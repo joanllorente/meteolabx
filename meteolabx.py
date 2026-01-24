@@ -594,11 +594,15 @@ saved_station = localS.getItem(LS_STATION)
 saved_key     = localS.getItem(LS_APIKEY)
 saved_z       = localS.getItem(LS_Z)
 
-if not st.session_state["active_station"] and saved_station:
+active_station = st.session_state.get("active_station", "")
+active_key = st.session_state.get("active_key", "")
+active_z = st.session_state.get("active_z", "0")
+
+if not active_station and saved_station:
     st.session_state["active_station"] = saved_station
-if not st.session_state["active_key"] and saved_key:
+if not active_key and saved_key:
     st.session_state["active_key"] = saved_key
-if (not str(st.session_state["active_z"]).strip() or st.session_state["active_z"] == "0") and saved_z:
+if (not str(active_z).strip() or active_z == "0") and saved_z:
     st.session_state["active_z"] = normalize_text_input(saved_z)
 
 st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
