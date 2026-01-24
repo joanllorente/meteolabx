@@ -552,7 +552,7 @@ def fetch_wu_current_session_cached(station_id: str, api_key: str, ttl_s: int):
 # STREAMLIT APP
 # ============================================================
 
-st.set_page_config(page_title="Meteo Panel", layout="wide")
+st.set_page_config(page_title="MeteoLabx", layout="wide")
 
 # ---- Theme auto (oscuro de noche) + toggle
 now = datetime.now()
@@ -568,7 +568,7 @@ st.sidebar.markdown("### 🔌 Conectar estación")
 draft_station = st.sidebar.text_input(
     "Station ID (WU)",
     value=st.session_state.get("draft_station", ""),
-    placeholder="Ej: ILHOSP26"
+    placeholder="Introducir ID"
 ).strip()
 
 draft_key = st.sidebar.text_input(
@@ -833,8 +833,11 @@ st_autorefresh(interval=1000, key="refresh_age")
 st.markdown(
     html_clean(f"""
     <div class="header">
-      <h1>🛰️ Meteo Panel</h1>
-      <div class="meta">Tema: {"Oscuro" if dark else "Claro"} · Refresh: {REFRESH_SECONDS}s</div>
+      <h1>🛰️ MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 1</span></h1>
+      <div class="meta">
+        Versión beta — la interfaz y las funciones pueden cambiar ·
+        Tema: {"Oscuro" if dark else "Claro"} · Refresh: {REFRESH_SECONDS}s
+      </div>
     </div>
     """),
     unsafe_allow_html=True
