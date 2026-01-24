@@ -42,6 +42,12 @@ def is_nan(x):
 
 # Local storage handled via streamlit-local-storage (see LocalStorage() below)
 
+def normalize_text_input(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (int, float)):
+        return str(value)
+    return str(value)
 
 def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
     stroke = "rgba(255,255,255,0.55)" if dark else "rgba(0,0,0,0.12)"
@@ -584,12 +590,6 @@ st.session_state.setdefault("active_station", "")
 st.session_state.setdefault("active_key", "")
 st.session_state.setdefault("active_z", "0")
 
-# Pedimos al componente que lea (quedará en estas keys de session_state)
-# Prefill desde el navegador (localStorage)
-st.session_state.setdefault("active_station", "")
-st.session_state.setdefault("active_key", "")
-st.session_state.setdefault("active_z", "0")
-
 saved_station = localS.getItem(LS_STATION)
 saved_key     = localS.getItem(LS_APIKEY)
 saved_z       = localS.getItem(LS_Z)
@@ -599,7 +599,9 @@ if not st.session_state["active_station"] and saved_station:
 if not st.session_state["active_key"] and saved_key:
     st.session_state["active_key"] = saved_key
 if (not str(st.session_state["active_z"]).strip() or st.session_state["active_z"] == "0") and saved_z:
-    st.session_state["active_z"] = saved_z
+    st.session_state["active_z"] = normalize_text_input(saved_z)
+
+st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
 
 st.sidebar.title("⚙️ Ajustes")
 theme_mode = st.sidebar.radio("Tema", ["Auto", "Claro", "Oscuro"], index=0)
