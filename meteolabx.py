@@ -4,6 +4,8 @@ import math
 import time
 import base64
 import textwrap
+import json
+import streamlit.components.v1 as components
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 from collections import deque
@@ -25,6 +27,41 @@ def html_clean(s: str) -> str:
 
 def is_nan(x):
     return x != x
+
+def ls_get(key: str):
+    """Get a value from browser localStorage via a tiny JS component."""
+    html = f"""
+    <script>
+      const key = {json.dumps(key)};
+      const value = window.localStorage.getItem(key);
+      const send = (v) => {{
+        const out = {{key, value: v}};
+        window.parent.postMessage({{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: out}}, "*");
+      }};
+      send(value);
+    </script>
+    """
+    return components.html(html, height=0)
+
+def ls_set(key: str, value: str):
+    """Set a value into browser localStorage."""
+    html = f"""
+    <script>
+      window.localStorage.setItem({json.dumps(key)}, {json.dumps(value)});
+      window.parent.postMessage({{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: true}}, "*");
+    </script>
+    """
+    return components.html(html, height=0)
+
+def ls_del(key: str):
+    """Delete a key from browser localStorage."""
+    html = f"""
+    <script>
+      window.localStorage.removeItem({json.dumps(key)});
+      window.parent.postMessage({{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: true}}, "*");
+    </script>
+    """
+    return components.html(html, height=0)
 
 def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
     stroke = "rgba(255,255,255,0.55)" if dark else "rgba(0,0,0,0.12)"
@@ -429,6 +466,10 @@ def rain_rates_from_total(precip_total_mm: float, now_ts: float):
 
     return inst, r1, r5
 
+    LS_STATION = "meteolabx_active_station"
+    LS_APIKEY  = "meteolabx_active_key"
+    LS_Z       = "meteolabx_active_z"
+
 # ============================================================
 # WEATHER UNDERGROUND
 # ============================================================
@@ -557,6 +598,35 @@ st.set_page_config(page_title="MeteoLabx", layout="wide")
 # ---- Theme auto (oscuro de noche) + toggle
 now = datetime.now()
 auto_dark = (now.hour >= 20) or (now.hour <= 7)
+
+if "prefill_done" not in st.session_state:
+    st.session_state.prefill_done = False
+
+# Valores por defecto si aún no existen
+st.session_state.setdefault("active_station", "")
+st.session_state.setdefault("active_key", "")
+st.session_state.setdefault("active_z", "0")
+
+if not st.session_state.prefill_done:
+    got1 = ls_get(LS_STATION)
+    got2 = ls_get(LS_APIKEY)
+    got3 = ls_get(LS_Z)
+
+    for got in (got1, got2, got3):
+        if isinstance(got, dict) and "key" in got:
+            k = got["key"]
+            v = got.get("value")
+            if v is None:
+                continue
+            if k == LS_STATION and v:
+                st.session_state["active_station"] = v
+            elif k == LS_APIKEY and v:
+                st.session_state["active_key"] = v
+            elif k == LS_Z and v:
+                st.session_state["active_z"] = v
+
+    st.session_state.prefill_done = True
+    st.rerun()
 
 st.sidebar.title("⚙️ Ajustes")
 theme_mode = st.sidebar.radio("Tema", ["Auto", "Claro", "Oscuro"], index=0)
