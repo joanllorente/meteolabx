@@ -9,6 +9,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 from collections import deque
+from typing import Optional
 
 # ============================================================
 # CONFIG
@@ -17,6 +18,12 @@ from collections import deque
 REFRESH_SECONDS = 30          # Público: mejor 60s (menos carga/abuso)
 WIND_DIR_OFFSET_DEG = 30.0
 WU_URL = "https://api.weather.com/v2/pws/observations/current"
+
+
+# LocalStorage keys (recordar en este dispositivo)
+LS_STATION = "meteolabx_active_station"
+LS_APIKEY  = "meteolabx_active_key"
+LS_Z       = "meteolabx_active_z"
 
 # ============================================================
 # UTILIDADES
@@ -466,17 +473,13 @@ def rain_rates_from_total(precip_total_mm: float, now_ts: float):
 
     return inst, r1, r5
 
-    LS_STATION = "meteolabx_active_station"
-    LS_APIKEY  = "meteolabx_active_key"
-    LS_Z       = "meteolabx_active_z"
-
 # ============================================================
 # WEATHER UNDERGROUND
 # ============================================================
 
 class WuError(Exception):
     """Error controlado para no filtrar URLs/keys."""
-    def __init__(self, kind: str, status_code: int | None = None):
+    def __init__(self, kind: str, status_code: Optional[int] = None):
         super().__init__(kind)
         self.kind = kind
         self.status_code = status_code
@@ -631,47 +634,50 @@ if not st.session_state.prefill_done:
 st.sidebar.title("⚙️ Ajustes")
 theme_mode = st.sidebar.radio("Tema", ["Auto", "Claro", "Oscuro"], index=0)
 
-# ---- Sidebar: Conectar estación con botón
+# ---- Sidebar: Conectar estación
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔌 Conectar estación")
 
-draft_station = st.sidebar.text_input(
-    "Station ID (WU)",
-    value=st.session_state.get("draft_station", ""),
-    placeholder="Introducir ID"
-).strip()
-
-draft_key = st.sidebar.text_input(
-    "API Key (WU)",
-    value=st.session_state.get("draft_key", ""),
-    type="password",
-    placeholder="Pega aquí tu API key"
-).strip()
-
-draft_z = st.sidebar.number_input(
-    "Altitud (m)",
-    min_value=-100.0,
-    max_value=9000.0,
-    value=float(st.session_state.get("draft_z", 0.0)),
-    step=0.1
-)
-
-# persistimos borrador
-st.session_state["draft_station"] = draft_station
-st.session_state["draft_key"] = draft_key
-st.session_state["draft_z"] = draft_z
+# Inputs vinculados a la configuración activa (se pueden recordar en el navegador)
+st.sidebar.text_input("Station ID (WU)", key="active_station", placeholder="Introducir ID")
+st.sidebar.text_input("API Key (WU)", key="active_key", type="password", placeholder="Pega aquí tu API key")
+st.sidebar.text_input("Altitud (m)", key="active_z", placeholder="Ej: 12.5")
 
 st.sidebar.caption("Este panel consulta Weather Underground usando tu propia API key. No se almacena en disco.")
+
+# ---- Recordar en este dispositivo (localStorage)
+st.sidebar.markdown("---")
+remember_device = st.sidebar.checkbox("Recordar en este dispositivo", value=True)
+st.sidebar.caption("⚠️ Si es un ordenador compartido, desactívalo o pulsa ‘Olvidar’ al terminar.")
+
+cS, cF = st.sidebar.columns(2)
+with cS:
+    save_clicked = st.button("💾 Guardar", use_container_width=True)
+with cF:
+    forget_clicked = st.button("🧹 Olvidar", use_container_width=True)
+
+if save_clicked:
+    if remember_device:
+        ls_set(LS_STATION, str(st.session_state.get("active_station", "")).strip())
+        ls_set(LS_APIKEY,  str(st.session_state.get("active_key", "")).strip())
+        ls_set(LS_Z,       str(st.session_state.get("active_z", "")).strip())
+        st.sidebar.success("Guardado en este dispositivo ✅")
+    else:
+        st.sidebar.info("Activa ‘Recordar en este dispositivo’ para guardar.")
+
+if forget_clicked:
+    ls_del(LS_STATION)
+    ls_del(LS_APIKEY)
+    ls_del(LS_Z)
+    st.session_state["active_station"] = ""
+    st.session_state["active_key"] = ""
+    st.session_state["active_z"] = "0"
+    st.sidebar.success("Borrado ✅")
+    st.rerun()
 
 # estado conectado
 if "connected" not in st.session_state:
     st.session_state["connected"] = False
-if "active_station" not in st.session_state:
-    st.session_state["active_station"] = ""
-if "active_key" not in st.session_state:
-    st.session_state["active_key"] = ""
-if "active_z" not in st.session_state:
-    st.session_state["active_z"] = 0.0
 
 colA, colB = st.sidebar.columns(2)
 with colA:
@@ -681,21 +687,29 @@ with colB:
 
 if disconnect_clicked:
     st.session_state["connected"] = False
-    st.session_state["active_station"] = ""
-    st.session_state["active_key"] = ""
-    st.session_state["active_z"] = 0.0
 
 if connect_clicked:
-    if not draft_station or not draft_key:
+    station = str(st.session_state.get("active_station", "")).strip()
+    key = str(st.session_state.get("active_key", "")).strip()
+    z_raw = str(st.session_state.get("active_z", "0")).strip()
+
+    if not station or not key:
         st.sidebar.error("Falta Station ID o API key.")
     else:
-        st.session_state["connected"] = True
-        st.session_state["active_station"] = draft_station
-        st.session_state["active_key"] = draft_key
-        st.session_state["active_z"] = float(draft_z)
+        try:
+            float(z_raw)  # validación
+        except Exception:
+            st.sidebar.error("Altitud inválida. Usa un número (ej: 12.5)")
+        else:
+            st.session_state["connected"] = True
+            # autosave opcional al conectar
+            if remember_device:
+                ls_set(LS_STATION, station)
+                ls_set(LS_APIKEY, key)
+                ls_set(LS_Z, z_raw)
 
-if st.session_state["connected"]:
-    st.sidebar.success(f"Conectado: {st.session_state['active_station']}")
+if st.session_state.get("connected"):
+    st.sidebar.success(f"Conectado: {st.session_state.get('active_station','')}")
 else:
     st.sidebar.info("No conectado")
 
