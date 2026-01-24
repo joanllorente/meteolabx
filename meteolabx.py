@@ -687,6 +687,8 @@ with colB:
 
 if disconnect_clicked:
     st.session_state["connected"] = False
+    # NO borres active_station/active_key/active_z aquí
+    st.rerun()
 
 if connect_clicked:
     station = str(st.session_state.get("active_station", "")).strip()
