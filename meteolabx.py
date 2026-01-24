@@ -585,17 +585,21 @@ st.session_state.setdefault("active_key", "")
 st.session_state.setdefault("active_z", "0")
 
 # Pedimos al componente que lea (quedará en estas keys de session_state)
-localS.getItem(LS_STATION, key="ls_station")
-localS.getItem(LS_APIKEY,  key="ls_apikey")
-localS.getItem(LS_Z,       key="ls_z")
+# Prefill desde el navegador (localStorage)
+st.session_state.setdefault("active_station", "")
+st.session_state.setdefault("active_key", "")
+st.session_state.setdefault("active_z", "0")
 
-# Si el usuario aún no ha escrito nada en esta sesión, rellenamos con lo guardado
-if not st.session_state.get("active_station") and st.session_state.get("ls_station"):
-    st.session_state["active_station"] = st.session_state["ls_station"]
-if not st.session_state.get("active_key") and st.session_state.get("ls_apikey"):
-    st.session_state["active_key"] = st.session_state["ls_apikey"]
-if (not str(st.session_state.get("active_z", "")).strip() or st.session_state.get("active_z") == "0") and st.session_state.get("ls_z"):
-    st.session_state["active_z"] = st.session_state["ls_z"]
+saved_station = localS.getItem(LS_STATION)
+saved_key     = localS.getItem(LS_APIKEY)
+saved_z       = localS.getItem(LS_Z)
+
+if not st.session_state["active_station"] and saved_station:
+    st.session_state["active_station"] = saved_station
+if not st.session_state["active_key"] and saved_key:
+    st.session_state["active_key"] = saved_key
+if (not str(st.session_state["active_z"]).strip() or st.session_state["active_z"] == "0") and saved_z:
+    st.session_state["active_z"] = saved_z
 
 st.sidebar.title("⚙️ Ajustes")
 theme_mode = st.sidebar.radio("Tema", ["Auto", "Claro", "Oscuro"], index=0)
@@ -624,17 +628,17 @@ with cF:
 
 if save_clicked:
     if remember_device:
-        localS.setItem(LS_STATION, str(st.session_state.get("active_station", "")).strip())
-        localS.setItem(LS_APIKEY,  str(st.session_state.get("active_key", "")).strip())
-        localS.setItem(LS_Z,       str(st.session_state.get("active_z", "")).strip())
+        localS.setItem(LS_STATION, st.session_state["active_station"])
+        localS.setItem(LS_APIKEY,  st.session_state["active_key"])
+        localS.setItem(LS_Z,       str(st.session_state["active_z"]))
         st.sidebar.success("Guardado en este dispositivo ✅")
     else:
         st.sidebar.info("Activa ‘Recordar en este dispositivo’ para guardar.")
 
 if forget_clicked:
     localS.setItem(LS_STATION, "")
-    localS.setItem(LS_APIKEY, "")
-    localS.setItem(LS_Z, "")
+    localS.setItem(LS_APIKEY,  "")
+    localS.setItem(LS_Z,       "")
     st.session_state["active_station"] = ""
     st.session_state["active_key"] = ""
     st.session_state["active_z"] = "0"
