@@ -6,6 +6,7 @@ import base64
 import textwrap
 import json
 import streamlit.components.v1 as components
+from streamlit_local_storage import LocalStorage
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 from collections import deque
@@ -25,6 +26,9 @@ LS_STATION = "meteolabx_active_station"
 LS_APIKEY  = "meteolabx_active_key"
 LS_Z       = "meteolabx_active_z"
 
+# Browser persistent storage (per device/browser)
+localS = LocalStorage()
+
 # ============================================================
 # UTILIDADES
 # ============================================================
@@ -35,40 +39,9 @@ def html_clean(s: str) -> str:
 def is_nan(x):
     return x != x
 
-def ls_get(key: str):
-    """Get a value from browser localStorage via a tiny JS component."""
-    html = f"""
-    <script>
-      const key = {json.dumps(key)};
-      const value = window.localStorage.getItem(key);
-      const send = (v) => {{
-        const out = {{key, value: v}};
-        window.parent.postMessage({{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: out}}, "*");
-      }};
-      send(value);
-    </script>
-    """
-    return components.html(html, height=0)
 
-def ls_set(key: str, value: str):
-    """Set a value into browser localStorage."""
-    html = f"""
-    <script>
-      window.localStorage.setItem({json.dumps(key)}, {json.dumps(value)});
-      window.parent.postMessage({{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: true}}, "*");
-    </script>
-    """
-    return components.html(html, height=0)
+# Local storage handled via streamlit-local-storage (see LocalStorage() below)
 
-def ls_del(key: str):
-    """Delete a key from browser localStorage."""
-    html = f"""
-    <script>
-      window.localStorage.removeItem({json.dumps(key)});
-      window.parent.postMessage({{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: true}}, "*");
-    </script>
-    """
-    return components.html(html, height=0)
 
 def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
     stroke = "rgba(255,255,255,0.55)" if dark else "rgba(0,0,0,0.12)"
@@ -602,34 +575,27 @@ st.set_page_config(page_title="MeteoLabx", layout="wide")
 now = datetime.now()
 auto_dark = (now.hour >= 20) or (now.hour <= 7)
 
-if "prefill_done" not in st.session_state:
-    st.session_state.prefill_done = False
-
+# ------------------------------------------------------------
+# Prefill desde el navegador (localStorage) usando componente
+# Nota: algunos componentes necesitan 1-2 renders para poblar st.session_state.
+# ------------------------------------------------------------
 # Valores por defecto si aún no existen
 st.session_state.setdefault("active_station", "")
 st.session_state.setdefault("active_key", "")
 st.session_state.setdefault("active_z", "0")
 
-if not st.session_state.prefill_done:
-    got1 = ls_get(LS_STATION)
-    got2 = ls_get(LS_APIKEY)
-    got3 = ls_get(LS_Z)
+# Pedimos al componente que lea (quedará en estas keys de session_state)
+localS.getItem(LS_STATION, key="ls_station")
+localS.getItem(LS_APIKEY,  key="ls_apikey")
+localS.getItem(LS_Z,       key="ls_z")
 
-    for got in (got1, got2, got3):
-        if isinstance(got, dict) and "key" in got:
-            k = got["key"]
-            v = got.get("value")
-            if v is None:
-                continue
-            if k == LS_STATION and v:
-                st.session_state["active_station"] = v
-            elif k == LS_APIKEY and v:
-                st.session_state["active_key"] = v
-            elif k == LS_Z and v:
-                st.session_state["active_z"] = v
-
-    st.session_state.prefill_done = True
-    st.rerun()
+# Si el usuario aún no ha escrito nada en esta sesión, rellenamos con lo guardado
+if not st.session_state.get("active_station") and st.session_state.get("ls_station"):
+    st.session_state["active_station"] = st.session_state["ls_station"]
+if not st.session_state.get("active_key") and st.session_state.get("ls_apikey"):
+    st.session_state["active_key"] = st.session_state["ls_apikey"]
+if (not str(st.session_state.get("active_z", "")).strip() or st.session_state.get("active_z") == "0") and st.session_state.get("ls_z"):
+    st.session_state["active_z"] = st.session_state["ls_z"]
 
 st.sidebar.title("⚙️ Ajustes")
 theme_mode = st.sidebar.radio("Tema", ["Auto", "Claro", "Oscuro"], index=0)
@@ -658,17 +624,17 @@ with cF:
 
 if save_clicked:
     if remember_device:
-        ls_set(LS_STATION, str(st.session_state.get("active_station", "")).strip())
-        ls_set(LS_APIKEY,  str(st.session_state.get("active_key", "")).strip())
-        ls_set(LS_Z,       str(st.session_state.get("active_z", "")).strip())
+        localS.setItem(LS_STATION, str(st.session_state.get("active_station", "")).strip())
+        localS.setItem(LS_APIKEY,  str(st.session_state.get("active_key", "")).strip())
+        localS.setItem(LS_Z,       str(st.session_state.get("active_z", "")).strip())
         st.sidebar.success("Guardado en este dispositivo ✅")
     else:
         st.sidebar.info("Activa ‘Recordar en este dispositivo’ para guardar.")
 
 if forget_clicked:
-    ls_del(LS_STATION)
-    ls_del(LS_APIKEY)
-    ls_del(LS_Z)
+    localS.setItem(LS_STATION, "")
+    localS.setItem(LS_APIKEY, "")
+    localS.setItem(LS_Z, "")
     st.session_state["active_station"] = ""
     st.session_state["active_key"] = ""
     st.session_state["active_z"] = "0"
@@ -687,8 +653,6 @@ with colB:
 
 if disconnect_clicked:
     st.session_state["connected"] = False
-    # NO borres active_station/active_key/active_z aquí
-    st.rerun()
 
 if connect_clicked:
     station = str(st.session_state.get("active_station", "")).strip()
@@ -706,9 +670,9 @@ if connect_clicked:
             st.session_state["connected"] = True
             # autosave opcional al conectar
             if remember_device:
-                ls_set(LS_STATION, station)
-                ls_set(LS_APIKEY, key)
-                ls_set(LS_Z, z_raw)
+                localS.setItem(LS_STATION, station)
+                localS.setItem(LS_APIKEY, key)
+                localS.setItem(LS_Z, z_raw)
 
 if st.session_state.get("connected"):
     st.sidebar.success(f"Conectado: {st.session_state.get('active_station','')}")
@@ -944,7 +908,7 @@ try:
     # ============================================================
     # TIEMPO DEL DATO (usar epoch de WU)
     # ============================================================
-    now_ts = base["epoch"]
+    now_ts = time.time()  # para lluvia (historial por tick de la app)
 
     # ============================================================
     # LLUVIA
