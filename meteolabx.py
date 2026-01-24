@@ -49,6 +49,10 @@ def normalize_text_input(value) -> str:
         return str(value)
     return str(value)
 
+
+def set_local_storage(item_key: str, value, key_suffix: str) -> None:
+    localS.setItem(item_key, value, key=f"ls-{item_key}-{key_suffix}")
+
 def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
     stroke = "rgba(255,255,255,0.55)" if dark else "rgba(0,0,0,0.12)"
     glow1 = "rgba(255,255,255,0.35)" if dark else "rgba(255,255,255,0.55)"
@@ -584,11 +588,7 @@ auto_dark = (now.hour >= 20) or (now.hour <= 7)
 # ------------------------------------------------------------
 # Prefill desde el navegador (localStorage) usando componente
 # Nota: algunos componentes necesitan 1-2 renders para poblar st.session_state.
-# ------------------------------------------------------------
-# Valores por defecto si aún no existen
-st.session_state.setdefault("active_station", "")
-st.session_state.setdefault("active_key", "")
-st.session_state.setdefault("active_z", "0")
+# -----------------------------------------------------------
 
 saved_station = localS.getItem(LS_STATION)
 saved_key     = localS.getItem(LS_APIKEY)
@@ -630,17 +630,17 @@ with cF:
 
 if save_clicked:
     if remember_device:
-        localS.setItem(LS_STATION, st.session_state["active_station"])
-        localS.setItem(LS_APIKEY,  st.session_state["active_key"])
-        localS.setItem(LS_Z,       str(st.session_state["active_z"]))
+        set_local_storage(LS_STATION, st.session_state["active_station"], "save-station")
+        set_local_storage(LS_APIKEY,  st.session_state["active_key"], "save-key")
+        set_local_storage(LS_Z,       str(st.session_state["active_z"]), "save-z")
         st.sidebar.success("Guardado en este dispositivo ✅")
     else:
         st.sidebar.info("Activa ‘Recordar en este dispositivo’ para guardar.")
 
 if forget_clicked:
-    localS.setItem(LS_STATION, "")
-    localS.setItem(LS_APIKEY,  "")
-    localS.setItem(LS_Z,       "")
+    set_local_storage(LS_STATION, "", "forget-station")
+    set_local_storage(LS_APIKEY,  "", "forget-key")
+    set_local_storage(LS_Z,       "", "forget-z")
     st.session_state["active_station"] = ""
     st.session_state["active_key"] = ""
     st.session_state["active_z"] = "0"
@@ -676,9 +676,9 @@ if connect_clicked:
             st.session_state["connected"] = True
             # autosave opcional al conectar
             if remember_device:
-                localS.setItem(LS_STATION, station)
-                localS.setItem(LS_APIKEY, key)
-                localS.setItem(LS_Z, z_raw)
+                set_local_storage(LS_STATION, station, "connect-station")
+                set_local_storage(LS_APIKEY, key, "connect-key")
+                set_local_storage(LS_Z, z_raw, "connect-z")
 
 if st.session_state.get("connected"):
     st.sidebar.success(f"Conectado: {st.session_state.get('active_station','')}")
