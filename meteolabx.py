@@ -16,7 +16,7 @@ from typing import Optional
 # CONFIG
 # ============================================================
 
-REFRESH_SECONDS = 30          # Público: mejor 60s (menos carga/abuso)
+REFRESH_SECONDS = 20          # Público: mejor 60s (menos carga/abuso)
 WIND_DIR_OFFSET_DEG = 30.0
 WU_URL = "https://api.weather.com/v2/pws/observations/current"
 
