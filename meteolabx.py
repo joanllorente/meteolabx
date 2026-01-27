@@ -374,7 +374,7 @@ try:
     # ============================================================
     # NIVEL 1 — BÁSICOS
     # ============================================================
-    section_title("Básicos")
+    section_title("Observados")
 
     deg = base["wind_dir_deg"]
     wind = base["wind"]
