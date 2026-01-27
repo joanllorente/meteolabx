@@ -1,4 +1,0 @@
-streamlit
-requests
-streamlit-autorefresh
-streamlit-local-storage
