@@ -468,7 +468,7 @@ try:
     # ============================================================
     # NIVEL 2 — DERIVADAS
     # ============================================================
-    section_title("Derivadas / Termodinámica")
+    section_title("Termodinámica")
 
     cards_derived = [
         card("Humedad específica", f"{q_gkg:.2f}", "g/kg", icon_kind="rh", uid="d1", dark=dark),
