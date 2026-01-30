@@ -279,7 +279,7 @@ st_autorefresh(interval=1000, key="refresh_age")
 st.markdown(
     html_clean(f"""
     <div class="header">
-      <h1>🛰️ MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 2</span></h1>
+      <h1>🛰️ MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 2 staging</span></h1>
       <div class="meta">
         Versión beta — la interfaz y las funciones pueden cambiar ·
         Tema: {"Oscuro" if dark else "Claro"} · Refresh: {REFRESH_SECONDS}s
