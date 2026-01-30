@@ -175,6 +175,159 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
         </svg>
         """)
 
+    # --- RADIACIÓN: nuevos iconos ---
+    if kind == "solar":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FFE07A"/>
+              <stop offset="0.6" stop-color="#FFB24A"/>
+              <stop offset="1" stop-color="#FF6A55"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="27" cy="25.5" r="6.2" stroke-width="3.2"/>
+            <!-- rays -->
+            <path d="M27 11.5v4.2" stroke-width="3.0" opacity="0.95"/>
+            <path d="M27 35.3v4.2" stroke-width="3.0" opacity="0.95"/>
+            <path d="M13.0 25.5h4.2" stroke-width="3.0" opacity="0.95"/>
+            <path d="M36.8 25.5h4.2" stroke-width="3.0" opacity="0.95"/>
+            <path d="M17.1 15.6l3.0 3.0" stroke-width="2.8" opacity="0.85"/>
+            <path d="M33.9 32.4l3.0 3.0" stroke-width="2.8" opacity="0.85"/>
+            <path d="M36.9 15.6l-3.0 3.0" stroke-width="2.8" opacity="0.85"/>
+            <path d="M20.1 32.4l-3.0 3.0" stroke-width="2.8" opacity="0.85"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "uv":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#A78BFA"/>
+              <stop offset="0.55" stop-color="#7C3AED"/>
+              <stop offset="1" stop-color="#EC4899"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <!-- small sun -->
+            <circle cx="20" cy="19" r="5.2" stroke-width="3.0"/>
+            <path d="M20 10.8v3.2M20 24.0v3.2M11.8 19h3.2M25.0 19h3.2" stroke-width="2.7" opacity="0.9"/>
+            <path d="M14.4 13.4l2.3 2.3M23.3 22.3l2.3 2.3M25.6 13.4l-2.3 2.3M16.7 22.3l-2.3 2.3" stroke-width="2.4" opacity="0.75"/>
+          </g>
+
+          <!-- UV text -->
+          <g filter="url(#{g('shadow')})" fill="white" opacity="0.92">
+            <text x="27" y="40.3" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+                  font-size="13.5" font-weight="800" letter-spacing="0.5">UV</text>
+          </g>
+        </svg>
+        """)
+
+    if kind == "et0":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#7DFFB5"/>
+              <stop offset="1" stop-color="#48C6EF"/>
+            </linearGradient>
+            <radialGradient id="{g('drop')}" cx="35%" cy="25%" r="75%">
+              <stop offset="0" stop-color="#E9FFF7"/>
+              <stop offset="0.55" stop-color="#7DE8D2"/>
+              <stop offset="1" stop-color="#2FB7FF"/>
+            </radialGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+
+          <g filter="url(#{g('shadow')})">
+            <!-- droplet -->
+            <path d="M27 14c0 0 8 9.5 8 15.0c0 4.7-3.6 8.5-8 8.5s-8-3.8-8-8.5C19 23.5 27 14 27 14z"
+                  fill="url(#{g('drop')})" opacity="0.95"/>
+            <!-- vapor waves -->
+            <path d="M18 41c2.2-1.6 2.2-3.4 0-5.0c-2.2-1.6-2.2-3.4 0-5.0"
+                  fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="2.7" stroke-linecap="round" opacity="0.9"/>
+            <path d="M36 41c2.2-1.6 2.2-3.4 0-5.0c-2.2-1.6-2.2-3.4 0-5.0"
+                  fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="2.7" stroke-linecap="round" opacity="0.9"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "clarity":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#B9E6FF"/>
+              <stop offset="1" stop-color="#5AA8FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <!-- small sun -->
+            <circle cx="18.5" cy="20.0" r="5.5" stroke-width="3.0"/>
+            <path d="M18.5 11.4v3.0M18.5 25.6v3.0M9.9 20h3.0M24.1 20h3.0" stroke-width="2.6" opacity="0.85"/>
+            <!-- clarity bars -->
+            <path d="M29.5 34.8h14.0" stroke-width="3.2" opacity="0.95"/>
+            <path d="M29.5 29.0h10.5" stroke-width="3.0" opacity="0.85"/>
+            <path d="M29.5 23.2h7.2" stroke-width="2.8" opacity="0.75"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "balance":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#73E0FF"/>
+              <stop offset="1" stop-color="#48C6EF"/>
+            </linearGradient>
+            <radialGradient id="{g('drop')}" cx="35%" cy="25%" r="75%">
+              <stop offset="0" stop-color="#E9F7FF"/>
+              <stop offset="0.55" stop-color="#7CC7FF"/>
+              <stop offset="1" stop-color="#2F7BFF"/>
+            </radialGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <!-- droplet -->
+            <path d="M27 14c0 0 8 9.5 8 15.0c0 4.7-3.6 8.5-8 8.5s-8-3.8-8-8.5C19 23.5 27 14 27 14z"
+                  fill="url(#{g('drop')})" opacity="0.95" stroke="none"/>
+            <!-- balance arrows -->
+            <path d="M16 41h22" stroke-width="3.0" opacity="0.9"/>
+            <path d="M20.5 41l-2.4-2.4M20.5 41l-2.4 2.4" stroke-width="2.6" opacity="0.9"/>
+            <path d="M33.5 41l2.4-2.4M33.5 41l2.4 2.4" stroke-width="2.6" opacity="0.9"/>
+          </g>
+        </svg>
+        """)
+
     return ""
 
 

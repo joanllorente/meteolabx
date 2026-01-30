@@ -33,9 +33,20 @@ def push_pressure(p_hpa: float, epoch: int):
         hist.append((epoch, p_hpa))
 
 
-def pressure_trend_3h():
+def pressure_trend_3h(p_now: float = None, epoch_now: int = None, 
+                      p_3h_ago: float = None, epoch_3h_ago: int = None):
     """
     Calcula la tendencia de presión en las últimas 3 horas
+    
+    Prioridad:
+    1. Usar datos del API (/all/1day) si están disponibles
+    2. Usar historial local si los datos del API no están disponibles
+    
+    Args:
+        p_now: Presión actual en hPa (MSL del API)
+        epoch_now: Timestamp actual (del API)
+        p_3h_ago: Presión de hace 3h en hPa (MSL del API)
+        epoch_3h_ago: Timestamp de hace 3h (del API)
     
     Returns:
         Tupla (dp, rate_h, label, arrow) donde:
@@ -44,11 +55,56 @@ def pressure_trend_3h():
         - label: Etiqueta descriptiva
         - arrow: Símbolo de flecha
     """
-    hist = st.session_state.p_hist
-    if len(hist) < 2:
+    from utils.helpers import is_nan
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # PRIORIDAD 1: Usar datos del API si están disponibles
+    if (p_now is not None and p_3h_ago is not None and 
+        epoch_now is not None and epoch_3h_ago is not None and
+        not is_nan(p_now) and not is_nan(p_3h_ago) and
+        epoch_now > epoch_3h_ago):
+        
+        dt = epoch_now - epoch_3h_ago
+        dt_hours = dt / 3600.0
+        
+        if dt > 0:
+            dp = p_now - p_3h_ago
+            rate_h = dp / dt_hours
+            
+            # Log detallado
+            logger.info(f"📊 Tendencia presión (del API):")
+            logger.info(f"   Presión ahora:    {p_now:.2f} hPa")
+            logger.info(f"   Presión hace {dt_hours:.2f}h: {p_3h_ago:.2f} hPa")
+            logger.info(f"   Diferencia (Δp):  {dp:+.2f} hPa")
+            logger.info(f"   Tasa:             {rate_h:+.2f} hPa/h")
+            
+            # Clasificar tendencia usando constantes de config
+            if abs(dp) < PRESSURE_STABLE_THRESHOLD:
+                logger.info(f"   → Estable")
+                return (dp, rate_h, "Estable", "→")
+            elif dp > 0:
+                if dp > PRESSURE_RAPID_CHANGE:
+                    logger.info(f"   → Subiendo rápido")
+                    return (dp, rate_h, "Subiendo rápido", "⬆")
+                logger.info(f"   → Subiendo")
+                return (dp, rate_h, "Subiendo", "↗")
+            else:
+                if dp < -PRESSURE_RAPID_CHANGE:
+                    logger.info(f"   → Bajando rápido")
+                    return (dp, rate_h, "Bajando rápido", "⬇")
+                logger.info(f"   → Bajando")
+                return (dp, rate_h, "Bajando", "↘")
+    
+    # PRIORIDAD 2: Usar historial local (fallback)
+    logger.debug("Usando historial local para tendencia de presión (fallback)")
+    
+    if "p_hist" not in st.session_state or len(st.session_state.p_hist) < 2:
+        logger.debug("Sin suficiente historial local")
         return (float("nan"), float("nan"), "—", "•")
-
-    t_now, p_now = hist[-1]
+    
+    hist = st.session_state.p_hist
+    t_now, p_now_local = hist[-1]
     target = t_now - 3 * 3600  # 3 horas atrás
 
     # Buscar el punto más cercano a 3h atrás
@@ -63,7 +119,7 @@ def pressure_trend_3h():
     if dt <= 0:
         return (float("nan"), float("nan"), "—", "•")
 
-    dp = p_now - p_old
+    dp = p_now_local - p_old
     rate_h = dp / (dt / 3600.0)
 
     # Clasificar tendencia usando constantes de config

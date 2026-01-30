@@ -27,20 +27,25 @@ def reset_rain_history():
     st.session_state.prev_tip = None
 
 
-def rain_rates_from_total(precip_total_mm: float, now_ts: float):
+def rain_rates_from_total(precip_total_mm: float, data_epoch: float):
     """
     Calcula tasas de precipitación instantánea y en ventanas temporales
     
+    MEJORAS:
+    - Usa el epoch del dato de WU (cuando se recibió el volcado), no el tiempo de la app
+    - Primera lectura sin referencia: usa 0.4 mm/h como default
+    - Intensidad promediada: si pasan 2 min entre volcados de 0.4 mm → 12 mm/h, no 0
+    
     Args:
         precip_total_mm: Precipitación total acumulada (mm)
-        now_ts: Timestamp actual (epoch)
+        data_epoch: Timestamp del dato de WU (cuando se recibió)
         
     Returns:
         Tupla (inst_mm_h, r1_mm_h, r5_mm_h) con tasas en mm/h
     """
     ensure_rain_history()
 
-    if is_nan(precip_total_mm):
+    if is_nan(precip_total_mm) or is_nan(data_epoch):
         return float("nan"), float("nan"), float("nan")
 
     hist = st.session_state.rain_hist
@@ -50,41 +55,74 @@ def rain_rates_from_total(precip_total_mm: float, now_ts: float):
         reset_rain_history()
         hist = st.session_state.rain_hist
 
-    # Agregar nuevo punto si cambió el total
-    if (not hist) or abs(precip_total_mm - hist[-1][1]) > 1e-9:
-        hist.append((now_ts, precip_total_mm))
-        st.session_state.prev_tip = st.session_state.last_tip
-        st.session_state.last_tip = (now_ts, precip_total_mm)
+    # Agregar nuevo punto SOLO si hay precipitación Y cambió el total
+    # No trackear volcados de 0 mm (sin lluvia)
+    if precip_total_mm > 1e-9:  # Hay precipitación real
+        if (not hist) or abs(precip_total_mm - hist[-1][1]) > 1e-9:
+            hist.append((data_epoch, precip_total_mm))
+            st.session_state.prev_tip = st.session_state.last_tip
+            st.session_state.last_tip = (data_epoch, precip_total_mm)
 
     # Tasa instantánea (entre últimos dos tips)
     inst = float("nan")
     a = st.session_state.prev_tip
     b = st.session_state.last_tip
-    if a is not None and b is not None:
-        t0, p0 = a
+    
+    if b is not None:
         t1, p1 = b
-        dp = p1 - p0
-        dt = t1 - t0
-        if dp > 0 and dt > 0:
-            inst = (dp / dt) * 3600.0
+        
+        # Solo calcular intensidad si hay precipitación real en last_tip
+        if p1 > 1e-9:
+            if a is not None:
+                # Tenemos dos volcados: calcular intensidad real
+                t0, p0 = a
+                dp = p1 - p0
+                dt = t1 - t0
+                if dp > 0 and dt > 0:
+                    inst = (dp / dt) * 3600.0
+            else:
+                # PRIMER VOLCADO: usar 0.4 mm/h como default
+                inst = 0.4
+        # Si p1 == 0, no hay lluvia → inst queda como NaN
 
     def window_rate(window_s: float):
-        """Calcula tasa de lluvia en una ventana temporal"""
+        """
+        Calcula tasa de lluvia en una ventana temporal
+        MEJORADO: Promedia la intensidad en lugar de devolver 0
+        """
         if not hist:
             return float("nan")
-        t_now, p_now = now_ts, precip_total_mm
+        
+        t_now = data_epoch
+        p_now = precip_total_mm
         target = t_now - window_s
+        
+        # Si no hay datos suficientemente antiguos, usar el más antiguo disponible
         if hist[0][0] > target:
-            return float("nan")
-        t_old, p_old = hist[0]
-        for t_i, p_i in reversed(hist):
-            if t_i <= target:
-                t_old, p_old = t_i, p_i
-                break
+            # No tenemos datos de toda la ventana
+            # Usar el dato más antiguo y promediar
+            t_old, p_old = hist[0]
+        else:
+            # Buscar el dato más cercano al inicio de la ventana
+            t_old, p_old = hist[0]
+            for t_i, p_i in reversed(hist):
+                if t_i <= target:
+                    t_old, p_old = t_i, p_i
+                    break
+        
         dt = t_now - t_old
         dp = p_now - p_old
-        if dt <= 0 or dp < 0:
+        
+        # MEJORA: Siempre promediar la intensidad
+        if dt <= 0:
             return float("nan")
+        
+        if dp < 0:
+            # Reset del contador detectado
+            return float("nan")
+        
+        # Promediar: si entre volcados pasaron 2 min y cayeron 0.4 mm
+        # la intensidad es (0.4 / 2min) * 60 = 12 mm/h
         return (dp / dt) * 3600.0
 
     r1 = window_rate(60.0)   # 1 minuto
