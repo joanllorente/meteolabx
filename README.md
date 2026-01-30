@@ -17,3 +17,4 @@ Panel meteorológico web basado en datos de estaciones personales de Weather Und
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
+DEPLOY TEST
