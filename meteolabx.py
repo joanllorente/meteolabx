@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 st.set_page_config(page_title="MeteoLabx", layout="wide")
+import streamlit as st
+st.warning("✅ DEPLOY CHECK: a5eaeca (BETA 3)")
 
 
 # ============================================================
