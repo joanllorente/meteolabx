@@ -634,89 +634,112 @@ if not connected or has_radiation:
 
 if connected and has_chart_data:
     section_title("Gráficos")
-    
-    # Convertir epochs a horas del día (formato HH:MM)
-    from datetime import datetime
-    times = []
-    hours_only = []  # Para el eje X (solo horas enteras)
-    for epoch in chart_epochs:
-        dt = datetime.fromtimestamp(epoch)
-        times.append(dt.strftime("%H:%M"))
-        hours_only.append(dt.strftime("%H:00"))
-    
-    # Crear DataFrame para Plotly
+
+    from datetime import datetime, timedelta
     import pandas as pd
-    df_chart = pd.DataFrame({
-        "Hora": times,
-        "Temperatura": chart_temps
-    })
-    
-    # Calcular rango del eje Y (±4°C de min/max)
-    temp_min = min(chart_temps)
-    temp_max = max(chart_temps)
-    y_min = temp_min - 4
-    y_max = temp_max + 4
-    
-    # Crear gráfico con Plotly
     import plotly.graph_objects as go
-    
-    fig = go.Figure()
-    
-    # Línea de temperatura
-    fig.add_trace(go.Scatter(
-        x=df_chart["Hora"],
-        y=df_chart["Temperatura"],
-        mode='lines',
-        name='Temperatura',
-        line=dict(
-            color='rgb(255, 107, 107)',
-            width=3
-        ),
-        fill='tozeroy',
-        fillcolor='rgba(255, 107, 107, 0.1)'
-    ))
-    
-    # Determinar colores según tema
-    if dark:
-        text_color = 'rgba(255, 255, 255, 0.92)'
-        grid_color = 'rgba(255, 255, 255, 0.15)'
+
+    # --- 1) Construir serie con datetimes reales
+    dt_list = []
+    temp_list = []
+    for epoch, temp in zip(chart_epochs, chart_temps):
+        dt = datetime.fromtimestamp(epoch)  # si fuera UTC: datetime.utcfromtimestamp(epoch)
+        dt_list.append(dt)
+        temp_list.append(temp)
+
+    df_obs = pd.DataFrame({"dt": dt_list, "temp": temp_list}).sort_values("dt")
+
+    # --- 1.5) Alinear timestamps a la rejilla (clave para que el reindex funcione)
+    step_minutes = 5
+    df_obs["dt"] = pd.to_datetime(df_obs["dt"]).dt.floor(f"{step_minutes}min")
+
+    # Si hay duplicados (varios puntos en el mismo tick), nos quedamos con el último
+    df_obs = df_obs.groupby("dt", as_index=False)["temp"].last().sort_values("dt")
+
+    # --- 2) Crear malla completa del día (cada 5 min)
+    now_local = datetime.now()
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+
+    grid = pd.date_range(
+        start=day_start,
+        end=day_end,
+        freq=f"{step_minutes}min",
+        inclusive="left"
+    )
+
+    # --- 3) Reindexar (ahora sí casan los timestamps)
+    s = pd.Series(df_obs["temp"].values, index=pd.to_datetime(df_obs["dt"]))
+    y = s.reindex(grid)  # sin rellenar; NaN = huecos
+
+    # --- 4) Rango Y con padding inteligente
+    y_valid = y.dropna()
+    if len(y_valid) >= 2:
+        temp_min = float(y_valid.min())
+        temp_max = float(y_valid.max())
+        span = max(1.0, temp_max - temp_min)
+        pad = max(0.8, 0.15 * span)
+        y_min = temp_min - pad
+        y_max = temp_max + pad
+    elif len(y_valid) == 1:
+        v = float(y_valid.iloc[0])
+        y_min, y_max = v - 2, v + 2
     else:
-        text_color = 'rgba(15, 18, 25, 0.92)'
-        grid_color = 'rgba(18, 18, 18, 0.12)'
-    
-    # Layout del gráfico
+        y_min, y_max = 0, 30
+
+    # --- 5) Gráfico
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=grid,
+        y=y.values,              # <- pasar valores explícitos evita rarezas
+        mode="lines",
+        name="Temperatura",
+        line=dict(color="rgb(255, 107, 107)", width=3),
+        connectgaps=False,
+        fill="tozeroy",
+        fillcolor="rgba(255, 107, 107, 0.1)"
+    ))
+
+    fig.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
+
+    if dark:
+        text_color = "rgba(255, 255, 255, 0.92)"
+        grid_color = "rgba(255, 255, 255, 0.15)"
+    else:
+        text_color = "rgba(15, 18, 25, 0.92)"
+        grid_color = "rgba(18, 18, 18, 0.12)"
+
     fig.update_layout(
-        title={
-            'text': 'Temperatura del Día',
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 18, 'color': text_color}
-        },
+        title=dict(
+            text="Temperatura del Día",
+            x=0.5,
+            xanchor="center",
+            font=dict(size=18, color=text_color)
+        ),
         xaxis=dict(
-            title='Hora',
+            title="Hora",
+            type="date",
+            range=[day_start, day_end],
+            tickformat="%H:%M",
+            dtick=60 * 60 * 1000,   # 1h
             gridcolor=grid_color,
             showgrid=True,
-            tickmode='linear',
-            dtick=12,  # Mostrar etiqueta cada 12 puntos (≈1 hora si hay datos cada 5 min)
             tickfont=dict(color=text_color)
         ),
         yaxis=dict(
-            title='Temperatura (°C)',
+            title="Temperatura (°C)",
+            range=[y_min, y_max],
             gridcolor=grid_color,
             showgrid=True,
-            range=[y_min, y_max],
             tickfont=dict(color=text_color)
         ),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        hovermode='x unified',
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified",
         height=400,
         margin=dict(l=60, r=40, t=60, b=60),
-        font=dict(
-            family='system-ui, -apple-system, "Segoe UI", Roboto, Arial',
-            color=text_color
-        )
+        font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color)
     )
-    
-    # Mostrar gráfico
+
     st.plotly_chart(fig, use_container_width=True)

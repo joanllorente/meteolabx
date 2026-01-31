@@ -8,33 +8,84 @@ from config import LS_STATION, LS_APIKEY, LS_Z
 localS = LocalStorage()
 
 
+def _mk_key(prefix: str, item_key: str, key_suffix: str) -> str:
+    """
+    Genera una key estable para los componentes de streamlit_local_storage.
+    NO cambia ninguna variable externa, solo ayuda a evitar colisiones.
+    """
+    if key_suffix:
+        return f"mlx_{prefix}_{item_key}_{key_suffix}"
+    return f"mlx_{prefix}_{item_key}"
+
+
 def set_local_storage(item_key: str, value, key_suffix: str) -> None:
-    """Guarda un valor en LocalStorage"""
+    """Guarda un valor en LocalStorage (o lo borra si value es None/'')"""
     try:
-        localS.setItem(item_key, value)
-    except:
-        pass  # Falla silenciosamente si hay problemas
+        k = _mk_key("set", item_key, key_suffix)
+
+        # Si queremos "olvidar", intentamos borrar
+        if value is None or value == "":
+            # Intentar métodos de borrado si existen
+            for method_name in ("removeItem", "deleteItem", "delItem", "remove"):
+                fn = getattr(localS, method_name, None)
+                if callable(fn):
+                    try:
+                        # Algunas libs aceptan key=..., otras no
+                        try:
+                            fn(item_key, key=k)
+                        except TypeError:
+                            fn(item_key)
+                        return
+                    except Exception:
+                        pass
+
+            # Fallback: si no hay método de borrado, guardamos vacío
+            try:
+                localS.setItem(item_key, "", key=k)
+            except TypeError:
+                localS.setItem(item_key, "")
+            return
+
+        # Guardado normal
+        try:
+            localS.setItem(item_key, value, key=k)
+        except TypeError:
+            localS.setItem(item_key, value)
+
+    except Exception:
+        # Falla silenciosamente si hay problemas
+        pass
 
 
 def get_stored_station():
     """Obtiene Station ID guardada"""
     try:
-        return localS.getItem(LS_STATION)
-    except:
+        # key estable para evitar colisiones si se llama varias veces
+        try:
+            return localS.getItem(LS_STATION, key="mlx_get_station")
+        except TypeError:
+            return localS.getItem(LS_STATION)
+    except Exception:
         return None
 
 
 def get_stored_apikey():
     """Obtiene API Key guardada"""
     try:
-        return localS.getItem(LS_APIKEY)
-    except:
+        try:
+            return localS.getItem(LS_APIKEY, key="mlx_get_apikey")
+        except TypeError:
+            return localS.getItem(LS_APIKEY)
+    except Exception:
         return None
 
 
 def get_stored_z():
     """Obtiene altitud guardada"""
     try:
-        return localS.getItem(LS_Z)
-    except:
+        try:
+            return localS.getItem(LS_Z, key="mlx_get_z")
+        except TypeError:
+            return localS.getItem(LS_Z)
+    except Exception:
         return None

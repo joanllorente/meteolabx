@@ -95,6 +95,13 @@ def render_sidebar(localS):
     # Conectar estación
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🔌 Conectar estación")
+    
+    # Aplicar borrado si está marcado (ANTES de crear widgets)
+    if st.session_state.get("_clear_inputs", False):
+        for key in ["active_station", "active_key", "active_z"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        del st.session_state["_clear_inputs"]
 
     st.sidebar.text_input("Station ID (WU)", key="active_station", placeholder="Introducir ID")
     st.sidebar.text_input("API Key (WU)", key="active_key", type="password", placeholder="Pega aquí tu API key")
@@ -123,13 +130,22 @@ def render_sidebar(localS):
             st.sidebar.info("Activa 'Recordar en este dispositivo' para guardar.")
 
     if forget_clicked:
+        # Borrar de localStorage
         set_local_storage(LS_STATION, "", "forget")
         set_local_storage(LS_APIKEY, "", "forget")
         set_local_storage(LS_Z, "", "forget")
-        st.session_state["active_station"] = ""
-        st.session_state["active_key"] = ""
-        st.session_state["active_z"] = "0"
-        st.sidebar.success("Borrado ✅")
+        
+        # Marcar para borrar en el próximo ciclo
+        st.session_state["_clear_inputs"] = True
+        st.session_state["connected"] = False
+        
+        # Limpiar caché de API
+        if "wu_cache_current" in st.session_state:
+            st.session_state["wu_cache_current"] = {}
+        if "wu_cache_daily" in st.session_state:
+            st.session_state["wu_cache_daily"] = {}
+        
+        st.sidebar.success("✅ Datos borrados")
         st.rerun()
 
     # Estado conectado
