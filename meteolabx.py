@@ -4,6 +4,11 @@ Aplicación principal
 """
 import streamlit as st
 import streamlit.components.v1 as components
+st.set_page_config(
+    page_title="MeteoLabX",
+    page_icon="favicon.png",
+    layout="wide"
+)
 import time
 import math
 import logging
