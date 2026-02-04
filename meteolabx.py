@@ -888,7 +888,15 @@ if active_tab == "📊 Observación":
             hovermode="x unified",
             height=400,
             margin=dict(l=60, r=40, t=60, b=60),
-            font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color)
+            font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color),
+            annotations=[dict(
+                text="meteolabx.com",
+                xref="paper", yref="paper",
+                x=0.98, y=0.02,
+                xanchor="right", yanchor="bottom",
+                showarrow=False,
+                font=dict(size=10, color="rgba(128,128,128,0.5)")
+            )]
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -1004,7 +1012,15 @@ if active_tab == "📊 Observación":
                 x=0.5
             ),
             margin=dict(l=60, r=40, t=60, b=60),
-            height=400
+            height=400,
+            annotations=[dict(
+                text="meteolabx.com",
+                xref="paper", yref="paper",
+                x=0.98, y=0.02,
+                xanchor="right", yanchor="bottom",
+                showarrow=False,
+                font=dict(size=10, color="rgba(128,128,128,0.5)")
+            )]
         )
         
         st.plotly_chart(fig_vapor, use_container_width=True, config={"displayModeBar": False})
@@ -1229,7 +1245,15 @@ elif active_tab == "📈 Tendencias":
                               gridcolor=grid_color, showgrid=True, tickfont=dict(color=text_color)),
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                     hovermode="x unified", height=400, margin=dict(l=60, r=40, t=60, b=60),
-                    font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color)
+                    font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color),
+                    annotations=[dict(
+                        text="meteolabx.com",
+                        xref="paper", yref="paper",
+                        x=0.98, y=0.02,
+                        xanchor="right", yanchor="bottom",
+                        showarrow=False,
+                        font=dict(size=10, color="rgba(128,128,128,0.5)")
+                    )]
                 )
 
                 st.plotly_chart(fig_theta_e, use_container_width=True)
@@ -1280,7 +1304,15 @@ elif active_tab == "📈 Tendencias":
                               gridcolor=grid_color, showgrid=True, tickfont=dict(color=text_color)),
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                     hovermode="x unified", height=400, margin=dict(l=60, r=40, t=60, b=60),
-                    font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color)
+                    font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color),
+                    annotations=[dict(
+                        text="meteolabx.com",
+                        xref="paper", yref="paper",
+                        x=0.98, y=0.02,
+                        xanchor="right", yanchor="bottom",
+                        showarrow=False,
+                        font=dict(size=10, color="rgba(128,128,128,0.5)")
+                    )]
                 )
 
                 st.plotly_chart(fig_e, use_container_width=True)
@@ -1320,7 +1352,15 @@ elif active_tab == "📈 Tendencias":
                               gridcolor=grid_color, showgrid=True, tickfont=dict(color=text_color)),
                     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                     hovermode="x unified", height=400, margin=dict(l=60, r=40, t=60, b=60),
-                    font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color)
+                    font=dict(family='system-ui, -apple-system, "Segoe UI", Roboto, Arial', color=text_color),
+                    annotations=[dict(
+                        text="meteolabx.com",
+                        xref="paper", yref="paper",
+                        x=0.98, y=0.02,
+                        xanchor="right", yanchor="bottom",
+                        showarrow=False,
+                        font=dict(size=10, color="rgba(128,128,128,0.5)")
+                    )]
                 )
 
                 st.plotly_chart(fig_p, use_container_width=True)
