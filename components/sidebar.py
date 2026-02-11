@@ -71,21 +71,26 @@ def render_sidebar(localS):
     from datetime import datetime
     from utils.storage import get_stored_station, get_stored_apikey, get_stored_z
     
-    # Prefill desde localStorage
-    saved_station = get_stored_station()
-    saved_key = get_stored_apikey()
-    saved_z = get_stored_z()
+    # Prefill desde localStorage (desactivado por defecto por seguridad)
+    # Actívalo solo si quieres ese comportamiento explícitamente:
+    #   MLX_ENABLE_LOCAL_PREFILL=1
+    allow_local_prefill = os.getenv("MLX_ENABLE_LOCAL_PREFILL", "0") == "1"
 
-    active_station = st.session_state.get("active_station", "")
-    active_key = st.session_state.get("active_key", "")
-    active_z = st.session_state.get("active_z", "0")
+    if allow_local_prefill:
+        saved_station = get_stored_station()
+        saved_key = get_stored_apikey()
+        saved_z = get_stored_z()
 
-    if not active_station and saved_station:
-        st.session_state["active_station"] = saved_station
-    if not active_key and saved_key:
-        st.session_state["active_key"] = saved_key
-    if (not str(active_z).strip() or active_z == "0") and saved_z:
-        st.session_state["active_z"] = normalize_text_input(saved_z)
+        active_station = st.session_state.get("active_station", "")
+        active_key = st.session_state.get("active_key", "")
+        active_z = st.session_state.get("active_z", "0")
+
+        if not active_station and saved_station:
+            st.session_state["active_station"] = saved_station
+        if not active_key and saved_key:
+            st.session_state["active_key"] = saved_key
+        if (not str(active_z).strip() or active_z == "0") and saved_z:
+            st.session_state["active_z"] = normalize_text_input(saved_z)
 
     st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
 
@@ -129,7 +134,7 @@ def render_sidebar(localS):
 
     # Recordar en dispositivo
     st.sidebar.markdown("---")
-    remember_device = st.sidebar.checkbox("Recordar en este dispositivo", value=True)
+    remember_device = st.sidebar.checkbox("Recordar en este dispositivo", value=False)
     st.sidebar.caption("⚠️ Si es un ordenador compartido, desactívalo o pulsa 'Olvidar' al terminar.")
 
     cS, cF = st.sidebar.columns(2)
