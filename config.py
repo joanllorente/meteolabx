@@ -13,7 +13,7 @@ MIN_REFRESH_SECONDS = 15  # Mínimo recomendado para evitar rate limit
 # ============================================================
 WU_URL = "https://api.weather.com/v2/pws/observations/current"
 WU_TIMEOUT_SECONDS = 15
-MAX_DATA_AGE_MINUTES = 10  # Advertir si datos son más antiguos
+MAX_DATA_AGE_MINUTES = 30  # Advertir si datos son más antiguos
 
 # ============================================================
 # CORRECCIÓN DE DIRECCIÓN DEL VIENTO

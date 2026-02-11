@@ -91,7 +91,24 @@ def render_sidebar(localS):
 
     # Tema
     st.sidebar.title("⚙️ Ajustes")
-    theme_mode = st.sidebar.radio("Tema", ["Auto", "Claro", "Oscuro"], index=0)
+    
+    # Obtener índice guardado o usar 0 por defecto
+    if "theme_index" not in st.session_state:
+        st.session_state["theme_index"] = 0
+    
+    theme_mode = st.sidebar.radio(
+        "Tema", 
+        ["Auto", "Claro", "Oscuro"], 
+        index=st.session_state["theme_index"],
+        key="theme_selector"
+    )
+    
+    # Actualizar índice si cambió
+    theme_options = ["Auto", "Claro", "Oscuro"]
+    new_index = theme_options.index(theme_mode)
+    if st.session_state["theme_index"] != new_index:
+        st.session_state["theme_index"] = new_index
+        st.rerun()
 
     # Conectar estación
     st.sidebar.markdown("---")
@@ -153,6 +170,38 @@ def render_sidebar(localS):
     if "connected" not in st.session_state:
         st.session_state["connected"] = False
 
+    def render_connection_banner(text: str, connected_state: bool):
+        """Banner de estado con texto tintado (sin blanco puro)."""
+        now_local = datetime.now()
+        auto_dark_local = (now_local.hour >= 20) or (now_local.hour <= 7)
+        is_dark_ui = (
+            theme_mode == "Oscuro" or
+            (theme_mode == "Auto" and auto_dark_local)
+        )
+
+        if connected_state:
+            bg = "rgba(61, 114, 87, 0.42)" if is_dark_ui else "rgba(55, 140, 88, 0.18)"
+            fg = "rgb(176, 231, 199)" if is_dark_ui else "rgb(28, 104, 61)"
+        else:
+            bg = "rgba(57, 86, 125, 0.45)" if is_dark_ui else "rgba(66, 133, 244, 0.16)"
+            fg = "rgb(64, 166, 255)" if is_dark_ui else "rgb(35, 112, 208)"
+
+        st.sidebar.markdown(
+            f"""
+            <div class="mlbx-status-banner" style="
+                --mlbx-banner-fg: {fg};
+                margin-top: 8px;
+                padding: 14px 16px;
+                border-radius: 14px;
+                border: none;
+                background: {bg};
+                font-size: 0.95rem;
+                font-weight: 500;
+            "><span class="mlbx-status-banner-text">{text}</span></div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     colA, colB = st.sidebar.columns(2)
     with colA:
         connect_clicked = st.button("Conectar", use_container_width=True)
@@ -161,15 +210,26 @@ def render_sidebar(localS):
 
     if disconnect_clicked:
         st.session_state["connected"] = False
+        st.session_state["connection_type"] = None
+        for state_key in list(st.session_state.keys()):
+            if state_key.startswith('aemet_') or state_key.startswith('provider_station_') or state_key.startswith('meteocat_'):
+                del st.session_state[state_key]
 
     if connect_clicked:
         station = str(st.session_state.get("active_station", "")).strip()
-        key = str(st.session_state.get("active_key", "")).strip()
+        api_key = str(st.session_state.get("active_key", "")).strip()
         z_raw = str(st.session_state.get("active_z", "")).strip()
 
-        if not station or not key:
+        if not station or not api_key:
             st.sidebar.error("Falta Station ID o API key.")
         else:
+            # Conexión explícita de Weather Underground
+            st.session_state["connection_type"] = "WU"
+            # Limpiar restos de conexión por proveedor para evitar UI duplicada
+            for state_key in list(st.session_state.keys()):
+                if state_key.startswith('aemet_') or state_key.startswith('provider_station_') or state_key.startswith('meteocat_'):
+                    del st.session_state[state_key]
+
             # Validar altitud si se proporcionó
             if z_raw:  # Si hay altitud manual
                 try:
@@ -182,7 +242,7 @@ def render_sidebar(localS):
                         st.session_state["connected"] = True
                         if remember_device:
                             set_local_storage(LS_STATION, station, "connect")
-                            set_local_storage(LS_APIKEY, key, "connect")
+                            set_local_storage(LS_APIKEY, api_key, "connect")
                             set_local_storage(LS_Z, z_raw, "connect")
                 except Exception:
                     st.sidebar.error("Altitud inválida. Usa un número (ej: 12.5)")
@@ -190,11 +250,19 @@ def render_sidebar(localS):
                 st.session_state["connected"] = True
                 if remember_device:
                     set_local_storage(LS_STATION, station, "connect")
-                    set_local_storage(LS_APIKEY, key, "connect")
+                    set_local_storage(LS_APIKEY, api_key, "connect")
                     set_local_storage(LS_Z, "", "connect")
 
     if st.session_state.get("connected"):
-        st.sidebar.success(f"Conectado: {st.session_state.get('active_station','')}")
+        # Mostrar nombre según tipo de conexión
+        if st.session_state.get("connection_type") == "AEMET":
+            station_name = st.session_state.get('aemet_station_name', 'AEMET')
+        elif st.session_state.get("provider_station_name"):
+            station_name = st.session_state.get('provider_station_name', 'Estación')
+        else:
+            station_name = st.session_state.get('active_station', '')
+        
+        render_connection_banner(f"Conectado: {station_name}", connected_state=True)
         
         # Mostrar última actualización
         if "last_update_time" in st.session_state:
@@ -211,7 +279,7 @@ def render_sidebar(localS):
             
             st.sidebar.caption(f"Última actualización: {time_str}")
     else:
-        st.sidebar.info("No conectado")
+        render_connection_banner("No conectado", connected_state=False)
     
     # ============================================================
     # MODO DEMO RADIACIÓN (SOLO DESARROLLO/INTERNO)
@@ -259,6 +327,10 @@ def render_sidebar(localS):
     st.session_state["demo_radiation"] = demo_radiation
     st.session_state["demo_solar"] = demo_solar
     st.session_state["demo_uv"] = demo_uv
+    
+    # Mostrar estado de conexión AEMET si aplica
+    from components.aemet_selector import show_aemet_connection_status
+    show_aemet_connection_status()
 
     # Determinar tema
     now = datetime.now()

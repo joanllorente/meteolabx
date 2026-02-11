@@ -18,6 +18,8 @@ def ensure_rain_history():
         st.session_state.last_tip = None
     if "prev_tip" not in st.session_state:
         st.session_state.prev_tip = None
+    if "last_precip_change_time" not in st.session_state:
+        st.session_state.last_precip_change_time = None
 
 
 def reset_rain_history():
@@ -25,6 +27,7 @@ def reset_rain_history():
     st.session_state.rain_hist = deque(maxlen=2000)
     st.session_state.last_tip = None
     st.session_state.prev_tip = None
+    st.session_state.last_precip_change_time = None
 
 
 def rain_rates_from_total(precip_total_mm: float, data_epoch: float):
@@ -55,24 +58,53 @@ def rain_rates_from_total(precip_total_mm: float, data_epoch: float):
         reset_rain_history()
         hist = st.session_state.rain_hist
 
-    # Agregar nuevo punto SOLO si hay precipitación Y cambió el total
-    # No trackear volcados de 0 mm (sin lluvia)
+    # Detectar si hubo un CAMBIO en precip_total (volcado nuevo)
+    precip_changed = False
     if precip_total_mm > 1e-9:  # Hay precipitación real
-        if (not hist) or abs(precip_total_mm - hist[-1][1]) > 1e-9:
+        if not hist:
+            # PRIMERA LECTURA después de reconectar
+            # Guardar en historial pero NO actualizar last_precip_change_time
+            # (no sabemos si es un cambio nuevo o dato viejo)
+            hist.append((data_epoch, precip_total_mm))
+            st.session_state.last_tip = (data_epoch, precip_total_mm)
+            # prev_tip queda como None
+            # last_precip_change_time queda como None o sin cambiar
+        elif abs(precip_total_mm - hist[-1][1]) > 1e-9:
+            # HAY CAMBIO REAL - el total es diferente al último registrado
+            precip_changed = True
             hist.append((data_epoch, precip_total_mm))
             st.session_state.prev_tip = st.session_state.last_tip
             st.session_state.last_tip = (data_epoch, precip_total_mm)
+            
+            # IMPORTANTE: Solo aquí actualizamos el timestamp
+            import time
+            st.session_state.last_precip_change_time = time.time()
 
     # Tasa instantánea (entre últimos dos tips)
     inst = float("nan")
     a = st.session_state.prev_tip
     b = st.session_state.last_tip
     
-    if b is not None:
+    # TIMEOUT: Si han pasado más de 15 minutos desde el último CAMBIO en precip_total
+    # considerar que ya no llueve (intensidad = 0)
+    import time
+    TIMEOUT_SECONDS = 15 * 60  # 15 minutos
+    current_time = time.time()
+    
+    # Verificar cuánto tiempo hace desde el último cambio REAL
+    last_change_time = st.session_state.last_precip_change_time
+    time_since_last_change = None
+    
+    if last_change_time is not None:
+        time_since_last_change = current_time - last_change_time
+    
+    if b is not None and last_change_time is not None:
         t1, p1 = b
         
-        # Solo calcular intensidad si hay precipitación real en last_tip
-        if p1 > 1e-9:
+        # Solo calcular intensidad si:
+        # 1. Hay precipitación real en last_tip (p1 > 0)
+        # 2. No han pasado más de 15 minutos desde el último CAMBIO en precip_total
+        if p1 > 1e-9 and time_since_last_change <= TIMEOUT_SECONDS:
             if a is not None:
                 # Tenemos dos volcados: calcular intensidad real
                 t0, p0 = a
@@ -83,7 +115,7 @@ def rain_rates_from_total(precip_total_mm: float, data_epoch: float):
             else:
                 # PRIMER VOLCADO: usar 0.4 mm/h como default
                 inst = 0.4
-        # Si p1 == 0, no hay lluvia → inst queda como NaN
+        # Si p1 == 0 o pasaron más de 15 min desde último cambio → inst = NaN
 
     def window_rate(window_s: float):
         """

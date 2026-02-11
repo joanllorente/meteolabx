@@ -12,6 +12,8 @@ def html_clean(s: str) -> str:
 
 def is_nan(x):
     """Verifica si un valor es NaN"""
+    if x is None:
+        return True
     return x != x
 
 
