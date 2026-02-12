@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser Geolocation Component</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        let lastRequestId = null;
+
+        function sendMessage(type, payload) {
+          const message = Object.assign(
+            {
+              isStreamlitMessage: true,
+              type: type,
+            },
+            payload || {}
+          );
+          window.parent.postMessage(message, "*");
+        }
+
+        function setComponentValue(value) {
+          sendMessage("streamlit:setComponentValue", { value: value });
+        }
+
+        function setFrameHeight(height) {
+          sendMessage("streamlit:setFrameHeight", { height: height });
+        }
+
+        function componentReady() {
+          sendMessage("streamlit:componentReady", { apiVersion: 1 });
+        }
+
+        function resolvePermissionState(callback) {
+          if (!navigator.permissions || !navigator.permissions.query) {
+            callback(null);
+            return;
+          }
+
+          navigator.permissions
+            .query({ name: "geolocation" })
+            .then(function (status) {
+              callback(status && status.state ? status.state : null);
+            })
+            .catch(function () {
+              callback(null);
+            });
+        }
+
+        function runGeolocation(args) {
+          if (!navigator.geolocation) {
+            setComponentValue({
+              ok: false,
+              error_code: -1,
+              error_message: "Geolocation not supported by this browser.",
+              permission_state: null,
+              source: "browser_geolocation",
+            });
+            return;
+          }
+
+          const options = {
+            enableHighAccuracy: Boolean(args.high_accuracy),
+            timeout: Number(args.timeout_ms || 12000),
+            maximumAge: 0,
+          };
+
+          resolvePermissionState(function (permissionState) {
+            navigator.geolocation.getCurrentPosition(
+              function (position) {
+                const c = position.coords || {};
+                setComponentValue({
+                  ok: true,
+                  lat: Number(c.latitude),
+                  lon: Number(c.longitude),
+                  accuracy_m: c.accuracy == null ? null : Number(c.accuracy),
+                  altitude_m: c.altitude == null ? null : Number(c.altitude),
+                  altitude_accuracy_m:
+                    c.altitudeAccuracy == null
+                      ? null
+                      : Number(c.altitudeAccuracy),
+                  heading_deg: c.heading == null ? null : Number(c.heading),
+                  speed_mps: c.speed == null ? null : Number(c.speed),
+                  timestamp_ms: Number(position.timestamp || Date.now()),
+                  permission_state: permissionState,
+                  source: "browser_geolocation",
+                });
+              },
+              function (error) {
+                setComponentValue({
+                  ok: false,
+                  error_code:
+                    error && typeof error.code === "number" ? error.code : null,
+                  error_message:
+                    error && error.message
+                      ? String(error.message)
+                      : "Unable to get geolocation.",
+                  permission_state: permissionState,
+                  source: "browser_geolocation",
+                });
+              },
+              options
+            );
+          });
+        }
+
+        function onRender(event) {
+          const data = event.data;
+          if (!data || data.type !== "streamlit:render") {
+            return;
+          }
+
+          const args = data.args || {};
+          const requestId = Number(args.request_id || 0);
+
+          setFrameHeight(0);
+
+          if (Number.isNaN(requestId)) {
+            return;
+          }
+
+          if (requestId <= 0) {
+            return;
+          }
+
+          if (requestId === lastRequestId) {
+            return;
+          }
+
+          lastRequestId = requestId;
+          runGeolocation(args);
+        }
+
+        window.addEventListener("message", onRender);
+        componentReady();
+        setFrameHeight(0);
+      })();
+    </script>
+  </body>
+</html>

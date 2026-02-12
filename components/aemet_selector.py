@@ -3,12 +3,10 @@ Componente para seleccionar estación meteorológica más cercana.
 Mantiene compatibilidad con el flujo actual de AEMET.
 """
 import streamlit as st
-import streamlit.components.v1 as components
 from providers import search_nearby_stations
 import unicodedata
 import requests
-from streamlit_autorefresh import st_autorefresh
-from streamlit_js_eval import streamlit_js_eval
+from .browser_geolocation import get_browser_geolocation
 
 CITY_COORDS_ES = {
     "madrid": (40.4168, -3.7038),
@@ -133,7 +131,6 @@ def _normalize_coords_order(lat: float, lon: float):
     return lat, lon, False
 
 
-@st.cache_data(ttl=3600)
 def _get_location_by_ip():
     """
     Fallback de geolocalización por IP (aproximado).
@@ -154,131 +151,6 @@ def _get_location_by_ip():
         except Exception:
             continue
     return None
-
-
-def _get_location_by_ip_client():
-    """
-    Fallback intermedio: geolocalización por IP del CLIENTE (navegador).
-    """
-    js = """
-    (async () => {
-      try {
-        const providers = [
-          'https://ipapi.co/json/',
-          'https://ipwho.is/'
-        ];
-        for (const url of providers) {
-          try {
-            const r = await fetch(url, {cache: 'no-store'});
-            if (!r.ok) continue;
-            const j = await r.json();
-            const lat = j.latitude ?? j.lat;
-            const lon = j.longitude ?? j.lon ?? j.lng;
-            if (lat != null && lon != null) {
-              return {
-                lat: Number(lat),
-                lon: Number(lon),
-                city: j.city ?? null,
-                region: j.region ?? j.region_name ?? null,
-                method: 'IP_CLIENT'
-              };
-            }
-          } catch (e) {}
-        }
-        return null;
-      } catch(e) {
-        return null;
-      }
-    })()
-    """
-    try:
-        result = streamlit_js_eval(js_expressions=js, key=f"ipgeo_client_{st.session_state.get('geo_request_id', 0)}")
-        if isinstance(result, dict):
-            lat = result.get("lat")
-            lon = result.get("lon")
-            if lat is not None and lon is not None:
-                return float(lat), float(lon), "IP_CLIENT"
-    except Exception:
-        pass
-    return None
-
-
-def _inject_browser_geolocation():
-    """
-    Inyecta geolocalización nativa y guarda resultado en localStorage por request_id.
-    """
-    request_id = st.session_state.get("geo_request_id", 0)
-    storage_key = f"mlx_geo_{request_id}"
-
-    st.markdown(
-        f"""
-        <script>
-        (function() {{
-            const KEY = "{storage_key}";
-            function save(obj) {{
-                try {{
-                    localStorage.setItem(KEY, JSON.stringify(obj));
-                }} catch (e) {{}}
-            }}
-
-            if (localStorage.getItem(KEY + "_done")) return;
-            localStorage.setItem(KEY + "_done", "true");
-
-            if (!navigator.geolocation) {{
-                save({{error: "not_supported", detail: "El navegador no soporta geolocalización."}});
-                return;
-            }}
-
-            navigator.geolocation.getCurrentPosition(
-                function(position) {{
-                    save({{
-                        success: true,
-                        lat: position.coords.latitude,
-                        lon: position.coords.longitude,
-                        accuracy: position.coords.accuracy || null
-                    }});
-                }},
-                function(error) {{
-                    save({{
-                        error: (error && error.code === 1) ? "permission_denied"
-                             : (error && error.code === 2) ? "position_unavailable"
-                             : (error && error.code === 3) ? "timeout"
-                             : "unknown",
-                        detail: (error && error.message) ? error.message : "El navegador no devolvió datos de geolocalización."
-                    }});
-                }},
-                {{
-                    enableHighAccuracy: true,
-                    timeout: 2500,
-                    maximumAge: 0
-                }}
-            );
-        }})();
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _read_browser_geolocation():
-    """
-    Lee resultado de geolocalización del localStorage del request_id actual.
-    """
-    request_id = st.session_state.get("geo_request_id", 0)
-    storage_key = f"mlx_geo_{request_id}"
-    reader = f"""
-    <script>
-    const Streamlit = window.parent.Streamlit;
-    try {{
-        const raw = localStorage.getItem("{storage_key}");
-        Streamlit.setComponentValue(raw ? JSON.parse(raw) : null);
-    }} catch (e) {{
-        Streamlit.setComponentValue(null);
-    }}
-    Streamlit.setFrameHeight(0);
-    </script>
-    """
-    return components.html(reader, height=0)
 
 
 def _default_search_coords():
@@ -320,10 +192,41 @@ def render_aemet_selector():
 
     if "geo_request_id" not in st.session_state:
         st.session_state["geo_request_id"] = 0
-    if "geo_waiting" not in st.session_state:
-        st.session_state["geo_waiting"] = False
-    if "geo_attempts" not in st.session_state:
-        st.session_state["geo_attempts"] = 0
+    if "geo_pending" not in st.session_state:
+        st.session_state["geo_pending"] = False
+    if "geo_last_error" not in st.session_state:
+        st.session_state["geo_last_error"] = ""
+    if "geo_debug_msg" not in st.session_state:
+        st.session_state["geo_debug_msg"] = ""
+
+    browser_geo_result = get_browser_geolocation(
+        request_id=st.session_state["geo_request_id"],
+        timeout_ms=12000,
+        high_accuracy=True,
+    )
+
+    if st.session_state.get("geo_pending") and isinstance(browser_geo_result, dict):
+        st.session_state["geo_pending"] = False
+        if browser_geo_result.get("ok"):
+            lat = browser_geo_result.get("lat")
+            lon = browser_geo_result.get("lon")
+            if lat is not None and lon is not None:
+                lat, lon, swapped = _normalize_coords_order(lat, lon)
+                st.session_state["search_lat"] = lat
+                st.session_state["search_lon"] = lon
+                st.session_state["show_results"] = True
+                acc = browser_geo_result.get("accuracy_m")
+                if isinstance(acc, (int, float)):
+                    st.session_state["geo_debug_msg"] = f"Ubicación GPS obtenida (±{acc:.0f} m)."
+                else:
+                    st.session_state["geo_debug_msg"] = "Ubicación GPS obtenida."
+                if swapped:
+                    st.session_state["geo_debug_msg"] += " Se corrigieron coordenadas invertidas."
+                st.session_state["geo_last_error"] = ""
+                st.rerun()
+        error_message = browser_geo_result.get("error_message") or "No se pudo obtener tu ubicación GPS."
+        st.session_state["geo_last_error"] = str(error_message)
+        st.session_state["geo_debug_msg"] = ""
 
     # Botón principal (CTA) en rojo para búsqueda rápida
     st.markdown(
@@ -346,89 +249,32 @@ def render_aemet_selector():
 
     if st.button("📍 Buscar estaciones cerca de mí", type="primary", use_container_width=True):
         st.session_state["geo_request_id"] += 1
-        st.session_state["geo_waiting"] = True
-        st.session_state["geo_attempts"] = 0
-        st.session_state["geo_debug_msg"] = "Solicitando ubicación al navegador..."
+        st.session_state["geo_pending"] = True
+        st.session_state["geo_last_error"] = ""
+        st.session_state["geo_debug_msg"] = "Solicitando ubicación GPS al navegador..."
         st.rerun()
 
-    if st.session_state.get("geo_waiting"):
-        if st.session_state["geo_attempts"] == 0:
-            _inject_browser_geolocation()
-            st.info("🔐 Acepta el permiso para ubicación precisa (si falla, se usará IP aproximada).")
+    if st.session_state.get("geo_pending"):
+        st.caption("Esperando respuesta de geolocalización del navegador...")
 
-        browser_result = _read_browser_geolocation()
-
-        if browser_result is not None and isinstance(browser_result, dict):
-            if browser_result.get("success"):
-                lat = browser_result.get("lat")
-                lon = browser_result.get("lon")
-                if lat is not None and lon is not None:
-                    lat, lon, swapped = _normalize_coords_order(float(lat), float(lon))
-                    st.session_state["search_lat"] = lat
-                    st.session_state["search_lon"] = lon
-                    st.session_state["show_results"] = True
-                    st.session_state["geo_waiting"] = False
-                    st.session_state["geo_debug_msg"] = (
-                        "Se corrigieron coordenadas invertidas del navegador." if swapped else ""
-                    )
-                    st.rerun()
-
-            elif browser_result.get("error") in ["permission_denied", "position_unavailable", "timeout", "not_supported", "unknown"]:
-                ip_result = _get_location_by_ip_client()
-                if not ip_result:
-                    ip_result = _get_location_by_ip()
-                if ip_result:
-                    lat, lon, method = ip_result
-                    lat, lon, swapped = _normalize_coords_order(lat, lon)
-                    st.session_state["search_lat"] = lat
-                    st.session_state["search_lon"] = lon
-                    st.session_state["show_results"] = True
-                    st.session_state["geo_waiting"] = False
-                    if method == "IP_CLIENT":
-                        st.session_state["geo_debug_msg"] = "GPS no disponible; se usó ubicación aproximada por IP del navegador."
-                    else:
-                        st.session_state["geo_debug_msg"] = "GPS no disponible; se usó ubicación aproximada por IP del servidor."
-                    if swapped:
-                        st.session_state["geo_debug_msg"] += " Se corrigieron coordenadas invertidas."
-                    st.rerun()
-                else:
-                    st.session_state["geo_waiting"] = False
-                    st.session_state["show_results"] = False
-                    st.session_state["geo_debug_msg"] = (
-                        "No se pudo obtener tu ubicación desde el navegador ni por IP. "
-                        "Usa ciudad o coordenadas."
-                    )
-                    st.warning("No pude leer tu ubicación. Usa ciudad o coordenadas.")
-        else:
-            st.session_state["geo_attempts"] += 1
-            if st.session_state["geo_attempts"] >= 3:
-                ip_result = _get_location_by_ip_client()
-                if not ip_result:
-                    ip_result = _get_location_by_ip()
-                if ip_result:
-                    lat, lon, method = ip_result
-                    lat, lon, swapped = _normalize_coords_order(lat, lon)
-                    st.session_state["search_lat"] = lat
-                    st.session_state["search_lon"] = lon
-                    st.session_state["show_results"] = True
-                    st.session_state["geo_waiting"] = False
-                    if method == "IP_CLIENT":
-                        st.session_state["geo_debug_msg"] = "Tiempo agotado en GPS; se usó ubicación aproximada por IP del navegador."
-                    else:
-                        st.session_state["geo_debug_msg"] = "Tiempo agotado en GPS; se usó ubicación aproximada por IP del servidor."
-                    if swapped:
-                        st.session_state["geo_debug_msg"] += " Se corrigieron coordenadas invertidas."
-                    st.rerun()
-                else:
-                    st.session_state["geo_waiting"] = False
-                    st.session_state["show_results"] = False
-                    st.session_state["geo_debug_msg"] = (
-                        "No se pudo obtener tu ubicación desde el navegador ni por IP. "
-                        "Usa ciudad o coordenadas."
-                    )
-                    st.warning("No pude leer tu ubicación. Usa ciudad o coordenadas.")
-            else:
-                st_autorefresh(interval=1000, limit=3, key=f"geo_poll_{st.session_state['geo_request_id']}")
+    geo_last_error = st.session_state.get("geo_last_error", "").strip()
+    if geo_last_error:
+        st.warning("No pude leer tu ubicación GPS del navegador. Revisa permisos de ubicación del sitio.")
+        st.caption(f"Detalle navegador: {geo_last_error}")
+        if st.button("Usar ubicación aproximada por IP (menos precisa)", use_container_width=True):
+            ip_result = _get_location_by_ip()
+            if ip_result:
+                lat, lon, _ = ip_result
+                lat, lon, swapped = _normalize_coords_order(lat, lon)
+                st.session_state["search_lat"] = lat
+                st.session_state["search_lon"] = lon
+                st.session_state["show_results"] = True
+                st.session_state["geo_last_error"] = ""
+                st.session_state["geo_debug_msg"] = "Se usó ubicación aproximada por IP del servidor."
+                if swapped:
+                    st.session_state["geo_debug_msg"] += " Se corrigieron coordenadas invertidas."
+                st.rerun()
+            st.warning("No pude obtener ubicación por IP en este momento.")
 
     geo_debug_msg = st.session_state.get("geo_debug_msg", "")
     if geo_debug_msg:
