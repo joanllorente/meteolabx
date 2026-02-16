@@ -1,0 +1,696 @@
+{
+  "B090": {
+    "measuresForAir/humidity": "HA05",
+    "measuresForAir/temperature": "TA05",
+    "measuresForAtmosphere/pressure": "SP05",
+    "measuresForWater/precipitation": "PA05",
+    "measuresForWind/max_speed": "VV05",
+    "measuresForWind/mean_direction": "DV05",
+    "measuresForWind/mean_speed": "DV05"
+  },
+  "B096": {
+    "measuresForAir/humidity": "HA06",
+    "measuresForAir/temperature": "TA06",
+    "measuresForAtmosphere/pressure": "SP06",
+    "measuresForWater/precipitation": "PA05",
+    "measuresForWind/max_speed": "VV06",
+    "measuresForWind/mean_direction": "DV06",
+    "measuresForWind/mean_speed": "VV06"
+  },
+  "C002": {
+    "measuresForAir/humidity": "R0RY",
+    "measuresForAir/temperature": "R0RY",
+    "measuresForSun/irradiance": "K0R3",
+    "measuresForWater/precipitation": "G4RE",
+    "measuresForWind/max_speed": "Y0AL",
+    "measuresForWind/mean_direction": "Y0AL",
+    "measuresForWind/mean_speed": "Y0AL"
+  },
+  "C007": {
+    "measuresForAir/humidity": "R0FY",
+    "measuresForAir/temperature": "R0FY",
+    "measuresForSun/irradiance": "K0AA",
+    "measuresForWind/max_speed": "Y094",
+    "measuresForWind/mean_direction": "Y094",
+    "measuresForWind/mean_speed": "Y094"
+  },
+  "C009": {
+    "measuresForAir/humidity": "R0EL",
+    "measuresForAir/temperature": "R0EL",
+    "measuresForWater/precipitation": "G477"
+  },
+  "C00A": {
+    "measuresForAir/humidity": "R0II",
+    "measuresForAir/temperature": "R0II",
+    "measuresForSun/irradiance": "K0AQ",
+    "measuresForWater/precipitation": "G458",
+    "measuresForWind/max_speed": "Y0AJ",
+    "measuresForWind/mean_direction": "Y0AJ",
+    "measuresForWind/mean_speed": "Y0AJ"
+  },
+  "C00B": {
+    "measuresForAir/humidity": "R0DZ",
+    "measuresForAir/temperature": "R0DZ",
+    "measuresForSun/irradiance": "K0AR",
+    "measuresForWater/precipitation": "G439",
+    "measuresForWind/max_speed": "Y041",
+    "measuresForWind/mean_direction": "Y041",
+    "measuresForWind/mean_speed": "Y041"
+  },
+  "C010": {
+    "measuresForWater/precipitation": "CHP10"
+  },
+  "C016": {
+    "measuresForAir/humidity": "R0EV",
+    "measuresForAir/temperature": "R0EV",
+    "measuresForAtmosphere/pressure": "S008",
+    "measuresForSun/irradiance": "K0AM",
+    "measuresForWater/precipitation": "G471",
+    "measuresForWind/max_speed": "Y0AT",
+    "measuresForWind/mean_direction": "Y0AT",
+    "measuresForWind/mean_speed": "Y0AT"
+  },
+  "C017": {
+    "measuresForAir/humidity": "R0D0",
+    "measuresForAir/temperature": "R0D0",
+    "measuresForSun/irradiance": "K0RA",
+    "measuresForWater/precipitation": "G4DB",
+    "measuresForWind/max_speed": "Y008",
+    "measuresForWind/mean_direction": "Y008",
+    "measuresForWind/mean_speed": "Y008"
+  },
+  "C018": {
+    "measuresForAir/humidity": "R0RE",
+    "measuresForAir/temperature": "R0RE",
+    "measuresForSun/irradiance": "K0AS",
+    "measuresForWind/max_speed": "Y093",
+    "measuresForWind/mean_direction": "Y093",
+    "measuresForWind/mean_speed": "Y093"
+  },
+  "C019": {
+    "measuresForAir/humidity": "R0FM",
+    "measuresForAir/temperature": "R0FM",
+    "measuresForSun/irradiance": "K048",
+    "measuresForWater/precipitation": "G455",
+    "measuresForWind/max_speed": "Y0BT",
+    "measuresForWind/mean_direction": "Y0BT",
+    "measuresForWind/mean_speed": "Y0BT"
+  },
+  "C020": {
+    "measuresForAir/humidity": "R026",
+    "measuresForAir/temperature": "R026",
+    "measuresForSun/irradiance": "K0AE",
+    "measuresForWater/precipitation": "G426",
+    "measuresForWind/max_speed": "Y0RI",
+    "measuresForWind/mean_direction": "Y0RI",
+    "measuresForWind/mean_speed": "Y0RI"
+  },
+  "C021": {
+    "measuresForAir/humidity": "R0FY",
+    "measuresForAir/temperature": "R0FY",
+    "measuresForWind/max_speed": "Y001",
+    "measuresForWind/mean_direction": "Y001",
+    "measuresForWind/mean_speed": "Y001"
+  },
+  "C022": {
+    "measuresForAir/humidity": "G411",
+    "measuresForAir/temperature": "G411",
+    "measuresForSun/irradiance": "K0AJ",
+    "measuresForWater/precipitation": "G416",
+    "measuresForWind/max_speed": "Y064",
+    "measuresForWind/mean_direction": "Y064",
+    "measuresForWind/mean_speed": "Y064"
+  },
+  "C023": {
+    "measuresForAir/humidity": "R0CY",
+    "measuresForAir/temperature": "R0CY",
+    "measuresForSun/irradiance": "K0S8",
+    "measuresForWater/precipitation": "G4AS",
+    "measuresForWind/max_speed": "Y024",
+    "measuresForWind/mean_direction": "Y024",
+    "measuresForWind/mean_speed": "Y024"
+  },
+  "C024": {
+    "measuresForAir/humidity": "R0BV",
+    "measuresForAir/temperature": "R0BV",
+    "measuresForAtmosphere/pressure": "S042",
+    "measuresForWater/precipitation": "G4AL",
+    "measuresForWind/max_speed": "Y0RB",
+    "measuresForWind/mean_direction": "Y0RB",
+    "measuresForWind/mean_speed": "Y0RB"
+  },
+  "C025": {
+    "measuresForWind/max_speed": "Y0CM",
+    "measuresForWind/mean_direction": "Y0CM",
+    "measuresForWind/mean_speed": "Y0CM"
+  },
+  "C026": {
+    "measuresForAir/humidity": "R0IE",
+    "measuresForAir/temperature": "R0IE",
+    "measuresForSun/irradiance": "K026",
+    "measuresForWater/precipitation": "G4B3",
+    "measuresForWind/max_speed": "Y0DB",
+    "measuresForWind/mean_direction": "Y0DB",
+    "measuresForWind/mean_speed": "Y0DB"
+  },
+  "C028": {
+    "measuresForAir/humidity": "R0IC",
+    "measuresForAir/temperature": "R0IC",
+    "measuresForWater/precipitation": "G4AF",
+    "measuresForWind/max_speed": "Y0R8",
+    "measuresForWind/mean_direction": "Y0R8",
+    "measuresForWind/mean_speed": "Y0R8"
+  },
+  "C029": {
+    "measuresForAir/humidity": "R0GG",
+    "measuresForAir/temperature": "R0GG",
+    "measuresForSun/irradiance": "K041",
+    "measuresForWater/precipitation": "G4AB",
+    "measuresForWind/max_speed": "Y0AP",
+    "measuresForWind/mean_direction": "Y0AP",
+    "measuresForWind/mean_speed": "Y0AP"
+  },
+  "C030": {
+    "measuresForAir/humidity": "R0DY",
+    "measuresForAir/temperature": "R0DY",
+    "measuresForSun/irradiance": "K013",
+    "measuresForWater/precipitation": "G447",
+    "measuresForWind/max_speed": "Y064",
+    "measuresForWind/mean_direction": "Y064",
+    "measuresForWind/mean_speed": "Y064"
+  },
+  "C031": {
+    "measuresForAir/humidity": "R0SM",
+    "measuresForAir/temperature": "R0SM",
+    "measuresForSun/irradiance": "K612",
+    "measuresForWater/precipitation": "G4D2",
+    "measuresForWind/max_speed": "Y0DD",
+    "measuresForWind/mean_direction": "Y0DD",
+    "measuresForWind/mean_speed": "Y0DD"
+  },
+  "C032": {
+    "measuresForAir/humidity": "R0HO",
+    "measuresForAir/temperature": "R0HO",
+    "measuresForWater/precipitation": "G450",
+    "measuresForWind/max_speed": "Y064",
+    "measuresForWind/mean_direction": "Y064",
+    "measuresForWind/mean_speed": "Y064"
+  },
+  "C033": {
+    "measuresForAir/humidity": "R0RU",
+    "measuresForAir/temperature": "R0RU",
+    "measuresForSun/irradiance": "K033",
+    "measuresForWater/precipitation": "G499",
+    "measuresForWind/max_speed": "Y005",
+    "measuresForWind/mean_direction": "Y005",
+    "measuresForWind/mean_speed": "Y005"
+  },
+  "C034": {
+    "measuresForAir/humidity": "R0IH",
+    "measuresForAir/temperature": "R0IH",
+    "measuresForSun/irradiance": "K0AX",
+    "measuresForWater/precipitation": "G4AR",
+    "measuresForWind/max_speed": "Y048",
+    "measuresForWind/mean_direction": "Y048",
+    "measuresForWind/mean_speed": "Y048"
+  },
+  "C035": {
+    "measuresForAir/humidity": "R0AX",
+    "measuresForAir/temperature": "R0DL",
+    "measuresForAtmosphere/pressure": "S001",
+    "measuresForSun/irradiance": "K0AD",
+    "measuresForWater/precipitation": "G4AF",
+    "measuresForWind/max_speed": "Y0BF",
+    "measuresForWind/mean_direction": "Y0BF",
+    "measuresForWind/mean_speed": "Y0BF"
+  },
+  "C036": {
+    "measuresForAir/humidity": "R0BJ",
+    "measuresForAir/temperature": "R0BJ",
+    "measuresForSun/irradiance": "K0AP",
+    "measuresForWater/precipitation": "G467",
+    "measuresForWind/max_speed": "Y0RG",
+    "measuresForWind/mean_direction": "Y0RG",
+    "measuresForWind/mean_speed": "Y0RG"
+  },
+  "C037": {
+    "measuresForAir/humidity": "R0BF",
+    "measuresForAir/temperature": "R0BF",
+    "measuresForSun/irradiance": "K093",
+    "measuresForWater/precipitation": "G4AE",
+    "measuresForWind/max_speed": "Y030",
+    "measuresForWind/mean_direction": "Y030",
+    "measuresForWind/mean_speed": "Y030"
+  },
+  "C038": {
+    "measuresForAir/humidity": "R0ED",
+    "measuresForAir/temperature": "R0ED",
+    "measuresForWater/precipitation": "G442",
+    "measuresForWind/max_speed": "Y0W1",
+    "measuresForWind/mean_direction": "Y0W1",
+    "measuresForWind/mean_speed": "Y0W1"
+  },
+  "C040": {
+    "measuresForAir/humidity": "R0GC",
+    "measuresForAir/temperature": "R0GC",
+    "measuresForSun/irradiance": "K026",
+    "measuresForWind/max_speed": "Y045",
+    "measuresForWind/mean_direction": "Y045",
+    "measuresForWind/mean_speed": "Y045"
+  },
+  "C041": {
+    "measuresForAir/humidity": "R0GF",
+    "measuresForAir/temperature": "R0GF",
+    "measuresForSun/irradiance": "K602",
+    "measuresForWater/precipitation": "G497",
+    "measuresForWind/max_speed": "Y005",
+    "measuresForWind/mean_direction": "Y005",
+    "measuresForWind/mean_speed": "Y005"
+  },
+  "C042": {
+    "measuresForAir/humidity": "R0HG",
+    "measuresForAir/temperature": "R0HG",
+    "measuresForAtmosphere/pressure": "S0AC",
+    "measuresForSun/irradiance": "K0R6",
+    "measuresForWind/max_speed": "Y0CV",
+    "measuresForWind/mean_direction": "Y0CV",
+    "measuresForWind/mean_speed": "Y0CV"
+  },
+  "C043": {
+    "measuresForAir/humidity": "R0FU",
+    "measuresForAir/temperature": "R0FU",
+    "measuresForAtmosphere/pressure": "S040",
+    "measuresForSun/irradiance": "K612",
+    "measuresForWater/precipitation": "G4AG",
+    "measuresForWind/max_speed": "Y0AQ",
+    "measuresForWind/mean_direction": "Y0AQ",
+    "measuresForWind/mean_speed": "Y0AQ"
+  },
+  "C044": {
+    "measuresForAir/humidity": "R0BF",
+    "measuresForAir/temperature": "R0BF",
+    "measuresForWater/precipitation": "G403"
+  },
+  "C045": {
+    "measuresForAir/humidity": "R0GE",
+    "measuresForAir/temperature": "R0GE",
+    "measuresForWater/precipitation": "G4RF",
+    "measuresForWind/max_speed": "Y0BR",
+    "measuresForWind/mean_direction": "Y0BR",
+    "measuresForWind/mean_speed": "Y0BR"
+  },
+  "C046": {
+    "measuresForAir/humidity": "R0SA",
+    "measuresForAir/temperature": "R0SA",
+    "measuresForWater/precipitation": "G414",
+    "measuresForWind/max_speed": "Y0BP",
+    "measuresForWind/mean_speed": "Y0BP"
+  },
+  "C047": {
+    "measuresForAir/humidity": "R0BS",
+    "measuresForAir/temperature": "R0BS",
+    "measuresForWater/precipitation": "G4RA",
+    "measuresForWind/max_speed": "Y0BX",
+    "measuresForWind/mean_direction": "Y0BX",
+    "measuresForWind/mean_speed": "Y0BX"
+  },
+  "C048": {
+    "measuresForAir/humidity": "R0EY",
+    "measuresForAir/temperature": "R0EY",
+    "measuresForSun/irradiance": "K0AZ",
+    "measuresForWater/precipitation": "G4R2",
+    "measuresForWind/max_speed": "Y0BO",
+    "measuresForWind/mean_direction": "Y0BO",
+    "measuresForWind/mean_speed": "Y0BO"
+  },
+  "C049": {
+    "measuresForAir/humidity": "R0RY",
+    "measuresForAir/temperature": "R0RY",
+    "measuresForSun/irradiance": "K0AL",
+    "measuresForWater/precipitation": "G4R9",
+    "measuresForWind/max_speed": "Y033",
+    "measuresForWind/mean_direction": "Y033",
+    "measuresForWind/mean_speed": "Y033"
+  },
+  "C050": {
+    "measuresForAir/humidity": "R0R2",
+    "measuresForAir/temperature": "R0R2",
+    "measuresForSun/irradiance": "K613",
+    "measuresForWater/precipitation": "G410",
+    "measuresForWind/max_speed": "YE17",
+    "measuresForWind/mean_direction": "YE17",
+    "measuresForWind/mean_speed": "YE17"
+  },
+  "C051": {
+    "measuresForAir/humidity": "R0RE",
+    "measuresForAir/temperature": "R0RE",
+    "measuresForSun/irradiance": "K0AT",
+    "measuresForWater/precipitation": "G4B1",
+    "measuresForWind/max_speed": "Y0R5",
+    "measuresForWind/mean_direction": "Y0R5",
+    "measuresForWind/mean_speed": "Y0R5"
+  },
+  "C052": {
+    "measuresForAir/humidity": "R0CC",
+    "measuresForAir/temperature": "R0CC",
+    "measuresForWater/precipitation": "G4AL"
+  },
+  "C054": {
+    "measuresForAir/humidity": "R0DO",
+    "measuresForAir/temperature": "R0DO",
+    "measuresForSun/irradiance": "K054",
+    "measuresForWater/precipitation": "G4AQ",
+    "measuresForWind/max_speed": "Y0AN",
+    "measuresForWind/mean_direction": "Y0AN",
+    "measuresForWind/mean_speed": "Y0AN"
+  },
+  "C055": {
+    "measuresForAir/humidity": "R0DE",
+    "measuresForAir/temperature": "R0DE",
+    "measuresForWater/precipitation": "G4RB"
+  },
+  "C056": {
+    "measuresForAir/humidity": "R0HZ",
+    "measuresForAir/temperature": "R0HZ",
+    "measuresForWater/precipitation": "G4AI",
+    "measuresForWind/max_speed": "Y0BN",
+    "measuresForWind/mean_direction": "Y0BN",
+    "measuresForWind/mean_speed": "Y0BN"
+  },
+  "C058": {
+    "measuresForAir/humidity": "R0FF",
+    "measuresForAir/temperature": "R0FF",
+    "measuresForSun/irradiance": "K607",
+    "measuresForWater/precipitation": "G460",
+    "measuresForWind/max_speed": "Y0BE",
+    "measuresForWind/mean_direction": "Y0BE",
+    "measuresForWind/mean_speed": "Y0BE"
+  },
+  "C059": {
+    "measuresForAir/humidity": "R0SA",
+    "measuresForAir/temperature": "R0SA",
+    "measuresForSun/irradiance": "K0R9",
+    "measuresForWater/precipitation": "G458",
+    "measuresForWind/max_speed": "Y0CJ",
+    "measuresForWind/mean_direction": "Y0CJ",
+    "measuresForWind/mean_speed": "Y0CJ"
+  },
+  "C060": {
+    "measuresForAir/humidity": "R0GO",
+    "measuresForAir/temperature": "R0GO",
+    "measuresForAtmosphere/pressure": "S0AE",
+    "measuresForSun/irradiance": "K0S6",
+    "measuresForWater/precipitation": "G4E5",
+    "measuresForWind/max_speed": "Y0R5",
+    "measuresForWind/mean_direction": "Y0R5",
+    "measuresForWind/mean_speed": "Y0R5"
+  },
+  "C061": {
+    "measuresForAir/humidity": "R0CE",
+    "measuresForAir/temperature": "R0CE",
+    "measuresForSun/irradiance": "K0AW",
+    "measuresForWater/precipitation": "G498",
+    "measuresForWind/max_speed": "Y029",
+    "measuresForWind/mean_direction": "Y029",
+    "measuresForWind/mean_speed": "Y029"
+  },
+  "C063": {
+    "measuresForAir/humidity": "R0BT",
+    "measuresForAir/temperature": "R0BT",
+    "measuresForWater/precipitation": "G4R7"
+  },
+  "C064": {
+    "measuresForAir/humidity": "R0RL",
+    "measuresForAir/temperature": "R0RL",
+    "measuresForSun/irradiance": "K057",
+    "measuresForWind/max_speed": "Y0AQ",
+    "measuresForWind/mean_direction": "Y0AQ",
+    "measuresForWind/mean_speed": "Y0AQ"
+  },
+  "C065": {
+    "measuresForAir/humidity": "R0GM",
+    "measuresForAir/temperature": "R0GM",
+    "measuresForAtmosphere/pressure": "S0AD",
+    "measuresForWater/precipitation": "G4AN",
+    "measuresForWind/max_speed": "Y0BR",
+    "measuresForWind/mean_direction": "Y0BR",
+    "measuresForWind/mean_speed": "Y0BR"
+  },
+  "C066": {
+    "measuresForAir/humidity": "R0FL",
+    "measuresForAir/temperature": "R0FL",
+    "measuresForWind/max_speed": "Y0DK",
+    "measuresForWind/mean_direction": "Y0DK",
+    "measuresForWind/mean_speed": "Y0DK"
+  },
+  "C067": {
+    "measuresForWater/precipitation": "G4R8"
+  },
+  "C068": {
+    "measuresForAir/humidity": "R0RW",
+    "measuresForAir/temperature": "R0RW",
+    "measuresForWater/precipitation": "G4R1",
+    "measuresForWind/max_speed": "Y0BZ",
+    "measuresForWind/mean_direction": "Y0BZ",
+    "measuresForWind/mean_speed": "Y0BZ"
+  },
+  "C069": {
+    "measuresForAir/humidity": "R014",
+    "measuresForAir/temperature": "R014",
+    "measuresForSun/irradiance": "K0R7",
+    "measuresForWater/precipitation": "G4AR",
+    "measuresForWind/max_speed": "Y033",
+    "measuresForWind/mean_direction": "Y033",
+    "measuresForWind/mean_speed": "Y033"
+  },
+  "C070": {
+    "measuresForAir/humidity": "R0EN",
+    "measuresForAir/temperature": "R0EN",
+    "measuresForWater/precipitation": "G411",
+    "measuresForWind/max_speed": "Y0DG",
+    "measuresForWind/mean_direction": "Y0DG",
+    "measuresForWind/mean_speed": "Y0DG"
+  },
+  "C071": {
+    "measuresForAir/humidity": "R0HO",
+    "measuresForAir/temperature": "R0HO",
+    "measuresForWind/max_speed": "Y0BT",
+    "measuresForWind/mean_direction": "Y0BT",
+    "measuresForWind/mean_speed": "Y0BT"
+  },
+  "C072": {
+    "measuresForAir/humidity": "R0SC",
+    "measuresForAir/temperature": "R0SC",
+    "measuresForWater/precipitation": "G4AD",
+    "measuresForWind/max_speed": "Y028",
+    "measuresForWind/mean_direction": "Y028",
+    "measuresForWind/mean_speed": "Y028"
+  },
+  "C073": {
+    "measuresForAir/humidity": "R0FR",
+    "measuresForAir/temperature": "R0FR",
+    "measuresForWater/precipitation": "G470",
+    "measuresForWind/max_speed": "Y0CW",
+    "measuresForWind/mean_direction": "Y0CW",
+    "measuresForWind/mean_speed": "Y0CW"
+  },
+  "C074": {
+    "measuresForAir/humidity": "R0BK",
+    "measuresForAir/temperature": "R0BK",
+    "measuresForWater/precipitation": "G418"
+  },
+  "C076": {
+    "measuresForAir/humidity": "R0EQ",
+    "measuresForAir/temperature": "R0EQ",
+    "measuresForWater/precipitation": "G428"
+  },
+  "C077": {
+    "measuresForAir/humidity": "R0RU",
+    "measuresForAir/temperature": "R0RU"
+  },
+  "C078": {
+    "measuresForAir/humidity": "R0SB",
+    "measuresForAir/temperature": "R0SB"
+  },
+  "C079": {
+    "measuresForAir/humidity": "R016",
+    "measuresForAir/temperature": "R016"
+  },
+  "C080": {
+    "measuresForAir/humidity": "R0CY",
+    "measuresForAir/temperature": "R0CY",
+    "measuresForWater/precipitation": "G4B6"
+  },
+  "C084": {
+    "measuresForAir/humidity": "R0RY",
+    "measuresForAir/temperature": "R0RY",
+    "measuresForWater/precipitation": "G4AM"
+  },
+  "C0A0": {
+    "measuresForAir/humidity": "R0HQ",
+    "measuresForAir/temperature": "R0HQ",
+    "measuresForWater/precipitation": "G429"
+  },
+  "C0A1": {
+    "measuresForAir/humidity": "R0W1",
+    "measuresForAir/temperature": "R0W1"
+  },
+  "C0A2": {
+    "measuresForAir/humidity": "R030",
+    "measuresForAir/temperature": "R030"
+  },
+  "C0A3": {
+    "measuresForAir/humidity": "R0BR",
+    "measuresForAir/temperature": "R0BR"
+  },
+  "C0A4": {
+    "measuresForAir/humidity": "R0EH",
+    "measuresForAir/temperature": "R0EH"
+  },
+  "C0AA": {
+    "measuresForAir/humidity": "R0A6",
+    "measuresForAir/temperature": "R0A6"
+  },
+  "C0B1": {
+    "measuresForWater/precipitation": "G4AI"
+  },
+  "C0B3": {
+    "measuresForAir/humidity": "R0AO",
+    "measuresForAir/temperature": "R0AO"
+  },
+  "C0B4": {
+    "measuresForAir/humidity": "R0AG",
+    "measuresForAir/temperature": "R0AG",
+    "measuresForWater/precipitation": "G417",
+    "measuresForWind/max_speed": "Y0R5",
+    "measuresForWind/mean_direction": "Y0R5",
+    "measuresForWind/mean_speed": "Y0R5"
+  },
+  "C0B6": {
+    "measuresForAir/humidity": "R0GD",
+    "measuresForAir/temperature": "R0GD",
+    "measuresForWater/precipitation": "G467"
+  },
+  "C0B7": {
+    "measuresForAir/humidity": "R012",
+    "measuresForAir/temperature": "R012",
+    "measuresForWater/precipitation": "G4C2"
+  },
+  "C0B8": {
+    "measuresForAir/humidity": "R0HJ",
+    "measuresForAir/temperature": "R0HJ",
+    "measuresForWater/precipitation": "G4DB"
+  },
+  "C0B9": {
+    "measuresForAir/humidity": "R007",
+    "measuresForAir/temperature": "R007",
+    "measuresForWater/precipitation": "G4AC"
+  },
+  "C0BD": {
+    "measuresForAir/humidity": "R0SI",
+    "measuresForAir/temperature": "R0SI",
+    "measuresForWater/precipitation": "G458"
+  },
+  "C0BE": {
+    "measuresForWater/precipitation": "G478"
+  },
+  "C0C2": {
+    "measuresForAir/humidity": "R0EQ",
+    "measuresForAir/temperature": "R0EQ"
+  },
+  "C0C3": {
+    "measuresForWater/precipitation": "G4AO",
+    "measuresForWind/max_speed": "Y0RG",
+    "measuresForWind/mean_direction": "Y0RG",
+    "measuresForWind/mean_speed": "Y0RG"
+  },
+  "C0D0": {
+    "measuresForAir/humidity": "R0SK",
+    "measuresForAir/temperature": "R0SK",
+    "measuresForWater/precipitation": "G451"
+  },
+  "C0D1": {
+    "measuresForAir/humidity": "R0IG",
+    "measuresForAir/temperature": "R0IG",
+    "measuresForWater/precipitation": "G404"
+  },
+  "C0D2": {
+    "measuresForAir/humidity": "R0BD",
+    "measuresForAir/temperature": "R0BD",
+    "measuresForWater/precipitation": "G4R9"
+  },
+  "C0D3": {
+    "measuresForAir/humidity": "R0RN",
+    "measuresForAir/temperature": "R0RN",
+    "measuresForWater/precipitation": "G4AE"
+  },
+  "C0DB": {
+    "measuresForAir/humidity": "R0AH",
+    "measuresForAir/temperature": "R0AH",
+    "measuresForWater/precipitation": "G480"
+  },
+  "C0DC": {
+    "measuresForAir/humidity": "R0Z1",
+    "measuresForAir/temperature": "R0Z1",
+    "measuresForSun/irradiance": "K011",
+    "measuresForWater/precipitation": "G496"
+  },
+  "C0DD": {
+    "measuresForAir/humidity": "R0RY",
+    "measuresForAir/temperature": "R0RY"
+  },
+  "C0DE": {
+    "measuresForAir/humidity": "R0B¿",
+    "measuresForAir/temperature": "R0B¿",
+    "measuresForWater/precipitation": "G4C1"
+  },
+  "C0E1": {
+    "measuresForAir/humidity": "R0FG",
+    "measuresForAir/temperature": "R0FG",
+    "measuresForWater/precipitation": "G4F0"
+  },
+  "C0E5": {
+    "measuresForAir/humidity": "R0CD",
+    "measuresForAir/temperature": "R0CD",
+    "measuresForWater/precipitation": "G4AP"
+  },
+  "C0E7": {
+    "measuresForAir/humidity": "R0HN",
+    "measuresForAir/temperature": "R0HN",
+    "measuresForWater/precipitation": "G457"
+  },
+  "C0E8": {
+    "measuresForAir/humidity": "R0RG",
+    "measuresForAir/temperature": "R0RG",
+    "measuresForWater/precipitation": "G433"
+  },
+  "C0E9": {
+    "measuresForWater/precipitation": "G4D0"
+  },
+  "C0EA": {
+    "measuresForWater/precipitation": "G4D2"
+  },
+  "C0EC": {
+    "measuresForSun/irradiance": "K605",
+    "measuresForWater/precipitation": "G415",
+    "measuresForWind/max_speed": "Y0BD",
+    "measuresForWind/mean_direction": "Y0BD",
+    "measuresForWind/mean_speed": "Y0BD"
+  },
+  "C0F0": {
+    "measuresForAir/humidity": "R0Z0",
+    "measuresForAir/temperature": "R0Z0",
+    "measuresForWater/precipitation": "G4DB",
+    "measuresForWind/max_speed": "Y0R4",
+    "measuresForWind/mean_direction": "Y0R4",
+    "measuresForWind/mean_speed": "Y0R4"
+  },
+  "C0F1": {
+    "measuresForAir/humidity": "R0RU",
+    "measuresForAir/temperature": "R0RU",
+    "measuresForWater/precipitation": "GIF1"
+  },
+  "C0F4": {
+    "measuresForWater/precipitation": "G4RG"
+  }
+}

@@ -1,0 +1,4002 @@
+[
+  {
+    "key": "euskalmet/sensors/0248",
+    "sensorId": "0248"
+  },
+  {
+    "key": "euskalmet/sensors/0293",
+    "sensorId": "0293"
+  },
+  {
+    "key": "euskalmet/sensors/0332",
+    "sensorId": "0332"
+  },
+  {
+    "key": "euskalmet/sensors/0338",
+    "sensorId": "0338"
+  },
+  {
+    "key": "euskalmet/sensors/0383",
+    "sensorId": "0383"
+  },
+  {
+    "key": "euskalmet/sensors/0428",
+    "sensorId": "0428"
+  },
+  {
+    "key": "euskalmet/sensors/0473",
+    "sensorId": "0473"
+  },
+  {
+    "key": "euskalmet/sensors/0518",
+    "sensorId": "0518"
+  },
+  {
+    "key": "euskalmet/sensors/0563",
+    "sensorId": "0563"
+  },
+  {
+    "key": "euskalmet/sensors/0608",
+    "sensorId": "0608"
+  },
+  {
+    "key": "euskalmet/sensors/0653",
+    "sensorId": "0653"
+  },
+  {
+    "key": "euskalmet/sensors/0698",
+    "sensorId": "0698"
+  },
+  {
+    "key": "euskalmet/sensors/0737",
+    "sensorId": "0737"
+  },
+  {
+    "key": "euskalmet/sensors/0743",
+    "sensorId": "0743"
+  },
+  {
+    "key": "euskalmet/sensors/0788",
+    "sensorId": "0788"
+  },
+  {
+    "key": "euskalmet/sensors/0833",
+    "sensorId": "0833"
+  },
+  {
+    "key": "euskalmet/sensors/0878",
+    "sensorId": "0878"
+  },
+  {
+    "key": "euskalmet/sensors/0923",
+    "sensorId": "0923"
+  },
+  {
+    "key": "euskalmet/sensors/0968",
+    "sensorId": "0968"
+  },
+  {
+    "key": "euskalmet/sensors/1013",
+    "sensorId": "1013"
+  },
+  {
+    "key": "euskalmet/sensors/1058",
+    "sensorId": "1058"
+  },
+  {
+    "key": "euskalmet/sensors/1103",
+    "sensorId": "1103"
+  },
+  {
+    "key": "euskalmet/sensors/1142",
+    "sensorId": "1142"
+  },
+  {
+    "key": "euskalmet/sensors/1148",
+    "sensorId": "1148"
+  },
+  {
+    "key": "euskalmet/sensors/1193",
+    "sensorId": "1193"
+  },
+  {
+    "key": "euskalmet/sensors/1238",
+    "sensorId": "1238"
+  },
+  {
+    "key": "euskalmet/sensors/1283",
+    "sensorId": "1283"
+  },
+  {
+    "key": "euskalmet/sensors/1328",
+    "sensorId": "1328"
+  },
+  {
+    "key": "euskalmet/sensors/1547",
+    "sensorId": "1547"
+  },
+  {
+    "key": "euskalmet/sensors/1951",
+    "sensorId": "1951"
+  },
+  {
+    "key": "euskalmet/sensors/2356",
+    "sensorId": "2356"
+  },
+  {
+    "key": "euskalmet/sensors/2761",
+    "sensorId": "2761"
+  },
+  {
+    "key": "euskalmet/sensors/3166",
+    "sensorId": "3166"
+  },
+  {
+    "key": "euskalmet/sensors/3570",
+    "sensorId": "3570"
+  },
+  {
+    "key": "euskalmet/sensors/3975",
+    "sensorId": "3975"
+  },
+  {
+    "key": "euskalmet/sensors/4380",
+    "sensorId": "4380"
+  },
+  {
+    "key": "euskalmet/sensors/AS9E",
+    "sensorId": "AS9E"
+  },
+  {
+    "key": "euskalmet/sensors/AT01",
+    "sensorId": "AT01"
+  },
+  {
+    "key": "euskalmet/sensors/AT02",
+    "sensorId": "AT02"
+  },
+  {
+    "key": "euskalmet/sensors/AT03",
+    "sensorId": "AT03"
+  },
+  {
+    "key": "euskalmet/sensors/AWA1",
+    "sensorId": "AWA1"
+  },
+  {
+    "key": "euskalmet/sensors/C001",
+    "sensorId": "C001"
+  },
+  {
+    "key": "euskalmet/sensors/C024",
+    "sensorId": "C024"
+  },
+  {
+    "key": "euskalmet/sensors/C041",
+    "sensorId": "C041"
+  },
+  {
+    "key": "euskalmet/sensors/C609",
+    "sensorId": "C609"
+  },
+  {
+    "key": "euskalmet/sensors/C610",
+    "sensorId": "C610"
+  },
+  {
+    "key": "euskalmet/sensors/C612",
+    "sensorId": "C612"
+  },
+  {
+    "key": "euskalmet/sensors/C614",
+    "sensorId": "C614"
+  },
+  {
+    "key": "euskalmet/sensors/C615",
+    "sensorId": "C615"
+  },
+  {
+    "key": "euskalmet/sensors/C616",
+    "sensorId": "C616"
+  },
+  {
+    "key": "euskalmet/sensors/CA09",
+    "sensorId": "CA09"
+  },
+  {
+    "key": "euskalmet/sensors/CAE0",
+    "sensorId": "CAE0"
+  },
+  {
+    "key": "euskalmet/sensors/CAE1",
+    "sensorId": "CAE1"
+  },
+  {
+    "key": "euskalmet/sensors/CAF0",
+    "sensorId": "CAF0"
+  },
+  {
+    "key": "euskalmet/sensors/CAF4",
+    "sensorId": "CAF4"
+  },
+  {
+    "key": "euskalmet/sensors/CB00",
+    "sensorId": "CB00"
+  },
+  {
+    "key": "euskalmet/sensors/CB01",
+    "sensorId": "CB01"
+  },
+  {
+    "key": "euskalmet/sensors/CB02",
+    "sensorId": "CB02"
+  },
+  {
+    "key": "euskalmet/sensors/CB03",
+    "sensorId": "CB03"
+  },
+  {
+    "key": "euskalmet/sensors/CB04",
+    "sensorId": "CB04"
+  },
+  {
+    "key": "euskalmet/sensors/CB05",
+    "sensorId": "CB05"
+  },
+  {
+    "key": "euskalmet/sensors/CB06",
+    "sensorId": "CB06"
+  },
+  {
+    "key": "euskalmet/sensors/CB07",
+    "sensorId": "CB07"
+  },
+  {
+    "key": "euskalmet/sensors/CB08",
+    "sensorId": "CB08"
+  },
+  {
+    "key": "euskalmet/sensors/CB09",
+    "sensorId": "CB09"
+  },
+  {
+    "key": "euskalmet/sensors/CB10",
+    "sensorId": "CB10"
+  },
+  {
+    "key": "euskalmet/sensors/CB11",
+    "sensorId": "CB11"
+  },
+  {
+    "key": "euskalmet/sensors/CB12",
+    "sensorId": "CB12"
+  },
+  {
+    "key": "euskalmet/sensors/CB13",
+    "sensorId": "CB13"
+  },
+  {
+    "key": "euskalmet/sensors/CB14",
+    "sensorId": "CB14"
+  },
+  {
+    "key": "euskalmet/sensors/CB15",
+    "sensorId": "CB15"
+  },
+  {
+    "key": "euskalmet/sensors/CB16",
+    "sensorId": "CB16"
+  },
+  {
+    "key": "euskalmet/sensors/CB17",
+    "sensorId": "CB17"
+  },
+  {
+    "key": "euskalmet/sensors/CB18",
+    "sensorId": "CB18"
+  },
+  {
+    "key": "euskalmet/sensors/CB19",
+    "sensorId": "CB19"
+  },
+  {
+    "key": "euskalmet/sensors/CB20",
+    "sensorId": "CB20"
+  },
+  {
+    "key": "euskalmet/sensors/CB21",
+    "sensorId": "CB21"
+  },
+  {
+    "key": "euskalmet/sensors/CB22",
+    "sensorId": "CB22"
+  },
+  {
+    "key": "euskalmet/sensors/CB23",
+    "sensorId": "CB23"
+  },
+  {
+    "key": "euskalmet/sensors/CB24",
+    "sensorId": "CB24"
+  },
+  {
+    "key": "euskalmet/sensors/CB25",
+    "sensorId": "CB25"
+  },
+  {
+    "key": "euskalmet/sensors/CB26",
+    "sensorId": "CB26"
+  },
+  {
+    "key": "euskalmet/sensors/CB27",
+    "sensorId": "CB27"
+  },
+  {
+    "key": "euskalmet/sensors/CB28",
+    "sensorId": "CB28"
+  },
+  {
+    "key": "euskalmet/sensors/CB29",
+    "sensorId": "CB29"
+  },
+  {
+    "key": "euskalmet/sensors/CB30",
+    "sensorId": "CB30"
+  },
+  {
+    "key": "euskalmet/sensors/CB31",
+    "sensorId": "CB31"
+  },
+  {
+    "key": "euskalmet/sensors/CB32",
+    "sensorId": "CB32"
+  },
+  {
+    "key": "euskalmet/sensors/CB33",
+    "sensorId": "CB33"
+  },
+  {
+    "key": "euskalmet/sensors/CB34",
+    "sensorId": "CB34"
+  },
+  {
+    "key": "euskalmet/sensors/CB35",
+    "sensorId": "CB35"
+  },
+  {
+    "key": "euskalmet/sensors/CB36",
+    "sensorId": "CB36"
+  },
+  {
+    "key": "euskalmet/sensors/CB37",
+    "sensorId": "CB37"
+  },
+  {
+    "key": "euskalmet/sensors/CB38",
+    "sensorId": "CB38"
+  },
+  {
+    "key": "euskalmet/sensors/CB39",
+    "sensorId": "CB39"
+  },
+  {
+    "key": "euskalmet/sensors/CB40",
+    "sensorId": "CB40"
+  },
+  {
+    "key": "euskalmet/sensors/CB41",
+    "sensorId": "CB41"
+  },
+  {
+    "key": "euskalmet/sensors/CB42",
+    "sensorId": "CB42"
+  },
+  {
+    "key": "euskalmet/sensors/CB43",
+    "sensorId": "CB43"
+  },
+  {
+    "key": "euskalmet/sensors/CB44",
+    "sensorId": "CB44"
+  },
+  {
+    "key": "euskalmet/sensors/CB45",
+    "sensorId": "CB45"
+  },
+  {
+    "key": "euskalmet/sensors/CC52",
+    "sensorId": "CC52"
+  },
+  {
+    "key": "euskalmet/sensors/CC78",
+    "sensorId": "CC78"
+  },
+  {
+    "key": "euskalmet/sensors/CCAA",
+    "sensorId": "CCAA"
+  },
+  {
+    "key": "euskalmet/sensors/CCB6",
+    "sensorId": "CCB6"
+  },
+  {
+    "key": "euskalmet/sensors/CCBA",
+    "sensorId": "CCBA"
+  },
+  {
+    "key": "euskalmet/sensors/CCBE",
+    "sensorId": "CCBE"
+  },
+  {
+    "key": "euskalmet/sensors/CCD1",
+    "sensorId": "CCD1"
+  },
+  {
+    "key": "euskalmet/sensors/CCE5",
+    "sensorId": "CCE5"
+  },
+  {
+    "key": "euskalmet/sensors/CCE7",
+    "sensorId": "CCE7"
+  },
+  {
+    "key": "euskalmet/sensors/CCE8",
+    "sensorId": "CCE8"
+  },
+  {
+    "key": "euskalmet/sensors/CCE9",
+    "sensorId": "CCE9"
+  },
+  {
+    "key": "euskalmet/sensors/CCEA",
+    "sensorId": "CCEA"
+  },
+  {
+    "key": "euskalmet/sensors/CG426",
+    "sensorId": "CG426"
+  },
+  {
+    "key": "euskalmet/sensors/CG445",
+    "sensorId": "CG445"
+  },
+  {
+    "key": "euskalmet/sensors/CGR43",
+    "sensorId": "CGR43"
+  },
+  {
+    "key": "euskalmet/sensors/CHN10",
+    "sensorId": "CHN10"
+  },
+  {
+    "key": "euskalmet/sensors/CHN12",
+    "sensorId": "CHN12"
+  },
+  {
+    "key": "euskalmet/sensors/CHP10",
+    "sensorId": "CHP10"
+  },
+  {
+    "key": "euskalmet/sensors/CK03",
+    "sensorId": "CK03"
+  },
+  {
+    "key": "euskalmet/sensors/CK036",
+    "sensorId": "CK036"
+  },
+  {
+    "key": "euskalmet/sensors/CK037",
+    "sensorId": "CK037"
+  },
+  {
+    "key": "euskalmet/sensors/CK042",
+    "sensorId": "CK042"
+  },
+  {
+    "key": "euskalmet/sensors/CK0R2",
+    "sensorId": "CK0R2"
+  },
+  {
+    "key": "euskalmet/sensors/CO9E",
+    "sensorId": "CO9E"
+  },
+  {
+    "key": "euskalmet/sensors/CR027",
+    "sensorId": "CR027"
+  },
+  {
+    "key": "euskalmet/sensors/CR0AJ",
+    "sensorId": "CR0AJ"
+  },
+  {
+    "key": "euskalmet/sensors/CS39",
+    "sensorId": "CS39"
+  },
+  {
+    "key": "euskalmet/sensors/CS81",
+    "sensorId": "CS81"
+  },
+  {
+    "key": "euskalmet/sensors/CS82",
+    "sensorId": "CS82"
+  },
+  {
+    "key": "euskalmet/sensors/CT00",
+    "sensorId": "CT00"
+  },
+  {
+    "key": "euskalmet/sensors/CT01",
+    "sensorId": "CT01"
+  },
+  {
+    "key": "euskalmet/sensors/CT02",
+    "sensorId": "CT02"
+  },
+  {
+    "key": "euskalmet/sensors/CT03",
+    "sensorId": "CT03"
+  },
+  {
+    "key": "euskalmet/sensors/CT04",
+    "sensorId": "CT04"
+  },
+  {
+    "key": "euskalmet/sensors/CT05",
+    "sensorId": "CT05"
+  },
+  {
+    "key": "euskalmet/sensors/CT06",
+    "sensorId": "CT06"
+  },
+  {
+    "key": "euskalmet/sensors/CT07",
+    "sensorId": "CT07"
+  },
+  {
+    "key": "euskalmet/sensors/CT08",
+    "sensorId": "CT08"
+  },
+  {
+    "key": "euskalmet/sensors/CT09",
+    "sensorId": "CT09"
+  },
+  {
+    "key": "euskalmet/sensors/CT10",
+    "sensorId": "CT10"
+  },
+  {
+    "key": "euskalmet/sensors/CT11",
+    "sensorId": "CT11"
+  },
+  {
+    "key": "euskalmet/sensors/CT12",
+    "sensorId": "CT12"
+  },
+  {
+    "key": "euskalmet/sensors/CT13",
+    "sensorId": "CT13"
+  },
+  {
+    "key": "euskalmet/sensors/CT14",
+    "sensorId": "CT14"
+  },
+  {
+    "key": "euskalmet/sensors/CT15",
+    "sensorId": "CT15"
+  },
+  {
+    "key": "euskalmet/sensors/CT16",
+    "sensorId": "CT16"
+  },
+  {
+    "key": "euskalmet/sensors/CT17",
+    "sensorId": "CT17"
+  },
+  {
+    "key": "euskalmet/sensors/CT18",
+    "sensorId": "CT18"
+  },
+  {
+    "key": "euskalmet/sensors/CT19",
+    "sensorId": "CT19"
+  },
+  {
+    "key": "euskalmet/sensors/CT20",
+    "sensorId": "CT20"
+  },
+  {
+    "key": "euskalmet/sensors/CT21",
+    "sensorId": "CT21"
+  },
+  {
+    "key": "euskalmet/sensors/CT22",
+    "sensorId": "CT22"
+  },
+  {
+    "key": "euskalmet/sensors/CT23",
+    "sensorId": "CT23"
+  },
+  {
+    "key": "euskalmet/sensors/CT24",
+    "sensorId": "CT24"
+  },
+  {
+    "key": "euskalmet/sensors/CT25",
+    "sensorId": "CT25"
+  },
+  {
+    "key": "euskalmet/sensors/CT26",
+    "sensorId": "CT26"
+  },
+  {
+    "key": "euskalmet/sensors/CT27",
+    "sensorId": "CT27"
+  },
+  {
+    "key": "euskalmet/sensors/CT28",
+    "sensorId": "CT28"
+  },
+  {
+    "key": "euskalmet/sensors/CT29",
+    "sensorId": "CT29"
+  },
+  {
+    "key": "euskalmet/sensors/CT30",
+    "sensorId": "CT30"
+  },
+  {
+    "key": "euskalmet/sensors/CT31",
+    "sensorId": "CT31"
+  },
+  {
+    "key": "euskalmet/sensors/CT32",
+    "sensorId": "CT32"
+  },
+  {
+    "key": "euskalmet/sensors/CT33",
+    "sensorId": "CT33"
+  },
+  {
+    "key": "euskalmet/sensors/CT34",
+    "sensorId": "CT34"
+  },
+  {
+    "key": "euskalmet/sensors/CT35",
+    "sensorId": "CT35"
+  },
+  {
+    "key": "euskalmet/sensors/CT36",
+    "sensorId": "CT36"
+  },
+  {
+    "key": "euskalmet/sensors/CT37",
+    "sensorId": "CT37"
+  },
+  {
+    "key": "euskalmet/sensors/CY005",
+    "sensorId": "CY005"
+  },
+  {
+    "key": "euskalmet/sensors/CY0R1",
+    "sensorId": "CY0R1"
+  },
+  {
+    "key": "euskalmet/sensors/DI9E",
+    "sensorId": "DI9E"
+  },
+  {
+    "key": "euskalmet/sensors/DO9E",
+    "sensorId": "DO9E"
+  },
+  {
+    "key": "euskalmet/sensors/DP9E",
+    "sensorId": "DP9E"
+  },
+  {
+    "key": "euskalmet/sensors/DRE1",
+    "sensorId": "DRE1"
+  },
+  {
+    "key": "euskalmet/sensors/DV00",
+    "sensorId": "DV00"
+  },
+  {
+    "key": "euskalmet/sensors/DV01",
+    "sensorId": "DV01"
+  },
+  {
+    "key": "euskalmet/sensors/DV02",
+    "sensorId": "DV02"
+  },
+  {
+    "key": "euskalmet/sensors/DV03",
+    "sensorId": "DV03"
+  },
+  {
+    "key": "euskalmet/sensors/DV04",
+    "sensorId": "DV04"
+  },
+  {
+    "key": "euskalmet/sensors/DV05",
+    "sensorId": "DV05"
+  },
+  {
+    "key": "euskalmet/sensors/DV06",
+    "sensorId": "DV06"
+  },
+  {
+    "key": "euskalmet/sensors/DV9E",
+    "sensorId": "DV9E"
+  },
+  {
+    "key": "euskalmet/sensors/F017",
+    "sensorId": "F017"
+  },
+  {
+    "key": "euskalmet/sensors/F027",
+    "sensorId": "F027"
+  },
+  {
+    "key": "euskalmet/sensors/F042",
+    "sensorId": "F042"
+  },
+  {
+    "key": "euskalmet/sensors/F048",
+    "sensorId": "F048"
+  },
+  {
+    "key": "euskalmet/sensors/F0R1",
+    "sensorId": "F0R1"
+  },
+  {
+    "key": "euskalmet/sensors/F426",
+    "sensorId": "F426"
+  },
+  {
+    "key": "euskalmet/sensors/F44F",
+    "sensorId": "F44F"
+  },
+  {
+    "key": "euskalmet/sensors/F4AF",
+    "sensorId": "F4AF"
+  },
+  {
+    "key": "euskalmet/sensors/FK47",
+    "sensorId": "FK47"
+  },
+  {
+    "key": "euskalmet/sensors/FP47",
+    "sensorId": "FP47"
+  },
+  {
+    "key": "euskalmet/sensors/FR47",
+    "sensorId": "FR47"
+  },
+  {
+    "key": "euskalmet/sensors/FT57",
+    "sensorId": "FT57"
+  },
+  {
+    "key": "euskalmet/sensors/FT63",
+    "sensorId": "FT63"
+  },
+  {
+    "key": "euskalmet/sensors/FTBA",
+    "sensorId": "FTBA"
+  },
+  {
+    "key": "euskalmet/sensors/FTBE",
+    "sensorId": "FTBE"
+  },
+  {
+    "key": "euskalmet/sensors/FTE9",
+    "sensorId": "FTE9"
+  },
+  {
+    "key": "euskalmet/sensors/FU47",
+    "sensorId": "FU47"
+  },
+  {
+    "key": "euskalmet/sensors/G035",
+    "sensorId": "G035"
+  },
+  {
+    "key": "euskalmet/sensors/G213",
+    "sensorId": "G213"
+  },
+  {
+    "key": "euskalmet/sensors/G299",
+    "sensorId": "G299"
+  },
+  {
+    "key": "euskalmet/sensors/G2B2",
+    "sensorId": "G2B2"
+  },
+  {
+    "key": "euskalmet/sensors/G2D3",
+    "sensorId": "G2D3"
+  },
+  {
+    "key": "euskalmet/sensors/G2DE",
+    "sensorId": "G2DE"
+  },
+  {
+    "key": "euskalmet/sensors/G2E1",
+    "sensorId": "G2E1"
+  },
+  {
+    "key": "euskalmet/sensors/G2R1",
+    "sensorId": "G2R1"
+  },
+  {
+    "key": "euskalmet/sensors/G401",
+    "sensorId": "G401"
+  },
+  {
+    "key": "euskalmet/sensors/G403",
+    "sensorId": "G403"
+  },
+  {
+    "key": "euskalmet/sensors/G404",
+    "sensorId": "G404"
+  },
+  {
+    "key": "euskalmet/sensors/G410",
+    "sensorId": "G410"
+  },
+  {
+    "key": "euskalmet/sensors/G411",
+    "sensorId": "G411"
+  },
+  {
+    "key": "euskalmet/sensors/G412",
+    "sensorId": "G412"
+  },
+  {
+    "key": "euskalmet/sensors/G413",
+    "sensorId": "G413"
+  },
+  {
+    "key": "euskalmet/sensors/G414",
+    "sensorId": "G414"
+  },
+  {
+    "key": "euskalmet/sensors/G415",
+    "sensorId": "G415"
+  },
+  {
+    "key": "euskalmet/sensors/G416",
+    "sensorId": "G416"
+  },
+  {
+    "key": "euskalmet/sensors/G417",
+    "sensorId": "G417"
+  },
+  {
+    "key": "euskalmet/sensors/G418",
+    "sensorId": "G418"
+  },
+  {
+    "key": "euskalmet/sensors/G422",
+    "sensorId": "G422"
+  },
+  {
+    "key": "euskalmet/sensors/G423",
+    "sensorId": "G423"
+  },
+  {
+    "key": "euskalmet/sensors/G424",
+    "sensorId": "G424"
+  },
+  {
+    "key": "euskalmet/sensors/G426",
+    "sensorId": "G426"
+  },
+  {
+    "key": "euskalmet/sensors/G427",
+    "sensorId": "G427"
+  },
+  {
+    "key": "euskalmet/sensors/G428",
+    "sensorId": "G428"
+  },
+  {
+    "key": "euskalmet/sensors/G429",
+    "sensorId": "G429"
+  },
+  {
+    "key": "euskalmet/sensors/G430",
+    "sensorId": "G430"
+  },
+  {
+    "key": "euskalmet/sensors/G433",
+    "sensorId": "G433"
+  },
+  {
+    "key": "euskalmet/sensors/G435",
+    "sensorId": "G435"
+  },
+  {
+    "key": "euskalmet/sensors/G437",
+    "sensorId": "G437"
+  },
+  {
+    "key": "euskalmet/sensors/G439",
+    "sensorId": "G439"
+  },
+  {
+    "key": "euskalmet/sensors/G440",
+    "sensorId": "G440"
+  },
+  {
+    "key": "euskalmet/sensors/G441",
+    "sensorId": "G441"
+  },
+  {
+    "key": "euskalmet/sensors/G442",
+    "sensorId": "G442"
+  },
+  {
+    "key": "euskalmet/sensors/G443",
+    "sensorId": "G443"
+  },
+  {
+    "key": "euskalmet/sensors/G444",
+    "sensorId": "G444"
+  },
+  {
+    "key": "euskalmet/sensors/G445",
+    "sensorId": "G445"
+  },
+  {
+    "key": "euskalmet/sensors/G446",
+    "sensorId": "G446"
+  },
+  {
+    "key": "euskalmet/sensors/G447",
+    "sensorId": "G447"
+  },
+  {
+    "key": "euskalmet/sensors/G448",
+    "sensorId": "G448"
+  },
+  {
+    "key": "euskalmet/sensors/G449",
+    "sensorId": "G449"
+  },
+  {
+    "key": "euskalmet/sensors/G450",
+    "sensorId": "G450"
+  },
+  {
+    "key": "euskalmet/sensors/G451",
+    "sensorId": "G451"
+  },
+  {
+    "key": "euskalmet/sensors/G452",
+    "sensorId": "G452"
+  },
+  {
+    "key": "euskalmet/sensors/G453",
+    "sensorId": "G453"
+  },
+  {
+    "key": "euskalmet/sensors/G454",
+    "sensorId": "G454"
+  },
+  {
+    "key": "euskalmet/sensors/G455",
+    "sensorId": "G455"
+  },
+  {
+    "key": "euskalmet/sensors/G456",
+    "sensorId": "G456"
+  },
+  {
+    "key": "euskalmet/sensors/G457",
+    "sensorId": "G457"
+  },
+  {
+    "key": "euskalmet/sensors/G458",
+    "sensorId": "G458"
+  },
+  {
+    "key": "euskalmet/sensors/G459",
+    "sensorId": "G459"
+  },
+  {
+    "key": "euskalmet/sensors/G460",
+    "sensorId": "G460"
+  },
+  {
+    "key": "euskalmet/sensors/G462",
+    "sensorId": "G462"
+  },
+  {
+    "key": "euskalmet/sensors/G463",
+    "sensorId": "G463"
+  },
+  {
+    "key": "euskalmet/sensors/G464",
+    "sensorId": "G464"
+  },
+  {
+    "key": "euskalmet/sensors/G465",
+    "sensorId": "G465"
+  },
+  {
+    "key": "euskalmet/sensors/G467",
+    "sensorId": "G467"
+  },
+  {
+    "key": "euskalmet/sensors/G470",
+    "sensorId": "G470"
+  },
+  {
+    "key": "euskalmet/sensors/G471",
+    "sensorId": "G471"
+  },
+  {
+    "key": "euskalmet/sensors/G472",
+    "sensorId": "G472"
+  },
+  {
+    "key": "euskalmet/sensors/G474",
+    "sensorId": "G474"
+  },
+  {
+    "key": "euskalmet/sensors/G476",
+    "sensorId": "G476"
+  },
+  {
+    "key": "euskalmet/sensors/G477",
+    "sensorId": "G477"
+  },
+  {
+    "key": "euskalmet/sensors/G478",
+    "sensorId": "G478"
+  },
+  {
+    "key": "euskalmet/sensors/G479",
+    "sensorId": "G479"
+  },
+  {
+    "key": "euskalmet/sensors/G480",
+    "sensorId": "G480"
+  },
+  {
+    "key": "euskalmet/sensors/G496",
+    "sensorId": "G496"
+  },
+  {
+    "key": "euskalmet/sensors/G498",
+    "sensorId": "G498"
+  },
+  {
+    "key": "euskalmet/sensors/G499",
+    "sensorId": "G499"
+  },
+  {
+    "key": "euskalmet/sensors/G4AA",
+    "sensorId": "G4AA"
+  },
+  {
+    "key": "euskalmet/sensors/G4AB",
+    "sensorId": "G4AB"
+  },
+  {
+    "key": "euskalmet/sensors/G4AC",
+    "sensorId": "G4AC"
+  },
+  {
+    "key": "euskalmet/sensors/G4AD",
+    "sensorId": "G4AD"
+  },
+  {
+    "key": "euskalmet/sensors/G4AE",
+    "sensorId": "G4AE"
+  },
+  {
+    "key": "euskalmet/sensors/G4AF",
+    "sensorId": "G4AF"
+  },
+  {
+    "key": "euskalmet/sensors/G4AG",
+    "sensorId": "G4AG"
+  },
+  {
+    "key": "euskalmet/sensors/G4AH",
+    "sensorId": "G4AH"
+  },
+  {
+    "key": "euskalmet/sensors/G4AI",
+    "sensorId": "G4AI"
+  },
+  {
+    "key": "euskalmet/sensors/G4AJ",
+    "sensorId": "G4AJ"
+  },
+  {
+    "key": "euskalmet/sensors/G4AK",
+    "sensorId": "G4AK"
+  },
+  {
+    "key": "euskalmet/sensors/G4AL",
+    "sensorId": "G4AL"
+  },
+  {
+    "key": "euskalmet/sensors/G4AM",
+    "sensorId": "G4AM"
+  },
+  {
+    "key": "euskalmet/sensors/G4AN",
+    "sensorId": "G4AN"
+  },
+  {
+    "key": "euskalmet/sensors/G4AO",
+    "sensorId": "G4AO"
+  },
+  {
+    "key": "euskalmet/sensors/G4AP",
+    "sensorId": "G4AP"
+  },
+  {
+    "key": "euskalmet/sensors/G4AQ",
+    "sensorId": "G4AQ"
+  },
+  {
+    "key": "euskalmet/sensors/G4AR",
+    "sensorId": "G4AR"
+  },
+  {
+    "key": "euskalmet/sensors/G4AS",
+    "sensorId": "G4AS"
+  },
+  {
+    "key": "euskalmet/sensors/G4AT",
+    "sensorId": "G4AT"
+  },
+  {
+    "key": "euskalmet/sensors/G4AU",
+    "sensorId": "G4AU"
+  },
+  {
+    "key": "euskalmet/sensors/G4B1",
+    "sensorId": "G4B1"
+  },
+  {
+    "key": "euskalmet/sensors/G4B3",
+    "sensorId": "G4B3"
+  },
+  {
+    "key": "euskalmet/sensors/G4B4",
+    "sensorId": "G4B4"
+  },
+  {
+    "key": "euskalmet/sensors/G4B6",
+    "sensorId": "G4B6"
+  },
+  {
+    "key": "euskalmet/sensors/G4C1",
+    "sensorId": "G4C1"
+  },
+  {
+    "key": "euskalmet/sensors/G4C2",
+    "sensorId": "G4C2"
+  },
+  {
+    "key": "euskalmet/sensors/G4C4",
+    "sensorId": "G4C4"
+  },
+  {
+    "key": "euskalmet/sensors/G4C5",
+    "sensorId": "G4C5"
+  },
+  {
+    "key": "euskalmet/sensors/G4D0",
+    "sensorId": "G4D0"
+  },
+  {
+    "key": "euskalmet/sensors/G4D1",
+    "sensorId": "G4D1"
+  },
+  {
+    "key": "euskalmet/sensors/G4D2",
+    "sensorId": "G4D2"
+  },
+  {
+    "key": "euskalmet/sensors/G4D3",
+    "sensorId": "G4D3"
+  },
+  {
+    "key": "euskalmet/sensors/G4DB",
+    "sensorId": "G4DB"
+  },
+  {
+    "key": "euskalmet/sensors/G4DC",
+    "sensorId": "G4DC"
+  },
+  {
+    "key": "euskalmet/sensors/G4DD",
+    "sensorId": "G4DD"
+  },
+  {
+    "key": "euskalmet/sensors/G4E5",
+    "sensorId": "G4E5"
+  },
+  {
+    "key": "euskalmet/sensors/G4E7",
+    "sensorId": "G4E7"
+  },
+  {
+    "key": "euskalmet/sensors/G4E9",
+    "sensorId": "G4E9"
+  },
+  {
+    "key": "euskalmet/sensors/G4EA",
+    "sensorId": "G4EA"
+  },
+  {
+    "key": "euskalmet/sensors/G4EC",
+    "sensorId": "G4EC"
+  },
+  {
+    "key": "euskalmet/sensors/G4F0",
+    "sensorId": "G4F0"
+  },
+  {
+    "key": "euskalmet/sensors/G4F4",
+    "sensorId": "G4F4"
+  },
+  {
+    "key": "euskalmet/sensors/G4R1",
+    "sensorId": "G4R1"
+  },
+  {
+    "key": "euskalmet/sensors/G4R2",
+    "sensorId": "G4R2"
+  },
+  {
+    "key": "euskalmet/sensors/G4R4",
+    "sensorId": "G4R4"
+  },
+  {
+    "key": "euskalmet/sensors/G4R5",
+    "sensorId": "G4R5"
+  },
+  {
+    "key": "euskalmet/sensors/G4R6",
+    "sensorId": "G4R6"
+  },
+  {
+    "key": "euskalmet/sensors/G4R7",
+    "sensorId": "G4R7"
+  },
+  {
+    "key": "euskalmet/sensors/G4R8",
+    "sensorId": "G4R8"
+  },
+  {
+    "key": "euskalmet/sensors/G4R9",
+    "sensorId": "G4R9"
+  },
+  {
+    "key": "euskalmet/sensors/G4RA",
+    "sensorId": "G4RA"
+  },
+  {
+    "key": "euskalmet/sensors/G4RB",
+    "sensorId": "G4RB"
+  },
+  {
+    "key": "euskalmet/sensors/G4RC",
+    "sensorId": "G4RC"
+  },
+  {
+    "key": "euskalmet/sensors/G4RD",
+    "sensorId": "G4RD"
+  },
+  {
+    "key": "euskalmet/sensors/G4RE",
+    "sensorId": "G4RE"
+  },
+  {
+    "key": "euskalmet/sensors/G4RF",
+    "sensorId": "G4RF"
+  },
+  {
+    "key": "euskalmet/sensors/G4RG",
+    "sensorId": "G4RG"
+  },
+  {
+    "key": "euskalmet/sensors/G4RH",
+    "sensorId": "G4RH"
+  },
+  {
+    "key": "euskalmet/sensors/GIF1",
+    "sensorId": "GIF1"
+  },
+  {
+    "key": "euskalmet/sensors/GR10",
+    "sensorId": "GR10"
+  },
+  {
+    "key": "euskalmet/sensors/GR11",
+    "sensorId": "GR11"
+  },
+  {
+    "key": "euskalmet/sensors/GR12",
+    "sensorId": "GR12"
+  },
+  {
+    "key": "euskalmet/sensors/GR13",
+    "sensorId": "GR13"
+  },
+  {
+    "key": "euskalmet/sensors/GR14",
+    "sensorId": "GR14"
+  },
+  {
+    "key": "euskalmet/sensors/GR15",
+    "sensorId": "GR15"
+  },
+  {
+    "key": "euskalmet/sensors/GR16",
+    "sensorId": "GR16"
+  },
+  {
+    "key": "euskalmet/sensors/GR17",
+    "sensorId": "GR17"
+  },
+  {
+    "key": "euskalmet/sensors/GR18",
+    "sensorId": "GR18"
+  },
+  {
+    "key": "euskalmet/sensors/GR19",
+    "sensorId": "GR19"
+  },
+  {
+    "key": "euskalmet/sensors/GR20",
+    "sensorId": "GR20"
+  },
+  {
+    "key": "euskalmet/sensors/GR21",
+    "sensorId": "GR21"
+  },
+  {
+    "key": "euskalmet/sensors/GR22",
+    "sensorId": "GR22"
+  },
+  {
+    "key": "euskalmet/sensors/GR23",
+    "sensorId": "GR23"
+  },
+  {
+    "key": "euskalmet/sensors/GR24",
+    "sensorId": "GR24"
+  },
+  {
+    "key": "euskalmet/sensors/GR25",
+    "sensorId": "GR25"
+  },
+  {
+    "key": "euskalmet/sensors/GR26",
+    "sensorId": "GR26"
+  },
+  {
+    "key": "euskalmet/sensors/GR28",
+    "sensorId": "GR28"
+  },
+  {
+    "key": "euskalmet/sensors/GR29",
+    "sensorId": "GR29"
+  },
+  {
+    "key": "euskalmet/sensors/GR30",
+    "sensorId": "GR30"
+  },
+  {
+    "key": "euskalmet/sensors/GR31",
+    "sensorId": "GR31"
+  },
+  {
+    "key": "euskalmet/sensors/GR32",
+    "sensorId": "GR32"
+  },
+  {
+    "key": "euskalmet/sensors/GR33",
+    "sensorId": "GR33"
+  },
+  {
+    "key": "euskalmet/sensors/GR34",
+    "sensorId": "GR34"
+  },
+  {
+    "key": "euskalmet/sensors/GR37",
+    "sensorId": "GR37"
+  },
+  {
+    "key": "euskalmet/sensors/GR38",
+    "sensorId": "GR38"
+  },
+  {
+    "key": "euskalmet/sensors/GR39",
+    "sensorId": "GR39"
+  },
+  {
+    "key": "euskalmet/sensors/GR40",
+    "sensorId": "GR40"
+  },
+  {
+    "key": "euskalmet/sensors/GR41",
+    "sensorId": "GR41"
+  },
+  {
+    "key": "euskalmet/sensors/GR42",
+    "sensorId": "GR42"
+  },
+  {
+    "key": "euskalmet/sensors/GR43",
+    "sensorId": "GR43"
+  },
+  {
+    "key": "euskalmet/sensors/GR44",
+    "sensorId": "GR44"
+  },
+  {
+    "key": "euskalmet/sensors/GR45",
+    "sensorId": "GR45"
+  },
+  {
+    "key": "euskalmet/sensors/GR46",
+    "sensorId": "GR46"
+  },
+  {
+    "key": "euskalmet/sensors/GR47",
+    "sensorId": "GR47"
+  },
+  {
+    "key": "euskalmet/sensors/GR50",
+    "sensorId": "GR50"
+  },
+  {
+    "key": "euskalmet/sensors/GR51",
+    "sensorId": "GR51"
+  },
+  {
+    "key": "euskalmet/sensors/GR52",
+    "sensorId": "GR52"
+  },
+  {
+    "key": "euskalmet/sensors/GR54",
+    "sensorId": "GR54"
+  },
+  {
+    "key": "euskalmet/sensors/HA00",
+    "sensorId": "HA00"
+  },
+  {
+    "key": "euskalmet/sensors/HA01",
+    "sensorId": "HA01"
+  },
+  {
+    "key": "euskalmet/sensors/HA02",
+    "sensorId": "HA02"
+  },
+  {
+    "key": "euskalmet/sensors/HA03",
+    "sensorId": "HA03"
+  },
+  {
+    "key": "euskalmet/sensors/HA04",
+    "sensorId": "HA04"
+  },
+  {
+    "key": "euskalmet/sensors/HA05",
+    "sensorId": "HA05"
+  },
+  {
+    "key": "euskalmet/sensors/HA06",
+    "sensorId": "HA06"
+  },
+  {
+    "key": "euskalmet/sensors/I032",
+    "sensorId": "I032"
+  },
+  {
+    "key": "euskalmet/sensors/I083",
+    "sensorId": "I083"
+  },
+  {
+    "key": "euskalmet/sensors/I168",
+    "sensorId": "I168"
+  },
+  {
+    "key": "euskalmet/sensors/ID06",
+    "sensorId": "ID06"
+  },
+  {
+    "key": "euskalmet/sensors/ID18",
+    "sensorId": "ID18"
+  },
+  {
+    "key": "euskalmet/sensors/ID20",
+    "sensorId": "ID20"
+  },
+  {
+    "key": "euskalmet/sensors/ID23",
+    "sensorId": "ID23"
+  },
+  {
+    "key": "euskalmet/sensors/ID24",
+    "sensorId": "ID24"
+  },
+  {
+    "key": "euskalmet/sensors/ID26",
+    "sensorId": "ID26"
+  },
+  {
+    "key": "euskalmet/sensors/ID27",
+    "sensorId": "ID27"
+  },
+  {
+    "key": "euskalmet/sensors/ID36",
+    "sensorId": "ID36"
+  },
+  {
+    "key": "euskalmet/sensors/ID57",
+    "sensorId": "ID57"
+  },
+  {
+    "key": "euskalmet/sensors/ID58",
+    "sensorId": "ID58"
+  },
+  {
+    "key": "euskalmet/sensors/ID60",
+    "sensorId": "ID60"
+  },
+  {
+    "key": "euskalmet/sensors/IEAD",
+    "sensorId": "IEAD"
+  },
+  {
+    "key": "euskalmet/sensors/IK36",
+    "sensorId": "IK36"
+  },
+  {
+    "key": "euskalmet/sensors/IL06",
+    "sensorId": "IL06"
+  },
+  {
+    "key": "euskalmet/sensors/IL18",
+    "sensorId": "IL18"
+  },
+  {
+    "key": "euskalmet/sensors/IL20",
+    "sensorId": "IL20"
+  },
+  {
+    "key": "euskalmet/sensors/IL23",
+    "sensorId": "IL23"
+  },
+  {
+    "key": "euskalmet/sensors/IL24",
+    "sensorId": "IL24"
+  },
+  {
+    "key": "euskalmet/sensors/IL26",
+    "sensorId": "IL26"
+  },
+  {
+    "key": "euskalmet/sensors/IL27",
+    "sensorId": "IL27"
+  },
+  {
+    "key": "euskalmet/sensors/IL36",
+    "sensorId": "IL36"
+  },
+  {
+    "key": "euskalmet/sensors/IL57",
+    "sensorId": "IL57"
+  },
+  {
+    "key": "euskalmet/sensors/IL58",
+    "sensorId": "IL58"
+  },
+  {
+    "key": "euskalmet/sensors/IL60",
+    "sensorId": "IL60"
+  },
+  {
+    "key": "euskalmet/sensors/IP18",
+    "sensorId": "IP18"
+  },
+  {
+    "key": "euskalmet/sensors/IP23",
+    "sensorId": "IP23"
+  },
+  {
+    "key": "euskalmet/sensors/IP24",
+    "sensorId": "IP24"
+  },
+  {
+    "key": "euskalmet/sensors/IP57",
+    "sensorId": "IP57"
+  },
+  {
+    "key": "euskalmet/sensors/IP58",
+    "sensorId": "IP58"
+  },
+  {
+    "key": "euskalmet/sensors/IP60",
+    "sensorId": "IP60"
+  },
+  {
+    "key": "euskalmet/sensors/IS",
+    "sensorId": "IS"
+  },
+  {
+    "key": "euskalmet/sensors/IS01",
+    "sensorId": "IS01"
+  },
+  {
+    "key": "euskalmet/sensors/IS02",
+    "sensorId": "IS02"
+  },
+  {
+    "key": "euskalmet/sensors/IS03",
+    "sensorId": "IS03"
+  },
+  {
+    "key": "euskalmet/sensors/IS04",
+    "sensorId": "IS04"
+  },
+  {
+    "key": "euskalmet/sensors/IS05",
+    "sensorId": "IS05"
+  },
+  {
+    "key": "euskalmet/sensors/IS06",
+    "sensorId": "IS06"
+  },
+  {
+    "key": "euskalmet/sensors/IS13",
+    "sensorId": "IS13"
+  },
+  {
+    "key": "euskalmet/sensors/IS16",
+    "sensorId": "IS16"
+  },
+  {
+    "key": "euskalmet/sensors/IS17",
+    "sensorId": "IS17"
+  },
+  {
+    "key": "euskalmet/sensors/IS18",
+    "sensorId": "IS18"
+  },
+  {
+    "key": "euskalmet/sensors/IS20",
+    "sensorId": "IS20"
+  },
+  {
+    "key": "euskalmet/sensors/IS23",
+    "sensorId": "IS23"
+  },
+  {
+    "key": "euskalmet/sensors/IS32",
+    "sensorId": "IS32"
+  },
+  {
+    "key": "euskalmet/sensors/IS51",
+    "sensorId": "IS51"
+  },
+  {
+    "key": "euskalmet/sensors/IS54",
+    "sensorId": "IS54"
+  },
+  {
+    "key": "euskalmet/sensors/IS55",
+    "sensorId": "IS55"
+  },
+  {
+    "key": "euskalmet/sensors/IS57",
+    "sensorId": "IS57"
+  },
+  {
+    "key": "euskalmet/sensors/IS63",
+    "sensorId": "IS63"
+  },
+  {
+    "key": "euskalmet/sensors/IS65",
+    "sensorId": "IS65"
+  },
+  {
+    "key": "euskalmet/sensors/IS67",
+    "sensorId": "IS67"
+  },
+  {
+    "key": "euskalmet/sensors/IS70",
+    "sensorId": "IS70"
+  },
+  {
+    "key": "euskalmet/sensors/IS74",
+    "sensorId": "IS74"
+  },
+  {
+    "key": "euskalmet/sensors/IS76",
+    "sensorId": "IS76"
+  },
+  {
+    "key": "euskalmet/sensors/IS77",
+    "sensorId": "IS77"
+  },
+  {
+    "key": "euskalmet/sensors/IS78",
+    "sensorId": "IS78"
+  },
+  {
+    "key": "euskalmet/sensors/IS79",
+    "sensorId": "IS79"
+  },
+  {
+    "key": "euskalmet/sensors/IS80",
+    "sensorId": "IS80"
+  },
+  {
+    "key": "euskalmet/sensors/IS89",
+    "sensorId": "IS89"
+  },
+  {
+    "key": "euskalmet/sensors/IS90",
+    "sensorId": "IS90"
+  },
+  {
+    "key": "euskalmet/sensors/IS93",
+    "sensorId": "IS93"
+  },
+  {
+    "key": "euskalmet/sensors/IS94",
+    "sensorId": "IS94"
+  },
+  {
+    "key": "euskalmet/sensors/IS95",
+    "sensorId": "IS95"
+  },
+  {
+    "key": "euskalmet/sensors/IS96",
+    "sensorId": "IS96"
+  },
+  {
+    "key": "euskalmet/sensors/IS97",
+    "sensorId": "IS97"
+  },
+  {
+    "key": "euskalmet/sensors/IS98",
+    "sensorId": "IS98"
+  },
+  {
+    "key": "euskalmet/sensors/IS99",
+    "sensorId": "IS99"
+  },
+  {
+    "key": "euskalmet/sensors/IS9A",
+    "sensorId": "IS9A"
+  },
+  {
+    "key": "euskalmet/sensors/ISA1",
+    "sensorId": "ISA1"
+  },
+  {
+    "key": "euskalmet/sensors/ISA2",
+    "sensorId": "ISA2"
+  },
+  {
+    "key": "euskalmet/sensors/ISA3",
+    "sensorId": "ISA3"
+  },
+  {
+    "key": "euskalmet/sensors/ISAB",
+    "sensorId": "ISAB"
+  },
+  {
+    "key": "euskalmet/sensors/ISAE",
+    "sensorId": "ISAE"
+  },
+  {
+    "key": "euskalmet/sensors/ISAF",
+    "sensorId": "ISAF"
+  },
+  {
+    "key": "euskalmet/sensors/ISAH",
+    "sensorId": "ISAH"
+  },
+  {
+    "key": "euskalmet/sensors/ISAJ",
+    "sensorId": "ISAJ"
+  },
+  {
+    "key": "euskalmet/sensors/ISAM",
+    "sensorId": "ISAM"
+  },
+  {
+    "key": "euskalmet/sensors/ISAP",
+    "sensorId": "ISAP"
+  },
+  {
+    "key": "euskalmet/sensors/ISAW",
+    "sensorId": "ISAW"
+  },
+  {
+    "key": "euskalmet/sensors/ISAX",
+    "sensorId": "ISAX"
+  },
+  {
+    "key": "euskalmet/sensors/ISAY",
+    "sensorId": "ISAY"
+  },
+  {
+    "key": "euskalmet/sensors/ISAZ",
+    "sensorId": "ISAZ"
+  },
+  {
+    "key": "euskalmet/sensors/ISB0",
+    "sensorId": "ISB0"
+  },
+  {
+    "key": "euskalmet/sensors/ISB2",
+    "sensorId": "ISB2"
+  },
+  {
+    "key": "euskalmet/sensors/ISB3",
+    "sensorId": "ISB3"
+  },
+  {
+    "key": "euskalmet/sensors/ISB4",
+    "sensorId": "ISB4"
+  },
+  {
+    "key": "euskalmet/sensors/ISB5",
+    "sensorId": "ISB5"
+  },
+  {
+    "key": "euskalmet/sensors/ISB9",
+    "sensorId": "ISB9"
+  },
+  {
+    "key": "euskalmet/sensors/ISBA",
+    "sensorId": "ISBA"
+  },
+  {
+    "key": "euskalmet/sensors/ISBE",
+    "sensorId": "ISBE"
+  },
+  {
+    "key": "euskalmet/sensors/ISBF",
+    "sensorId": "ISBF"
+  },
+  {
+    "key": "euskalmet/sensors/ISBM",
+    "sensorId": "ISBM"
+  },
+  {
+    "key": "euskalmet/sensors/ISBN",
+    "sensorId": "ISBN"
+  },
+  {
+    "key": "euskalmet/sensors/ISBO",
+    "sensorId": "ISBO"
+  },
+  {
+    "key": "euskalmet/sensors/ISBP",
+    "sensorId": "ISBP"
+  },
+  {
+    "key": "euskalmet/sensors/ISBQ",
+    "sensorId": "ISBQ"
+  },
+  {
+    "key": "euskalmet/sensors/ISBR",
+    "sensorId": "ISBR"
+  },
+  {
+    "key": "euskalmet/sensors/ISBS",
+    "sensorId": "ISBS"
+  },
+  {
+    "key": "euskalmet/sensors/ISBT",
+    "sensorId": "ISBT"
+  },
+  {
+    "key": "euskalmet/sensors/ISBU",
+    "sensorId": "ISBU"
+  },
+  {
+    "key": "euskalmet/sensors/ISBW",
+    "sensorId": "ISBW"
+  },
+  {
+    "key": "euskalmet/sensors/ISBX",
+    "sensorId": "ISBX"
+  },
+  {
+    "key": "euskalmet/sensors/ISC0",
+    "sensorId": "ISC0"
+  },
+  {
+    "key": "euskalmet/sensors/ISC1",
+    "sensorId": "ISC1"
+  },
+  {
+    "key": "euskalmet/sensors/ISC3",
+    "sensorId": "ISC3"
+  },
+  {
+    "key": "euskalmet/sensors/ISC4",
+    "sensorId": "ISC4"
+  },
+  {
+    "key": "euskalmet/sensors/ISCI",
+    "sensorId": "ISCI"
+  },
+  {
+    "key": "euskalmet/sensors/ISCJ",
+    "sensorId": "ISCJ"
+  },
+  {
+    "key": "euskalmet/sensors/ISCM",
+    "sensorId": "ISCM"
+  },
+  {
+    "key": "euskalmet/sensors/ISCS",
+    "sensorId": "ISCS"
+  },
+  {
+    "key": "euskalmet/sensors/ISCT",
+    "sensorId": "ISCT"
+  },
+  {
+    "key": "euskalmet/sensors/ISCU",
+    "sensorId": "ISCU"
+  },
+  {
+    "key": "euskalmet/sensors/ISCW",
+    "sensorId": "ISCW"
+  },
+  {
+    "key": "euskalmet/sensors/ISD3",
+    "sensorId": "ISD3"
+  },
+  {
+    "key": "euskalmet/sensors/ISDB",
+    "sensorId": "ISDB"
+  },
+  {
+    "key": "euskalmet/sensors/ISDC",
+    "sensorId": "ISDC"
+  },
+  {
+    "key": "euskalmet/sensors/ISDE",
+    "sensorId": "ISDE"
+  },
+  {
+    "key": "euskalmet/sensors/ISEA",
+    "sensorId": "ISEA"
+  },
+  {
+    "key": "euskalmet/sensors/ISEC",
+    "sensorId": "ISEC"
+  },
+  {
+    "key": "euskalmet/sensors/ISF4",
+    "sensorId": "ISF4"
+  },
+  {
+    "key": "euskalmet/sensors/ISF5",
+    "sensorId": "ISF5"
+  },
+  {
+    "key": "euskalmet/sensors/ISF6",
+    "sensorId": "ISF6"
+  },
+  {
+    "key": "euskalmet/sensors/ISF7",
+    "sensorId": "ISF7"
+  },
+  {
+    "key": "euskalmet/sensors/ISF8",
+    "sensorId": "ISF8"
+  },
+  {
+    "key": "euskalmet/sensors/ISFA",
+    "sensorId": "ISFA"
+  },
+  {
+    "key": "euskalmet/sensors/ISFB",
+    "sensorId": "ISFB"
+  },
+  {
+    "key": "euskalmet/sensors/ISP4",
+    "sensorId": "ISP4"
+  },
+  {
+    "key": "euskalmet/sensors/ISR1",
+    "sensorId": "ISR1"
+  },
+  {
+    "key": "euskalmet/sensors/ISR2",
+    "sensorId": "ISR2"
+  },
+  {
+    "key": "euskalmet/sensors/ISR4",
+    "sensorId": "ISR4"
+  },
+  {
+    "key": "euskalmet/sensors/ISR5",
+    "sensorId": "ISR5"
+  },
+  {
+    "key": "euskalmet/sensors/ISR6",
+    "sensorId": "ISR6"
+  },
+  {
+    "key": "euskalmet/sensors/ISR7",
+    "sensorId": "ISR7"
+  },
+  {
+    "key": "euskalmet/sensors/ISRF",
+    "sensorId": "ISRF"
+  },
+  {
+    "key": "euskalmet/sensors/IT06",
+    "sensorId": "IT06"
+  },
+  {
+    "key": "euskalmet/sensors/IT18",
+    "sensorId": "IT18"
+  },
+  {
+    "key": "euskalmet/sensors/IT20",
+    "sensorId": "IT20"
+  },
+  {
+    "key": "euskalmet/sensors/IT23",
+    "sensorId": "IT23"
+  },
+  {
+    "key": "euskalmet/sensors/IT24",
+    "sensorId": "IT24"
+  },
+  {
+    "key": "euskalmet/sensors/IT26",
+    "sensorId": "IT26"
+  },
+  {
+    "key": "euskalmet/sensors/IT27",
+    "sensorId": "IT27"
+  },
+  {
+    "key": "euskalmet/sensors/IT36",
+    "sensorId": "IT36"
+  },
+  {
+    "key": "euskalmet/sensors/IT57",
+    "sensorId": "IT57"
+  },
+  {
+    "key": "euskalmet/sensors/IT58",
+    "sensorId": "IT58"
+  },
+  {
+    "key": "euskalmet/sensors/IT60",
+    "sensorId": "IT60"
+  },
+  {
+    "key": "euskalmet/sensors/IV06",
+    "sensorId": "IV06"
+  },
+  {
+    "key": "euskalmet/sensors/IV18",
+    "sensorId": "IV18"
+  },
+  {
+    "key": "euskalmet/sensors/IV20",
+    "sensorId": "IV20"
+  },
+  {
+    "key": "euskalmet/sensors/IV23",
+    "sensorId": "IV23"
+  },
+  {
+    "key": "euskalmet/sensors/IV24",
+    "sensorId": "IV24"
+  },
+  {
+    "key": "euskalmet/sensors/IV26",
+    "sensorId": "IV26"
+  },
+  {
+    "key": "euskalmet/sensors/IV27",
+    "sensorId": "IV27"
+  },
+  {
+    "key": "euskalmet/sensors/IV36",
+    "sensorId": "IV36"
+  },
+  {
+    "key": "euskalmet/sensors/IV57",
+    "sensorId": "IV57"
+  },
+  {
+    "key": "euskalmet/sensors/IV58",
+    "sensorId": "IV58"
+  },
+  {
+    "key": "euskalmet/sensors/IV60",
+    "sensorId": "IV60"
+  },
+  {
+    "key": "euskalmet/sensors/K001",
+    "sensorId": "K001"
+  },
+  {
+    "key": "euskalmet/sensors/K010",
+    "sensorId": "K010"
+  },
+  {
+    "key": "euskalmet/sensors/K011",
+    "sensorId": "K011"
+  },
+  {
+    "key": "euskalmet/sensors/K012",
+    "sensorId": "K012"
+  },
+  {
+    "key": "euskalmet/sensors/K013",
+    "sensorId": "K013"
+  },
+  {
+    "key": "euskalmet/sensors/K022",
+    "sensorId": "K022"
+  },
+  {
+    "key": "euskalmet/sensors/K023",
+    "sensorId": "K023"
+  },
+  {
+    "key": "euskalmet/sensors/K024",
+    "sensorId": "K024"
+  },
+  {
+    "key": "euskalmet/sensors/K026",
+    "sensorId": "K026"
+  },
+  {
+    "key": "euskalmet/sensors/K027",
+    "sensorId": "K027"
+  },
+  {
+    "key": "euskalmet/sensors/K030",
+    "sensorId": "K030"
+  },
+  {
+    "key": "euskalmet/sensors/K033",
+    "sensorId": "K033"
+  },
+  {
+    "key": "euskalmet/sensors/K035",
+    "sensorId": "K035"
+  },
+  {
+    "key": "euskalmet/sensors/K036",
+    "sensorId": "K036"
+  },
+  {
+    "key": "euskalmet/sensors/K037",
+    "sensorId": "K037"
+  },
+  {
+    "key": "euskalmet/sensors/K038",
+    "sensorId": "K038"
+  },
+  {
+    "key": "euskalmet/sensors/K039",
+    "sensorId": "K039"
+  },
+  {
+    "key": "euskalmet/sensors/K040",
+    "sensorId": "K040"
+  },
+  {
+    "key": "euskalmet/sensors/K041",
+    "sensorId": "K041"
+  },
+  {
+    "key": "euskalmet/sensors/K042",
+    "sensorId": "K042"
+  },
+  {
+    "key": "euskalmet/sensors/K043",
+    "sensorId": "K043"
+  },
+  {
+    "key": "euskalmet/sensors/K045",
+    "sensorId": "K045"
+  },
+  {
+    "key": "euskalmet/sensors/K047",
+    "sensorId": "K047"
+  },
+  {
+    "key": "euskalmet/sensors/K048",
+    "sensorId": "K048"
+  },
+  {
+    "key": "euskalmet/sensors/K050",
+    "sensorId": "K050"
+  },
+  {
+    "key": "euskalmet/sensors/K051",
+    "sensorId": "K051"
+  },
+  {
+    "key": "euskalmet/sensors/K053",
+    "sensorId": "K053"
+  },
+  {
+    "key": "euskalmet/sensors/K054",
+    "sensorId": "K054"
+  },
+  {
+    "key": "euskalmet/sensors/K055",
+    "sensorId": "K055"
+  },
+  {
+    "key": "euskalmet/sensors/K056",
+    "sensorId": "K056"
+  },
+  {
+    "key": "euskalmet/sensors/K057",
+    "sensorId": "K057"
+  },
+  {
+    "key": "euskalmet/sensors/K058",
+    "sensorId": "K058"
+  },
+  {
+    "key": "euskalmet/sensors/K064",
+    "sensorId": "K064"
+  },
+  {
+    "key": "euskalmet/sensors/K089",
+    "sensorId": "K089"
+  },
+  {
+    "key": "euskalmet/sensors/K090",
+    "sensorId": "K090"
+  },
+  {
+    "key": "euskalmet/sensors/K091",
+    "sensorId": "K091"
+  },
+  {
+    "key": "euskalmet/sensors/K092",
+    "sensorId": "K092"
+  },
+  {
+    "key": "euskalmet/sensors/K093",
+    "sensorId": "K093"
+  },
+  {
+    "key": "euskalmet/sensors/K0A6",
+    "sensorId": "K0A6"
+  },
+  {
+    "key": "euskalmet/sensors/K0AA",
+    "sensorId": "K0AA"
+  },
+  {
+    "key": "euskalmet/sensors/K0AB",
+    "sensorId": "K0AB"
+  },
+  {
+    "key": "euskalmet/sensors/K0AC",
+    "sensorId": "K0AC"
+  },
+  {
+    "key": "euskalmet/sensors/K0AD",
+    "sensorId": "K0AD"
+  },
+  {
+    "key": "euskalmet/sensors/K0AE",
+    "sensorId": "K0AE"
+  },
+  {
+    "key": "euskalmet/sensors/K0AF",
+    "sensorId": "K0AF"
+  },
+  {
+    "key": "euskalmet/sensors/K0AJ",
+    "sensorId": "K0AJ"
+  },
+  {
+    "key": "euskalmet/sensors/K0AL",
+    "sensorId": "K0AL"
+  },
+  {
+    "key": "euskalmet/sensors/K0AM",
+    "sensorId": "K0AM"
+  },
+  {
+    "key": "euskalmet/sensors/K0AN",
+    "sensorId": "K0AN"
+  },
+  {
+    "key": "euskalmet/sensors/K0AO",
+    "sensorId": "K0AO"
+  },
+  {
+    "key": "euskalmet/sensors/K0AP",
+    "sensorId": "K0AP"
+  },
+  {
+    "key": "euskalmet/sensors/K0AQ",
+    "sensorId": "K0AQ"
+  },
+  {
+    "key": "euskalmet/sensors/K0AR",
+    "sensorId": "K0AR"
+  },
+  {
+    "key": "euskalmet/sensors/K0AS",
+    "sensorId": "K0AS"
+  },
+  {
+    "key": "euskalmet/sensors/K0AT",
+    "sensorId": "K0AT"
+  },
+  {
+    "key": "euskalmet/sensors/K0AV",
+    "sensorId": "K0AV"
+  },
+  {
+    "key": "euskalmet/sensors/K0AY",
+    "sensorId": "K0AY"
+  },
+  {
+    "key": "euskalmet/sensors/K0AZ",
+    "sensorId": "K0AZ"
+  },
+  {
+    "key": "euskalmet/sensors/K0C2",
+    "sensorId": "K0C2"
+  },
+  {
+    "key": "euskalmet/sensors/K0R2",
+    "sensorId": "K0R2"
+  },
+  {
+    "key": "euskalmet/sensors/K0R3",
+    "sensorId": "K0R3"
+  },
+  {
+    "key": "euskalmet/sensors/K0R4",
+    "sensorId": "K0R4"
+  },
+  {
+    "key": "euskalmet/sensors/K0R6",
+    "sensorId": "K0R6"
+  },
+  {
+    "key": "euskalmet/sensors/K0R7",
+    "sensorId": "K0R7"
+  },
+  {
+    "key": "euskalmet/sensors/K0R8",
+    "sensorId": "K0R8"
+  },
+  {
+    "key": "euskalmet/sensors/K0R9",
+    "sensorId": "K0R9"
+  },
+  {
+    "key": "euskalmet/sensors/K0RA",
+    "sensorId": "K0RA"
+  },
+  {
+    "key": "euskalmet/sensors/K0RB",
+    "sensorId": "K0RB"
+  },
+  {
+    "key": "euskalmet/sensors/K0S2",
+    "sensorId": "K0S2"
+  },
+  {
+    "key": "euskalmet/sensors/K0S6",
+    "sensorId": "K0S6"
+  },
+  {
+    "key": "euskalmet/sensors/K0S8",
+    "sensorId": "K0S8"
+  },
+  {
+    "key": "euskalmet/sensors/K602",
+    "sensorId": "K602"
+  },
+  {
+    "key": "euskalmet/sensors/K605",
+    "sensorId": "K605"
+  },
+  {
+    "key": "euskalmet/sensors/K606",
+    "sensorId": "K606"
+  },
+  {
+    "key": "euskalmet/sensors/K607",
+    "sensorId": "K607"
+  },
+  {
+    "key": "euskalmet/sensors/K609",
+    "sensorId": "K609"
+  },
+  {
+    "key": "euskalmet/sensors/K610",
+    "sensorId": "K610"
+  },
+  {
+    "key": "euskalmet/sensors/K612",
+    "sensorId": "K612"
+  },
+  {
+    "key": "euskalmet/sensors/K613",
+    "sensorId": "K613"
+  },
+  {
+    "key": "euskalmet/sensors/K614",
+    "sensorId": "K614"
+  },
+  {
+    "key": "euskalmet/sensors/K615",
+    "sensorId": "K615"
+  },
+  {
+    "key": "euskalmet/sensors/K616",
+    "sensorId": "K616"
+  },
+  {
+    "key": "euskalmet/sensors/K617",
+    "sensorId": "K617"
+  },
+  {
+    "key": "euskalmet/sensors/K618",
+    "sensorId": "K618"
+  },
+  {
+    "key": "euskalmet/sensors/LA9E",
+    "sensorId": "LA9E"
+  },
+  {
+    "key": "euskalmet/sensors/LO9E",
+    "sensorId": "LO9E"
+  },
+  {
+    "key": "euskalmet/sensors/MI00",
+    "sensorId": "MI00"
+  },
+  {
+    "key": "euskalmet/sensors/MI01",
+    "sensorId": "MI01"
+  },
+  {
+    "key": "euskalmet/sensors/MI02",
+    "sensorId": "MI02"
+  },
+  {
+    "key": "euskalmet/sensors/MI03",
+    "sensorId": "MI03"
+  },
+  {
+    "key": "euskalmet/sensors/MI04",
+    "sensorId": "MI04"
+  },
+  {
+    "key": "euskalmet/sensors/MI05",
+    "sensorId": "MI05"
+  },
+  {
+    "key": "euskalmet/sensors/MI06",
+    "sensorId": "MI06"
+  },
+  {
+    "key": "euskalmet/sensors/MO00",
+    "sensorId": "MO00"
+  },
+  {
+    "key": "euskalmet/sensors/MO01",
+    "sensorId": "MO01"
+  },
+  {
+    "key": "euskalmet/sensors/MO02",
+    "sensorId": "MO02"
+  },
+  {
+    "key": "euskalmet/sensors/MO03",
+    "sensorId": "MO03"
+  },
+  {
+    "key": "euskalmet/sensors/MO04",
+    "sensorId": "MO04"
+  },
+  {
+    "key": "euskalmet/sensors/MO05",
+    "sensorId": "MO05"
+  },
+  {
+    "key": "euskalmet/sensors/MO06",
+    "sensorId": "MO06"
+  },
+  {
+    "key": "euskalmet/sensors/NA57",
+    "sensorId": "NA57"
+  },
+  {
+    "key": "euskalmet/sensors/NA63",
+    "sensorId": "NA63"
+  },
+  {
+    "key": "euskalmet/sensors/NA67",
+    "sensorId": "NA67"
+  },
+  {
+    "key": "euskalmet/sensors/NA74",
+    "sensorId": "NA74"
+  },
+  {
+    "key": "euskalmet/sensors/NA78",
+    "sensorId": "NA78"
+  },
+  {
+    "key": "euskalmet/sensors/NA79",
+    "sensorId": "NA79"
+  },
+  {
+    "key": "euskalmet/sensors/NAAA",
+    "sensorId": "NAAA"
+  },
+  {
+    "key": "euskalmet/sensors/NAB1",
+    "sensorId": "NAB1"
+  },
+  {
+    "key": "euskalmet/sensors/NAB2",
+    "sensorId": "NAB2"
+  },
+  {
+    "key": "euskalmet/sensors/NABA",
+    "sensorId": "NABA"
+  },
+  {
+    "key": "euskalmet/sensors/NABE",
+    "sensorId": "NABE"
+  },
+  {
+    "key": "euskalmet/sensors/NAC4",
+    "sensorId": "NAC4"
+  },
+  {
+    "key": "euskalmet/sensors/NAD2",
+    "sensorId": "NAD2"
+  },
+  {
+    "key": "euskalmet/sensors/NADB",
+    "sensorId": "NADB"
+  },
+  {
+    "key": "euskalmet/sensors/NADD",
+    "sensorId": "NADD"
+  },
+  {
+    "key": "euskalmet/sensors/NAE9",
+    "sensorId": "NAE9"
+  },
+  {
+    "key": "euskalmet/sensors/NAEC",
+    "sensorId": "NAEC"
+  },
+  {
+    "key": "euskalmet/sensors/NC57",
+    "sensorId": "NC57"
+  },
+  {
+    "key": "euskalmet/sensors/NC63",
+    "sensorId": "NC63"
+  },
+  {
+    "key": "euskalmet/sensors/NC67",
+    "sensorId": "NC67"
+  },
+  {
+    "key": "euskalmet/sensors/NC74",
+    "sensorId": "NC74"
+  },
+  {
+    "key": "euskalmet/sensors/NC77",
+    "sensorId": "NC77"
+  },
+  {
+    "key": "euskalmet/sensors/NC78",
+    "sensorId": "NC78"
+  },
+  {
+    "key": "euskalmet/sensors/NC79",
+    "sensorId": "NC79"
+  },
+  {
+    "key": "euskalmet/sensors/NC93",
+    "sensorId": "NC93"
+  },
+  {
+    "key": "euskalmet/sensors/NCAA",
+    "sensorId": "NCAA"
+  },
+  {
+    "key": "euskalmet/sensors/NCB1",
+    "sensorId": "NCB1"
+  },
+  {
+    "key": "euskalmet/sensors/NCB2",
+    "sensorId": "NCB2"
+  },
+  {
+    "key": "euskalmet/sensors/NCBA",
+    "sensorId": "NCBA"
+  },
+  {
+    "key": "euskalmet/sensors/NCBE",
+    "sensorId": "NCBE"
+  },
+  {
+    "key": "euskalmet/sensors/NCC2",
+    "sensorId": "NCC2"
+  },
+  {
+    "key": "euskalmet/sensors/NCC3",
+    "sensorId": "NCC3"
+  },
+  {
+    "key": "euskalmet/sensors/NCC4",
+    "sensorId": "NCC4"
+  },
+  {
+    "key": "euskalmet/sensors/NCD1",
+    "sensorId": "NCD1"
+  },
+  {
+    "key": "euskalmet/sensors/NCD2",
+    "sensorId": "NCD2"
+  },
+  {
+    "key": "euskalmet/sensors/NCDB",
+    "sensorId": "NCDB"
+  },
+  {
+    "key": "euskalmet/sensors/NCDD",
+    "sensorId": "NCDD"
+  },
+  {
+    "key": "euskalmet/sensors/NCE1",
+    "sensorId": "NCE1"
+  },
+  {
+    "key": "euskalmet/sensors/NCE7",
+    "sensorId": "NCE7"
+  },
+  {
+    "key": "euskalmet/sensors/NCE8",
+    "sensorId": "NCE8"
+  },
+  {
+    "key": "euskalmet/sensors/NCE9",
+    "sensorId": "NCE9"
+  },
+  {
+    "key": "euskalmet/sensors/NCEA",
+    "sensorId": "NCEA"
+  },
+  {
+    "key": "euskalmet/sensors/NCEC",
+    "sensorId": "NCEC"
+  },
+  {
+    "key": "euskalmet/sensors/NCF0",
+    "sensorId": "NCF0"
+  },
+  {
+    "key": "euskalmet/sensors/NCF4",
+    "sensorId": "NCF4"
+  },
+  {
+    "key": "euskalmet/sensors/NI57",
+    "sensorId": "NI57"
+  },
+  {
+    "key": "euskalmet/sensors/NI63",
+    "sensorId": "NI63"
+  },
+  {
+    "key": "euskalmet/sensors/NI79",
+    "sensorId": "NI79"
+  },
+  {
+    "key": "euskalmet/sensors/NIB1",
+    "sensorId": "NIB1"
+  },
+  {
+    "key": "euskalmet/sensors/NIB2",
+    "sensorId": "NIB2"
+  },
+  {
+    "key": "euskalmet/sensors/NIBA",
+    "sensorId": "NIBA"
+  },
+  {
+    "key": "euskalmet/sensors/NIBE",
+    "sensorId": "NIBE"
+  },
+  {
+    "key": "euskalmet/sensors/NIC3",
+    "sensorId": "NIC3"
+  },
+  {
+    "key": "euskalmet/sensors/NIE0",
+    "sensorId": "NIE0"
+  },
+  {
+    "key": "euskalmet/sensors/NIE9",
+    "sensorId": "NIE9"
+  },
+  {
+    "key": "euskalmet/sensors/NM57",
+    "sensorId": "NM57"
+  },
+  {
+    "key": "euskalmet/sensors/NM63",
+    "sensorId": "NM63"
+  },
+  {
+    "key": "euskalmet/sensors/NM67",
+    "sensorId": "NM67"
+  },
+  {
+    "key": "euskalmet/sensors/NM74",
+    "sensorId": "NM74"
+  },
+  {
+    "key": "euskalmet/sensors/NM78",
+    "sensorId": "NM78"
+  },
+  {
+    "key": "euskalmet/sensors/NM79",
+    "sensorId": "NM79"
+  },
+  {
+    "key": "euskalmet/sensors/NMB1",
+    "sensorId": "NMB1"
+  },
+  {
+    "key": "euskalmet/sensors/NMB2",
+    "sensorId": "NMB2"
+  },
+  {
+    "key": "euskalmet/sensors/NMBA",
+    "sensorId": "NMBA"
+  },
+  {
+    "key": "euskalmet/sensors/NMBE",
+    "sensorId": "NMBE"
+  },
+  {
+    "key": "euskalmet/sensors/NMC3",
+    "sensorId": "NMC3"
+  },
+  {
+    "key": "euskalmet/sensors/NMC4",
+    "sensorId": "NMC4"
+  },
+  {
+    "key": "euskalmet/sensors/NMD1",
+    "sensorId": "NMD1"
+  },
+  {
+    "key": "euskalmet/sensors/NMD2",
+    "sensorId": "NMD2"
+  },
+  {
+    "key": "euskalmet/sensors/NMDB",
+    "sensorId": "NMDB"
+  },
+  {
+    "key": "euskalmet/sensors/NMDD",
+    "sensorId": "NMDD"
+  },
+  {
+    "key": "euskalmet/sensors/NME9",
+    "sensorId": "NME9"
+  },
+  {
+    "key": "euskalmet/sensors/NMEC",
+    "sensorId": "NMEC"
+  },
+  {
+    "key": "euskalmet/sensors/NMF0",
+    "sensorId": "NMF0"
+  },
+  {
+    "key": "euskalmet/sensors/NO57",
+    "sensorId": "NO57"
+  },
+  {
+    "key": "euskalmet/sensors/NO63",
+    "sensorId": "NO63"
+  },
+  {
+    "key": "euskalmet/sensors/NO67",
+    "sensorId": "NO67"
+  },
+  {
+    "key": "euskalmet/sensors/NO74",
+    "sensorId": "NO74"
+  },
+  {
+    "key": "euskalmet/sensors/NO77",
+    "sensorId": "NO77"
+  },
+  {
+    "key": "euskalmet/sensors/NO78",
+    "sensorId": "NO78"
+  },
+  {
+    "key": "euskalmet/sensors/NO79",
+    "sensorId": "NO79"
+  },
+  {
+    "key": "euskalmet/sensors/NOAA",
+    "sensorId": "NOAA"
+  },
+  {
+    "key": "euskalmet/sensors/NOB1",
+    "sensorId": "NOB1"
+  },
+  {
+    "key": "euskalmet/sensors/NOB2",
+    "sensorId": "NOB2"
+  },
+  {
+    "key": "euskalmet/sensors/NOBA",
+    "sensorId": "NOBA"
+  },
+  {
+    "key": "euskalmet/sensors/NOBE",
+    "sensorId": "NOBE"
+  },
+  {
+    "key": "euskalmet/sensors/NOC2",
+    "sensorId": "NOC2"
+  },
+  {
+    "key": "euskalmet/sensors/NOC3",
+    "sensorId": "NOC3"
+  },
+  {
+    "key": "euskalmet/sensors/NOC4",
+    "sensorId": "NOC4"
+  },
+  {
+    "key": "euskalmet/sensors/NOD1",
+    "sensorId": "NOD1"
+  },
+  {
+    "key": "euskalmet/sensors/NOD2",
+    "sensorId": "NOD2"
+  },
+  {
+    "key": "euskalmet/sensors/NODB",
+    "sensorId": "NODB"
+  },
+  {
+    "key": "euskalmet/sensors/NODD",
+    "sensorId": "NODD"
+  },
+  {
+    "key": "euskalmet/sensors/NOE1",
+    "sensorId": "NOE1"
+  },
+  {
+    "key": "euskalmet/sensors/NOE7",
+    "sensorId": "NOE7"
+  },
+  {
+    "key": "euskalmet/sensors/NOE8",
+    "sensorId": "NOE8"
+  },
+  {
+    "key": "euskalmet/sensors/NOE9",
+    "sensorId": "NOE9"
+  },
+  {
+    "key": "euskalmet/sensors/NOEA",
+    "sensorId": "NOEA"
+  },
+  {
+    "key": "euskalmet/sensors/NOEC",
+    "sensorId": "NOEC"
+  },
+  {
+    "key": "euskalmet/sensors/NOF0",
+    "sensorId": "NOF0"
+  },
+  {
+    "key": "euskalmet/sensors/NOF4",
+    "sensorId": "NOF4"
+  },
+  {
+    "key": "euskalmet/sensors/NP57",
+    "sensorId": "NP57"
+  },
+  {
+    "key": "euskalmet/sensors/NP63",
+    "sensorId": "NP63"
+  },
+  {
+    "key": "euskalmet/sensors/NP67",
+    "sensorId": "NP67"
+  },
+  {
+    "key": "euskalmet/sensors/NP74",
+    "sensorId": "NP74"
+  },
+  {
+    "key": "euskalmet/sensors/NP77",
+    "sensorId": "NP77"
+  },
+  {
+    "key": "euskalmet/sensors/NP78",
+    "sensorId": "NP78"
+  },
+  {
+    "key": "euskalmet/sensors/NP79",
+    "sensorId": "NP79"
+  },
+  {
+    "key": "euskalmet/sensors/NPAA",
+    "sensorId": "NPAA"
+  },
+  {
+    "key": "euskalmet/sensors/NPB1",
+    "sensorId": "NPB1"
+  },
+  {
+    "key": "euskalmet/sensors/NPB2",
+    "sensorId": "NPB2"
+  },
+  {
+    "key": "euskalmet/sensors/NPBA",
+    "sensorId": "NPBA"
+  },
+  {
+    "key": "euskalmet/sensors/NPBE",
+    "sensorId": "NPBE"
+  },
+  {
+    "key": "euskalmet/sensors/NPC2",
+    "sensorId": "NPC2"
+  },
+  {
+    "key": "euskalmet/sensors/NPC3",
+    "sensorId": "NPC3"
+  },
+  {
+    "key": "euskalmet/sensors/NPC4",
+    "sensorId": "NPC4"
+  },
+  {
+    "key": "euskalmet/sensors/NPD1",
+    "sensorId": "NPD1"
+  },
+  {
+    "key": "euskalmet/sensors/NPD2",
+    "sensorId": "NPD2"
+  },
+  {
+    "key": "euskalmet/sensors/NPDB",
+    "sensorId": "NPDB"
+  },
+  {
+    "key": "euskalmet/sensors/NPDD",
+    "sensorId": "NPDD"
+  },
+  {
+    "key": "euskalmet/sensors/NPE1",
+    "sensorId": "NPE1"
+  },
+  {
+    "key": "euskalmet/sensors/NPE7",
+    "sensorId": "NPE7"
+  },
+  {
+    "key": "euskalmet/sensors/NPE8",
+    "sensorId": "NPE8"
+  },
+  {
+    "key": "euskalmet/sensors/NPE9",
+    "sensorId": "NPE9"
+  },
+  {
+    "key": "euskalmet/sensors/NPEA",
+    "sensorId": "NPEA"
+  },
+  {
+    "key": "euskalmet/sensors/NPEC",
+    "sensorId": "NPEC"
+  },
+  {
+    "key": "euskalmet/sensors/NPF0",
+    "sensorId": "NPF0"
+  },
+  {
+    "key": "euskalmet/sensors/NPF4",
+    "sensorId": "NPF4"
+  },
+  {
+    "key": "euskalmet/sensors/NR57",
+    "sensorId": "NR57"
+  },
+  {
+    "key": "euskalmet/sensors/NR63",
+    "sensorId": "NR63"
+  },
+  {
+    "key": "euskalmet/sensors/NR67",
+    "sensorId": "NR67"
+  },
+  {
+    "key": "euskalmet/sensors/NR74",
+    "sensorId": "NR74"
+  },
+  {
+    "key": "euskalmet/sensors/NR77",
+    "sensorId": "NR77"
+  },
+  {
+    "key": "euskalmet/sensors/NR78",
+    "sensorId": "NR78"
+  },
+  {
+    "key": "euskalmet/sensors/NR79",
+    "sensorId": "NR79"
+  },
+  {
+    "key": "euskalmet/sensors/NRAA",
+    "sensorId": "NRAA"
+  },
+  {
+    "key": "euskalmet/sensors/NRB1",
+    "sensorId": "NRB1"
+  },
+  {
+    "key": "euskalmet/sensors/NRB2",
+    "sensorId": "NRB2"
+  },
+  {
+    "key": "euskalmet/sensors/NRBA",
+    "sensorId": "NRBA"
+  },
+  {
+    "key": "euskalmet/sensors/NRBE",
+    "sensorId": "NRBE"
+  },
+  {
+    "key": "euskalmet/sensors/NRC2",
+    "sensorId": "NRC2"
+  },
+  {
+    "key": "euskalmet/sensors/NRC3",
+    "sensorId": "NRC3"
+  },
+  {
+    "key": "euskalmet/sensors/NRC4",
+    "sensorId": "NRC4"
+  },
+  {
+    "key": "euskalmet/sensors/NRD1",
+    "sensorId": "NRD1"
+  },
+  {
+    "key": "euskalmet/sensors/NRD2",
+    "sensorId": "NRD2"
+  },
+  {
+    "key": "euskalmet/sensors/NRDB",
+    "sensorId": "NRDB"
+  },
+  {
+    "key": "euskalmet/sensors/NRDD",
+    "sensorId": "NRDD"
+  },
+  {
+    "key": "euskalmet/sensors/NRE1",
+    "sensorId": "NRE1"
+  },
+  {
+    "key": "euskalmet/sensors/NRE7",
+    "sensorId": "NRE7"
+  },
+  {
+    "key": "euskalmet/sensors/NRE8",
+    "sensorId": "NRE8"
+  },
+  {
+    "key": "euskalmet/sensors/NRE9",
+    "sensorId": "NRE9"
+  },
+  {
+    "key": "euskalmet/sensors/NREA",
+    "sensorId": "NREA"
+  },
+  {
+    "key": "euskalmet/sensors/NREC",
+    "sensorId": "NREC"
+  },
+  {
+    "key": "euskalmet/sensors/NRF0",
+    "sensorId": "NRF0"
+  },
+  {
+    "key": "euskalmet/sensors/NRF4",
+    "sensorId": "NRF4"
+  },
+  {
+    "key": "euskalmet/sensors/NT09",
+    "sensorId": "NT09"
+  },
+  {
+    "key": "euskalmet/sensors/NT39",
+    "sensorId": "NT39"
+  },
+  {
+    "key": "euskalmet/sensors/NT3A",
+    "sensorId": "NT3A"
+  },
+  {
+    "key": "euskalmet/sensors/NT57",
+    "sensorId": "NT57"
+  },
+  {
+    "key": "euskalmet/sensors/NT63",
+    "sensorId": "NT63"
+  },
+  {
+    "key": "euskalmet/sensors/NT67",
+    "sensorId": "NT67"
+  },
+  {
+    "key": "euskalmet/sensors/NT74",
+    "sensorId": "NT74"
+  },
+  {
+    "key": "euskalmet/sensors/NT77",
+    "sensorId": "NT77"
+  },
+  {
+    "key": "euskalmet/sensors/NT78",
+    "sensorId": "NT78"
+  },
+  {
+    "key": "euskalmet/sensors/NT79",
+    "sensorId": "NT79"
+  },
+  {
+    "key": "euskalmet/sensors/NTAA",
+    "sensorId": "NTAA"
+  },
+  {
+    "key": "euskalmet/sensors/NTB1",
+    "sensorId": "NTB1"
+  },
+  {
+    "key": "euskalmet/sensors/NTB2",
+    "sensorId": "NTB2"
+  },
+  {
+    "key": "euskalmet/sensors/NTBA",
+    "sensorId": "NTBA"
+  },
+  {
+    "key": "euskalmet/sensors/NTBE",
+    "sensorId": "NTBE"
+  },
+  {
+    "key": "euskalmet/sensors/NTC2",
+    "sensorId": "NTC2"
+  },
+  {
+    "key": "euskalmet/sensors/NTC3",
+    "sensorId": "NTC3"
+  },
+  {
+    "key": "euskalmet/sensors/NTC4",
+    "sensorId": "NTC4"
+  },
+  {
+    "key": "euskalmet/sensors/NTD1",
+    "sensorId": "NTD1"
+  },
+  {
+    "key": "euskalmet/sensors/NTD2",
+    "sensorId": "NTD2"
+  },
+  {
+    "key": "euskalmet/sensors/NTDB",
+    "sensorId": "NTDB"
+  },
+  {
+    "key": "euskalmet/sensors/NTDD",
+    "sensorId": "NTDD"
+  },
+  {
+    "key": "euskalmet/sensors/NTE7",
+    "sensorId": "NTE7"
+  },
+  {
+    "key": "euskalmet/sensors/NTE8",
+    "sensorId": "NTE8"
+  },
+  {
+    "key": "euskalmet/sensors/NTE9",
+    "sensorId": "NTE9"
+  },
+  {
+    "key": "euskalmet/sensors/NTEA",
+    "sensorId": "NTEA"
+  },
+  {
+    "key": "euskalmet/sensors/NTEC",
+    "sensorId": "NTEC"
+  },
+  {
+    "key": "euskalmet/sensors/NTF0",
+    "sensorId": "NTF0"
+  },
+  {
+    "key": "euskalmet/sensors/NTF4",
+    "sensorId": "NTF4"
+  },
+  {
+    "key": "euskalmet/sensors/NX79",
+    "sensorId": "NX79"
+  },
+  {
+    "key": "euskalmet/sensors/NXD2",
+    "sensorId": "NXD2"
+  },
+  {
+    "key": "euskalmet/sensors/OR57",
+    "sensorId": "OR57"
+  },
+  {
+    "key": "euskalmet/sensors/OR63",
+    "sensorId": "OR63"
+  },
+  {
+    "key": "euskalmet/sensors/OR78",
+    "sensorId": "OR78"
+  },
+  {
+    "key": "euskalmet/sensors/ORBA",
+    "sensorId": "ORBA"
+  },
+  {
+    "key": "euskalmet/sensors/ORBE",
+    "sensorId": "ORBE"
+  },
+  {
+    "key": "euskalmet/sensors/ORDD",
+    "sensorId": "ORDD"
+  },
+  {
+    "key": "euskalmet/sensors/ORE9",
+    "sensorId": "ORE9"
+  },
+  {
+    "key": "euskalmet/sensors/PA05",
+    "sensorId": "PA05"
+  },
+  {
+    "key": "euskalmet/sensors/PC9E",
+    "sensorId": "PC9E"
+  },
+  {
+    "key": "euskalmet/sensors/PO9E",
+    "sensorId": "PO9E"
+  },
+  {
+    "key": "euskalmet/sensors/PP9E",
+    "sensorId": "PP9E"
+  },
+  {
+    "key": "euskalmet/sensors/PR02",
+    "sensorId": "PR02"
+  },
+  {
+    "key": "euskalmet/sensors/PR77",
+    "sensorId": "PR77"
+  },
+  {
+    "key": "euskalmet/sensors/PR9E",
+    "sensorId": "PR9E"
+  },
+  {
+    "key": "euskalmet/sensors/PRD1",
+    "sensorId": "PRD1"
+  },
+  {
+    "key": "euskalmet/sensors/PRD2",
+    "sensorId": "PRD2"
+  },
+  {
+    "key": "euskalmet/sensors/PRDD",
+    "sensorId": "PRDD"
+  },
+  {
+    "key": "euskalmet/sensors/PRE5",
+    "sensorId": "PRE5"
+  },
+  {
+    "key": "euskalmet/sensors/PRE7",
+    "sensorId": "PRE7"
+  },
+  {
+    "key": "euskalmet/sensors/PRE9",
+    "sensorId": "PRE9"
+  },
+  {
+    "key": "euskalmet/sensors/PRF0",
+    "sensorId": "PRF0"
+  },
+  {
+    "key": "euskalmet/sensors/R001",
+    "sensorId": "R001"
+  },
+  {
+    "key": "euskalmet/sensors/R002",
+    "sensorId": "R002"
+  },
+  {
+    "key": "euskalmet/sensors/R003",
+    "sensorId": "R003"
+  },
+  {
+    "key": "euskalmet/sensors/R004",
+    "sensorId": "R004"
+  },
+  {
+    "key": "euskalmet/sensors/R005",
+    "sensorId": "R005"
+  },
+  {
+    "key": "euskalmet/sensors/R006",
+    "sensorId": "R006"
+  },
+  {
+    "key": "euskalmet/sensors/R007",
+    "sensorId": "R007"
+  },
+  {
+    "key": "euskalmet/sensors/R008",
+    "sensorId": "R008"
+  },
+  {
+    "key": "euskalmet/sensors/R009",
+    "sensorId": "R009"
+  },
+  {
+    "key": "euskalmet/sensors/R010",
+    "sensorId": "R010"
+  },
+  {
+    "key": "euskalmet/sensors/R011",
+    "sensorId": "R011"
+  },
+  {
+    "key": "euskalmet/sensors/R012",
+    "sensorId": "R012"
+  },
+  {
+    "key": "euskalmet/sensors/R013",
+    "sensorId": "R013"
+  },
+  {
+    "key": "euskalmet/sensors/R014",
+    "sensorId": "R014"
+  },
+  {
+    "key": "euskalmet/sensors/R015",
+    "sensorId": "R015"
+  },
+  {
+    "key": "euskalmet/sensors/R016",
+    "sensorId": "R016"
+  },
+  {
+    "key": "euskalmet/sensors/R017",
+    "sensorId": "R017"
+  },
+  {
+    "key": "euskalmet/sensors/R018",
+    "sensorId": "R018"
+  },
+  {
+    "key": "euskalmet/sensors/R019",
+    "sensorId": "R019"
+  },
+  {
+    "key": "euskalmet/sensors/R020",
+    "sensorId": "R020"
+  },
+  {
+    "key": "euskalmet/sensors/R021",
+    "sensorId": "R021"
+  },
+  {
+    "key": "euskalmet/sensors/R022",
+    "sensorId": "R022"
+  },
+  {
+    "key": "euskalmet/sensors/R023",
+    "sensorId": "R023"
+  },
+  {
+    "key": "euskalmet/sensors/R024",
+    "sensorId": "R024"
+  },
+  {
+    "key": "euskalmet/sensors/R026",
+    "sensorId": "R026"
+  },
+  {
+    "key": "euskalmet/sensors/R027",
+    "sensorId": "R027"
+  },
+  {
+    "key": "euskalmet/sensors/R028",
+    "sensorId": "R028"
+  },
+  {
+    "key": "euskalmet/sensors/R029",
+    "sensorId": "R029"
+  },
+  {
+    "key": "euskalmet/sensors/R030",
+    "sensorId": "R030"
+  },
+  {
+    "key": "euskalmet/sensors/R033",
+    "sensorId": "R033"
+  },
+  {
+    "key": "euskalmet/sensors/R035",
+    "sensorId": "R035"
+  },
+  {
+    "key": "euskalmet/sensors/R037",
+    "sensorId": "R037"
+  },
+  {
+    "key": "euskalmet/sensors/R040",
+    "sensorId": "R040"
+  },
+  {
+    "key": "euskalmet/sensors/R041",
+    "sensorId": "R041"
+  },
+  {
+    "key": "euskalmet/sensors/R042",
+    "sensorId": "R042"
+  },
+  {
+    "key": "euskalmet/sensors/R043",
+    "sensorId": "R043"
+  },
+  {
+    "key": "euskalmet/sensors/R044",
+    "sensorId": "R044"
+  },
+  {
+    "key": "euskalmet/sensors/R045",
+    "sensorId": "R045"
+  },
+  {
+    "key": "euskalmet/sensors/R047",
+    "sensorId": "R047"
+  },
+  {
+    "key": "euskalmet/sensors/R048",
+    "sensorId": "R048"
+  },
+  {
+    "key": "euskalmet/sensors/R049",
+    "sensorId": "R049"
+  },
+  {
+    "key": "euskalmet/sensors/R050",
+    "sensorId": "R050"
+  },
+  {
+    "key": "euskalmet/sensors/R051",
+    "sensorId": "R051"
+  },
+  {
+    "key": "euskalmet/sensors/R052",
+    "sensorId": "R052"
+  },
+  {
+    "key": "euskalmet/sensors/R053",
+    "sensorId": "R053"
+  },
+  {
+    "key": "euskalmet/sensors/R054",
+    "sensorId": "R054"
+  },
+  {
+    "key": "euskalmet/sensors/R055",
+    "sensorId": "R055"
+  },
+  {
+    "key": "euskalmet/sensors/R056",
+    "sensorId": "R056"
+  },
+  {
+    "key": "euskalmet/sensors/R058",
+    "sensorId": "R058"
+  },
+  {
+    "key": "euskalmet/sensors/R064",
+    "sensorId": "R064"
+  },
+  {
+    "key": "euskalmet/sensors/R065",
+    "sensorId": "R065"
+  },
+  {
+    "key": "euskalmet/sensors/R067",
+    "sensorId": "R067"
+  },
+  {
+    "key": "euskalmet/sensors/R070",
+    "sensorId": "R070"
+  },
+  {
+    "key": "euskalmet/sensors/R071",
+    "sensorId": "R071"
+  },
+  {
+    "key": "euskalmet/sensors/R076",
+    "sensorId": "R076"
+  },
+  {
+    "key": "euskalmet/sensors/R077",
+    "sensorId": "R077"
+  },
+  {
+    "key": "euskalmet/sensors/R078",
+    "sensorId": "R078"
+  },
+  {
+    "key": "euskalmet/sensors/R080",
+    "sensorId": "R080"
+  },
+  {
+    "key": "euskalmet/sensors/R081",
+    "sensorId": "R081"
+  },
+  {
+    "key": "euskalmet/sensors/R082",
+    "sensorId": "R082"
+  },
+  {
+    "key": "euskalmet/sensors/R083",
+    "sensorId": "R083"
+  },
+  {
+    "key": "euskalmet/sensors/R084",
+    "sensorId": "R084"
+  },
+  {
+    "key": "euskalmet/sensors/R085",
+    "sensorId": "R085"
+  },
+  {
+    "key": "euskalmet/sensors/R087",
+    "sensorId": "R087"
+  },
+  {
+    "key": "euskalmet/sensors/R095",
+    "sensorId": "R095"
+  },
+  {
+    "key": "euskalmet/sensors/R096",
+    "sensorId": "R096"
+  },
+  {
+    "key": "euskalmet/sensors/R098",
+    "sensorId": "R098"
+  },
+  {
+    "key": "euskalmet/sensors/R099",
+    "sensorId": "R099"
+  },
+  {
+    "key": "euskalmet/sensors/R0A0",
+    "sensorId": "R0A0"
+  },
+  {
+    "key": "euskalmet/sensors/R0A1",
+    "sensorId": "R0A1"
+  },
+  {
+    "key": "euskalmet/sensors/R0A2",
+    "sensorId": "R0A2"
+  },
+  {
+    "key": "euskalmet/sensors/R0A3",
+    "sensorId": "R0A3"
+  },
+  {
+    "key": "euskalmet/sensors/R0A4",
+    "sensorId": "R0A4"
+  },
+  {
+    "key": "euskalmet/sensors/R0A5",
+    "sensorId": "R0A5"
+  },
+  {
+    "key": "euskalmet/sensors/R0A6",
+    "sensorId": "R0A6"
+  },
+  {
+    "key": "euskalmet/sensors/R0A7",
+    "sensorId": "R0A7"
+  },
+  {
+    "key": "euskalmet/sensors/R0A8",
+    "sensorId": "R0A8"
+  },
+  {
+    "key": "euskalmet/sensors/R0A9",
+    "sensorId": "R0A9"
+  },
+  {
+    "key": "euskalmet/sensors/R0AA",
+    "sensorId": "R0AA"
+  },
+  {
+    "key": "euskalmet/sensors/R0AB",
+    "sensorId": "R0AB"
+  },
+  {
+    "key": "euskalmet/sensors/R0AC",
+    "sensorId": "R0AC"
+  },
+  {
+    "key": "euskalmet/sensors/R0AD",
+    "sensorId": "R0AD"
+  },
+  {
+    "key": "euskalmet/sensors/R0AE",
+    "sensorId": "R0AE"
+  },
+  {
+    "key": "euskalmet/sensors/R0AF",
+    "sensorId": "R0AF"
+  },
+  {
+    "key": "euskalmet/sensors/R0AG",
+    "sensorId": "R0AG"
+  },
+  {
+    "key": "euskalmet/sensors/R0AH",
+    "sensorId": "R0AH"
+  },
+  {
+    "key": "euskalmet/sensors/R0AI",
+    "sensorId": "R0AI"
+  },
+  {
+    "key": "euskalmet/sensors/R0AJ",
+    "sensorId": "R0AJ"
+  },
+  {
+    "key": "euskalmet/sensors/R0AK",
+    "sensorId": "R0AK"
+  },
+  {
+    "key": "euskalmet/sensors/R0AL",
+    "sensorId": "R0AL"
+  },
+  {
+    "key": "euskalmet/sensors/R0AM",
+    "sensorId": "R0AM"
+  },
+  {
+    "key": "euskalmet/sensors/R0AN",
+    "sensorId": "R0AN"
+  },
+  {
+    "key": "euskalmet/sensors/R0AO",
+    "sensorId": "R0AO"
+  },
+  {
+    "key": "euskalmet/sensors/R0AP",
+    "sensorId": "R0AP"
+  },
+  {
+    "key": "euskalmet/sensors/R0AQ",
+    "sensorId": "R0AQ"
+  },
+  {
+    "key": "euskalmet/sensors/R0AS",
+    "sensorId": "R0AS"
+  },
+  {
+    "key": "euskalmet/sensors/R0AT",
+    "sensorId": "R0AT"
+  },
+  {
+    "key": "euskalmet/sensors/R0AV",
+    "sensorId": "R0AV"
+  },
+  {
+    "key": "euskalmet/sensors/R0AW",
+    "sensorId": "R0AW"
+  },
+  {
+    "key": "euskalmet/sensors/R0AX",
+    "sensorId": "R0AX"
+  },
+  {
+    "key": "euskalmet/sensors/R0AY",
+    "sensorId": "R0AY"
+  },
+  {
+    "key": "euskalmet/sensors/R0AZ",
+    "sensorId": "R0AZ"
+  },
+  {
+    "key": "euskalmet/sensors/R0B1",
+    "sensorId": "R0B1"
+  },
+  {
+    "key": "euskalmet/sensors/R0B2",
+    "sensorId": "R0B2"
+  },
+  {
+    "key": "euskalmet/sensors/R0B3",
+    "sensorId": "R0B3"
+  },
+  {
+    "key": "euskalmet/sensors/R0B4",
+    "sensorId": "R0B4"
+  },
+  {
+    "key": "euskalmet/sensors/R0B6",
+    "sensorId": "R0B6"
+  },
+  {
+    "key": "euskalmet/sensors/R0BB",
+    "sensorId": "R0BB"
+  },
+  {
+    "key": "euskalmet/sensors/R0BC",
+    "sensorId": "R0BC"
+  },
+  {
+    "key": "euskalmet/sensors/R0BD",
+    "sensorId": "R0BD"
+  },
+  {
+    "key": "euskalmet/sensors/R0BE",
+    "sensorId": "R0BE"
+  },
+  {
+    "key": "euskalmet/sensors/R0BF",
+    "sensorId": "R0BF"
+  },
+  {
+    "key": "euskalmet/sensors/R0BG",
+    "sensorId": "R0BG"
+  },
+  {
+    "key": "euskalmet/sensors/R0BH",
+    "sensorId": "R0BH"
+  },
+  {
+    "key": "euskalmet/sensors/R0BI",
+    "sensorId": "R0BI"
+  },
+  {
+    "key": "euskalmet/sensors/R0BJ",
+    "sensorId": "R0BJ"
+  },
+  {
+    "key": "euskalmet/sensors/R0BK",
+    "sensorId": "R0BK"
+  },
+  {
+    "key": "euskalmet/sensors/R0BM",
+    "sensorId": "R0BM"
+  },
+  {
+    "key": "euskalmet/sensors/R0BN",
+    "sensorId": "R0BN"
+  },
+  {
+    "key": "euskalmet/sensors/R0BP",
+    "sensorId": "R0BP"
+  },
+  {
+    "key": "euskalmet/sensors/R0BR",
+    "sensorId": "R0BR"
+  },
+  {
+    "key": "euskalmet/sensors/R0BS",
+    "sensorId": "R0BS"
+  },
+  {
+    "key": "euskalmet/sensors/R0BT",
+    "sensorId": "R0BT"
+  },
+  {
+    "key": "euskalmet/sensors/R0BU",
+    "sensorId": "R0BU"
+  },
+  {
+    "key": "euskalmet/sensors/R0BV",
+    "sensorId": "R0BV"
+  },
+  {
+    "key": "euskalmet/sensors/R0BX",
+    "sensorId": "R0BX"
+  },
+  {
+    "key": "euskalmet/sensors/R0BY",
+    "sensorId": "R0BY"
+  },
+  {
+    "key": "euskalmet/sensors/R0BZ",
+    "sensorId": "R0BZ"
+  },
+  {
+    "key": "euskalmet/sensors/R0B�",
+    "sensorId": "R0B�"
+  },
+  {
+    "key": "euskalmet/sensors/R0C1",
+    "sensorId": "R0C1"
+  },
+  {
+    "key": "euskalmet/sensors/R0CA",
+    "sensorId": "R0CA"
+  },
+  {
+    "key": "euskalmet/sensors/R0CB",
+    "sensorId": "R0CB"
+  },
+  {
+    "key": "euskalmet/sensors/R0CC",
+    "sensorId": "R0CC"
+  },
+  {
+    "key": "euskalmet/sensors/R0CD",
+    "sensorId": "R0CD"
+  },
+  {
+    "key": "euskalmet/sensors/R0CE",
+    "sensorId": "R0CE"
+  },
+  {
+    "key": "euskalmet/sensors/R0CF",
+    "sensorId": "R0CF"
+  },
+  {
+    "key": "euskalmet/sensors/R0CG",
+    "sensorId": "R0CG"
+  },
+  {
+    "key": "euskalmet/sensors/R0CH",
+    "sensorId": "R0CH"
+  },
+  {
+    "key": "euskalmet/sensors/R0CI",
+    "sensorId": "R0CI"
+  },
+  {
+    "key": "euskalmet/sensors/R0CJ",
+    "sensorId": "R0CJ"
+  },
+  {
+    "key": "euskalmet/sensors/R0CK",
+    "sensorId": "R0CK"
+  },
+  {
+    "key": "euskalmet/sensors/R0CL",
+    "sensorId": "R0CL"
+  },
+  {
+    "key": "euskalmet/sensors/R0CM",
+    "sensorId": "R0CM"
+  },
+  {
+    "key": "euskalmet/sensors/R0CN",
+    "sensorId": "R0CN"
+  },
+  {
+    "key": "euskalmet/sensors/R0CO",
+    "sensorId": "R0CO"
+  },
+  {
+    "key": "euskalmet/sensors/R0CP",
+    "sensorId": "R0CP"
+  },
+  {
+    "key": "euskalmet/sensors/R0CQ",
+    "sensorId": "R0CQ"
+  },
+  {
+    "key": "euskalmet/sensors/R0CR",
+    "sensorId": "R0CR"
+  },
+  {
+    "key": "euskalmet/sensors/R0CS",
+    "sensorId": "R0CS"
+  },
+  {
+    "key": "euskalmet/sensors/R0CT",
+    "sensorId": "R0CT"
+  },
+  {
+    "key": "euskalmet/sensors/R0CV",
+    "sensorId": "R0CV"
+  },
+  {
+    "key": "euskalmet/sensors/R0CW",
+    "sensorId": "R0CW"
+  },
+  {
+    "key": "euskalmet/sensors/R0CX",
+    "sensorId": "R0CX"
+  },
+  {
+    "key": "euskalmet/sensors/R0CY",
+    "sensorId": "R0CY"
+  },
+  {
+    "key": "euskalmet/sensors/R0CZ",
+    "sensorId": "R0CZ"
+  },
+  {
+    "key": "euskalmet/sensors/R0D0",
+    "sensorId": "R0D0"
+  },
+  {
+    "key": "euskalmet/sensors/R0D3",
+    "sensorId": "R0D3"
+  },
+  {
+    "key": "euskalmet/sensors/R0D9",
+    "sensorId": "R0D9"
+  },
+  {
+    "key": "euskalmet/sensors/R0DA",
+    "sensorId": "R0DA"
+  }
+]

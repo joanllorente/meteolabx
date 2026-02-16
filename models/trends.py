@@ -114,48 +114,57 @@ def equivalent_potential_temperature(t_celsius, rh_pct, p_hpa):
 
 def calculate_trend(values, times, interval_minutes=10):
     """
-    Calcula tendencia (derivada discreta) usando un intervalo fijo
-    
-    Args:
-        values: Array de valores
-        times: Array de tiempos (pandas DatetimeIndex o similar)
-        interval_minutes: Intervalo en minutos para calcular la tendencia
-        
-    Returns:
-        Array de tendencias (misma longitud que values, con NaN donde no se puede calcular)
+    Calcula tendencia (derivada discreta) usando un intervalo fijo.
+
+    Adaptado para series irregulares: la tolerancia temporal se ajusta
+    automáticamente según la resolución real de la serie.
     """
     trends = []
-    
+
     # Convertir times a DatetimeIndex si no lo es
     if not isinstance(times, pd.DatetimeIndex):
         times = pd.to_datetime(times)
-    
+
+    # Inferir resolución temporal típica (segundos)
+    inferred_step_s = None
+    try:
+        if len(times) >= 2:
+            # Compatibilidad pandas: .view('int64') en Series está deprecado.
+            time_ns = np.asarray(pd.DatetimeIndex(times).astype("int64"), dtype=np.int64)
+            diffs = np.diff(time_ns) / 1e9
+            diffs = diffs[diffs > 0]
+            if diffs.size > 0:
+                inferred_step_s = float(np.median(diffs))
+    except Exception:
+        inferred_step_s = None
+
+    interval_seconds = float(interval_minutes) * 60.0
+
+    # Tolerancia robusta para datos no perfectamente regulares.
+    # - mínimo 30s
+    # - al menos 1.5x la resolución típica (si se conoce)
+    # - hasta ~35% del intervalo objetivo
+    tolerance_candidates = [30.0, interval_seconds * 0.35]
+    if inferred_step_s is not None:
+        tolerance_candidates.append(inferred_step_s * 1.5)
+    tolerance = max(tolerance_candidates)
+
     for i, t in enumerate(times):
-        # Buscar el punto interval_minutes atrás
         target_time = t - pd.Timedelta(minutes=interval_minutes)
-        
-        # Encontrar el índice más cercano
+
         time_diffs_td = np.abs(times - target_time)
-        
-        # Convertir a segundos (manejar tanto Series como TimedeltaIndex)
         if hasattr(time_diffs_td, 'total_seconds'):
-            # Es un TimedeltaIndex o similar
             time_diffs = time_diffs_td.total_seconds().values
         else:
-            # Es una Serie con .dt accessor
             time_diffs = time_diffs_td.dt.total_seconds().values
-        
+
         min_diff_idx = np.argmin(time_diffs)
-        
-        # Tolerancia: 30 segundos para all1day, 2 minutos para hourly/7day
-        tolerance = 120 if interval_minutes >= 60 else 30
-        
+
         if time_diffs[min_diff_idx] <= tolerance:
             v_now = float(values[i])
             v_past = float(values[min_diff_idx])
-            
+
             if not (math.isnan(v_now) or math.isnan(v_past)):
-                # Tendencia por hora
                 dt_hours = float(interval_minutes) / 60.0
                 trend = float((v_now - v_past) / dt_hours)
                 trends.append(trend)
@@ -163,5 +172,5 @@ def calculate_trend(values, times, interval_minutes=10):
                 trends.append(np.nan)
         else:
             trends.append(np.nan)
-    
+
     return np.array(trends, dtype=np.float64)

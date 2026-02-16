@@ -71,10 +71,9 @@ def render_sidebar(localS):
     from datetime import datetime
     from utils.storage import get_stored_station, get_stored_apikey, get_stored_z
     
-    # Prefill desde localStorage (desactivado por defecto por seguridad)
-    # Actívalo solo si quieres ese comportamiento explícitamente:
-    #   MLX_ENABLE_LOCAL_PREFILL=1
-    allow_local_prefill = os.getenv("MLX_ENABLE_LOCAL_PREFILL", "0") == "1"
+    # Prefill desde localStorage activado por defecto para persistir credenciales
+    # entre recargas locales; puede desactivarse con MLX_ENABLE_LOCAL_PREFILL=0.
+    allow_local_prefill = os.getenv("MLX_ENABLE_LOCAL_PREFILL", "1") == "1"
 
     if allow_local_prefill:
         saved_station = get_stored_station()
@@ -93,6 +92,16 @@ def render_sidebar(localS):
             st.session_state["active_z"] = normalize_text_input(saved_z)
 
     st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
+
+    # Si hay conexión WU activa, mantener credenciales en sesión aunque un rerun
+    # temporalmente deje vacíos los widgets de entrada (ej. cambio de tema).
+    if st.session_state.get("connected") and st.session_state.get("connection_type") == "WU":
+        if not str(st.session_state.get("active_station", "")).strip():
+            st.session_state["active_station"] = str(st.session_state.get("wu_connected_station", "")).strip()
+        if not str(st.session_state.get("active_key", "")).strip():
+            st.session_state["active_key"] = str(st.session_state.get("wu_connected_api_key", "")).strip()
+        if not str(st.session_state.get("active_z", "")).strip():
+            st.session_state["active_z"] = normalize_text_input(st.session_state.get("wu_connected_z", ""))
 
     # Tema
     st.sidebar.title("⚙️ Ajustes")
@@ -134,7 +143,8 @@ def render_sidebar(localS):
 
     # Recordar en dispositivo
     st.sidebar.markdown("---")
-    remember_device = st.sidebar.checkbox("Recordar en este dispositivo", value=False)
+    remember_default = bool(st.session_state.get("remember_device", True))
+    remember_device = st.sidebar.checkbox("Recordar en este dispositivo", value=remember_default, key="remember_device")
     st.sidebar.caption("⚠️ Si es un ordenador compartido, desactívalo o pulsa 'Olvidar' al terminar.")
 
     cS, cF = st.sidebar.columns(2)
@@ -150,6 +160,10 @@ def render_sidebar(localS):
             set_local_storage(LS_Z, str(st.session_state["active_z"]), "save")
             st.sidebar.success("Guardado en este dispositivo ✅")
         else:
+            # Si se desactiva recordar, limpiar lo persistido para evitar ambigüedad.
+            set_local_storage(LS_STATION, "", "save")
+            set_local_storage(LS_APIKEY, "", "save")
+            set_local_storage(LS_Z, "", "save")
             st.sidebar.info("Activa 'Recordar en este dispositivo' para guardar.")
 
     if forget_clicked:
@@ -161,6 +175,10 @@ def render_sidebar(localS):
         # Marcar para borrar en el próximo ciclo
         st.session_state["_clear_inputs"] = True
         st.session_state["connected"] = False
+        st.session_state["connection_type"] = None
+        for key in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
+            if key in st.session_state:
+                del st.session_state[key]
         
         # Limpiar caché de API
         if "wu_cache_current" in st.session_state:
@@ -216,8 +234,16 @@ def render_sidebar(localS):
     if disconnect_clicked:
         st.session_state["connected"] = False
         st.session_state["connection_type"] = None
+        for key in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
+            if key in st.session_state:
+                del st.session_state[key]
         for state_key in list(st.session_state.keys()):
-            if state_key.startswith('aemet_') or state_key.startswith('provider_station_') or state_key.startswith('meteocat_'):
+            if (
+                state_key.startswith('aemet_')
+                or state_key.startswith('provider_station_')
+                or state_key.startswith('meteocat_')
+                or state_key.startswith('euskalmet_')
+            ):
                 del st.session_state[state_key]
 
     if connect_clicked:
@@ -232,7 +258,12 @@ def render_sidebar(localS):
             st.session_state["connection_type"] = "WU"
             # Limpiar restos de conexión por proveedor para evitar UI duplicada
             for state_key in list(st.session_state.keys()):
-                if state_key.startswith('aemet_') or state_key.startswith('provider_station_') or state_key.startswith('meteocat_'):
+                if (
+                    state_key.startswith('aemet_')
+                    or state_key.startswith('provider_station_')
+                    or state_key.startswith('meteocat_')
+                    or state_key.startswith('euskalmet_')
+                ):
                     del st.session_state[state_key]
 
             # Validar altitud si se proporcionó
@@ -245,18 +276,44 @@ def render_sidebar(localS):
                         st.sidebar.error(f"Altitud fuera de rango ({MIN_ALTITUDE_M} a {MAX_ALTITUDE_M}m)")
                     else:
                         st.session_state["connected"] = True
+                        st.session_state["wu_connected_station"] = station
+                        st.session_state["wu_connected_api_key"] = api_key
+                        st.session_state["wu_connected_z"] = z_raw
                         if remember_device:
                             set_local_storage(LS_STATION, station, "connect")
                             set_local_storage(LS_APIKEY, api_key, "connect")
                             set_local_storage(LS_Z, z_raw, "connect")
+                            set_local_storage(LS_STATION, station, "save")
+                            set_local_storage(LS_APIKEY, api_key, "save")
+                            set_local_storage(LS_Z, z_raw, "save")
+                        else:
+                            set_local_storage(LS_STATION, "", "connect")
+                            set_local_storage(LS_APIKEY, "", "connect")
+                            set_local_storage(LS_Z, "", "connect")
+                            set_local_storage(LS_STATION, "", "save")
+                            set_local_storage(LS_APIKEY, "", "save")
+                            set_local_storage(LS_Z, "", "save")
                 except Exception:
                     st.sidebar.error("Altitud inválida. Usa un número (ej: 12.5)")
             else:  # Sin altitud manual, confiar en la API
                 st.session_state["connected"] = True
+                st.session_state["wu_connected_station"] = station
+                st.session_state["wu_connected_api_key"] = api_key
+                st.session_state["wu_connected_z"] = ""
                 if remember_device:
                     set_local_storage(LS_STATION, station, "connect")
                     set_local_storage(LS_APIKEY, api_key, "connect")
                     set_local_storage(LS_Z, "", "connect")
+                    set_local_storage(LS_STATION, station, "save")
+                    set_local_storage(LS_APIKEY, api_key, "save")
+                    set_local_storage(LS_Z, "", "save")
+                else:
+                    set_local_storage(LS_STATION, "", "connect")
+                    set_local_storage(LS_APIKEY, "", "connect")
+                    set_local_storage(LS_Z, "", "connect")
+                    set_local_storage(LS_STATION, "", "save")
+                    set_local_storage(LS_APIKEY, "", "save")
+                    set_local_storage(LS_Z, "", "save")
 
     if st.session_state.get("connected"):
         # Mostrar nombre según tipo de conexión
@@ -265,7 +322,7 @@ def render_sidebar(localS):
         elif st.session_state.get("provider_station_name"):
             station_name = st.session_state.get('provider_station_name', 'Estación')
         else:
-            station_name = st.session_state.get('active_station', '')
+            station_name = st.session_state.get('active_station') or st.session_state.get('wu_connected_station', '')
         
         render_connection_banner(f"Conectado: {station_name}", connected_state=True)
         
@@ -333,9 +390,9 @@ def render_sidebar(localS):
     st.session_state["demo_solar"] = demo_solar
     st.session_state["demo_uv"] = demo_uv
     
-    # Mostrar estado de conexión AEMET si aplica
-    from components.aemet_selector import show_aemet_connection_status
-    show_aemet_connection_status()
+    # Mostrar estado de conexión por proveedor si aplica
+    from components.station_selector import show_provider_connection_status
+    show_provider_connection_status()
 
     # Determinar tema
     now = datetime.now()

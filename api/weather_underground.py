@@ -42,6 +42,51 @@ def safe_float(val, default=float("nan")):
         return default
 
 
+def first_valid_number(*vals):
+    """Devuelve el primer valor convertible a float y no-NaN."""
+    for v in vals:
+        f = safe_float(v)
+        if not is_nan(f):
+            return f
+    return float("nan")
+
+
+CARDINAL_16 = [
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
+]
+
+
+def parse_wind_direction(val):
+    """Convierte dirección a grados desde número o texto cardinal."""
+    f = safe_float(val)
+    if not is_nan(f):
+        return f % 360
+
+    if val is None:
+        return float("nan")
+
+    s = str(val).strip().upper()
+    if not s:
+        return float("nan")
+    if s in ("CALM", "CALMA"):
+        return 0.0
+
+    if s in CARDINAL_16:
+        idx = CARDINAL_16.index(s)
+        return (idx * 22.5) % 360
+
+    return float("nan")
+
+
+def first_valid_wind_dir(*vals):
+    for v in vals:
+        d = parse_wind_direction(v)
+        if not is_nan(d):
+            return d
+    return float("nan")
+
+
 def quantize_rain_mm_wu(mm_wu: float) -> float:
     if is_nan(mm_wu):
         return float("nan")
@@ -76,6 +121,10 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 "humidities": [],
                 "dewpts": [],
                 "pressures": [],
+                "solar_radiations": [],
+                "winds": [],
+                "gusts": [],
+                "wind_dirs": [],
                 "has_data": False
             }
         
@@ -90,6 +139,10 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 "humidities": [],
                 "dewpts": [],
                 "pressures": [],
+                "solar_radiations": [],
+                "winds": [],
+                "gusts": [],
+                "wind_dirs": [],
                 "has_data": False
             }
         
@@ -99,13 +152,25 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
         humidities = []
         dewpts = []
         pressures = []
+        solar_radiations = []
+        winds = []
+        gusts = []
+        wind_dirs = []
+        lat_series = float("nan")
+        lon_series = float("nan")
         
         for obs in observations:
             epoch = obs.get("epoch", 0)
             if epoch <= 0:
                 continue
-            
+
             metric = obs.get("metric", {})
+
+            # Coordenadas para fallback cuando current no las trae
+            if is_nan(lat_series):
+                lat_series = first_valid_number(obs.get("lat"), obs.get("latitude"), metric.get("lat"), metric.get("latitude"))
+            if is_nan(lon_series):
+                lon_series = first_valid_number(obs.get("lon"), obs.get("longitude"), metric.get("lon"), metric.get("longitude"))
             
             # Temperatura (usar tempAvg si existe, sino tempHigh, sino tempLow)
             temp = safe_float(metric.get("tempAvg"))
@@ -132,6 +197,77 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
             pressure = safe_float(metric.get("pressureMin"))
             if is_nan(pressure):
                 pressure = safe_float(metric.get("pressureMax"))
+
+            # Radiación y viento para cálculos integrados (ET0, gráfica y rosa).
+            solar_radiation = first_valid_number(
+                obs.get("solarRadiation"),
+                obs.get("solarRadiationHigh"),
+                metric.get("solarRadiation"),
+                metric.get("solarRadiationHigh"),
+            )
+
+            wind = first_valid_number(
+                metric.get("windSpeed"),
+                metric.get("windspeed"),
+                metric.get("windSpeedAvg"),
+                metric.get("windspeedAvg"),
+                metric.get("windspeedHigh"),
+                metric.get("windSpeedHigh"),
+                obs.get("windSpeed"),
+                obs.get("windspeed"),
+                obs.get("windSpeedAvg"),
+                obs.get("windspeedAvg"),
+            )
+
+            gust = first_valid_number(
+                metric.get("windgustHigh"),
+                metric.get("windGust"),
+                metric.get("windgust"),
+                metric.get("windgustAvg"),
+                obs.get("windgustHigh"),
+                obs.get("windGust"),
+                obs.get("windGustHigh"),
+            )
+
+            raw_dir = first_valid_wind_dir(
+                obs.get("winddir"),
+                obs.get("windDir"),
+                obs.get("winddirAvg"),
+                obs.get("windDirAvg"),
+                obs.get("windDirection"),
+                obs.get("windDirectionAvg"),
+                obs.get("windCardinal"),
+                obs.get("windDirectionCardinal"),
+                metric.get("winddir"),
+                metric.get("windDir"),
+                metric.get("winddirAvg"),
+                metric.get("windDirAvg"),
+                metric.get("windDirection"),
+                metric.get("windDirectionAvg"),
+                metric.get("windCardinal"),
+                metric.get("windDirectionCardinal"),
+            )
+            if not is_nan(raw_dir):
+                # Para series/rosa usamos el grado nativo reportado por WU.
+                wind_dir = raw_dir % 360
+            else:
+                # Fallback: buscar cualquier clave tipo winddir/winddirection
+                wind_dir = float("nan")
+                for src in (obs, metric):
+                    if not isinstance(src, dict):
+                        continue
+                    for k, v in src.items():
+                        lk = str(k).lower()
+                        if "winddir" in lk or "winddirection" in lk:
+                            candidate = parse_wind_direction(v)
+                            if not is_nan(candidate):
+                                wind_dir = candidate % 360
+                                break
+                    if not is_nan(wind_dir):
+                        break
+
+            if is_nan(wind_dir):
+                wind_dir = float("nan")
             
             # Añadir punto (incluso si algunos valores son NaN)
             # Siempre que tengamos al menos temperatura
@@ -141,6 +277,10 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 humidities.append(float(humidity) if not is_nan(humidity) else float("nan"))
                 dewpts.append(float(dewpt) if not is_nan(dewpt) else float("nan"))
                 pressures.append(float(pressure) if not is_nan(pressure) else float("nan"))
+                solar_radiations.append(float(solar_radiation) if not is_nan(solar_radiation) else float("nan"))
+                winds.append(float(wind) if not is_nan(wind) else float("nan"))
+                gusts.append(float(gust) if not is_nan(gust) else float("nan"))
+                wind_dirs.append(float(wind_dir) if not is_nan(wind_dir) else float("nan"))
         
         logger.info(f"Series temporales: {len(epochs)} puntos obtenidos")
         
@@ -150,6 +290,12 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
             "humidities": humidities,
             "dewpts": dewpts,
             "pressures": pressures,
+            "solar_radiations": solar_radiations,
+            "winds": winds,
+            "gusts": gusts,
+            "wind_dirs": wind_dirs,
+            "lat": lat_series,
+            "lon": lon_series,
             "has_data": len(epochs) > 0
         }
         
@@ -159,6 +305,14 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
             "epochs": [],
             "temps": [],
             "humidities": [],
+            "dewpts": [],
+            "pressures": [],
+            "solar_radiations": [],
+            "winds": [],
+            "gusts": [],
+            "wind_dirs": [],
+            "lat": float("nan"),
+            "lon": float("nan"),
             "has_data": False
         }
 
@@ -408,7 +562,8 @@ def fetch_wu_current(station_id: str, api_key: str) -> Dict:
 
     logger.info(f"✅ Current: T={Tc:.1f}°C, RH={RH:.0f}%, P={p_hpa:.1f}hPa")
     if not is_nan(solar_radiation):
-        logger.info(f"   Solar: {solar_radiation:.0f} W/m², UV: {uv_index:.1f if not is_nan(uv_index) else 'N/A'}")
+        uv_log = f"{uv_index:.1f}" if not is_nan(uv_index) else "N/A"
+        logger.info(f"   Solar: {solar_radiation:.0f} W/m², UV: {uv_log}")
     if not is_nan(elevation):
         logger.info(f"   Estación: lat={lat:.4f}, lon={lon:.4f}, elev={elevation:.1f}m")
 
@@ -606,5 +761,3 @@ def fetch_hourly_7day_session_cached(station_id: str, api_key: str) -> Dict:
             "pressures": [],
             "has_data": False
         }
-
-

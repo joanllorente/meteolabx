@@ -3,15 +3,17 @@ Registro y orquestación de proveedores de estaciones.
 """
 from typing import Dict, List, Optional
 from .aemet_provider import AemetProvider
+from .euskalmet_provider import EuskalmetProvider
+from .meteocat_provider import MeteocatProvider
 from .types import StationCandidate
 
 
 def get_providers() -> Dict[str, object]:
     """
     Devuelve proveedores habilitados.
-    Nota: de momento solo AEMET está conectado al pipeline de observación.
+    Nota: AEMET y Meteocat están conectados al flujo de búsqueda.
     """
-    providers = [AemetProvider()]
+    providers = [AemetProvider(), MeteocatProvider(), EuskalmetProvider()]
     return {p.provider_id: p for p in providers}
 
 
@@ -33,4 +35,3 @@ def search_nearby_stations(lat: float, lon: float, max_results: int = 5) -> List
 
     results.sort(key=lambda s: s.distance_km)
     return results[:max_results]
-
