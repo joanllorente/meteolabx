@@ -90,6 +90,12 @@ def _ms_to_kmh(value: float) -> float:
     return float("nan") if _is_nan(value) else value * 3.6
 
 
+def _non_negative(value: float) -> float:
+    if _is_nan(value):
+        return float("nan")
+    return max(0.0, float(value))
+
+
 def _absolute_to_msl(p_abs_hpa: float, elevation_m: float) -> float:
     if _is_nan(p_abs_hpa):
         return float("nan")
@@ -324,7 +330,8 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
         winds.append(_ms_to_kmh(row[3]) if len(row) > 3 else float("nan"))
         gusts.append(_ms_to_kmh(row[4]) if len(row) > 4 else float("nan"))
         dirs.append(row[5] if len(row) > 5 else float("nan"))
-        solar.append(row[6] if len(row) > 6 else float("nan"))
+        solar_raw = row[6] if len(row) > 6 else float("nan")
+        solar.append(_non_negative(solar_raw))
 
     return {
         "epochs": epochs,
@@ -446,7 +453,7 @@ def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]
         "wind_dir_deg": wind_dir,
         "precip_total": rain_today,
         "rain_1min_mm": rain_1min,
-        "solar_radiation": _safe_float(values.get("solar")),
+        "solar_radiation": _non_negative(_safe_float(values.get("solar"))),
         "uv": _safe_float(values.get("uv")),
         "epoch": latest_epoch,
         "time_local": snapshot.get("latest_iso", ""),

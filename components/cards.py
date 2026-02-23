@@ -14,6 +14,27 @@ from .icons import icon_img
 
 
 DEFINITIONS_PATH = Path("/Users/joantisdale/Desktop/definiciones.txt")
+FALLBACK_DEFINITIONS = {
+    "temperatura": "Temperatura del aire medida por la estación a la altura del sensor (habitualmente 1.5-2 m).",
+    "humedad relativa": "Porcentaje de vapor de agua presente en el aire respecto al máximo posible a esa temperatura.",
+    "punto de rocio": "Temperatura a la que el aire se saturaría y comenzaría la condensación si se enfría a presión constante.",
+    "presion": "Presión atmosférica medida por el barómetro de la estación. Puede mostrarse como presión absoluta o referida al nivel del mar.",
+    "viento": "Velocidad media del viento en el intervalo de medida. Suele acompañarse de dirección y racha máxima.",
+    "precipitacion hoy": "Precipitación acumulada desde las 00:00 (hora local) hasta el instante actual.",
+    "humedad especifica": "Masa de vapor de agua por unidad de masa de aire húmedo (g/kg).",
+    "humedad absoluta": "Masa de vapor de agua por unidad de volumen de aire (g/m³).",
+    "temperatura de bulbo humedo": "Temperatura que alcanzaría el aire al enfriarse por evaporación hasta saturación, a presión aproximadamente constante.",
+    "temperatura virtual": "Temperatura equivalente que tendría aire seco con la misma densidad que el aire húmedo observado.",
+    "temperatura equivalente": "Temperatura que resultaría al condensar todo el vapor de agua del aire y liberar su calor latente.",
+    "temperatura potencial": "Temperatura que tendría una parcela de aire al llevarla adiabáticamente a 1000 hPa.",
+    "densidad del aire": "Masa de aire por unidad de volumen, calculada a partir de temperatura, humedad y presión.",
+    "nivel de condensacion por ascenso": "Altura aproximada a la que una parcela de aire ascendente alcanzaría saturación (base de nube LCL).",
+    "radiacion solar": "Irradiancia solar global instantánea medida por el sensor (W/m²).",
+    "indice uv": "Índice de radiación ultravioleta eritemática en superficie.",
+    "evapotranspircion": "Pérdida de agua combinada por evaporación y transpiración estimada para el día actual (mm).",
+    "claridad del cielo": "Índice relativo de transparencia atmosférica deducido de la radiación observada frente a la potencial.",
+    "balance hidrico": "Diferencia entre precipitación acumulada y evapotranspiración estimada en el día actual (mm).",
+}
 
 
 def _normalize_text(text: str) -> str:
@@ -97,6 +118,8 @@ def _card_tooltip_text(title: str) -> str:
         if text:
             return f"{text}\n{extra}"
         return f"Radiación solar instantánea medida por piranómetro.\n{extra}"
+    if not text:
+        text = FALLBACK_DEFINITIONS.get(lookup)
     if text:
         return text
     return "Definicion no disponible todavia para esta variable."

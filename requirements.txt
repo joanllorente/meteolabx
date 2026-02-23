@@ -5,3 +5,4 @@ streamlit-autorefresh>=0.0.1
 plotly>=5.18.0
 pandas>=2.0.0
 astral>=3.2
+pydeck>=0.8.0

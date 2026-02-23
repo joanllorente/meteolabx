@@ -13,13 +13,22 @@ st.set_page_config(
 import time
 import math
 import logging
+import inspect
+import html
+from typing import Optional
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # Imports locales
-from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES
+from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT
 from utils import html_clean, is_nan, es_datetime_from_epoch, age_string, fmt_hpa
-from utils.storage import localS
+from utils.storage import (
+    localS,
+    set_local_storage,
+    set_stored_autoconnect_target,
+    get_stored_autoconnect,
+    get_stored_autoconnect_target,
+)
 from api import WuError, fetch_wu_current_session_cached, fetch_daily_timeseries, fetch_hourly_7day_session_cached
 from models import (
     e_s, vapor_pressure, dewpoint_from_vapor_pressure,
@@ -55,11 +64,47 @@ from services.euskalmet import (
     get_euskalmet_data,
     is_euskalmet_connection,
 )
+from services.meteogalicia import (
+    get_meteogalicia_data,
+    is_meteogalicia_connection,
+)
+from services.nws import (
+    get_nws_data,
+    is_nws_connection,
+)
 from components.station_selector import render_station_selector
+from components.browser_geolocation import get_browser_geolocation
+from providers import search_nearby_stations
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _plotly_chart_stretch(fig, key: str, config: Optional[dict] = None):
+    """Renderiza Plotly con compatibilidad entre APIs antiguas/nuevas de Streamlit."""
+    cfg = config if isinstance(config, dict) else {}
+    params = inspect.signature(st.plotly_chart).parameters
+    if "width" in params:
+        st.plotly_chart(fig, width="stretch", key=key, config=cfg)
+    else:
+        st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
+
+
+def _pydeck_chart_stretch(deck, key: str, height: int = 900):
+    """Renderiza pydeck de forma compatible entre versiones de Streamlit."""
+    params = inspect.signature(st.pydeck_chart).parameters
+    kwargs = {"height": int(height), "key": key}
+    if "on_select" in params:
+        kwargs["on_select"] = "rerun"
+    if "selection_mode" in params:
+        kwargs["selection_mode"] = "single-object"
+
+    if "use_container_width" in params:
+        return st.pydeck_chart(deck, use_container_width=True, **kwargs)
+    if "width" in params:
+        return st.pydeck_chart(deck, width=1200, **kwargs)
+    return st.pydeck_chart(deck, **kwargs)
 
 
 # ============================================================
@@ -100,16 +145,34 @@ button_border = "rgba(180, 180, 180, 0.55)" if not dark else "rgba(120, 126, 138
 button_border_width = "1px"
 eye_color = "rgba(0, 0, 0, 0.5)" if not dark else "rgba(255, 255, 255, 0.8)"
 eye_color_hover = "rgba(0, 0, 0, 0.7)" if not dark else "rgba(255, 255, 255, 1)"
+theme_color_scheme = "light" if not dark else "dark"
+expander_bg = "rgba(255,255,255,0.45)" if not dark else "rgba(22,25,31,0.45)"
+expander_summary_bg = "rgba(255,255,255,0.85)" if not dark else "rgba(17,22,30,0.92)"
 
 st.markdown(f"""
 <style>
 /* Forzar tema de sidebar */
 [data-testid="stSidebar"] {{
     background-color: {sidebar_bg} !important;
+    color-scheme: {theme_color_scheme} !important;
+    --mlbx-control-bg: {'#ffffff' if not dark else '#0e1117'};
+    --mlbx-control-bg-hover: {'#f3f5fa' if not dark else '#141821'};
+    --mlbx-control-border: {button_border};
+    --mlbx-sidebar-text: {sidebar_text};
 }}
 
-[data-testid="stSidebar"] * {{
-    color: {sidebar_text} !important;
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] li,
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6 {{
+    color: var(--mlbx-sidebar-text) !important;
 }}
 
 /* Excepción: banners de estado con color tintado propio */
@@ -123,26 +186,29 @@ st.markdown(f"""
     color: {sidebar_text} !important;
 }}
 
-[data-testid="stSidebar"] input {{
+[data-testid="stSidebar"] input[type="text"],
+[data-testid="stSidebar"] input[type="password"],
+[data-testid="stSidebar"] input[type="number"],
+[data-testid="stSidebar"] textarea {{
     color: {sidebar_text} !important;
-    background-color: {'#ffffff' if not dark else '#0e1117'} !important;
+    background-color: var(--mlbx-control-bg) !important;
 }}
 
 /* Contenedor de inputs en sidebar (incluye zona del ojo y +/-) */
 [data-testid="stSidebar"] [data-baseweb="input"] {{
-    background-color: {'#ffffff' if not dark else '#0e1117'} !important;
+    background-color: var(--mlbx-control-bg) !important;
     border-color: {button_border} !important;
 }}
 
 /* Botón del ojo de la API key (evitar cuadro negro) */
 [data-testid="stSidebar"] [data-testid="stTextInput"] button {{
-    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    background: var(--mlbx-control-bg) !important;
     border: 0 !important;
     box-shadow: none !important;
 }}
 
 [data-testid="stSidebar"] [data-testid="stTextInput"] button:hover {{
-    background: {'#f3f5fa' if not dark else '#141821'} !important;
+    background: var(--mlbx-control-bg-hover) !important;
 }}
 
 [data-testid="stSidebar"] [data-testid="stTextInput"] button svg,
@@ -171,15 +237,13 @@ st.markdown(f"""
 }}
 
 /* Botones principales de la sidebar (Guardar, Conectar, etc.) - bordes visibles */
-[data-testid="stSidebar"] button[kind="primary"],
-[data-testid="stSidebar"] button[kind="secondary"] {{
-    background-color: {sidebar_bg} !important;
+[data-testid="stSidebar"] div[data-testid="stButton"] > button {{
+    background-color: {button_bg} !important;
     color: {sidebar_text} !important;
     border: {button_border_width} solid {button_border} !important;
 }}
 
-[data-testid="stSidebar"] button[kind="primary"]:hover,
-[data-testid="stSidebar"] button[kind="secondary"]:hover {{
+[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
     background-color: {'#e8ecf3' if not dark else '#1f2229'} !important;
     border-color: {'rgba(100, 100, 100, 0.9)' if not dark else 'rgba(150, 150, 150, 0.9)'} !important;
 }}
@@ -189,9 +253,58 @@ st.markdown(f"""
     color: {sidebar_text} !important;
 }}
 
+/* Radios y toggles en sidebar: forzar esquema de color dinámico */
+[data-testid="stSidebar"] input[type="radio"],
+[data-testid="stSidebar"] input[type="checkbox"] {{
+    color-scheme: {theme_color_scheme} !important;
+}}
+
 /* Radios del tema: forzar colores para que cambien al alternar claro/oscuro */
 [data-testid="stSidebar"] input[type="radio"] {{
     accent-color: #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] input[type="checkbox"] {{
+    accent-color: #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] [role="checkbox"] {{
+    width: 1.05rem !important;
+    height: 1.05rem !important;
+    border: 1px solid {button_border} !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    border-radius: 0.25rem !important;
+}}
+
+[data-testid="stSidebar"] [role="checkbox"][aria-checked="true"] {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+/* Toggle de sidebar (switch) visible en claro/oscuro */
+[data-testid="stSidebar"] [data-baseweb="switch"] input + div {{
+    background-color: {'#d7dbe4' if not dark else '#1f2734'} !important;
+    border: 1px solid {button_border} !important;
+}}
+
+[data-testid="stSidebar"] [data-baseweb="switch"] input + div > div {{
+    background-color: {'#ffffff' if not dark else '#dbe4f2'} !important;
+}}
+
+[data-testid="stSidebar"] [data-baseweb="switch"] input:checked + div {{
+    background-color: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] [role="switch"] {{
+    background-color: {'#d7dbe4' if not dark else '#1f2734'} !important;
+    border: 1px solid {button_border} !important;
+    border-radius: 999px !important;
+}}
+
+[data-testid="stSidebar"] [role="switch"][aria-checked="true"] {{
+    background-color: #ff4b4b !important;
+    border-color: #ff4b4b !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -214,6 +327,7 @@ if not dark:
         --accent: rgba(35, 132, 255, 0.20);
       }
       .stApp{
+        color-scheme: light;
         background: radial-gradient(circle at 15% 10%, #ffffff 0%, var(--bg) 50%, #eef2fb 100%);
       }
     </style>
@@ -231,6 +345,7 @@ else:
         --accent: rgba(120, 180, 255, 0.12);
       }
       .stApp{
+        color-scheme: dark;
         background: radial-gradient(circle at 15% 10%, #2a2f39 0%, #14171d 55%, #0f1115 100%);
       }
     </style>
@@ -316,7 +431,18 @@ button[data-testid="collapsedControl"] {{
 [data-testid="stMainBlockContainer"] [data-testid="stExpander"] {{
     border: 1px solid {main_button_border} !important;
     border-radius: 12px !important;
-    background: {'rgba(255,255,255,0.45)' if not dark else 'rgba(22,25,31,0.45)'} !important;
+    background: {expander_bg} !important;
+    color-scheme: {theme_color_scheme} !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stExpander"] details,
+[data-testid="stMainBlockContainer"] [data-testid="stExpander"] > div {{
+    background: {expander_bg} !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stExpander"] summary {{
+    background: {expander_summary_bg} !important;
+    border-radius: 10px !important;
 }}
 
 [data-testid="stMainBlockContainer"] [data-testid="stExpander"] summary,
@@ -347,6 +473,78 @@ button[data-testid="collapsedControl"] {{
     color: var(--text) !important;
 }}
 
+/* Selectores (multiselect de Mapa/Filtros y otros) siguiendo tema activo */
+[data-testid="stMainBlockContainer"] [data-baseweb="select"] > div {{
+    background: {main_button_bg} !important;
+    border-color: {main_button_border} !important;
+    color: var(--text) !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-baseweb="select"] input {{
+    color: var(--text) !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-baseweb="tag"] {{
+    border-color: {main_button_border} !important;
+}}
+
+/* Multiselect de filtros (Mapa): forzar fondo/contraste correctos */
+[data-testid="stMainBlockContainer"] [data-testid="stMultiSelect"] [data-baseweb="select"] > div {{
+    background: {main_button_bg} !important;
+    border-color: {main_button_border} !important;
+    color: var(--text) !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stMultiSelect"] [data-baseweb="tag"] {{
+    background: {'rgba(255,75,75,0.95)' if not dark else 'rgba(255,75,75,0.95)'} !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-baseweb="popover"] [role="listbox"] {{
+    background: {main_button_bg} !important;
+    color: var(--text) !important;
+}}
+
+[data-testid="stMainBlockContainer"] [role="checkbox"] {{
+    width: 1.05rem !important;
+    height: 1.05rem !important;
+    border: 1px solid {main_button_border} !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    border-radius: 0.25rem !important;
+}}
+
+[data-testid="stMainBlockContainer"] [role="checkbox"][aria-checked="true"] {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+/* Toggles del contenido principal (estaciones cercanas / mapa) */
+[data-testid="stMainBlockContainer"] [data-baseweb="switch"] input + div {{
+    background-color: {'#d7dbe4' if not dark else '#1f2734'} !important;
+    border: 1px solid {main_button_border} !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-baseweb="switch"] input + div > div {{
+    background-color: {'#ffffff' if not dark else '#dbe4f2'} !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-baseweb="switch"] input:checked + div {{
+    background-color: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+[data-testid="stMainBlockContainer"] [role="switch"] {{
+    background-color: {'#d7dbe4' if not dark else '#1f2734'} !important;
+    border: 1px solid {main_button_border} !important;
+    border-radius: 999px !important;
+}}
+
+[data-testid="stMainBlockContainer"] [role="switch"][aria-checked="true"] {{
+    background-color: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
 /* Forzar que todos los headers usen la variable --text */
 h1, h2, h3, h4, h5, h6 {{
     color: var(--text) !important;
@@ -372,10 +570,33 @@ st.markdown(html_clean("""
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MeteoLabX">
 <link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=3">
 <meta name="theme-color" content="#2384ff">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3">
+
+<script>
+(function () {
+  const doc = window.parent?.document || document;
+  const head = doc.head || document.head;
+  if (!head) return;
+
+  function upsertLink(rel, href, sizes) {
+    let el = head.querySelector(`link[rel="${rel}"]${sizes ? `[sizes="${sizes}"]` : ""}`);
+    if (!el) {
+      el = doc.createElement("link");
+      el.setAttribute("rel", rel);
+      if (sizes) el.setAttribute("sizes", sizes);
+      head.appendChild(el);
+    }
+    el.setAttribute("href", href);
+  }
+
+  upsertLink("apple-touch-icon", "/static/apple-touch-icon.png?v=3", "180x180");
+  upsertLink("icon", "/favicon-32x32.png?v=3", "32x32");
+  upsertLink("icon", "/favicon-16x16.png?v=3", "16x16");
+})();
+</script>
 
 <style>
   .block-container { 
@@ -937,6 +1158,8 @@ def _provider_refresh_seconds() -> int:
         "AEMET": 600,  # AEMET reporta típicamente en ventanas de ~10 min
         "METEOCAT": 600,  # Meteocat XEMA actualiza en base semihoraria/horaria según estación
         "EUSKALMET": 600,  # Euskalmet suele reportar en slots de 10 min
+        "METEOGALICIA": 600,  # MeteoGalicia ofrece estado y serie horaria reciente
+        "NWS": 600,  # NWS suele actualizar en intervalo subhorario según estación
         "WU": REFRESH_SECONDS,
     }
     return int(defaults.get(provider_id, REFRESH_SECONDS))
@@ -955,6 +1178,8 @@ def _disconnect_active_station() -> None:
             or state_key.startswith("provider_station_")
             or state_key.startswith("meteocat_")
             or state_key.startswith("euskalmet_")
+            or state_key.startswith("meteogalicia_")
+            or state_key.startswith("nws_")
         ):
             del st.session_state[state_key]
 
@@ -984,13 +1209,13 @@ header_refresh_label = (
 st.markdown(
     html_clean(f"""
     <div class="header">
-      <h1>MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 6</span></h1>
+      <h1>MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 7</span></h1>
       <div class="meta">
         Versión beta — la interfaz y las funciones pueden cambiar ·
         Tema: {"Oscuro" if dark else "Claro"} · Refresh: {header_refresh_label}
       </div>
     </div>
-    <div class="header-sub station-count">1113 estaciones disponibles</div>
+    <div class="header-sub station-count">37000 estaciones disponibles</div>
     """),
     unsafe_allow_html=True
 )
@@ -1067,7 +1292,7 @@ if connected:
         )
     with action_col:
         st.markdown("<div style='height:0.28rem;'></div>", unsafe_allow_html=True)
-        if st.button("Desconectar", key="disconnect_header_btn", use_container_width=True):
+        if st.button("Desconectar", key="disconnect_header_btn", width="stretch"):
             _disconnect_active_station()
             try:
                 st.rerun()
@@ -1840,6 +2065,277 @@ if connected:
         st.session_state["chart_wind_dirs"] = chart_wind_dirs
         st.session_state["has_chart_data"] = has_chart_data
 
+    elif is_meteogalicia_connection():
+        # ========== DATOS DE METEOGALICIA ==========
+        base = get_meteogalicia_data()
+        if base is None:
+            st.warning("⚠️ No se pudieron obtener datos de MeteoGalicia por ahora. Intenta de nuevo en unos minutos.")
+            st.stop()
+
+        st.session_state["last_update_time"] = time.time()
+        st.session_state["station_lat"] = base.get("lat", float("nan"))
+        st.session_state["station_lon"] = base.get("lon", float("nan"))
+
+        z = base.get("elevation", st.session_state.get("meteogalicia_station_alt", 0))
+        st.session_state["station_elevation"] = z
+        st.session_state["elevation_source"] = "METEOGALICIA"
+
+        now_ts = time.time()
+        data_age_minutes = (now_ts - base["epoch"]) / 60
+        if data_age_minutes > MAX_DATA_AGE_MINUTES:
+            st.warning(
+                f"⚠️ Datos de MeteoGalicia con {data_age_minutes:.0f} minutos de antigüedad. "
+                "La estación puede no estar reportando."
+            )
+            logger.warning(f"Datos MeteoGalicia antiguos: {data_age_minutes:.1f} minutos")
+
+        # Lluvia
+        inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
+        inst_label = rain_intensity_label(inst_mm_h)
+
+        # Presion (serie horaria usada como referencia de estacion)
+        p_abs = float(base.get("p_abs_hpa", float("nan")))
+        p_msl = float(base.get("p_hpa", float("nan")))
+        provider_for_pressure = st.session_state.get("connection_type", "METEOGALICIA")
+        p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
+        p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
+
+        if not is_nan(p_abs):
+            init_pressure_history()
+            push_pressure(p_abs, base["epoch"])
+
+        if not is_nan(p_msl):
+            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
+                p_now=p_msl,
+                epoch_now=base["epoch"],
+                p_3h_ago=base.get("pressure_3h_ago"),
+                epoch_3h_ago=base.get("epoch_3h_ago"),
+            )
+        else:
+            dp3, rate_h, p_label, p_arrow = float("nan"), float("nan"), "—", "•"
+
+        # Termodinamica
+        e_sat = float("nan")
+        e = float("nan")
+        Td_calc = float("nan")
+        Tw = float("nan")
+        q = float("nan")
+        q_gkg = float("nan")
+        theta = float("nan")
+        Tv = float("nan")
+        Te = float("nan")
+        rho = float("nan")
+        rho_v_gm3 = float("nan")
+        lcl = float("nan")
+
+        if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
+            e_sat = e_s(base["Tc"])
+            e = vapor_pressure(base["Tc"], base["RH"])
+            Td_calc = dewpoint_from_vapor_pressure(e)
+            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
+            base["Td"] = Td_calc
+
+            if not is_nan(p_abs):
+                q = specific_humidity(e, p_abs)
+                q_gkg = q * 1000
+                theta = potential_temperature(base["Tc"], p_abs)
+                Tv = virtual_temperature(base["Tc"], q)
+                Te = equivalent_temperature(base["Tc"], q)
+                rho = air_density(p_abs, Tv)
+                rho_v_gm3 = absolute_humidity(e, base["Tc"])
+                lcl = lcl_height(base["Tc"], Td_calc)
+        else:
+            base["Td"] = float("nan")
+
+        # Radiacion (si hay sensores en la estacion)
+        solar_rad = base.get("solar_radiation", float("nan"))
+        uv = base.get("uv", float("nan"))
+        has_radiation = not is_nan(solar_rad) or not is_nan(uv)
+
+        if has_radiation:
+            from models.radiation import penman_monteith_et0, sky_clarity_index
+
+            lat = base.get("lat", float("nan"))
+            lon = base.get("lon", float("nan"))
+            wind_speed = base.get("wind", 2.0)
+            if is_nan(wind_speed):
+                wind_speed = 2.0
+            if wind_speed < 0.1:
+                wind_speed = 0.1
+
+            et0 = penman_monteith_et0(
+                solar_rad,
+                base["Tc"],
+                base["RH"],
+                wind_speed,
+                lat,
+                z,
+                base["epoch"],
+            )
+            clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
+            balance = water_balance(base["precip_total"], et0)
+        else:
+            et0 = float("nan")
+            clarity = float("nan")
+            balance = float("nan")
+
+        # Series para graficos desde el servicio MeteoGalicia.
+        series = base.get("_series", {}) if isinstance(base.get("_series"), dict) else {}
+        chart_epochs = series.get("epochs", [])
+        chart_temps = series.get("temps", [])
+        chart_humidities = series.get("humidities", [])
+        chart_pressures = series.get("pressures_abs", [])
+        chart_winds = series.get("winds", [])
+        chart_gusts = series.get("gusts", [])
+        chart_wind_dirs = series.get("wind_dirs", [])
+        chart_solar_radiations = series.get("solar_radiations", [])
+        chart_dewpts = []
+        has_chart_data = series.get("has_data", False)
+
+        st.session_state["chart_epochs"] = chart_epochs
+        st.session_state["chart_temps"] = chart_temps
+        st.session_state["chart_humidities"] = chart_humidities
+        st.session_state["chart_dewpts"] = chart_dewpts
+        st.session_state["chart_pressures"] = chart_pressures
+        st.session_state["chart_solar_radiations"] = chart_solar_radiations
+        st.session_state["chart_winds"] = chart_winds
+        st.session_state["chart_gusts"] = chart_gusts
+        st.session_state["chart_wind_dirs"] = chart_wind_dirs
+        st.session_state["has_chart_data"] = has_chart_data
+
+        # Reusar la serie horaria para tendencia sinonptica generica.
+        st.session_state["trend_hourly_epochs"] = chart_epochs
+        st.session_state["trend_hourly_temps"] = chart_temps
+        st.session_state["trend_hourly_humidities"] = chart_humidities
+        st.session_state["trend_hourly_pressures"] = chart_pressures
+
+    elif is_nws_connection():
+        # ========== DATOS DE NWS ==========
+        base = get_nws_data()
+        if base is None:
+            st.warning("⚠️ No se pudieron obtener datos de NWS por ahora. Intenta de nuevo en unos minutos.")
+            st.stop()
+
+        st.session_state["last_update_time"] = time.time()
+        st.session_state["station_lat"] = base.get("lat", float("nan"))
+        st.session_state["station_lon"] = base.get("lon", float("nan"))
+
+        z = base.get("elevation", st.session_state.get("nws_station_alt", 0))
+        st.session_state["station_elevation"] = z
+        st.session_state["elevation_source"] = "NWS"
+
+        now_ts = time.time()
+        data_age_minutes = (now_ts - base["epoch"]) / 60
+        if data_age_minutes > MAX_DATA_AGE_MINUTES:
+            st.warning(
+                f"⚠️ Datos de NWS con {data_age_minutes:.0f} minutos de antigüedad. "
+                "La estación puede no estar reportando."
+            )
+            logger.warning(f"Datos NWS antiguos: {data_age_minutes:.1f} minutos")
+
+        # Lluvia
+        inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
+        inst_label = rain_intensity_label(inst_mm_h)
+
+        # Presion
+        p_abs = float(base.get("p_abs_hpa", float("nan")))
+        p_msl = float(base.get("p_hpa", float("nan")))
+        provider_for_pressure = st.session_state.get("connection_type", "NWS")
+        p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
+        p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
+
+        if not is_nan(p_abs):
+            init_pressure_history()
+            push_pressure(p_abs, base["epoch"])
+
+        if not is_nan(p_msl):
+            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
+                p_now=p_msl,
+                epoch_now=base["epoch"],
+                p_3h_ago=base.get("pressure_3h_ago"),
+                epoch_3h_ago=base.get("epoch_3h_ago"),
+            )
+        else:
+            dp3, rate_h, p_label, p_arrow = float("nan"), float("nan"), "—", "•"
+
+        # Termodinamica
+        e_sat = float("nan")
+        e = float("nan")
+        Td_calc = float("nan")
+        Tw = float("nan")
+        q = float("nan")
+        q_gkg = float("nan")
+        theta = float("nan")
+        Tv = float("nan")
+        Te = float("nan")
+        rho = float("nan")
+        rho_v_gm3 = float("nan")
+        lcl = float("nan")
+
+        if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
+            e_sat = e_s(base["Tc"])
+            e = vapor_pressure(base["Tc"], base["RH"])
+            Td_calc = dewpoint_from_vapor_pressure(e)
+            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
+            base["Td"] = Td_calc
+
+            if not is_nan(p_abs):
+                q = specific_humidity(e, p_abs)
+                q_gkg = q * 1000
+                theta = potential_temperature(base["Tc"], p_abs)
+                Tv = virtual_temperature(base["Tc"], q)
+                Te = equivalent_temperature(base["Tc"], q)
+                rho = air_density(p_abs, Tv)
+                rho_v_gm3 = absolute_humidity(e, base["Tc"])
+                lcl = lcl_height(base["Tc"], Td_calc)
+        else:
+            base["Td"] = float("nan")
+
+        # Radiacion (NWS observaciones no exponen este campo en este panel)
+        solar_rad = float("nan")
+        uv = float("nan")
+        has_radiation = False
+        et0 = float("nan")
+        clarity = float("nan")
+        balance = float("nan")
+
+        # Series para graficos desde el servicio NWS.
+        series = base.get("_series", {}) if isinstance(base.get("_series"), dict) else {}
+        chart_epochs = series.get("epochs", [])
+        chart_temps = series.get("temps", [])
+        chart_humidities = series.get("humidities", [])
+        chart_pressures = series.get("pressures_abs", [])
+        chart_winds = series.get("winds", [])
+        chart_gusts = series.get("gusts", [])
+        chart_wind_dirs = series.get("wind_dirs", [])
+        chart_solar_radiations = series.get("solar_radiations", [])
+        chart_dewpts = []
+        has_chart_data = series.get("has_data", False)
+
+        st.session_state["chart_epochs"] = chart_epochs
+        st.session_state["chart_temps"] = chart_temps
+        st.session_state["chart_humidities"] = chart_humidities
+        st.session_state["chart_dewpts"] = chart_dewpts
+        st.session_state["chart_pressures"] = chart_pressures
+        st.session_state["chart_solar_radiations"] = chart_solar_radiations
+        st.session_state["chart_winds"] = chart_winds
+        st.session_state["chart_gusts"] = chart_gusts
+        st.session_state["chart_wind_dirs"] = chart_wind_dirs
+        st.session_state["has_chart_data"] = has_chart_data
+
+        # Serie semanal para tendencia sinoptica.
+        trend_series = base.get("_series_7d", {}) if isinstance(base.get("_series_7d"), dict) else {}
+        if trend_series.get("has_data"):
+            st.session_state["trend_hourly_epochs"] = trend_series.get("epochs", [])
+            st.session_state["trend_hourly_temps"] = trend_series.get("temps", [])
+            st.session_state["trend_hourly_humidities"] = trend_series.get("humidities", [])
+            st.session_state["trend_hourly_pressures"] = trend_series.get("pressures_abs", [])
+        else:
+            st.session_state["trend_hourly_epochs"] = chart_epochs
+            st.session_state["trend_hourly_temps"] = chart_temps
+            st.session_state["trend_hourly_humidities"] = chart_humidities
+            st.session_state["trend_hourly_pressures"] = chart_pressures
+
     else:
         # ========== DATOS DE WEATHER UNDERGROUND ==========
         station_id = str(st.session_state.get("active_station", "")).strip()
@@ -2132,9 +2628,22 @@ if connected:
 
 # Mostrar metadata si está conectado (común para AEMET y WU)
 if connected:
+    station_tz_name = str(
+        base.get("station_tz", st.session_state.get("provider_station_tz", ""))
+    ).strip()
+    station_time_txt = ""
+    if station_tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+
+            dt_station = datetime.fromtimestamp(int(base["epoch"]), ZoneInfo(station_tz_name))
+            station_time_txt = f" · Hora huso estación ({station_tz_name}): {dt_station.strftime('%d-%m-%Y %H:%M:%S')}"
+        except Exception:
+            station_time_txt = ""
+
     st.markdown(
         html_clean(
-            f"<div class='meta'>Último dato (local): {es_datetime_from_epoch(base['epoch'])} · Edad: {age_string(base['epoch'])}</div>"
+            f"<div class='meta'>Último dato (local): {es_datetime_from_epoch(base['epoch'])}{station_time_txt} · Edad: {age_string(base['epoch'])}</div>"
         ),
         unsafe_allow_html=True
     )
@@ -2202,24 +2711,28 @@ st.markdown(f"""
 </script>
 """, unsafe_allow_html=True)
 
-# Preservar tab activo al cambiar tema
-if "preserved_tab" not in st.session_state:
-    st.session_state["preserved_tab"] = 0
-
 tab_options = ["Observación", "Tendencias", "Climogramas", "Divulgación", "Mapa"]
+
+# Aplicar navegación diferida ANTES de instanciar el widget de tabs.
+pending_tab = st.session_state.get("_pending_active_tab")
+if isinstance(pending_tab, str) and pending_tab in tab_options:
+    st.session_state["active_tab"] = pending_tab
+if "_pending_active_tab" in st.session_state:
+    del st.session_state["_pending_active_tab"]
+
+# Inicializar tab activo una sola vez y dejar que el propio widget
+# gestione su estado en reruns (evita casos de "doble clic" al cambiar pestaña).
+if st.session_state.get("active_tab") not in tab_options:
+    st.session_state["active_tab"] = tab_options[0]
 
 # Radio buttons estilizados como tabs con underline
 active_tab = st.radio(
     "Navegación",
     tab_options,
     horizontal=True,
-    index=st.session_state["preserved_tab"],
     key="active_tab",
     label_visibility="collapsed"
 )
-
-# Guardar tab actual para preservarlo en reruns
-st.session_state["preserved_tab"] = tab_options.index(active_tab)
 
 # ============================================================
 # CONSTRUCCIÓN DE UI (SIEMPRE SE MUESTRA, CON O SIN DATOS)
@@ -2462,10 +2975,12 @@ if active_tab == "Observación":
         text_color = "rgba(255, 255, 255, 0.92)"
         grid_color = "rgba(255, 255, 255, 0.15)"
         zero_line_color = "rgba(230, 230, 230, 0.65)"
+        now_line_color = "rgba(230, 236, 245, 0.7)"
     else:
         text_color = "rgba(15, 18, 25, 0.92)"
         grid_color = "rgba(18, 18, 18, 0.12)"
         zero_line_color = "rgba(55, 55, 55, 0.65)"
+        now_line_color = "rgba(35, 42, 56, 0.55)"
 
     if connected and has_chart_data:
         section_title("Gráficos")
@@ -2639,14 +3154,14 @@ if active_tab == "Observación":
         )
 
         
-        st.plotly_chart(fig, use_container_width=True, key=f"temp_graph_{theme_mode}")
+        _plotly_chart_stretch(fig, key=f"temp_graph_{theme_mode}")
 
         # Gráfico de presión de vapor solo para WU (AEMET no ofrece HR diezminutal fiable)
         if True:
             humidities_valid = [h for h in chart_humidities if not is_nan(h)]
 
             if (not is_aemet_connection()) and len(humidities_valid) >= 10:
-                st.markdown("### 💧 Presión de Vapor")
+                st.markdown("### Presión de Vapor")
 
                 from models.thermodynamics import e_s as calc_e_s, vapor_pressure
 
@@ -2734,11 +3249,10 @@ if active_tab == "Observación":
                             font=dict(size=10, color="rgba(128,128,128,0.5)")
                         )],
                     )
-                    st.plotly_chart(
+                    _plotly_chart_stretch(
                         fig_vapor,
-                        use_container_width=True,
+                        key=f"vapor_graph_{theme_mode}",
                         config={"displayModeBar": False},
-                        key=f"vapor_graph_{theme_mode}"
                     )
             else:
                 if not is_aemet_connection():
@@ -2780,19 +3294,37 @@ if active_tab == "Observación":
                 df_wind["dt"] = pd.to_datetime(df_wind["dt"]).dt.floor("5min")
                 df_wind = df_wind.groupby("dt", as_index=False).last()
 
+                # Limitar análisis de viento/rosa al mismo rango mostrado en el gráfico de "Hoy".
+                range_start = pd.Timestamp(day_start)
+                range_end = pd.Timestamp(day_end)
+                df_wind_view = df_wind[(df_wind["dt"] >= range_start) & (df_wind["dt"] < range_end)].copy()
+
+                if df_wind_view.empty:
+                    st.info("ℹ️ No hay datos de viento en la ventana temporal mostrada (hoy).")
+                    df_wind_view = pd.DataFrame(columns=["dt", "wind", "gust", "dir"])
+
                 # Algunas estaciones AEMET no reportan VV útil (todo 0) pero sí rachas.
-                wind_non_nan = [float(v) for v in df_wind["wind"].tolist() if not is_nan(v)]
-                gust_non_nan = [float(v) for v in df_wind["gust"].tolist() if not is_nan(v)]
+                wind_non_nan = [float(v) for v in df_wind_view["wind"].tolist() if not is_nan(v)]
+                gust_non_nan = [float(v) for v in df_wind_view["gust"].tolist() if not is_nan(v)]
                 vv_all_zero = (len(wind_non_nan) > 0) and (max(abs(v) for v in wind_non_nan) < 0.1)
                 gust_has_signal = (len(gust_non_nan) > 0) and (max(gust_non_nan) >= 1.0)
                 if is_aemet_connection() and vv_all_zero and gust_has_signal:
-                    df_wind["wind"] = float("nan")
+                    df_wind_view["wind"] = float("nan")
                     st.caption("ℹ️ Esta estación no está devolviendo viento medio (VV) útil; se muestran rachas y la rosa usa racha+dirección.")
 
-                s_wind = pd.Series(df_wind["wind"].values, index=pd.to_datetime(df_wind["dt"]))
-                s_gust = pd.Series(df_wind["gust"].values, index=pd.to_datetime(df_wind["dt"]))
+                s_wind = pd.Series(df_wind_view["wind"].values, index=pd.to_datetime(df_wind_view["dt"]))
+                s_gust = pd.Series(df_wind_view["gust"].values, index=pd.to_datetime(df_wind_view["dt"]))
+                # No mostrar dirección cuando el viento medio está en calma (0),
+                # para evitar "direcciones fantasma" de la veleta.
+                df_wind_view["dir_plot"] = df_wind_view["dir"]
+                calm_mask = df_wind_view["wind"].apply(
+                    lambda v: (not is_nan(v)) and abs(float(v)) < 0.1
+                )
+                df_wind_view.loc[calm_mask, "dir_plot"] = float("nan")
+                s_dir = pd.Series(df_wind_view["dir_plot"].values, index=pd.to_datetime(df_wind_view["dt"]))
                 y_wind = s_wind.reindex(grid)
                 y_gust = s_gust.reindex(grid)
+                y_dir = s_dir.reindex(grid)
 
                 fig_wind = go.Figure()
                 fig_wind.add_trace(go.Scatter(
@@ -2810,6 +3342,15 @@ if active_tab == "Observación":
                     name="Racha",
                     line=dict(color="rgb(255, 170, 65)", width=2.4, dash="dot"),
                     connectgaps=True,
+                ))
+                fig_wind.add_trace(go.Scatter(
+                    x=grid,
+                    y=y_dir.values,
+                    mode="markers",
+                    name="Dirección",
+                    marker=dict(color="rgba(120, 170, 255, 0.85)", size=5),
+                    yaxis="y2",
+                    hovertemplate="Dirección: %{y:.0f}°<extra></extra>",
                 ))
                 fig_wind.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
                 fig_wind.update_layout(
@@ -2831,6 +3372,16 @@ if active_tab == "Observación":
                         tickfont=dict(color=text_color),
                         rangemode="tozero",
                     ),
+                    yaxis2=dict(
+                        title=dict(text="Dirección", font=dict(color=text_color)),
+                        overlaying="y",
+                        side="right",
+                        range=[0, 360],
+                        tickvals=[0, 45, 90, 135, 180, 225, 270, 315, 360],
+                        ticktext=["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"],
+                        tickfont=dict(color=text_color),
+                        showgrid=False,
+                    ),
                     hovermode="x unified",
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
@@ -2847,7 +3398,7 @@ if active_tab == "Observación":
                         font=dict(size=10, color="rgba(128,128,128,0.5)"),
                     )],
                 )
-                st.plotly_chart(fig_wind, use_container_width=True, key=f"wind_graph_{theme_mode}")
+                _plotly_chart_stretch(fig_wind, key=f"wind_graph_{theme_mode}")
 
                 # Rosa de viento 16 rumbos: excluir dirección cuando viento y racha son ambos 0.0
                 sectors16 = [
@@ -2859,7 +3410,7 @@ if active_tab == "Observación":
                 calm = 0
                 valid_dir_samples = 0
 
-                for _, row in df_wind.iterrows():
+                for _, row in df_wind_view.iterrows():
                     w = float(row["wind"]) if not is_nan(row["wind"]) else float("nan")
                     g = float(row["gust"]) if not is_nan(row["gust"]) else float("nan")
                     d = float(row["dir"]) if not is_nan(row["dir"]) else float("nan")
@@ -2889,7 +3440,7 @@ if active_tab == "Observación":
                     counts[sectors16[idx]] += 1
                     valid_dir_samples += 1
 
-                total_samples = len(df_wind)
+                total_samples = len(df_wind_view)
                 dir_total = sum(counts.values())
                 dominant_dir = None
                 if dir_total > 0:
@@ -2967,7 +3518,7 @@ if active_tab == "Observación":
                                 font=dict(size=10, color="rgba(128,128,128,0.5)"),
                             )],
                         )
-                        st.plotly_chart(fig_rose, use_container_width=True, key=f"wind_rose_{theme_mode}")
+                        _plotly_chart_stretch(fig_rose, key=f"wind_rose_{theme_mode}")
 
                     with col_stats:
                         calm_pct = (100.0 * calm / total_samples) if total_samples > 0 else 0.0
@@ -3022,10 +3573,12 @@ elif active_tab == "Tendencias":
         text_color = "rgba(255, 255, 255, 0.92)"
         grid_color = "rgba(255, 255, 255, 0.15)"
         zero_line_color = "rgba(230, 230, 230, 0.65)"
+        now_line_color = "rgba(230, 236, 245, 0.7)"
     else:
         text_color = "rgba(15, 18, 25, 0.92)"
         grid_color = "rgba(18, 18, 18, 0.12)"
         zero_line_color = "rgba(55, 55, 55, 0.65)"
+        now_line_color = "rgba(35, 42, 56, 0.55)"
 
     if not connected:
         st.info("👈 Conecta una estación para ver las tendencias")
@@ -3292,7 +3845,13 @@ elif active_tab == "Tendencias":
                             line=dict(color="rgb(255, 107, 107)", width=2.5),
                             marker=dict(size=5, color="rgb(255, 107, 107)"), connectgaps=True
                         ))
-                        fig_theta_e.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
+                        fig_theta_e.add_vline(
+                            x=now_local,
+                            line_width=1.2,
+                            line_dash="dot",
+                            line_color=now_line_color,
+                            opacity=0.85,
+                        )
                         fig_theta_e.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
 
                         fig_theta_e.update_layout(
@@ -3316,7 +3875,7 @@ elif active_tab == "Tendencias":
                             )]
                         )
 
-                        st.plotly_chart(fig_theta_e, use_container_width=True, key=f"theta_e_graph_{theme_mode}_{periodo}")
+                        _plotly_chart_stretch(fig_theta_e, key=f"theta_e_graph_{theme_mode}_{periodo}")
                 except Exception as err:
                     st.error("Error al calcular tendencia de θe: " + str(err))
                     logger.error(f"Error tendencia θe: {repr(err)}")
@@ -3361,7 +3920,13 @@ elif active_tab == "Tendencias":
                             line=dict(color="rgb(107, 170, 255)", width=2.5),
                             marker=dict(size=5, color="rgb(107, 170, 255)"), connectgaps=True
                         ))
-                        fig_e.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
+                        fig_e.add_vline(
+                            x=now_local,
+                            line_width=1.2,
+                            line_dash="dot",
+                            line_color=now_line_color,
+                            opacity=0.85,
+                        )
                         fig_e.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
 
                         fig_e.update_layout(
@@ -3385,12 +3950,142 @@ elif active_tab == "Tendencias":
                             )]
                         )
 
-                        st.plotly_chart(fig_e, use_container_width=True, key=f"e_graph_{theme_mode}_{periodo}")
+                        _plotly_chart_stretch(fig_e, key=f"e_graph_{theme_mode}_{periodo}")
                 except Exception as err:
                     st.error("Error al calcular tendencia de e: " + str(err))
                     logger.error(f"Error tendencia e: {repr(err)}")
             else:
                 st.warning("⚠️ No se puede calcular tendencia de presión de vapor (e): la estación no tiene higrómetro.")
+
+            # --- GRÁFICO 2.5 (solo Hoy): componentes zonal/meridional del viento ---
+            if periodo == "Hoy":
+                try:
+                    chart_epochs_uv = st.session_state.get("chart_epochs", [])
+                    chart_winds_uv = st.session_state.get("chart_winds", [])
+                    chart_dirs_uv = st.session_state.get("chart_wind_dirs", [])
+
+                    uv_times = []
+                    u_vals = []
+                    v_vals = []
+
+                    for i, epoch in enumerate(chart_epochs_uv):
+                        if i >= len(chart_winds_uv) or i >= len(chart_dirs_uv):
+                            continue
+                        speed = chart_winds_uv[i]
+                        direction_deg = chart_dirs_uv[i]
+                        if is_nan(speed) or is_nan(direction_deg):
+                            continue
+
+                        theta = math.radians(float(direction_deg))
+                        speed = float(speed)
+                        # Convención meteorológica:
+                        # u = -V sin(theta), v = -V cos(theta)
+                        u_comp = -speed * math.sin(theta)
+                        v_comp = -speed * math.cos(theta)
+
+                        uv_times.append(datetime.fromtimestamp(epoch))
+                        u_vals.append(u_comp)
+                        v_vals.append(v_comp)
+
+                    if len(uv_times) >= 3:
+                        df_uv = pd.DataFrame({"dt": uv_times, "u": u_vals, "v": v_vals}).sort_values("dt")
+                        df_uv["dt"] = pd.to_datetime(df_uv["dt"]).dt.floor("5min")
+                        df_uv = df_uv.groupby("dt", as_index=False).last()
+
+                        s_u = pd.Series(df_uv["u"].values, index=pd.to_datetime(df_uv["dt"]))
+                        s_v = pd.Series(df_uv["v"].values, index=pd.to_datetime(df_uv["dt"]))
+                        y_u = s_u.reindex(grid)
+                        y_v = s_v.reindex(grid)
+
+                        uv_valid = np.concatenate([
+                            np.asarray(y_u.values, dtype=np.float64),
+                            np.asarray(y_v.values, dtype=np.float64),
+                        ])
+                        uv_valid = uv_valid[~np.isnan(uv_valid)]
+                        if len(uv_valid) > 0:
+                            max_abs_uv = float(max(abs(uv_valid.min()), abs(uv_valid.max())))
+                            if max_abs_uv < 0.5:
+                                max_abs_uv = 0.5
+                            y_range_uv = [-max_abs_uv * 1.1, max_abs_uv * 1.1]
+
+                            fig_uv = go.Figure()
+                            fig_uv.add_trace(go.Scatter(
+                                x=grid, y=y_u.values, mode="lines+markers", name="u (zonal)",
+                                line=dict(color="rgb(255, 148, 82)", width=2.2),
+                                marker=dict(size=4, color="rgb(255, 148, 82)"), connectgaps=True
+                            ))
+                            fig_uv.add_trace(go.Scatter(
+                                x=grid, y=y_v.values, mode="lines+markers", name="v (meridional)",
+                                line=dict(color="rgb(96, 196, 129)", width=2.2),
+                                marker=dict(size=4, color="rgb(96, 196, 129)"), connectgaps=True
+                            ))
+                            fig_uv.add_vline(
+                                x=now_local,
+                                line_width=1.2,
+                                line_dash="dot",
+                                line_color=now_line_color,
+                                opacity=0.85,
+                            )
+                            fig_uv.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
+
+                            fig_uv.update_layout(
+                                title=dict(
+                                    text="Componentes del viento",
+                                    x=0.5,
+                                    xanchor="center",
+                                    font=dict(size=18, color=text_color),
+                                ),
+                                showlegend=True,
+                                legend=dict(
+                                    orientation="h",
+                                    yanchor="bottom",
+                                    y=1.02,
+                                    xanchor="center",
+                                    x=0.5,
+                                ),
+                                xaxis=dict(
+                                    title=dict(text="Hora", font=dict(color=text_color)),
+                                    type="date",
+                                    range=[day_start, day_end],
+                                    tickformat=tickformat,
+                                    dtick=dtick_ms,
+                                    gridcolor=grid_color,
+                                    showgrid=True,
+                                    tickfont=dict(color=text_color),
+                                ),
+                                yaxis=dict(
+                                    title=dict(text="Velocidad (km/h)", font=dict(color=text_color)),
+                                    range=y_range_uv,
+                                    gridcolor=grid_color,
+                                    showgrid=True,
+                                    tickfont=dict(color=text_color),
+                                ),
+                                plot_bgcolor="rgba(0,0,0,0)",
+                                paper_bgcolor="rgba(0,0,0,0)",
+                                hovermode="x unified",
+                                height=400,
+                                margin=dict(l=60, r=40, t=90, b=60),
+                                font=dict(
+                                    family='system-ui, -apple-system, "Segoe UI", Roboto, Arial',
+                                    color=text_color,
+                                ),
+                                annotations=[dict(
+                                    text="meteolabx.com",
+                                    xref="paper", yref="paper",
+                                    x=0.98, y=0.02,
+                                    xanchor="right", yanchor="bottom",
+                                    showarrow=False,
+                                    font=dict(size=10, color="rgba(128,128,128,0.5)")
+                                )],
+                            )
+                            _plotly_chart_stretch(fig_uv, key=f"wind_uv_graph_{theme_mode}_{periodo}")
+                        else:
+                            st.info("ℹ️ No hay datos válidos de viento para calcular componentes u/v hoy.")
+                    else:
+                        st.info("ℹ️ No hay suficientes datos de viento/dirección para dibujar componentes u/v hoy.")
+                except Exception as err:
+                    st.error("Error al calcular componentes del viento (u/v): " + str(err))
+                    logger.error(f"Error componentes viento u/v: {repr(err)}")
 
             # --- GRÁFICO 3: Tendencia de presión ---
             if has_barometer_series:
@@ -3414,7 +4109,13 @@ elif active_tab == "Tendencias":
                             line=dict(color="rgb(150, 107, 255)", width=2.5),
                             marker=dict(size=5, color="rgb(150, 107, 255)"), connectgaps=True
                         ))
-                        fig_p.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
+                        fig_p.add_vline(
+                            x=now_local,
+                            line_width=1.2,
+                            line_dash="dot",
+                            line_color=now_line_color,
+                            opacity=0.85,
+                        )
                         fig_p.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
 
                         fig_p.update_layout(
@@ -3438,11 +4139,96 @@ elif active_tab == "Tendencias":
                             )]
                         )
 
-                        st.plotly_chart(fig_p, use_container_width=True, key=f"p_graph_{theme_mode}_{periodo}")
+                        _plotly_chart_stretch(fig_p, key=f"p_graph_{theme_mode}_{periodo}")
                 except Exception as err:
                     st.error("Error al calcular tendencia de presión: " + str(err))
                     logger.error(f"Error tendencia presión: {repr(err)}")
 
+            # Sincronizar línea vertical de hover entre gráficos separados (solo Hoy).
+            if periodo == "Hoy":
+                components.html(
+                    f"""
+                    <script>
+                    (function() {{
+                        const host = window.parent;
+                        const doc = host.document;
+                        const LINE_NAME = "mlbx-hover-sync-line";
+                        const LINE_COLOR = "{now_line_color}";
+
+                        function getTrendPlots() {{
+                            const all = Array.from(doc.querySelectorAll('[data-testid="stPlotlyChart"] .js-plotly-plot'));
+                            const visible = all.filter((p) => p.offsetParent !== null);
+                            if (visible.length <= 4) return visible;
+                            return visible.slice(-4);
+                        }}
+
+                        function getShapesWithoutSync(plot) {{
+                            const current = (plot && plot.layout && Array.isArray(plot.layout.shapes))
+                                ? plot.layout.shapes
+                                : [];
+                            return current.filter((s) => s && s.name !== LINE_NAME);
+                        }}
+
+                        function drawSyncLine(plot, xValue) {{
+                            if (!host.Plotly || !plot) return;
+                            const base = getShapesWithoutSync(plot);
+                            const hoverLine = {{
+                                type: "line",
+                                xref: "x",
+                                yref: "paper",
+                                x0: xValue,
+                                x1: xValue,
+                                y0: 0,
+                                y1: 1,
+                                line: {{ color: LINE_COLOR, width: 1.1, dash: "dot" }},
+                                name: LINE_NAME
+                            }};
+                            host.Plotly.relayout(plot, {{ shapes: [...base, hoverLine] }});
+                        }}
+
+                        function clearSyncLine(plot) {{
+                            if (!host.Plotly || !plot) return;
+                            const base = getShapesWithoutSync(plot);
+                            host.Plotly.relayout(plot, {{ shapes: base }});
+                        }}
+
+                        function bindHoverSync() {{
+                            if (!host.Plotly) return;
+                            const plots = getTrendPlots();
+                            if (plots.length < 2) return;
+
+                            plots.forEach((plot) => {{
+                                if (plot.dataset.mlbxHoverSyncBound === "1") return;
+                                plot.dataset.mlbxHoverSyncBound = "1";
+
+                                plot.on("plotly_hover", (ev) => {{
+                                    const xVal = ev && ev.points && ev.points[0] ? ev.points[0].x : null;
+                                    if (xVal === null || xVal === undefined) return;
+                                    plots.forEach((p) => {{
+                                        if (p !== plot) drawSyncLine(p, xVal);
+                                    }});
+                                }});
+
+                                plot.on("plotly_unhover", () => {{
+                                    plots.forEach((p) => {{
+                                        if (p !== plot) clearSyncLine(p);
+                                    }});
+                                }});
+                            }});
+                        }}
+
+                        bindHoverSync();
+
+                        if (!host.__mlbxHoverSyncObserver) {{
+                            host.__mlbxHoverSyncObserver = new host.MutationObserver(() => bindHoverSync());
+                            host.__mlbxHoverSyncObserver.observe(doc.body, {{ childList: true, subtree: true }});
+                        }}
+                    }})();
+                    </script>
+                    """,
+                    height=0,
+                    width=0,
+                )
 
 # ============================================================
 # TAB 3: CLIMOGRAMAS
@@ -3466,7 +4252,585 @@ elif active_tab == "Divulgación":
 # ============================================================
 
 elif active_tab == "Mapa":
-    st.info("Sección en desarrollo - Próximamente")
+    import pydeck as pdk
+
+    section_title("Mapa de estaciones")
+
+    def _safe_float(value, default=None):
+        try:
+            number = float(value)
+            if math.isnan(number):
+                return default
+            return number
+        except Exception:
+            return default
+
+    def _first_valid_float(*values, default):
+        for value in values:
+            parsed = _safe_float(value, default=None)
+            if parsed is not None:
+                return parsed
+        return float(default)
+
+    def _map_default_coords():
+        lat = _first_valid_float(
+            st.session_state.get("provider_station_lat"),
+            st.session_state.get("aemet_station_lat"),
+            st.session_state.get("station_lat"),
+            default=40.4168,
+        )
+        lon = _first_valid_float(
+            st.session_state.get("provider_station_lon"),
+            st.session_state.get("aemet_station_lon"),
+            st.session_state.get("station_lon"),
+            default=-3.7038,
+        )
+        return float(lat), float(lon)
+
+    def _normalize_coords(lat: float, lon: float):
+        lat = float(lat)
+        lon = float(lon)
+        if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0:
+            return lat, lon, False
+        if -90.0 <= lon <= 90.0 and -180.0 <= lat <= 180.0:
+            return lon, lat, True
+        return lat, lon, False
+
+    def _zoom_for_max_distance(max_distance_km: float) -> float:
+        if max_distance_km <= 5:
+            return 10.8
+        if max_distance_km <= 15:
+            return 9.5
+        if max_distance_km <= 35:
+            return 8.3
+        if max_distance_km <= 80:
+            return 7.3
+        if max_distance_km <= 180:
+            return 6.3
+        return 5.5
+
+    def _is_us_map_center(lat: float, lon: float) -> bool:
+        # Caja amplia para EEUU + Alaska/territorios en longitudes oeste.
+        return 17.0 <= float(lat) <= 72.5 and -178.0 <= float(lon) <= -52.0
+
+    if "map_geo_request_id" not in st.session_state:
+        st.session_state["map_geo_request_id"] = 10000
+    if "map_geo_pending" not in st.session_state:
+        st.session_state["map_geo_pending"] = False
+    if "map_geo_last_error" not in st.session_state:
+        st.session_state["map_geo_last_error"] = ""
+    if "map_geo_debug_msg" not in st.session_state:
+        st.session_state["map_geo_debug_msg"] = ""
+
+    default_lat, default_lon = _map_default_coords()
+    if "map_search_lat" not in st.session_state or _safe_float(st.session_state.get("map_search_lat")) is None:
+        st.session_state["map_search_lat"] = default_lat
+    if "map_search_lon" not in st.session_state or _safe_float(st.session_state.get("map_search_lon")) is None:
+        st.session_state["map_search_lon"] = default_lon
+    if "map_provider_filter" not in st.session_state:
+        st.session_state["map_provider_filter"] = ["AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS"]
+
+    browser_geo_result = None
+    if st.session_state.get("map_geo_pending"):
+        browser_geo_result = get_browser_geolocation(
+            request_id=st.session_state["map_geo_request_id"],
+            timeout_ms=12000,
+            high_accuracy=True,
+        )
+
+    if st.session_state.get("map_geo_pending") and isinstance(browser_geo_result, dict):
+        st.session_state["map_geo_pending"] = False
+        if browser_geo_result.get("ok"):
+            lat = browser_geo_result.get("lat")
+            lon = browser_geo_result.get("lon")
+            if lat is not None and lon is not None:
+                lat, lon, swapped = _normalize_coords(lat, lon)
+                st.session_state["map_search_lat"] = lat
+                st.session_state["map_search_lon"] = lon
+                acc = browser_geo_result.get("accuracy_m")
+                if isinstance(acc, (int, float)):
+                    st.session_state["map_geo_debug_msg"] = f"Ubicación detectada (±{acc:.0f} m)."
+                else:
+                    st.session_state["map_geo_debug_msg"] = "Ubicación detectada."
+                if swapped:
+                    st.session_state["map_geo_debug_msg"] += " Se corrigieron coordenadas invertidas."
+                st.session_state["map_geo_last_error"] = ""
+                st.rerun()
+
+        error_message = browser_geo_result.get("error_message") or "No se pudo obtener la ubicación del navegador."
+        st.session_state["map_geo_last_error"] = str(error_message)
+        st.session_state["map_geo_debug_msg"] = ""
+
+    controls_col, filters_col = st.columns([1.1, 1], gap="large")
+    with controls_col:
+        st.markdown("#### Ubicación")
+        if st.button("📍 Usar mi ubicación actual", type="primary", width="stretch"):
+            st.session_state["map_geo_request_id"] += 1
+            st.session_state["map_geo_pending"] = True
+            st.session_state["map_geo_last_error"] = ""
+            st.session_state["map_geo_debug_msg"] = "Solicitando ubicación al navegador..."
+            st.rerun()
+
+        if st.session_state.get("map_geo_pending"):
+            st.caption("Esperando permiso o respuesta de geolocalización...")
+
+        geo_last_error = st.session_state.get("map_geo_last_error", "").strip()
+        if geo_last_error:
+            st.warning("No se pudo leer la ubicación GPS del navegador. Revisa los permisos del sitio.")
+            st.caption(f"Detalle navegador: {geo_last_error}")
+
+        geo_debug_msg = st.session_state.get("map_geo_debug_msg", "")
+        if geo_debug_msg:
+            st.caption(geo_debug_msg)
+        st.caption(
+            f"Centro actual: {float(st.session_state.get('map_search_lat')):.4f}, "
+            f"{float(st.session_state.get('map_search_lon')):.4f}"
+        )
+
+    with filters_col:
+        st.markdown("#### Filtros")
+        st.multiselect(
+            "Proveedores",
+            options=["AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS"],
+            key="map_provider_filter",
+        )
+        st.caption("El mapa muestra todas las estaciones disponibles para los proveedores seleccionados.")
+
+    search_lat = float(st.session_state.get("map_search_lat"))
+    search_lon = float(st.session_state.get("map_search_lon"))
+    provider_filter = set(st.session_state.get("map_provider_filter", []))
+
+    center_in_us = _is_us_map_center(search_lat, search_lon)
+    map_max_results = 20000
+    if "NWS" in provider_filter:
+        # Cargar todo NWS para no recortar por distancia cuando el centro no está en USA.
+        map_max_results = 90000
+
+    nearest = search_nearby_stations(search_lat, search_lon, max_results=map_max_results)
+    nearest = [s for s in nearest if s.provider_id in provider_filter]
+
+    if not nearest:
+        st.warning("No hay estaciones disponibles para los filtros actuales.")
+    else:
+        def _station_locality(station):
+            meta = station.metadata if isinstance(station.metadata, dict) else {}
+            if station.provider_id == "METEOCAT":
+                municipi = meta.get("municipi")
+                if isinstance(municipi, dict):
+                    town = str(municipi.get("nom", "")).strip()
+                    if town:
+                        return town
+            if station.provider_id == "EUSKALMET":
+                municipality = meta.get("municipality")
+                if isinstance(municipality, dict):
+                    town = str(municipality.get("SPANISH", "")).strip() or str(municipality.get("BASQUE", "")).strip()
+                    if town:
+                        return town.replace("[eu] ", "").strip()
+            if station.provider_id == "METEOGALICIA":
+                town = str(meta.get("concello", "")).strip()
+                if town:
+                    return town
+            if station.provider_id == "NWS":
+                tz_name = str(meta.get("tz", "")).strip()
+                if tz_name:
+                    return tz_name
+            provincia = meta.get("provincia")
+            if isinstance(provincia, dict):
+                province_name = str(provincia.get("nom", "")).strip()
+                if province_name:
+                    return province_name
+            province_txt = str(meta.get("provincia", "")).strip()
+            if province_txt:
+                return province_txt
+            return str(station.name).strip()
+
+        provider_colors = {
+            "AEMET": [255, 75, 75],
+            "METEOCAT": [58, 145, 255],
+            "EUSKALMET": [55, 198, 124],
+            "METEOGALICIA": [255, 184, 64],
+            "NWS": [178, 122, 255],
+        }
+        points = []
+        for station in nearest:
+            points.append(
+                {
+                    "lat": float(station.lat),
+                    "lon": float(station.lon),
+                    "name": station.name,
+                    "provider": station.provider_name,
+                    "provider_id": station.provider_id,
+                    "station_id": station.station_id,
+                    "distance_km": float(station.distance_km),
+                    "distance_txt": f"{station.distance_km:.1f} km",
+                    "locality": _station_locality(station),
+                    "elevation_m": float(station.elevation_m),
+                    "alt_txt": f"{station.elevation_m:.0f} m",
+                    "station_tz": str((station.metadata or {}).get("tz", "")).strip() if isinstance(station.metadata, dict) else "",
+                    "color": provider_colors.get(station.provider_id, [180, 180, 180]),
+                    "radius": 170,
+                }
+            )
+
+        def _connect_station_from_map(selected_station: dict) -> bool:
+            provider_id = str(selected_station.get("provider_id", "")).strip().upper()
+            station_id = str(selected_station.get("station_id", "")).strip()
+            if not provider_id or not station_id:
+                return False
+
+            station_name = str(selected_station.get("name", "")).strip() or station_id
+            lat = _safe_float(selected_station.get("lat"))
+            lon = _safe_float(selected_station.get("lon"))
+            elevation_m = _safe_float(selected_station.get("elevation_m"), default=0.0)
+            station_tz = str(selected_station.get("station_tz", "")).strip()
+
+            st.session_state["connection_type"] = provider_id
+            st.session_state["provider_station_id"] = station_id
+            st.session_state["provider_station_name"] = station_name
+            st.session_state["provider_station_lat"] = lat
+            st.session_state["provider_station_lon"] = lon
+            st.session_state["provider_station_alt"] = elevation_m
+            st.session_state["provider_station_tz"] = station_tz
+
+            if provider_id == "AEMET":
+                st.session_state["aemet_station_id"] = station_id
+                st.session_state["aemet_station_name"] = station_name
+                st.session_state["aemet_station_lat"] = lat
+                st.session_state["aemet_station_lon"] = lon
+                st.session_state["aemet_station_alt"] = elevation_m
+            elif provider_id == "METEOCAT":
+                st.session_state["meteocat_station_id"] = station_id
+                st.session_state["meteocat_station_name"] = station_name
+                st.session_state["meteocat_station_lat"] = lat
+                st.session_state["meteocat_station_lon"] = lon
+                st.session_state["meteocat_station_alt"] = elevation_m
+            elif provider_id == "EUSKALMET":
+                st.session_state["euskalmet_station_id"] = station_id
+                st.session_state["euskalmet_station_name"] = station_name
+                st.session_state["euskalmet_station_lat"] = lat
+                st.session_state["euskalmet_station_lon"] = lon
+                st.session_state["euskalmet_station_alt"] = elevation_m
+            elif provider_id == "METEOGALICIA":
+                st.session_state["meteogalicia_station_id"] = station_id
+                st.session_state["meteogalicia_station_name"] = station_name
+                st.session_state["meteogalicia_station_lat"] = lat
+                st.session_state["meteogalicia_station_lon"] = lon
+                st.session_state["meteogalicia_station_alt"] = elevation_m
+            elif provider_id == "NWS":
+                st.session_state["nws_station_id"] = station_id
+                st.session_state["nws_station_name"] = station_name
+                st.session_state["nws_station_lat"] = lat
+                st.session_state["nws_station_lon"] = lon
+                st.session_state["nws_station_alt"] = elevation_m
+            else:
+                return False
+
+            st.session_state["connected"] = True
+            st.session_state["_pending_active_tab"] = "Observación"
+            st.session_state["map_selected_station"] = dict(selected_station)
+            return True
+
+        def _set_provider_autoconnect_from_map(selected_station: dict) -> bool:
+            provider_id = str(selected_station.get("provider_id", "")).strip().upper()
+            station_id = str(selected_station.get("station_id", "")).strip()
+            if not provider_id or not station_id:
+                return False
+
+            station_name = str(selected_station.get("name", "")).strip() or station_id
+            lat = _safe_float(selected_station.get("lat"), default=None)
+            lon = _safe_float(selected_station.get("lon"), default=None)
+            elevation_m = _safe_float(selected_station.get("elevation_m"), default=None)
+
+            set_stored_autoconnect_target(
+                {
+                    "kind": "PROVIDER",
+                    "provider_id": provider_id,
+                    "station_id": station_id,
+                    "station_name": station_name,
+                    "lat": lat,
+                    "lon": lon,
+                    "elevation_m": elevation_m,
+                }
+            )
+            set_local_storage(LS_AUTOCONNECT, "1", "save")
+            # Evita autoconectar inmediatamente en esta sesión.
+            st.session_state["_autoconnect_attempted"] = True
+            return True
+
+        def _reset_map_autoconnect_toggle_state() -> None:
+            for state_key in list(st.session_state.keys()):
+                if state_key.startswith("map_autoconnect_toggle_"):
+                    del st.session_state[state_key]
+
+        points_sorted = sorted(points, key=lambda p: float(p["distance_km"]))
+        zoom_reference = points_sorted[: min(len(points_sorted), 2000)]
+        max_distance = max((p["distance_km"] for p in zoom_reference), default=250.0)
+
+        points_for_layer = list(points_sorted)
+
+        map_style = (
+            "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+            if dark else
+            "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+        )
+
+        map_layers = [
+            pdk.Layer(
+                "ScatterplotLayer",
+                id="stations-layer",
+                data=points_for_layer,
+                pickable=True,
+                auto_highlight=True,
+                filled=True,
+                stroked=True,
+                get_position="[lon, lat]",
+                get_fill_color="color",
+                get_line_color=[16, 20, 28, 140],
+                line_width_min_pixels=1,
+                get_radius="radius",
+                radius_min_pixels=4,
+                radius_max_pixels=24,
+            ),
+        ]
+        map_layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                id="center-layer",
+                data=[{"lat": search_lat, "lon": search_lon}],
+                pickable=False,
+                filled=True,
+                stroked=True,
+                get_position="[lon, lat]",
+                get_fill_color=[255, 255, 255, 230],
+                get_line_color=[25, 25, 25, 230],
+                get_radius=220,
+                radius_min_pixels=6,
+                radius_max_pixels=10,
+            )
+        )
+
+        deck = pdk.Deck(
+            map_style=map_style,
+            initial_view_state=pdk.ViewState(
+                latitude=search_lat,
+                longitude=search_lon,
+                zoom=_zoom_for_max_distance(max_distance),
+                pitch=0,
+            ),
+            layers=map_layers,
+            tooltip={
+                "html": "<b>{name}</b><br/>{provider} · ID {station_id}<br/>Distancia: {distance_txt}<br/>Altitud: {alt_txt}",
+                "style": {
+                    "backgroundColor": "rgba(18, 18, 18, 0.92)",
+                    "color": "white",
+                    "fontSize": "12px",
+                },
+            },
+        )
+
+        metric_col1, metric_col2 = st.columns(2)
+        metric_col1.metric("Estaciones visibles", len(points))
+        metric_col2.metric("Proveedores", len({p["provider_id"] for p in points}))
+
+        deck_event = None
+        try:
+            deck_event = _pydeck_chart_stretch(
+                deck,
+                key="map_stations_chart",
+                height=900,
+            )
+        except Exception as map_err:
+            st.warning(f"No se pudo renderizar el mapa ({map_err}). Mostrando tabla de estaciones.")
+        st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
+
+        selected_station = st.session_state.get("map_selected_station")
+        selection_state = {}
+        try:
+            if hasattr(deck_event, "get"):
+                selection_state = deck_event.get("selection", {}) or {}
+            elif hasattr(deck_event, "selection"):
+                selection_state = getattr(deck_event, "selection", {}) or {}
+        except Exception:
+            selection_state = {}
+        try:
+            selected_objects = selection_state.get("objects", {}) if hasattr(selection_state, "get") else {}
+        except Exception:
+            selected_objects = {}
+        if isinstance(selected_objects, dict):
+            selected_in_layer = selected_objects.get("stations-layer", [])
+            if isinstance(selected_in_layer, list) and selected_in_layer:
+                selected_station = selected_in_layer[0]
+                st.session_state["map_selected_station"] = dict(selected_station)
+
+        st.markdown("#### Estación seleccionada")
+        if isinstance(selected_station, dict):
+            selected_name = str(selected_station.get("name", "Estación"))
+            selected_provider = str(selected_station.get("provider", "Proveedor"))
+            selected_station_id = str(selected_station.get("station_id", "—"))
+            selected_locality = str(selected_station.get("locality", "—"))
+            selected_alt = _safe_float(selected_station.get("elevation_m"), default=None)
+            selected_dist = _safe_float(selected_station.get("distance_km"), default=None)
+            selected_lat = _safe_float(selected_station.get("lat"), default=None)
+            selected_lon = _safe_float(selected_station.get("lon"), default=None)
+            selected_alt_txt = "—" if selected_alt is None else f"{selected_alt:.0f} m"
+            selected_dist_txt = "—" if selected_dist is None else f"{selected_dist:.1f} km"
+            selected_coords_txt = (
+                "—"
+                if selected_lat is None or selected_lon is None
+                else f"{selected_lat:.4f}, {selected_lon:.4f}"
+            )
+
+            info_col, action_col = st.columns([0.78, 0.22], gap="small")
+            with info_col:
+                st.markdown(
+                    f"**{selected_name}** · {selected_provider}  \n"
+                    f"ID: `{selected_station_id}` · Ciudad/Pueblo: `{selected_locality}` · "
+                    f"Altitud: `{selected_alt_txt}` · Distancia: `{selected_dist_txt}` · "
+                    f"Lat/Lon: `{selected_coords_txt}`"
+                )
+                saved_autoconnect = bool(get_stored_autoconnect())
+                saved_target = get_stored_autoconnect_target() or {}
+                is_target_station = bool(
+                    saved_autoconnect
+                    and str(saved_target.get("kind", "")).strip().upper() == "PROVIDER"
+                    and str(saved_target.get("provider_id", "")).strip().upper() == str(selected_station.get("provider_id", "")).strip().upper()
+                    and str(saved_target.get("station_id", "")).strip() == selected_station_id
+                )
+                map_toggle_key = f"map_autoconnect_toggle_{selected_provider}_{selected_station_id}"
+                if map_toggle_key not in st.session_state:
+                    st.session_state[map_toggle_key] = is_target_station
+                map_toggle_enabled = st.checkbox("Conectar automáticamente al iniciar", key=map_toggle_key)
+                if map_toggle_enabled and not is_target_station:
+                    if _set_provider_autoconnect_from_map(selected_station):
+                        _reset_map_autoconnect_toggle_state()
+                        st.success(f"Auto-conexión guardada para {selected_name}.")
+                        st.rerun()
+                    st.error("No se pudo guardar la auto-conexión para la estación seleccionada.")
+                elif (not map_toggle_enabled) and is_target_station:
+                    set_local_storage(LS_AUTOCONNECT, "0", "save")
+                    set_stored_autoconnect_target(None)
+                    st.session_state["_autoconnect_attempted"] = True
+                    _reset_map_autoconnect_toggle_state()
+                    st.info("Auto-conexión desactivada en este dispositivo.")
+                    st.rerun()
+            with action_col:
+                connect_key = f"map_connect_btn_{selected_provider}_{selected_station_id}"
+                if st.button("Conectar", key=connect_key, type="primary", width="stretch"):
+                    if _connect_station_from_map(selected_station):
+                        st.success(f"Conectado a {selected_name}. Ya puedes ver los datos en Observación.")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo conectar la estación seleccionada.")
+        else:
+            st.caption("Haz clic sobre una estación del mapa para ver sus detalles y conectarla.")
+
+        table_limit = 100
+        stations_rows = [
+            {
+                "Estación": p["name"],
+                "Proveedor": p["provider"],
+                "ID": p["station_id"],
+                "Ciudad/Pueblo": p["locality"],
+                "Altitud (m)": round(float(p["elevation_m"]), 0),
+                "Distancia (km)": round(float(p["distance_km"]), 2),
+                "Lat": round(float(p["lat"]), 5),
+                "Lon": round(float(p["lon"]), 5),
+            }
+            for p in points_sorted
+        ][:table_limit]
+        st.caption(f"Mostrando las {len(stations_rows)} estaciones más cercanas en la tabla.")
+        table_head_bg = "#0f1728" if dark else "#e9edf5"
+        table_row_bg = "#081121" if dark else "#ffffff"
+        table_row_alt_bg = "#0d1729" if dark else "#f7f9fc"
+        table_border = "rgba(255,255,255,0.10)" if dark else "rgba(15,18,25,0.14)"
+        table_text = "rgba(245,248,255,0.95)" if dark else "rgba(15,18,25,0.92)"
+        table_muted = "rgba(210,220,235,0.88)" if dark else "rgba(70,80,96,0.88)"
+
+        table_rows_html = ""
+        for row in stations_rows:
+            table_rows_html += (
+                "<tr>"
+                f"<td>{html.escape(str(row['Estación']))}</td>"
+                f"<td>{html.escape(str(row['Proveedor']))}</td>"
+                f"<td>{html.escape(str(row['ID']))}</td>"
+                f"<td>{html.escape(str(row['Ciudad/Pueblo']))}</td>"
+                f"<td>{html.escape(str(row['Altitud (m)']))}</td>"
+                f"<td>{html.escape(str(row['Distancia (km)']))}</td>"
+                f"<td>{html.escape(str(row['Lat']))}</td>"
+                f"<td>{html.escape(str(row['Lon']))}</td>"
+                "</tr>"
+            )
+
+        st.markdown(
+            f"""
+            <style>
+            .mlx-map-table-wrap {{
+                width: 100%;
+                border: 1px solid {table_border};
+                border-radius: 10px;
+                overflow: auto;
+                max-height: 430px;
+                background: {table_row_bg};
+            }}
+            .mlx-map-table {{
+                width: 100%;
+                border-collapse: collapse;
+                color: {table_text};
+                font-size: 0.95rem;
+            }}
+            .mlx-map-table thead th {{
+                position: sticky;
+                top: 0;
+                z-index: 2;
+                background: {table_head_bg};
+                color: {table_muted};
+                text-align: left;
+                padding: 10px 8px;
+                border-bottom: 1px solid {table_border};
+                border-right: 1px solid {table_border};
+                font-weight: 600;
+            }}
+            .mlx-map-table thead th:last-child {{
+                border-right: none;
+            }}
+            .mlx-map-table tbody tr:nth-child(odd) {{
+                background: {table_row_bg};
+            }}
+            .mlx-map-table tbody tr:nth-child(even) {{
+                background: {table_row_alt_bg};
+            }}
+            .mlx-map-table td {{
+                padding: 9px 8px;
+                border-bottom: 1px solid {table_border};
+                border-right: 1px solid {table_border};
+                white-space: nowrap;
+            }}
+            .mlx-map-table td:last-child {{
+                border-right: none;
+            }}
+            </style>
+            <div class="mlx-map-table-wrap">
+                <table class="mlx-map-table">
+                    <thead>
+                        <tr>
+                            <th>Estación</th>
+                            <th>Proveedor</th>
+                            <th>ID</th>
+                            <th>Ciudad/Pueblo</th>
+                            <th>Altitud (m)</th>
+                            <th>Distancia (km)</th>
+                            <th>Lat</th>
+                            <th>Lon</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {table_rows_html}
+                    </tbody>
+                </table>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ============================================================
 # AUTOREFRESH SOLO EN OBSERVACIÓN
@@ -3540,42 +4904,32 @@ st.markdown(
         </style>
         <div class="mlb-footer">
           <div class="mlb-footer-top">
-            <span><b>MeteoLabX · Beta 6</b></span>
+            <span><b>MeteoLabX · Versión 0.7.0</b></span>
             <span class="mlb-footer-news">
               <details>
                 <summary>Novedades</summary>
                 <div class="mlb-footer-box">
-                  <h2 style="margin:0 0 0.6rem 0;">0.6.0</h2>
+                  <h2 style="margin:0 0 0.6rem 0;">0.7.0</h2>
                   <h3>Mejoras</h3>
                   <ul>
-                    <li>Añadidas estaciones de Meteocat y Euskalmet.</li>
-                    <li>Nuevo gráfico de viento medio y rachas.</li>
-                    <li>Nueva rosa de vientos.</li>
-                    <li>Orto y ocaso en “Claridad del cielo”.</li>
-                    <li>En tarjeta “Radiación solar” se ha añadido energía acumulada hoy.</li>
-                    <li>En Radiación UV se añade irradiancia eritematosa.</li>
-                    <li>Evapotranspiración: ahora se muestra la acumulada del día.</li>
-                    <li>Balance hídrico: ahora se muestra el acumulado del día.</li>
-                    <li>Nueva sección “Mapa” (próximamente).</li>
-                    <li>Ajustes menores de interfaz.</li>
+                    <li>Añadido soporte para estaciones de <b>MeteoGalicia</b> y del <b>NWS (EE. UU.)</b>.</li>
+                    <li>Añadido gráfico de <b>componentes del viento</b>.</li>
+                    <li>Nueva sección <b>Mapa</b>, con acceso a más de <b>30.000 estaciones</b> disponibles.</li>
+                    <li>Añadida la opción de <b>conectarse automáticamente a una estación al iniciar</b>.</li>
+                    <li>Mejorado el cálculo de <b>θe</b>: ahora utiliza la formulación de <b>Bolton (1980)</b>.</li>
+                    <li>La búsqueda manual ahora permite encontrar <b>cualquier localización</b> mediante <b>Nominatim</b>.</li>
                   </ul>
                   <h3>Correcciones</h3>
                   <ul>
-                    <li>Corregido un error por el que las fuentes no cambiaban de color con el tema.</li>
-                    <li>“Claridad del cielo”: corregido el fallo que por la noche marcaba “Muy nuboso”.</li>
-                    <li>Corregido un error que impedía mostrar tendencias con estaciones de servicios meteorológicos.</li>
-                  </ul>
-                  <h3>Bugs conocidos</h3>
-                  <ul>
-                    <li>Algunas lecturas de Meteocat pueden no coincidir con el valor del web.</li>
-                    <li>Los radios de la barra lateral no cambian de color con el tema.</li>
-                    <li>Para cambiar de pestaña a veces hay que pulsar dos veces.</li>
+                    <li>Corregido el error que obligaba a hacer <b>doble clic en las pestañas</b>.</li>
+                    <li>Solucionados problemas relacionados con los <b>temas</b>.</li>
+                    <li>Corregido un problema con valores de <b>irradiancia negativa</b> en estaciones de <b>Meteocat</b>.</li>
                   </ul>
                 </div>
               </details>
             </span>
           </div>
-          <div class="mlb-footer-bottom">Fuentes: WU · AEMET · Meteocat · Euskalmet · No afiliado · © 2026</div>
+          <div class="mlb-footer-bottom">Fuentes: WU · AEMET · Meteocat · Euskalmet · MeteoGalicia · NWS · No afiliado · © 2026</div>
         </div>
         """
     ),

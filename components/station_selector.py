@@ -4,11 +4,24 @@ Independiente del proveedor (AEMET/WU/futuros).
 """
 
 import unicodedata
+import time
+from typing import Optional, Tuple
 
+import requests
 import streamlit as st
 
+from config import LS_AUTOCONNECT
 from providers import search_nearby_stations
+from utils.storage import (
+    set_local_storage,
+    set_stored_autoconnect_target,
+    get_stored_autoconnect,
+    get_stored_autoconnect_target,
+)
 from .browser_geolocation import get_browser_geolocation
+
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_USER_AGENT = "MeteoLabX/1.0 (contact: meteolabx@gmail.com)"
 
 CITY_COORDS_ES = {
     "madrid": (40.4168, -3.7038),
@@ -137,6 +150,83 @@ def _coords_from_city(city_name: str):
     return CITY_COORDS_ES.get(key)
 
 
+@st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
+def _nominatim_geocode_cached(query: str, accept_language: str = "es,en") -> dict:
+    """Geocodifica texto con Nominatim y cachea resultados para reducir tráfico."""
+    params = {
+        "q": query,
+        "format": "jsonv2",
+        "limit": 1,
+        "addressdetails": 1,
+    }
+    if accept_language:
+        params["accept-language"] = accept_language
+
+    headers = {
+        "User-Agent": NOMINATIM_USER_AGENT,
+        "Accept": "application/json",
+    }
+
+    response = requests.get(
+        NOMINATIM_SEARCH_URL,
+        params=params,
+        headers=headers,
+        timeout=12,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list) or len(payload) == 0:
+        return {}
+    first = payload[0]
+    return first if isinstance(first, dict) else {}
+
+
+def _geocode_with_nominatim(query: str) -> Tuple[Optional[Tuple[float, float]], str]:
+    """
+    Devuelve (lat, lon) desde Nominatim para una consulta textual.
+    Incluye limitación de 1 req/s según policy pública.
+    """
+    clean_query = str(query or "").strip()
+    if not clean_query:
+        return None, "Consulta vacía"
+
+    last_ts = float(st.session_state.get("nominatim_last_request_ts", 0.0))
+    now_ts = time.monotonic()
+    wait_s = 1.05 - (now_ts - last_ts)
+    if wait_s > 0:
+        time.sleep(wait_s)
+
+    st.session_state["nominatim_last_request_ts"] = time.monotonic()
+
+    try:
+        result = _nominatim_geocode_cached(clean_query, accept_language="es,en")
+    except requests.HTTPError as err:
+        status = getattr(err.response, "status_code", None)
+        if status == 429:
+            return None, "Nominatim ha limitado temporalmente las peticiones (429)."
+        return None, f"Error HTTP de Nominatim ({status})."
+    except requests.RequestException:
+        return None, "No se pudo conectar con Nominatim."
+    except Exception:
+        return None, "Error inesperado consultando Nominatim."
+
+    if not result:
+        return None, "Nominatim no encontró resultados para ese texto."
+
+    try:
+        lat = float(result.get("lat"))
+        lon = float(result.get("lon"))
+    except (TypeError, ValueError):
+        return None, "Nominatim devolvió un resultado sin coordenadas válidas."
+
+    display_name = str(result.get("display_name", "")).strip()
+    if display_name:
+        st.session_state["nominatim_last_match"] = display_name
+    else:
+        st.session_state["nominatim_last_match"] = ""
+    return (lat, lon), ""
+
+
 def _apply_selected_station(station):
     """Guarda estación seleccionada en session_state, con compatibilidad legacy."""
     st.session_state["connection_type"] = station.provider_id
@@ -164,6 +254,18 @@ def _apply_selected_station(station):
         st.session_state["euskalmet_station_lat"] = station.lat
         st.session_state["euskalmet_station_lon"] = station.lon
         st.session_state["euskalmet_station_alt"] = station.elevation_m
+    elif station.provider_id == "METEOGALICIA":
+        st.session_state["meteogalicia_station_id"] = station.station_id
+        st.session_state["meteogalicia_station_name"] = station.name
+        st.session_state["meteogalicia_station_lat"] = station.lat
+        st.session_state["meteogalicia_station_lon"] = station.lon
+        st.session_state["meteogalicia_station_alt"] = station.elevation_m
+    elif station.provider_id == "NWS":
+        st.session_state["nws_station_id"] = station.station_id
+        st.session_state["nws_station_name"] = station.name
+        st.session_state["nws_station_lat"] = station.lat
+        st.session_state["nws_station_lon"] = station.lon
+        st.session_state["nws_station_alt"] = station.elevation_m
 
     st.session_state["connected"] = True
     st.session_state["show_results"] = False
@@ -171,6 +273,38 @@ def _apply_selected_station(station):
     for key in ("search_lat", "search_lon"):
         if key in st.session_state:
             del st.session_state[key]
+
+
+def _set_provider_autoconnect(station):
+    """Guarda en localStorage la estación de proveedor para auto-conexión."""
+    provider_id = str(getattr(station, "provider_id", "") or "").strip().upper()
+    station_id = str(getattr(station, "station_id", "") or "").strip()
+    if not provider_id or not station_id:
+        return False
+
+    set_stored_autoconnect_target(
+        {
+            "kind": "PROVIDER",
+            "provider_id": provider_id,
+            "station_id": station_id,
+            "station_name": str(getattr(station, "name", "") or station_id).strip(),
+            "lat": float(getattr(station, "lat", 0.0)),
+            "lon": float(getattr(station, "lon", 0.0)),
+            "elevation_m": float(getattr(station, "elevation_m", 0.0)),
+        }
+    )
+    set_local_storage(LS_AUTOCONNECT, "1", "save")
+    # Evita autoconectar inmediatamente en esta misma sesión;
+    # la auto-conexión se aplica al volver a entrar.
+    st.session_state["_autoconnect_attempted"] = True
+    return True
+
+
+def _reset_autoconnect_toggle_state():
+    """Limpia estado de toggles para resincronizar con la estación objetivo."""
+    for state_key in list(st.session_state.keys()):
+        if state_key.startswith("autoconnect_toggle_"):
+            del st.session_state[state_key]
 
 
 def render_station_selector():
@@ -186,6 +320,10 @@ def render_station_selector():
         st.session_state["geo_last_error"] = ""
     if "geo_debug_msg" not in st.session_state:
         st.session_state["geo_debug_msg"] = ""
+    if "nominatim_last_match" not in st.session_state:
+        st.session_state["nominatim_last_match"] = ""
+    if "nominatim_last_error" not in st.session_state:
+        st.session_state["nominatim_last_error"] = ""
 
     browser_geo_result = None
     # Renderizar el componente custom solo cuando hay solicitud activa.
@@ -222,7 +360,7 @@ def render_station_selector():
         st.session_state["geo_debug_msg"] = ""
 
     st.markdown("<div class='station-selector-gap'></div>", unsafe_allow_html=True)
-    if st.button("📍 Buscar estaciones cerca de mí", type="primary", use_container_width=True):
+    if st.button("📍 Buscar estaciones cerca de mí", type="primary", width="stretch"):
         st.session_state["geo_request_id"] += 1
         st.session_state["geo_pending"] = True
         st.session_state["geo_last_error"] = ""
@@ -246,8 +384,10 @@ def render_station_selector():
             "Ciudad (opcional)",
             value=st.session_state.get("search_city", ""),
             placeholder="Ej: Madrid",
-            help="Usa una ciudad conocida o escribe lat/lon manualmente",
+            help="Escribe un lugar para geocodificarlo con Nominatim u ajusta lat/lon manualmente",
         )
+        st.caption("Búsqueda textual geocodificada por Nominatim (OpenStreetMap).")
+        st.caption("Datos geográficos © OpenStreetMap contributors (ODbL).")
 
         base_lat, base_lon = _default_search_coords()
         city_coords = _coords_from_city(city_input)
@@ -271,12 +411,41 @@ def render_station_selector():
             help="Ejemplo: -3.70",
         )
 
-        if st.button("🔎 Buscar con estos datos", use_container_width=True):
+        if st.button("🔎 Buscar con estos datos", width="stretch"):
             st.session_state["search_city"] = city_input.strip()
-            st.session_state["search_lat"] = float(lat_manual)
-            st.session_state["search_lon"] = float(lon_manual)
+            st.session_state["nominatim_last_error"] = ""
+
+            chosen_lat = float(lat_manual)
+            chosen_lon = float(lon_manual)
+            city_query = city_input.strip()
+
+            if city_query:
+                coords, nom_err = _geocode_with_nominatim(city_query)
+                if coords is not None:
+                    chosen_lat, chosen_lon = coords
+                else:
+                    fallback = _coords_from_city(city_query)
+                    if fallback is not None:
+                        chosen_lat, chosen_lon = fallback
+                        st.session_state["nominatim_last_match"] = ""
+                        st.session_state["nominatim_last_error"] = (
+                            f"{nom_err} Se usaron coordenadas locales de respaldo."
+                        )
+                    else:
+                        st.session_state["nominatim_last_match"] = ""
+                        st.session_state["nominatim_last_error"] = nom_err
+
+            st.session_state["search_lat"] = float(chosen_lat)
+            st.session_state["search_lon"] = float(chosen_lon)
             st.session_state["show_results"] = True
             st.rerun()
+
+        nominatim_match = str(st.session_state.get("nominatim_last_match", "")).strip()
+        nominatim_error = str(st.session_state.get("nominatim_last_error", "")).strip()
+        if nominatim_match:
+            st.caption(f"Resultado Nominatim: {nominatim_match}")
+        if nominatim_error:
+            st.warning(nominatim_error)
 
     if st.session_state.get("show_results"):
         st.markdown("---")
@@ -292,12 +461,37 @@ def render_station_selector():
         for station in nearest:
             with st.container():
                 col1, col2, col3 = st.columns([3, 2, 1])
+                saved_autoconnect = bool(get_stored_autoconnect())
+                saved_target = get_stored_autoconnect_target() or {}
+                is_target_station = bool(
+                    saved_autoconnect
+                    and str(saved_target.get("kind", "")).strip().upper() == "PROVIDER"
+                    and str(saved_target.get("provider_id", "")).strip().upper() == str(station.provider_id).strip().upper()
+                    and str(saved_target.get("station_id", "")).strip() == str(station.station_id).strip()
+                )
 
                 with col1:
                     st.markdown(f"**{station.name}**")
                     st.caption(
                         f"{station.provider_name} | ID: {station.station_id} | Alt: {station.elevation_m:.0f}m"
                     )
+                    toggle_key = f"autoconnect_toggle_{station.provider_id}_{station.station_id}"
+                    if toggle_key not in st.session_state:
+                        st.session_state[toggle_key] = is_target_station
+                    toggle_enabled = st.checkbox("Conectar automáticamente al iniciar", key=toggle_key)
+                    if toggle_enabled and not is_target_station:
+                        if _set_provider_autoconnect(station):
+                            _reset_autoconnect_toggle_state()
+                            st.success(f"✅ Auto-conexión guardada para {station.name}")
+                            st.rerun()
+                        st.error("No se pudo guardar la auto-conexión")
+                    elif (not toggle_enabled) and is_target_station:
+                        set_local_storage(LS_AUTOCONNECT, "0", "save")
+                        set_stored_autoconnect_target(None)
+                        st.session_state["_autoconnect_attempted"] = True
+                        _reset_autoconnect_toggle_state()
+                        st.info("Auto-conexión desactivada en este dispositivo.")
+                        st.rerun()
 
                 with col2:
                     st.metric("Distancia", f"{station.distance_km:.1f} km")
@@ -306,7 +500,7 @@ def render_station_selector():
                     if st.button(
                         "Conectar",
                         key=f"connect_{station.provider_id}_{station.station_id}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         _apply_selected_station(station)
                         st.success(f"✅ Conectado a {station.name} ({station.provider_name})")
@@ -333,6 +527,6 @@ def show_provider_connection_status():
     st.sidebar.caption(f"ID: {station_id}")
     st.sidebar.caption(f"Alt: {station_alt}m")
 
-    if st.sidebar.button("🔄 Actualizar", use_container_width=True, help="Forzar actualización de datos (bypass caché)"):
+    if st.sidebar.button("🔄 Actualizar", width="stretch", help="Forzar actualización de datos (bypass caché)"):
         st.cache_data.clear()
         st.rerun()

@@ -1,8 +1,11 @@
 """
 Gestión de LocalStorage del navegador
 """
+import json
+from typing import Optional
+
 from streamlit_local_storage import LocalStorage
-from config import LS_STATION, LS_APIKEY, LS_Z
+from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT, LS_AUTOCONNECT_TARGET
 
 # Instancia global de LocalStorage
 localS = LocalStorage()
@@ -89,3 +92,59 @@ def get_stored_z():
             return localS.getItem(LS_Z)
     except Exception:
         return None
+
+
+def get_stored_autoconnect():
+    """Obtiene la preferencia de autoconexion guardada (bool)."""
+    try:
+        try:
+            raw = localS.getItem(LS_AUTOCONNECT, key="mlx_get_autoconnect")
+        except TypeError:
+            raw = localS.getItem(LS_AUTOCONNECT)
+    except Exception:
+        return False
+
+    if isinstance(raw, bool):
+        return raw
+
+    txt = str(raw or "").strip().lower()
+    return txt in ("1", "true", "yes", "si", "on")
+
+
+def set_stored_autoconnect_target(target: Optional[dict]):
+    """Guarda el objetivo de autoconexión (WU o proveedor) en localStorage."""
+    if not target:
+        set_local_storage(LS_AUTOCONNECT_TARGET, "", "forget")
+        return
+
+    try:
+        payload = json.dumps(target, ensure_ascii=True, separators=(",", ":"))
+    except Exception:
+        return
+
+    set_local_storage(LS_AUTOCONNECT_TARGET, payload, "save")
+
+
+def get_stored_autoconnect_target():
+    """Obtiene el objetivo de autoconexión guardado."""
+    try:
+        try:
+            raw = localS.getItem(LS_AUTOCONNECT_TARGET, key="mlx_get_autoconnect_target")
+        except TypeError:
+            raw = localS.getItem(LS_AUTOCONNECT_TARGET)
+    except Exception:
+        return None
+
+    if isinstance(raw, dict):
+        return raw
+
+    txt = str(raw or "").strip()
+    if not txt:
+        return None
+
+    try:
+        payload = json.loads(txt)
+    except Exception:
+        return None
+
+    return payload if isinstance(payload, dict) else None

@@ -3,8 +3,8 @@ Componentes de sidebar y funciones auxiliares
 """
 import streamlit as st
 import os
-from config import LS_STATION, LS_APIKEY, LS_Z
-from utils.storage import set_local_storage
+from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT
+from utils.storage import set_local_storage, set_stored_autoconnect_target
 from utils.helpers import normalize_text_input, is_nan
 
 
@@ -69,7 +69,13 @@ def render_sidebar(localS):
         Tupla (theme_mode, dark)
     """
     from datetime import datetime
-    from utils.storage import get_stored_station, get_stored_apikey, get_stored_z
+    from utils.storage import (
+        get_stored_station,
+        get_stored_apikey,
+        get_stored_z,
+        get_stored_autoconnect,
+        get_stored_autoconnect_target,
+    )
     
     # Prefill desde localStorage activado por defecto para persistir credenciales
     # entre recargas locales; puede desactivarse con MLX_ENABLE_LOCAL_PREFILL=0.
@@ -79,6 +85,8 @@ def render_sidebar(localS):
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
         saved_z = get_stored_z()
+        saved_autoconnect = bool(get_stored_autoconnect())
+        saved_target = get_stored_autoconnect_target()
 
         active_station = st.session_state.get("active_station", "")
         active_key = st.session_state.get("active_key", "")
@@ -90,6 +98,101 @@ def render_sidebar(localS):
             st.session_state["active_key"] = saved_key
         if (not str(active_z).strip() or active_z == "0") and saved_z:
             st.session_state["active_z"] = normalize_text_input(saved_z)
+
+        has_saved_credentials = bool(str(saved_station or "").strip() and str(saved_key or "").strip())
+        target_kind = str((saved_target or {}).get("kind", "")).strip().upper()
+        valid_wu_target = bool(target_kind == "WU" and has_saved_credentials)
+        valid_provider_target = bool(
+            target_kind == "PROVIDER"
+            and str((saved_target or {}).get("provider_id", "")).strip()
+            and str((saved_target or {}).get("station_id", "")).strip()
+        )
+        has_valid_target = valid_wu_target or valid_provider_target
+        if not has_valid_target:
+            saved_autoconnect = False
+
+        # Estado UI del toggle de sidebar: solo representa auto-conexión WU.
+        wu_toggle_default = bool(saved_autoconnect and valid_wu_target)
+        current_target_kind = target_kind if has_valid_target else ""
+        if st.session_state.get("_wu_autoconnect_ui_target_kind") != current_target_kind:
+            st.session_state["auto_connect_wu_device"] = wu_toggle_default
+            st.session_state["_wu_autoconnect_ui_target_kind"] = current_target_kind
+            st.session_state["_wu_autoconnect_ui_last_value"] = wu_toggle_default
+        elif "auto_connect_wu_device" not in st.session_state:
+            st.session_state["auto_connect_wu_device"] = wu_toggle_default
+            st.session_state["_wu_autoconnect_ui_last_value"] = wu_toggle_default
+
+        # Autoconexion al abrir si hay target guardado y el toggle estaba activo.
+        if (
+            saved_autoconnect
+            and has_valid_target
+            and not st.session_state.get("connected", False)
+            and not st.session_state.get("_autoconnect_attempted", False)
+        ):
+            if valid_wu_target:
+                st.session_state["connection_type"] = "WU"
+                st.session_state["connected"] = True
+                st.session_state["wu_connected_station"] = str(saved_station).strip()
+                st.session_state["wu_connected_api_key"] = str(saved_key).strip()
+                st.session_state["wu_connected_z"] = normalize_text_input(saved_z or "")
+                st.session_state["active_station"] = str(saved_station).strip()
+                st.session_state["active_key"] = str(saved_key).strip()
+                st.session_state["active_z"] = normalize_text_input(saved_z or "")
+                st.session_state["_autoconnect_attempted"] = True
+                st.rerun()
+            elif valid_provider_target:
+                provider_id = str(saved_target.get("provider_id", "")).strip().upper()
+                station_id = str(saved_target.get("station_id", "")).strip()
+                station_name = str(saved_target.get("station_name", "")).strip() or station_id
+                lat = saved_target.get("lat")
+                lon = saved_target.get("lon")
+                elevation_m = saved_target.get("elevation_m")
+
+                st.session_state["connection_type"] = provider_id
+                st.session_state["provider_station_id"] = station_id
+                st.session_state["provider_station_name"] = station_name
+                st.session_state["provider_station_lat"] = lat
+                st.session_state["provider_station_lon"] = lon
+                st.session_state["provider_station_alt"] = elevation_m
+
+                if provider_id == "AEMET":
+                    st.session_state["aemet_station_id"] = station_id
+                    st.session_state["aemet_station_name"] = station_name
+                    st.session_state["aemet_station_lat"] = lat
+                    st.session_state["aemet_station_lon"] = lon
+                    st.session_state["aemet_station_alt"] = elevation_m
+                elif provider_id == "METEOCAT":
+                    st.session_state["meteocat_station_id"] = station_id
+                    st.session_state["meteocat_station_name"] = station_name
+                    st.session_state["meteocat_station_lat"] = lat
+                    st.session_state["meteocat_station_lon"] = lon
+                    st.session_state["meteocat_station_alt"] = elevation_m
+                elif provider_id == "EUSKALMET":
+                    st.session_state["euskalmet_station_id"] = station_id
+                    st.session_state["euskalmet_station_name"] = station_name
+                    st.session_state["euskalmet_station_lat"] = lat
+                    st.session_state["euskalmet_station_lon"] = lon
+                    st.session_state["euskalmet_station_alt"] = elevation_m
+                elif provider_id == "METEOGALICIA":
+                    st.session_state["meteogalicia_station_id"] = station_id
+                    st.session_state["meteogalicia_station_name"] = station_name
+                    st.session_state["meteogalicia_station_lat"] = lat
+                    st.session_state["meteogalicia_station_lon"] = lon
+                    st.session_state["meteogalicia_station_alt"] = elevation_m
+                elif provider_id == "NWS":
+                    st.session_state["nws_station_id"] = station_id
+                    st.session_state["nws_station_name"] = station_name
+                    st.session_state["nws_station_lat"] = lat
+                    st.session_state["nws_station_lon"] = lon
+                    st.session_state["nws_station_alt"] = elevation_m
+                else:
+                    st.session_state["auto_connect_wu_device"] = False
+                    st.session_state["_autoconnect_attempted"] = True
+                    st.rerun()
+
+                st.session_state["connected"] = True
+                st.session_state["_autoconnect_attempted"] = True
+                st.rerun()
 
     st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
 
@@ -106,23 +209,16 @@ def render_sidebar(localS):
     # Tema
     st.sidebar.title("⚙️ Ajustes")
     
-    # Obtener índice guardado o usar 0 por defecto
-    if "theme_index" not in st.session_state:
-        st.session_state["theme_index"] = 0
-    
-    theme_mode = st.sidebar.radio(
-        "Tema", 
-        ["Auto", "Claro", "Oscuro"], 
-        index=st.session_state["theme_index"],
-        key="theme_selector"
-    )
-    
-    # Actualizar índice si cambió
     theme_options = ["Auto", "Claro", "Oscuro"]
-    new_index = theme_options.index(theme_mode)
-    if st.session_state["theme_index"] != new_index:
-        st.session_state["theme_index"] = new_index
-        st.rerun()
+    if st.session_state.get("theme_selector") not in theme_options:
+        st.session_state["theme_selector"] = theme_options[0]
+
+    # Usar solo key/session_state (sin index manual) para evitar el doble clic.
+    theme_mode = st.sidebar.radio(
+        "Tema",
+        theme_options,
+        key="theme_selector",
+    )
 
     # Conectar estación
     st.sidebar.markdown("---")
@@ -139,43 +235,86 @@ def render_sidebar(localS):
     st.sidebar.text_input("API Key (WU)", key="active_key", type="password", placeholder="Pega aquí tu API key")
     st.sidebar.text_input("Altitud (m)", key="active_z", placeholder="Opcional (se obtiene de API)")
     
-    st.sidebar.caption("Este panel consulta Weather Underground usando tu propia API key. No se almacena en disco.")
+    st.sidebar.caption("Este panel consulta Weather Underground usando tu propia API key. Solo se guarda localmente si pulsas Guardar.")
 
     # Recordar en dispositivo
     st.sidebar.markdown("---")
-    remember_default = bool(st.session_state.get("remember_device", True))
-    remember_device = st.sidebar.checkbox("Recordar en este dispositivo", value=remember_default, key="remember_device")
-    st.sidebar.caption("⚠️ Si es un ordenador compartido, desactívalo o pulsa 'Olvidar' al terminar.")
+    auto_connect_default = bool(st.session_state.get("auto_connect_wu_device", False))
+    auto_connect_wu_device = st.sidebar.checkbox(
+        "Conectar automáticamente al iniciar",
+        value=auto_connect_default,
+        key="auto_connect_wu_device",
+    )
+    st.sidebar.caption("Solo puede haber una auto-conexión activa; siempre se usa la última estación marcada.")
+
+    if "_wu_autoconnect_ui_last_value" not in st.session_state:
+        st.session_state["_wu_autoconnect_ui_last_value"] = auto_connect_default
+    last_wu_toggle_value = bool(st.session_state.get("_wu_autoconnect_ui_last_value", auto_connect_default))
+    if auto_connect_wu_device != last_wu_toggle_value:
+        station_for_target = str(st.session_state.get("active_station", "")).strip()
+        key_for_target = str(st.session_state.get("active_key", "")).strip()
+        z_for_target = str(st.session_state.get("active_z", "")).strip()
+
+        if auto_connect_wu_device:
+            if station_for_target and key_for_target:
+                set_local_storage(LS_AUTOCONNECT, "1", "save")
+                set_stored_autoconnect_target(
+                    {
+                        "kind": "WU",
+                        "station": station_for_target,
+                        "api_key": key_for_target,
+                        "z": z_for_target,
+                    }
+                )
+                st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
+                st.sidebar.success("Auto-conexión al iniciar activada (WU) ✅")
+            else:
+                set_local_storage(LS_AUTOCONNECT, "0", "save")
+                set_stored_autoconnect_target(None)
+                st.session_state["_wu_autoconnect_ui_target_kind"] = ""
+                st.sidebar.warning("Para activar auto-conexión WU, completa Station ID y API Key.")
+        else:
+            current_target = get_stored_autoconnect_target() or {}
+            current_kind = str(current_target.get("kind", "")).strip().upper()
+            if current_kind == "WU":
+                set_local_storage(LS_AUTOCONNECT, "0", "save")
+                set_stored_autoconnect_target(None)
+                st.session_state["_wu_autoconnect_ui_target_kind"] = ""
+                st.sidebar.info("Auto-conexión al iniciar desactivada.")
+
+        # Evita autoconectar en caliente en esta misma sesión.
+        st.session_state["_autoconnect_attempted"] = True
+        st.session_state["_wu_autoconnect_ui_last_value"] = bool(auto_connect_wu_device)
 
     cS, cF = st.sidebar.columns(2)
     with cS:
-        save_clicked = st.button("Guardar", use_container_width=True)
+        save_clicked = st.button("Guardar", width="stretch")
     with cF:
-        forget_clicked = st.button("Olvidar", use_container_width=True)
+        forget_clicked = st.button("Olvidar", width="stretch")
 
     if save_clicked:
-        if remember_device:
-            set_local_storage(LS_STATION, st.session_state["active_station"], "save")
-            set_local_storage(LS_APIKEY, st.session_state["active_key"], "save")
-            set_local_storage(LS_Z, str(st.session_state["active_z"]), "save")
-            st.sidebar.success("Guardado en este dispositivo ✅")
-        else:
-            # Si se desactiva recordar, limpiar lo persistido para evitar ambigüedad.
-            set_local_storage(LS_STATION, "", "save")
-            set_local_storage(LS_APIKEY, "", "save")
-            set_local_storage(LS_Z, "", "save")
-            st.sidebar.info("Activa 'Recordar en este dispositivo' para guardar.")
+        station_to_save = str(st.session_state.get("active_station", "")).strip()
+        key_to_save = str(st.session_state.get("active_key", "")).strip()
+        z_to_save = str(st.session_state.get("active_z", "")).strip()
+
+        set_local_storage(LS_STATION, station_to_save, "save")
+        set_local_storage(LS_APIKEY, key_to_save, "save")
+        set_local_storage(LS_Z, z_to_save, "save")
+        st.sidebar.success("Guardado en este dispositivo ✅")
 
     if forget_clicked:
         # Borrar de localStorage
         set_local_storage(LS_STATION, "", "forget")
         set_local_storage(LS_APIKEY, "", "forget")
         set_local_storage(LS_Z, "", "forget")
+        set_local_storage(LS_AUTOCONNECT, "", "forget")
+        set_stored_autoconnect_target(None)
         
         # Marcar para borrar en el próximo ciclo
         st.session_state["_clear_inputs"] = True
         st.session_state["connected"] = False
         st.session_state["connection_type"] = None
+        st.session_state["_autoconnect_attempted"] = False
         for key in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -227,9 +366,9 @@ def render_sidebar(localS):
 
     colA, colB = st.sidebar.columns(2)
     with colA:
-        connect_clicked = st.button("Conectar", use_container_width=True)
+        connect_clicked = st.button("Conectar", width="stretch")
     with colB:
-        disconnect_clicked = st.button("Desconectar", use_container_width=True)
+        disconnect_clicked = st.button("Desconectar", width="stretch")
 
     if disconnect_clicked:
         st.session_state["connected"] = False
@@ -243,6 +382,8 @@ def render_sidebar(localS):
                 or state_key.startswith('provider_station_')
                 or state_key.startswith('meteocat_')
                 or state_key.startswith('euskalmet_')
+                or state_key.startswith('meteogalicia_')
+                or state_key.startswith('nws_')
             ):
                 del st.session_state[state_key]
 
@@ -263,6 +404,8 @@ def render_sidebar(localS):
                     or state_key.startswith('provider_station_')
                     or state_key.startswith('meteocat_')
                     or state_key.startswith('euskalmet_')
+                    or state_key.startswith('meteogalicia_')
+                    or state_key.startswith('nws_')
                 ):
                     del st.session_state[state_key]
 
@@ -279,20 +422,6 @@ def render_sidebar(localS):
                         st.session_state["wu_connected_station"] = station
                         st.session_state["wu_connected_api_key"] = api_key
                         st.session_state["wu_connected_z"] = z_raw
-                        if remember_device:
-                            set_local_storage(LS_STATION, station, "connect")
-                            set_local_storage(LS_APIKEY, api_key, "connect")
-                            set_local_storage(LS_Z, z_raw, "connect")
-                            set_local_storage(LS_STATION, station, "save")
-                            set_local_storage(LS_APIKEY, api_key, "save")
-                            set_local_storage(LS_Z, z_raw, "save")
-                        else:
-                            set_local_storage(LS_STATION, "", "connect")
-                            set_local_storage(LS_APIKEY, "", "connect")
-                            set_local_storage(LS_Z, "", "connect")
-                            set_local_storage(LS_STATION, "", "save")
-                            set_local_storage(LS_APIKEY, "", "save")
-                            set_local_storage(LS_Z, "", "save")
                 except Exception:
                     st.sidebar.error("Altitud inválida. Usa un número (ej: 12.5)")
             else:  # Sin altitud manual, confiar en la API
@@ -300,20 +429,25 @@ def render_sidebar(localS):
                 st.session_state["wu_connected_station"] = station
                 st.session_state["wu_connected_api_key"] = api_key
                 st.session_state["wu_connected_z"] = ""
-                if remember_device:
-                    set_local_storage(LS_STATION, station, "connect")
-                    set_local_storage(LS_APIKEY, api_key, "connect")
-                    set_local_storage(LS_Z, "", "connect")
-                    set_local_storage(LS_STATION, station, "save")
-                    set_local_storage(LS_APIKEY, api_key, "save")
-                    set_local_storage(LS_Z, "", "save")
-                else:
-                    set_local_storage(LS_STATION, "", "connect")
-                    set_local_storage(LS_APIKEY, "", "connect")
-                    set_local_storage(LS_Z, "", "connect")
-                    set_local_storage(LS_STATION, "", "save")
-                    set_local_storage(LS_APIKEY, "", "save")
-                    set_local_storage(LS_Z, "", "save")
+
+            if (
+                st.session_state.get("connected")
+                and st.session_state.get("connection_type") == "WU"
+                and bool(st.session_state.get("auto_connect_wu_device", False))
+            ):
+                set_local_storage(LS_STATION, station, "save")
+                set_local_storage(LS_APIKEY, api_key, "save")
+                set_local_storage(LS_Z, z_raw, "save")
+                set_local_storage(LS_AUTOCONNECT, "1", "save")
+                set_stored_autoconnect_target(
+                    {
+                        "kind": "WU",
+                        "station": station,
+                        "api_key": api_key,
+                        "z": z_raw,
+                    }
+                )
+                st.session_state["_autoconnect_attempted"] = True
 
     if st.session_state.get("connected"):
         # Mostrar nombre según tipo de conexión

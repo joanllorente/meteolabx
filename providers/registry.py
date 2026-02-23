@@ -5,15 +5,17 @@ from typing import Dict, List, Optional
 from .aemet_provider import AemetProvider
 from .euskalmet_provider import EuskalmetProvider
 from .meteocat_provider import MeteocatProvider
+from .meteogalicia_provider import MeteogaliciaProvider
+from .nws_provider import NwsProvider
 from .types import StationCandidate
 
 
 def get_providers() -> Dict[str, object]:
     """
     Devuelve proveedores habilitados.
-    Nota: AEMET y Meteocat están conectados al flujo de búsqueda.
+    Nota: incluye AEMET, Meteocat, Euskalmet, MeteoGalicia y NWS.
     """
-    providers = [AemetProvider(), MeteocatProvider(), EuskalmetProvider()]
+    providers = [AemetProvider(), MeteocatProvider(), EuskalmetProvider(), MeteogaliciaProvider(), NwsProvider()]
     return {p.provider_id: p for p in providers}
 
 

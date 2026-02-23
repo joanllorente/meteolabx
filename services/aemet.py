@@ -229,9 +229,10 @@ def _parse_aemet_basic_series(data_list: Optional[List[Dict]]) -> Dict[str, Any]
 
         temp = _parse_num(_aemet_first_non_empty(row, ["TA", "ta", "TPRE", "tpre", "T", "t", "TEMP", "temp"]))
         rh = _parse_num(_aemet_first_non_empty(row, ["hr", "HR", "hrel", "HREL", "humidity", "HUMIDITY"]))
-        p_msl = _parse_num(_aemet_first_non_empty(row, ["pres_nmar", "PRES_NMAR", "pnm", "PNM", "pressure", "PRESSURE"]))
         p_station = _parse_num(_aemet_first_non_empty(row, ["pres", "PRES"]))
-        p = p_msl if p_msl == p_msl else p_station
+        p_msl = _parse_num(_aemet_first_non_empty(row, ["pres_nmar", "PRES_NMAR", "pnm", "PNM", "pressure", "PRESSURE"]))
+        # Priorizar presión de estación (absoluta) para cálculos termodinámicos.
+        p = p_station if p_station == p_station else p_msl
 
         if temp != temp and rh != rh and p != p:
             continue

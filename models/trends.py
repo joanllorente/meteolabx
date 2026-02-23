@@ -86,29 +86,63 @@ def potential_temperature(t_celsius, p_hpa):
 
 def equivalent_potential_temperature(t_celsius, rh_pct, p_hpa):
     """
-    Temperatura potencial equivalente θe (K)
-    θe = θ * exp(Lv*q / (cp*T_K))
-    
-    Calculada a partir de T, RH y p
-    
+    Temperatura potencial equivalente θe (K) según Bolton (1980).
+
+    Fórmula implementada:
+        θE = T_K * (1000/p)^(0.2854 * (1 - 0.28e-3 * r))
+             * exp(((3.376/T_L) - 0.00254) * r * (1 + 0.81e-3 * r))
+
+    con:
+        - T_K en K
+        - p en hPa (presión absoluta)
+        - r en g/kg
+        - T_L en K:
+          T_L = 1 / (1/(T_K - 55) - ln(RH/100)/2840) + 55
+
     Args:
-        t_celsius: Temperatura en °C
-        rh_pct: Humedad relativa en %
-        p_hpa: Presión absoluta en hPa
-        
+        t_celsius: Temperatura en °C.
+        rh_pct: Humedad relativa en %.
+        p_hpa: Presión absoluta en hPa.
+
     Returns:
-        Temperatura potencial equivalente en K
+        Temperatura potencial equivalente en K (float("nan") si no es calculable).
     """
-    t = float(t_celsius)
-    rh = float(rh_pct)
-    p = float(p_hpa)
-    
+    try:
+        t = float(t_celsius)
+        rh = float(rh_pct)
+        p = float(p_hpa)
+    except (TypeError, ValueError):
+        return float("nan")
+
+    if math.isnan(t) or math.isnan(rh) or math.isnan(p):
+        return float("nan")
+    if p <= 0.0:
+        return float("nan")
+
+    # Evita log(0) y limita ruido de sensores (>100%).
+    rh_limited = min(max(rh, 0.1), 100.0)
+
     t_kelvin = t + 273.15
-    theta = potential_temperature(t, p)
-    q = specific_humidity(t, rh, p)
-    
-    # θe = θ * exp(Lv * q / (cp * T))
-    theta_e = theta * math.exp((LV * q) / (CP * t_kelvin))
+    e = vapor_pressure(t, rh_limited)
+    if p <= e:
+        return float("nan")
+
+    # r en g/kg (la fórmula de Bolton usa g/kg).
+    r_kgkg = 0.622 * e / (p - e)
+    r_gkg = r_kgkg * 1000.0
+
+    tl_denom = (1.0 / (t_kelvin - 55.0)) - (math.log(rh_limited / 100.0) / 2840.0)
+    if tl_denom == 0.0:
+        return float("nan")
+    t_l = (1.0 / tl_denom) + 55.0
+    if t_l <= 0.0 or math.isnan(t_l):
+        return float("nan")
+
+    theta_e = (
+        t_kelvin
+        * (1000.0 / p) ** (0.2854 * (1.0 - 0.28e-3 * r_gkg))
+        * math.exp(((3.376 / t_l) - 0.00254) * r_gkg * (1.0 + 0.81e-3 * r_gkg))
+    )
     return float(theta_e)
 
 

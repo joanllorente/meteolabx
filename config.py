@@ -26,6 +26,8 @@ WIND_DIR_OFFSET_DEG = 30.0
 LS_STATION = "meteolabx_active_station"
 LS_APIKEY = "meteolabx_active_key"
 LS_Z = "meteolabx_active_z"
+LS_AUTOCONNECT = "meteolabx_auto_connect"
+LS_AUTOCONNECT_TARGET = "meteolabx_auto_connect_target"
 
 # ============================================================
 # CACHE
