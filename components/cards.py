@@ -13,7 +13,7 @@ from utils.helpers import html_clean
 from .icons import icon_img
 
 
-DEFINITIONS_PATH = Path("/Users/joantisdale/Desktop/definiciones.txt")
+DEFINITIONS_PATH = Path(__file__).parent.parent / "definiciones.txt"
 FALLBACK_DEFINITIONS = {
     "temperatura": "Temperatura del aire medida por la estación a la altura del sensor (habitualmente 1.5-2 m).",
     "humedad relativa": "Porcentaje de vapor de agua presente en el aire respecto al máximo posible a esa temperatura.",
@@ -31,7 +31,7 @@ FALLBACK_DEFINITIONS = {
     "nivel de condensacion por ascenso": "Altura aproximada a la que una parcela de aire ascendente alcanzaría saturación (base de nube LCL).",
     "radiacion solar": "Irradiancia solar global instantánea medida por el sensor (W/m²).",
     "indice uv": "Índice de radiación ultravioleta eritemática en superficie.",
-    "evapotranspircion": "Pérdida de agua combinada por evaporación y transpiración estimada para el día actual (mm).",
+    "evapotranspiracion": "Pérdida de agua combinada por evaporación y transpiración estimada para el día actual (mm).",
     "claridad del cielo": "Índice relativo de transparencia atmosférica deducido de la radiación observada frente a la potencial.",
     "balance hidrico": "Diferencia entre precipitación acumulada y evapotranspiración estimada en el día actual (mm).",
 }
@@ -55,23 +55,31 @@ def _load_definitions() -> dict:
         return definitions
 
     current_key = ""
-    current_parts = []
+    current_parts: list[str] = []
+
+    def _flush():
+        if current_key:
+            definitions[current_key] = "\n".join(p for p in current_parts if p)
 
     lines = DEFINITIONS_PATH.read_text(encoding="utf-8", errors="ignore").splitlines()
     for raw_line in lines:
         stripped = raw_line.strip()
         if not stripped:
             continue
-        if set(stripped) == {"-"}:
+        # Separador: línea compuesta solo de = o de -
+        if stripped and set(stripped) <= {"=", "-"}:
+            _flush()
+            current_key = ""
+            current_parts = []
             continue
 
-        is_top_level = raw_line.startswith("- ")
         is_child = raw_line.startswith("\t- ") or raw_line.startswith("    - ")
+        is_top_level = (not is_child) and stripped.startswith("- ")
 
         if is_top_level:
+            # Nueva entrada principal (puede ser primera del bloque o cambio de clave)
             if current_key:
-                definitions[current_key] = "\n".join(part for part in current_parts if part)
-
+                _flush()
             payload = stripped[2:].strip()
             if ":" in payload:
                 label, desc = payload.split(":", 1)
@@ -88,12 +96,17 @@ def _load_definitions() -> dict:
                 current_parts.append(f"- {child_text}")
             continue
 
+        # Línea sin guión: puede ser comienzo de bloque (con :) o continuación
+        if not current_key and ":" in stripped:
+            label, desc = stripped.split(":", 1)
+            current_key = _normalize_text(label)
+            current_parts = [desc.strip()] if desc.strip() else []
+            continue
+
         if current_key:
             current_parts.append(stripped)
 
-    if current_key:
-        definitions[current_key] = "\n".join(part for part in current_parts if part)
-
+    _flush()
     return definitions
 
 
@@ -107,12 +120,18 @@ def _card_tooltip_text(title: str) -> str:
         "temp equivalente": "temperatura equivalente",
         "temp potencial": "temperatura potencial",
         "base nube lcl": "nivel de condensacion por ascenso",
-        "evapotranspiracion hoy": "evapotranspircion",
+        "evapotranspiracion hoy": "evapotranspiracion",
         "balance hidrico hoy": "balance hidrico",
     }
 
     lookup = aliases.get(normalized_title, normalized_title)
     text = definitions.get(lookup)
+    # Si no hay match directo, buscar por prefijo (ej. "humedad especifica" → "humedad especifica (q)")
+    if not text:
+        for key, val in definitions.items():
+            if key.startswith(lookup):
+                text = val
+                break
     if normalized_title == "radiacion solar":
         extra = "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
         if text:

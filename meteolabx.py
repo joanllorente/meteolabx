@@ -13,7 +13,6 @@ st.set_page_config(
 import time
 import math
 import logging
-import inspect
 import html
 from typing import Optional
 from datetime import datetime
@@ -81,29 +80,20 @@ logger = logging.getLogger(__name__)
 
 
 def _plotly_chart_stretch(fig, key: str, config: Optional[dict] = None):
-    """Renderiza Plotly con compatibilidad entre APIs antiguas/nuevas de Streamlit."""
+    """Renderiza Plotly ocupando todo el ancho del contenedor."""
     cfg = config if isinstance(config, dict) else {}
-    params = inspect.signature(st.plotly_chart).parameters
-    if "width" in params:
-        st.plotly_chart(fig, width="stretch", key=key, config=cfg)
-    else:
-        st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
+    st.plotly_chart(fig, use_container_width=True, key=key, config=cfg)
 
 
 def _pydeck_chart_stretch(deck, key: str, height: int = 900):
     """Renderiza pydeck de forma compatible entre versiones de Streamlit."""
-    params = inspect.signature(st.pydeck_chart).parameters
-    kwargs = {"height": int(height), "key": key}
-    if "on_select" in params:
-        kwargs["on_select"] = "rerun"
-    if "selection_mode" in params:
-        kwargs["selection_mode"] = "single-object"
-
-    if "use_container_width" in params:
-        return st.pydeck_chart(deck, use_container_width=True, **kwargs)
-    if "width" in params:
-        return st.pydeck_chart(deck, width=1200, **kwargs)
-    return st.pydeck_chart(deck, **kwargs)
+    try:
+        return st.pydeck_chart(
+            deck, use_container_width=True, height=int(height), key=key,
+            on_select="rerun", selection_mode="single-object",
+        )
+    except TypeError:
+        return st.pydeck_chart(deck, use_container_width=True, height=int(height), key=key)
 
 
 # ============================================================
@@ -569,7 +559,7 @@ st.markdown(html_clean("""
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MeteoLabX">
 <link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=3">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon-pwa.png?v=4">
 <meta name="theme-color" content="#2384ff">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3">
@@ -591,7 +581,7 @@ st.markdown(html_clean("""
     el.setAttribute("href", href);
   }
 
-  upsertLink("apple-touch-icon", "/static/apple-touch-icon.png?v=3", "180x180");
+  upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=4", "180x180");
   upsertLink("icon", "/favicon-32x32.png?v=3", "32x32");
   upsertLink("icon", "/favicon-16x16.png?v=3", "16x16");
 })();
@@ -4903,7 +4893,7 @@ st.markdown(
         </style>
         <div class="mlb-footer">
           <div class="mlb-footer-top">
-            <span><b>MeteoLabX · Versión 0.7.1</b></span>
+            <span><b>MeteoLabX · Versión 0.7.2</b></span>
             <span class="mlb-footer-news">
               <details>
                 <summary>Novedades</summary>

@@ -3,8 +3,8 @@ Componentes de sidebar y funciones auxiliares
 """
 import streamlit as st
 import os
-from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT
-from utils.storage import set_local_storage, set_stored_autoconnect_target
+from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT, LS_WU_FORGOTTEN
+from utils.storage import set_local_storage, set_stored_autoconnect_target, forget_local_storage_keys
 from utils.helpers import normalize_text_input, is_nan
 
 
@@ -72,8 +72,25 @@ def render_sidebar(_local_storage_unused=None):
         get_stored_z,
         get_stored_autoconnect,
         get_stored_autoconnect_target,
+        get_local_storage_value,
     )
-    
+
+    # Fase 2 del Olvidar: los setItem del ciclo anterior ya llegaron al navegador.
+    # Ahora limpiamos el estado de sesión y forzamos el rerun de limpieza de UI.
+    if st.session_state.pop("_forget_pending", False):
+        st.session_state["_skip_local_prefill_once"] = True
+        st.session_state["_clear_inputs"] = True
+        st.session_state["connected"] = False
+        st.session_state["connection_type"] = None
+        st.session_state["_autoconnect_attempted"] = False
+        for _k in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
+            st.session_state.pop(_k, None)
+        st.session_state.pop("wu_cache_current", None)
+        st.session_state.pop("wu_cache_daily", None)
+        st.rerun()
+
+    first_sidebar_load = not bool(st.session_state.get("_sidebar_inputs_initialized", False))
+
     # Prefill desde localStorage activado por defecto para persistir credenciales
     # entre recargas locales; puede desactivarse con MLX_ENABLE_LOCAL_PREFILL=0.
     allow_local_prefill = os.getenv("MLX_ENABLE_LOCAL_PREFILL", "1") == "1"
@@ -85,17 +102,31 @@ def render_sidebar(_local_storage_unused=None):
         saved_z = get_stored_z()
         saved_autoconnect = bool(get_stored_autoconnect())
         saved_target = get_stored_autoconnect_target()
+        is_wu_forgotten = str(get_local_storage_value(LS_WU_FORGOTTEN) or "").lower() in ("1", "true", "yes", "si", "on")
+        if is_wu_forgotten:
+            saved_station = None
+            saved_key = None
+            saved_z = None
+            target_kind_raw = str((saved_target or {}).get("kind", "")).strip().upper()
+            if target_kind_raw == "WU":
+                saved_autoconnect = False
+                saved_target = None
 
         active_station = st.session_state.get("active_station", "")
         active_key = st.session_state.get("active_key", "")
         active_z = st.session_state.get("active_z", "0")
 
-        if not active_station and saved_station:
-            st.session_state["active_station"] = saved_station
-        if not active_key and saved_key:
-            st.session_state["active_key"] = saved_key
-        if (not str(active_z).strip() or active_z == "0") and saved_z:
-            st.session_state["active_z"] = normalize_text_input(saved_z)
+        if first_sidebar_load:
+            st.session_state["active_station"] = str(saved_station or "").strip()
+            st.session_state["active_key"] = str(saved_key or "").strip()
+            st.session_state["active_z"] = normalize_text_input(saved_z or "")
+        else:
+            if not active_station and saved_station:
+                st.session_state["active_station"] = saved_station
+            if not active_key and saved_key:
+                st.session_state["active_key"] = saved_key
+            if (not str(active_z).strip() or active_z == "0") and saved_z:
+                st.session_state["active_z"] = normalize_text_input(saved_z)
 
         has_saved_credentials = bool(str(saved_station or "").strip() and str(saved_key or "").strip())
         target_kind = str((saved_target or {}).get("kind", "")).strip().upper()
@@ -153,36 +184,19 @@ def render_sidebar(_local_storage_unused=None):
                 st.session_state["provider_station_lon"] = lon
                 st.session_state["provider_station_alt"] = elevation_m
 
-                if provider_id == "AEMET":
-                    st.session_state["aemet_station_id"] = station_id
-                    st.session_state["aemet_station_name"] = station_name
-                    st.session_state["aemet_station_lat"] = lat
-                    st.session_state["aemet_station_lon"] = lon
-                    st.session_state["aemet_station_alt"] = elevation_m
-                elif provider_id == "METEOCAT":
-                    st.session_state["meteocat_station_id"] = station_id
-                    st.session_state["meteocat_station_name"] = station_name
-                    st.session_state["meteocat_station_lat"] = lat
-                    st.session_state["meteocat_station_lon"] = lon
-                    st.session_state["meteocat_station_alt"] = elevation_m
-                elif provider_id == "EUSKALMET":
-                    st.session_state["euskalmet_station_id"] = station_id
-                    st.session_state["euskalmet_station_name"] = station_name
-                    st.session_state["euskalmet_station_lat"] = lat
-                    st.session_state["euskalmet_station_lon"] = lon
-                    st.session_state["euskalmet_station_alt"] = elevation_m
-                elif provider_id == "METEOGALICIA":
-                    st.session_state["meteogalicia_station_id"] = station_id
-                    st.session_state["meteogalicia_station_name"] = station_name
-                    st.session_state["meteogalicia_station_lat"] = lat
-                    st.session_state["meteogalicia_station_lon"] = lon
-                    st.session_state["meteogalicia_station_alt"] = elevation_m
-                elif provider_id == "NWS":
-                    st.session_state["nws_station_id"] = station_id
-                    st.session_state["nws_station_name"] = station_name
-                    st.session_state["nws_station_lat"] = lat
-                    st.session_state["nws_station_lon"] = lon
-                    st.session_state["nws_station_alt"] = elevation_m
+                # Prefijos de session_state por proveedor
+                _provider_prefix = {
+                    "AEMET": "aemet", "METEOCAT": "meteocat",
+                    "EUSKALMET": "euskalmet", "METEOGALICIA": "meteogalicia",
+                    "NWS": "nws",
+                }
+                prefix = _provider_prefix.get(provider_id)
+                if prefix:
+                    st.session_state[f"{prefix}_station_id"]   = station_id
+                    st.session_state[f"{prefix}_station_name"] = station_name
+                    st.session_state[f"{prefix}_station_lat"]  = lat
+                    st.session_state[f"{prefix}_station_lon"]  = lon
+                    st.session_state[f"{prefix}_station_alt"]  = elevation_m
                 else:
                     st.session_state["auto_connect_wu_device"] = False
                     st.session_state["_autoconnect_attempted"] = True
@@ -191,6 +205,12 @@ def render_sidebar(_local_storage_unused=None):
                 st.session_state["connected"] = True
                 st.session_state["_autoconnect_attempted"] = True
                 st.rerun()
+    elif first_sidebar_load:
+        st.session_state["active_station"] = ""
+        st.session_state["active_key"] = ""
+        st.session_state["active_z"] = ""
+
+    st.session_state["_sidebar_inputs_initialized"] = True
 
     st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
 
@@ -232,10 +252,10 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["_wu_autoconnect_ui_target_kind"] = ""
         del st.session_state["_clear_inputs"]
 
-    st.sidebar.text_input("Station ID (WU)", key="active_station", placeholder="Introducir ID")
-    st.sidebar.text_input("API Key (WU)", key="active_key", type="password", placeholder="Pega aquí tu API key")
-    st.sidebar.text_input("Altitud (m)", key="active_z", placeholder="Opcional (se obtiene de API)")
-    
+    st.sidebar.text_input("Station ID (WU)", key="active_station", placeholder="Introducir ID", autocomplete="off")
+    st.sidebar.text_input("API Key (WU)", key="active_key", type="password", placeholder="Pega aquí tu API key", autocomplete="new-password")
+    st.sidebar.text_input("Altitud (m)", key="active_z", placeholder="Opcional (se obtiene de API)", autocomplete="off")
+
     st.sidebar.caption("Este panel consulta Weather Underground usando tu propia API key. Solo se guarda localmente si pulsas Guardar.")
 
     # Recordar en dispositivo
@@ -259,6 +279,7 @@ def render_sidebar(_local_storage_unused=None):
         if auto_connect_wu_device:
             if station_for_target and key_for_target:
                 set_local_storage(LS_AUTOCONNECT, "1", "save")
+                set_local_storage(LS_WU_FORGOTTEN, "0", "save")
                 set_stored_autoconnect_target(
                     {
                         "kind": "WU",
@@ -301,34 +322,17 @@ def render_sidebar(_local_storage_unused=None):
         set_local_storage(LS_STATION, station_to_save, "save")
         set_local_storage(LS_APIKEY, key_to_save, "save")
         set_local_storage(LS_Z, z_to_save, "save")
+        set_local_storage(LS_WU_FORGOTTEN, "0", "save")
         st.sidebar.success("Guardado en este dispositivo ✅")
 
     if forget_clicked:
-        # Borrar de localStorage
-        set_local_storage(LS_STATION, "", "forget")
-        set_local_storage(LS_APIKEY, "", "forget")
-        set_local_storage(LS_Z, "", "forget")
-        set_local_storage(LS_AUTOCONNECT, "", "forget")
-        set_stored_autoconnect_target(None)
-        
-        # Marcar para borrar en el próximo ciclo
-        st.session_state["_skip_local_prefill_once"] = True
-        st.session_state["_clear_inputs"] = True
-        st.session_state["connected"] = False
-        st.session_state["connection_type"] = None
-        st.session_state["_autoconnect_attempted"] = False
-        for key in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
-            if key in st.session_state:
-                del st.session_state[key]
-        
-        # Limpiar caché de API
-        if "wu_cache_current" in st.session_state:
-            st.session_state["wu_cache_current"] = {}
-        if "wu_cache_daily" in st.session_state:
-            st.session_state["wu_cache_daily"] = {}
-        
+        # Fase 1: escribir los marcadores en localStorage y marcar pendiente.
+        # NO llamamos st.rerun() aquí para que los widgets setItem se rendericen
+        # en este ciclo y el JS del componente los procese antes del siguiente ciclo.
+        forget_local_storage_keys()
+        st.session_state["_forget_pending"] = True
         st.sidebar.success("✅ Datos borrados")
-        st.rerun()
+
 
     # Estado conectado
     if "connected" not in st.session_state:
@@ -372,22 +376,15 @@ def render_sidebar(_local_storage_unused=None):
     with colB:
         disconnect_clicked = st.button("Desconectar", width="stretch")
 
+    _PROVIDER_PREFIXES = ('aemet_', 'provider_station_', 'meteocat_', 'euskalmet_', 'meteogalicia_', 'nws_')
+
     if disconnect_clicked:
         st.session_state["connected"] = False
         st.session_state["connection_type"] = None
-        for key in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
-            if key in st.session_state:
-                del st.session_state[key]
-        for state_key in list(st.session_state.keys()):
-            if (
-                state_key.startswith('aemet_')
-                or state_key.startswith('provider_station_')
-                or state_key.startswith('meteocat_')
-                or state_key.startswith('euskalmet_')
-                or state_key.startswith('meteogalicia_')
-                or state_key.startswith('nws_')
-            ):
-                del st.session_state[state_key]
+        for k in ("wu_connected_station", "wu_connected_api_key", "wu_connected_z"):
+            st.session_state.pop(k, None)
+        for k in [k for k in st.session_state if k.startswith(_PROVIDER_PREFIXES)]:
+            del st.session_state[k]
 
     if connect_clicked:
         station = str(st.session_state.get("active_station", "")).strip()
@@ -400,16 +397,8 @@ def render_sidebar(_local_storage_unused=None):
             # Conexión explícita de Weather Underground
             st.session_state["connection_type"] = "WU"
             # Limpiar restos de conexión por proveedor para evitar UI duplicada
-            for state_key in list(st.session_state.keys()):
-                if (
-                    state_key.startswith('aemet_')
-                    or state_key.startswith('provider_station_')
-                    or state_key.startswith('meteocat_')
-                    or state_key.startswith('euskalmet_')
-                    or state_key.startswith('meteogalicia_')
-                    or state_key.startswith('nws_')
-                ):
-                    del st.session_state[state_key]
+            for k in [k for k in st.session_state if k.startswith(_PROVIDER_PREFIXES)]:
+                del st.session_state[k]
 
             # Validar altitud si se proporcionó
             if z_raw:  # Si hay altitud manual
@@ -441,6 +430,7 @@ def render_sidebar(_local_storage_unused=None):
                 set_local_storage(LS_APIKEY, api_key, "save")
                 set_local_storage(LS_Z, z_raw, "save")
                 set_local_storage(LS_AUTOCONNECT, "1", "save")
+                set_local_storage(LS_WU_FORGOTTEN, "0", "save")
                 set_stored_autoconnect_target(
                     {
                         "kind": "WU",

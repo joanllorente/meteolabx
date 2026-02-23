@@ -28,6 +28,7 @@ LS_APIKEY = "meteolabx_active_key"
 LS_Z = "meteolabx_active_z"
 LS_AUTOCONNECT = "meteolabx_auto_connect"
 LS_AUTOCONNECT_TARGET = "meteolabx_auto_connect_target"
+LS_WU_FORGOTTEN = "meteolabx_wu_forgotten"
 
 # ============================================================
 # CACHE

@@ -2,6 +2,7 @@
 Funciones auxiliares generales
 """
 import textwrap
+import time
 from datetime import datetime
 
 
@@ -21,8 +22,6 @@ def normalize_text_input(value) -> str:
     """Normaliza entrada de texto a string"""
     if value is None:
         return ""
-    if isinstance(value, (int, float)):
-        return str(value)
     return str(value)
 
 
@@ -34,14 +33,12 @@ def es_datetime_from_epoch(epoch: int) -> str:
 
 def age_string(epoch: int) -> str:
     """Calcula la edad de un dato desde epoch"""
-    import time
     diff_s = int(time.time() - epoch)
     if diff_s < 60:
         return f"{diff_s}s"
-    elif diff_s < 3600:
+    if diff_s < 3600:
         return f"{diff_s // 60}m"
-    else:
-        return f"{diff_s // 3600}h {(diff_s % 3600) // 60}m"
+    return f"{diff_s // 3600}h {(diff_s % 3600) // 60}m"
 
 
 def fmt_hpa(x, decimals=1):

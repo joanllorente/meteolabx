@@ -1,0 +1,76 @@
+- Temperatura: indica el estado de agitación de las partículas del aire. Es medida directamente por la estación con mediante un termistor.
+
+	- Feels like: es la  temperatura aparente calculada combinando T, humedad y 	viento
+
+	- Heat Index: sensación de bochorno para calor; se calcula con temperatura y 	humedad (sin viento) cuando la temperatura es superior a 25ºC
+
+===============================================================================
+- Humedad relativa: indica qué porcentaje de saturación tiene el aire (depende de la temperatura). La mide un sensor capacitivo de polímero: la humedad cambia su capacitancia y la estación lo convierte a %HR.
+
+	- Presión de vapor: presión parcial del vapor de agua. Se obtiene a partir de la humedad medida por la estación.
+
+===============================================================================
+- Punto de rocío: temperatura a la que el aire debe enfriarse para alcanzar la saturación y que empiece a condensar. Se calcula con Magnus–Tetens.
+	- Temperatura de bulbo húmedo (Tw): temperatura mínima que alcanzaría el aire al enfriarse por evaporación (hasta saturación). Se calcula a partir de T, HR y presión mediante la ecuación psicrométrica.
+	
+===============================================================================
+- Presión absoluta: presión atmosférica medida por el barómetro de la estación en su altitud. Es la fuerza por m² debida al aire que hay encima.
+	
+	- Tendencia: indica si la presión sube o baja según la evolución reciente.
+
+	- Δ3h: variación de presión en las últimas 3 horas.
+
+	- MSL / MSLP (nivel del mar): presión reducida a nivel del mar (valor 		comparable entre lugares). La calcula la estación a partir de la presión 	absoluta y la altitud (aprox. ecuación hipsométrica).
+
+===============================================================================
+- Viento: velocidad media del aire en un intervalo de tiempo. La registra el anemómetro.
+	- Racha: es el valor máximo medido en dicho intervalo.
+
+	- Dirección: punto cardinal desde el que viene el aire.
+
+=============================================================================
+- Precipitación Hoy: precipitación acumula desde las 00:00 del día actual. Es medida por el pluviómetro de la estación.
+
+	- Intensidad instantánea: se calcula a partir del tiempo entre dos medidas de la estación.
+
+	- Intensidad minutal: intensidad media en los últimos 60 s (solo en WU).
+
+	- Intensidad 5-minutal: intensidad media en los últimos 5 min (solo en WU).
+
+==============================================================================
+- Humedad específica (q): masa de vapor de agua por unidad de masa de aire húmedo (g/kg). Se calcula a partir de la presión, la temperatura y la humedad.
+
+==============================================================================
+- Humedad absoluta : masa de vapor de agua por volumen de aire (g/m³). Se calcula a partir de la temperatura y la presión de vapor.
+
+==============================================================================
+- Temperatura virtual (Tv): temperatura que debería tener el aire seco para tener la misma densidad que el aire húmedo. Se calcula a partir de T y la humedad.
+
+==============================================================================
+- Temperatura equivalente (Te): temperatura que tendría una parcela si todo su vapor de agua condensara liberando calor latente y ese calor se usara para calentar la parcela (a presión constante). Se calcula a partir de T y la humedad.
+
+==============================================================================
+- Temperatura potencial (θ): temperatura que tendría una parcela si se llevara adiabáticamente hasta los 1000 hPa.
+
+==============================================================================
+- Densidad del aire (ρ): masa de aire por unidad de volumen (kg/m³). Se calcula mediante la ecuación de los gases ideales.
+
+==============================================================================
+- Nivel de condensación por ascenso (LCL): altura a la que una parcela de aire, al ascender adiabáticamente, alcanza la saturación. Se calcula a partir de T y Td.
+
+==============================================================================
+- Radiación solar: potencia de energía solar que llega al sensor por unidad de área. La mide el piranómetro de la estación (fotodiodo calibrado).
+
+==============================================================================
+- Índice UV (UVI): lo estima la estación con un sensor UV (fotodiodo + filtro). Mide la radiación UV incidente y la convierte, mediante calibración, a UVI.
+
+	- Irradiancia eritematosa (E_ery): irradiancia UV ponderada por la sensibilidad de la piel al eritema
+
+==============================================================================
+- Evapotranspiración (ET): cantidad de agua que se pierde hacia la atmósfera por evaporación del suelo y transpiración de las plantas. Se calcula según el estándar internacional FAO-56 on el método de Penman–Monteith.
+
+==============================================================================
+- Claridad del cielo: estimación de cuán despejado está el cielo. Se calcula comparando la radiación solar medida con la radiación esperada en cielo despejado (según hora/posición solar).
+
+==============================================================================
+- Balance hídrico: diferencia entre el aporte de agua (precipitación) y la demanda/pérdida hacia la atmósfera (evapotranspiración). Precipitación-Evapotranspiración.
