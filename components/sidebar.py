@@ -58,13 +58,10 @@ def wind_name_cat(deg: float) -> str:
     return "—"
 
 
-def render_sidebar(localS):
+def render_sidebar(_local_storage_unused=None):
     """
     Renderiza la barra lateral con configuración
-    
-    Args:
-        localS: Instancia de LocalStorage
-        
+
     Returns:
         Tupla (theme_mode, dark)
     """
@@ -81,7 +78,8 @@ def render_sidebar(localS):
     # entre recargas locales; puede desactivarse con MLX_ENABLE_LOCAL_PREFILL=0.
     allow_local_prefill = os.getenv("MLX_ENABLE_LOCAL_PREFILL", "1") == "1"
 
-    if allow_local_prefill:
+    skip_prefill_once = bool(st.session_state.pop("_skip_local_prefill_once", False))
+    if allow_local_prefill and not skip_prefill_once:
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
         saved_z = get_stored_z()
@@ -226,9 +224,12 @@ def render_sidebar(localS):
     
     # Aplicar borrado si está marcado (ANTES de crear widgets)
     if st.session_state.get("_clear_inputs", False):
-        for key in ["active_station", "active_key", "active_z"]:
-            if key in st.session_state:
-                del st.session_state[key]
+        st.session_state["active_station"] = ""
+        st.session_state["active_key"] = ""
+        st.session_state["active_z"] = ""
+        st.session_state["auto_connect_wu_device"] = False
+        st.session_state["_wu_autoconnect_ui_last_value"] = False
+        st.session_state["_wu_autoconnect_ui_target_kind"] = ""
         del st.session_state["_clear_inputs"]
 
     st.sidebar.text_input("Station ID (WU)", key="active_station", placeholder="Introducir ID")
@@ -311,6 +312,7 @@ def render_sidebar(localS):
         set_stored_autoconnect_target(None)
         
         # Marcar para borrar en el próximo ciclo
+        st.session_state["_skip_local_prefill_once"] = True
         st.session_state["_clear_inputs"] = True
         st.session_state["connected"] = False
         st.session_state["connection_type"] = None

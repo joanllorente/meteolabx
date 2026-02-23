@@ -23,7 +23,6 @@ from streamlit_autorefresh import st_autorefresh
 from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT
 from utils import html_clean, is_nan, es_datetime_from_epoch, age_string, fmt_hpa
 from utils.storage import (
-    localS,
     set_local_storage,
     set_stored_autoconnect_target,
     get_stored_autoconnect,
@@ -111,7 +110,7 @@ def _pydeck_chart_stretch(deck, key: str, height: int = 900):
 # SIDEBAR Y TEMA
 # ============================================================
 
-theme_mode, dark = render_sidebar(localS)
+theme_mode, dark = render_sidebar()
 
 # Configuración global de Plotly según tema
 import plotly.io as pio
@@ -4904,12 +4903,12 @@ st.markdown(
         </style>
         <div class="mlb-footer">
           <div class="mlb-footer-top">
-            <span><b>MeteoLabX · Versión 0.7.0</b></span>
+            <span><b>MeteoLabX · Versión 0.7.1</b></span>
             <span class="mlb-footer-news">
               <details>
                 <summary>Novedades</summary>
                 <div class="mlb-footer-box">
-                  <h2 style="margin:0 0 0.6rem 0;">0.7.0</h2>
+                  <h2 style="margin:0 0 0.6rem 0;">0.7.1</h2>
                   <h3>Mejoras</h3>
                   <ul>
                     <li>Añadido soporte para estaciones de <b>MeteoGalicia</b> y del <b>NWS (EE. UU.)</b>.</li>
@@ -4921,6 +4920,7 @@ st.markdown(
                   </ul>
                   <h3>Correcciones</h3>
                   <ul>
+                    <li>Corregido el aislamiento de <b>credenciales y auto-conexión</b> entre navegadores/dispositivos.</li>
                     <li>Corregido el error que obligaba a hacer <b>doble clic en las pestañas</b>.</li>
                     <li>Solucionados problemas relacionados con los <b>temas</b>.</li>
                     <li>Corregido un problema con valores de <b>irradiancia negativa</b> en estaciones de <b>Meteocat</b>.</li>
