@@ -19,7 +19,7 @@ from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # Imports locales
-from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT
+from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT, RD
 from utils import html_clean, is_nan, es_datetime_from_epoch, age_string, fmt_hpa
 from utils.storage import (
     set_local_storage,
@@ -33,11 +33,23 @@ from models import (
     mixing_ratio, specific_humidity, absolute_humidity,
     potential_temperature, virtual_temperature, equivalent_temperature, equivalent_potential_temperature,
     wet_bulb_celsius, msl_to_absolute, air_density, lcl_height,
+    apparent_temperature, heat_index_rothfusz,
     sky_clarity_label, uv_index_label, water_balance, water_balance_label
 )
 from services import (
     rain_rates_from_total, rain_intensity_label,
     init_pressure_history, push_pressure, pressure_trend_3h
+)
+from services.climograms import (
+    MONTH_NAMES_ES,
+    build_period_specs,
+    describe_period_range,
+    fetch_wu_daily_history_for_periods,
+    build_extremes_table,
+    build_general_metrics_table,
+    resolve_chart_granularity,
+    build_chart_table,
+    build_units_table,
 )
 from components import (
     card, section_title, render_grid,
@@ -46,17 +58,28 @@ from components import (
 
 # Imports de AEMET
 from services.aemet import (
+    AEMET_API_KEY,
     get_aemet_data,
     is_aemet_connection,
     get_aemet_daily_charts,
     fetch_aemet_all24h_station_series,
     fetch_aemet_hourly_7day_series,
+    fetch_aemet_climo_daily_for_periods,
+    fetch_aemet_climo_monthly_for_year,
+    fetch_aemet_climo_yearly_for_years,
 )
 from services.meteocat import (
     get_meteocat_data,
     is_meteocat_connection,
     fetch_meteocat_station_day,
     extract_meteocat_daily_timeseries,
+    get_meteocat_station_series_start_date,
+    fetch_meteocat_daily_history_for_periods,
+    fetch_meteocat_annual_history_for_years,
+    fetch_meteocat_monthly_history_for_year,
+    fetch_meteocat_daily_extremes_for_year,
+    fetch_meteocat_monthly_history_for_periods,
+    fetch_meteocat_daily_extremes_for_periods,
 )
 from services.euskalmet import (
     get_euskalmet_data,
@@ -65,6 +88,9 @@ from services.euskalmet import (
 from services.meteogalicia import (
     get_meteogalicia_data,
     is_meteogalicia_connection,
+    fetch_mgalicia_climo_daily_for_periods,
+    fetch_mgalicia_climo_monthly_for_year,
+    fetch_mgalicia_climo_yearly_for_years,
 )
 from services.nws import (
     get_nws_data,
@@ -94,6 +120,280 @@ def _pydeck_chart_stretch(deck, key: str, height: int = 900):
         )
     except TypeError:
         return st.pydeck_chart(deck, use_container_width=True, height=int(height), key=key)
+
+
+# ============================================================
+# PROCESAMIENTO ESTÁNDAR DE PROVEEDORES
+# ============================================================
+
+from dataclasses import dataclass
+
+
+@dataclass
+class ProcessedData:
+    """Variables derivadas del procesamiento post-fetch de un proveedor estándar."""
+    z: float
+    p_abs: float
+    p_msl: float
+    p_abs_disp: str
+    p_msl_disp: str
+    dp3: float
+    rate_h: float
+    p_label: str
+    p_arrow: str
+    inst_mm_h: float
+    r1_mm_h: float
+    r5_mm_h: float
+    inst_label: str
+    e_sat: float
+    e: float
+    Td_calc: float
+    Tw: float
+    q: float
+    q_gkg: float
+    theta: float
+    Tv: float
+    Te: float
+    rho: float
+    rho_v_gm3: float
+    lcl: float
+    solar_rad: float
+    uv: float
+    et0: float
+    clarity: float
+    balance: float
+    has_radiation: bool
+    has_chart_data: bool
+
+
+def process_standard_provider(
+    base: dict,
+    provider_name: str,
+    elevation_fallback_key: str,
+    series_override: Optional[dict] = None,
+    series_7d: Optional[dict] = None,
+) -> ProcessedData:
+    """Procesamiento post-fetch común a todos los proveedores estándar.
+
+    Parámetros:
+        base: dict devuelto por get_xxx_data() con keys canónicas (Tc, RH, p_hpa…)
+        provider_name: nombre del proveedor ("EUSKALMET", "METEOCAT"…)
+        elevation_fallback_key: key de session_state para altitud de respaldo
+        series_override: si no es None, se usa como serie de charts en vez de base["_series"]
+        series_7d: si no es None, se escribe en trend_hourly_* de session_state
+    """
+    NaN = float("nan")
+
+    # 1. Session state: lat, lon, elevation, timestamp
+    st.session_state["last_update_time"] = time.time()
+    st.session_state["station_lat"] = base.get("lat", NaN)
+    st.session_state["station_lon"] = base.get("lon", NaN)
+
+    z = base.get("elevation", st.session_state.get(elevation_fallback_key, 0))
+    st.session_state["station_elevation"] = z
+    st.session_state["elevation_source"] = provider_name
+
+    # 2. Warning de datos antiguos
+    data_age_minutes = (time.time() - base["epoch"]) / 60
+    if data_age_minutes > MAX_DATA_AGE_MINUTES:
+        st.warning(
+            f"⚠️ Datos de {provider_name} con {data_age_minutes:.0f} minutos "
+            "de antigüedad. La estación puede no estar reportando."
+        )
+        logger.warning(f"Datos {provider_name} antiguos: {data_age_minutes:.1f} minutos")
+
+    # 3. Lluvia
+    inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
+    inst_label = rain_intensity_label(inst_mm_h)
+
+    # 4. Presión
+    p_abs = float(base.get("p_abs_hpa", NaN))
+    p_msl = float(base.get("p_hpa", NaN))
+    provider_for_pressure = st.session_state.get("connection_type", provider_name)
+    p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
+    p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
+
+    if not is_nan(p_abs):
+        init_pressure_history()
+        push_pressure(p_abs, base["epoch"])
+
+    # 5. Tendencia presión 3h (desde base primero)
+    if not is_nan(p_msl):
+        dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
+            p_now=p_msl,
+            epoch_now=base["epoch"],
+            p_3h_ago=base.get("pressure_3h_ago"),
+            epoch_3h_ago=base.get("epoch_3h_ago"),
+        )
+    else:
+        dp3, rate_h, p_label, p_arrow = NaN, NaN, "—", "•"
+
+    # 6. Termodinámica
+    e_sat = e_v = Td_calc = Tw = q_val = q_gkg = theta = Tv_val = Te_val = NaN
+    rho_val = rho_v_gm3 = lcl_val = NaN
+
+    if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
+        e_sat = e_s(base["Tc"])
+        e_v = vapor_pressure(base["Tc"], base["RH"])
+        Td_calc = dewpoint_from_vapor_pressure(e_v)
+        Tw = wet_bulb_celsius(base["Tc"], base["RH"], p_abs)
+        base["Td"] = Td_calc
+
+        if not is_nan(p_abs):
+            q_val = specific_humidity(e_v, p_abs)
+            q_gkg = q_val * 1000
+            theta = potential_temperature(base["Tc"], p_abs)
+            Tv_val = virtual_temperature(base["Tc"], q_val)
+            Te_val = equivalent_temperature(base["Tc"], q_val)
+            rho_val = air_density(p_abs, Tv_val)
+            rho_v_gm3 = absolute_humidity(e_v, base["Tc"])
+            lcl_val = lcl_height(base["Tc"], Td_calc)
+    else:
+        base["Td"] = NaN
+
+    # 6.5 Sensación térmica y Heat Index (calculados, nunca del API)
+    wind_fl = base.get("wind", 0.0)
+    if is_nan(wind_fl):
+        wind_fl = 0.0
+    wind_fl_ms = float(wind_fl) / 3.6
+    base["feels_like"] = apparent_temperature(base["Tc"], e_v, wind_fl_ms)
+    base["heat_index"] = heat_index_rothfusz(base["Tc"], base.get("RH", NaN))
+
+    # 7. Radiación / UV / claridad  (ET0 se acumula desde la serie en paso 8.5)
+    solar_rad = base.get("solar_radiation", NaN)
+    uv = base.get("uv", NaN)
+    has_radiation = not is_nan(solar_rad) or not is_nan(uv)
+    et0 = clarity = balance = NaN
+
+    if has_radiation:
+        from models.radiation import sky_clarity_index
+        lat = base.get("lat", NaN)
+        lon = base.get("lon", NaN)
+        clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
+
+    # 8. Series para gráficos
+    if series_override is not None:
+        series = series_override if isinstance(series_override, dict) else {}
+    else:
+        raw = base.get("_series")
+        series = raw if isinstance(raw, dict) else {}
+
+    chart_epochs = series.get("epochs", [])
+    chart_temps = series.get("temps", [])
+    chart_humidities = series.get("humidities", [])
+    chart_pressures = series.get("pressures_abs", [])
+    chart_winds = series.get("winds", [])
+    chart_gusts = series.get("gusts", [])
+    chart_wind_dirs = series.get("wind_dirs", [])
+    chart_solar_radiations = series.get("solar_radiations", [])
+    has_chart_data = series.get("has_data", False)
+
+    # 8.5. ET0 acumulada desde serie — integra cada paso temporal igual que WU
+    if has_radiation and chart_solar_radiations:
+        from models.radiation import penman_monteith_et0
+        lat_et0 = base.get("lat", NaN)
+        et0_accum = 0.0
+        valid_steps = 0
+        fallback_wind = base.get("wind", 2.0)
+        if is_nan(fallback_wind):
+            fallback_wind = 2.0
+        for i, epoch_i in enumerate(chart_epochs):
+            solar_i = chart_solar_radiations[i] if i < len(chart_solar_radiations) else NaN
+            temp_i  = chart_temps[i]       if i < len(chart_temps)       else NaN
+            rh_i    = chart_humidities[i]  if i < len(chart_humidities)  else NaN
+            if is_nan(solar_i) or solar_i < 0 or is_nan(temp_i) or is_nan(rh_i):
+                continue
+            wind_i = chart_winds[i] if i < len(chart_winds) else NaN
+            if is_nan(wind_i):
+                wind_i = fallback_wind
+            if wind_i < 0.1:
+                wind_i = 0.1
+            et0_i = penman_monteith_et0(
+                solar_i, temp_i, rh_i, wind_i, lat_et0, z, float(epoch_i),
+            )
+            if is_nan(et0_i):
+                continue
+            step_hours = 5.0 / 60.0
+            if i > 0:
+                try:
+                    dt_s = float(epoch_i) - float(chart_epochs[i - 1])
+                    if 120 <= dt_s <= 1800:
+                        step_hours = dt_s / 3600.0
+                except Exception:
+                    pass
+            et0_accum += et0_i / 24.0 * step_hours
+            valid_steps += 1
+        if valid_steps > 0:
+            et0 = et0_accum
+            balance = water_balance(base["precip_total"], et0)
+
+    # 9. Tendencia presión 3h desde serie (abs → MSL)
+    if has_chart_data and len(chart_epochs) == len(chart_pressures):
+        press_valid = [
+            (int(ep), float(p))
+            for ep, p in zip(chart_epochs, chart_pressures)
+            if not is_nan(float(p))
+        ]
+        if len(press_valid) >= 2:
+            press_valid.sort(key=lambda x: x[0])
+            ep_now, p_abs_now = press_valid[-1]
+            target_ep = ep_now - (3 * 3600)
+            ep_3h, p_abs_3h = min(press_valid, key=lambda x: abs(x[0] - target_ep))
+            msl_factor = math.exp(z / 8000.0)
+            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
+                p_now=p_abs_now * msl_factor,
+                epoch_now=ep_now,
+                p_3h_ago=p_abs_3h * msl_factor,
+                epoch_3h_ago=ep_3h,
+            )
+
+    # 10. Guardar chart data en session_state
+    st.session_state["chart_epochs"] = chart_epochs
+    st.session_state["chart_temps"] = chart_temps
+    st.session_state["chart_humidities"] = chart_humidities
+    st.session_state["chart_dewpts"] = []
+    st.session_state["chart_pressures"] = chart_pressures
+    st.session_state["chart_solar_radiations"] = chart_solar_radiations
+    st.session_state["chart_winds"] = chart_winds
+    st.session_state["chart_gusts"] = chart_gusts
+    st.session_state["chart_wind_dirs"] = chart_wind_dirs
+    st.session_state["has_chart_data"] = has_chart_data
+
+    # 11. Trend hourly opcional (MeteoGalicia, NWS)
+    if series_7d is not None:
+        if isinstance(series_7d, dict) and series_7d.get("has_data"):
+            st.session_state["trend_hourly_epochs"] = series_7d.get("epochs", [])
+            st.session_state["trend_hourly_temps"] = series_7d.get("temps", [])
+            st.session_state["trend_hourly_humidities"] = series_7d.get("humidities", [])
+            st.session_state["trend_hourly_pressures"] = series_7d.get("pressures_abs", [])
+        else:
+            st.session_state["trend_hourly_epochs"] = chart_epochs
+            st.session_state["trend_hourly_temps"] = chart_temps
+            st.session_state["trend_hourly_humidities"] = chart_humidities
+            st.session_state["trend_hourly_pressures"] = chart_pressures
+
+    return ProcessedData(
+        z=z, p_abs=p_abs, p_msl=p_msl, p_abs_disp=p_abs_disp, p_msl_disp=p_msl_disp,
+        dp3=dp3, rate_h=rate_h, p_label=p_label, p_arrow=p_arrow,
+        inst_mm_h=inst_mm_h, r1_mm_h=r1_mm_h, r5_mm_h=r5_mm_h, inst_label=inst_label,
+        e_sat=e_sat, e=e_v, Td_calc=Td_calc, Tw=Tw, q=q_val, q_gkg=q_gkg,
+        theta=theta, Tv=Tv_val, Te=Te_val, rho=rho_val, rho_v_gm3=rho_v_gm3, lcl=lcl_val,
+        solar_rad=solar_rad, uv=uv, et0=et0, clarity=clarity, balance=balance,
+        has_radiation=has_radiation, has_chart_data=has_chart_data,
+    )
+
+
+def _unpack_processed(r: ProcessedData) -> tuple:
+    """Desempaqueta ProcessedData en la tupla de variables locales que espera el display."""
+    return (
+        r.z, r.p_abs, r.p_msl, r.p_abs_disp, r.p_msl_disp,
+        r.dp3, r.rate_h, r.p_label, r.p_arrow,
+        r.inst_mm_h, r.r1_mm_h, r.r5_mm_h, r.inst_label,
+        r.e_sat, r.e, r.Td_calc, r.Tw, r.q, r.q_gkg,
+        r.theta, r.Tv, r.Te, r.rho, r.rho_v_gm3, r.lcl,
+        r.solar_rad, r.uv, r.et0, r.clarity, r.balance,
+        r.has_radiation, r.has_chart_data,
+    )
 
 
 # ============================================================
@@ -584,6 +884,16 @@ st.markdown(html_clean("""
   upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=4", "180x180");
   upsertLink("icon", "/favicon-32x32.png?v=3", "32x32");
   upsertLink("icon", "/favicon-16x16.png?v=3", "16x16");
+
+  // Escribir timezone del navegador en query param para que Python la use en modo Auto
+  try {
+    var _tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var _url = new URL(window.parent.location.href);
+    if (_url.searchParams.get("_tz") !== _tz) {
+      _url.searchParams.set("_tz", _tz);
+      window.parent.history.replaceState({}, "", _url.toString());
+    }
+  } catch (_e) {}
 })();
 </script>
 
@@ -1198,7 +1508,7 @@ header_refresh_label = (
 st.markdown(
     html_clean(f"""
     <div class="header">
-      <h1>MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 7</span></h1>
+      <h1>MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Beta 8</span></h1>
       <div class="meta">
         Versión beta — la interfaz y las funciones pueden cambiar ·
         Tema: {"Oscuro" if dark else "Claro"} · Refresh: {header_refresh_label}
@@ -1667,8 +1977,8 @@ if connected:
             e_sat = e_s(base["Tc"])
             e = vapor_pressure(base["Tc"], base["RH"])
             Td_calc = dewpoint_from_vapor_pressure(e)
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
-            
+            Tw = wet_bulb_celsius(base["Tc"], base["RH"], p_abs)
+
             # Actualizar base con Td calculado
             base["Td"] = Td_calc
             
@@ -1684,7 +1994,15 @@ if connected:
                 lcl = lcl_height(base["Tc"], Td_calc)
         else:
             base["Td"] = float("nan")
-        
+
+        # Sensación térmica y Heat Index (calculados, nunca del API)
+        wind_fl = base.get("wind", 0.0)
+        if is_nan(wind_fl):
+            wind_fl = 0.0
+        wind_fl_ms = float(wind_fl) / 3.6
+        base["feels_like"] = apparent_temperature(base["Tc"], e, wind_fl_ms)
+        base["heat_index"] = heat_index_rothfusz(base["Tc"], base.get("RH", float("nan")))
+
         # Radiación (no disponible en AEMET)
         solar_rad = float("nan")
         uv = float("nan")
@@ -1707,149 +2025,14 @@ if connected:
                 st.caption(f"Detalle técnico Euskalmet: {err_detail}")
             st.stop()
 
-        st.session_state["last_update_time"] = time.time()
-        st.session_state["station_lat"] = base.get("lat", float("nan"))
-        st.session_state["station_lon"] = base.get("lon", float("nan"))
-
-        z = base.get("elevation", st.session_state.get("euskalmet_station_alt", 0))
-        st.session_state["station_elevation"] = z
-        st.session_state["elevation_source"] = "EUSKALMET"
-
-        now_ts = time.time()
-        data_age_minutes = (now_ts - base["epoch"]) / 60
-        if data_age_minutes > MAX_DATA_AGE_MINUTES:
-            st.warning(f"⚠️ Datos de Euskalmet con {data_age_minutes:.0f} minutos de antigüedad.")
-
-        # Lluvia: acumulada diaria basada en serie de precipitación.
-        inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
-        inst_label = rain_intensity_label(inst_mm_h)
-
-        p_abs = float(base.get("p_abs_hpa", float("nan")))
-        p_msl = float(base.get("p_hpa", float("nan")))
-        provider_for_pressure = st.session_state.get("connection_type", "EUSKALMET")
-        p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
-        p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
-
-        if not is_nan(p_abs):
-            init_pressure_history()
-            push_pressure(p_abs, base["epoch"])
-
-        if not is_nan(p_msl):
-            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                p_now=p_msl,
-                epoch_now=base["epoch"],
-                p_3h_ago=base.get("pressure_3h_ago"),
-                epoch_3h_ago=base.get("epoch_3h_ago"),
-            )
-        else:
-            dp3, rate_h, p_label, p_arrow = float("nan"), float("nan"), "—", "•"
-
-        # Termodinámica
-        e_sat = float("nan")
-        e = float("nan")
-        Td_calc = float("nan")
-        Tw = float("nan")
-        q = float("nan")
-        q_gkg = float("nan")
-        theta = float("nan")
-        Tv = float("nan")
-        Te = float("nan")
-        rho = float("nan")
-        rho_v_gm3 = float("nan")
-        lcl = float("nan")
-
-        if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
-            e_sat = e_s(base["Tc"])
-            e = vapor_pressure(base["Tc"], base["RH"])
-            Td_calc = dewpoint_from_vapor_pressure(e)
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
-            base["Td"] = Td_calc
-            if not is_nan(p_abs):
-                q = specific_humidity(e, p_abs)
-                q_gkg = q * 1000
-                theta = potential_temperature(base["Tc"], p_abs)
-                Tv = virtual_temperature(base["Tc"], q)
-                Te = equivalent_temperature(base["Tc"], q)
-                rho = air_density(p_abs, Tv)
-                rho_v_gm3 = absolute_humidity(e, base["Tc"])
-                lcl = lcl_height(base["Tc"], Td_calc)
-        else:
-            base["Td"] = float("nan")
-
-        solar_rad = base.get("solar_radiation", float("nan"))
-        uv = base.get("uv", float("nan"))
-        has_radiation = not is_nan(solar_rad) or not is_nan(uv)
-
-        if has_radiation:
-            from models.radiation import penman_monteith_et0, sky_clarity_index
-            lat = base.get("lat", float("nan"))
-            lon = base.get("lon", float("nan"))
-            wind_speed = base.get("wind", 2.0)
-            if is_nan(wind_speed):
-                wind_speed = 2.0
-            if wind_speed < 0.1:
-                wind_speed = 0.1
-            et0 = penman_monteith_et0(
-                solar_rad,
-                base["Tc"],
-                base["RH"],
-                wind_speed,
-                lat,
-                z,
-                base["epoch"],
-            )
-            clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
-            balance = water_balance(base["precip_total"], et0)
-        else:
-            et0 = float("nan")
-            clarity = float("nan")
-            balance = float("nan")
-
-        # Series para gráficos desde el servicio Euskalmet.
-        series = base.get("_series", {}) if isinstance(base.get("_series"), dict) else {}
-        chart_epochs = series.get("epochs", [])
-        chart_temps = series.get("temps", [])
-        chart_humidities = series.get("humidities", [])
-        chart_pressures = series.get("pressures_abs", [])
-        chart_winds = series.get("winds", [])
-        chart_gusts = series.get("gusts", [])
-        chart_wind_dirs = series.get("wind_dirs", [])
-        chart_solar_radiations = series.get("solar_radiations", [])
-        chart_dewpts = []
-        has_chart_data = series.get("has_data", False)
-
-        # Tendencia de presión 3h desde serie (absoluta -> msl).
-        if has_chart_data and len(chart_epochs) == len(chart_pressures):
-            press_valid = []
-            for ep, p_abs_series in zip(chart_epochs, chart_pressures):
-                if not is_nan(p_abs_series):
-                    press_valid.append((int(ep), float(p_abs_series)))
-            if len(press_valid) >= 2:
-                press_valid.sort(key=lambda x: x[0])
-                ep_now, p_abs_now = press_valid[-1]
-                target_ep = ep_now - (3 * 3600)
-                ep_3h, p_abs_3h = min(press_valid, key=lambda x: abs(x[0] - target_ep))
-                import math
-                msl_factor = math.exp(z / 8000.0)
-                p_now_msl = p_abs_now * msl_factor
-                p_3h_msl = p_abs_3h * msl_factor
-                dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                    p_now=p_now_msl,
-                    epoch_now=ep_now,
-                    p_3h_ago=p_3h_msl,
-                    epoch_3h_ago=ep_3h,
-                )
-
-        st.session_state["chart_epochs"] = chart_epochs
-        st.session_state["chart_temps"] = chart_temps
-        st.session_state["chart_humidities"] = chart_humidities
-        st.session_state["chart_dewpts"] = chart_dewpts
-        st.session_state["chart_pressures"] = chart_pressures
-        st.session_state["chart_solar_radiations"] = chart_solar_radiations
-        st.session_state["chart_winds"] = chart_winds
-        st.session_state["chart_gusts"] = chart_gusts
-        st.session_state["chart_wind_dirs"] = chart_wind_dirs
-        st.session_state["has_chart_data"] = has_chart_data
+        _r = process_standard_provider(base, "EUSKALMET", "euskalmet_station_alt")
+        (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
+         dp3, rate_h, p_label, p_arrow,
+         inst_mm_h, r1_mm_h, r5_mm_h, inst_label,
+         e_sat, e, Td_calc, Tw, q, q_gkg,
+         theta, Tv, Te, rho, rho_v_gm3, lcl,
+         solar_rad, uv, et0, clarity, balance,
+         has_radiation, has_chart_data) = _unpack_processed(_r)
 
     elif is_meteocat_connection():
         # ========== DATOS DE METEOCAT ==========
@@ -1858,201 +2041,27 @@ if connected:
             st.warning("⚠️ No se pudieron obtener datos de Meteocat por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
 
-        # Guardar timestamp de última actualización exitosa
-        st.session_state["last_update_time"] = time.time()
-
-        # Guardar latitud y longitud para cálculos de radiación
-        st.session_state["station_lat"] = base.get("lat", float("nan"))
-        st.session_state["station_lon"] = base.get("lon", float("nan"))
-
-        # Altitud Meteocat (catálogo de estación)
-        z = base.get("elevation", st.session_state.get("meteocat_station_alt", 0))
-        st.session_state["station_elevation"] = z
-        st.session_state["elevation_source"] = "METEOCAT"
-
-        now_ts = time.time()
-        data_age_minutes = (now_ts - base["epoch"]) / 60
-        if data_age_minutes > MAX_DATA_AGE_MINUTES:
-            st.warning(f"⚠️ Datos de Meteocat con {data_age_minutes:.0f} minutos de antigüedad. La estación puede no estar reportando.")
-            logger.warning(f"Datos Meteocat antiguos: {data_age_minutes:.1f} minutos")
-
-        # Lluvia
-        inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
-        inst_label = rain_intensity_label(inst_mm_h)
-
-        # Presión Meteocat: 34 se trata como absoluta (estación).
-        p_abs = float(base.get("p_abs_hpa", float("nan")))
-        p_msl = float(base.get("p_hpa", float("nan")))
-
-        provider_for_pressure = st.session_state.get("connection_type", "METEOCAT")
-        p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
-        p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
-
-        if not is_nan(p_abs):
-            init_pressure_history()
-            push_pressure(p_abs, base["epoch"])
-
-        if not is_nan(p_msl):
-            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                p_now=p_msl,
-                epoch_now=base["epoch"],
-                p_3h_ago=base.get("pressure_3h_ago"),
-                epoch_3h_ago=base.get("epoch_3h_ago"),
-            )
-        else:
-            dp3, rate_h, p_label, p_arrow = float("nan"), float("nan"), "—", "•"
-
-        # Termodinámica
-        e_sat = float("nan")
-        e = float("nan")
-        Td_calc = float("nan")
-        Tw = float("nan")
-        q = float("nan")
-        q_gkg = float("nan")
-        theta = float("nan")
-        Tv = float("nan")
-        Te = float("nan")
-        rho = float("nan")
-        rho_v_gm3 = float("nan")
-        lcl = float("nan")
-
-        if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
-            e_sat = e_s(base["Tc"])
-            e = vapor_pressure(base["Tc"], base["RH"])
-            Td_calc = dewpoint_from_vapor_pressure(e)
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
-            base["Td"] = Td_calc
-
-            if not is_nan(p_abs):
-                q = specific_humidity(e, p_abs)
-                q_gkg = q * 1000
-                theta = potential_temperature(base["Tc"], p_abs)
-                Tv = virtual_temperature(base["Tc"], q)
-                Te = equivalent_temperature(base["Tc"], q)
-                rho = air_density(p_abs, Tv)
-                rho_v_gm3 = absolute_humidity(e, base["Tc"])
-                lcl = lcl_height(base["Tc"], Td_calc)
-        else:
-            base["Td"] = float("nan")
-
-        # Radiación
-        solar_rad = base.get("solar_radiation", float("nan"))
-        uv = base.get("uv", float("nan"))
-        has_radiation = not is_nan(solar_rad) or not is_nan(uv)
-
-        if has_radiation:
-            from models.radiation import penman_monteith_et0, sky_clarity_index
-
-            lat = base.get("lat", float("nan"))
-            lon = base.get("lon", float("nan"))
-            wind_speed = base.get("wind", 2.0)
-            if is_nan(wind_speed):
-                wind_speed = 2.0
-            if wind_speed < 0.1:
-                wind_speed = 0.1
-
-            et0 = penman_monteith_et0(
-                solar_rad,
-                base["Tc"],
-                base["RH"],
-                wind_speed,
-                lat,
-                z,
-                base["epoch"],
-            )
-            clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
-            balance = water_balance(base["precip_total"], et0)
-        else:
-            et0 = float("nan")
-            clarity = float("nan")
-            balance = float("nan")
-
-        # Serie del día para gráficos y derivados.
+        # Meteocat: la serie de charts se obtiene de un endpoint separado
+        series_override = None
         station_code = str(base.get("station_code", "")).strip()
         if station_code:
             now_local_cat = datetime.now()
             day_payload = fetch_meteocat_station_day(
-                station_code,
-                now_local_cat.year,
-                now_local_cat.month,
-                now_local_cat.day,
+                station_code, now_local_cat.year, now_local_cat.month, now_local_cat.day,
             )
             if day_payload.get("ok"):
-                ts = extract_meteocat_daily_timeseries(day_payload.get("variables", {}))
-                chart_epochs = ts.get("epochs", [])
-                chart_temps = ts.get("temps", [])
-                chart_humidities = ts.get("humidities", [])
-                chart_pressures = ts.get("pressures_abs", [])  # Meteocat 34: absoluta
-                chart_winds = ts.get("winds", [])
-                chart_gusts = ts.get("gusts", [])
-                chart_wind_dirs = ts.get("wind_dirs", [])
-                chart_solar_radiations = ts.get("solar_radiations", [])
-                chart_dewpts = []
-                has_chart_data = ts.get("has_data", False)
-            else:
-                chart_epochs = []
-                chart_temps = []
-                chart_humidities = []
-                chart_dewpts = []
-                chart_pressures = []
-                chart_solar_radiations = []
-                chart_winds = []
-                chart_gusts = []
-                chart_wind_dirs = []
-                has_chart_data = False
-        else:
-            chart_epochs = []
-            chart_temps = []
-            chart_humidities = []
-            chart_dewpts = []
-            chart_pressures = []
-            chart_solar_radiations = []
-            chart_winds = []
-            chart_gusts = []
-            chart_wind_dirs = []
-            has_chart_data = False
+                series_override = extract_meteocat_daily_timeseries(day_payload.get("variables", {}))
 
-        # Tendencia de presión 3h usando serie diaria Meteocat (34 = presión absoluta).
-        if has_chart_data and len(chart_epochs) == len(chart_pressures):
-            press_valid = []
-            for ep, p_abs_series in zip(chart_epochs, chart_pressures):
-                if not is_nan(p_abs_series):
-                    press_valid.append((int(ep), float(p_abs_series)))
-
-            if len(press_valid) >= 2:
-                press_valid.sort(key=lambda x: x[0])
-                ep_now, p_abs_now = press_valid[-1]
-                target_ep = ep_now - (3 * 3600)
-                ep_3h, p_abs_3h = min(press_valid, key=lambda x: abs(x[0] - target_ep))
-
-                # Pasar a MSL con el mismo factor para mantener coherencia entre puntos.
-                import math
-                msl_factor = math.exp(z / 8000.0)
-                p_now_msl = p_abs_now * msl_factor
-                p_3h_msl = p_abs_3h * msl_factor
-
-                dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                    p_now=p_now_msl,
-                    epoch_now=ep_now,
-                    p_3h_ago=p_3h_msl,
-                    epoch_3h_ago=ep_3h,
-                )
-
-                logger.info(
-                    "[METEOCAT] Tendencia presión 3h desde serie diaria: "
-                    f"t_now={ep_now}, t_old={ep_3h}, p_now={p_now_msl:.2f}, p_old={p_3h_msl:.2f}"
-                )
-
-        st.session_state["chart_epochs"] = chart_epochs
-        st.session_state["chart_temps"] = chart_temps
-        st.session_state["chart_humidities"] = chart_humidities
-        st.session_state["chart_dewpts"] = chart_dewpts
-        st.session_state["chart_pressures"] = chart_pressures
-        st.session_state["chart_solar_radiations"] = chart_solar_radiations
-        st.session_state["chart_winds"] = chart_winds
-        st.session_state["chart_gusts"] = chart_gusts
-        st.session_state["chart_wind_dirs"] = chart_wind_dirs
-        st.session_state["has_chart_data"] = has_chart_data
+        _r = process_standard_provider(
+            base, "METEOCAT", "meteocat_station_alt", series_override=series_override,
+        )
+        (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
+         dp3, rate_h, p_label, p_arrow,
+         inst_mm_h, r1_mm_h, r5_mm_h, inst_label,
+         e_sat, e, Td_calc, Tw, q, q_gkg,
+         theta, Tv, Te, rho, rho_v_gm3, lcl,
+         solar_rad, uv, et0, clarity, balance,
+         has_radiation, has_chart_data) = _unpack_processed(_r)
 
     elif is_meteogalicia_connection():
         # ========== DATOS DE METEOGALICIA ==========
@@ -2061,142 +2070,17 @@ if connected:
             st.warning("⚠️ No se pudieron obtener datos de MeteoGalicia por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
 
-        st.session_state["last_update_time"] = time.time()
-        st.session_state["station_lat"] = base.get("lat", float("nan"))
-        st.session_state["station_lon"] = base.get("lon", float("nan"))
-
-        z = base.get("elevation", st.session_state.get("meteogalicia_station_alt", 0))
-        st.session_state["station_elevation"] = z
-        st.session_state["elevation_source"] = "METEOGALICIA"
-
-        now_ts = time.time()
-        data_age_minutes = (now_ts - base["epoch"]) / 60
-        if data_age_minutes > MAX_DATA_AGE_MINUTES:
-            st.warning(
-                f"⚠️ Datos de MeteoGalicia con {data_age_minutes:.0f} minutos de antigüedad. "
-                "La estación puede no estar reportando."
-            )
-            logger.warning(f"Datos MeteoGalicia antiguos: {data_age_minutes:.1f} minutos")
-
-        # Lluvia
-        inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
-        inst_label = rain_intensity_label(inst_mm_h)
-
-        # Presion (serie horaria usada como referencia de estacion)
-        p_abs = float(base.get("p_abs_hpa", float("nan")))
-        p_msl = float(base.get("p_hpa", float("nan")))
-        provider_for_pressure = st.session_state.get("connection_type", "METEOGALICIA")
-        p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
-        p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
-
-        if not is_nan(p_abs):
-            init_pressure_history()
-            push_pressure(p_abs, base["epoch"])
-
-        if not is_nan(p_msl):
-            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                p_now=p_msl,
-                epoch_now=base["epoch"],
-                p_3h_ago=base.get("pressure_3h_ago"),
-                epoch_3h_ago=base.get("epoch_3h_ago"),
-            )
-        else:
-            dp3, rate_h, p_label, p_arrow = float("nan"), float("nan"), "—", "•"
-
-        # Termodinamica
-        e_sat = float("nan")
-        e = float("nan")
-        Td_calc = float("nan")
-        Tw = float("nan")
-        q = float("nan")
-        q_gkg = float("nan")
-        theta = float("nan")
-        Tv = float("nan")
-        Te = float("nan")
-        rho = float("nan")
-        rho_v_gm3 = float("nan")
-        lcl = float("nan")
-
-        if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
-            e_sat = e_s(base["Tc"])
-            e = vapor_pressure(base["Tc"], base["RH"])
-            Td_calc = dewpoint_from_vapor_pressure(e)
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
-            base["Td"] = Td_calc
-
-            if not is_nan(p_abs):
-                q = specific_humidity(e, p_abs)
-                q_gkg = q * 1000
-                theta = potential_temperature(base["Tc"], p_abs)
-                Tv = virtual_temperature(base["Tc"], q)
-                Te = equivalent_temperature(base["Tc"], q)
-                rho = air_density(p_abs, Tv)
-                rho_v_gm3 = absolute_humidity(e, base["Tc"])
-                lcl = lcl_height(base["Tc"], Td_calc)
-        else:
-            base["Td"] = float("nan")
-
-        # Radiacion (si hay sensores en la estacion)
-        solar_rad = base.get("solar_radiation", float("nan"))
-        uv = base.get("uv", float("nan"))
-        has_radiation = not is_nan(solar_rad) or not is_nan(uv)
-
-        if has_radiation:
-            from models.radiation import penman_monteith_et0, sky_clarity_index
-
-            lat = base.get("lat", float("nan"))
-            lon = base.get("lon", float("nan"))
-            wind_speed = base.get("wind", 2.0)
-            if is_nan(wind_speed):
-                wind_speed = 2.0
-            if wind_speed < 0.1:
-                wind_speed = 0.1
-
-            et0 = penman_monteith_et0(
-                solar_rad,
-                base["Tc"],
-                base["RH"],
-                wind_speed,
-                lat,
-                z,
-                base["epoch"],
-            )
-            clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
-            balance = water_balance(base["precip_total"], et0)
-        else:
-            et0 = float("nan")
-            clarity = float("nan")
-            balance = float("nan")
-
-        # Series para graficos desde el servicio MeteoGalicia.
-        series = base.get("_series", {}) if isinstance(base.get("_series"), dict) else {}
-        chart_epochs = series.get("epochs", [])
-        chart_temps = series.get("temps", [])
-        chart_humidities = series.get("humidities", [])
-        chart_pressures = series.get("pressures_abs", [])
-        chart_winds = series.get("winds", [])
-        chart_gusts = series.get("gusts", [])
-        chart_wind_dirs = series.get("wind_dirs", [])
-        chart_solar_radiations = series.get("solar_radiations", [])
-        chart_dewpts = []
-        has_chart_data = series.get("has_data", False)
-
-        st.session_state["chart_epochs"] = chart_epochs
-        st.session_state["chart_temps"] = chart_temps
-        st.session_state["chart_humidities"] = chart_humidities
-        st.session_state["chart_dewpts"] = chart_dewpts
-        st.session_state["chart_pressures"] = chart_pressures
-        st.session_state["chart_solar_radiations"] = chart_solar_radiations
-        st.session_state["chart_winds"] = chart_winds
-        st.session_state["chart_gusts"] = chart_gusts
-        st.session_state["chart_wind_dirs"] = chart_wind_dirs
-        st.session_state["has_chart_data"] = has_chart_data
-
-        # Reusar la serie horaria para tendencia sinonptica generica.
-        st.session_state["trend_hourly_epochs"] = chart_epochs
-        st.session_state["trend_hourly_temps"] = chart_temps
-        st.session_state["trend_hourly_humidities"] = chart_humidities
-        st.session_state["trend_hourly_pressures"] = chart_pressures
+        # series_7d={} (sin has_data) → copia chart data a trend_hourly
+        _r = process_standard_provider(
+            base, "METEOGALICIA", "meteogalicia_station_alt", series_7d={},
+        )
+        (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
+         dp3, rate_h, p_label, p_arrow,
+         inst_mm_h, r1_mm_h, r5_mm_h, inst_label,
+         e_sat, e, Td_calc, Tw, q, q_gkg,
+         theta, Tv, Te, rho, rho_v_gm3, lcl,
+         solar_rad, uv, et0, clarity, balance,
+         has_radiation, has_chart_data) = _unpack_processed(_r)
 
     elif is_nws_connection():
         # ========== DATOS DE NWS ==========
@@ -2205,125 +2089,19 @@ if connected:
             st.warning("⚠️ No se pudieron obtener datos de NWS por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
 
-        st.session_state["last_update_time"] = time.time()
-        st.session_state["station_lat"] = base.get("lat", float("nan"))
-        st.session_state["station_lon"] = base.get("lon", float("nan"))
+        raw_7d = base.get("_series_7d")
+        series_7d = raw_7d if isinstance(raw_7d, dict) else {}
 
-        z = base.get("elevation", st.session_state.get("nws_station_alt", 0))
-        st.session_state["station_elevation"] = z
-        st.session_state["elevation_source"] = "NWS"
-
-        now_ts = time.time()
-        data_age_minutes = (now_ts - base["epoch"]) / 60
-        if data_age_minutes > MAX_DATA_AGE_MINUTES:
-            st.warning(
-                f"⚠️ Datos de NWS con {data_age_minutes:.0f} minutos de antigüedad. "
-                "La estación puede no estar reportando."
-            )
-            logger.warning(f"Datos NWS antiguos: {data_age_minutes:.1f} minutos")
-
-        # Lluvia
-        inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
-        inst_label = rain_intensity_label(inst_mm_h)
-
-        # Presion
-        p_abs = float(base.get("p_abs_hpa", float("nan")))
-        p_msl = float(base.get("p_hpa", float("nan")))
-        provider_for_pressure = st.session_state.get("connection_type", "NWS")
-        p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
-        p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
-
-        if not is_nan(p_abs):
-            init_pressure_history()
-            push_pressure(p_abs, base["epoch"])
-
-        if not is_nan(p_msl):
-            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                p_now=p_msl,
-                epoch_now=base["epoch"],
-                p_3h_ago=base.get("pressure_3h_ago"),
-                epoch_3h_ago=base.get("epoch_3h_ago"),
-            )
-        else:
-            dp3, rate_h, p_label, p_arrow = float("nan"), float("nan"), "—", "•"
-
-        # Termodinamica
-        e_sat = float("nan")
-        e = float("nan")
-        Td_calc = float("nan")
-        Tw = float("nan")
-        q = float("nan")
-        q_gkg = float("nan")
-        theta = float("nan")
-        Tv = float("nan")
-        Te = float("nan")
-        rho = float("nan")
-        rho_v_gm3 = float("nan")
-        lcl = float("nan")
-
-        if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
-            e_sat = e_s(base["Tc"])
-            e = vapor_pressure(base["Tc"], base["RH"])
-            Td_calc = dewpoint_from_vapor_pressure(e)
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"])
-            base["Td"] = Td_calc
-
-            if not is_nan(p_abs):
-                q = specific_humidity(e, p_abs)
-                q_gkg = q * 1000
-                theta = potential_temperature(base["Tc"], p_abs)
-                Tv = virtual_temperature(base["Tc"], q)
-                Te = equivalent_temperature(base["Tc"], q)
-                rho = air_density(p_abs, Tv)
-                rho_v_gm3 = absolute_humidity(e, base["Tc"])
-                lcl = lcl_height(base["Tc"], Td_calc)
-        else:
-            base["Td"] = float("nan")
-
-        # Radiacion (NWS observaciones no exponen este campo en este panel)
-        solar_rad = float("nan")
-        uv = float("nan")
-        has_radiation = False
-        et0 = float("nan")
-        clarity = float("nan")
-        balance = float("nan")
-
-        # Series para graficos desde el servicio NWS.
-        series = base.get("_series", {}) if isinstance(base.get("_series"), dict) else {}
-        chart_epochs = series.get("epochs", [])
-        chart_temps = series.get("temps", [])
-        chart_humidities = series.get("humidities", [])
-        chart_pressures = series.get("pressures_abs", [])
-        chart_winds = series.get("winds", [])
-        chart_gusts = series.get("gusts", [])
-        chart_wind_dirs = series.get("wind_dirs", [])
-        chart_solar_radiations = series.get("solar_radiations", [])
-        chart_dewpts = []
-        has_chart_data = series.get("has_data", False)
-
-        st.session_state["chart_epochs"] = chart_epochs
-        st.session_state["chart_temps"] = chart_temps
-        st.session_state["chart_humidities"] = chart_humidities
-        st.session_state["chart_dewpts"] = chart_dewpts
-        st.session_state["chart_pressures"] = chart_pressures
-        st.session_state["chart_solar_radiations"] = chart_solar_radiations
-        st.session_state["chart_winds"] = chart_winds
-        st.session_state["chart_gusts"] = chart_gusts
-        st.session_state["chart_wind_dirs"] = chart_wind_dirs
-        st.session_state["has_chart_data"] = has_chart_data
-
-        # Serie semanal para tendencia sinoptica.
-        trend_series = base.get("_series_7d", {}) if isinstance(base.get("_series_7d"), dict) else {}
-        if trend_series.get("has_data"):
-            st.session_state["trend_hourly_epochs"] = trend_series.get("epochs", [])
-            st.session_state["trend_hourly_temps"] = trend_series.get("temps", [])
-            st.session_state["trend_hourly_humidities"] = trend_series.get("humidities", [])
-            st.session_state["trend_hourly_pressures"] = trend_series.get("pressures_abs", [])
-        else:
-            st.session_state["trend_hourly_epochs"] = chart_epochs
-            st.session_state["trend_hourly_temps"] = chart_temps
-            st.session_state["trend_hourly_humidities"] = chart_humidities
-            st.session_state["trend_hourly_pressures"] = chart_pressures
+        _r = process_standard_provider(
+            base, "NWS", "nws_station_alt", series_7d=series_7d,
+        )
+        (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
+         dp3, rate_h, p_label, p_arrow,
+         inst_mm_h, r1_mm_h, r5_mm_h, inst_label,
+         e_sat, e, Td_calc, Tw, q, q_gkg,
+         theta, Tv, Te, rho, rho_v_gm3, lcl,
+         solar_rad, uv, et0, clarity, balance,
+         has_radiation, has_chart_data) = _unpack_processed(_r)
 
     else:
         # ========== DATOS DE WEATHER UNDERGROUND ==========
@@ -2423,10 +2201,18 @@ if connected:
             theta = potential_temperature(base["Tc"], p_abs)  # Temperatura potencial
             Tv = virtual_temperature(base["Tc"], q)  # Temperatura virtual
             Te = equivalent_temperature(base["Tc"], q)  # Temperatura equivalente
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"])  # Bulbo húmedo (Stull)
+            Tw = wet_bulb_celsius(base["Tc"], base["RH"], p_abs)  # Psicrométrica si hay p_abs
             rho = air_density(p_abs, Tv)  # Densidad del aire
             rho_v_gm3 = absolute_humidity(e, base["Tc"])  # Humedad absoluta
             lcl = lcl_height(base["Tc"], Td_calc)  # Altura LCL
+
+            # Sensación térmica y Heat Index (calculados, nunca del API)
+            wind_fl = base.get("wind", 0.0)
+            if is_nan(wind_fl):
+                wind_fl = 0.0
+            wind_fl_ms = float(wind_fl) / 3.6
+            base["feels_like"] = apparent_temperature(base["Tc"], e, wind_fl_ms)
+            base["heat_index"] = heat_index_rothfusz(base["Tc"], base["RH"])
 
             # ========== RADIACIÓN ==========
             solar_rad = base.get("solar_radiation", float("nan"))
@@ -2466,9 +2252,11 @@ if connected:
                 )
 
                 # Claridad del cielo con latitud y elevación (FAO-56)
+                # Usar epoch del dato (no time.time()) para que la referencia
+                # teórica coincida con el momento de la medición.
                 from models.radiation import sky_clarity_index
                 lon = base.get("lon", float("nan"))
-                clarity = sky_clarity_index(solar_rad, lat, z, now_ts, lon)
+                clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
 
                 # ET0 y balance mostrados en UI se recalculan como acumulado "hoy"
                 # usando la serie /all/1day tras cargar los puntos temporales.
@@ -2488,7 +2276,13 @@ if connected:
             chart_temps = timeseries.get("temps", [])
             chart_humidities = timeseries.get("humidities", [])
             chart_dewpts = timeseries.get("dewpts", [])
-            chart_pressures = timeseries.get("pressures", [])
+            # WU devuelve presiones MSL → convertir a absoluta para coherencia
+            _cp_msl = timeseries.get("pressures", [])
+            _msl_factor = math.exp(-z / 8000.0)
+            chart_pressures = [
+                p * _msl_factor if not is_nan(p) else float("nan")
+                for p in _cp_msl
+            ]
             chart_solar_radiations = timeseries.get("solar_radiations", [])
             chart_winds = timeseries.get("winds", [])
             chart_gusts = timeseries.get("gusts", [])
@@ -2760,7 +2554,12 @@ if active_tab == "Observación":
 
     # Temperatura
     fl_str = "—" if is_nan(base["feels_like"]) else f"{base['feels_like']:.1f} °C"
-    hi_str = "—" if is_nan(base["heat_index"]) else f"{base['heat_index']:.1f} °C"
+    _tc_hi = base.get("Tc", float("nan"))
+    hi_str = (
+        f"{base['heat_index']:.1f} °C"
+        if not is_nan(base["heat_index"]) and not is_nan(_tc_hi) and _tc_hi > 25
+        else "—"
+    )
 
     # Rocío
     try:
@@ -2768,6 +2567,7 @@ if active_tab == "Observación":
     except Exception:
         e_vapor_val = float("nan")
     e_vapor_str = "—" if is_nan(e_vapor_val) else f"{e_vapor_val:.1f}"
+    tw_sub_str = "—" if is_nan(Tw) else f"{Tw:.1f} °C"
 
     # Extremos
     temp_side = ""
@@ -2793,16 +2593,17 @@ if active_tab == "Observación":
     cards_basic = [
         card("Temperatura", temp_val, "°C", 
              icon_kind="temp", 
-             subtitle_html=f"<div>Feels like: <b>{fl_str}</b></div><div>Heat index: <b>{hi_str}</b></div>", 
+             subtitle_html=f"<div>Sensación térmica: <b>{fl_str}</b></div><div>Heat index: <b>{hi_str}</b></div>",
              side_html=temp_side, 
              uid="b1", dark=dark),
         card("Humedad relativa", rh_val, "%", 
              icon_kind="rh", 
+             subtitle_html=f"<div>Presión de vapor: <b>{e_vapor_str} hPa</b></div>",
              side_html=rh_side, 
              uid="b2", dark=dark),
         card("Punto de rocío", td_val, "°C", 
              icon_kind="dew", 
-             subtitle_html=f"<div>Presión de vapor: <b>{e_vapor_str} hPa</b></div>", 
+             subtitle_html=f"<div>Bulbo húmedo: <b>{tw_sub_str}</b></div>", 
              uid="b3", dark=dark),
         card("Presión", p_abs_str, "hPa", 
              icon_kind="press", 
@@ -2821,30 +2622,38 @@ if active_tab == "Observación":
     render_grid(cards_basic, cols=3, extra_class="grid-basic")
 
     # ============================================================
-    # NIVEL 2 — TERMODINÁMICA
+    # NIVEL 2 — TERMODINÁMICA (solo si hay barómetro)
     # ============================================================
-    section_title("Termodinámica")
+    has_barometer_now = not is_nan(p_abs)
+    if not connected or has_barometer_now:
+        section_title("Termodinámica")
 
-    q_val = "—" if is_nan(q_gkg) else f"{q_gkg:.2f}"
-    rho_v_val = "—" if is_nan(rho_v_gm3) else f"{rho_v_gm3:.1f}"
-    tw_val = "—" if is_nan(Tw) else f"{Tw:.1f}"
-    tv_val = "—" if is_nan(Tv) else f"{Tv:.1f}"
-    te_val = "—" if is_nan(Te) else f"{Te:.1f}"
-    theta_val = "—" if is_nan(theta) else f"{theta:.1f}"
-    rho_val = "—" if is_nan(rho) else f"{rho:.3f}"
-    lcl_val = "—" if is_nan(lcl) else f"{lcl:.0f}"
+        q_val = "—" if is_nan(q_gkg) else f"{q_gkg:.2f}"
+        rho_v_val = "—" if is_nan(rho_v_gm3) else f"{rho_v_gm3:.1f}"
+        tv_val = "—" if is_nan(Tv) else f"{Tv:.1f}"
+        te_val = "—" if is_nan(Te) else f"{Te:.1f}"
+        theta_val = "—" if is_nan(theta) else f"{theta:.1f}"
+        rho_val = "—" if is_nan(rho) else f"{rho:.3f}"
+        lcl_val = "—" if is_nan(lcl) else f"{lcl:.0f}"
+        sound_speed = float("nan")
+        if not is_nan(Tv):
+            try:
+                sound_speed = math.sqrt(1.4 * RD * (float(Tv) + 273.15))
+            except Exception:
+                sound_speed = float("nan")
+        c_sound_val = "—" if is_nan(sound_speed) else f"{sound_speed:.1f}"
 
-    cards_derived = [
-        card("Humedad específica", q_val, "g/kg", icon_kind="rh", uid="d1", dark=dark),
-        card("Humedad absoluta", rho_v_val, "g/m³", icon_kind="dew", uid="d7a", dark=dark),
-        card("Temp. bulbo húmedo", tw_val, "°C", icon_kind="dew", uid="tw", dark=dark),
-        card("Temp. virtual", tv_val, "°C", icon_kind="wind", uid="d3", dark=dark),
-        card("Temp. equivalente", te_val, "°C", icon_kind="rain", uid="d4", dark=dark),
-        card("Temp. potencial", theta_val, "°C", icon_kind="temp", uid="d2", dark=dark),
-        card("Densidad del aire", rho_val, "kg/m³", icon_kind="press", uid="d5", dark=dark),
-        card("Base nube LCL", lcl_val, "m", icon_kind="dew", uid="d6", dark=dark),
-    ]
-    render_grid(cards_derived, cols=4)
+        cards_derived = [
+            card("Humedad específica", q_val, "g/kg", icon_kind="rh", uid="d1", dark=dark),
+            card("Humedad absoluta", rho_v_val, "g/m³", icon_kind="dew", uid="d7a", dark=dark),
+            card("Temp. virtual", tv_val, "°C", icon_kind="wind", uid="d3", dark=dark),
+            card("Temp. equivalente", te_val, "°C", icon_kind="rain", uid="d4", dark=dark),
+            card("Temp. potencial", theta_val, "°C", icon_kind="temp", uid="d2", dark=dark),
+            card("Densidad del aire", rho_val, "kg/m³", icon_kind="press", uid="d5", dark=dark),
+            card("Base nube LCL", lcl_val, "m", icon_kind="dew", uid="d6", dark=dark),
+            card("Velocidad del sonido", c_sound_val, "m/s", icon_kind="wind", uid="d8", dark=dark),
+        ]
+        render_grid(cards_derived, cols=4)
 
     # ============================================================
     # NIVEL 3 — RADIACIÓN (solo si la estación tiene sensores)
@@ -3733,6 +3542,15 @@ elif active_tab == "Tendencias":
                 dewpts_7d = hourly7d.get("dewpts", [])
                 pressures_7d = hourly7d.get("pressures", [])
 
+                # WU devuelve presiones MSL → convertir a absoluta
+                if provider_id == "WU":
+                    _z7 = st.session_state.get("station_elevation", 0)
+                    _f7 = math.exp(-_z7 / 8000.0)
+                    pressures_7d = [
+                        p * _f7 if not is_nan(p) else float("nan")
+                        for p in pressures_7d
+                    ]
+
                 if (len(humidities_7d) == 0 or all(is_nan(h) for h in humidities_7d)) and len(dewpts_7d) == len(temps_7d):
                     logger.warning("⚠️  Serie sinóptica sin HR - usando fallback desde T y Td")
                     humidities_7d = []
@@ -3808,7 +3626,7 @@ elif active_tab == "Tendencias":
                 try:
                     theta_e_list = []
                     for _, row in df_trends.iterrows():
-                        if not (math.isnan(row["temp"]) or math.isnan(row["rh"]) or math.isnan(row["p"])):
+                        if not (pd.isna(row["temp"]) or pd.isna(row["rh"]) or pd.isna(row["p"])):
                             theta_e = equivalent_potential_temperature(row["temp"], row["rh"], row["p"])
                             theta_e_list.append(theta_e)
                         else:
@@ -3883,7 +3701,7 @@ elif active_tab == "Tendencias":
 
                     e_list = []
                     for _, row in df_trends.iterrows():
-                        if not (math.isnan(row["temp"]) or math.isnan(row["rh"])):
+                        if not (pd.isna(row["temp"]) or pd.isna(row["rh"])):
                             e = vapor_pressure(row["temp"], row["rh"])
                             e_list.append(e)
                         else:
@@ -4224,8 +4042,399 @@ elif active_tab == "Tendencias":
 # ============================================================
 
 elif active_tab == "Climogramas":
-    st.info("Sección en desarrollo - Próximamente")
-    st.markdown("Esta sección mostrará climogramas y estadísticas climáticas.")
+    section_title("Climogramas")
+
+    if not connected:
+        st.info("👈 Conecta una estación para ver climogramas.")
+    else:
+        provider_id = str(st.session_state.get("connection_type", "WU")).strip().upper() or "WU"
+        if provider_id not in ("WU", "METEOCAT", "AEMET", "METEOGALICIA"):
+            st.info(
+                "Por ahora Climogramas está implementado con WU, Meteocat, AEMET y MeteoGalicia. "
+                "La capa de cálculo ya es común para extenderla al resto de proveedores."
+            )
+        else:
+            if provider_id == "WU":
+                station_id = str(
+                    st.session_state.get("active_station", "")
+                    or st.session_state.get("wu_connected_station", "")
+                ).strip()
+                api_key = str(
+                    st.session_state.get("active_key", "")
+                    or st.session_state.get("wu_connected_api_key", "")
+                ).strip()
+            elif provider_id == "METEOCAT":
+                station_id = str(
+                    st.session_state.get("meteocat_station_id", "")
+                    or st.session_state.get("provider_station_id", "")
+                ).strip().upper()
+                api_key = None
+                series_start_iso = get_meteocat_station_series_start_date(station_id)
+                if series_start_iso:
+                    try:
+                        start_txt = datetime.fromisoformat(series_start_iso).strftime("%d/%m/%Y")
+                    except Exception:
+                        start_txt = str(series_start_iso)
+                    st.caption(f"Inicio de serie Meteocat (inventario): {start_txt}")
+                else:
+                    st.caption("Inicio de serie Meteocat (inventario): no disponible.")
+            elif provider_id == "AEMET":
+                station_id = str(
+                    st.session_state.get("aemet_station_id", "")
+                    or st.session_state.get("provider_station_id", "")
+                ).strip().upper()
+                api_key = AEMET_API_KEY
+            else:
+                # METEOGALICIA
+                station_id = str(
+                    st.session_state.get("meteogalicia_station_id", "")
+                    or st.session_state.get("provider_station_id", "")
+                ).strip()
+                api_key = None
+
+            if provider_id == "WU" and (not station_id or not api_key):
+                st.warning("⚠️ Faltan credenciales WU (Station ID/API Key) para consultar histórico.")
+            elif provider_id == "METEOCAT" and not station_id:
+                st.warning("⚠️ Falta código de estación Meteocat para consultar histórico.")
+            elif provider_id == "AEMET" and not station_id:
+                st.warning("⚠️ Falta código de estación AEMET para consultar histórico.")
+            elif provider_id == "METEOGALICIA" and not station_id:
+                st.warning("⚠️ Falta código de estación MeteoGalicia para consultar histórico.")
+            else:
+                import pandas as pd
+                import plotly.graph_objects as go
+                from plotly.subplots import make_subplots
+
+                now_local = datetime.now()
+                min_year = 1990
+                year_floor = max(min_year, now_local.year - 35)
+                year_options = list(range(now_local.year, year_floor - 1, -1))
+                default_year = now_local.year
+
+                summary_mode = st.radio(
+                    "Tipo de resumen",
+                    ["Mensual", "Anual"],
+                    horizontal=True,
+                    key="climo_summary_mode",
+                )
+
+                selected_months = []
+                selected_years = []
+
+                if summary_mode == "Mensual":
+                    month_col, year_col = st.columns(2)
+                    with month_col:
+                        selected_months = st.multiselect(
+                            "Mes(es)",
+                            options=list(range(1, 13)),
+                            default=[now_local.month],
+                            format_func=lambda m: MONTH_NAMES_ES.get(int(m), str(m)),
+                            key="climo_months_select",
+                        )
+                    with year_col:
+                        selected_years = st.multiselect(
+                            "Año(s)",
+                            options=year_options,
+                            default=[default_year],
+                            key="climo_years_monthly_select",
+                        )
+                else:
+                    selected_years = st.multiselect(
+                        "Año(s)",
+                        options=year_options,
+                        default=[default_year],
+                        key="climo_years_annual_select",
+                    )
+
+                max_monthly_blocks = 12
+                if summary_mode == "Mensual":
+                    monthly_blocks = len(selected_months) * len(selected_years)
+                    if monthly_blocks > max_monthly_blocks:
+                        st.warning(
+                            f"⚠️ En modo mensual el máximo es {max_monthly_blocks} bloques mes×año "
+                            f"(seleccionados: {monthly_blocks}). Reduce la selección."
+                        )
+
+                if not selected_years or (summary_mode == "Mensual" and not selected_months):
+                    if summary_mode == "Mensual":
+                        st.info("Selecciona al menos un mes y un año.")
+                    else:
+                        st.info("Selecciona al menos un año.")
+                elif summary_mode == "Mensual" and (len(selected_months) * len(selected_years) > max_monthly_blocks):
+                    st.stop()
+                else:
+                    periods = build_period_specs(summary_mode, selected_years, selected_months)
+                    if not periods:
+                        st.warning("⚠️ No se pudo construir un periodo válido.")
+                    else:
+                        total_days_requested = sum((period.end - period.start).days + 1 for period in periods)
+                        st.caption(
+                            f"Periodo: {describe_period_range(periods)} · "
+                            f"Bloques seleccionados: {len(periods)} · Días solicitados: {total_days_requested}"
+                        )
+
+                        daily_df = None
+                        extremes_overrides = None
+                        if provider_id == "WU":
+                            provider_label = "WU"
+                        elif provider_id == "AEMET":
+                            provider_label = "AEMET"
+                        elif provider_id == "METEOGALICIA":
+                            provider_label = "MeteoGalicia"
+                        else:
+                            provider_label = "Meteocat"
+                        with st.spinner(f"Consultando histórico de {provider_label}..."):
+                            try:
+                                if provider_id == "WU":
+                                    daily_df = fetch_wu_daily_history_for_periods(
+                                        station_id=station_id,
+                                        api_key=api_key,
+                                        periods=periods,
+                                    )
+                                elif provider_id == "AEMET":
+                                    if summary_mode == "Mensual":
+                                        daily_df = fetch_aemet_climo_daily_for_periods(
+                                            idema=station_id,
+                                            periods=periods,
+                                            api_key=api_key,
+                                        )
+                                    elif len(selected_years) == 1:
+                                        daily_df = fetch_aemet_climo_monthly_for_year(
+                                            idema=station_id,
+                                            year=int(selected_years[0]),
+                                            api_key=api_key,
+                                        )
+                                    else:
+                                        daily_df = fetch_aemet_climo_yearly_for_years(
+                                            idema=station_id,
+                                            years=[int(year) for year in selected_years],
+                                            api_key=api_key,
+                                        )
+                                elif provider_id == "METEOGALICIA":
+                                    if summary_mode == "Mensual":
+                                        daily_df = fetch_mgalicia_climo_daily_for_periods(
+                                            station_id=station_id,
+                                            periods=periods,
+                                        )
+                                    elif len(selected_years) == 1:
+                                        daily_df = fetch_mgalicia_climo_monthly_for_year(
+                                            station_id=station_id,
+                                            year=int(selected_years[0]),
+                                        )
+                                    else:
+                                        daily_df = fetch_mgalicia_climo_yearly_for_years(
+                                            station_id=station_id,
+                                            years=[int(year) for year in selected_years],
+                                        )
+                                else:
+                                    if summary_mode == "Anual" and len(selected_years) > 1:
+                                        daily_df = fetch_meteocat_annual_history_for_years(
+                                            station_code=station_id,
+                                            years=[int(year) for year in selected_years],
+                                        )
+                                    elif summary_mode == "Anual" and len(selected_years) == 1:
+                                        selected_year = int(selected_years[0])
+                                        daily_df = fetch_meteocat_monthly_history_for_year(
+                                            station_code=station_id,
+                                            year=selected_year,
+                                        )
+                                        extremes_overrides = fetch_meteocat_daily_extremes_for_year(
+                                            station_code=station_id,
+                                            year=selected_year,
+                                        )
+                                    elif summary_mode == "Mensual":
+                                        if len(periods) == 1:
+                                            daily_df = fetch_meteocat_daily_history_for_periods(
+                                                station_code=station_id,
+                                                periods=periods,
+                                            )
+                                        else:
+                                            daily_df = fetch_meteocat_monthly_history_for_periods(
+                                                station_code=station_id,
+                                                periods=periods,
+                                            )
+                                        extremes_overrides = fetch_meteocat_daily_extremes_for_periods(
+                                            station_code=station_id,
+                                            periods=periods,
+                                        )
+                                    else:
+                                        daily_df = fetch_meteocat_daily_history_for_periods(
+                                            station_code=station_id,
+                                            periods=periods,
+                                        )
+                            except WuError as e:
+                                if provider_id == "WU":
+                                    if e.kind == "unauthorized":
+                                        st.error("❌ API key inválida o sin permisos para histórico.")
+                                    elif e.kind == "notfound":
+                                        st.error("❌ Station ID no encontrado en WU histórico.")
+                                    elif e.kind == "ratelimit":
+                                        st.error("❌ Límite de peticiones alcanzado en WU histórico.")
+                                    elif e.kind == "timeout":
+                                        st.error("❌ Timeout consultando histórico de WU.")
+                                    elif e.kind == "network":
+                                        st.error("❌ Error de red consultando histórico de WU.")
+                                    else:
+                                        status_msg = f" (HTTP {e.status_code})" if e.status_code else ""
+                                        st.error(f"❌ Error consultando histórico de WU{status_msg}.")
+                                else:
+                                    st.error("❌ Error consultando histórico de Meteocat.")
+                            except Exception as exc:
+                                import traceback
+                                traceback.print_exc()
+                                st.error(f"❌ Error consultando histórico de {provider_label}: {type(exc).__name__}: {exc}")
+
+                        if daily_df is not None:
+                            if daily_df.empty:
+                                st.warning("⚠️ No hay datos para el periodo seleccionado.")
+                            else:
+                                data_start = pd.to_datetime(daily_df["date"]).min()
+                                data_end = pd.to_datetime(daily_df["date"]).max()
+                                st.caption(
+                                    f"Registros válidos recibidos: {len(daily_df)} · "
+                                    f"{data_start.strftime('%d/%m/%Y')} → {data_end.strftime('%d/%m/%Y')}"
+                                )
+
+                                st.markdown("### Hitos del periodo")
+                                extremes_table_df = build_extremes_table(daily_df, overrides=extremes_overrides)
+                                st.dataframe(extremes_table_df, width="stretch", hide_index=True)
+
+                                st.markdown("### Resumen del periodo")
+                                general_table_df = build_general_metrics_table(daily_df)
+                                st.dataframe(general_table_df, width="stretch", hide_index=True)
+
+                                chart_granularity = resolve_chart_granularity(summary_mode, len(periods))
+                                chart_df = build_chart_table(daily_df, chart_granularity)
+
+                                if not chart_df.empty:
+                                    if chart_granularity == "daily":
+                                        x_title = "Día"
+                                        title_scope = "diario"
+                                    elif chart_granularity == "monthly":
+                                        x_title = "Mes"
+                                        title_scope = "mensual"
+                                    else:
+                                        x_title = "Año"
+                                        title_scope = "anual"
+
+                                    if dark:
+                                        text_color = "rgba(255, 255, 255, 0.92)"
+                                        grid_color = "rgba(255, 255, 255, 0.14)"
+                                        precip_color = "rgba(96, 165, 250, 0.45)"
+                                    else:
+                                        text_color = "rgba(15, 18, 25, 0.92)"
+                                        grid_color = "rgba(18, 18, 18, 0.12)"
+                                        precip_color = "rgba(59, 130, 246, 0.35)"
+
+                                    fig_climo = make_subplots(specs=[[{"secondary_y": True}]])
+                                    fig_climo.add_trace(
+                                        go.Bar(
+                                            x=chart_df["label"],
+                                            y=chart_df["precip_total"],
+                                            name="Precipitación",
+                                            marker_color=precip_color,
+                                        ),
+                                        secondary_y=True,
+                                    )
+                                    fig_climo.add_trace(
+                                        go.Scatter(
+                                            x=chart_df["label"],
+                                            y=chart_df["temp_mean"],
+                                            mode="lines+markers",
+                                            name="Media diaria",
+                                            line=dict(color="#22c55e", width=2.5),
+                                        ),
+                                        secondary_y=False,
+                                    )
+                                    fig_climo.add_trace(
+                                        go.Scatter(
+                                            x=chart_df["label"],
+                                            y=chart_df["temp_max"],
+                                            mode="lines+markers",
+                                            name="Media de máximas",
+                                            line=dict(color="#ef4444", width=2.0),
+                                        ),
+                                        secondary_y=False,
+                                    )
+                                    fig_climo.add_trace(
+                                        go.Scatter(
+                                            x=chart_df["label"],
+                                            y=chart_df["temp_min"],
+                                            mode="lines+markers",
+                                            name="Media de mínimas",
+                                            line=dict(color="#3b82f6", width=2.0),
+                                        ),
+                                        secondary_y=False,
+                                    )
+
+                                    fig_climo.update_layout(
+                                        title=f"Climograma ({title_scope})",
+                                        height=500,
+                                        margin=dict(l=40, r=40, t=58, b=40),
+                                        hovermode="x unified",
+                                        legend=dict(orientation="h", y=1.12, x=0.0),
+                                        font=dict(color=text_color),
+                                    )
+                                    fig_climo.update_xaxes(
+                                        title_text=x_title,
+                                        showgrid=False,
+                                        tickfont=dict(color=text_color),
+                                    )
+                                    fig_climo.update_yaxes(
+                                        title_text="Temperatura (°C)",
+                                        secondary_y=False,
+                                        showgrid=True,
+                                        gridcolor=grid_color,
+                                        zeroline=False,
+                                    )
+                                    fig_climo.update_yaxes(
+                                        title_text="Precipitación (mm)",
+                                        secondary_y=True,
+                                        showgrid=False,
+                                        zeroline=False,
+                                    )
+
+                                    _plotly_chart_stretch(
+                                        fig_climo,
+                                        key=f"climogram_chart_{summary_mode}_{chart_granularity}_{len(chart_df)}",
+                                    )
+
+                                    if chart_granularity == "daily":
+                                        table_scope = "día"
+                                        table_period_col = "Día"
+                                    elif chart_granularity == "monthly":
+                                        table_scope = "mes"
+                                        table_period_col = "Mes"
+                                    else:
+                                        table_scope = "año"
+                                        table_period_col = "Año"
+
+                                    units_df = build_units_table(daily_df, chart_granularity)
+                                    table_df = units_df[
+                                        ["label", "temp_abs_max", "temp_abs_min", "temp_mean", "precip_total"]
+                                    ].copy()
+                                    table_df = table_df.rename(
+                                        columns={
+                                            "label": table_period_col,
+                                            "temp_abs_max": "Máx abs (°C)",
+                                            "temp_abs_min": "Mín abs (°C)",
+                                            "temp_mean": "Media (°C)",
+                                            "precip_total": "Precipitación (mm)",
+                                        }
+                                    )
+                                    for col_name in [
+                                        "Máx abs (°C)",
+                                        "Mín abs (°C)",
+                                        "Media (°C)",
+                                        "Precipitación (mm)",
+                                    ]:
+                                        table_df[col_name] = pd.to_numeric(table_df[col_name], errors="coerce")
+                                        table_df[col_name] = table_df[col_name].apply(
+                                            lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
+                                        )
+
+                                    st.markdown(f"### Datos por {table_scope}")
+                                    st.dataframe(table_df, width="stretch", hide_index=True)
 
 
 # ============================================================
@@ -4893,27 +5102,29 @@ st.markdown(
         </style>
         <div class="mlb-footer">
           <div class="mlb-footer-top">
-            <span><b>MeteoLabX · Versión 0.7.2</b></span>
+            <span><b>MeteoLabX · Versión 0.8.0</b></span>
             <span class="mlb-footer-news">
               <details>
                 <summary>Novedades</summary>
                 <div class="mlb-footer-box">
-                  <h2 style="margin:0 0 0.6rem 0;">0.7.1</h2>
+                  <h2 style="margin:0 0 0.6rem 0;">0.8.0</h2>
                   <h3>Mejoras</h3>
                   <ul>
-                    <li>Añadido soporte para estaciones de <b>MeteoGalicia</b> y del <b>NWS (EE. UU.)</b>.</li>
-                    <li>Añadido gráfico de <b>componentes del viento</b>.</li>
-                    <li>Nueva sección <b>Mapa</b>, con acceso a más de <b>30.000 estaciones</b> disponibles.</li>
-                    <li>Añadida la opción de <b>conectarse automáticamente a una estación al iniciar</b>.</li>
-                    <li>Mejorado el cálculo de <b>θe</b>: ahora utiliza la formulación de <b>Bolton (1980)</b>.</li>
-                    <li>La búsqueda manual ahora permite encontrar <b>cualquier localización</b> mediante <b>Nominatim</b>.</li>
+                    <li>Nueva sección <b>Climogramas</b>, disponible para estaciones WU, Meteocat, AEMET y MeteoGalicia.</li>
+                    <li>Mejoras en la visualización de los <b>gráficos de tendencias</b>.</li>
+                    <li>La <b>presión de vapor</b> ahora se muestra en la tarjeta de <b>Humedad relativa</b>.</li>
+                    <li>La <b>temperatura de bulbo húmedo</b> ahora se muestra en la tarjeta de <b>Punto de rocío</b>.</li>
+                    <li>Nueva tarjeta <b>Velocidad del sonido</b> en la sección de <b>Termodinámica</b>.</li>
+                    <li>Si una estación no tiene <b>barómetro</b>, se oculta la sección <b>Termodinámica</b>.</li>
+                    <li>Los <b>tooltips</b> ahora incluyen definiciones de las magnitudes.</li>
+                    <li>Mejoras internas de rendimiento y mantenimiento.</li>
                   </ul>
                   <h3>Correcciones</h3>
                   <ul>
-                    <li>Corregido el aislamiento de <b>credenciales y auto-conexión</b> entre navegadores/dispositivos.</li>
-                    <li>Corregido el error que obligaba a hacer <b>doble clic en las pestañas</b>.</li>
-                    <li>Solucionados problemas relacionados con los <b>temas</b>.</li>
-                    <li>Corregido un problema con valores de <b>irradiancia negativa</b> en estaciones de <b>Meteocat</b>.</li>
+                    <li>Corregido un error que impedía la conexión con estaciones de <b>Euskalmet</b>.</li>
+                    <li>Corregido un error que provocaba datos incorrectos en <b>Claridad del cielo</b>.</li>
+                    <li>Corregido el cálculo de <b>ET0</b> que en algunas estaciones podía dar valores erróneos.</li>
+                    <li>Corregido un error que impedía el cálculo correcto de la <b>sensación térmica</b>.</li>
                   </ul>
                 </div>
               </details>

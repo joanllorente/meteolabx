@@ -3,9 +3,31 @@ Componentes de sidebar y funciones auxiliares
 """
 import streamlit as st
 import os
+from datetime import datetime
 from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT, LS_WU_FORGOTTEN
 from utils.storage import set_local_storage, set_stored_autoconnect_target, forget_local_storage_keys
 from utils.helpers import normalize_text_input, is_nan
+
+
+def _now_local() -> datetime:
+    """Hora actual en la timezone del navegador del usuario."""
+    from zoneinfo import ZoneInfo
+    # JS escribe la timezone del navegador en el query param _tz en cada carga de página
+    if "browser_tz" not in st.session_state:
+        tz_name = st.query_params.get("_tz", "")
+        if tz_name:
+            try:
+                ZoneInfo(tz_name)  # validar que existe
+                st.session_state["browser_tz"] = tz_name
+            except Exception:
+                pass
+    tz_name = st.session_state.get("browser_tz", "")
+    if tz_name:
+        try:
+            return datetime.now(ZoneInfo(tz_name))
+        except Exception:
+            pass
+    return datetime.now().astimezone()
 
 
 def wind_dir_text(deg: float) -> str:
@@ -65,7 +87,6 @@ def render_sidebar(_local_storage_unused=None):
     Returns:
         Tupla (theme_mode, dark)
     """
-    from datetime import datetime
     from utils.storage import (
         get_stored_station,
         get_stored_apikey,
@@ -340,7 +361,7 @@ def render_sidebar(_local_storage_unused=None):
 
     def render_connection_banner(text: str, connected_state: bool):
         """Banner de estado con texto tintado (sin blanco puro)."""
-        now_local = datetime.now()
+        now_local = _now_local()
         auto_dark_local = (now_local.hour >= 20) or (now_local.hour <= 7)
         is_dark_ui = (
             theme_mode == "Oscuro" or
@@ -521,7 +542,7 @@ def render_sidebar(_local_storage_unused=None):
     show_provider_connection_status()
 
     # Determinar tema
-    now = datetime.now()
+    now = _now_local()
     auto_dark = (now.hour >= 20) or (now.hour <= 7)
     
     if theme_mode == "Auto":

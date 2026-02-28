@@ -2,7 +2,7 @@
 Cálculos relacionados con radiación solar y evapotranspiración según FAO-56
 """
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def is_nan(x):
@@ -51,7 +51,10 @@ def sunset_hour_angle(latitude_rad: float, declination_rad: float) -> float:
     Returns:
         Ángulo horario en radianes
     """
-    return math.acos(-math.tan(latitude_rad) * math.tan(declination_rad))
+    acos_arg = -math.tan(latitude_rad) * math.tan(declination_rad)
+    # Evita errores de dominio por redondeo numérico (p. ej. 1.0000000002).
+    acos_arg = max(-1.0, min(1.0, float(acos_arg)))
+    return math.acos(acos_arg)
 
 
 def extraterrestrial_radiation(latitude_deg: float, day_of_year: int) -> float:
@@ -95,22 +98,93 @@ def clear_sky_radiation(elevation_m: float, ra: float) -> float:
     
     Args:
         elevation_m: Elevación sobre el nivel del mar en metros
-        ra: Radiación extraterrestre en MJ/m²/día
+        ra: Radiación extraterrestre (mismas unidades objetivo)
         
     Returns:
-        Rso en MJ/m²/día
+        Rso en las mismas unidades que `ra`
     """
     # FAO-56 Eq. 37 para ausencia de turbidez
     rso = (0.75 + 2e-5 * elevation_m) * ra
     return rso
 
 
-def solar_radiation_max_wm2(latitude_deg: float, elevation_m: float, timestamp: float) -> float:
+def _seasonal_correction_solar_time(day_of_year: int) -> float:
+    """
+    Corrección estacional del tiempo solar (Sc) en horas.
+    FAO-56 Eq. 32/33.
+    """
+    b = 2.0 * math.pi * (day_of_year - 81) / 364.0
+    return 0.1645 * math.sin(2.0 * b) - 0.1255 * math.cos(b) - 0.025 * math.sin(b)
+
+
+def extraterrestrial_radiation_short_period(
+    latitude_deg: float,
+    longitude_deg: float,
+    timestamp: float,
+    period_minutes: float = 1.0,
+) -> float:
+    """
+    Radiación extraterrestre para periodos horarios o menores.
+    FAO-56 Eq. 28 (con Eq. 29-33 para ángulo horario solar).
+
+    Returns:
+        Ra en MJ/m²/h para el periodo centrado en `timestamp`.
+    """
+    if is_nan(latitude_deg) or period_minutes <= 0:
+        return float("nan")
+
+    lon_deg = 0.0 if is_nan(longitude_deg) else float(longitude_deg)
+    dt_utc = datetime.utcfromtimestamp(timestamp)
+
+    # Día del año en hora solar aproximada (UTC + lon/15).
+    dt_solar = dt_utc + timedelta(hours=(lon_deg / 15.0))
+    day_of_year = dt_solar.timetuple().tm_yday
+
+    lat_rad = math.radians(latitude_deg)
+    delta = solar_declination(day_of_year)
+    dr = inverse_relative_distance(day_of_year)
+    sc = _seasonal_correction_solar_time(day_of_year)  # horas
+
+    t_mid_utc_h = (
+        dt_utc.hour
+        + dt_utc.minute / 60.0
+        + dt_utc.second / 3600.0
+        + dt_utc.microsecond / 3_600_000_000.0
+    )
+
+    # Ángulo horario solar al punto medio del periodo (Eq. 31).
+    omega = (math.pi / 12.0) * ((t_mid_utc_h + lon_deg / 15.0 + sc) - 12.0)
+    period_h = float(period_minutes) / 60.0
+    omega_1 = omega - (math.pi * period_h / 24.0)  # Eq. 29
+    omega_2 = omega + (math.pi * period_h / 24.0)  # Eq. 30
+
+    # Recortar al intervalo diurno [−ws, ws].
+    ws = sunset_hour_angle(lat_rad, delta)
+    omega_1 = max(-ws, min(ws, omega_1))
+    omega_2 = max(-ws, min(ws, omega_2))
+    if omega_2 <= omega_1:
+        return 0.0
+
+    GSC = 0.0820  # MJ/m²/min
+    ra = (12.0 * 60.0 / math.pi) * GSC * dr * (
+        (omega_2 - omega_1) * math.sin(lat_rad) * math.sin(delta)
+        + math.cos(lat_rad) * math.cos(delta) * (math.sin(omega_2) - math.sin(omega_1))
+    )
+    return max(float(ra), 0.0)
+
+
+def solar_radiation_max_wm2(
+    latitude_deg: float,
+    elevation_m: float,
+    timestamp: float,
+    longitude_deg: float = float("nan"),
+    period_minutes: float = 1.0,
+) -> float:
     """
     Radiación solar máxima teórica instantánea en W/m²
     
-    Calcula la radiación máxima que podría recibirse en condiciones de cielo despejado
-    en una ubicación y fecha dadas.
+    Calcula la radiación máxima teórica para el instante de medida,
+    usando Ra de periodo corto (Eq. 28, FAO-56) en una ventana de 1 minuto.
     
     Args:
         latitude_deg: Latitud en grados
@@ -118,23 +192,24 @@ def solar_radiation_max_wm2(latitude_deg: float, elevation_m: float, timestamp: 
         timestamp: Timestamp Unix
         
     Returns:
-        Radiación máxima en W/m² (instantánea al mediodía)
+        Radiación máxima teórica instantánea en W/m²
     """
-    dt = datetime.fromtimestamp(timestamp)
-    day_of_year = dt.timetuple().tm_yday
-    
-    # Radiación extraterrestre diaria
-    ra = extraterrestrial_radiation(latitude_deg, day_of_year)
-    
-    # Radiación de cielo despejado diaria
-    rso_mj = clear_sky_radiation(elevation_m, ra)
-    
-    # Convertir de MJ/m²/día a W/m² instantáneo al mediodía
-    # Asumiendo distribución sinusoidal a lo largo del día (12h efectivas)
-    # Máximo instantáneo ≈ 1.5 * promedio durante horas de sol
-    rso_wm2 = (rso_mj / (12 * 3600)) * 1e6 * 1.5
-    
-    return rso_wm2
+    elev = 0.0 if is_nan(elevation_m) else float(elevation_m)
+    ra_short = extraterrestrial_radiation_short_period(
+        latitude_deg=latitude_deg,
+        longitude_deg=longitude_deg,
+        timestamp=timestamp,
+        period_minutes=period_minutes,
+    )
+    if is_nan(ra_short):
+        return float("nan")
+
+    # Rso = (0.75 + 2e-5 z) * Ra, en las mismas unidades que Ra.
+    rso_mj_per_h = clear_sky_radiation(elev, ra_short)
+
+    # MJ/m²/h -> W/m²
+    rso_wm2 = (rso_mj_per_h * 1_000_000.0) / 3600.0
+    return max(float(rso_wm2), 0.0)
 
 
 # ============================================================
@@ -281,7 +356,13 @@ def sky_clarity_index(
         return float("nan")
     
     # Calcular radiación máxima teórica
-    solar_max = solar_radiation_max_wm2(latitude_deg, elevation_m, timestamp)
+    solar_max = solar_radiation_max_wm2(
+        latitude_deg,
+        elevation_m,
+        timestamp,
+        longitude_deg=longitude_deg,
+        period_minutes=1.0,
+    )
     
     # Claridad como fracción de la radiación máxima
     clarity = solar_rad / solar_max if solar_max > 0 else 0.0

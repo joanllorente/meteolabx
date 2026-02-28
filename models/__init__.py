@@ -5,8 +5,9 @@ from .thermodynamics import (
     e_s, vapor_pressure, dewpoint_from_vapor_pressure,
     mixing_ratio, specific_humidity, absolute_humidity,
     potential_temperature, virtual_temperature, equivalent_temperature, equivalent_potential_temperature,
-    wet_bulb_celsius, wet_bulb_celsius_stull,
+    wet_bulb_celsius, wet_bulb_celsius_stull, wet_bulb_psychrometric,
     msl_to_absolute, absolute_to_msl, air_density, lcl_height,
+    apparent_temperature, heat_index_rothfusz,
     # Aliases para compatibilidad
     theta_celsius, Tv_celsius, Te_celsius
 )
@@ -29,8 +30,9 @@ __all__ = [
     'e_s', 'vapor_pressure', 'dewpoint_from_vapor_pressure',
     'mixing_ratio', 'specific_humidity', 'absolute_humidity',
     'potential_temperature', 'virtual_temperature', 'equivalent_temperature', 'equivalent_potential_temperature',
-    'wet_bulb_celsius', 'wet_bulb_celsius_stull',
+    'wet_bulb_celsius', 'wet_bulb_celsius_stull', 'wet_bulb_psychrometric',
     'msl_to_absolute', 'absolute_to_msl', 'air_density', 'lcl_height',
+    'apparent_temperature', 'heat_index_rothfusz',
     'theta_celsius', 'Tv_celsius', 'Te_celsius',  # Aliases
     # Radiation
     'penman_monteith_et0', 'sky_clarity_label',

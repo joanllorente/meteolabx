@@ -259,11 +259,14 @@ def _candidate_inventory_sensors(station_id: str, measure_type: str, measure_id:
     return ordered[:max(4, DISCOVERY_MAX_CANDIDATES)]
 
 
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def _resolve_private_key_path() -> str:
     candidates = [
         str(st.session_state.get("euskalmet_private_key_path", "")).strip(),
         str(EUSKALMET_PRIVATE_KEY_PATH).strip(),
-        "/Users/joantisdale/Downloads/Apikey/privateKey.pem",
+        os.path.join(_PROJECT_ROOT, "keys", "euskalmet", "privateKey.pem"),
     ]
     for p in candidates:
         if p and os.path.exists(p):
@@ -275,7 +278,7 @@ def _resolve_public_key_path() -> str:
     candidates = [
         str(st.session_state.get("euskalmet_public_key_path", "")).strip(),
         str(EUSKALMET_PUBLIC_KEY_PATH).strip(),
-        "/Users/joantisdale/Downloads/Apikey/publicKey.pem",
+        os.path.join(_PROJECT_ROOT, "keys", "euskalmet", "publicKey.pem"),
     ]
     for p in candidates:
         if p and os.path.exists(p):

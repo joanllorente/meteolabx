@@ -195,6 +195,68 @@ def wet_bulb_celsius_stull(T_celsius: float, RH_pct: float) -> float:
     except Exception:
         return float("nan")
 
+
+def wet_bulb_psychrometric(T_celsius: float, RH_pct: float, p_abs_hpa: float) -> float:
+    """
+    Temperatura de bulbo húmedo por ecuación psicrométrica (Newton-Raphson).
+
+    Resuelve  e = e_s(Tw) − γ·(T − Tw)
+    con  γ = cp·p / (ε·Lv)
+
+    Args:
+        T_celsius: Temperatura en °C
+        RH_pct: Humedad relativa en %
+        p_abs_hpa: Presión absoluta en hPa
+    Returns:
+        Temperatura de bulbo húmedo en °C
+    """
+    try:
+        if T_celsius is None or RH_pct is None or p_abs_hpa is None:
+            return float("nan")
+        T = float(T_celsius)
+        RH = float(RH_pct)
+        p = float(p_abs_hpa)
+        if is_nan(T) or is_nan(RH) or is_nan(p) or p <= 0:
+            return wet_bulb_celsius_stull(T, RH)
+
+        # Constante psicrométrica  γ = cp·p / (ε·Lv)  [hPa/°C]
+        gamma = CP * p / (EPSILON * LV)
+
+        # Presión de vapor real
+        e_actual = vapor_pressure(T, RH)
+        if is_nan(e_actual):
+            return wet_bulb_celsius_stull(T, RH)
+
+        # Semilla: Stull 2011
+        Tw = wet_bulb_celsius_stull(T, RH)
+        if is_nan(Tw):
+            return float("nan")
+
+        # Newton-Raphson
+        for _ in range(50):
+            es_tw = e_s(Tw)
+            # f(Tw) = e_s(Tw) − γ·(T − Tw) − e
+            f_val = es_tw - gamma * (T - Tw) - e_actual
+            # f'(Tw) = de_s/dTw + γ
+            des_dtw = es_tw * 17.67 * 243.5 / ((Tw + 243.5) ** 2)
+            fp_val = des_dtw + gamma
+            if abs(fp_val) < 1e-12:
+                break
+            delta = f_val / fp_val
+            Tw -= delta
+            if abs(delta) < 1e-6:
+                break
+
+        # Clamp a [Td, T] para garantía física
+        Td = dewpoint_from_vapor_pressure(e_actual)
+        if not is_nan(Td):
+            Tw = max(Tw, Td)
+        Tw = min(Tw, T)
+        return Tw
+    except Exception:
+        return wet_bulb_celsius_stull(T_celsius, RH_pct)
+
+
 # ====================
 # PRESIÓN
 # ====================
@@ -260,8 +322,65 @@ def lcl_height(T_celsius: float, Td_celsius: float) -> float:
     """
     return LCL_FACTOR * (T_celsius - Td_celsius)
 
-# Alias para compatibilidad
-wet_bulb_celsius = wet_bulb_celsius_stull
+# ====================
+# SENSACIÓN TÉRMICA
+# ====================
+
+def apparent_temperature(T_celsius: float, e_hpa: float, v_ms: float) -> float:
+    """
+    Temperatura aparente (Steadman, 1984).
+    T_app = T + 0.33·e − 0.70·v − 4.00
+
+    Args:
+        T_celsius: Temperatura en °C
+        e_hpa: Presión de vapor en hPa
+        v_ms: Velocidad del viento en m/s
+    Returns:
+        Temperatura aparente en °C
+    """
+    if is_nan(T_celsius) or is_nan(e_hpa):
+        return float("nan")
+    if is_nan(v_ms):
+        v_ms = 0.0
+    return T_celsius + 0.33 * e_hpa - 0.70 * v_ms - 4.00
+
+
+def heat_index_rothfusz(T_celsius: float, RH_pct: float) -> float:
+    """
+    Heat Index (Rothfusz, NWS).
+    Regresión polinómica de 9 coeficientes.
+
+    Args:
+        T_celsius: Temperatura en °C
+        RH_pct: Humedad relativa en %
+    Returns:
+        Heat Index en °C
+    """
+    if is_nan(T_celsius) or is_nan(RH_pct):
+        return float("nan")
+    T = T_celsius
+    RH = RH_pct
+    return (
+        -8.78469475556
+        + 1.61139411 * T
+        + 2.33854883889 * RH
+        - 0.14611605 * T * RH
+        - 0.012308094 * T * T
+        - 0.0164248277778 * RH * RH
+        + 0.002211732 * T * T * RH
+        + 0.00072546 * T * RH * RH
+        - 0.000003582 * T * T * RH * RH
+    )
+
+
+# Dispatcher bulbo húmedo: psicrométrica si hay presión, Stull si no
+def wet_bulb_celsius(T_celsius: float, RH_pct: float, p_abs_hpa: float = None) -> float:
+    """Tw: usa ecuación psicrométrica si hay p_abs, Stull 2011 si no."""
+    if p_abs_hpa is not None and not is_nan(p_abs_hpa):
+        return wet_bulb_psychrometric(T_celsius, RH_pct, p_abs_hpa)
+    return wet_bulb_celsius_stull(T_celsius, RH_pct)
+
+
 theta_celsius = potential_temperature
 Tv_celsius = virtual_temperature
 Te_celsius = equivalent_temperature

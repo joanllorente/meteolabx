@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 WU_URL_CURRENT = "https://api.weather.com/v2/pws/observations/current"
 WU_URL_DAILY = "https://api.weather.com/v2/pws/observations/all/1day"
 WU_URL_HOURLY_7DAY = "https://api.weather.com/v2/pws/observations/hourly/7day"
+WU_URL_HISTORY_DAILY = "https://api.weather.com/v2/pws/history/daily"
 
 
 class WuError(Exception):
@@ -761,3 +762,67 @@ def fetch_hourly_7day_session_cached(station_id: str, api_key: str) -> Dict:
             "pressures": [],
             "has_data": False
         }
+
+
+def fetch_wu_history_daily(
+    station_id: str,
+    api_key: str,
+    *,
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    units: str = "m",
+) -> Dict:
+    """Consulta histórico diario de WU (v2/pws/history/daily)."""
+    has_single_date = bool(date)
+    has_range = bool(start_date and end_date)
+
+    if has_single_date and has_range:
+        raise ValueError("Usa date o start_date/end_date, no ambos a la vez.")
+    if not has_single_date and not has_range:
+        raise ValueError("Debes indicar date o start_date/end_date.")
+    if bool(start_date) ^ bool(end_date):
+        raise ValueError("start_date y end_date deben ir juntos.")
+
+    params = {
+        "stationId": station_id,
+        "format": "json",
+        "units": units,
+        "apiKey": api_key,
+        "numericPrecision": "decimal",
+    }
+
+    if has_single_date:
+        params["date"] = str(date)
+    else:
+        params["startDate"] = str(start_date)
+        params["endDate"] = str(end_date)
+
+    try:
+        r = requests.get(WU_URL_HISTORY_DAILY, params=params, timeout=WU_TIMEOUT_SECONDS)
+    except requests.Timeout:
+        raise WuError("timeout")
+    except requests.RequestException:
+        raise WuError("network")
+
+    if r.status_code == 401:
+        raise WuError("unauthorized", 401)
+    if r.status_code == 404:
+        raise WuError("notfound", 404)
+    if r.status_code == 429:
+        raise WuError("ratelimit", 429)
+    if r.status_code >= 400:
+        raise WuError("http", r.status_code)
+
+    try:
+        data = r.json()
+    except ValueError:
+        raise WuError("badjson")
+
+    if not isinstance(data, dict):
+        return {"observations": []}
+
+    observations = data.get("observations", [])
+    if not isinstance(observations, list):
+        data["observations"] = []
+    return data

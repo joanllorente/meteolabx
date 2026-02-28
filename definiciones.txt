@@ -1,8 +1,8 @@
 - Temperatura: indica el estado de agitación de las partículas del aire. Es medida directamente por la estación con mediante un termistor.
 
-	- Feels like: es la  temperatura aparente calculada combinando T, humedad y 	viento
+	- Feels like: es la  temperatura aparente calculada combinando T, humedad y viento. Utiliza Steadman 1984.
 
-	- Heat Index: sensación de bochorno para calor; se calcula con temperatura y 	humedad (sin viento) cuando la temperatura es superior a 25ºC
+	- Heat Index: sensación de bochorno para calor; se calcula con temperatura y humedad (sin viento) cuando la temperatura es superior a 25ºC mediante regresión polinómica Rothfusz de 9 coeficientes.
 
 ===============================================================================
 - Humedad relativa: indica qué porcentaje de saturación tiene el aire (depende de la temperatura). La mide un sensor capacitivo de polímero: la humedad cambia su capacitancia y la estación lo convierte a %HR.
@@ -11,7 +11,8 @@
 
 ===============================================================================
 - Punto de rocío: temperatura a la que el aire debe enfriarse para alcanzar la saturación y que empiece a condensar. Se calcula con Magnus–Tetens.
-	- Temperatura de bulbo húmedo (Tw): temperatura mínima que alcanzaría el aire al enfriarse por evaporación (hasta saturación). Se calcula a partir de T, HR y presión mediante la ecuación psicrométrica.
+
+	- Temperatura de bulbo húmedo (Tw): temperatura mínima que alcanzaría el aire al enfriarse por evaporación (hasta saturación). Si la estación tiene barómetro se calcula mediante la ecuación psicrométrica usando el método de Newton-Rapshon, si no hay barómetro se calcula con la aproximación Stull 2011.
 	
 ===============================================================================
 - Presión absoluta: presión atmosférica medida por el barómetro de la estación en su altitud. Es la fuerza por m² debida al aire que hay encima.
@@ -57,6 +58,10 @@
 
 ==============================================================================
 - Nivel de condensación por ascenso (LCL): altura a la que una parcela de aire, al ascender adiabáticamente, alcanza la saturación. Se calcula a partir de T y Td.
+
+==============================================================================
+- Velocidad del sonido: velocidad a la que una onda de presión se transmite por el aire.
+
 
 ==============================================================================
 - Radiación solar: potencia de energía solar que llega al sensor por unidad de área. La mide el piranómetro de la estación (fotodiodo calibrado).

@@ -107,7 +107,7 @@ def _build_auto_jwt(args: argparse.Namespace) -> str:
 
     private_key_path = str(args.private_key or os.getenv("EUSKALMET_PRIVATE_KEY_PATH", "")).strip()
     if not private_key_path:
-        private_key_path = "/Users/joantisdale/Downloads/Apikey/privateKey.pem"
+        private_key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keys", "euskalmet", "privateKey.pem")
     if not os.path.exists(private_key_path):
         return ""
 

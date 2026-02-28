@@ -1,14 +1,15 @@
 """
-Servicio para integrar observaciones de MeteoGalicia.
+Servicio para integrar observaciones y climogramas de MeteoGalicia.
 """
 
 import json
 import math
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -16,6 +17,8 @@ import streamlit as st
 BASE_URL = "https://servizos.meteogalicia.gal/mgrss/observacion"
 TENMIN_ENDPOINT = f"{BASE_URL}/ultimos10minEstacionsMeteo.action"
 HOURLY_ENDPOINT = f"{BASE_URL}/ultimosHorariosEstacions.action"
+DAILY_ENDPOINT = f"{BASE_URL}/datosDiariosEstacionsMeteo.action"
+MONTHLY_ENDPOINT = f"{BASE_URL}/datosMensuaisEstacionsMeteo.action"
 TIMEOUT_SECONDS = 14
 
 
@@ -603,3 +606,376 @@ def get_meteogalicia_data() -> Optional[Dict[str, Any]]:
             "has_data": bool(hourly_series.get("has_data", False)),
         },
     }
+
+
+# =====================================================================
+# CLIMOGRAMAS — datos diarios y mensuales para la pestaña Climogramas
+# =====================================================================
+
+# Esquema de columnas del DataFrame devuelto (compatible con climograms.py).
+_CLIMO_DAILY_COLS = [
+    "date", "epoch", "temp_mean", "temp_max", "temp_min",
+    "wind_mean", "gust_max", "precip_total",
+]
+_CLIMO_EXTRA_COLS = [
+    "solar_hours", "precip_max_24h", "rain_days",
+    "temp_abs_max", "temp_abs_min",
+    "tropical_nights", "frost_nights",
+]
+
+# Mapeo código-parámetro → campo del esquema para datos *diarios*.
+_DAILY_PARAM_MAP: Dict[str, Tuple[str, float]] = {
+    "TA_AVG_1.5m":   ("temp_mean",    1.0),
+    "TA_MAX_1.5m":   ("temp_max",     1.0),
+    "TA_MIN_1.5m":   ("temp_min",     1.0),
+    "PP_SUM_1.5m":   ("precip_total", 1.0),
+    "VV_AVG_10m":    ("wind_mean",    3.6),   # m/s → km/h
+    "VV_AVG_2m":     ("wind_mean",    3.6),
+    "VV_MAX_10m":    ("gust_max",     3.6),
+    "VV_MAX_2m":     ("gust_max",     3.6),
+    "HSOL_SUM_1.5m": ("solar_hours",  1.0),
+}
+
+# Mapeo código-parámetro → campo del esquema para datos *mensuales*.
+_MONTHLY_PARAM_MAP: Dict[str, Tuple[str, float]] = {
+    "TA_AVG_1.5m":          ("temp_mean",      1.0),
+    "TA_AVGMAX_1.5m":       ("temp_max",       1.0),   # media de máximas
+    "TA_AVGMIN_1.5m":       ("temp_min",       1.0),   # media de mínimas
+    "TA_MAX_1.5m":          ("temp_abs_max",   1.0),   # absoluta del mes
+    "TA_MIN_1.5m":          ("temp_abs_min",   1.0),   # absoluta del mes
+    "PP_SUM_1.5m":          ("precip_total",   1.0),
+    "PP_MAX_1.5m":          ("precip_max_24h", 1.0),
+    "VV_AVG_10m":           ("wind_mean",      3.6),
+    "VV_AVG_2m":            ("wind_mean",      3.6),
+    "VV_MAX_10m":           ("gust_max",       3.6),
+    "VV_MAX_2m":            ("gust_max",       3.6),
+    "HSOL_SUM_1.5m":        ("solar_hours",    1.0),
+    "NDPP_RECUENTO_1.5m":   ("rain_days",      1.0),
+    "NDX_RECUENTO_1.5m":    ("frost_nights",   1.0),   # días de helada
+}
+
+
+def _mgalicia_parse_measures(
+    medidas: Any,
+    param_map: Dict[str, Tuple[str, float]],
+) -> Dict[str, float]:
+    """Extrae medidas de una listaMedidas según el mapa de parámetros.
+
+    Descarta valores con código de validación 3 (erróneo) o 9 (sin registro).
+    Cuando hay duplicados de campo, conserva el de mayor prioridad (10m > 2m).
+    """
+    out: Dict[str, float] = {}
+    priority: Dict[str, int] = {}
+    if not isinstance(medidas, list):
+        return out
+
+    for m in medidas:
+        if not isinstance(m, dict):
+            continue
+        # Descartar datos erróneos / sin registro.
+        try:
+            vc = int(m.get("lnCodigoValidacion", 0))
+            if vc in (3, 9):
+                continue
+        except (TypeError, ValueError):
+            pass
+
+        code = str(m.get("codigoParametro", "")).strip()
+        mapping = param_map.get(code)
+        if mapping is None:
+            continue
+
+        field, factor = mapping
+        val = _safe_float(m.get("valor"))
+        if _is_nan(val) or val <= -9999:
+            continue
+
+        # Priorizar sensores a mayor altura (10m > 2m).
+        score = 10 if "10m" in code.lower() or "10M" in code else 0
+        if field not in out or score >= priority.get(field, -1):
+            out[field] = val * factor
+            priority[field] = score
+    return out
+
+
+def _mgalicia_parse_date(data_str: Any) -> Optional[date]:
+    """Convierte la cadena 'data' de la respuesta a un objeto date (UTC)."""
+    raw = str(data_str or "").strip()
+    if not raw:
+        return None
+    # Formato habitual: "2024-01-15T00:00:00.000+01:00" o similar ISO.
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z",
+                "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw[:26].replace("+", "+") if "+" in raw else raw, fmt).date()
+        except Exception:
+            continue
+    # Intento genérico con fromisoformat (Python 3.11+).
+    try:
+        return datetime.fromisoformat(raw).date()
+    except Exception:
+        return None
+
+
+def _last_day_of_month(year: int, month: int) -> date:
+    if month == 12:
+        return date(year, 12, 31)
+    return date(year, month + 1, 1) - timedelta(days=1)
+
+
+def _empty_climo_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=_CLIMO_DAILY_COLS + _CLIMO_EXTRA_COLS)
+
+
+# ── Datos diarios ───────────────────────────────────────────────────────
+
+def _fetch_daily_raw(station_id: str, start: date, end: date) -> List[Dict[str, Any]]:
+    """Consulta el endpoint diario y devuelve las filas parseadas."""
+    params = {
+        "idEst": str(station_id).strip(),
+        "dataIni": start.strftime("%d/%m/%Y"),
+        "dataFin": end.strftime("%d/%m/%Y"),
+    }
+    try:
+        payload = _request_json(DAILY_ENDPOINT, params=params)
+    except Exception:
+        return []
+
+    # Estructura: { "listDatosDiarios": [ { "data": "...", "listaEstacions": [...] } ] }
+    day_entries = payload.get("listDatosDiarios", []) if isinstance(payload, dict) else []
+    sid = str(station_id).strip()
+
+    rows: List[Dict[str, Any]] = []
+    for entry in day_entries:
+        if not isinstance(entry, dict):
+            continue
+        day_date = _mgalicia_parse_date(entry.get("data"))
+        if day_date is None:
+            continue
+
+        stations = entry.get("listaEstacions", [])
+        if not isinstance(stations, list):
+            continue
+
+        # Buscar nuestra estación en la lista.
+        station_block = None
+        for s in stations:
+            if not isinstance(s, dict):
+                continue
+            if str(s.get("idEstacion", "")).strip() == sid:
+                station_block = s
+                break
+        if station_block is None and stations:
+            station_block = stations[0]
+        if station_block is None:
+            continue
+
+        measures = _mgalicia_parse_measures(
+            station_block.get("listaMedidas", []),
+            _DAILY_PARAM_MAP,
+        )
+        if not measures:
+            continue
+
+        row: Dict[str, Any] = {"date": pd.Timestamp(day_date), "epoch": 0.0}
+        for col in _CLIMO_DAILY_COLS[2:] + _CLIMO_EXTRA_COLS:
+            row[col] = measures.get(col, float("nan"))
+        rows.append(row)
+
+    return rows
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_mgalicia_climo_daily_for_periods(
+    station_id: str,
+    periods: Sequence[Any],
+) -> pd.DataFrame:
+    """Modo Mensual: descarga datos diarios para los periodos indicados."""
+    all_rows: List[Dict[str, Any]] = []
+    for period in periods:
+        start = period.start if hasattr(period, "start") else period[0]
+        end = period.end if hasattr(period, "end") else period[1]
+        all_rows.extend(_fetch_daily_raw(station_id, start, end))
+
+    if not all_rows:
+        return _empty_climo_df()
+
+    df = pd.DataFrame(all_rows)
+    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
+    for col in _CLIMO_DAILY_COLS[2:] + _CLIMO_EXTRA_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["precip_total"] = df["precip_total"].clip(lower=0)
+
+    df = (
+        df.sort_values("date")
+        .drop_duplicates(subset=["date"], keep="last")
+        .reset_index(drop=True)
+    )
+    # Asegurar que todas las columnas del esquema existen.
+    for col in _CLIMO_DAILY_COLS + _CLIMO_EXTRA_COLS:
+        if col not in df.columns:
+            df[col] = float("nan") if col != "date" else pd.NaT
+    return df
+
+
+# ── Datos mensuales ─────────────────────────────────────────────────────
+
+def _fetch_monthly_raw(station_id: str, start: date, end: date) -> List[Dict[str, Any]]:
+    """Consulta el endpoint mensual y devuelve las filas parseadas."""
+    params = {
+        "idEst": str(station_id).strip(),
+        "dataIni": start.strftime("%d/%m/%Y"),
+        "dataFin": end.strftime("%d/%m/%Y"),
+    }
+    try:
+        payload = _request_json(MONTHLY_ENDPOINT, params=params)
+    except Exception:
+        return []
+
+    month_entries = payload.get("listDatosMensuais", []) if isinstance(payload, dict) else []
+    sid = str(station_id).strip()
+
+    rows: List[Dict[str, Any]] = []
+    for entry in month_entries:
+        if not isinstance(entry, dict):
+            continue
+        month_date = _mgalicia_parse_date(entry.get("data"))
+        if month_date is None:
+            continue
+
+        stations = entry.get("listaEstacions", [])
+        if not isinstance(stations, list):
+            continue
+
+        station_block = None
+        for s in stations:
+            if not isinstance(s, dict):
+                continue
+            if str(s.get("idEstacion", "")).strip() == sid:
+                station_block = s
+                break
+        if station_block is None and stations:
+            station_block = stations[0]
+        if station_block is None:
+            continue
+
+        measures = _mgalicia_parse_measures(
+            station_block.get("listaMedidas", []),
+            _MONTHLY_PARAM_MAP,
+        )
+        if not measures:
+            continue
+
+        # Fecha = primer día del mes (formato mensual-indexado).
+        canonical_date = date(month_date.year, month_date.month, 1)
+        row: Dict[str, Any] = {
+            "date": pd.Timestamp(canonical_date),
+            "epoch": 0.0,
+        }
+        for col in _CLIMO_DAILY_COLS[2:] + _CLIMO_EXTRA_COLS:
+            row[col] = measures.get(col, float("nan"))
+        rows.append(row)
+
+    return rows
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_mgalicia_climo_monthly_for_year(
+    station_id: str,
+    year: int,
+) -> pd.DataFrame:
+    """Modo Anual (1 año): descarga datos mensuales para un año."""
+    start = date(year, 1, 1)
+    end = date(year, 12, 31)
+    rows = _fetch_monthly_raw(station_id, start, end)
+
+    if not rows:
+        return _empty_climo_df()
+
+    df = pd.DataFrame(rows)
+    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
+    for col in _CLIMO_DAILY_COLS[2:] + _CLIMO_EXTRA_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["precip_total"] = df["precip_total"].clip(lower=0)
+
+    df = (
+        df.sort_values("date")
+        .drop_duplicates(subset=["date"], keep="last")
+        .reset_index(drop=True)
+    )
+    for col in _CLIMO_DAILY_COLS + _CLIMO_EXTRA_COLS:
+        if col not in df.columns:
+            df[col] = float("nan") if col != "date" else pd.NaT
+    return df
+
+
+# ── Datos plurianuales ──────────────────────────────────────────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_mgalicia_climo_yearly_for_years(
+    station_id: str,
+    years: Sequence[int],
+) -> pd.DataFrame:
+    """Modo Plurianual: descarga mensuales de cada año y agrega a nivel anual."""
+    yearly_rows: List[Dict[str, Any]] = []
+    for yr in sorted(set(int(y) for y in years)):
+        start = date(yr, 1, 1)
+        end = date(yr, 12, 31)
+        monthly = _fetch_monthly_raw(station_id, start, end)
+        if not monthly:
+            continue
+
+        mdf = pd.DataFrame(monthly)
+        for col in _CLIMO_DAILY_COLS[2:] + _CLIMO_EXTRA_COLS:
+            if col in mdf.columns:
+                mdf[col] = pd.to_numeric(mdf[col], errors="coerce")
+
+        row: Dict[str, Any] = {
+            "date": pd.Timestamp(date(yr, 1, 1)),
+            "epoch": 0.0,
+        }
+        # Medias: temp_mean, temp_max, temp_min, wind_mean
+        for col in ("temp_mean", "temp_max", "temp_min", "wind_mean"):
+            if col in mdf.columns:
+                row[col] = float(mdf[col].mean(skipna=True))
+            else:
+                row[col] = float("nan")
+        # Sumas: precip_total, solar_hours, rain_days, frost_nights
+        for col in ("precip_total", "solar_hours", "rain_days", "frost_nights"):
+            if col in mdf.columns:
+                s = mdf[col].dropna()
+                row[col] = float(s.sum()) if len(s) > 0 else float("nan")
+            else:
+                row[col] = float("nan")
+        # Máximos: temp_abs_max, gust_max, precip_max_24h
+        for col in ("temp_abs_max", "gust_max", "precip_max_24h"):
+            if col in mdf.columns:
+                s = mdf[col].dropna()
+                row[col] = float(s.max()) if len(s) > 0 else float("nan")
+            else:
+                row[col] = float("nan")
+        # Mínimo: temp_abs_min
+        if "temp_abs_min" in mdf.columns:
+            s = mdf["temp_abs_min"].dropna()
+            row["temp_abs_min"] = float(s.min()) if len(s) > 0 else float("nan")
+        else:
+            row["temp_abs_min"] = float("nan")
+
+        yearly_rows.append(row)
+
+    if not yearly_rows:
+        return _empty_climo_df()
+
+    df = pd.DataFrame(yearly_rows)
+    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
+    for col in _CLIMO_DAILY_COLS[2:] + _CLIMO_EXTRA_COLS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df = df.sort_values("date").reset_index(drop=True)
+    for col in _CLIMO_DAILY_COLS + _CLIMO_EXTRA_COLS:
+        if col not in df.columns:
+            df[col] = float("nan") if col != "date" else pd.NaT
+    return df
