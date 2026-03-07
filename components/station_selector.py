@@ -266,6 +266,12 @@ def _apply_selected_station(station):
         st.session_state["nws_station_lat"] = station.lat
         st.session_state["nws_station_lon"] = station.lon
         st.session_state["nws_station_alt"] = station.elevation_m
+    elif station.provider_id == "POEM":
+        st.session_state["poem_station_id"] = station.station_id
+        st.session_state["poem_station_name"] = station.name
+        st.session_state["poem_station_lat"] = station.lat
+        st.session_state["poem_station_lon"] = station.lon
+        st.session_state["poem_station_alt"] = station.elevation_m
 
     st.session_state["connected"] = True
     st.session_state["show_results"] = False

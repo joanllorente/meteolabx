@@ -128,7 +128,7 @@ def extraterrestrial_radiation_short_period(
     FAO-56 Eq. 28 (con Eq. 29-33 para ángulo horario solar).
 
     Returns:
-        Ra en MJ/m²/h para el periodo centrado en `timestamp`.
+        Ra en MJ/m² para el periodo centrado en `timestamp`.
     """
     if is_nan(latitude_deg) or period_minutes <= 0:
         return float("nan")
@@ -205,10 +205,12 @@ def solar_radiation_max_wm2(
         return float("nan")
 
     # Rso = (0.75 + 2e-5 z) * Ra, en las mismas unidades que Ra.
-    rso_mj_per_h = clear_sky_radiation(elev, ra_short)
+    # `ra_short` está en MJ/m² para el periodo usado, no por hora.
+    rso_mj_period = clear_sky_radiation(elev, ra_short)
 
-    # MJ/m²/h -> W/m²
-    rso_wm2 = (rso_mj_per_h * 1_000_000.0) / 3600.0
+    # MJ/m² por periodo -> W/m² medio durante ese periodo.
+    period_seconds = max(float(period_minutes) * 60.0, 1.0)
+    rso_wm2 = (rso_mj_period * 1_000_000.0) / period_seconds
     return max(float(rso_wm2), 0.0)
 
 
@@ -499,6 +501,25 @@ def sunrise_sunset_label(latitude_deg: float, longitude_deg: float, timestamp: f
         return f"Orto {_fmt_local_minutes(sunrise_min)} · Ocaso {_fmt_local_minutes(sunset_min)}"
 
     return f"Orto {sunrise.strftime('%H:%M')} · Ocaso {sunset.strftime('%H:%M')}"
+
+
+def sunrise_sunset_datetimes(latitude_deg: float, longitude_deg: float, timestamp: float):
+    """Devuelve orto y ocaso en hora local del sistema para la fecha del timestamp."""
+    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp)
+    if sunrise is None or sunset is None:
+        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp)
+    if sunrise is not None and sunset is not None:
+        return sunrise, sunset
+
+    sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp)
+    if sunrise_min is None or sunset_min is None:
+        return None, None
+
+    dt_local = datetime.fromtimestamp(timestamp).astimezone()
+    base_day = dt_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    sunrise_dt = base_day + timedelta(minutes=float(sunrise_min))
+    sunset_dt = base_day + timedelta(minutes=float(sunset_min))
+    return sunrise_dt, sunset_dt
 
 
 def is_nighttime(latitude_deg: float, timestamp: float, longitude_deg: float = float("nan")) -> bool:

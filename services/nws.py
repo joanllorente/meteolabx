@@ -363,6 +363,29 @@ def _local_day_window_epoch() -> Tuple[int, int]:
     return int(day_start.timestamp()), int(day_end.timestamp())
 
 
+def _slice_series_recent_hours(series: Dict[str, Any], hours: int) -> Dict[str, Any]:
+    if not isinstance(series, dict) or not series.get("has_data"):
+        return {"has_data": False}
+    epochs = series.get("epochs", [])
+    if not isinstance(epochs, list) or not epochs:
+        return {"has_data": False}
+    max_epoch = max(int(ep) for ep in epochs)
+    min_epoch = max_epoch - max(1, int(hours)) * 3600
+    keep_idx = [idx for idx, ep in enumerate(epochs) if int(ep) >= min_epoch]
+    if not keep_idx:
+        return {"has_data": False}
+
+    out: Dict[str, Any] = {"has_data": True}
+    for key, value in series.items():
+        if key == "has_data":
+            continue
+        if isinstance(value, list) and len(value) == len(epochs):
+            out[key] = [value[idx] for idx in keep_idx]
+        else:
+            out[key] = value
+    return out
+
+
 def _today_values(values: List[float], epochs: List[int], day_start_epoch: int, day_end_epoch: int) -> List[float]:
     out: List[float] = []
     for ep, value in zip(epochs, values):
@@ -424,17 +447,21 @@ def get_nws_data() -> Optional[Dict[str, Any]]:
     station_lon = _safe_float(station_meta.get("lon"))
     elevation = _safe_float(station_meta.get("elev"), default=0.0)
     station_tz = str(station_meta.get("tz", "")).strip()
-    latest_payload = fetch_nws_latest(station_id)
-    day_payload = fetch_nws_observations(station_id, hours=36, limit=1400)
     week_payload = fetch_nws_observations(station_id, hours=24 * 7, limit=3000)
-
-    day_series = _series_from_features(day_payload.get("features", []), elevation_m=elevation)
-    week_series = _series_from_features(week_payload.get("features", []), elevation_m=elevation)
+    week_features = week_payload.get("features", []) if isinstance(week_payload, dict) else []
+    week_series = _series_from_features(week_features, elevation_m=elevation)
+    day_series = _slice_series_recent_hours(week_series, 36)
 
     current = {}
-    latest_feature = latest_payload.get("feature", {}) if isinstance(latest_payload, dict) else {}
-    if isinstance(latest_feature, dict) and latest_feature:
-        current = _parse_observation_feature(latest_feature, elevation_m=elevation)
+    if isinstance(week_features, list):
+        parsed_rows = [
+            _parse_observation_feature(feature, elevation_m=elevation)
+            for feature in week_features
+            if isinstance(feature, dict)
+        ]
+        parsed_rows = [row for row in parsed_rows if row]
+        if parsed_rows:
+            current = max(parsed_rows, key=lambda row: int(row.get("epoch", 0)))
 
     if not current and day_series.get("has_data"):
         idx = len(day_series["epochs"]) - 1

@@ -120,6 +120,7 @@ def _card_tooltip_text(title: str) -> str:
         "temp equivalente": "temperatura equivalente",
         "temp potencial": "temperatura potencial",
         "base nube lcl": "nivel de condensacion por ascenso",
+        "irradiancia": "radiacion solar",
         "evapotranspiracion hoy": "evapotranspiracion",
         "balance hidrico hoy": "balance hidrico",
     }
@@ -132,7 +133,7 @@ def _card_tooltip_text(title: str) -> str:
             if key.startswith(lookup):
                 text = val
                 break
-    if normalized_title == "radiacion solar":
+    if normalized_title in ("radiacion solar", "irradiancia"):
         extra = "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
         if text:
             return f"{text}\n{extra}"

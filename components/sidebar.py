@@ -209,7 +209,7 @@ def render_sidebar(_local_storage_unused=None):
                 _provider_prefix = {
                     "AEMET": "aemet", "METEOCAT": "meteocat",
                     "EUSKALMET": "euskalmet", "METEOGALICIA": "meteogalicia",
-                    "NWS": "nws",
+                    "NWS": "nws", "POEM": "poem",
                 }
                 prefix = _provider_prefix.get(provider_id)
                 if prefix:

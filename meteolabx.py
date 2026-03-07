@@ -14,6 +14,8 @@ import time
 import math
 import logging
 import html
+import json
+import os
 from typing import Optional
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
@@ -71,8 +73,6 @@ from services.aemet import (
 from services.meteocat import (
     get_meteocat_data,
     is_meteocat_connection,
-    fetch_meteocat_station_day,
-    extract_meteocat_daily_timeseries,
     get_meteocat_station_series_start_date,
     fetch_meteocat_daily_history_for_periods,
     fetch_meteocat_annual_history_for_years,
@@ -95,6 +95,10 @@ from services.meteogalicia import (
 from services.nws import (
     get_nws_data,
     is_nws_connection,
+)
+from services.poem import (
+    get_poem_data,
+    is_poem_connection,
 )
 from components.station_selector import render_station_selector
 from components.browser_geolocation import get_browser_geolocation
@@ -1459,6 +1463,7 @@ def _provider_refresh_seconds() -> int:
         "EUSKALMET": 600,  # Euskalmet suele reportar en slots de 10 min
         "METEOGALICIA": 600,  # MeteoGalicia ofrece estado y serie horaria reciente
         "NWS": 600,  # NWS suele actualizar en intervalo subhorario según estación
+        "POEM": 300,  # POEM dispone de endpoints TR y series con mayor frecuencia
         "WU": REFRESH_SECONDS,
     }
     return int(defaults.get(provider_id, REFRESH_SECONDS))
@@ -1498,6 +1503,46 @@ def _fmt_pressure_for_provider(value, provider_id: str) -> str:
     return f"{v:.{decimals}f}"
 
 
+@st.cache_data(ttl=3600)
+def _total_catalog_stations() -> int:
+    files = [
+        "data_estaciones_aemet.json",
+        "data_estaciones_meteocat.json",
+        "data_estaciones_euskalmet.json",
+        "data_estaciones_meteogalicia.json",
+        "data_estaciones_nws.json",
+        "data_estaciones_poem.json",
+    ]
+
+    def _count_payload(payload) -> int:
+        if isinstance(payload, list):
+            return len(payload)
+        if isinstance(payload, dict):
+            for key in (
+                "stations",
+                "estaciones",
+                "listaEstacionsMeteo",
+                "lista_estaciones",
+                "items",
+                "data",
+            ):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return len(value)
+        return 0
+
+    total = 0
+    for filename in files:
+        path = os.path.join(os.path.dirname(__file__), filename)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            total += _count_payload(payload)
+        except Exception:
+            continue
+    return int(total)
+
+
 header_refresh_seconds = _provider_refresh_seconds() if st.session_state.get("connected", False) else REFRESH_SECONDS
 header_refresh_label = (
     f"{header_refresh_seconds // 60} min"
@@ -1514,7 +1559,7 @@ st.markdown(
         Tema: {"Oscuro" if dark else "Claro"} · Refresh: {header_refresh_label}
       </div>
     </div>
-    <div class="header-sub station-count">37000 estaciones disponibles</div>
+    <div class="header-sub station-count">{_total_catalog_stations()} estaciones disponibles</div>
     """),
     unsafe_allow_html=True
 )
@@ -2041,19 +2086,8 @@ if connected:
             st.warning("⚠️ No se pudieron obtener datos de Meteocat por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
 
-        # Meteocat: la serie de charts se obtiene de un endpoint separado
-        series_override = None
-        station_code = str(base.get("station_code", "")).strip()
-        if station_code:
-            now_local_cat = datetime.now()
-            day_payload = fetch_meteocat_station_day(
-                station_code, now_local_cat.year, now_local_cat.month, now_local_cat.day,
-            )
-            if day_payload.get("ok"):
-                series_override = extract_meteocat_daily_timeseries(day_payload.get("variables", {}))
-
         _r = process_standard_provider(
-            base, "METEOCAT", "meteocat_station_alt", series_override=series_override,
+            base, "METEOCAT", "meteocat_station_alt",
         )
         (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
          dp3, rate_h, p_label, p_arrow,
@@ -2094,6 +2128,30 @@ if connected:
 
         _r = process_standard_provider(
             base, "NWS", "nws_station_alt", series_7d=series_7d,
+        )
+        (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
+         dp3, rate_h, p_label, p_arrow,
+         inst_mm_h, r1_mm_h, r5_mm_h, inst_label,
+         e_sat, e, Td_calc, Tw, q, q_gkg,
+         theta, Tv, Te, rho, rho_v_gm3, lcl,
+         solar_rad, uv, et0, clarity, balance,
+         has_radiation, has_chart_data) = _unpack_processed(_r)
+
+    elif is_poem_connection():
+        # ========== DATOS DE POEM ==========
+        base = get_poem_data()
+        if base is None:
+            st.warning("⚠️ No se pudieron obtener datos de POEM por ahora. Intenta de nuevo en unos minutos.")
+            err_detail = str(st.session_state.get("poem_last_error", "")).strip()
+            if err_detail:
+                st.caption(f"Detalle técnico POEM: {err_detail}")
+            st.stop()
+
+        raw_7d = base.get("_series_7d")
+        series_7d = raw_7d if isinstance(raw_7d, dict) else {}
+
+        _r = process_standard_provider(
+            base, "POEM", "poem_station_alt", series_7d=series_7d,
         )
         (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
          dp3, rate_h, p_label, p_arrow,
@@ -2622,10 +2680,11 @@ if active_tab == "Observación":
     render_grid(cards_basic, cols=3, extra_class="grid-basic")
 
     # ============================================================
-    # NIVEL 2 — TERMODINÁMICA (solo si hay barómetro)
+    # NIVEL 2 — TERMODINÁMICA (solo si hay barómetro e higrómetro)
     # ============================================================
     has_barometer_now = not is_nan(p_abs)
-    if not connected or has_barometer_now:
+    has_humidity_now = not is_nan(base.get("RH"))
+    if not connected or (has_barometer_now and has_humidity_now):
         section_title("Termodinámica")
 
         q_val = "—" if is_nan(q_gkg) else f"{q_gkg:.2f}"
@@ -2644,14 +2703,14 @@ if active_tab == "Observación":
         c_sound_val = "—" if is_nan(sound_speed) else f"{sound_speed:.1f}"
 
         cards_derived = [
-            card("Humedad específica", q_val, "g/kg", icon_kind="rh", uid="d1", dark=dark),
-            card("Humedad absoluta", rho_v_val, "g/m³", icon_kind="dew", uid="d7a", dark=dark),
-            card("Temp. virtual", tv_val, "°C", icon_kind="wind", uid="d3", dark=dark),
-            card("Temp. equivalente", te_val, "°C", icon_kind="rain", uid="d4", dark=dark),
-            card("Temp. potencial", theta_val, "°C", icon_kind="temp", uid="d2", dark=dark),
-            card("Densidad del aire", rho_val, "kg/m³", icon_kind="press", uid="d5", dark=dark),
-            card("Base nube LCL", lcl_val, "m", icon_kind="dew", uid="d6", dark=dark),
-            card("Velocidad del sonido", c_sound_val, "m/s", icon_kind="wind", uid="d8", dark=dark),
+            card("Humedad específica", q_val, "g/kg", icon_kind="qspec", uid="d1", dark=dark),
+            card("Humedad absoluta", rho_v_val, "g/m³", icon_kind="qabs", uid="d7a", dark=dark),
+            card("Temp. virtual", tv_val, "°C", icon_kind="tv", uid="d3", dark=dark),
+            card("Temp. equivalente", te_val, "°C", icon_kind="te", uid="d4", dark=dark),
+            card("Temp. potencial", theta_val, "°C", icon_kind="theta", uid="d2", dark=dark),
+            card("Densidad del aire", rho_val, "kg/m³", icon_kind="rho", uid="d5", dark=dark),
+            card("Base nube LCL", lcl_val, "m", icon_kind="lcl", uid="d6", dark=dark),
+            card("Velocidad del sonido", c_sound_val, "m/s", icon_kind="csound", uid="d8", dark=dark),
         ]
         render_grid(cards_derived, cols=4)
 
@@ -2751,7 +2810,7 @@ if active_tab == "Observación":
         # Grid de 4 columnas (como termodinámica)
         # Primera fila: Solar, UV, ET0, Clarity
         cards_radiation_row1 = [
-            card("Radiación solar", solar_val, "W/m²", icon_kind="solar", subtitle_html=solar_sub, uid="r1", dark=dark),
+            card("Irradiancia", solar_val, "W/m²", icon_kind="solar", subtitle_html=solar_sub, uid="r1", dark=dark),
             card("Índice UV", uv_val, "", icon_kind="uv", subtitle_html=uv_sub, uid="r2", dark=dark),
             card("Evapotranspiración hoy", et0_val, "mm", icon_kind="et0", subtitle_html=et0_sub, uid="r3", dark=dark),
             card("Claridad del cielo", clarity_val, "%", icon_kind="clarity", subtitle_html=clarity_sub, uid="r4", dark=dark),
@@ -2792,11 +2851,13 @@ if active_tab == "Observación":
         chart_temps = st.session_state.get("chart_temps", [])
         chart_humidities = st.session_state.get("chart_humidities", [])
         chart_pressures = st.session_state.get("chart_pressures", [])
+        chart_solar_radiations = st.session_state.get("chart_solar_radiations", [])
         chart_winds = st.session_state.get("chart_winds", [])
         
         print(f"🔍 [DEBUG Gráficos] Obtenidos del session_state:")
         print(f"   - chart_epochs: {len(chart_epochs)} elementos")
         print(f"   - chart_temps: {len(chart_temps)} elementos")  
+        print(f"   - chart_solar_radiations: {len(chart_solar_radiations)} elementos")
         print(f"   - Keys en session_state: {[k for k in st.session_state.keys() if 'chart' in k]}")
         
         logger.info(f"📊 [Gráficos] Datos disponibles: {len(chart_epochs)} epochs, {len(chart_temps)} temps, {len(chart_humidities)} humidities")
@@ -3353,6 +3414,124 @@ if active_tab == "Observación":
                         "⚠️ Rosa de viento no disponible: no hay muestras válidas de dirección en este periodo "
                         f"(dirección válida: {dir_non_nan}, muestras en calma: {calm})."
                     )
+
+                # Claridad del cielo intradía: serie derivada de irradiancia instantánea
+                solar_valid = [float(v) for v in chart_solar_radiations if not is_nan(v)]
+                try:
+                    lat_clarity = float(base.get("lat", float("nan")))
+                except Exception:
+                    lat_clarity = float("nan")
+                try:
+                    lon_clarity = float(base.get("lon", float("nan")))
+                except Exception:
+                    lon_clarity = float("nan")
+                if len(solar_valid) >= 3 and not is_nan(lat_clarity) and not is_nan(lon_clarity):
+                    from models.radiation import sky_clarity_index, sunrise_sunset_datetimes
+
+                    clarity_times = []
+                    clarity_vals = []
+                    clarity_epochs = []
+                    for epoch, solar_i in zip(chart_epochs, chart_solar_radiations):
+                        if is_nan(solar_i):
+                            continue
+                        clarity_i = sky_clarity_index(float(solar_i), lat_clarity, z, float(epoch), lon_clarity)
+                        if is_nan(clarity_i):
+                            continue
+                        clarity_times.append(datetime.fromtimestamp(float(epoch)))
+                        clarity_vals.append(float(clarity_i) * 100.0)
+                        clarity_epochs.append(int(epoch))
+
+                    if len(clarity_times) >= 3:
+                        df_clarity = pd.DataFrame({
+                            "dt": clarity_times,
+                            "clarity": clarity_vals,
+                        }).sort_values("dt")
+                        df_clarity["dt"] = (
+                            pd.to_datetime(df_clarity["dt"], errors="coerce")
+                            .dt.tz_localize(None)
+                            .dt.floor("5min")
+                        )
+                        df_clarity = df_clarity.dropna(subset=["dt"])
+                        df_clarity = df_clarity.groupby("dt", as_index=False).last()
+
+                        ref_epoch = float(clarity_epochs[-1]) if clarity_epochs else float(base.get("epoch", time.time()))
+                        sunrise_dt, sunset_dt = sunrise_sunset_datetimes(
+                            float(lat_clarity), float(lon_clarity), ref_epoch
+                        )
+                        if sunrise_dt is None or sunset_dt is None:
+                            sunrise_dt = day_start
+                            sunset_dt = day_end
+
+                        range_start = pd.Timestamp(sunrise_dt).tz_localize(None)
+                        range_end = pd.Timestamp(sunset_dt).tz_localize(None)
+                        df_clarity_view = df_clarity[
+                            (df_clarity["dt"] >= range_start) & (df_clarity["dt"] <= range_end)
+                        ].copy()
+                        if len(df_clarity_view) < 2:
+                            # Fallback defensivo: usar el día de la propia serie para no dejar el gráfico vacío.
+                            series_day_start = pd.Timestamp(df_clarity["dt"].min()).replace(hour=0, minute=0, second=0, microsecond=0)
+                            series_day_end = pd.Timestamp(df_clarity["dt"].min()).replace(hour=23, minute=59, second=59, microsecond=0)
+                            df_clarity_view = df_clarity[
+                                (df_clarity["dt"] >= series_day_start) & (df_clarity["dt"] <= series_day_end)
+                            ].copy()
+                            range_start = series_day_start
+                            range_end = series_day_end
+
+                        if len(df_clarity_view) >= 2:
+                            st.markdown("### Claridad del Cielo")
+
+                            x_clarity = pd.to_datetime(df_clarity_view["dt"])
+                            y_clarity = pd.to_numeric(df_clarity_view["clarity"], errors="coerce")
+
+                            fig_clarity = go.Figure()
+                            fig_clarity.add_trace(go.Scatter(
+                                x=x_clarity,
+                                y=y_clarity,
+                                mode="lines",
+                                name="Claridad",
+                                line=dict(color="rgb(96, 165, 250)", width=3),
+                                connectgaps=True,
+                                fill="tozeroy",
+                                fillcolor="rgba(96, 165, 250, 0.10)",
+                            ))
+                            fig_clarity.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
+                            fig_clarity.update_layout(
+                                title=dict(text="Claridad del cielo", x=0.5, xanchor="center", font=dict(size=18, color=text_color)),
+                                xaxis=dict(
+                                    title=dict(text="Hora solar útil", font=dict(color=text_color)),
+                                    type="date",
+                                    range=[range_start, range_end],
+                                    tickformat="%H:%M",
+                                    dtick=60 * 60 * 1000,
+                                    showgrid=True,
+                                    gridcolor=grid_color,
+                                    tickfont=dict(color=text_color),
+                                ),
+                                yaxis=dict(
+                                    title=dict(text="Claridad (%)", font=dict(color=text_color)),
+                                    range=[0, 100],
+                                    showgrid=True,
+                                    gridcolor=grid_color,
+                                    tickfont=dict(color=text_color),
+                                    ticksuffix="%",
+                                ),
+                                hovermode="x unified",
+                                plot_bgcolor="rgba(0,0,0,0)",
+                                paper_bgcolor="rgba(0,0,0,0)",
+                                font=dict(color=text_color),
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                                margin=dict(l=60, r=40, t=60, b=60),
+                                height=400,
+                                annotations=[dict(
+                                    text="meteolabx.com",
+                                    xref="paper", yref="paper",
+                                    x=0.98, y=0.02,
+                                    xanchor="right", yanchor="bottom",
+                                    showarrow=False,
+                                    font=dict(size=10, color="rgba(128,128,128,0.5)"),
+                                )],
+                            )
+                            _plotly_chart_stretch(fig_clarity, key=f"clarity_graph_{theme_mode}")
 
     if connected and not has_chart_data:
         section_title("Gráficos")
@@ -4374,6 +4553,27 @@ elif active_tab == "Climogramas":
                                         hovermode="x unified",
                                         legend=dict(orientation="h", y=1.12, x=0.0),
                                         font=dict(color=text_color),
+                                        annotations=[
+                                            dict(
+                                                text="MeteoLabX",
+                                                x=0.5,
+                                                y=0.5,
+                                                xref="paper",
+                                                yref="paper",
+                                                showarrow=False,
+                                                font=dict(
+                                                    size=52,
+                                                    color=(
+                                                        "rgba(255, 255, 255, 0.08)"
+                                                        if dark
+                                                        else "rgba(15, 18, 25, 0.08)"
+                                                    ),
+                                                ),
+                                                xanchor="center",
+                                                yanchor="middle",
+                                                textangle=-18,
+                                            )
+                                        ],
                                     )
                                     fig_climo.update_xaxes(
                                         title_text=x_title,
@@ -4511,6 +4711,25 @@ elif active_tab == "Mapa":
         # Caja amplia para EEUU + Alaska/territorios en longitudes oeste.
         return 17.0 <= float(lat) <= 72.5 and -178.0 <= float(lon) <= -52.0
 
+    def _is_iberia_map_center(lat: float, lon: float) -> bool:
+        return 27.0 <= float(lat) <= 45.5 and -19.5 <= float(lon) <= 5.5
+
+    def _provider_is_near_center(provider_id: str, lat: float, lon: float) -> bool:
+        pid = str(provider_id or "").strip().upper()
+        if pid == "NWS":
+            return _is_us_map_center(lat, lon)
+        if pid in {"AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM"}:
+            return _is_iberia_map_center(lat, lon)
+        return True
+
+    def _provider_region(provider_id: str) -> str:
+        pid = str(provider_id or "").strip().upper()
+        if pid == "NWS":
+            return "US"
+        if pid in {"AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM"}:
+            return "IBERIA"
+        return "GLOBAL"
+
     if "map_geo_request_id" not in st.session_state:
         st.session_state["map_geo_request_id"] = 10000
     if "map_geo_pending" not in st.session_state:
@@ -4525,8 +4744,10 @@ elif active_tab == "Mapa":
         st.session_state["map_search_lat"] = default_lat
     if "map_search_lon" not in st.session_state or _safe_float(st.session_state.get("map_search_lon")) is None:
         st.session_state["map_search_lon"] = default_lon
-    if "map_provider_filter" not in st.session_state:
-        st.session_state["map_provider_filter"] = ["AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS"]
+    if "map_provider_filter_near" not in st.session_state:
+        st.session_state["map_provider_filter_near"] = []
+    if "map_provider_filter_far" not in st.session_state:
+        st.session_state["map_provider_filter_far"] = []
 
     browser_geo_result = None
     if st.session_state.get("map_geo_pending"):
@@ -4559,6 +4780,38 @@ elif active_tab == "Mapa":
         st.session_state["map_geo_last_error"] = str(error_message)
         st.session_state["map_geo_debug_msg"] = ""
 
+    search_lat = float(st.session_state.get("map_search_lat"))
+    search_lon = float(st.session_state.get("map_search_lon"))
+    all_provider_options = ["AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS", "POEM"]
+    near_provider_options = [
+        provider_id
+        for provider_id in all_provider_options
+        if _provider_is_near_center(provider_id, search_lat, search_lon)
+    ]
+    far_provider_options = [
+        provider_id
+        for provider_id in all_provider_options
+        if provider_id not in near_provider_options
+    ]
+
+    selected_near_state = [
+        provider_id
+        for provider_id in st.session_state.get("map_provider_filter_near", [])
+        if provider_id in near_provider_options
+    ]
+    if selected_near_state != st.session_state.get("map_provider_filter_near", []):
+        st.session_state["map_provider_filter_near"] = selected_near_state
+    if not selected_near_state:
+        st.session_state["map_provider_filter_near"] = list(near_provider_options)
+
+    selected_far_state = [
+        provider_id
+        for provider_id in st.session_state.get("map_provider_filter_far", [])
+        if provider_id in far_provider_options
+    ]
+    if selected_far_state != st.session_state.get("map_provider_filter_far", []):
+        st.session_state["map_provider_filter_far"] = selected_far_state
+
     controls_col, filters_col = st.columns([1.1, 1], gap="large")
     with controls_col:
         st.markdown("#### Ubicación")
@@ -4588,23 +4841,33 @@ elif active_tab == "Mapa":
     with filters_col:
         st.markdown("#### Filtros")
         st.multiselect(
-            "Proveedores",
-            options=["AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS"],
-            key="map_provider_filter",
+            "Proveedores cercanos",
+            options=near_provider_options,
+            key="map_provider_filter_near",
         )
-        st.caption("El mapa muestra todas las estaciones disponibles para los proveedores seleccionados.")
+        if far_provider_options:
+            st.multiselect(
+                "Añadir proveedores lejanos",
+                options=far_provider_options,
+                key="map_provider_filter_far",
+            )
+        st.caption("El mapa muestra primero los proveedores cercanos al centro actual. Los lejanos se añaden manualmente.")
 
-    search_lat = float(st.session_state.get("map_search_lat"))
-    search_lon = float(st.session_state.get("map_search_lon"))
-    provider_filter = set(st.session_state.get("map_provider_filter", []))
+    selected_near = set(st.session_state.get("map_provider_filter_near", []))
+    selected_far = set(st.session_state.get("map_provider_filter_far", []))
+    provider_filter = selected_near.union(selected_far)
+    effective_provider_ids = sorted(provider_filter)
 
-    center_in_us = _is_us_map_center(search_lat, search_lon)
     map_max_results = 20000
-    if "NWS" in provider_filter:
-        # Cargar todo NWS para no recortar por distancia cuando el centro no está en USA.
+    if "NWS" in effective_provider_ids:
         map_max_results = 90000
 
-    nearest = search_nearby_stations(search_lat, search_lon, max_results=map_max_results)
+    nearest = search_nearby_stations(
+        search_lat,
+        search_lon,
+        max_results=map_max_results,
+        provider_ids=effective_provider_ids or list(provider_filter),
+    )
     nearest = [s for s in nearest if s.provider_id in provider_filter]
 
     if not nearest:
@@ -4632,6 +4895,10 @@ elif active_tab == "Mapa":
                 tz_name = str(meta.get("tz", "")).strip()
                 if tz_name:
                     return tz_name
+            if station.provider_id == "POEM":
+                station_type = str(meta.get("tipo", "")).strip()
+                if station_type:
+                    return station_type
             provincia = meta.get("provincia")
             if isinstance(provincia, dict):
                 province_name = str(provincia.get("nom", "")).strip()
@@ -4648,6 +4915,7 @@ elif active_tab == "Mapa":
             "EUSKALMET": [55, 198, 124],
             "METEOGALICIA": [255, 184, 64],
             "NWS": [178, 122, 255],
+            "POEM": [14, 188, 212],
         }
         points = []
         for station in nearest:
@@ -4720,6 +4988,12 @@ elif active_tab == "Mapa":
                 st.session_state["nws_station_lat"] = lat
                 st.session_state["nws_station_lon"] = lon
                 st.session_state["nws_station_alt"] = elevation_m
+            elif provider_id == "POEM":
+                st.session_state["poem_station_id"] = station_id
+                st.session_state["poem_station_name"] = station_name
+                st.session_state["poem_station_lat"] = lat
+                st.session_state["poem_station_lon"] = lon
+                st.session_state["poem_station_alt"] = elevation_m
             else:
                 return False
 
@@ -5102,35 +5376,33 @@ st.markdown(
         </style>
         <div class="mlb-footer">
           <div class="mlb-footer-top">
-            <span><b>MeteoLabX · Versión 0.8.0</b></span>
+            <span><b>MeteoLabX · Versión 0.8.1</b></span>
             <span class="mlb-footer-news">
               <details>
                 <summary>Novedades</summary>
                 <div class="mlb-footer-box">
-                  <h2 style="margin:0 0 0.6rem 0;">0.8.0</h2>
+                  <h2 style="margin:0 0 0.6rem 0;">0.8.1</h2>
                   <h3>Mejoras</h3>
                   <ul>
-                    <li>Nueva sección <b>Climogramas</b>, disponible para estaciones WU, Meteocat, AEMET y MeteoGalicia.</li>
-                    <li>Mejoras en la visualización de los <b>gráficos de tendencias</b>.</li>
-                    <li>La <b>presión de vapor</b> ahora se muestra en la tarjeta de <b>Humedad relativa</b>.</li>
-                    <li>La <b>temperatura de bulbo húmedo</b> ahora se muestra en la tarjeta de <b>Punto de rocío</b>.</li>
-                    <li>Nueva tarjeta <b>Velocidad del sonido</b> en la sección de <b>Termodinámica</b>.</li>
-                    <li>Si una estación no tiene <b>barómetro</b>, se oculta la sección <b>Termodinámica</b>.</li>
-                    <li>Los <b>tooltips</b> ahora incluyen definiciones de las magnitudes.</li>
-                    <li>Mejoras internas de rendimiento y mantenimiento.</li>
+                    <li>Nuevo proveedor: <b>Puertos del Estado (PORTUS)</b>.</li>
+                    <li>Nuevo gráfico de <b>Claridad del cielo</b>.</li>
+                    <li>Nuevos iconos en la sección <b>Termodinámica</b>.</li>
+                    <li>Conexión a estaciones más <b>rápida y estable</b>.</li>
+                    <li>Optimización en la carga del <b>Mapa</b>.</li>
                   </ul>
                   <h3>Correcciones</h3>
                   <ul>
-                    <li>Corregido un error que impedía la conexión con estaciones de <b>Euskalmet</b>.</li>
                     <li>Corregido un error que provocaba datos incorrectos en <b>Claridad del cielo</b>.</li>
-                    <li>Corregido el cálculo de <b>ET0</b> que en algunas estaciones podía dar valores erróneos.</li>
-                    <li>Corregido un error que impedía el cálculo correcto de la <b>sensación térmica</b>.</li>
+                  </ul>
+                  <h3>Bugs conocidos</h3>
+                  <ul>
+                    <li>Las tablas de <b>Climogramas</b> no actualizan sus colores al cambiar el <b>tema</b>.</li>
                   </ul>
                 </div>
               </details>
             </span>
           </div>
-          <div class="mlb-footer-bottom">Fuentes: WU · AEMET · Meteocat · Euskalmet · MeteoGalicia · NWS · No afiliado · © 2026</div>
+          <div class="mlb-footer-bottom">Fuentes: WU · AEMET · Meteocat · Euskalmet · MeteoGalicia · NWS · POEM · No afiliado · © 2026</div>
         </div>
         """
     ),

@@ -30,7 +30,7 @@
 	- Dirección: punto cardinal desde el que viene el aire.
 
 =============================================================================
-- Precipitación Hoy: precipitación acumula desde las 00:00 del día actual. Es medida por el pluviómetro de la estación.
+- Precipitación Hoy: precipitación acumulada desde las 00:00 del día actual. Es medida por el pluviómetro de la estación.
 
 	- Intensidad instantánea: se calcula a partir del tiempo entre dos medidas de la estación.
 

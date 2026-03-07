@@ -425,6 +425,33 @@ def _series_today(values: List[float], epochs: List[int]) -> List[float]:
     return out
 
 
+def _latest_hourly_snapshot(hourly_series: Dict[str, Any]) -> Dict[str, float]:
+    if not isinstance(hourly_series, dict) or not hourly_series.get("has_data"):
+        return {}
+    epochs = hourly_series.get("epochs", [])
+    if not isinstance(epochs, list) or not epochs:
+        return {}
+    idx = len(epochs) - 1
+
+    def _pick(name: str) -> float:
+        values = hourly_series.get(name, [])
+        if not isinstance(values, list) or idx >= len(values):
+            return float("nan")
+        return _safe_float(values[idx])
+
+    return {
+        "epoch": int(epochs[idx]),
+        "temp": _pick("temps"),
+        "rh": _pick("humidities"),
+        "pressure": _pick("pressures"),
+        "wind": _pick("winds"),
+        "gust": _pick("gusts"),
+        "wind_dir": _pick("wind_dirs"),
+        "precip": _pick("precips"),
+        "solar": _pick("solar_radiations"),
+    }
+
+
 def is_meteogalicia_connection() -> bool:
     return str(st.session_state.get("connection_type", "")).strip().upper() == "METEOGALICIA"
 
@@ -442,11 +469,24 @@ def get_meteogalicia_data() -> Optional[Dict[str, Any]]:
     if not station_id:
         return None
 
-    current_payload = fetch_meteogalicia_current(station_id)
     hourly_payload = fetch_meteogalicia_hourly(station_id, num_hours=24)
+    hourly_series = hourly_payload.get("series", {}) if isinstance(hourly_payload, dict) else {}
+    hourly_latest = _latest_hourly_snapshot(hourly_series)
+
+    current_payload: Dict[str, Any] = {"ok": False, "error": "", "item": {}}
+    need_current = True
+    if hourly_latest:
+        current_age_s = int(datetime.now(timezone.utc).timestamp()) - int(hourly_latest.get("epoch") or 0)
+        core_missing = sum(
+            1
+            for key in ("temp", "rh", "pressure", "wind")
+            if _is_nan(_safe_float(hourly_latest.get(key)))
+        )
+        need_current = current_age_s > 5400 or core_missing >= 2
+    if need_current:
+        current_payload = fetch_meteogalicia_current(station_id)
 
     current_item = current_payload.get("item", {}) if isinstance(current_payload, dict) else {}
-    hourly_series = hourly_payload.get("series", {}) if isinstance(hourly_payload, dict) else {}
 
     epochs = hourly_series.get("epochs", []) if isinstance(hourly_series, dict) else []
     temps = hourly_series.get("temps", []) if isinstance(hourly_series, dict) else []
@@ -458,7 +498,7 @@ def get_meteogalicia_data() -> Optional[Dict[str, Any]]:
     precips = hourly_series.get("precips", []) if isinstance(hourly_series, dict) else []
     solars = hourly_series.get("solar_radiations", []) if isinstance(hourly_series, dict) else []
 
-    if not current_item and len(epochs) == 0:
+    if not current_item and not hourly_latest and len(epochs) == 0:
         return None
 
     station_meta = _find_station(station_id)
@@ -468,12 +508,25 @@ def get_meteogalicia_data() -> Optional[Dict[str, Any]]:
     elevation = _safe_float(station_meta.get("altitude"), default=0.0)
 
     epoch = _parse_epoch(current_item.get("_epoch"))
+    if epoch is None and hourly_latest:
+        epoch = int(hourly_latest["epoch"])
     if epoch is None and epochs:
         epoch = int(epochs[-1])
     if epoch is None:
         epoch = int(datetime.now(timezone.utc).timestamp())
 
     current_measures = current_item.get("_measures", {}) if isinstance(current_item, dict) else {}
+    if not current_measures and hourly_latest:
+        current_measures = {
+            "temp": (hourly_latest.get("temp", float("nan")), "hourly"),
+            "rh": (hourly_latest.get("rh", float("nan")), "hourly"),
+            "pressure": (hourly_latest.get("pressure", float("nan")), "hourly"),
+            "wind": (hourly_latest.get("wind", float("nan")), "hourly"),
+            "gust": (hourly_latest.get("gust", float("nan")), "hourly"),
+            "wind_dir": (hourly_latest.get("wind_dir", float("nan")), "hourly"),
+            "precip": (hourly_latest.get("precip", float("nan")), "hourly"),
+            "solar": (hourly_latest.get("solar", float("nan")), "hourly"),
+        }
     temp_current = _safe_float(
         current_measures.get("temp", (float("nan"), ""))[0],
         default=float("nan"),

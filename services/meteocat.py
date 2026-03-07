@@ -1605,6 +1605,7 @@ def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]
     rain_1min = _max_of_series(_series_from_map(day_vars, V_RAIN_1MIN_MAX))
     if _is_nan(rain_1min):
         rain_1min = float("nan")
+    series = extract_meteocat_daily_timeseries(day_vars)
 
     return {
         "Tc": _safe_float(values.get("temp")),
@@ -1637,4 +1638,5 @@ def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]
         "gust_max": gust_max,
         "pressure_3h_ago": float("nan"),
         "epoch_3h_ago": float("nan"),
+        "_series": series,
     }

@@ -450,16 +450,12 @@ def fetch_aemet_station_data(idema: str) -> Optional[Dict]:
             
     except requests.exceptions.Timeout:
         st.warning("⏱️ La estación o el servidor de AEMET no responde a tiempo. Inténtalo de nuevo en unos minutos.")
-        # No cachear errores - lanzar excepción para que streamlit no guarde en caché
-        st.cache_data.clear()
         return None
     except requests.exceptions.RequestException as e:
         st.warning(f"⚠️ No se pudo contactar con AEMET ahora mismo (red/servidor). Detalle: {e}")
-        st.cache_data.clear()
         return None
     except Exception as e:
         st.error(f"❌ Error inesperado: {e}")
-        st.cache_data.clear()
         return None
 
 

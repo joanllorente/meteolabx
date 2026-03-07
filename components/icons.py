@@ -1,8 +1,9 @@
 """
 Generador de iconos SVG para las tarjetas meteorológicas
 """
-import base64
 from utils.helpers import html_clean
+
+ICON_BASE_SIZE = 54
 
 
 def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
@@ -124,7 +125,7 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
             <circle cx="27" cy="28" r="14.5" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="3"/>
             <path d="M27 28 L36 19" stroke="rgba(255,255,255,0.95)" stroke-width="3.2" stroke-linecap="round"/>
             <circle cx="27" cy="28" r="3" fill="white" opacity="0.9"/>
-            <path d="M16 28a11 11 0 0 0 22 0" stroke="{stroke}" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M16 28a11 11 0 0 0 22 0" fill="none" stroke="{stroke}" stroke-width="2.2" stroke-linecap="round"/>
           </g>
         </svg>
         """)
@@ -143,9 +144,9 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
           </defs>
           <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
           <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round">
-            <path d="M14 26c8 0 10-6 18-6 5 0 8 2.5 8 6" stroke-width="3.2"/>
-            <path d="M14 32c10 0 12-4 20-4 4 0 7 2 7 5" stroke-width="3.0" opacity="0.9"/>
-            <path d="M14 20c7 0 9-3 14-3 3 0 5 1.5 5 4" stroke-width="2.6" opacity="0.75"/>
+            <path d="M12.8 20.2c5.2 0 7.8-2.7 12.7-2.7 3.4 0 5.8 1.2 7.8 3.7" stroke-width="2.7" opacity="0.82"/>
+            <path d="M12.8 26.9c6.8 0 10.4-3.3 16.6-3.3 4.1 0 7 1.7 9.3 5.1" stroke-width="3.1"/>
+            <path d="M12.8 33.6c5.8 0 8.9-2.8 14.3-2.8 3.7 0 6.3 1.3 8.4 4.0" stroke-width="2.9" opacity="0.9"/>
           </g>
         </svg>
         """)
@@ -168,9 +169,186 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
                      1-3.4 4.1-5.9 7.8-5.9 3.6 0 6.7 2.3 7.7 5.6
                      2.9 0.2 5.2 2.6 5.2 5.6 0 3.1-2.5 5.6-5.6 5.6H18z"
                   fill="rgba(255,255,255,0.92)"/>
-            <path d="M22 35l-2.2 4.2" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
-            <path d="M29 35l-2.2 4.2" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
-            <path d="M36 35l-2.2 4.2" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M21.8 35.1l-2.2 4.2" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M27.4 35.1l-2.2 4.2" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M33.0 35.1l-2.2 4.2" stroke="rgba(255,255,255,0.85)" stroke-width="3" stroke-linecap="round"/>
+          </g>
+        </svg>
+        """)
+
+    # --- TERMODINAMICA: iconos dedicados (estilo coherente con observados) ---
+    if kind == "qspec":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#9CD7FF"/>
+              <stop offset="1" stop-color="#4A7DFF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M27 10c0 0-10 12-10 19 0 6 4 10 10 10s10-4 10-10c0-7-10-19-10-19z"
+                  fill="none" stroke-width="3"/>
+            <text x="27" y="31" text-anchor="middle"
+                  fill="rgba(255,255,255,0.96)" stroke="none"
+                  font-size="14" font-weight="700"
+                  font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">q</text>
+          </g>
+        </svg>
+        """)
+
+    if kind == "qabs":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8DE7DB"/>
+              <stop offset="1" stop-color="#3EA3FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M27 14.6l11.2 6.2L27 27.1l-11.2-6.3L27 14.6z" stroke-width="2.9"/>
+            <path d="M15.8 20.8v13.6L27 40.8V27.1" stroke-width="2.9"/>
+            <path d="M38.2 20.8v13.6L27 40.8" stroke-width="2.9"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "tv":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8DFFCC"/>
+              <stop offset="1" stop-color="#44B7FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M27 12c-5.8 0-10 5-10 10.8 0 6.5 4.8 11.6 10 16.2 5.2-4.6 10-9.7 10-16.2C37 17 32.8 12 27 12z" stroke-width="2.9"/>
+            <path d="M23.4 41h7.2l-1.1 2.6h-5z" stroke-width="2.4"/>
+            <path d="M24.8 39.4l-1 1.6M29.2 39.4l1 1.6" stroke-width="2.3" opacity="0.9"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "te":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FFBD86"/>
+              <stop offset="1" stop-color="#FF6286"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18.5 16.5a3.3 3.3 0 0 1 6.6 0v12.8a7.3 7.3 0 1 1-6.6 0z" stroke-width="2.8"/>
+            <path d="M21.8 20.6v12.1" stroke-width="2.6"/>
+            <path d="M30.2 20.6h10.8M30.2 26.4h10.8M30.2 32.2h10.8" stroke-width="2.8"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "theta":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#D5B5FF"/>
+              <stop offset="1" stop-color="#7E85FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})">
+            <text x="27" y="36" text-anchor="middle"
+                  fill="rgba(255,255,255,0.96)"
+                  font-size="28" font-weight="700"
+                  font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">θ</text>
+          </g>
+        </svg>
+        """)
+
+    if kind == "rho":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#9CE6FF"/>
+              <stop offset="1" stop-color="#48C89A"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})">
+            <text x="27" y="22" text-anchor="middle"
+                  fill="rgba(255,255,255,0.96)"
+                  font-size="11" font-weight="800"
+                  font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">p</text>
+            <path d="M15 27h24" stroke="rgba(255,255,255,0.96)" stroke-width="2.6" stroke-linecap="round"/>
+            <text x="27" y="36" text-anchor="middle"
+                  fill="rgba(255,255,255,0.96)"
+                  font-size="9" font-weight="700"
+                  font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+              R<tspan baseline-shift="sub" font-size="6">d</tspan>T<tspan baseline-shift="sub" font-size="6">v</tspan>
+            </text>
+          </g>
+        </svg>
+        """)
+
+    if kind == "lcl":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#A5D4FF"/>
+              <stop offset="1" stop-color="#5C82FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round" transform="translate(-1 1)">
+            <path d="M19 33c-3 0-6-3-6-6 0-3 2-5 5-6 1-4 5-7 9-7 4 0 8 2 9 6 1-1 2-1 3-1 4 0 7 3 7 7 0 4-3 7-7 7H19z" stroke-width="3"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "csound":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#8FEFDD"/>
+              <stop offset="1" stop-color="#4AB0FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.92)" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.8 29.0C15.8 23.0 19.8 23.0 22.8 29.0C25.8 35.0 29.8 35.0 32.8 29.0C35.8 23.0 39.8 23.0 42.8 29.0" stroke-width="3.0"/>
           </g>
         </svg>
         """)
@@ -333,7 +511,7 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
 
 def icon_img(kind: str, uid: str, dark: bool = False) -> str:
     """
-    Convierte SVG a imagen base64 embebida
+    Devuelve SVG inline para mejor nitidez en el navegador
     
     Args:
         kind: Tipo de icono
@@ -341,8 +519,17 @@ def icon_img(kind: str, uid: str, dark: bool = False) -> str:
         dark: Tema oscuro
         
     Returns:
-        HTML img tag con SVG embebido
+        HTML SVG inline
     """
     svg = icon_svg(kind, uid=uid, dark=dark)
-    b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-    return f"<img class='icon-img' src='data:image/svg+xml;base64,{b64}'/>"
+    svg = svg.replace(
+        f'width="{ICON_BASE_SIZE}" height="{ICON_BASE_SIZE}" ',
+        (
+            f'class="icon-svg icon-img" width="{ICON_BASE_SIZE}" height="{ICON_BASE_SIZE}" '
+            'shape-rendering="geometricPrecision" text-rendering="geometricPrecision" '
+        ),
+        1,
+    )
+    # Compactar a una sola línea evita que Streamlit/Markdown trate bloques
+    # indentados de la tarjeta como código al interpolar HTML multilinea.
+    return " ".join(line.strip() for line in svg.splitlines() if line.strip())
