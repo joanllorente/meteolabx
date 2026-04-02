@@ -13,7 +13,7 @@ MIN_REFRESH_SECONDS = 15  # Mínimo recomendado para evitar rate limit
 # ============================================================
 WU_URL = "https://api.weather.com/v2/pws/observations/current"
 WU_TIMEOUT_SECONDS = 15
-MAX_DATA_AGE_MINUTES = 30  # Advertir si datos son más antiguos
+MAX_DATA_AGE_MINUTES = 70  # Advertir si datos son más antiguos
 
 # ============================================================
 # CORRECCIÓN DE DIRECCIÓN DEL VIENTO
@@ -29,6 +29,8 @@ LS_Z = "meteolabx_active_z"
 LS_AUTOCONNECT = "meteolabx_auto_connect"
 LS_AUTOCONNECT_TARGET = "meteolabx_auto_connect_target"
 LS_WU_FORGOTTEN = "meteolabx_wu_forgotten"
+LS_WU_CALIBRATIONS = "meteolabx_wu_calibrations"
+LS_UNIT_PREFERENCES = "meteolabx_unit_preferences"
 
 # ============================================================
 # CACHE

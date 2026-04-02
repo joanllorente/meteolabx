@@ -7,7 +7,16 @@ from typing import Optional
 
 import streamlit as st
 from streamlit_local_storage import LocalStorage
-from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT, LS_AUTOCONNECT_TARGET
+from config import (
+    LS_STATION,
+    LS_APIKEY,
+    LS_Z,
+    LS_AUTOCONNECT,
+    LS_AUTOCONNECT_TARGET,
+    LS_WU_CALIBRATIONS,
+    LS_UNIT_PREFERENCES,
+)
+from utils.units import normalize_unit_preferences
 
 _FORGET_MARKER = "__MLX_FORGOTTEN__"
 
@@ -123,7 +132,7 @@ def forget_local_storage_keys() -> None:
     storage = _get_local_storage()
 
     # Keys actuales a marcar con el marcador de olvidado
-    keys_to_forget = [LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT_TARGET]
+    keys_to_forget = [LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT_TARGET, LS_WU_CALIBRATIONS]
     # Keys legacy a marcar también (pueden tener datos de versiones anteriores)
     legacy_keys = [_LS_LEGACY_STATION, _LS_LEGACY_APIKEY, _LS_LEGACY_Z]
 
@@ -335,3 +344,79 @@ def get_local_storage_value(item_key: str):
     if not txt or txt == _FORGET_MARKER:
         return None
     return txt
+
+
+def get_stored_wu_calibrations():
+    """Devuelve el mapa completo de calibraciones WU guardadas."""
+    txt = get_local_storage_value(LS_WU_CALIBRATIONS)
+    if not txt:
+        return {}
+    try:
+        payload = json.loads(txt)
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def get_stored_wu_station_calibration(station_id: str):
+    """Devuelve la calibración guardada para una estación WU concreta."""
+    sid = str(station_id or "").strip().upper()
+    if not sid:
+        return {}
+    payload = get_stored_wu_calibrations()
+    station_payload = payload.get(sid, {})
+    return station_payload if isinstance(station_payload, dict) else {}
+
+
+def set_stored_wu_station_calibration(station_id: str, calibration: Optional[dict]):
+    """Guarda la calibración WU de una estación dentro del mapa persistente."""
+    sid = str(station_id or "").strip().upper()
+    if not sid:
+        return
+
+    payload = get_stored_wu_calibrations()
+    if not isinstance(payload, dict):
+        payload = {}
+
+    has_effective_values = False
+    if isinstance(calibration, dict):
+        for value in calibration.values():
+            try:
+                if abs(float(value)) > 1e-9:
+                    has_effective_values = True
+                    break
+            except Exception:
+                continue
+
+    if has_effective_values:
+        payload[sid] = calibration
+    else:
+        payload.pop(sid, None)
+
+    try:
+        raw = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    except Exception:
+        return
+    set_local_storage(LS_WU_CALIBRATIONS, raw, "save")
+
+
+def get_stored_unit_preferences():
+    """Devuelve las preferencias de unidades guardadas."""
+    txt = get_local_storage_value(LS_UNIT_PREFERENCES)
+    if not txt:
+        return normalize_unit_preferences(None)
+    try:
+        payload = json.loads(txt)
+    except Exception:
+        return normalize_unit_preferences(None)
+    return normalize_unit_preferences(payload if isinstance(payload, dict) else None)
+
+
+def set_stored_unit_preferences(preferences: Optional[dict]):
+    """Guarda las preferencias de unidades en localStorage."""
+    payload = normalize_unit_preferences(preferences if isinstance(preferences, dict) else None)
+    try:
+        raw = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    except Exception:
+        return
+    set_local_storage(LS_UNIT_PREFERENCES, raw, "save")

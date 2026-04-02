@@ -9,11 +9,13 @@ from datetime import datetime, timedelta, timezone, date
 from urllib.parse import quote
 import re
 import pandas as pd
+from config import MAX_DATA_AGE_MINUTES
 
 # API Key de AEMET
 AEMET_API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZXRlb2xhYnhAZ21haWwuY29tIiwianRpIjoiNTdkMzE1MjYtMTk4My00YzNiLTgzNjAtYTdkZWJmMmIxMDFhIiwiaXNzIjoiQUVNRVQiLCJpYXQiOjE3NzAyNDQ1OTEsInVzZXJJZCI6IjU3ZDMxNTI2LTE5ODMtNGMzYi04MzYwLWE3ZGViZjJiMTAxYSIsInJvbGUiOiIifQ.GvliQHY3f94N691sU0ExhMHZxbTiGn2BCe-bIA22K8c"
 
 BASE_URL = "https://opendata.aemet.es/opendata/api"
+AEMET_SERIES_FRESHNESS_MINUTES = max(1, int(MAX_DATA_AGE_MINUTES))
 
 CLIMO_DAILY_SCHEMA = [
     "date",
@@ -73,6 +75,16 @@ def _parse_num(value):
         return float(s)
     except Exception:
         return float("nan")
+
+
+def _aemet_data_age_minutes(epoch: Any) -> float:
+    try:
+        ep = float(epoch)
+    except Exception:
+        return float("inf")
+    if ep <= 0 or ep != ep:
+        return float("inf")
+    return max(0.0, (time.time() - ep) / 60.0)
 
 
 _MONTH_ABBR_ES = {
@@ -218,6 +230,8 @@ def _aemet_first_by_patterns(record: Dict[str, Any], keys: List[str], patterns: 
         if v is None or v == "":
             continue
         lk = str(k).lower()
+        if lk.startswith("q"):
+            continue
         if any(p in lk for p in patterns):
             return v
     return None
@@ -391,6 +405,180 @@ def _parse_aemet_basic_series(data_list: Optional[List[Dict]]) -> Dict[str, Any]
     }
 
 
+def _empty_aemet_window_series() -> Dict[str, Any]:
+    return {
+        "epochs": [],
+        "temps": [],
+        "humidities": [],
+        "pressures": [],
+        "winds": [],
+        "gusts": [],
+        "wind_dirs": [],
+        "precips": [],
+        "has_data": False,
+    }
+
+
+def clear_aemet_runtime_cache() -> None:
+    """Limpia cachés de AEMET para forzar una reconexión real."""
+    try:
+        fetch_aemet_station_data.clear()
+    except Exception:
+        pass
+    try:
+        fetch_aemet_daily_timeseries.clear()
+    except Exception:
+        pass
+    try:
+        fetch_aemet_hourly_7day_series.clear()
+    except Exception:
+        pass
+    try:
+        fetch_aemet_recent_synoptic_series.clear()
+    except Exception:
+        pass
+    try:
+        fetch_aemet_today_series_with_lookback.clear()
+    except Exception:
+        pass
+
+
+def _build_aemet_local_window_series(
+    data_list: Optional[List[Dict]],
+    *,
+    hours_before_start: int = 0,
+) -> Dict[str, Any]:
+    """Convierte la serie cruda AEMET en una ventana local homogénea."""
+    if not data_list:
+        return _empty_aemet_window_series()
+
+    rows: List[Tuple[int, float, float, float, float, float, float, float]] = []
+
+    for record in data_list:
+        if not isinstance(record, dict):
+            continue
+
+        fint_str = _extract_timestamp(record)
+        if not fint_str:
+            continue
+
+        epoch = _parse_epoch_any(fint_str)
+        if epoch is None:
+            continue
+
+        ta = _aemet_first_non_empty(record, ["TA", "ta", "TPRE", "T", "t", "TEMP", "temp"])
+        temp_val = _parse_num(ta) if ta is not None else float("nan")
+
+        hr = _aemet_first_non_empty(record, ["hr", "HR", "hrel", "HREL"])
+        rh_val = _parse_num(hr) if hr is not None else float("nan")
+
+        pres = _aemet_first_non_empty(record, ["PRES", "pres", "pres_nmar", "pnm", "PNM"])
+        pres_val = _parse_num(pres) if pres is not None else float("nan")
+
+        vv = _aemet_first_by_patterns(
+            record,
+            ["VV", "vv", "FF", "ff", "VVIENTO", "v_viento", "viento", "vel_viento", "velocidad_viento", "wind"],
+            ["vv", "ff", "viento", "vel_viento", "velocidad_viento", "wind"],
+        )
+        vv_val = _parse_num(vv)
+        wind_kmh = vv_val * 3.6 if vv_val == vv_val else float("nan")
+
+        vmax = _aemet_first_by_patterns(
+            record,
+            ["VMAX", "vmax", "FX", "fx", "RACHA", "racha", "racha_max", "v_racha", "vmax10m", "windgust"],
+            ["vmax", "racha", "fx", "gust"],
+        )
+        vmax_val = _parse_num(vmax)
+        gust_kmh = vmax_val * 3.6 if vmax_val == vmax_val else float("nan")
+
+        dv = _aemet_first_by_patterns(
+            record,
+            ["DV", "dv", "DD", "dd", "dir_viento", "direccion_viento", "DIR", "dir", "winddir"],
+            ["dv", "dd", "dir", "direccion", "winddir"],
+        )
+        dv_val = _parse_wind_dir_deg(dv)
+
+        prec = _aemet_first_non_empty(record, ["prec", "PREC", "PR", "pr", "lluvia"])
+        prec_val = _parse_num(prec) if prec is not None else float("nan")
+
+        rows.append((
+            int(epoch),
+            float(temp_val) if temp_val == temp_val else float("nan"),
+            float(rh_val) if rh_val == rh_val else float("nan"),
+            float(pres_val) if pres_val == pres_val else float("nan"),
+            float(wind_kmh) if wind_kmh == wind_kmh else float("nan"),
+            float(gust_kmh) if gust_kmh == gust_kmh else float("nan"),
+            float(dv_val) if dv_val == dv_val else float("nan"),
+            float(prec_val) if prec_val == prec_val else float("nan"),
+        ))
+
+    if not rows:
+        return _empty_aemet_window_series()
+
+    rows.sort(key=lambda row: row[0])
+    dedup: Dict[int, Tuple[float, float, float, float, float, float, float]] = {}
+    for epoch, temp_val, rh_val, pres_val, wind_kmh, gust_kmh, dv_val, prec_val in rows:
+        dedup[int(epoch)] = (temp_val, rh_val, pres_val, wind_kmh, gust_kmh, dv_val, prec_val)
+
+    now_local = datetime.now()
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    start_epoch = int((day_start - timedelta(hours=max(0, int(hours_before_start)))).timestamp())
+    end_epoch = int(day_end.timestamp())
+
+    filtered_rows: List[Tuple[int, float, float, float, float, float, float, float]] = []
+    for epoch in sorted(dedup.keys()):
+        if start_epoch <= int(epoch) < end_epoch:
+            temp_val, rh_val, pres_val, wind_kmh, gust_kmh, dv_val, prec_val = dedup[int(epoch)]
+            filtered_rows.append((
+                int(epoch),
+                temp_val,
+                rh_val,
+                pres_val,
+                wind_kmh,
+                gust_kmh,
+                dv_val,
+                prec_val,
+            ))
+
+    if not filtered_rows:
+        return _empty_aemet_window_series()
+
+    (
+        epochs,
+        temps,
+        humidities,
+        pressures,
+        winds,
+        gusts,
+        wind_dirs,
+        precip_totals,
+    ) = map(list, zip(*filtered_rows))
+
+    dir_non_calm = [
+        float(d)
+        for d, w, g in zip(wind_dirs, winds, gusts)
+        if d == d and (
+            (w == w and float(w) > 0.3) or
+            (g == g and float(g) > 0.3)
+        )
+    ]
+    if len(dir_non_calm) >= 6 and max(abs(v) for v in dir_non_calm) < 0.1:
+        wind_dirs = [float("nan") if d == d else d for d in wind_dirs]
+
+    return {
+        "epochs": epochs,
+        "temps": temps,
+        "humidities": humidities,
+        "pressures": pressures,
+        "winds": winds,
+        "gusts": gusts,
+        "wind_dirs": wind_dirs,
+        "precips": precip_totals,
+        "has_data": len(epochs) > 0,
+    }
+
+
 @st.cache_data(ttl=600)  # Caché de 10 minutos (AEMET actualiza ~cada 30 min)
 def fetch_aemet_station_data(idema: str) -> Optional[Dict]:
     """
@@ -407,6 +595,22 @@ def fetch_aemet_station_data(idema: str) -> Optional[Dict]:
         Diccionario con datos de la estación o None si falla
     """
     try:
+        # Si ya tenemos serie diezminutal válida, reutilizar su último registro
+        # para evitar dos llamadas extra al endpoint "actual".
+        try:
+            data_list = fetch_aemet_daily_timeseries(str(idema).strip().upper())
+        except Exception:
+            data_list = None
+        if isinstance(data_list, list) and len(data_list) > 0:
+            last_row = data_list[-1]
+            last_epoch = _parse_epoch_any(_extract_timestamp(last_row) or "")
+            if _aemet_data_age_minutes(last_epoch) <= AEMET_SERIES_FRESHNESS_MINUTES:
+                return last_row
+            print(
+                f"⚠️ [AEMET API] Último dato diezminutal demasiado antiguo para reutilizarlo "
+                f"como actual (age={_aemet_data_age_minutes(last_epoch):.1f}m)"
+            )
+
         # Paso 1: Obtener URL de datos
         endpoint = f"{BASE_URL}/observacion/convencional/datos/estacion/{idema}"
         headers = {"api_key": AEMET_API_KEY}
@@ -448,15 +652,12 @@ def fetch_aemet_station_data(idema: str) -> Optional[Dict]:
         else:
             return None
             
-    except requests.exceptions.Timeout:
-        st.warning("⏱️ La estación o el servidor de AEMET no responde a tiempo. Inténtalo de nuevo en unos minutos.")
-        return None
+    except requests.exceptions.Timeout as e:
+        raise RuntimeError("La estación o el servidor de AEMET no responde a tiempo.") from e
     except requests.exceptions.RequestException as e:
-        st.warning(f"⚠️ No se pudo contactar con AEMET ahora mismo (red/servidor). Detalle: {e}")
-        return None
+        raise RuntimeError(f"No se pudo contactar con AEMET ahora mismo: {e}") from e
     except Exception as e:
-        st.error(f"❌ Error inesperado: {e}")
-        return None
+        raise RuntimeError(f"Error inesperado consultando AEMET: {e}") from e
 
 
 def parse_aemet_data(raw_data: Dict) -> Dict:
@@ -534,11 +735,11 @@ def parse_aemet_data(raw_data: Dict) -> Dict:
         "p_station": _parse_num(field("pres", "PRES")),                      # Presión a nivel de estación
         
         # Viento
-        "wind": ms_to_kmh(field("vv", "VV", "ff", "FF", "viento")),
-        "wind_speed_kmh": ms_to_kmh(field("vv", "VV", "ff", "FF", "viento")),
-        "wind_dir_deg": _parse_wind_dir_deg(field("dv", "DV", "dd", "DD", "dir", "DIR", "dir_viento", "direccion_viento")),
-        "gust": ms_to_kmh(field("vmax", "VMAX", "fx", "FX", "racha", "RACHA")),
-        "gust_max": ms_to_kmh(field("vmax", "VMAX", "fx", "FX", "racha", "RACHA")),
+        "wind": ms_to_kmh(field("VV10m", "vv10m", "vv", "VV", "ff", "FF", "viento")),
+        "wind_speed_kmh": ms_to_kmh(field("VV10m", "vv10m", "vv", "VV", "ff", "FF", "viento")),
+        "wind_dir_deg": _parse_wind_dir_deg(field("DV10m", "dv10m", "dv", "DV", "dd", "DD", "dir", "DIR", "dir_viento", "direccion_viento")),
+        "gust": ms_to_kmh(field("VMAX10m", "vmax10m", "vmax", "VMAX", "fx", "FX", "racha", "RACHA")),
+        "gust_max": ms_to_kmh(field("VMAX10m", "vmax10m", "vmax", "VMAX", "fx", "FX", "racha", "RACHA")),
         
         # Precipitación
         "precip_total": _parse_num(field("prec", "PREC", "precip", "PR", "pr", "lluvia")),
@@ -582,11 +783,37 @@ def get_aemet_data() -> Optional[Dict]:
     if not idema:
         return None
     
-    raw_data = fetch_aemet_station_data(idema)
-    if not raw_data:
-        return None
-    
-    return parse_aemet_data(raw_data)
+    last_error = ""
+    stale_data: Optional[Dict[str, Any]] = None
+
+    for attempt in range(2):
+        try:
+            raw_data = fetch_aemet_station_data(idema)
+        except Exception as e:
+            last_error = str(e)
+            raw_data = None
+        if not raw_data:
+            if attempt == 0:
+                clear_aemet_runtime_cache()
+                continue
+            st.session_state["aemet_last_error"] = last_error or "AEMET no devolvió datos."
+            return None
+
+        parsed = parse_aemet_data(raw_data)
+        age_min = _aemet_data_age_minutes(parsed.get("epoch"))
+        if age_min <= AEMET_SERIES_FRESHNESS_MINUTES:
+            st.session_state["aemet_last_error"] = ""
+            return parsed
+
+        stale_data = parsed
+        last_error = f"AEMET devolvió un dato demasiado antiguo ({age_min:.0f} min)."
+        if attempt == 0:
+            print(f"⚠️ [AEMET] Dato actual demasiado antiguo, limpiando caché y reintentando: {age_min:.1f} min")
+            clear_aemet_runtime_cache()
+            continue
+
+    st.session_state["aemet_last_error"] = last_error
+    return stale_data
 
 
 @st.cache_data(ttl=600)  # Caché de 10 minutos
@@ -601,6 +828,8 @@ def fetch_aemet_daily_timeseries(idema: str) -> Optional[List[Dict]]:
 
     Solo si no hay serie útil diezminutal se usa /observacion/convencional/todas como último recurso.
     """
+    request_state = {"network_failures": 0}
+
     def fetch_from_endpoint(endpoint: str, label: str) -> Optional[List[Dict]]:
         """Patrón OpenData de 2 pasos: endpoint -> URL temporal -> lista JSON."""
         try:
@@ -641,6 +870,7 @@ def fetch_aemet_daily_timeseries(idema: str) -> Optional[List[Dict]]:
             print(f"❌ [AEMET API:{label}] Datos no son lista: {type(data)}")
             return None
         except Exception as e:
+            request_state["network_failures"] += 1
             print(f"⚠️ [AEMET API:{label}] Error consultando endpoint: {e}")
             return None
 
@@ -758,13 +988,51 @@ def fetch_aemet_daily_timeseries(idema: str) -> Optional[List[Dict]]:
         if data:
             candidates.append((label, data, stats, kind))
 
+    def merge_raw_series(series_list: List[List[Dict]]) -> List[Dict]:
+        dedup: Dict[str, Dict] = {}
+        for rows in series_list:
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                ts = _extract_timestamp(row)
+                rid = str(row.get("idema") or row.get("IDEMA") or idema).strip().upper()
+                if not ts:
+                    continue
+                dedup[f"{rid}|{ts}"] = row
+        merged = list(dedup.values())
+        merged.sort(key=lambda row: _parse_epoch_any(_extract_timestamp(row) or "") or 0)
+        return merged
+
     try:
         print(f"🔄 [AEMET API] Solicitando serie temporal para {idema}...")
         candidates: List[tuple] = []
 
-        # Endpoint 1: por estación (diezminutal)
+        # Endpoint 1: por estación (diezminutal). Si ya devuelve una serie 10m
+        # consistente, no merece la pena seguir lanzando peticiones.
         endpoint_station = f"{BASE_URL}/observacion/convencional/diezminutal/datos/estacion/{idema}"
-        add_candidate(candidates, "station", fetch_from_endpoint(endpoint_station, "station"), "10m")
+        station_data = fetch_from_endpoint(endpoint_station, "station")
+        add_candidate(candidates, "station", station_data, "10m")
+        station_stats = series_stats(station_data)
+        station_age_min = _aemet_data_age_minutes(station_stats["latest_epoch"])
+        if (
+            station_data
+            and station_stats["ts_valid"] >= 12
+            and station_stats["step_10m_ratio"] >= 0.5
+            and station_age_min <= AEMET_SERIES_FRESHNESS_MINUTES
+        ):
+            print(
+                f"✅ [AEMET API] Fuente elegida temprano: station "
+                f"(ts={int(station_stats['ts_valid'])}, temp={int(station_stats['temp_valid'])}, "
+                f"wind={int(station_stats['wind_valid'])}, dir={int(station_stats['dir_valid'])}, "
+                f"step_med={station_stats['median_step_min']:.1f}min, step10m={station_stats['step_10m_ratio']:.2f}, "
+                f"latest={int(station_stats['latest_epoch'])}, age={station_age_min:.1f}m, registros={len(station_data)})"
+            )
+            return station_data
+        elif station_data and station_stats["ts_valid"] > 0:
+            print(
+                f"⚠️ [AEMET API] Serie station demasiado antigua para usarla sola "
+                f"(latest={int(station_stats['latest_epoch'])}, age={station_age_min:.1f}m)"
+            )
 
         # Endpoints 2 y 3: por fecha (hoy y ayer) diezminutal
         now_utc = datetime.now(timezone.utc)
@@ -816,10 +1084,25 @@ def fetch_aemet_daily_timeseries(idema: str) -> Optional[List[Dict]]:
                 add_candidate(candidates, "all24h", filtered, "fallback")
 
         if not candidates:
+            if request_state["network_failures"] > 0:
+                raise RuntimeError("AEMET no respondió correctamente al intentar obtener la serie diezminutal.")
             return None
 
         ten_min_candidates = [c for c in candidates if c[3] == "10m" and c[2]["ts_valid"] > 0]
-        pool = ten_min_candidates if ten_min_candidates else candidates
+        if ten_min_candidates:
+            merged_ten_min = merge_raw_series([c[1] for c in ten_min_candidates if c[1]])
+            merged_stats = series_stats(merged_ten_min)
+            print(
+                f"✅ [AEMET API] Fuente unificada diezminutal "
+                f"(ts={int(merged_stats['ts_valid'])}, temp={int(merged_stats['temp_valid'])}, "
+                f"wind={int(merged_stats['wind_valid'])}, wind_nz={int(merged_stats['wind_nonzero'])}, "
+                f"dir={int(merged_stats['dir_valid'])}, wind_dir={int(merged_stats['wind_dir_valid'])}, dir_u={int(merged_stats['dir_unique'])}, "
+                f"step_med={merged_stats['median_step_min']:.1f}min, step10m={merged_stats['step_10m_ratio']:.2f}, "
+                f"latest={int(merged_stats['latest_epoch'])}, registros={len(merged_ten_min)})"
+            )
+            return merged_ten_min
+
+        pool = candidates
 
         priority = {
             "station": 4,
@@ -864,7 +1147,7 @@ def fetch_aemet_daily_timeseries(idema: str) -> Optional[List[Dict]]:
         print(f"❌ [AEMET API] Error obteniendo serie temporal: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        raise
 
 
 @st.cache_data(ttl=600)
@@ -985,6 +1268,123 @@ def fetch_aemet_hourly_7day_series(idema: str) -> Dict[str, Any]:
             "pressures": [],
             "has_data": False,
         }
+
+
+@st.cache_data(ttl=3600)
+def fetch_aemet_recent_synoptic_series(
+    idema: str,
+    *,
+    days_back: int = 7,
+    step_hours: int = 3,
+) -> Dict[str, Any]:
+    """Serie reciente AEMET remuestreada a intervalos sinópticos de step_hours."""
+    base = fetch_aemet_hourly_7day_series(idema)
+    if not base.get("has_data", False):
+        merged_rows: Dict[str, Dict[str, Any]] = {}
+        today_utc = datetime.now(timezone.utc).date()
+        for day_offset in range(max(1, int(days_back))):
+            target_day = today_utc - timedelta(days=day_offset)
+            fecha = f"{target_day.isoformat()}T00:00:00UTC"
+            fecha_encoded = quote(fecha, safe="")
+            endpoint = (
+                f"{BASE_URL}/observacion/convencional/diezminutal/"
+                f"datos/fecha/{fecha_encoded}/estacion/{str(idema).strip().upper()}"
+            )
+            try:
+                payload = _fetch_aemet_opendata_list(endpoint, f"synoptic10m:{target_day.isoformat()}")
+            except Exception as exc:
+                print(f"⚠️ [AEMET API] Fallback sinóptico diezminutal falló para {target_day}: {exc}")
+                payload = None
+            if not payload:
+                continue
+            for row in payload:
+                if not isinstance(row, dict):
+                    continue
+                ts = _extract_timestamp(row)
+                rid = str(row.get("idema") or row.get("IDEMA") or idema).strip().upper()
+                if not ts:
+                    continue
+                merged_rows[f"{rid}|{ts}"] = row
+
+        if merged_rows:
+            base = _parse_aemet_basic_series(list(merged_rows.values()))
+        else:
+            return {
+                "epochs": [],
+                "temps": [],
+                "humidities": [],
+                "pressures": [],
+                "has_data": False,
+            }
+
+    step_h = max(1, int(step_hours))
+    cutoff_epoch = int((datetime.now(timezone.utc) - timedelta(days=max(1, int(days_back)))).timestamp())
+
+    buckets: Dict[int, Tuple[int, float, float, float]] = {}
+    for ep, temp, rh, p in zip(
+        base.get("epochs", []),
+        base.get("temps", []),
+        base.get("humidities", []),
+        base.get("pressures", []),
+    ):
+        try:
+            epoch_i = int(ep)
+        except Exception:
+            continue
+        if epoch_i < cutoff_epoch:
+            continue
+
+        dt_utc = datetime.fromtimestamp(epoch_i, tz=timezone.utc)
+        bucket_dt = dt_utc.replace(minute=0, second=0, microsecond=0)
+        bucket_dt = bucket_dt - timedelta(hours=(bucket_dt.hour % step_h))
+        bucket_epoch = int(bucket_dt.timestamp())
+
+        buckets[bucket_epoch] = (
+            epoch_i,
+            float(temp) if temp == temp else float("nan"),
+            float(rh) if rh == rh else float("nan"),
+            float(p) if p == p else float("nan"),
+        )
+
+    if not buckets:
+        return {
+            "epochs": [],
+            "temps": [],
+            "humidities": [],
+            "pressures": [],
+            "has_data": False,
+        }
+
+    epochs = sorted(buckets.keys())
+    temps = [float(buckets[ep][1]) for ep in epochs]
+    humidities = [float(buckets[ep][2]) for ep in epochs]
+    pressures = [float(buckets[ep][3]) for ep in epochs]
+    return {
+        "epochs": epochs,
+        "temps": temps,
+        "humidities": humidities,
+        "pressures": pressures,
+        "has_data": len(epochs) > 0,
+    }
+
+
+@st.cache_data(ttl=600)
+def fetch_aemet_today_series_with_lookback(
+    idema: str,
+    *,
+    hours_before_start: int = 0,
+) -> Dict[str, Any]:
+    """Serie local del día para AEMET, opcionalmente con horas previas al inicio del día."""
+    station = str(idema).strip().upper()
+    if not station:
+        return _empty_aemet_window_series()
+
+    data_list = fetch_aemet_daily_timeseries(station)
+    series = _build_aemet_local_window_series(
+        data_list,
+        hours_before_start=hours_before_start,
+    )
+    return series
 
 
 def _empty_climo_dataframe(include_extras: bool = True) -> pd.DataFrame:
@@ -1573,182 +1973,24 @@ def get_aemet_daily_charts() -> tuple:
         return [], [], [], [], [], [], [], []
     
     print(f"📊 [AEMET Charts] Obteniendo datos del día para estación {idema}")
-    
-    # Obtener serie temporal del día
-    data_list = fetch_aemet_daily_timeseries(idema)
-    if not data_list:
-        print("❌ [AEMET Charts] fetch_aemet_daily_timeseries devolvió None o lista vacía")
+    try:
+        series = fetch_aemet_today_series_with_lookback(idema, hours_before_start=0)
+    except Exception as e:
+        print(f"❌ [AEMET Charts] Error obteniendo serie local: {e}")
         return [], [], [], [], [], [], [], []
-    
-    print(f"📦 [AEMET Charts] Recibidos {len(data_list)} registros")
-    
-    # Debug: mostrar campos del primer registro
-    if len(data_list) > 0:
-        campos = list(data_list[0].keys())
-        print(f"🔑 [AEMET Charts] Campos disponibles en registro: {campos}")
-        
-        # Debug: mostrar valores de temperatura del primer registro
-        primer = data_list[0]
-        print(f"🌡️ [AEMET Charts] Valores temperatura primer registro:")
-        print(f"   - TA: {primer.get('TA')}")
-        print(f"   - ta: {primer.get('ta')}")
-        print(f"   - TPRE: {primer.get('TPRE')}")
-        print(f"   - TPR: {primer.get('TPR')}")
-    
-    epochs = []
-    temps = []
-    humidities = []
-    pressures = []
-    winds = []
-    gusts = []
-    wind_dirs = []
-    precip_totals = []
-    
-    # Parsear cada registro
-    
-    errores = 0
-    timestamps_ejemplo = []
-    
-    for i, record in enumerate(data_list):
-        record_ci = {str(k).lower(): v for k, v in record.items()}
-
-        def first_non_empty(keys):
-            for key in keys:
-                value = record.get(key)
-                if value is None and isinstance(key, str):
-                    value = record_ci.get(key.lower())
-                if value is not None and value != "":
-                    return value
-            return None
-
-        # Timestamp - endpoint diezminutal usa 'Fecha' (mayúscula)
-        fint_str = first_non_empty(["Fecha", "fecha", "fint", "FINT", "fhora"])
-        if not fint_str:
-            fint_str = _extract_timestamp(record)
-        if not fint_str:
-            errores += 1
-            if errores <= 3:
-                print(f"⚠️ [AEMET Charts] Registro #{i}: sin campo de fecha")
-            continue
-        
-        # Guardar primeros 3 timestamps para debug
-        if len(timestamps_ejemplo) < 3:
-            timestamps_ejemplo.append(fint_str)
-            
-        epoch = _parse_epoch_any(fint_str)
-        if epoch is None:
-            errores += 1
-            if errores <= 3:  # Solo mostrar primeros 3 errores
-                print(f"⚠️ [AEMET Charts] Error #{i}: timestamp no parseable '{fint_str}'")
-            continue
-        
-        # Temperatura - diezminutal usa 'TA' (temperatura del aire)
-        ta = first_non_empty(["TA", "ta", "TPRE", "T", "t", "TEMP", "temp"])
-        if ta is not None:
-            temp_val = _parse_num(ta)
-            if temp_val == temp_val:
-                temps.append(temp_val)
-                epochs.append(epoch)
-            else:
-                temps.append(float("nan"))
-                epochs.append(epoch)
-        else:
-            temps.append(float("nan"))
-            epochs.append(epoch)
-        
-        # Humedad - diezminutal NO tiene humedad en todos los registros
-        # Solo hay humedad en observaciones horarias (sincronizadas)
-        hr = first_non_empty(["hr", "HR", "hrel", "HREL"])  # Puede no existir
-        if hr is not None:
-            rh_val = _parse_num(hr)
-            if rh_val == rh_val:
-                humidities.append(rh_val)
-            else:
-                humidities.append(float("nan"))
-        else:
-            humidities.append(float("nan"))
-        
-        # Presión - diezminutal usa 'PRES' (presión de estación)
-        pres = first_non_empty(["PRES", "pres", "pres_nmar", "pnm", "PNM"])
-        if pres is not None:
-            pres_val = _parse_num(pres)
-            if pres_val == pres_val:
-                pressures.append(pres_val)
-            else:
-                pressures.append(float("nan"))
-        else:
-            pressures.append(float("nan"))
-
-        # Viento medio (normalmente VV/FF en m/s), convertir a km/h.
-        vv = _aemet_first_by_patterns(
-            record,
-            ["VV", "vv", "FF", "ff", "VVIENTO", "v_viento", "viento", "vel_viento", "velocidad_viento", "wind"],
-            ["vv", "ff", "viento", "vel_viento", "velocidad_viento", "wind"],
-        )
-        vv_val = _parse_num(vv)
-        winds.append(vv_val * 3.6 if vv_val == vv_val else float("nan"))
-
-        # Racha máxima (normalmente VMAX/FX en m/s), convertir a km/h.
-        vmax = _aemet_first_by_patterns(
-            record,
-            ["VMAX", "vmax", "FX", "fx", "RACHA", "racha", "racha_max", "v_racha", "vmax10m", "windgust"],
-            ["vmax", "racha", "fx", "gust"],
-        )
-        vmax_val = _parse_num(vmax)
-        gusts.append(vmax_val * 3.6 if vmax_val == vmax_val else float("nan"))
-
-        # Dirección del viento (numérica o cardinal ES/EN).
-        dv = _aemet_first_by_patterns(
-            record,
-            ["DV", "dv", "DD", "dd", "dir_viento", "direccion_viento", "DIR", "dir", "winddir"],
-            ["dv", "dd", "dir", "direccion", "winddir"],
-        )
-        dv_val = _parse_wind_dir_deg(dv)
-        wind_dirs.append(dv_val if dv_val == dv_val else float("nan"))
-
-        # Precipitación acumulada/total reportada por el registro (mm)
-        prec = first_non_empty(["prec", "PREC", "PR", "pr", "lluvia"])
-        if prec is not None:
-            prec_val = _parse_num(prec)
-            if prec_val == prec_val:
-                precip_totals.append(prec_val)
-            else:
-                precip_totals.append(float("nan"))
-        else:
-            precip_totals.append(float("nan"))
-    
-    print(f"✅ [AEMET Charts] Procesados: {len(epochs)} puntos, {errores} errores")
-    if errores > 0 and len(timestamps_ejemplo) > 0:
-        print(f"📋 [AEMET Charts] Ejemplos de timestamps recibidos:")
-        for ts in timestamps_ejemplo:
-            print(f"   - '{ts}'")
-    if len(epochs) == 0:
+    if not series.get("has_data", False):
+        print("❌ [AEMET Charts] No hay serie local válida para hoy")
         return [], [], [], [], [], [], [], []
 
-    # Ordenar cronológicamente todas las series y recortar a ventana reciente
-    rows = sorted(
-        zip(epochs, temps, humidities, pressures, winds, gusts, wind_dirs, precip_totals),
-        key=lambda r: r[0]
-    )
-
-    # Mantener datos de las últimas 72h para tolerar desfases en algunos endpoints.
-    now_epoch = int(time.time())
-    min_epoch = now_epoch - (72 * 3600)
-    rows = [r for r in rows if min_epoch <= r[0] <= now_epoch + 3600]
-
-    if len(rows) == 0:
-        return [], [], [], [], [], [], [], []
-
-    (
-        epochs,
-        temps,
-        humidities,
-        pressures,
-        winds,
-        gusts,
-        wind_dirs,
-        precip_totals,
-    ) = map(list, zip(*rows))
-
+    epochs = series.get("epochs", [])
     print(f"📈 [AEMET Charts] Rango ordenado: {datetime.fromtimestamp(epochs[0])} → {datetime.fromtimestamp(epochs[-1])}")
-    return epochs, temps, humidities, pressures, winds, gusts, wind_dirs, precip_totals
+    return (
+        epochs,
+        series.get("temps", []),
+        series.get("humidities", []),
+        series.get("pressures", []),
+        series.get("winds", []),
+        series.get("gusts", []),
+        series.get("wind_dirs", []),
+        series.get("precips", []),
+    )

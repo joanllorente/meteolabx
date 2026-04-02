@@ -10,11 +10,12 @@ import unicodedata
 import streamlit as st
 
 from utils.helpers import html_clean
+from utils.i18n import get_language, t
 from .icons import icon_img
 
 
 DEFINITIONS_PATH = Path(__file__).parent.parent / "definiciones.txt"
-FALLBACK_DEFINITIONS = {
+FALLBACK_DEFINITIONS_ES = {
     "temperatura": "Temperatura del aire medida por la estación a la altura del sensor (habitualmente 1.5-2 m).",
     "humedad relativa": "Porcentaje de vapor de agua presente en el aire respecto al máximo posible a esa temperatura.",
     "punto de rocio": "Temperatura a la que el aire se saturaría y comenzaría la condensación si se enfría a presión constante.",
@@ -33,7 +34,31 @@ FALLBACK_DEFINITIONS = {
     "indice uv": "Índice de radiación ultravioleta eritemática en superficie.",
     "evapotranspiracion": "Pérdida de agua combinada por evaporación y transpiración estimada para el día actual (mm).",
     "claridad del cielo": "Índice relativo de transparencia atmosférica deducido de la radiación observada frente a la potencial.",
+    "altura del sol": "Altura angular del Sol sobre el horizonte para la ubicación y el instante de observación.",
     "balance hidrico": "Diferencia entre precipitación acumulada y evapotranspiración estimada en el día actual (mm).",
+}
+
+FALLBACK_DEFINITIONS_EN = {
+    "temperatura": "Air temperature measured by the station at sensor height (usually 1.5-2 m).",
+    "humedad relativa": "Percentage of water vapour present in the air relative to the maximum possible at that temperature.",
+    "punto de rocio": "Temperature at which the air would become saturated and condensation would begin if cooled at constant pressure.",
+    "presion": "Atmospheric pressure measured by the station barometer. It may be shown as absolute pressure or reduced to sea level.",
+    "viento": "Mean wind speed during the measurement interval. It is usually accompanied by direction and maximum gust.",
+    "precipitacion hoy": "Accumulated precipitation from 00:00 local time until the current observation.",
+    "humedad especifica": "Mass of water vapour per unit mass of moist air (g/kg).",
+    "humedad absoluta": "Mass of water vapour per unit volume of air (g/m³).",
+    "temperatura de bulbo humedo": "Temperature the air would reach if cooled by evaporation to saturation at approximately constant pressure.",
+    "temperatura virtual": "Equivalent temperature that dry air would have with the same density as the observed moist air.",
+    "temperatura equivalente": "Temperature resulting from condensing all the water vapour in the air and releasing its latent heat.",
+    "temperatura potencial": "Temperature an air parcel would have if brought adiabatically to 1000 hPa.",
+    "densidad del aire": "Mass of air per unit volume, calculated from temperature, humidity and pressure.",
+    "nivel de condensacion por ascenso": "Approximate height at which a rising air parcel would reach saturation (LCL cloud base).",
+    "radiacion solar": "Instantaneous global solar irradiance measured by the sensor (W/m²).",
+    "indice uv": "Surface erythemal ultraviolet radiation index.",
+    "evapotranspiracion": "Combined water loss by evaporation and transpiration estimated for the current day (mm).",
+    "claridad del cielo": "Relative atmospheric transparency index derived from observed radiation versus the theoretical potential.",
+    "altura del sol": "Solar angular height above the horizon for the observation location and time.",
+    "balance hidrico": "Difference between accumulated precipitation and estimated evapotranspiration during the current day (mm).",
 }
 
 
@@ -110,9 +135,10 @@ def _load_definitions() -> dict:
     return definitions
 
 
-def _card_tooltip_text(title: str) -> str:
-    definitions = _load_definitions()
-    normalized_title = _normalize_text(title)
+def _card_tooltip_text(title: str, tooltip_key: str = "") -> str:
+    lang = get_language()
+    definitions = _load_definitions() if lang == "es" else {}
+    normalized_title = _normalize_text(tooltip_key or title)
 
     aliases = {
         "temp bulbo humedo": "temperatura de bulbo humedo",
@@ -134,15 +160,40 @@ def _card_tooltip_text(title: str) -> str:
                 text = val
                 break
     if normalized_title in ("radiacion solar", "irradiancia"):
-        extra = "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
+        extra = (
+            "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
+            if lang == "es"
+            else "- Energy today: integration of solar irradiance from 00:00 until now, expressed in MJ/m²."
+        )
         if text:
             return f"{text}\n{extra}"
-        return f"Radiación solar instantánea medida por piranómetro.\n{extra}"
+        return (
+            f"Radiación solar instantánea medida por piranómetro.\n{extra}"
+            if lang == "es"
+            else f"Instantaneous solar radiation measured by pyranometer.\n{extra}"
+        )
+    if normalized_title == "altura del sol":
+        extra = (
+            "- Culminación: altura máxima que alcanza el Sol ese día al pasar por el meridiano local."
+            if lang == "es"
+            else "- Culmination: maximum solar altitude reached that day when the Sun crosses the local meridian."
+        )
+        if text:
+            return f"{text}\n{extra}"
+        return (
+            f"Altura angular del Sol sobre el horizonte.\n{extra}"
+            if lang == "es"
+            else f"Angular height of the Sun above the horizon.\n{extra}"
+        )
     if not text:
-        text = FALLBACK_DEFINITIONS.get(lookup)
+        text = (
+            FALLBACK_DEFINITIONS_ES.get(lookup)
+            if lang == "es"
+            else FALLBACK_DEFINITIONS_EN.get(lookup) or FALLBACK_DEFINITIONS_ES.get(lookup)
+        )
     if text:
         return text
-    return "Definicion no disponible todavia para esta variable."
+    return t("cards.tooltip_unavailable")
 
 
 def _capitalize_tooltip_line(text: str) -> str:
@@ -170,7 +221,7 @@ def _tooltip_html(text: str) -> str:
     )
     lines = [line for line in fixed_text.splitlines() if line.strip()]
     if not lines:
-        return "Definicion no disponible todavia para esta variable."
+        return t("cards.tooltip_unavailable")
     normalized = [_capitalize_tooltip_line(line) for line in lines]
     return "<br><br>".join(escape(line) for line in normalized)
 
@@ -184,6 +235,7 @@ def card(
     side_html: str = "",
     uid: str = "x",
     dark: bool = False,
+    tooltip_key: str = "",
 ) -> str:
     """
     Genera HTML de una tarjeta de dato meteorologico.
@@ -192,7 +244,7 @@ def card(
     sub_html = f"<div class='subtitle'>{subtitle_html}</div>" if subtitle_html else ""
     icon_html = icon_img(icon_kind, uid=uid, dark=dark)
 
-    tip_text = _card_tooltip_text(title)
+    tip_text = _card_tooltip_text(title, tooltip_key=tooltip_key)
     tip_html = _tooltip_html(tip_text)
 
     side_col = f"""
@@ -202,7 +254,7 @@ def card(
     return html_clean(
         f"""
   <div class="card card-h">
-    <div class="card-help-wrap" tabindex="0" aria-label="Ayuda de {escape(title)}">
+    <div class="card-help-wrap" tabindex="0" aria-label="{escape(t('cards.help_aria', title=title))}">
       <span class="card-help-btn">?</span>
       <div class="card-help-tooltip">{tip_html}</div>
     </div>

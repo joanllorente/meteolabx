@@ -5,7 +5,7 @@ import json
 import math
 import os
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -23,6 +23,7 @@ METEOCAT_API_KEY = os.getenv(
 BASE_URL = "https://api.meteo.cat/xema/v1"
 TIMEOUT_SECONDS = 14
 CAT_TZ = ZoneInfo("Europe/Madrid")
+METEOCAT_SERIES_CACHE_VERSION = 5
 
 
 # Variables de interés.
@@ -194,6 +195,23 @@ def _parse_iso_epoch(value: Any) -> Optional[int]:
         dt = datetime.fromisoformat(raw)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
+
+def _parse_measurement_epoch(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=CAT_TZ)
         return int(dt.timestamp())
     except Exception:
         return None
@@ -1312,7 +1330,7 @@ def _request_latest_variable(station_code: str, variable_code: int, api_key: str
     for reading in readings:
         if not isinstance(reading, dict):
             continue
-        epoch = _parse_iso_epoch(reading.get("data"))
+        epoch = _parse_measurement_epoch(reading.get("data"))
         if epoch is None:
             continue
         if best_epoch is None or epoch > best_epoch:
@@ -1374,6 +1392,8 @@ def _local_day_parts(day_local: Optional[datetime]) -> Tuple[int, int, int]:
 def fetch_meteocat_station_day(station_code: str, year: int, month: int, day: int, api_key: Optional[str] = None) -> Dict[str, Any]:
     code = str(station_code).strip().upper()
     key = str(api_key or METEOCAT_API_KEY).strip()
+    _cache_version = METEOCAT_SERIES_CACHE_VERSION
+    del _cache_version
     if not code or not key:
         return {"ok": False, "error": "Falta station_code o API key", "variables": {}}
 
@@ -1406,7 +1426,7 @@ def fetch_meteocat_station_day(station_code: str, year: int, month: int, day: in
         for reading in readings if isinstance(readings, list) else []:
             if not isinstance(reading, dict):
                 continue
-            epoch = _parse_iso_epoch(reading.get("data"))
+            epoch = _parse_measurement_epoch(reading.get("data"))
             if epoch is None:
                 continue
             value = _safe_float(reading.get("valor"))
@@ -1452,6 +1472,32 @@ def _precip_today_mm(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
             return max(vals)
 
     # Fallback: precipitación por intervalo (sumar).
+    s = _series_from_map(var_map, V_PRECIP)
+    return _sum_series(s)
+
+
+def _precip_window_mm(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
+    """
+    Calcula la precipitación acumulada dentro de una ventana temporal local.
+
+    Para series acumuladas no se debe tomar el máximo cuando la ventana empieza
+    a mitad del día UTC, porque el primer valor ya arrastra lluvia previa.
+    """
+    s_acc = _series_from_map(var_map, V_PRECIP_ACC)
+    vals = [max(0.0, float(v)) for _, v in s_acc if not _is_nan(v)]
+    if len(vals) >= 2:
+        total = 0.0
+        for i in range(1, len(vals)):
+            diff = vals[i] - vals[i - 1]
+            if diff >= -0.05:
+                total += max(0.0, diff)
+            else:
+                total += max(0.0, vals[i])
+        return float(total)
+
+    if len(vals) == 1:
+        return 0.0
+
     s = _series_from_map(var_map, V_PRECIP)
     return _sum_series(s)
 
@@ -1509,6 +1555,208 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
     }
 
 
+def _iter_utc_dates_for_window(start_epoch: int, end_epoch: int):
+    safe_end = max(int(start_epoch), int(end_epoch) - 1)
+    cursor = datetime.fromtimestamp(int(start_epoch), tz=timezone.utc).date()
+    limit = datetime.fromtimestamp(safe_end, tz=timezone.utc).date()
+    while cursor <= limit:
+        yield cursor
+        cursor += timedelta(days=1)
+
+
+def _merge_var_maps(var_maps: List[Dict[int, List[Tuple[int, float]]]]) -> Dict[int, List[Tuple[int, float]]]:
+    merged: Dict[int, Dict[int, float]] = {}
+    for var_map in var_maps:
+        if not isinstance(var_map, dict):
+            continue
+        for code, rows in var_map.items():
+            try:
+                code_int = int(code)
+            except Exception:
+                continue
+            bucket = merged.setdefault(code_int, {})
+            for row in rows if isinstance(rows, list) else []:
+                try:
+                    ep = int(row[0])
+                    val = float(row[1])
+                except Exception:
+                    continue
+                bucket[ep] = val
+
+    out: Dict[int, List[Tuple[int, float]]] = {}
+    for code, rows_by_epoch in merged.items():
+        out[code] = sorted(rows_by_epoch.items(), key=lambda item: item[0])
+    return out
+
+
+def _filter_var_map_by_epoch_range(
+    var_map: Dict[int, List[Tuple[int, float]]],
+    start_epoch: int,
+    end_epoch: int,
+) -> Dict[int, List[Tuple[int, float]]]:
+    filtered: Dict[int, List[Tuple[int, float]]] = {}
+    for code, rows in var_map.items():
+        keep = []
+        for row in rows if isinstance(rows, list) else []:
+            try:
+                ep = int(row[0])
+                val = float(row[1])
+            except Exception:
+                continue
+            if int(start_epoch) <= ep < int(end_epoch):
+                keep.append((ep, val))
+        if keep:
+            filtered[int(code)] = keep
+    return filtered
+
+
+@st.cache_data(ttl=600)
+def fetch_meteocat_local_day_window(
+    station_code: str,
+    hours_before_start: int = 0,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    code = str(station_code).strip().upper()
+    _cache_version = METEOCAT_SERIES_CACHE_VERSION
+    del _cache_version
+    if not code:
+        return {
+            "station_code": code,
+            "start_epoch": 0,
+            "end_epoch": 0,
+            "variables": {},
+            "series": {"epochs": [], "has_data": False},
+            "has_data": False,
+        }
+
+    now_local = datetime.now(CAT_TZ)
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    start_epoch = int((day_start - timedelta(hours=max(0, int(hours_before_start)))).timestamp())
+    end_epoch = int(day_end.timestamp())
+
+    var_maps: List[Dict[int, List[Tuple[int, float]]]] = []
+    for utc_day in _iter_utc_dates_for_window(start_epoch, end_epoch):
+        payload = fetch_meteocat_station_day(
+            code,
+            utc_day.year,
+            utc_day.month,
+            utc_day.day,
+            api_key=api_key,
+        )
+        if not payload.get("ok"):
+            continue
+        var_map = payload.get("variables", {})
+        if isinstance(var_map, dict) and var_map:
+            var_maps.append(var_map)
+
+    merged = _merge_var_maps(var_maps)
+    filtered = _filter_var_map_by_epoch_range(merged, start_epoch, end_epoch)
+    series = extract_meteocat_daily_timeseries(filtered)
+    return {
+        "station_code": code,
+        "start_epoch": start_epoch,
+        "end_epoch": end_epoch,
+        "variables": filtered,
+        "series": series,
+        "has_data": bool(series.get("epochs")),
+    }
+
+
+def _merge_timeseries_dicts(series_list: List[Dict[str, List[float]]]) -> Dict[str, List[float]]:
+    merged_rows: Dict[int, Dict[str, float]] = {}
+    key_map = {
+        "temps": "temp",
+        "humidities": "rh",
+        "pressures_abs": "p",
+        "winds": "wind",
+        "gusts": "gust",
+        "wind_dirs": "dir",
+        "solar_radiations": "solar",
+    }
+
+    for series in series_list:
+        epochs = series.get("epochs", []) if isinstance(series, dict) else []
+        for idx, epoch in enumerate(epochs):
+            try:
+                ep = int(epoch)
+            except Exception:
+                continue
+            row = merged_rows.setdefault(ep, {})
+            for src_key, dst_key in key_map.items():
+                values = series.get(src_key, [])
+                value = values[idx] if idx < len(values) else float("nan")
+                row[dst_key] = value
+
+    ordered_epochs = sorted(merged_rows.keys())
+    return {
+        "epochs": ordered_epochs,
+        "temps": [merged_rows[ep].get("temp", float("nan")) for ep in ordered_epochs],
+        "humidities": [merged_rows[ep].get("rh", float("nan")) for ep in ordered_epochs],
+        "pressures_abs": [merged_rows[ep].get("p", float("nan")) for ep in ordered_epochs],
+        "winds": [merged_rows[ep].get("wind", float("nan")) for ep in ordered_epochs],
+        "gusts": [merged_rows[ep].get("gust", float("nan")) for ep in ordered_epochs],
+        "wind_dirs": [merged_rows[ep].get("dir", float("nan")) for ep in ordered_epochs],
+        "solar_radiations": [merged_rows[ep].get("solar", float("nan")) for ep in ordered_epochs],
+        "has_data": len(ordered_epochs) > 0,
+    }
+
+
+@st.cache_data(ttl=600)
+def fetch_meteocat_today_series_with_lookback(
+    station_code: str,
+    hours_before_start: int = 3,
+    api_key: Optional[str] = None,
+) -> Dict[str, List[float]]:
+    payload = fetch_meteocat_local_day_window(
+        station_code=station_code,
+        hours_before_start=hours_before_start,
+        api_key=api_key,
+    )
+    series = payload.get("series", {})
+    if isinstance(series, dict):
+        return series
+    return {"epochs": [], "has_data": False}
+
+
+@st.cache_data(ttl=1800)
+def fetch_meteocat_recent_synoptic_series(
+    station_code: str,
+    days_back: int = 7,
+    api_key: Optional[str] = None,
+) -> Dict[str, List[float]]:
+    code = str(station_code).strip().upper()
+    if not code:
+        return {"epochs": [], "temps": [], "humidities": [], "pressures": [], "has_data": False}
+
+    today_local = datetime.now(CAT_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_day = today_local - timedelta(days=max(1, int(days_back)))
+    cursor = start_day
+    series_parts: List[Dict[str, List[float]]] = []
+    while cursor <= today_local:
+        payload = fetch_meteocat_station_day(
+            code,
+            cursor.year,
+            cursor.month,
+            cursor.day,
+            api_key=api_key,
+        )
+        if payload.get("ok"):
+            var_map = payload.get("variables", {})
+            if isinstance(var_map, dict) and var_map:
+                series_parts.append(extract_meteocat_daily_timeseries(var_map))
+        cursor += timedelta(days=1)
+
+    merged = _merge_timeseries_dicts(series_parts)
+    return {
+        "epochs": merged.get("epochs", []),
+        "temps": merged.get("temps", []),
+        "humidities": merged.get("humidities", []),
+        "pressures": merged.get("pressures_abs", []),
+        "has_data": bool(merged.get("epochs")),
+    }
+
+
 def is_meteocat_connection() -> bool:
     return st.session_state.get("connection_type") == "METEOCAT"
 
@@ -1530,9 +1778,12 @@ def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]
     if not snapshot.get("ok"):
         return None
 
-    year, month, day = _local_day_parts(None)
-    day_payload = fetch_meteocat_station_day(station_code, year, month, day, api_key=api_key)
-    day_vars = day_payload.get("variables", {}) if day_payload.get("ok") else {}
+    local_day_payload = fetch_meteocat_local_day_window(
+        station_code,
+        hours_before_start=0,
+        api_key=api_key,
+    )
+    day_vars = local_day_payload.get("variables", {}) if local_day_payload.get("has_data") else {}
 
     station_meta = _find_station(station_code)
     coords = station_meta.get("coordenades", {}) if isinstance(station_meta, dict) else {}
@@ -1555,45 +1806,29 @@ def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]
     p_abs = _safe_float(values.get("pressure_abs"))
     p_msl = _absolute_to_msl(p_abs, elevation)
 
-    # Extremos diarios desde endpoint /estacions/mesurades.
+    # Extremos del dia local real, no del dia UTC del endpoint.
     temp_max = _safe_float(values.get("temp"))
     temp_min = _safe_float(values.get("temp"))
     rh_max = _safe_float(values.get("rh"))
     rh_min = _safe_float(values.get("rh"))
     gust_max = gust_kmh
 
-    s_tmax = _series_from_map(day_vars, V_TEMP_MAX_AIR)
-    if not s_tmax:
-        s_tmax = _series_from_map(day_vars, V_TEMP_MAX_DAY)
-    s_tmin = _series_from_map(day_vars, V_TEMP_MIN_AIR)
-    if not s_tmin:
-        s_tmin = _series_from_map(day_vars, V_TEMP_MIN_DAY)
-    s_rhmax = _series_from_map(day_vars, V_RH_MAX_DAY)
-    s_rhmin = _series_from_map(day_vars, V_RH_MIN_DAY)
+    s_temp_local = _series_from_map(day_vars, V_TEMP)
+    s_rh_local = _series_from_map(day_vars, V_RH)
     s_gmax = _series_from_map(day_vars, V_GUST)
 
-    if s_tmax:
-        tmax = _max_of_series(s_tmax)
-        if not _is_nan(tmax):
-            temp_max = tmax
-    else:
-        tmax = _max_of_series(_series_from_map(day_vars, V_TEMP))
-        if not _is_nan(tmax):
-            temp_max = tmax
+    tmax = _max_of_series(s_temp_local)
+    if not _is_nan(tmax):
+        temp_max = tmax
 
-    if s_tmin:
-        tmin = _min_of_series(s_tmin)
-        if not _is_nan(tmin):
-            temp_min = tmin
-    else:
-        tmin = _min_of_series(_series_from_map(day_vars, V_TEMP))
-        if not _is_nan(tmin):
-            temp_min = tmin
+    tmin = _min_of_series(s_temp_local)
+    if not _is_nan(tmin):
+        temp_min = tmin
 
-    rhmax = _max_of_series(s_rhmax)
+    rhmax = _max_of_series(s_rh_local)
     if not _is_nan(rhmax):
         rh_max = rhmax
-    rhmin = _min_of_series(s_rhmin)
+    rhmin = _min_of_series(s_rh_local)
     if not _is_nan(rhmin):
         rh_min = rhmin
 
@@ -1601,11 +1836,12 @@ def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]
     if not _is_nan(gmax):
         gust_max = _ms_to_kmh(gmax)
 
-    rain_today = _precip_today_mm(day_vars)
+    rain_today = _precip_window_mm(day_vars)
     rain_1min = _max_of_series(_series_from_map(day_vars, V_RAIN_1MIN_MAX))
     if _is_nan(rain_1min):
         rain_1min = float("nan")
-    series = extract_meteocat_daily_timeseries(day_vars)
+    raw_series = local_day_payload.get("series", {})
+    series = raw_series if isinstance(raw_series, dict) else extract_meteocat_daily_timeseries(day_vars)
 
     return {
         "Tc": _safe_float(values.get("temp")),

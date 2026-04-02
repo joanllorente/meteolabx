@@ -4,6 +4,7 @@ Funciones auxiliares generales
 import textwrap
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 def html_clean(s: str) -> str:
@@ -25,9 +26,21 @@ def normalize_text_input(value) -> str:
     return str(value)
 
 
-def es_datetime_from_epoch(epoch: int) -> str:
-    """Convierte epoch a datetime"""
-    dt = datetime.fromtimestamp(epoch)
+def es_datetime_from_epoch(epoch: int, tz_name: str = "") -> str:
+    """Convierte epoch a datetime en la timezone indicada si existe."""
+    try:
+        epoch_value = int(epoch)
+    except Exception:
+        return "—"
+
+    if str(tz_name or "").strip():
+        try:
+            dt = datetime.fromtimestamp(epoch_value, ZoneInfo(str(tz_name).strip()))
+            return dt.strftime("%d-%m-%Y %H:%M:%S")
+        except Exception:
+            pass
+
+    dt = datetime.fromtimestamp(epoch_value)
     return dt.strftime("%d-%m-%Y %H:%M:%S")
 
 

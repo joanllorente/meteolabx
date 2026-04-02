@@ -287,6 +287,9 @@ def fetch_meteogalicia_current(station_id: str) -> Dict[str, Any]:
 @st.cache_data(ttl=600)
 def fetch_meteogalicia_hourly(station_id: str, num_hours: int = 24) -> Dict[str, Any]:
     sid = str(station_id).strip()
+    # En la práctica el endpoint horario de MeteoGalicia parece quedar
+    # limitado a unas 72 h aunque se pidan más; alineamos la petición
+    # con esa cobertura real para no prometer una ventana mayor.
     nh = max(1, min(72, int(num_hours)))
     params = {"idEst": sid, "numHoras": nh} if sid else {"numHoras": nh}
 
@@ -371,6 +374,73 @@ def fetch_meteogalicia_hourly(station_id: str, num_hours: int = 24) -> Dict[str,
             "solar_radiations": solars,
             "has_data": len(epochs) > 0,
         },
+    }
+
+
+@st.cache_data(ttl=1800)
+def fetch_meteogalicia_recent_synoptic_series(
+    station_id: str,
+    *,
+    days_back: int = 7,
+    step_hours: int = 3,
+) -> Dict[str, Any]:
+    """Serie reciente MeteoGalicia remuestreada a intervalos sinópticos."""
+    hours = max(24, min(72, int(days_back) * 24))
+    payload = fetch_meteogalicia_hourly(station_id, num_hours=hours)
+    base = payload.get("series", {}) if isinstance(payload, dict) else {}
+    if not payload.get("ok") or not base.get("has_data", False):
+        return {
+            "epochs": [],
+            "temps": [],
+            "humidities": [],
+            "pressures": [],
+            "has_data": False,
+        }
+
+    step_h = max(1, int(step_hours))
+    cutoff_epoch = int((datetime.now(timezone.utc) - timedelta(days=max(1, int(days_back)))).timestamp())
+    buckets: Dict[int, Tuple[int, float, float, float]] = {}
+
+    for ep, temp, rh, p in zip(
+        base.get("epochs", []),
+        base.get("temps", []),
+        base.get("humidities", []),
+        base.get("pressures", []),
+    ):
+        try:
+            epoch_i = int(ep)
+        except Exception:
+            continue
+        if epoch_i < cutoff_epoch:
+            continue
+
+        dt_utc = datetime.fromtimestamp(epoch_i, tz=timezone.utc)
+        bucket_dt = dt_utc.replace(minute=0, second=0, microsecond=0)
+        bucket_dt = bucket_dt - timedelta(hours=(bucket_dt.hour % step_h))
+        bucket_epoch = int(bucket_dt.timestamp())
+        buckets[bucket_epoch] = (
+            epoch_i,
+            float(temp) if temp == temp else float("nan"),
+            float(rh) if rh == rh else float("nan"),
+            float(p) if p == p else float("nan"),
+        )
+
+    if not buckets:
+        return {
+            "epochs": [],
+            "temps": [],
+            "humidities": [],
+            "pressures": [],
+            "has_data": False,
+        }
+
+    epochs = sorted(buckets.keys())
+    return {
+        "epochs": epochs,
+        "temps": [float(buckets[ep][1]) for ep in epochs],
+        "humidities": [float(buckets[ep][2]) for ep in epochs],
+        "pressures": [float(buckets[ep][3]) for ep in epochs],
+        "has_data": len(epochs) > 0,
     }
 
 

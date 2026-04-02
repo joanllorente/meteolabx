@@ -1,6 +1,8 @@
 """
 Generador de iconos SVG para las tarjetas meteorológicas
 """
+from urllib.parse import quote
+
 from utils.helpers import html_clean
 
 ICON_BASE_SIZE = 54
@@ -474,6 +476,31 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
         </svg>
         """)
 
+    if kind == "sunalt":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FFD978"/>
+              <stop offset="0.55" stop-color="#FFA95C"/>
+              <stop offset="1" stop-color="#6CC6FF"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.94)" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 36.5h32" stroke-width="3.1" opacity="0.9"/>
+            <path d="M17 36.5a10 10 0 0 1 20 0" stroke-width="3.1"/>
+            <circle cx="27" cy="26.5" r="4.8" stroke-width="3.0"/>
+            <path d="M27 14.2v3.2M18.2 18.0l2.3 2.3M35.8 18.0l-2.3 2.3" stroke-width="2.5" opacity="0.9"/>
+          </g>
+        </svg>
+        """)
+
     if kind == "balance":
         return html_clean(f"""
         <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
@@ -511,7 +538,10 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
 
 def icon_img(kind: str, uid: str, dark: bool = False) -> str:
     """
-    Devuelve SVG inline para mejor nitidez en el navegador
+    Devuelve un <img> con SVG embebido en data URI.
+
+    Safari es más estable así que con algunos SVG inline complejos
+    (filtros, texto, gradientes), especialmente dentro de tarjetas.
     
     Args:
         kind: Tipo de icono
@@ -519,17 +549,13 @@ def icon_img(kind: str, uid: str, dark: bool = False) -> str:
         dark: Tema oscuro
         
     Returns:
-        HTML SVG inline
+        HTML <img> con data URI SVG
     """
     svg = icon_svg(kind, uid=uid, dark=dark)
-    svg = svg.replace(
-        f'width="{ICON_BASE_SIZE}" height="{ICON_BASE_SIZE}" ',
-        (
-            f'class="icon-svg icon-img" width="{ICON_BASE_SIZE}" height="{ICON_BASE_SIZE}" '
-            'shape-rendering="geometricPrecision" text-rendering="geometricPrecision" '
-        ),
-        1,
+    svg = " ".join(line.strip() for line in svg.splitlines() if line.strip())
+    svg = svg.replace("<?xml version='1.0' encoding='UTF-8'?>", "").strip()
+    data_uri = "data:image/svg+xml;charset=utf-8," + quote(svg, safe="")
+    return (
+        f'<img class="icon-img" width="{ICON_BASE_SIZE}" height="{ICON_BASE_SIZE}" '
+        f'src="{data_uri}" alt="" draggable="false" decoding="async" loading="eager" />'
     )
-    # Compactar a una sola línea evita que Streamlit/Markdown trate bloques
-    # indentados de la tarjeta como código al interpolar HTML multilinea.
-    return " ".join(line.strip() for line in svg.splitlines() if line.strip())

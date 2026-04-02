@@ -4,7 +4,9 @@ Registro y orquestación de proveedores de estaciones.
 from typing import Dict, List, Optional, Sequence
 from .aemet_provider import AemetProvider
 from .euskalmet_provider import EuskalmetProvider
+from .frost_provider import FrostProvider
 from .meteocat_provider import MeteocatProvider
+from .meteofrance_provider import MeteofranceProvider
 from .meteogalicia_provider import MeteogaliciaProvider
 from .nws_provider import NwsProvider
 from .poem_provider import PoemProvider
@@ -14,12 +16,14 @@ from .types import StationCandidate
 def get_providers() -> Dict[str, object]:
     """
     Devuelve proveedores habilitados.
-    Nota: incluye AEMET, Meteocat, Euskalmet, MeteoGalicia, NWS y POEM.
+    Nota: incluye AEMET, Meteocat, Euskalmet, Frost, Meteo-France, MeteoGalicia, NWS y POEM.
     """
     providers = [
         AemetProvider(),
         MeteocatProvider(),
         EuskalmetProvider(),
+        FrostProvider(),
+        MeteofranceProvider(),
         MeteogaliciaProvider(),
         NwsProvider(),
         PoemProvider(),

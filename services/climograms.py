@@ -15,6 +15,17 @@ import streamlit as st
 
 from api import fetch_wu_history_daily
 from api.weather_underground import quantize_rain_mm_wu
+from services.wu_calibration import apply_wu_daily_history_calibration, default_wu_calibration
+from utils.i18n import month_name
+from utils.units import (
+    convert_precip,
+    convert_temperature,
+    convert_wind,
+    format_precip,
+    format_temperature,
+    format_wind,
+    normalize_unit_preferences,
+)
 
 
 MONTH_NAMES_ES: Dict[int, str] = {
@@ -191,7 +202,7 @@ def _iter_chunks(start_date: date, end_date: date, max_days: int = 31) -> Iterab
 
 
 def build_period_specs(
-    summary_mode: Literal["Mensual", "Anual"],
+    summary_mode: Literal["monthly", "annual"],
     years: Sequence[int],
     months: Optional[Sequence[int]] = None,
 ) -> List[ClimogramPeriod]:
@@ -200,13 +211,13 @@ def build_period_specs(
         return []
 
     periods: List[ClimogramPeriod] = []
-    if summary_mode == "Mensual":
+    if summary_mode == "monthly":
         valid_months = sorted({int(month) for month in (months or []) if 1 <= int(month) <= 12})
         for year in valid_years:
             for month in valid_months:
                 start = date(year, month, 1)
                 end = _last_day_of_month(year, month)
-                periods.append(ClimogramPeriod(label=f"{MONTH_NAMES_ES[month]} {year}", start=start, end=end))
+                periods.append(ClimogramPeriod(label=f"{month_name(month)} {year}", start=start, end=end))
     else:
         for year in valid_years:
             periods.append(
@@ -276,6 +287,11 @@ def fetch_wu_daily_history_for_periods(
         .sort_values("date")
         .reset_index(drop=True)
     )
+    active_station = str(st.session_state.get("active_station", "")).strip().upper()
+    calibration_station = str(st.session_state.get("wu_station_calibration_station", "")).strip().upper()
+    if active_station and active_station == station_id.upper() and calibration_station == station_id.upper():
+        station_calibration = st.session_state.get("wu_station_calibration", default_wu_calibration())
+        all_days = apply_wu_daily_history_calibration(all_days, station_calibration)
     return all_days[DAILY_SCHEMA]
 
 
@@ -308,6 +324,23 @@ def _format_value(value: float, unit: str, decimals: int = 1) -> str:
     return f"{float(value):.{int(decimals)}f} {unit}".strip()
 
 
+def _format_temperature_value(value: float, unit_preferences: Optional[Dict[str, str]], decimals: int = 1) -> str:
+    prefs = normalize_unit_preferences(unit_preferences)
+    return f"{format_temperature(value, prefs['temperature'], decimals=decimals)} {prefs['temperature'] == 'k' and 'K' or ('°F' if prefs['temperature'] == 'f' else '°C')}".strip()
+
+
+def _format_wind_value(value: float, unit_preferences: Optional[Dict[str, str]], decimals: int = 1) -> str:
+    prefs = normalize_unit_preferences(unit_preferences)
+    unit = {"kmh": "km/h", "ms": "m/s", "mph": "mph", "kt": "kt"}[prefs["wind"]]
+    return f"{format_wind(value, prefs['wind'], decimals=decimals)} {unit}".strip()
+
+
+def _format_precip_value(value: float, unit_preferences: Optional[Dict[str, str]], decimals: int = 1) -> str:
+    prefs = normalize_unit_preferences(unit_preferences)
+    unit = {"mm": "mm", "in": "in"}[prefs["precip"]]
+    return f"{format_precip(value, prefs['precip'], decimals=decimals)} {unit}".strip()
+
+
 def _extract_extreme(
     df: pd.DataFrame,
     metric: str,
@@ -334,6 +367,7 @@ def _extract_extreme(
 def build_extremes_table(
     daily_df: pd.DataFrame,
     overrides: Optional[Dict[str, Dict[str, str]]] = None,
+    unit_preferences: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
     if daily_df.empty:
         return pd.DataFrame(columns=["Métrica", "Valor", "Fecha"])
@@ -380,7 +414,15 @@ def build_extremes_table(
                 title, metric, mode, unit, date_override_col = row_def
             value, day, override_used = _extract_extreme(frame, metric, mode, date_override_col=date_override_col)  # type: ignore[arg-type]
             date_txt = _format_year(day) if not override_used else _format_date(day)
-            rows.append({"Métrica": title, "Valor": _format_value(value, unit), "Fecha": date_txt})
+            if unit == "°C":
+                value_txt = _format_temperature_value(value, unit_preferences)
+            elif unit == "km/h":
+                value_txt = _format_wind_value(value, unit_preferences)
+            elif unit == "mm":
+                value_txt = _format_precip_value(value, unit_preferences)
+            else:
+                value_txt = _format_value(value, unit)
+            rows.append({"Métrica": title, "Valor": value_txt, "Fecha": date_txt})
 
     else:
         # ── Datos no-anuales: mensuales agregados o diarios ─────────────────
@@ -410,37 +452,37 @@ def build_extremes_table(
 
             # 1. Máxima absoluta
             val, day, _ = _extract_extreme(frame, "temp_abs_max", "max", date_override_col="temp_abs_max_date")
-            rows.append({"Métrica": "Máxima absoluta", "Valor": _format_value(val, "°C"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Máxima absoluta", "Valor": _format_temperature_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 2. Mínima absoluta
             val, day, _ = _extract_extreme(frame, "temp_abs_min", "min", date_override_col="temp_abs_min_date")
-            rows.append({"Métrica": "Mínima absoluta", "Valor": _format_value(val, "°C"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Mínima absoluta", "Valor": _format_temperature_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 3. Mínima de máximas (calculada: mes con menor media de máximas en meses fríos)
             rows.append({
                 "Métrica": "Mínima de máximas",
-                "Valor": _format_value(min_of_max_value, "°C"),
+                "Valor": _format_temperature_value(min_of_max_value, unit_preferences),
                 "Fecha": _format_date(min_of_max_day),
             })
 
             # 4. Máxima de mínimas (calculada: mes con mayor media de mínimas en meses cálidos)
             rows.append({
                 "Métrica": "Máxima de mínimas",
-                "Valor": _format_value(max_of_min_value, "°C"),
+                "Valor": _format_temperature_value(max_of_min_value, unit_preferences),
                 "Fecha": _format_date(max_of_min_day),
             })
 
             # 5. Mes más ventoso (viento medio calculado)
             val, day, _ = _extract_extreme(frame, "wind_mean", "max")
-            rows.append({"Métrica": "Mes más ventoso (viento medio)", "Valor": _format_value(val, "km/h"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Mes más ventoso (viento medio)", "Valor": _format_wind_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 6. Racha máxima
             val, day, _ = _extract_extreme(frame, "gust_max", "max", date_override_col="gust_abs_max_date")
-            rows.append({"Métrica": "Racha máxima", "Valor": _format_value(val, "km/h"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Racha máxima", "Valor": _format_wind_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 7. Precipitación máx. en 24h (p_max de AEMET)
             val, day, _ = _extract_extreme(frame, "precip_max_24h", "max", date_override_col="precip_max_24h_date")
-            rows.append({"Métrica": "Precipitación máx. en 24h", "Valor": _format_value(val, "mm"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Precipitación máx. en 24h", "Valor": _format_precip_value(val, unit_preferences), "Fecha": _format_date(day)})
 
         else:
             # ── Datos diarios (modo Mensual: una fila por día real) ───────────
@@ -463,37 +505,37 @@ def build_extremes_table(
 
             # 1. Máxima absoluta
             val, day, _ = _extract_extreme(frame, abs_max_col, "max", date_override_col=abs_max_date_col)
-            rows.append({"Métrica": "Máxima absoluta", "Valor": _format_value(val, "°C"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Máxima absoluta", "Valor": _format_temperature_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 2. Mínima absoluta
             val, day, _ = _extract_extreme(frame, abs_min_col, "min", date_override_col=abs_min_date_col)
-            rows.append({"Métrica": "Mínima absoluta", "Valor": _format_value(val, "°C"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Mínima absoluta", "Valor": _format_temperature_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 3. Mínima de máximas (calculada)
             rows.append({
                 "Métrica": "Mínima de máximas",
-                "Valor": _format_value(min_of_max_value, "°C"),
+                "Valor": _format_temperature_value(min_of_max_value, unit_preferences),
                 "Fecha": _format_date(min_of_max_day),
             })
 
             # 4. Máxima de mínimas (calculada)
             rows.append({
                 "Métrica": "Máxima de mínimas",
-                "Valor": _format_value(max_of_min_value, "°C"),
+                "Valor": _format_temperature_value(max_of_min_value, unit_preferences),
                 "Fecha": _format_date(max_of_min_day),
             })
 
             # 5. Día más ventoso (viento medio calculado)
             val, day, _ = _extract_extreme(frame, "wind_mean", "max")
-            rows.append({"Métrica": "Día más ventoso (viento medio)", "Valor": _format_value(val, "km/h"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Día más ventoso (viento medio)", "Valor": _format_wind_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 6. Racha máxima
             val, day, _ = _extract_extreme(frame, "gust_max", "max", date_override_col="gust_abs_max_date")
-            rows.append({"Métrica": "Racha máxima", "Valor": _format_value(val, "km/h"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Racha máxima", "Valor": _format_wind_value(val, unit_preferences), "Fecha": _format_date(day)})
 
             # 7. Día más lluvioso (calculado)
             val, day, _ = _extract_extreme(frame, "precip_total", "max")
-            rows.append({"Métrica": "Día más lluvioso", "Valor": _format_value(val, "mm"), "Fecha": _format_date(day)})
+            rows.append({"Métrica": "Día más lluvioso", "Valor": _format_precip_value(val, unit_preferences), "Fecha": _format_date(day)})
 
     if overrides:
         rows_by_title = {str(row.get("Métrica", "")): idx for idx, row in enumerate(rows)}
@@ -502,6 +544,15 @@ def build_extremes_table(
                 continue
             value_txt = str(override.get("Valor", "—"))
             date_txt = str(override.get("Fecha", "—"))
+            try:
+                if value_txt.endswith(" °C"):
+                    value_txt = _format_temperature_value(float(value_txt.replace(" °C", "").strip()), unit_preferences)
+                elif value_txt.endswith(" km/h"):
+                    value_txt = _format_wind_value(float(value_txt.replace(" km/h", "").strip()), unit_preferences)
+                elif value_txt.endswith(" mm"):
+                    value_txt = _format_precip_value(float(value_txt.replace(" mm", "").strip()), unit_preferences)
+            except Exception:
+                pass
             if metric_title in rows_by_title:
                 idx = rows_by_title[metric_title]
                 rows[idx]["Valor"] = value_txt
@@ -512,7 +563,10 @@ def build_extremes_table(
     return pd.DataFrame(rows, columns=["Métrica", "Valor", "Fecha"])
 
 
-def build_general_metrics_table(daily_df: pd.DataFrame) -> pd.DataFrame:
+def build_general_metrics_table(
+    daily_df: pd.DataFrame,
+    unit_preferences: Optional[Dict[str, str]] = None,
+) -> pd.DataFrame:
     if daily_df.empty:
         return pd.DataFrame(columns=["Métrica", "Valor"])
 
@@ -540,17 +594,17 @@ def build_general_metrics_table(daily_df: pd.DataFrame) -> pd.DataFrame:
     unique_years = frame["date"].dt.year.nunique(dropna=True)
 
     rows = [
-        {"Métrica": "Temperatura media", "Valor": _format_value(temp_mean_series.mean(), "°C", decimals=1)},
-        {"Métrica": "Media de máximas", "Valor": _format_value(temp_max_series.mean(), "°C", decimals=1)},
-        {"Métrica": "Media de mínimas", "Valor": _format_value(temp_min_series.mean(), "°C", decimals=1)},
-        {"Métrica": "Desv. estándar de temperatura", "Valor": _format_value(temp_mean_series.std(ddof=0), "°C", decimals=1)},
-        {"Métrica": "Media de viento", "Valor": _format_value(wind_mean_series.mean(), "km/h", decimals=1)},
-        {"Métrica": "Precipitación acumulada", "Valor": _format_value(precip_series.sum(min_count=1), "mm", decimals=1)},
+        {"Métrica": "Temperatura media", "Valor": _format_temperature_value(temp_mean_series.mean(), unit_preferences, decimals=1)},
+        {"Métrica": "Media de máximas", "Valor": _format_temperature_value(temp_max_series.mean(), unit_preferences, decimals=1)},
+        {"Métrica": "Media de mínimas", "Valor": _format_temperature_value(temp_min_series.mean(), unit_preferences, decimals=1)},
+        {"Métrica": "Desv. estándar de temperatura", "Valor": _format_temperature_value(temp_mean_series.std(ddof=0), unit_preferences, decimals=1)},
+        {"Métrica": "Media de viento", "Valor": _format_wind_value(wind_mean_series.mean(), unit_preferences, decimals=1)},
+        {"Métrica": "Precipitación acumulada", "Valor": _format_precip_value(precip_series.sum(min_count=1), unit_preferences, decimals=1)},
     ]
     if int(unique_years) > 1:
         rows.insert(
             5,
-            {"Métrica": "Media de precipitación", "Valor": _format_value(precip_series.mean(), "mm", decimals=1)},
+            {"Métrica": "Media de precipitación", "Valor": _format_precip_value(precip_series.mean(), unit_preferences, decimals=1)},
         )
 
     # Solo añadir filas solares si hay datos reales (sin fallback a "—" vacío).
@@ -596,8 +650,8 @@ def build_general_metrics_table(daily_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Métrica", "Valor"])
 
 
-def resolve_chart_granularity(summary_mode: Literal["Mensual", "Anual"], period_count: int) -> Literal["daily", "monthly", "yearly"]:
-    if summary_mode == "Mensual":
+def resolve_chart_granularity(summary_mode: Literal["monthly", "annual"], period_count: int) -> Literal["daily", "monthly", "yearly"]:
+    if summary_mode == "monthly":
         return "daily" if int(period_count) == 1 else "monthly"
     if int(period_count) <= 1:
         return "monthly"
@@ -611,6 +665,7 @@ def _sum_with_min_count(series: pd.Series) -> float:
 def build_chart_table(
     daily_df: pd.DataFrame,
     granularity: Literal["daily", "monthly", "yearly"],
+    unit_preferences: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
     if daily_df.empty:
         return pd.DataFrame(columns=["label", "sort_key", "temp_mean", "temp_max", "temp_min", "precip_total"])
@@ -647,7 +702,7 @@ def build_chart_table(
         )
         grouped["sort_key"] = grouped["month_start"]
         grouped["label"] = grouped["month_start"].apply(
-            lambda d: f"{MONTH_SHORT_ES[int(pd.Timestamp(d).month)]} {int(pd.Timestamp(d).year)}"
+            lambda d: f"{month_name(int(pd.Timestamp(d).month), short=True)} {int(pd.Timestamp(d).year)}"
         )
     else:
         frame["year"] = frame["date"].dt.year
@@ -665,6 +720,14 @@ def build_chart_table(
         grouped["sort_key"] = pd.to_datetime(grouped["year"].astype(str) + "-01-01")
         grouped["label"] = grouped["year"].astype(str)
 
+    prefs = normalize_unit_preferences(unit_preferences)
+    for column in ("temp_mean", "temp_max", "temp_min"):
+        grouped[column] = grouped[column].apply(
+            lambda value: convert_temperature(value, prefs["temperature"]) if not pd.isna(value) else float("nan")
+        )
+    grouped["precip_total"] = grouped["precip_total"].apply(
+        lambda value: convert_precip(value, prefs["precip"]) if not pd.isna(value) else float("nan")
+    )
     grouped = grouped.fillna(value={"temp_mean": float("nan"), "temp_max": float("nan"), "temp_min": float("nan"), "precip_total": float("nan")})
     return grouped[["label", "sort_key", "temp_mean", "temp_max", "temp_min", "precip_total"]]
 
@@ -672,6 +735,7 @@ def build_chart_table(
 def build_units_table(
     daily_df: pd.DataFrame,
     granularity: Literal["daily", "monthly", "yearly"],
+    unit_preferences: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
     if daily_df.empty:
         return pd.DataFrame(columns=["label", "sort_key", "temp_abs_max", "temp_abs_min", "temp_mean", "precip_total"])
@@ -714,7 +778,7 @@ def build_units_table(
         )
         grouped["sort_key"] = grouped["month_start"]
         grouped["label"] = grouped["month_start"].apply(
-            lambda d: f"{MONTH_SHORT_ES[int(pd.Timestamp(d).month)]} {int(pd.Timestamp(d).year)}"
+            lambda d: f"{month_name(int(pd.Timestamp(d).month), short=True)} {int(pd.Timestamp(d).year)}"
         )
     else:
         frame["year"] = frame["date"].dt.year
@@ -731,6 +795,15 @@ def build_units_table(
         )
         grouped["sort_key"] = pd.to_datetime(grouped["year"].astype(str) + "-01-01")
         grouped["label"] = grouped["year"].astype(str)
+
+    prefs = normalize_unit_preferences(unit_preferences)
+    for column in ("temp_abs_max", "temp_abs_min", "temp_mean"):
+        grouped[column] = grouped[column].apply(
+            lambda value: convert_temperature(value, prefs["temperature"]) if not pd.isna(value) else float("nan")
+        )
+    grouped["precip_total"] = grouped["precip_total"].apply(
+        lambda value: convert_precip(value, prefs["precip"]) if not pd.isna(value) else float("nan")
+    )
 
     grouped = grouped.fillna(
         value={

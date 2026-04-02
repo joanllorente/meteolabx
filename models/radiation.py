@@ -214,6 +214,91 @@ def solar_radiation_max_wm2(
     return max(float(rso_wm2), 0.0)
 
 
+def solar_zenith_cosine(
+    latitude_deg: float,
+    timestamp: float,
+    longitude_deg: float = float("nan"),
+) -> float:
+    """
+    Coseno del ángulo cenital solar para un instante dado.
+
+    Usa la misma geometría solar base que el resto del módulo:
+    declinación FAO-56 + corrección estacional + longitud.
+    """
+    if is_nan(latitude_deg):
+        return float("nan")
+
+    lon_deg = 0.0 if is_nan(longitude_deg) else float(longitude_deg)
+    dt_utc = datetime.utcfromtimestamp(timestamp)
+    dt_solar = dt_utc + timedelta(hours=(lon_deg / 15.0))
+    day_of_year = dt_solar.timetuple().tm_yday
+
+    lat_rad = math.radians(float(latitude_deg))
+    delta = solar_declination(day_of_year)
+    sc = _seasonal_correction_solar_time(day_of_year)
+
+    t_mid_utc_h = (
+        dt_utc.hour
+        + dt_utc.minute / 60.0
+        + dt_utc.second / 3600.0
+        + dt_utc.microsecond / 3_600_000_000.0
+    )
+    omega = (math.pi / 12.0) * ((t_mid_utc_h + lon_deg / 15.0 + sc) - 12.0)
+
+    cos_theta_z = (
+        math.sin(lat_rad) * math.sin(delta)
+        + math.cos(lat_rad) * math.cos(delta) * math.cos(omega)
+    )
+    return float(cos_theta_z)
+
+
+def solar_altitude_deg(
+    latitude_deg: float,
+    timestamp: float,
+    longitude_deg: float = float("nan"),
+) -> float:
+    """
+    Altura solar sobre el horizonte en grados.
+    """
+    cos_theta_z = solar_zenith_cosine(
+        latitude_deg=latitude_deg,
+        timestamp=timestamp,
+        longitude_deg=longitude_deg,
+    )
+    if is_nan(cos_theta_z):
+        return float("nan")
+
+    cos_theta_z = max(-1.0, min(1.0, float(cos_theta_z)))
+    zenith_deg = math.degrees(math.acos(cos_theta_z))
+    return 90.0 - float(zenith_deg)
+
+
+def max_solar_altitude_day_deg(
+    latitude_deg: float,
+    timestamp: float,
+    longitude_deg: float = float("nan"),
+) -> float:
+    """
+    Altura solar máxima teórica del día para la latitud/fecha dadas.
+    """
+    if is_nan(latitude_deg):
+        return float("nan")
+
+    lon_deg = 0.0 if is_nan(longitude_deg) else float(longitude_deg)
+    dt_utc = datetime.utcfromtimestamp(timestamp)
+    dt_solar = dt_utc + timedelta(hours=(lon_deg / 15.0))
+    day_of_year = dt_solar.timetuple().tm_yday
+
+    lat_rad = math.radians(float(latitude_deg))
+    delta = solar_declination(day_of_year)
+    sin_alpha_max = (
+        math.sin(lat_rad) * math.sin(delta)
+        + math.cos(lat_rad) * math.cos(delta)
+    )
+    sin_alpha_max = max(-1.0, min(1.0, float(sin_alpha_max)))
+    return math.degrees(math.asin(sin_alpha_max))
+
+
 # ============================================================
 # FAO-56 PENMAN-MONTEITH ET0
 # ============================================================

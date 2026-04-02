@@ -5,8 +5,28 @@ import streamlit as st
 import os
 from datetime import datetime
 from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT, LS_WU_FORGOTTEN
-from utils.storage import set_local_storage, set_stored_autoconnect_target, forget_local_storage_keys
+from utils.i18n import (
+    get_language_label,
+    get_supported_languages,
+    init_language,
+    set_language,
+    t,
+)
+from utils.storage import (
+    set_local_storage,
+    set_stored_autoconnect_target,
+    forget_local_storage_keys,
+    get_stored_unit_preferences,
+    set_stored_unit_preferences,
+)
 from utils.helpers import normalize_text_input, is_nan
+from utils.units import DEFAULT_UNIT_PREFERENCES, UNIT_LABELS, UNIT_OPTIONS, normalize_unit_preferences
+from services.wu_calibration import (
+    WU_CALIBRATION_ORDER,
+    WU_CALIBRATION_SPECS,
+    default_wu_calibration,
+    normalize_wu_calibration,
+)
 
 
 def _now_local() -> datetime:
@@ -94,6 +114,8 @@ def render_sidebar(_local_storage_unused=None):
         get_stored_autoconnect,
         get_stored_autoconnect_target,
         get_local_storage_value,
+        get_stored_wu_station_calibration,
+        set_stored_wu_station_calibration,
     )
 
     # Fase 2 del Olvidar: los setItem del ciclo anterior ya llegaron al navegador.
@@ -208,7 +230,8 @@ def render_sidebar(_local_storage_unused=None):
                 # Prefijos de session_state por proveedor
                 _provider_prefix = {
                     "AEMET": "aemet", "METEOCAT": "meteocat",
-                    "EUSKALMET": "euskalmet", "METEOGALICIA": "meteogalicia",
+                    "EUSKALMET": "euskalmet", "FROST": "frost", "METEOFRANCE": "meteofrance",
+                    "METEOGALICIA": "meteogalicia",
                     "NWS": "nws", "POEM": "poem",
                 }
                 prefix = _provider_prefix.get(provider_id)
@@ -235,6 +258,13 @@ def render_sidebar(_local_storage_unused=None):
 
     st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
 
+    current_lang = init_language()
+    saved_unit_preferences = get_stored_unit_preferences()
+    for category, default_value in DEFAULT_UNIT_PREFERENCES.items():
+        state_key = f"unit_pref_{category}"
+        if state_key not in st.session_state:
+            st.session_state[state_key] = saved_unit_preferences.get(category, default_value)
+
     # Si hay conexión WU activa, mantener credenciales en sesión aunque un rerun
     # temporalmente deje vacíos los widgets de entrada (ej. cambio de tema).
     if st.session_state.get("connected") and st.session_state.get("connection_type") == "WU":
@@ -245,23 +275,47 @@ def render_sidebar(_local_storage_unused=None):
         if not str(st.session_state.get("active_z", "")).strip():
             st.session_state["active_z"] = normalize_text_input(st.session_state.get("wu_connected_z", ""))
 
-    # Tema
-    st.sidebar.title("⚙️ Ajustes")
-    
-    theme_options = ["Auto", "Claro", "Oscuro"]
-    if st.session_state.get("theme_selector") not in theme_options:
-        st.session_state["theme_selector"] = theme_options[0]
+    # Idioma + tema
+    st.sidebar.title(f"⚙️ {t('sidebar.settings_title')}")
+
+    supported_languages = get_supported_languages()
+    selector_lang = str(st.session_state.get("lang_selector", "")).strip().lower()
+    if selector_lang in supported_languages and selector_lang != current_lang:
+        current_lang = set_language(selector_lang)
+    elif selector_lang not in supported_languages:
+        st.session_state["lang_selector"] = current_lang
+
+    selected_lang = st.sidebar.selectbox(
+        t("sidebar.language.label"),
+        supported_languages,
+        format_func=get_language_label,
+        key="lang_selector",
+    )
+    if selected_lang != current_lang:
+        set_language(selected_lang)
+        st.rerun()
+
+    theme_options = ["auto", "light", "dark"]
+    legacy_theme_aliases = {"Auto": "auto", "Claro": "light", "Oscuro": "dark"}
+    current_theme = legacy_theme_aliases.get(
+        str(st.session_state.get("theme_selector", "")).strip(),
+        str(st.session_state.get("theme_selector", "")).strip(),
+    )
+    if current_theme not in theme_options:
+        current_theme = theme_options[0]
+    st.session_state["theme_selector"] = current_theme
 
     # Usar solo key/session_state (sin index manual) para evitar el doble clic.
     theme_mode = st.sidebar.radio(
-        "Tema",
+        t("sidebar.theme.label"),
         theme_options,
+        format_func=lambda option: t(f"sidebar.theme.options.{option}"),
         key="theme_selector",
     )
 
     # Conectar estación
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔌 Conectar estación")
+    st.sidebar.markdown(f"### 🔌 {t('sidebar.connection.title')}")
     
     # Aplicar borrado si está marcado (ANTES de crear widgets)
     if st.session_state.get("_clear_inputs", False):
@@ -273,21 +327,36 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["_wu_autoconnect_ui_target_kind"] = ""
         del st.session_state["_clear_inputs"]
 
-    st.sidebar.text_input("Station ID (WU)", key="active_station", placeholder="Introducir ID", autocomplete="off")
-    st.sidebar.text_input("API Key (WU)", key="active_key", type="password", placeholder="Pega aquí tu API key", autocomplete="new-password")
-    st.sidebar.text_input("Altitud (m)", key="active_z", placeholder="Opcional (se obtiene de API)", autocomplete="off")
+    st.sidebar.text_input(
+        t("sidebar.connection.fields.station_id"),
+        key="active_station",
+        placeholder=t("sidebar.connection.placeholders.station_id"),
+        autocomplete="off",
+    )
+    st.sidebar.text_input(
+        t("sidebar.connection.fields.api_key"),
+        key="active_key",
+        type="password",
+        placeholder=t("sidebar.connection.placeholders.api_key"),
+        autocomplete="new-password",
+    )
+    st.sidebar.text_input(
+        t("sidebar.connection.fields.altitude"),
+        key="active_z",
+        placeholder=t("sidebar.connection.placeholders.altitude"),
+        autocomplete="off",
+    )
 
-    st.sidebar.caption("Este panel consulta Weather Underground usando tu propia API key. Solo se guarda localmente si pulsas Guardar.")
-
-    # Recordar en dispositivo
-    st.sidebar.markdown("---")
+    connection_caption = str(t("sidebar.connection.caption") or "").strip()
     auto_connect_default = bool(st.session_state.get("auto_connect_wu_device", False))
     auto_connect_wu_device = st.sidebar.checkbox(
-        "Conectar automáticamente al iniciar",
+        t("sidebar.autoconnect.label"),
         value=auto_connect_default,
         key="auto_connect_wu_device",
     )
-    st.sidebar.caption("Solo puede haber una auto-conexión activa; siempre se usa la última estación marcada.")
+    autoconnect_caption = str(t("sidebar.autoconnect.caption") or "").strip()
+    if autoconnect_caption and autoconnect_caption != "sidebar.autoconnect.caption":
+        st.sidebar.caption(autoconnect_caption)
 
     if "_wu_autoconnect_ui_last_value" not in st.session_state:
         st.session_state["_wu_autoconnect_ui_last_value"] = auto_connect_default
@@ -310,12 +379,12 @@ def render_sidebar(_local_storage_unused=None):
                     }
                 )
                 st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
-                st.sidebar.success("Auto-conexión al iniciar activada (WU) ✅")
+                st.sidebar.success(t("sidebar.autoconnect.enabled"))
             else:
                 set_local_storage(LS_AUTOCONNECT, "0", "save")
                 set_stored_autoconnect_target(None)
                 st.session_state["_wu_autoconnect_ui_target_kind"] = ""
-                st.sidebar.warning("Para activar auto-conexión WU, completa Station ID y API Key.")
+                st.sidebar.warning(t("sidebar.autoconnect.missing_credentials"))
         else:
             current_target = get_stored_autoconnect_target() or {}
             current_kind = str(current_target.get("kind", "")).strip().upper()
@@ -323,7 +392,7 @@ def render_sidebar(_local_storage_unused=None):
                 set_local_storage(LS_AUTOCONNECT, "0", "save")
                 set_stored_autoconnect_target(None)
                 st.session_state["_wu_autoconnect_ui_target_kind"] = ""
-                st.sidebar.info("Auto-conexión al iniciar desactivada.")
+                st.sidebar.info(t("sidebar.autoconnect.disabled"))
 
         # Evita autoconectar en caliente en esta misma sesión.
         st.session_state["_autoconnect_attempted"] = True
@@ -331,9 +400,9 @@ def render_sidebar(_local_storage_unused=None):
 
     cS, cF = st.sidebar.columns(2)
     with cS:
-        save_clicked = st.button("Guardar", width="stretch")
+        save_clicked = st.button(t("sidebar.buttons.save"), width="stretch")
     with cF:
-        forget_clicked = st.button("Olvidar", width="stretch")
+        forget_clicked = st.button(t("sidebar.buttons.forget"), width="stretch")
 
     if save_clicked:
         station_to_save = str(st.session_state.get("active_station", "")).strip()
@@ -344,7 +413,7 @@ def render_sidebar(_local_storage_unused=None):
         set_local_storage(LS_APIKEY, key_to_save, "save")
         set_local_storage(LS_Z, z_to_save, "save")
         set_local_storage(LS_WU_FORGOTTEN, "0", "save")
-        st.sidebar.success("Guardado en este dispositivo ✅")
+        st.sidebar.success(t("sidebar.messages.saved_device"))
 
     if forget_clicked:
         # Fase 1: escribir los marcadores en localStorage y marcar pendiente.
@@ -352,7 +421,7 @@ def render_sidebar(_local_storage_unused=None):
         # en este ciclo y el JS del componente los procese antes del siguiente ciclo.
         forget_local_storage_keys()
         st.session_state["_forget_pending"] = True
-        st.sidebar.success("✅ Datos borrados")
+        st.sidebar.success(t("sidebar.messages.data_erased"))
 
 
     # Estado conectado
@@ -364,8 +433,8 @@ def render_sidebar(_local_storage_unused=None):
         now_local = _now_local()
         auto_dark_local = (now_local.hour >= 20) or (now_local.hour <= 7)
         is_dark_ui = (
-            theme_mode == "Oscuro" or
-            (theme_mode == "Auto" and auto_dark_local)
+            theme_mode == "dark" or
+            (theme_mode == "auto" and auto_dark_local)
         )
 
         if connected_state:
@@ -393,15 +462,28 @@ def render_sidebar(_local_storage_unused=None):
 
     colA, colB = st.sidebar.columns(2)
     with colA:
-        connect_clicked = st.button("Conectar", width="stretch")
+        connect_clicked = st.button(t("sidebar.buttons.connect"), width="stretch")
     with colB:
-        disconnect_clicked = st.button("Desconectar", width="stretch")
+        disconnect_clicked = st.button(t("sidebar.buttons.disconnect"), width="stretch")
 
-    _PROVIDER_PREFIXES = ('aemet_', 'provider_station_', 'meteocat_', 'euskalmet_', 'meteogalicia_', 'nws_')
+    _PROVIDER_PREFIXES = (
+        'aemet_', 'provider_station_', 'meteocat_', 'euskalmet_', 'frost_',
+        'meteofrance_', 'meteogalicia_', 'nws_', 'poem_',
+    )
 
     if disconnect_clicked:
+        if st.session_state.get("connection_type") == "AEMET":
+            try:
+                from services.aemet import clear_aemet_runtime_cache
+                clear_aemet_runtime_cache()
+            except Exception:
+                pass
         st.session_state["connected"] = False
         st.session_state["connection_type"] = None
+        st.session_state.pop("wu_sensor_presence", None)
+        st.session_state.pop("wu_sensor_presence_station", None)
+        st.session_state.pop("wu_station_calibration", None)
+        st.session_state.pop("wu_station_calibration_station", None)
         for k in ("wu_connected_station", "wu_connected_api_key", "wu_connected_z"):
             st.session_state.pop(k, None)
         for k in [k for k in st.session_state if k.startswith(_PROVIDER_PREFIXES)]:
@@ -413,13 +495,15 @@ def render_sidebar(_local_storage_unused=None):
         z_raw = str(st.session_state.get("active_z", "")).strip()
 
         if not station or not api_key:
-            st.sidebar.error("Falta Station ID o API key.")
+            st.sidebar.error(t("sidebar.messages.missing_station_or_key"))
         else:
             # Conexión explícita de Weather Underground
             st.session_state["connection_type"] = "WU"
             # Limpiar restos de conexión por proveedor para evitar UI duplicada
             for k in [k for k in st.session_state if k.startswith(_PROVIDER_PREFIXES)]:
                 del st.session_state[k]
+            st.session_state.pop("wu_sensor_presence", None)
+            st.session_state.pop("wu_sensor_presence_station", None)
 
             # Validar altitud si se proporcionó
             if z_raw:  # Si hay altitud manual
@@ -428,14 +512,20 @@ def render_sidebar(_local_storage_unused=None):
                     # Validar rango de altitud
                     from config import MIN_ALTITUDE_M, MAX_ALTITUDE_M
                     if not (MIN_ALTITUDE_M <= z_float <= MAX_ALTITUDE_M):
-                        st.sidebar.error(f"Altitud fuera de rango ({MIN_ALTITUDE_M} a {MAX_ALTITUDE_M}m)")
+                        st.sidebar.error(
+                            t(
+                                "sidebar.messages.altitude_out_of_range",
+                                min=MIN_ALTITUDE_M,
+                                max=MAX_ALTITUDE_M,
+                            )
+                        )
                     else:
                         st.session_state["connected"] = True
                         st.session_state["wu_connected_station"] = station
                         st.session_state["wu_connected_api_key"] = api_key
                         st.session_state["wu_connected_z"] = z_raw
                 except Exception:
-                    st.sidebar.error("Altitud inválida. Usa un número (ej: 12.5)")
+                    st.sidebar.error(t("sidebar.messages.altitude_invalid"))
             else:  # Sin altitud manual, confiar en la API
                 st.session_state["connected"] = True
                 st.session_state["wu_connected_station"] = station
@@ -462,33 +552,93 @@ def render_sidebar(_local_storage_unused=None):
                 )
                 st.session_state["_autoconnect_attempted"] = True
 
-    if st.session_state.get("connected"):
-        # Mostrar nombre según tipo de conexión
-        if st.session_state.get("connection_type") == "AEMET":
-            station_name = st.session_state.get('aemet_station_name', 'AEMET')
-        elif st.session_state.get("provider_station_name"):
-            station_name = st.session_state.get('provider_station_name', 'Estación')
+    if connection_caption and connection_caption != "sidebar.connection.caption":
+        st.sidebar.caption(connection_caption)
+
+    st.sidebar.markdown("---")
+
+    is_connected_wu = bool(
+        st.session_state.get("connected")
+        and st.session_state.get("connection_type") == "WU"
+    )
+    wu_station_id = str(
+        st.session_state.get("wu_connected_station", "")
+        or st.session_state.get("active_station", "")
+    ).strip().upper()
+    sensor_presence_station = str(st.session_state.get("wu_sensor_presence_station", "")).strip().upper()
+    sensor_presence = (
+        st.session_state.get("wu_sensor_presence", {})
+        if sensor_presence_station and sensor_presence_station == wu_station_id
+        else {}
+    )
+
+    if is_connected_wu and wu_station_id:
+        stored_calibration = normalize_wu_calibration(get_stored_wu_station_calibration(wu_station_id))
+        current_calibration = dict(stored_calibration)
+        st.session_state["wu_station_calibration"] = current_calibration
+        st.session_state["wu_station_calibration_station"] = wu_station_id
+
+        st.sidebar.markdown(f"### 🎛️ {t('sidebar.calibration.title')}")
+        if isinstance(sensor_presence, dict) and any(bool(sensor_presence.get(sensor)) for sensor in WU_CALIBRATION_ORDER):
+            for sensor in WU_CALIBRATION_ORDER:
+                if not bool(sensor_presence.get(sensor)):
+                    continue
+
+                spec = WU_CALIBRATION_SPECS[sensor]
+                decimals = int(spec.get("decimals", 1))
+                step = 1.0 if decimals == 0 else 0.1
+                fmt = "%.0f" if decimals == 0 else "%.1f"
+                range_fmt = "{value:.0f}" if decimals == 0 else "{value:.1f}"
+                widget_key = f"wu_calibration_{wu_station_id}_{sensor}"
+                if widget_key not in st.session_state:
+                    st.session_state[widget_key] = float(stored_calibration.get(sensor, 0.0))
+
+                value = st.sidebar.number_input(
+                    t(f"sidebar.calibration.fields.{sensor}"),
+                    min_value=float(spec["min"]),
+                    max_value=float(spec["max"]),
+                    step=step,
+                    format=fmt,
+                    key=widget_key,
+                    help=t(
+                        "sidebar.calibration.range_help",
+                        min=range_fmt.format(value=float(spec["min"])),
+                        max=range_fmt.format(value=float(spec["max"])),
+                        unit=str(spec["unit"]),
+                    ),
+                )
+                current_calibration[sensor] = round(float(value), decimals)
+
+            current_calibration = normalize_wu_calibration(current_calibration)
+            st.session_state["wu_station_calibration"] = current_calibration
+            st.session_state["wu_station_calibration_station"] = wu_station_id
+
+            if current_calibration != stored_calibration:
+                set_stored_wu_station_calibration(wu_station_id, current_calibration)
+                st.session_state["_wu_calibration_changed"] = True
         else:
-            station_name = st.session_state.get('active_station') or st.session_state.get('wu_connected_station', '')
-        
-        render_connection_banner(f"Conectado: {station_name}", connected_state=True)
-        
-        # Mostrar última actualización
-        if "last_update_time" in st.session_state:
-            import time
-            last_update = st.session_state["last_update_time"]
-            elapsed = time.time() - last_update
-            
-            if elapsed < 60:
-                time_str = f"hace {int(elapsed)}s"
-            elif elapsed < 3600:
-                time_str = f"hace {int(elapsed/60)}min"
-            else:
-                time_str = f"hace {int(elapsed/3600)}h {int((elapsed%3600)/60)}min"
-            
-            st.sidebar.caption(f"Última actualización: {time_str}")
-    else:
-        render_connection_banner("No conectado", connected_state=False)
+            st.sidebar.caption(t("sidebar.calibration.loading"))
+
+        st.sidebar.markdown("---")
+
+    st.sidebar.markdown(f"### 📏 {t('sidebar.units.title')}")
+    selected_unit_preferences = {}
+    for category, options in UNIT_OPTIONS.items():
+        widget_key = f"unit_pref_{category}"
+        value = st.sidebar.selectbox(
+            t(f"sidebar.units.fields.{category}"),
+            options,
+            format_func=lambda option, category=category: UNIT_LABELS[category][str(option)],
+            key=widget_key,
+        )
+        selected_unit_preferences[category] = str(value)
+
+    selected_unit_preferences = normalize_unit_preferences(selected_unit_preferences)
+    st.session_state["unit_preferences"] = selected_unit_preferences
+    if selected_unit_preferences != normalize_unit_preferences(saved_unit_preferences):
+        set_stored_unit_preferences(selected_unit_preferences)
+
+    st.sidebar.markdown("---")
     
     # ============================================================
     # MODO DEMO RADIACIÓN (SOLO DESARROLLO/INTERNO)
@@ -501,53 +651,49 @@ def render_sidebar(_local_storage_unused=None):
     
     if os.getenv("DEMO_MODE") == "1" or os.getenv("METEOLABX_DEMO") == "1":
         st.sidebar.markdown("---")
-        st.sidebar.markdown("### 🔬 Modo Demo (Interno)")
+        st.sidebar.markdown(f"### 🔬 {t('sidebar.demo.title')}")
         
         demo_radiation = st.sidebar.checkbox(
-            "Activar datos de radiación demo",
+            t("sidebar.demo.enable"),
             value=False,
-            help="Muestra controles para simular datos de radiación solar y UV cuando tu estación no tiene estos sensores"
+            help=t("sidebar.demo.enable_help"),
         )
         
         if demo_radiation:
-            st.sidebar.caption("📊 **Simula datos de radiación**")
+            st.sidebar.caption(t("sidebar.demo.intro"))
             demo_solar = st.sidebar.slider(
-                "Radiación solar (W/m²)",
+                t("sidebar.demo.solar_label"),
                 min_value=0,
                 max_value=1200,
                 value=650,
                 step=50,
-                help="Valores típicos: Nublado 100-300, Parcialmente nublado 400-700, Despejado 800-1200"
+                help=t("sidebar.demo.solar_help"),
             )
             demo_uv = st.sidebar.slider(
-                "Índice UV",
+                t("sidebar.demo.uv_label"),
                 min_value=0.0,
                 max_value=15.0,
                 value=6.0,
                 step=0.5,
-                help="Valores típicos: Bajo 0-2, Moderado 3-5, Alto 6-7, Muy alto 8-10, Extremo 11+"
+                help=t("sidebar.demo.uv_help"),
             )
-            st.sidebar.caption("💡 **Referencia rápida:**")
-            st.sidebar.caption("• ☁️ Nublado: Solar ~200, UV ~2")
-            st.sidebar.caption("• ⛅ Parcial: Solar ~500, UV ~5")  
-            st.sidebar.caption("• ☀️ Despejado: Solar ~900, UV ~8")
+            st.sidebar.caption(t("sidebar.demo.quick_ref"))
+            st.sidebar.caption(t("sidebar.demo.cloudy"))
+            st.sidebar.caption(t("sidebar.demo.partial"))
+            st.sidebar.caption(t("sidebar.demo.clear"))
     
     # Guardar en session_state para acceso desde main
     st.session_state["demo_radiation"] = demo_radiation
     st.session_state["demo_solar"] = demo_solar
     st.session_state["demo_uv"] = demo_uv
-    
-    # Mostrar estado de conexión por proveedor si aplica
-    from components.station_selector import show_provider_connection_status
-    show_provider_connection_status()
 
     # Determinar tema
     now = _now_local()
     auto_dark = (now.hour >= 20) or (now.hour <= 7)
     
-    if theme_mode == "Auto":
+    if theme_mode == "auto":
         dark = auto_dark
-    elif theme_mode == "Oscuro":
+    elif theme_mode == "dark":
         dark = True
     else:
         dark = False

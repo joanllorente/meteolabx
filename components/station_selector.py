@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 
 import requests
 import streamlit as st
+from utils.i18n import t
 
 from config import LS_AUTOCONNECT
 from providers import search_nearby_stations
@@ -229,6 +230,13 @@ def _geocode_with_nominatim(query: str) -> Tuple[Optional[Tuple[float, float]], 
 
 def _apply_selected_station(station):
     """Guarda estación seleccionada en session_state, con compatibilidad legacy."""
+    if station.provider_id == "AEMET":
+        try:
+            from services.aemet import clear_aemet_runtime_cache
+            clear_aemet_runtime_cache()
+        except Exception:
+            pass
+
     st.session_state["connection_type"] = station.provider_id
     st.session_state["provider_station_id"] = station.station_id
     st.session_state["provider_station_name"] = station.name
@@ -254,6 +262,19 @@ def _apply_selected_station(station):
         st.session_state["euskalmet_station_lat"] = station.lat
         st.session_state["euskalmet_station_lon"] = station.lon
         st.session_state["euskalmet_station_alt"] = station.elevation_m
+    elif station.provider_id == "METEOFRANCE":
+        st.session_state["meteofrance_station_id"] = station.station_id
+        st.session_state["meteofrance_station_name"] = station.name
+        st.session_state["meteofrance_station_lat"] = station.lat
+        st.session_state["meteofrance_station_lon"] = station.lon
+        st.session_state["meteofrance_station_alt"] = station.elevation_m
+    elif station.provider_id == "FROST":
+        st.session_state["frost_station_id"] = station.station_id
+        st.session_state["frost_station_name"] = station.name
+        st.session_state["frost_station_lat"] = station.lat
+        st.session_state["frost_station_lon"] = station.lon
+        st.session_state["frost_station_alt"] = station.elevation_m
+        st.session_state["provider_station_tz"] = "Europe/Oslo"
     elif station.provider_id == "METEOGALICIA":
         st.session_state["meteogalicia_station_id"] = station.station_id
         st.session_state["meteogalicia_station_name"] = station.name
@@ -353,47 +374,47 @@ def render_station_selector():
                 st.session_state["show_results"] = True
                 acc = browser_geo_result.get("accuracy_m")
                 if isinstance(acc, (int, float)):
-                    st.session_state["geo_debug_msg"] = f"Ubicación GPS obtenida (±{acc:.0f} m)."
+                    st.session_state["geo_debug_msg"] = t("station_selector.geo_detected_accuracy", accuracy=acc)
                 else:
-                    st.session_state["geo_debug_msg"] = "Ubicación GPS obtenida."
+                    st.session_state["geo_debug_msg"] = t("station_selector.geo_detected")
                 if swapped:
-                    st.session_state["geo_debug_msg"] += " Se corrigieron coordenadas invertidas."
+                    st.session_state["geo_debug_msg"] += t("station_selector.coords_swapped")
                 st.session_state["geo_last_error"] = ""
                 st.rerun()
 
-        error_message = browser_geo_result.get("error_message") or "No se pudo obtener tu ubicación GPS."
+        error_message = browser_geo_result.get("error_message") or t("station_selector.geo_error_default")
         st.session_state["geo_last_error"] = str(error_message)
         st.session_state["geo_debug_msg"] = ""
 
     st.markdown("<div class='station-selector-gap'></div>", unsafe_allow_html=True)
-    if st.button("📍 Buscar estaciones cerca de mí", type="primary", width="stretch"):
+    if st.button(t("station_selector.search_near_me"), type="primary", width="stretch"):
         st.session_state["geo_request_id"] += 1
         st.session_state["geo_pending"] = True
         st.session_state["geo_last_error"] = ""
-        st.session_state["geo_debug_msg"] = "Solicitando ubicación GPS al navegador..."
+        st.session_state["geo_debug_msg"] = t("station_selector.requesting_geo")
         st.rerun()
 
     if st.session_state.get("geo_pending"):
-        st.caption("Esperando respuesta de geolocalización del navegador...")
+        st.caption(t("station_selector.waiting_geo"))
 
     geo_last_error = st.session_state.get("geo_last_error", "").strip()
     if geo_last_error:
-        st.warning("No pude leer tu ubicación GPS del navegador. Revisa permisos de ubicación del sitio.")
-        st.caption(f"Detalle navegador: {geo_last_error}")
+        st.warning(t("station_selector.gps_unavailable"))
+        st.caption(t("station_selector.browser_detail", detail=geo_last_error))
 
     geo_debug_msg = st.session_state.get("geo_debug_msg", "")
     if geo_debug_msg:
         st.caption(geo_debug_msg)
 
-    with st.expander("O buscar por ciudad/coordenadas", expanded=False):
+    with st.expander(t("station_selector.search_by_city"), expanded=False):
         city_input = st.text_input(
-            "Ciudad (opcional)",
+            t("station_selector.city_optional"),
             value=st.session_state.get("search_city", ""),
-            placeholder="Ej: Madrid",
-            help="Escribe un lugar para geocodificarlo con Nominatim u ajusta lat/lon manualmente",
+            placeholder=t("station_selector.city_placeholder"),
+            help=t("station_selector.city_help"),
         )
-        st.caption("Búsqueda textual geocodificada por Nominatim (OpenStreetMap).")
-        st.caption("Datos geográficos © OpenStreetMap contributors (ODbL).")
+        st.caption(t("station_selector.nominatim_caption"))
+        st.caption(t("station_selector.osm_caption"))
 
         base_lat, base_lon = _default_search_coords()
         city_coords = _coords_from_city(city_input)
@@ -401,23 +422,23 @@ def render_station_selector():
             base_lat, base_lon = city_coords
 
         lat_manual = st.number_input(
-            "Latitud",
+            t("station_selector.latitude"),
             min_value=-90.0,
             max_value=90.0,
             value=float(base_lat),
             step=0.01,
-            help="Ejemplo: 40.42",
+            help=t("station_selector.latitude_help"),
         )
         lon_manual = st.number_input(
-            "Longitud",
+            t("station_selector.longitude"),
             min_value=-180.0,
             max_value=180.0,
             value=float(base_lon),
             step=0.01,
-            help="Ejemplo: -3.70",
+            help=t("station_selector.longitude_help"),
         )
 
-        if st.button("🔎 Buscar con estos datos", width="stretch"):
+        if st.button(t("station_selector.search_with_data"), width="stretch"):
             st.session_state["search_city"] = city_input.strip()
             st.session_state["nominatim_last_error"] = ""
 
@@ -449,19 +470,19 @@ def render_station_selector():
         nominatim_match = str(st.session_state.get("nominatim_last_match", "")).strip()
         nominatim_error = str(st.session_state.get("nominatim_last_error", "")).strip()
         if nominatim_match:
-            st.caption(f"Resultado Nominatim: {nominatim_match}")
+            st.caption(t("station_selector.nominatim_result", result=nominatim_match))
         if nominatim_error:
             st.warning(nominatim_error)
 
     if st.session_state.get("show_results"):
         st.markdown("---")
-        st.markdown("### 🎯 Estaciones cercanas")
+        st.markdown(f"### {t('station_selector.nearby_title')}")
 
         lat, lon = _default_search_coords()
         nearest = search_nearby_stations(lat, lon, max_results=5)
 
         if not nearest:
-            st.warning("⚠️ No se encontraron estaciones cercanas")
+            st.warning(t("station_selector.no_nearby"))
             return
 
         for station in nearest:
@@ -484,32 +505,32 @@ def render_station_selector():
                     toggle_key = f"autoconnect_toggle_{station.provider_id}_{station.station_id}"
                     if toggle_key not in st.session_state:
                         st.session_state[toggle_key] = is_target_station
-                    toggle_enabled = st.checkbox("Conectar automáticamente al iniciar", key=toggle_key)
+                    toggle_enabled = st.checkbox(t("station_selector.autoconnect"), key=toggle_key)
                     if toggle_enabled and not is_target_station:
                         if _set_provider_autoconnect(station):
                             _reset_autoconnect_toggle_state()
-                            st.success(f"✅ Auto-conexión guardada para {station.name}")
+                            st.success(t("station_selector.autoconnect_saved", station=station.name))
                             st.rerun()
-                        st.error("No se pudo guardar la auto-conexión")
+                        st.error(t("station_selector.autoconnect_save_error"))
                     elif (not toggle_enabled) and is_target_station:
                         set_local_storage(LS_AUTOCONNECT, "0", "save")
                         set_stored_autoconnect_target(None)
                         st.session_state["_autoconnect_attempted"] = True
                         _reset_autoconnect_toggle_state()
-                        st.info("Auto-conexión desactivada en este dispositivo.")
+                        st.info(t("station_selector.autoconnect_disabled"))
                         st.rerun()
 
                 with col2:
-                    st.metric("Distancia", f"{station.distance_km:.1f} km")
+                    st.metric(t("station_selector.distance"), f"{station.distance_km:.1f} km")
 
                 with col3:
                     if st.button(
-                        "Conectar",
+                        t("sidebar.buttons.connect"),
                         key=f"connect_{station.provider_id}_{station.station_id}",
                         width="stretch",
                     ):
                         _apply_selected_station(station)
-                        st.success(f"✅ Conectado a {station.name} ({station.provider_name})")
+                        st.success(t("station_selector.connect_success", station=station.name, provider=station.provider_name))
                         st.rerun()
 
                 st.markdown("---")
@@ -528,11 +549,15 @@ def show_provider_connection_status():
     station_id = st.session_state.get("aemet_station_id")
     station_alt = st.session_state.get("aemet_station_alt")
 
-    st.sidebar.markdown(f"### 📡 Conectado a {provider_id}")
+    st.sidebar.markdown(f"### {t('sidebar.provider_status.connected_to', provider=provider_id)}")
     st.sidebar.markdown(f"**{station_name}**")
-    st.sidebar.caption(f"ID: {station_id}")
-    st.sidebar.caption(f"Alt: {station_alt}m")
+    st.sidebar.caption(t("sidebar.provider_status.station_id", station_id=station_id))
+    st.sidebar.caption(t("sidebar.provider_status.altitude", altitude=station_alt))
 
-    if st.sidebar.button("🔄 Actualizar", width="stretch", help="Forzar actualización de datos (bypass caché)"):
+    if st.sidebar.button(
+        t("sidebar.buttons.refresh"),
+        width="stretch",
+        help=t("sidebar.provider_status.refresh_help"),
+    ):
         st.cache_data.clear()
         st.rerun()
