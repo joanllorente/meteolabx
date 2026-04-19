@@ -1520,8 +1520,9 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
     s_gust = _series_from_map(var_map, V_GUST)
     s_dir = _series_from_map(var_map, V_WIND_DIR)
     s_solar = _series_from_map(var_map, V_SOLAR)
+    s_uv = _series_from_map(var_map, V_UV)
 
-    joined = _join_by_epoch(s_temp, s_rh, s_p_abs, s_wind, s_gust, s_dir, s_solar)
+    joined = _join_by_epoch(s_temp, s_rh, s_p_abs, s_wind, s_gust, s_dir, s_solar, s_uv)
     epochs = sorted(joined.keys())
 
     temps = []
@@ -1531,6 +1532,7 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
     gusts = []
     dirs = []
     solar = []
+    uv_indexes = []
     for ep in epochs:
         row = joined[ep]
         temps.append(row[0] if len(row) > 0 else float("nan"))
@@ -1541,6 +1543,7 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
         dirs.append(row[5] if len(row) > 5 else float("nan"))
         solar_raw = row[6] if len(row) > 6 else float("nan")
         solar.append(_non_negative(solar_raw))
+        uv_indexes.append(row[7] if len(row) > 7 else float("nan"))
 
     return {
         "epochs": epochs,
@@ -1551,6 +1554,7 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
         "gusts": gusts,
         "wind_dirs": dirs,
         "solar_radiations": solar,
+        "uv_indexes": uv_indexes,
         "has_data": len(epochs) > 0,
     }
 
@@ -1673,6 +1677,7 @@ def _merge_timeseries_dicts(series_list: List[Dict[str, List[float]]]) -> Dict[s
         "gusts": "gust",
         "wind_dirs": "dir",
         "solar_radiations": "solar",
+        "uv_indexes": "uv",
     }
 
     for series in series_list:
@@ -1698,6 +1703,7 @@ def _merge_timeseries_dicts(series_list: List[Dict[str, List[float]]]) -> Dict[s
         "gusts": [merged_rows[ep].get("gust", float("nan")) for ep in ordered_epochs],
         "wind_dirs": [merged_rows[ep].get("dir", float("nan")) for ep in ordered_epochs],
         "solar_radiations": [merged_rows[ep].get("solar", float("nan")) for ep in ordered_epochs],
+        "uv_indexes": [merged_rows[ep].get("uv", float("nan")) for ep in ordered_epochs],
         "has_data": len(ordered_epochs) > 0,
     }
 

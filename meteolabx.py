@@ -16,9 +16,9 @@ import logging
 import html
 import json
 import os
+import hashlib
 from typing import Optional
-from datetime import datetime
-from streamlit_autorefresh import st_autorefresh
+from datetime import datetime, timedelta
 
 # Imports locales
 from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT, RD
@@ -53,13 +53,15 @@ from utils.units import (
     wind_unit_label,
 )
 from api import WuError, fetch_wu_current_session_cached, fetch_daily_timeseries, fetch_hourly_7day_session_cached
-from models import (
+from models.thermodynamics import (
     e_s, vapor_pressure, dewpoint_from_vapor_pressure,
     mixing_ratio, specific_humidity, absolute_humidity,
     potential_temperature, virtual_temperature, equivalent_temperature, equivalent_potential_temperature,
     wet_bulb_celsius, msl_to_absolute, air_density, lcl_height,
     apparent_temperature, heat_index_rothfusz,
-    sky_clarity_label, uv_index_label, water_balance, water_balance_label
+)
+from models.radiation import (
+    sky_clarity_label, uv_index_label, water_balance, water_balance_label,
 )
 from services import (
     rain_rates_from_total, rain_intensity_label, reset_rain_history,
@@ -71,89 +73,11 @@ from services.wu_calibration import (
     default_wu_calibration,
     detect_wu_sensor_presence,
 )
-from services.climograms import (
-    build_period_specs,
-    describe_period_range,
-    fetch_wu_daily_history_for_periods,
-    build_extremes_table,
-    build_general_metrics_table,
-    resolve_chart_granularity,
-    build_chart_table,
-    build_units_table,
-)
 from components import (
     card, section_title, render_grid,
     wind_dir_text, render_sidebar
 )
 
-# Imports de AEMET
-from services.aemet import (
-    AEMET_API_KEY,
-    get_aemet_data,
-    is_aemet_connection,
-    get_aemet_daily_charts,
-    clear_aemet_runtime_cache,
-    fetch_aemet_today_series_with_lookback,
-    fetch_aemet_all24h_station_series,
-    fetch_aemet_hourly_7day_series,
-    fetch_aemet_recent_synoptic_series,
-    fetch_aemet_climo_daily_for_periods,
-    fetch_aemet_climo_monthly_for_year,
-    fetch_aemet_climo_yearly_for_years,
-)
-from services.meteocat import (
-    get_meteocat_data,
-    is_meteocat_connection,
-    get_meteocat_station_series_start_date,
-    fetch_meteocat_today_series_with_lookback,
-    fetch_meteocat_recent_synoptic_series,
-    fetch_meteocat_daily_history_for_periods,
-    fetch_meteocat_annual_history_for_years,
-    fetch_meteocat_monthly_history_for_year,
-    fetch_meteocat_daily_extremes_for_year,
-    fetch_meteocat_monthly_history_for_periods,
-    fetch_meteocat_daily_extremes_for_periods,
-)
-from services.euskalmet import (
-    get_euskalmet_data,
-    is_euskalmet_connection,
-)
-from services.frost import (
-    FROST_CLIENT_ID,
-    FROST_CLIENT_SECRET,
-    fetch_frost_climo_monthly_for_period,
-    fetch_frost_climo_yearly_for_periods,
-    get_frost_climo_period_options,
-    get_frost_data,
-    is_frost_connection,
-)
-from services.meteofrance import (
-    METEOFRANCE_API_KEY,
-    fetch_meteofrance_climo_daily_for_periods,
-    fetch_meteofrance_climo_monthly_for_year,
-    fetch_meteofrance_recent_synoptic_series,
-    fetch_meteofrance_today_pressure_series_with_lookback,
-    fetch_meteofrance_climo_yearly_for_years,
-    get_meteofrance_data,
-    get_meteofrance_station_series_start_date,
-    is_meteofrance_connection,
-)
-from services.meteogalicia import (
-    fetch_meteogalicia_recent_synoptic_series,
-    get_meteogalicia_data,
-    is_meteogalicia_connection,
-    fetch_mgalicia_climo_daily_for_periods,
-    fetch_mgalicia_climo_monthly_for_year,
-    fetch_mgalicia_climo_yearly_for_years,
-)
-from services.nws import (
-    get_nws_data,
-    is_nws_connection,
-)
-from services.poem import (
-    get_poem_data,
-    is_poem_connection,
-)
 from components.station_selector import render_station_selector
 from components.browser_geolocation import get_browser_geolocation
 from providers import search_nearby_stations
@@ -161,6 +85,60 @@ from providers import search_nearby_stations
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _get_frost_service():
+    """Importa Frost bajo demanda para aligerar el arranque inicial."""
+    from services import frost as frost_service
+    return frost_service
+
+
+def _get_meteofrance_service():
+    """Importa Meteo-France bajo demanda para aligerar el arranque inicial."""
+    from services import meteofrance as meteofrance_service
+    return meteofrance_service
+
+
+def _get_climograms_service():
+    """Importa cálculos de climogramas bajo demanda para aligerar el arranque inicial."""
+    from services import climograms as climograms_service
+    return climograms_service
+
+
+def _get_aemet_service():
+    """Importa AEMET bajo demanda para aligerar el arranque inicial."""
+    from services import aemet as aemet_service
+    return aemet_service
+
+
+def _get_meteocat_service():
+    """Importa Meteocat bajo demanda para aligerar el arranque inicial."""
+    from services import meteocat as meteocat_service
+    return meteocat_service
+
+
+def _get_euskalmet_service():
+    """Importa Euskalmet bajo demanda para aligerar el arranque inicial."""
+    from services import euskalmet as euskalmet_service
+    return euskalmet_service
+
+
+def _get_meteogalicia_service():
+    """Importa MeteoGalicia bajo demanda para aligerar el arranque inicial."""
+    from services import meteogalicia as meteogalicia_service
+    return meteogalicia_service
+
+
+def _get_poem_service():
+    """Importa POEM bajo demanda para aligerar el arranque inicial."""
+    from services import poem as poem_service
+    return poem_service
+
+
+def _get_nws_service():
+    """Importa NWS bajo demanda para aligerar el arranque inicial."""
+    from services import nws as nws_service
+    return nws_service
 
 
 def _browser_viewport_width() -> int:
@@ -172,6 +150,86 @@ def _browser_viewport_width() -> int:
         return max(0, int(float(str(raw).strip())))
     except (TypeError, ValueError):
         return 0
+
+
+def _first_valid_float(*values: object, default: float = float("nan")) -> float:
+    """Devuelve el primer float válido no-NaN de una lista heterogénea."""
+    for value in values:
+        try:
+            candidate = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not is_nan(candidate):
+            return candidate
+    return default
+
+
+def _build_demo_radiation_series(
+    current_solar: float,
+    current_uv: float,
+    *,
+    now_dt: Optional[datetime] = None,
+) -> dict:
+    """Serie diaria sintética para visualizar radiación/UV en modo DEMO."""
+    now_local = now_dt or datetime.now().astimezone()
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    step_seconds = 5 * 60
+    total_steps = max(2, int((now_local - day_start).total_seconds() // step_seconds) + 1)
+
+    # El slider del DEMO representa una intensidad "típica" del tramo fuerte del día,
+    # no un valor a extrapolar desde la hora real actual. Así evitamos picos absurdos
+    # cuando se prueba de noche con UVI manual.
+    solar_noon_hour = 14.0
+    sigma_hours = 2.8
+    solar_peak = min(1200.0, max(0.0, float(current_solar) if current_solar > 0 else 850.0))
+    uv_peak = min(15.0, max(0.0, float(current_uv) if current_uv > 0 else 8.5))
+
+    epochs = []
+    solar_radiations = []
+    uv_indexes = []
+    temps = []
+    humidities = []
+    winds = []
+    gusts = []
+    wind_dirs = []
+
+    for step_idx in range(total_steps):
+        point_dt = day_start + timedelta(seconds=step_idx * step_seconds)
+        point_hour = point_dt.hour + (point_dt.minute / 60.0)
+        diurnal_shape = math.exp(-((point_hour - solar_noon_hour) ** 2) / (2.0 * sigma_hours ** 2))
+
+        solar_val = solar_peak * (diurnal_shape ** 1.02)
+        uv_val = uv_peak * (diurnal_shape ** 1.18)
+        if diurnal_shape < 0.08:
+            solar_val = 0.0
+        if diurnal_shape < 0.10:
+            uv_val = 0.0
+
+        # Variables auxiliares plausibles para que ET0 y balance también se vean.
+        temp_shape = math.exp(-((point_hour - 16.0) ** 2) / (2.0 * 4.6 ** 2))
+        rh_shape = math.exp(-((point_hour - 14.5) ** 2) / (2.0 * 4.0 ** 2))
+        wind_shape = math.exp(-((point_hour - 15.5) ** 2) / (2.0 * 4.8 ** 2))
+
+        epochs.append(int(point_dt.timestamp()))
+        solar_radiations.append(float(max(0.0, solar_val)))
+        uv_indexes.append(float(max(0.0, uv_val)))
+        temps.append(float(14.5 + (11.0 * temp_shape)))
+        humidities.append(float(max(28.0, min(92.0, 82.0 - (30.0 * rh_shape)))))
+        winds.append(float(6.0 + (8.0 * wind_shape)))
+        gusts.append(float(8.5 + (11.0 * wind_shape)))
+        wind_dirs.append(210.0)
+
+    return {
+        "epochs": epochs,
+        "solar_radiations": solar_radiations,
+        "uv_indexes": uv_indexes,
+        "temps": temps,
+        "humidities": humidities,
+        "winds": winds,
+        "gusts": gusts,
+        "wind_dirs": wind_dirs,
+        "has_data": bool(epochs),
+    }
 
 
 def _is_small_mobile_client() -> bool:
@@ -467,7 +525,7 @@ def _inject_mobile_plotly_compactor() -> None:
 
 
 def _inject_live_age_updater() -> None:
-    """Mantiene actualizado el texto de edad sin esperar a un rerun completo."""
+    """Mantiene actualizados edad y hora local del usuario sin esperar a un rerun completo."""
     components.html(
         """
         <script>
@@ -492,9 +550,40 @@ def _inject_live_age_updater() -> None:
             return ((60 - rem) || 60) * 1000;
           }
 
+          function formatLocalDateTime(epoch) {
+            const date = new Date(epoch * 1000);
+            if (!Number.isFinite(date.getTime())) return "";
+            const pad = function (value) {
+              return String(value).padStart(2, "0");
+            };
+            return [
+              pad(date.getDate()),
+              pad(date.getMonth() + 1),
+              date.getFullYear()
+            ].join("-") + " " + [
+              pad(date.getHours()),
+              pad(date.getMinutes()),
+              pad(date.getSeconds())
+            ].join(":");
+          }
+
+          function refreshUserTimes() {
+            doc.querySelectorAll(".mlbx-live-user-time[data-epoch]").forEach(function (el) {
+              const epoch = Number.parseInt(el.getAttribute("data-epoch") || "", 10);
+              if (!Number.isFinite(epoch)) return;
+              const text = formatLocalDateTime(epoch);
+              if (text && el.textContent !== text) el.textContent = text;
+            });
+            doc.querySelectorAll(".mlbx-live-user-time-label").forEach(function (el) {
+              const fallback = el.getAttribute("data-fallback-label") || "Hora usuario";
+              if (el.textContent !== fallback) el.textContent = fallback;
+            });
+          }
+
           function refreshAges() {
             let minDelay = 60000;
             let found = false;
+            refreshUserTimes();
             doc.querySelectorAll(".mlbx-live-age[data-epoch]").forEach(function (el) {
               const epoch = Number.parseInt(el.getAttribute("data-epoch") || "", 10);
               if (!Number.isFinite(epoch)) return;
@@ -702,6 +791,7 @@ def process_standard_provider(
     chart_winds = series.get("winds", [])
     chart_gusts = series.get("gusts", [])
     chart_wind_dirs = series.get("wind_dirs", [])
+    chart_uv_indexes = series.get("uv_indexes", [])
     chart_solar_radiations = series.get("solar_radiations", [])
     has_chart_data = series.get("has_data", False)
 
@@ -770,6 +860,7 @@ def process_standard_provider(
     st.session_state["chart_humidities"] = chart_humidities
     st.session_state["chart_dewpts"] = []
     st.session_state["chart_pressures"] = chart_pressures
+    st.session_state["chart_uv_indexes"] = chart_uv_indexes
     st.session_state["chart_solar_radiations"] = chart_solar_radiations
     st.session_state["chart_winds"] = chart_winds
     st.session_state["chart_gusts"] = chart_gusts
@@ -889,6 +980,39 @@ def _fmt_radiation_display(value, decimals: int = 0) -> str:
 def _fmt_radiation_energy_display(value, decimals: int = 2) -> str:
     return format_radiation_energy(value, radiation_unit_pref, decimals=decimals)
 
+
+def _render_theme_table(df, table_class: str = "mlbx-data-table") -> None:
+    """Renderiza una tabla HTML simple para respetar el tema claro/oscuro."""
+    try:
+        styled_df = df.copy()
+    except Exception:
+        styled_df = df
+    try:
+        html_table = styled_df.to_html(index=False, classes=table_class, border=0)
+    except Exception:
+        st.dataframe(df, width="stretch", hide_index=True)
+        return
+    st.markdown(
+        html_clean(f"<div class='mlbx-table-wrap'>{html_table}</div>"),
+        unsafe_allow_html=True,
+    )
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _cached_map_search_nearby_stations(
+    lat: float,
+    lon: float,
+    max_results: int,
+    provider_ids: tuple[str, ...],
+):
+    """Cache corto para que cambiar el tema no dispare de nuevo toda la búsqueda del mapa."""
+    return search_nearby_stations(
+        lat,
+        lon,
+        max_results=max_results,
+        provider_ids=list(provider_ids),
+    )
+
 # Configuración global de Plotly según tema
 import plotly.io as pio
 
@@ -925,8 +1049,10 @@ theme_color_scheme = "light" if not dark else "dark"
 expander_bg = "rgba(255,255,255,0.45)" if not dark else "rgba(22,25,31,0.45)"
 expander_summary_bg = "rgba(255,255,255,0.85)" if not dark else "rgba(17,22,30,0.92)"
 
+sidebar_css_hash = hashlib.md5(f"sidebar-{theme_color_scheme}-{sidebar_bg}-{button_bg}-{button_border}".encode()).hexdigest()[:8]
+
 st.markdown(f"""
-<style>
+<style data-sidebar-theme="{sidebar_css_hash}">
 /* Forzar tema de sidebar */
 [data-testid="stSidebar"] {{
     background-color: {sidebar_bg} !important;
@@ -974,6 +1100,35 @@ st.markdown(f"""
 [data-testid="stSidebar"] [data-baseweb="input"] {{
     background-color: var(--mlbx-control-bg) !important;
     border-color: {button_border} !important;
+}}
+
+/* Selectbox de sidebar: forzar fondo y texto del control visible */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] [data-baseweb="select"] > div {{
+    background: var(--mlbx-control-bg) !important;
+    border: {button_border_width} solid var(--mlbx-control-border) !important;
+    color: var(--mlbx-sidebar-text) !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div:hover,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] [data-baseweb="select"] > div:hover {{
+    background: var(--mlbx-control-bg-hover) !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] div,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] [data-baseweb="select"] div {{
+    color: var(--mlbx-sidebar-text) !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stSelectbox"] svg,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] svg path,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] svg,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] svg path {{
+    fill: var(--mlbx-sidebar-text) !important;
+    stroke: var(--mlbx-sidebar-text) !important;
 }}
 
 /* Botón del ojo de la API key (evitar cuadro negro) */
@@ -1035,13 +1190,120 @@ st.markdown(f"""
     color-scheme: {theme_color_scheme} !important;
 }}
 
+/* Ocultar el control nativo y dejar visible el indicador custom del label */
+[data-testid="stSidebar"] [data-testid="stRadio"] input[type="radio"],
+[data-testid="stSidebar"] [data-testid="stCheckbox"] input[type="checkbox"] {{
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 1px !important;
+    height: 1px !important;
+    pointer-events: none !important;
+}}
+
 /* Radios del tema: forzar colores para que cambien al alternar claro/oscuro */
 [data-testid="stSidebar"] input[type="radio"] {{
+    -webkit-appearance: none !important;
+    appearance: none !important;
     accent-color: #ff4b4b !important;
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+    border-radius: 999px !important;
+    border: 1px solid {button_border} !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    box-shadow: inset 0 0 0 0.24rem transparent !important;
+}}
+
+[data-testid="stSidebar"] input[type="radio"]:checked {{
+    border-color: #ff4b4b !important;
+    box-shadow: inset 0 0 0 0.24rem #ff4b4b !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
 }}
 
 [data-testid="stSidebar"] input[type="checkbox"] {{
+    -webkit-appearance: none !important;
+    appearance: none !important;
     accent-color: #ff4b4b !important;
+    width: 1.0rem !important;
+    height: 1.0rem !important;
+    border-radius: 0.22rem !important;
+    border: 1px solid {button_border} !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] input[type="checkbox"]:checked {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+/* Radios de Streamlit/BaseWeb en sidebar: círculo visible */
+[data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child {{
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+    border-radius: 999px !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    border: 1px solid {button_border} !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) > div:first-child {{
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    border-color: #ff4b4b !important;
+    box-shadow: inset 0 0 0 0.24rem #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child * {{
+    color: transparent !important;
+    fill: transparent !important;
+    stroke: transparent !important;
+}}
+
+/* Checkbox de Streamlit/BaseWeb en sidebar: cuadrado visible */
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label > div:first-child {{
+    width: 1.0rem !important;
+    height: 1.0rem !important;
+    border-radius: 0.22rem !important;
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    border: 1px solid {button_border} !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label:has(input:checked) > div:first-child {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label > div:first-child svg,
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label > div:first-child svg path {{
+    fill: {'#ffffff' if not dark else '#ffffff'} !important;
+    stroke: {'#ffffff' if not dark else '#ffffff'} !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label:has(input:checked) > div:first-child::after {{
+    content: "✓";
+    color: #ffffff;
+    display: block;
+    text-align: center;
+    line-height: 1rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+}}
+
+/* Radios del selector de tema cuando Streamlit/BaseWeb los renderiza como círculos custom */
+[data-testid="stSidebar"] [role="radiogroup"] [role="radio"] {{
+    background: {'#ffffff' if not dark else '#0e1117'} !important;
+    border: 1px solid {button_border} !important;
+    color: var(--mlbx-sidebar-text) !important;
+}}
+
+[data-testid="stSidebar"] [role="radiogroup"] [role="radio"][aria-checked="true"] {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] [role="radiogroup"] [role="radio"] *,
+[data-testid="stSidebar"] [role="radiogroup"] label * {{
+    color: var(--mlbx-sidebar-text) !important;
 }}
 
 [data-testid="stSidebar"] [role="checkbox"] {{
@@ -1082,8 +1344,301 @@ st.markdown(f"""
     background-color: #ff4b4b !important;
     border-color: #ff4b4b !important;
 }}
+
+/* Segmented control real de Streamlit en sidebar */
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] {{
+    width: 100% !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] {{
+    width: 100% !important;
+    background: var(--mlbx-control-bg) !important;
+    border: 1px solid var(--mlbx-control-border) !important;
+    border-radius: 0.95rem !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button {{
+    background: var(--mlbx-control-bg) !important;
+    color: var(--mlbx-sidebar-text) !important;
+    border-color: var(--mlbx-control-border) !important;
+    box-shadow: none !important;
+    font-weight: 600 !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"] {{
+    background: var(--mlbx-control-bg) !important;
+    color: var(--mlbx-sidebar-text) !important;
+    border-color: var(--mlbx-control-border) !important;
+    box-shadow: none !important;
+    font-weight: 600 !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button:hover {{
+    background: var(--mlbx-control-bg-hover) !important;
+    color: var(--mlbx-sidebar-text) !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] {{
+    background: #ff4b4b !important;
+    color: #ffffff !important;
+    border-color: #ff4b4b !important;
+    font-weight: 700 !important;
+    z-index: 2 !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] {{
+    background: #ff4b4b !important;
+    color: #ffffff !important;
+    border-color: #ff4b4b !important;
+    font-weight: 700 !important;
+    z-index: 2 !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] {{
+    background: #ff4b4b !important;
+    color: #ffffff !important;
+    border-color: #ff4b4b !important;
+    font-weight: 700 !important;
+    box-shadow: inset 0 0 0 1px #ff4b4b !important;
+    z-index: 2 !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"]:hover {{
+    background: #ff5f5f !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"]:hover {{
+    background: #ff5f5f !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] *,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] div,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] span,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] p,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] *,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] div,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] span,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] p,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] *,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] div,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] span,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] p {{
+    color: #ffffff !important;
+}}
+
+/* Toggle real de Streamlit/BaseWeb en sidebar */
+[data-testid="stSidebar"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] {{
+    color: var(--mlbx-sidebar-text) !important;
+    background: transparent !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div:first-child {{
+    background: {'#d7dbe4' if not dark else '#1f2734'} !important;
+    border: 1px solid var(--mlbx-control-border) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div:first-child > div {{
+    background: {'#ffffff' if not dark else '#dbe4f2'} !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div:first-child {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] input[type="checkbox"] {{
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 1px !important;
+    height: 1px !important;
+    appearance: auto !important;
+    -webkit-appearance: auto !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {{
+    color: var(--mlbx-sidebar-text) !important;
+}}
+
+/* Botones +/- de calibración / number_input */
+[data-testid="stSidebar"] [data-testid="stNumberInput"] button {{
+    background: var(--mlbx-control-bg) !important;
+    color: var(--mlbx-sidebar-text) !important;
+    border-color: var(--mlbx-control-border) !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stNumberInput"] button:hover {{
+    background: var(--mlbx-control-bg-hover) !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stNumberInput"] button svg,
+[data-testid="stSidebar"] [data-testid="stNumberInput"] button svg path {{
+    fill: var(--mlbx-sidebar-text) !important;
+    stroke: var(--mlbx-sidebar-text) !important;
+}}
 </style>
 """, unsafe_allow_html=True)
+
+sidebar_control_bg = '#ffffff' if not dark else '#0e1117'
+sidebar_toggle_bg = '#d7dbe4' if not dark else '#1f2734'
+
+components.html(f"""
+<script>
+(function() {{
+  const host = window.parent || window;
+  const doc = host.document;
+  const SIDEBAR_BG = "{sidebar_control_bg}";
+  const SIDEBAR_BORDER = "{button_border}";
+  const SIDEBAR_TEXT = "{sidebar_text}";
+  const TOGGLE_BG = "{sidebar_toggle_bg}";
+  const ACTIVE = "#ff4b4b";
+  const MAP_BG = "{button_bg}";
+  const MAP_BORDER = "{button_border}";
+  const MAP_TEXT = "{'rgba(15, 18, 25, 0.92)' if not dark else 'rgba(255, 255, 255, 0.92)'}";
+  const MAP_HOVER = "{'#eef2f8' if not dark else '#1b2230'}";
+  const IS_DARK = {str(bool(dark)).lower()};
+
+  function paintSidebarControls() {{
+    const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+    if (!sidebar) return;
+
+    sidebar.querySelectorAll('[data-testid="stButtonGroup"] [data-baseweb="button-group"]').forEach((group) => {{
+      group.style.width = "100%";
+      group.style.background = SIDEBAR_BG;
+      group.style.border = "1px solid " + SIDEBAR_BORDER;
+      group.style.borderRadius = "0.95rem";
+      group.style.overflow = "hidden";
+      group.style.boxShadow = "none";
+
+      group.querySelectorAll('[role="radio"], button').forEach((btn) => {{
+        const checked = btn.getAttribute('aria-checked') === 'true'
+          || btn.getAttribute('data-testid') === 'stBaseButton-segmented_controlActive';
+        btn.style.background = checked ? ACTIVE : SIDEBAR_BG;
+        btn.style.color = checked ? "#ffffff" : SIDEBAR_TEXT;
+        btn.style.borderColor = checked ? ACTIVE : SIDEBAR_BORDER;
+        btn.style.boxShadow = checked ? "inset 0 0 0 1px " + ACTIVE : "none";
+        btn.style.fontWeight = checked ? "700" : "600";
+        btn.querySelectorAll('*').forEach((node) => {{
+          node.style.color = checked ? "#ffffff" : SIDEBAR_TEXT;
+          node.style.fill = checked ? "#ffffff" : "";
+          node.style.stroke = checked ? "#ffffff" : "";
+        }});
+      }});
+    }});
+
+    sidebar.querySelectorAll('input[type="radio"]').forEach((input) => {{
+      if (input.closest('[data-baseweb="button-group"]')) return;
+      const label = input.closest('label');
+      const bubble = label && label.children && label.children[0] ? label.children[0] : null;
+      input.style.webkitAppearance = "none";
+      input.style.appearance = "none";
+      input.style.width = "0.95rem";
+      input.style.height = "0.95rem";
+      input.style.borderRadius = "999px";
+      input.style.border = "1px solid " + SIDEBAR_BORDER;
+      input.style.background = SIDEBAR_BG;
+      input.style.boxShadow = input.checked ? "inset 0 0 0 0.24rem #ff4b4b" : "none";
+      if (!bubble) return;
+      bubble.style.width = "0.95rem";
+      bubble.style.height = "0.95rem";
+      bubble.style.borderRadius = "999px";
+      bubble.style.border = "1px solid " + SIDEBAR_BORDER;
+      bubble.style.background = SIDEBAR_BG;
+      bubble.style.boxShadow = input.checked ? "inset 0 0 0 0.24rem #ff4b4b" : "none";
+      bubble.style.color = "transparent";
+      bubble.querySelectorAll('*').forEach((node) => {{
+        node.style.color = "transparent";
+        node.style.fill = "transparent";
+        node.style.stroke = "transparent";
+      }});
+    }});
+
+    sidebar.querySelectorAll('input[type="checkbox"]').forEach((input) => {{
+      if (input.closest('[data-baseweb="checkbox"]')) return;
+      const label = input.closest('label');
+      const box = label && label.children && label.children[0] ? label.children[0] : null;
+      input.style.webkitAppearance = "none";
+      input.style.appearance = "none";
+      input.style.width = "1rem";
+      input.style.height = "1rem";
+      input.style.borderRadius = "0.22rem";
+      input.style.border = "1px solid " + (input.checked ? ACTIVE : SIDEBAR_BORDER);
+      input.style.background = input.checked ? ACTIVE : SIDEBAR_BG;
+      if (!box) return;
+      box.style.width = "1rem";
+      box.style.height = "1rem";
+      box.style.borderRadius = "0.22rem";
+      box.style.border = "1px solid " + (input.checked ? ACTIVE : SIDEBAR_BORDER);
+      box.style.background = input.checked ? ACTIVE : SIDEBAR_BG;
+      box.querySelectorAll('svg, svg *').forEach((node) => {{
+        node.style.fill = "#ffffff";
+        node.style.stroke = "#ffffff";
+      }});
+    }});
+
+    sidebar.querySelectorAll('[data-baseweb="switch"]').forEach((sw) => {{
+      const knobTrack = sw.querySelector('label > div, div[role="switch"]');
+      const roleSwitch = sw.querySelector('[role="switch"]');
+      const input = sw.querySelector('input[type="checkbox"]');
+      const checked = !!(input && input.checked) || (roleSwitch && roleSwitch.getAttribute('aria-checked') === 'true');
+      const track = roleSwitch || knobTrack;
+      if (track) {{
+        track.style.background = checked ? ACTIVE : TOGGLE_BG;
+        track.style.border = "1px solid " + (checked ? ACTIVE : SIDEBAR_BORDER);
+        track.style.borderRadius = "999px";
+      }}
+      const knob = sw.querySelector('label > div > div');
+      if (knob) {{
+        knob.style.background = "#ffffff";
+      }}
+    }});
+  }}
+
+  function paintMapControls() {{
+    doc.querySelectorAll('.mapboxgl-ctrl-group, .maplibregl-ctrl-group').forEach((group) => {{
+      group.style.background = MAP_BG;
+      group.style.border = "1px solid " + MAP_BORDER;
+      group.style.borderRadius = "12px";
+      group.style.overflow = "hidden";
+      group.style.boxShadow = "0 10px 24px rgba(0,0,0," + (IS_DARK ? "0.28" : "0.12") + ")";
+      group.style.filter = "none";
+
+      group.querySelectorAll('button').forEach((btn, index) => {{
+        btn.style.background = MAP_BG;
+        btn.style.color = MAP_TEXT;
+        btn.style.width = "38px";
+        btn.style.height = "38px";
+        btn.style.borderBottom = index === group.querySelectorAll('button').length - 1 ? "none" : ("1px solid " + MAP_BORDER);
+      }});
+
+      group.querySelectorAll('.mapboxgl-ctrl-icon, .maplibregl-ctrl-icon').forEach((icon) => {{
+        icon.style.filter = IS_DARK ? "brightness(0) invert(1)" : "none";
+      }});
+    }});
+  }}
+
+  paintSidebarControls();
+  paintMapControls();
+
+  if (!host.__mlbxSidebarThemeObserver) {{
+    host.__mlbxSidebarThemeObserver = new host.MutationObserver(() => {{
+      paintSidebarControls();
+      paintMapControls();
+    }});
+    host.__mlbxSidebarThemeObserver.observe(doc.body, {{ childList: true, subtree: true, attributes: true }});
+  }}
+}})();
+</script>
+""", height=0, width=0)
 
 
 # ============================================================
@@ -1277,9 +1832,71 @@ button[data-testid="collapsedControl"] {{
     border-color: transparent !important;
 }}
 
-[data-testid="stMainBlockContainer"] [data-baseweb="popover"] [role="listbox"] {{
+[data-baseweb="popover"],
+body [data-baseweb="popover"] {{
+    color-scheme: {theme_color_scheme} !important;
+}}
+
+[data-baseweb="popover"] [role="listbox"],
+body [role="listbox"],
+[data-baseweb="popover"] ul,
+[data-baseweb="menu"] {{
     background: {main_button_bg} !important;
     color: var(--text) !important;
+    border: 1px solid {main_button_border} !important;
+}}
+
+[data-baseweb="popover"] [role="option"],
+body [role="option"],
+[data-baseweb="popover"] li,
+[data-baseweb="menu"] li {{
+    background: {main_button_bg} !important;
+    color: var(--text) !important;
+}}
+
+[data-baseweb="popover"] [role="option"]:hover,
+body [role="option"]:hover,
+[data-baseweb="popover"] li:hover,
+[data-baseweb="menu"] li:hover {{
+    background: {'#eef2f8' if not dark else '#1b2230'} !important;
+}}
+
+/* Tablas HTML tematizadas */
+.mlbx-table-wrap {{
+    width: 100%;
+    overflow-x: auto;
+    margin: 0.25rem 0 1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+}}
+
+.mlbx-data-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    color: var(--text);
+}}
+
+.mlbx-data-table thead th {{
+    text-align: left;
+    padding: 0.72rem 0.78rem;
+    background: {'rgba(233,237,243,0.95)' if not dark else 'rgba(42, 46, 56, 0.96)'};
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+}}
+
+.mlbx-data-table tbody td {{
+    padding: 0.58rem 0.78rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    background: transparent;
+}}
+
+.mlbx-data-table tbody tr:last-child td {{
+    border-bottom: 0;
 }}
 
 [data-testid="stMainBlockContainer"] [role="checkbox"] {{
@@ -1321,6 +1938,122 @@ button[data-testid="collapsedControl"] {{
     border-color: #ff4b4b !important;
 }}
 
+/* Toggle real de Streamlit/BaseWeb en contenido principal (mapa) */
+[data-testid="stMainBlockContainer"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] {{
+    color: var(--text) !important;
+    background: transparent !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div:first-child {{
+    background: {'#d7dbe4' if not dark else '#1f2734'} !important;
+    border: 1px solid {main_button_border} !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div:first-child > div {{
+    background: {'#ffffff' if not dark else '#dbe4f2'} !important;
+    box-shadow: none !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stCheckbox"] [data-baseweb="checkbox"]:has(input:checked) > div:first-child {{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stCheckbox"] [data-baseweb="checkbox"] input[type="checkbox"] {{
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 1px !important;
+    height: 1px !important;
+    appearance: auto !important;
+    -webkit-appearance: auto !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+}}
+
+[data-testid="stMainBlockContainer"] [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {{
+    color: var(--text) !important;
+}}
+
+/* Mapa: controles de zoom y chips de metadatos */
+[data-testid="stDeckGlJsonChart"] .mapboxgl-ctrl-group,
+[data-testid="stDeckGlJsonChart"] .maplibregl-ctrl-group,
+.stApp .mapboxgl-ctrl-group,
+.stApp .maplibregl-ctrl-group {{
+    background: {main_button_bg} !important;
+    border: 1px solid {main_button_border} !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 10px 24px rgba(0,0,0,{'0.12' if not dark else '0.28'}) !important;
+}}
+
+[data-testid="stDeckGlJsonChart"] .mapboxgl-ctrl-group button,
+[data-testid="stDeckGlJsonChart"] .maplibregl-ctrl-group button,
+.stApp .mapboxgl-ctrl-group button,
+.stApp .maplibregl-ctrl-group button {{
+    background: {main_button_bg} !important;
+    color: var(--text) !important;
+    border-bottom: 1px solid {main_button_border} !important;
+    width: 38px !important;
+    height: 38px !important;
+}}
+
+[data-testid="stDeckGlJsonChart"] .mapboxgl-ctrl-group button:last-child,
+[data-testid="stDeckGlJsonChart"] .maplibregl-ctrl-group button:last-child,
+.stApp .mapboxgl-ctrl-group button:last-child,
+.stApp .maplibregl-ctrl-group button:last-child {{
+    border-bottom: none !important;
+}}
+
+[data-testid="stDeckGlJsonChart"] .mapboxgl-ctrl-group button:hover,
+[data-testid="stDeckGlJsonChart"] .maplibregl-ctrl-group button:hover,
+.stApp .mapboxgl-ctrl-group button:hover,
+.stApp .maplibregl-ctrl-group button:hover {{
+    background: {'#eef2f8' if not dark else '#1b2230'} !important;
+}}
+
+[data-testid="stDeckGlJsonChart"] .mapboxgl-ctrl-group .mapboxgl-ctrl-icon,
+[data-testid="stDeckGlJsonChart"] .maplibregl-ctrl-group .maplibregl-ctrl-icon,
+[data-testid="stDeckGlJsonChart"] .mapboxgl-ctrl-group .maplibregl-ctrl-icon,
+[data-testid="stDeckGlJsonChart"] .maplibregl-ctrl-group .mapboxgl-ctrl-icon,
+.stApp .mapboxgl-ctrl-group .mapboxgl-ctrl-icon,
+.stApp .maplibregl-ctrl-group .maplibregl-ctrl-icon,
+.stApp .mapboxgl-ctrl-group .maplibregl-ctrl-icon,
+.stApp .maplibregl-ctrl-group .mapboxgl-ctrl-icon {{
+    filter: none !important;
+}}
+
+.mlbx-map-meta {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 0.65rem;
+    align-items: center;
+    margin-top: 0.2rem;
+    color: var(--text);
+    font-size: 0.98rem;
+}}
+
+.mlbx-map-meta-item {{
+    color: var(--text);
+}}
+
+.mlbx-map-chip {{
+    display: inline-flex;
+    align-items: center;
+    padding: 0.16rem 0.52rem;
+    border-radius: 0.55rem;
+    background: {'rgba(233,237,243,0.95)' if not dark else 'rgba(24, 29, 38, 0.96)'};
+    border: 1px solid {'rgba(15,18,25,0.12)' if not dark else 'rgba(255,255,255,0.10)'};
+    color: {'rgba(15,18,25,0.92)' if not dark else 'rgba(121, 242, 165, 0.96)'};
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.95em;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}}
+
 /* Forzar que todos los headers usen la variable --text */
 h1, h2, h3, h4, h5, h6 {{
     color: var(--text) !important;
@@ -1346,10 +2079,13 @@ st.markdown(html_clean("""
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MeteoLabX">
 <link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon-pwa.png?v=4">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon-pwa.png?v=5">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon-pwa.png?v=5">
+<link rel="apple-touch-icon-precomposed" href="/static/apple-touch-icon-pwa.png?v=5">
 <meta name="theme-color" content="#2384ff">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3">
+<link rel="shortcut icon" href="/static/apple-touch-icon-pwa.png?v=5">
 
 <script>
 (function () {
@@ -1370,9 +2106,12 @@ st.markdown(html_clean("""
     el.setAttribute("href", href);
   }
 
-  upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=4", "180x180");
+  upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=5");
+  upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=5", "180x180");
+  upsertLink("apple-touch-icon-precomposed", "/static/apple-touch-icon-pwa.png?v=5");
   upsertLink("icon", "/favicon-32x32.png?v=3", "32x32");
   upsertLink("icon", "/favicon-16x16.png?v=3", "16x16");
+  upsertLink("shortcut icon", "/static/apple-touch-icon-pwa.png?v=5");
 
   // Escribir timezone del navegador en query param para que Python la use en modo Auto
   try {
@@ -1905,6 +2644,8 @@ st.markdown(html_clean("""
     width: 54px;
     height: 54px;
     display:block;
+    image-rendering: auto;
+    filter: none;
   }
   
   /* Iconos más pequeños en móviles */
@@ -2061,7 +2802,7 @@ def _disconnect_active_station() -> None:
     """Desconecta la estación activa (mismo criterio que el botón del sidebar)."""
     if str(st.session_state.get("connection_type", "")).strip().upper() == "AEMET":
         try:
-            clear_aemet_runtime_cache()
+            _get_aemet_service().clear_aemet_runtime_cache()
         except Exception:
             pass
     st.session_state["connected"] = False
@@ -2329,8 +3070,9 @@ has_chart_data = False
 # Solo calcular datos si está conectado
 if connected:
     # Determinar origen de datos
-    if is_aemet_connection():
+    if _get_aemet_service().is_aemet_connection():
         # ========== DATOS DE AEMET ==========
+        aemet_service = _get_aemet_service()
         
         # Primero obtener datos históricos (más frescos, cada 10 min)
         (
@@ -2342,14 +3084,14 @@ if connected:
             chart_gusts,
             chart_wind_dirs,
             chart_precips,
-        ) = get_aemet_daily_charts()
+        ) = aemet_service.get_aemet_daily_charts()
         has_chart_data = len(chart_epochs) > 0
         
         print(f"🔍 [DEBUG] get_aemet_daily_charts() devolvió: {len(chart_epochs)} epochs")
         print(f"🔍 [DEBUG] has_chart_data = {has_chart_data}")
         
         # Obtener dato actual del endpoint normal (puede ser antiguo)
-        base = get_aemet_data()
+        base = aemet_service.get_aemet_data()
         
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de AEMET por ahora. Intenta de nuevo en unos minutos.")
@@ -2500,6 +3242,7 @@ if connected:
             st.session_state["chart_humidities"] = chart_humidities
             st.session_state["chart_dewpts"] = []
             st.session_state["chart_pressures"] = chart_pressures
+            st.session_state["chart_uv_indexes"] = []
             st.session_state["chart_solar_radiations"] = []
             st.session_state["chart_winds"] = chart_winds
             st.session_state["chart_gusts"] = chart_gusts
@@ -2515,6 +3258,7 @@ if connected:
             st.session_state["chart_humidities"] = []
             st.session_state["chart_dewpts"] = []
             st.session_state["chart_pressures"] = []
+            st.session_state["chart_uv_indexes"] = []
             st.session_state["chart_solar_radiations"] = []
             st.session_state["chart_winds"] = []
             st.session_state["chart_gusts"] = []
@@ -2679,9 +3423,9 @@ if connected:
         balance = float("nan")
         has_radiation = False
 
-    elif is_euskalmet_connection():
+    elif _get_euskalmet_service().is_euskalmet_connection():
         # ========== DATOS DE EUSKALMET ==========
-        base = get_euskalmet_data()
+        base = _get_euskalmet_service().get_euskalmet_data()
         if base is None:
             err_detail = str(st.session_state.get("euskalmet_last_error", "")).strip()
             st.warning(
@@ -2702,9 +3446,9 @@ if connected:
          solar_rad, uv, et0, clarity, balance,
          has_radiation, has_chart_data) = _unpack_processed(_r)
 
-    elif is_meteocat_connection():
+    elif _get_meteocat_service().is_meteocat_connection():
         # ========== DATOS DE METEOCAT ==========
-        base = get_meteocat_data()
+        base = _get_meteocat_service().get_meteocat_data()
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de Meteocat por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
@@ -2720,9 +3464,9 @@ if connected:
          solar_rad, uv, et0, clarity, balance,
          has_radiation, has_chart_data) = _unpack_processed(_r)
 
-    elif is_meteofrance_connection():
+    elif _get_meteofrance_service().is_meteofrance_connection():
         # ========== DATOS DE METEO-FRANCE ==========
-        base = get_meteofrance_data()
+        base = _get_meteofrance_service().get_meteofrance_data()
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de Meteo-France por ahora. Intenta de nuevo en unos minutos.")
             err_detail = str(st.session_state.get("meteofrance_last_error", "")).strip()
@@ -2744,9 +3488,9 @@ if connected:
          solar_rad, uv, et0, clarity, balance,
          has_radiation, has_chart_data) = _unpack_processed(_r)
 
-    elif is_frost_connection():
+    elif _get_frost_service().is_frost_connection():
         # ========== DATOS DE FROST ==========
-        base = get_frost_data()
+        base = _get_frost_service().get_frost_data()
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de Frost por ahora. Intenta de nuevo en unos minutos.")
             err_detail = str(st.session_state.get("frost_last_error", "")).strip()
@@ -2768,9 +3512,9 @@ if connected:
          solar_rad, uv, et0, clarity, balance,
          has_radiation, has_chart_data) = _unpack_processed(_r)
 
-    elif is_meteogalicia_connection():
+    elif _get_meteogalicia_service().is_meteogalicia_connection():
         # ========== DATOS DE METEOGALICIA ==========
-        base = get_meteogalicia_data()
+        base = _get_meteogalicia_service().get_meteogalicia_data()
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de MeteoGalicia por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
@@ -2787,9 +3531,9 @@ if connected:
          solar_rad, uv, et0, clarity, balance,
          has_radiation, has_chart_data) = _unpack_processed(_r)
 
-    elif is_nws_connection():
+    elif _get_nws_service().is_nws_connection():
         # ========== DATOS DE NWS ==========
-        base = get_nws_data()
+        base = _get_nws_service().get_nws_data()
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de NWS por ahora. Intenta de nuevo en unos minutos.")
             st.stop()
@@ -2808,9 +3552,9 @@ if connected:
          solar_rad, uv, et0, clarity, balance,
          has_radiation, has_chart_data) = _unpack_processed(_r)
 
-    elif is_poem_connection():
+    elif _get_poem_service().is_poem_connection():
         # ========== DATOS DE POEM ==========
-        base = get_poem_data()
+        base = _get_poem_service().get_poem_data()
         if base is None:
             st.warning("⚠️ No se pudieron obtener datos de POEM por ahora. Intenta de nuevo en unos minutos.")
             err_detail = str(st.session_state.get("poem_last_error", "")).strip()
@@ -3023,6 +3767,7 @@ if connected:
                 p * _msl_factor if not is_nan(p) else float("nan")
                 for p in _cp_msl
             ]
+            chart_uv_indexes = timeseries.get("uv_indexes", [])
             chart_solar_radiations = timeseries.get("solar_radiations", [])
             chart_winds = timeseries.get("winds", [])
             chart_gusts = timeseries.get("gusts", [])
@@ -3127,6 +3872,7 @@ if connected:
             st.session_state["chart_humidities"] = chart_humidities
             st.session_state["chart_dewpts"] = chart_dewpts
             st.session_state["chart_pressures"] = chart_pressures
+            st.session_state["chart_uv_indexes"] = chart_uv_indexes
             st.session_state["chart_solar_radiations"] = chart_solar_radiations
             st.session_state["chart_winds"] = chart_winds
             st.session_state["chart_gusts"] = chart_gusts
@@ -3157,6 +3903,113 @@ if connected:
             st.error("❌ Error inesperado: " + str(err))
             logger.error(f"Error inesperado: {repr(err)}")
 
+if st.session_state.get("demo_radiation", False):
+    demo_solar = _first_valid_float(st.session_state.get("demo_solar"), default=650.0)
+    demo_uv = _first_valid_float(st.session_state.get("demo_uv"), default=6.0)
+    demo_lat = _first_valid_float(
+        base.get("lat"),
+        st.session_state.get("provider_station_lat"),
+        st.session_state.get("aemet_station_lat"),
+        st.session_state.get("station_lat"),
+        default=41.3874,
+    )
+    demo_lon = _first_valid_float(
+        base.get("lon"),
+        st.session_state.get("provider_station_lon"),
+        st.session_state.get("aemet_station_lon"),
+        st.session_state.get("station_lon"),
+        default=2.1686,
+    )
+    demo_alt = _first_valid_float(
+        z,
+        st.session_state.get("provider_station_alt"),
+        st.session_state.get("aemet_station_alt"),
+        st.session_state.get("station_elevation"),
+        default=12.0,
+    )
+
+    demo_series = _build_demo_radiation_series(demo_solar, demo_uv)
+    demo_epoch = demo_series["epochs"][-1] if demo_series["epochs"] else int(time.time())
+
+    base.update({
+        "epoch": int(base.get("epoch") or demo_epoch),
+        "solar_radiation": demo_solar,
+        "uv": demo_uv,
+        "lat": demo_lat,
+        "lon": demo_lon,
+        "precip_total": _first_valid_float(base.get("precip_total"), default=0.0),
+    })
+    z = demo_alt
+    solar_rad = demo_solar
+    uv = demo_uv
+    has_radiation = True
+    st.session_state["demo_radiation_series"] = demo_series
+
+    from models.radiation import penman_monteith_et0, sky_clarity_index
+
+    clarity = sky_clarity_index(solar_rad, demo_lat, z, demo_epoch, demo_lon)
+
+    et0_accum_mm = 0.0
+    valid_steps = 0
+    demo_epochs = demo_series["epochs"]
+    demo_temps = demo_series["temps"]
+    demo_humidities = demo_series["humidities"]
+    demo_winds = demo_series["winds"]
+    demo_solars = demo_series["solar_radiations"]
+
+    for idx, epoch_i in enumerate(demo_epochs):
+        if idx >= len(demo_solars) or idx >= len(demo_temps) or idx >= len(demo_humidities) or idx >= len(demo_winds):
+            continue
+
+        solar_i = float(demo_solars[idx])
+        temp_i = float(demo_temps[idx])
+        rh_i = float(demo_humidities[idx])
+        wind_i = max(0.1, float(demo_winds[idx]))
+
+        et0_i = penman_monteith_et0(solar_i, temp_i, rh_i, wind_i, demo_lat, z, float(epoch_i))
+        if is_nan(et0_i):
+            continue
+
+        step_hours = 5.0 / 60.0
+        if idx > 0:
+            dt_seconds = float(epoch_i) - float(demo_epochs[idx - 1])
+            if 120 <= dt_seconds <= 1800:
+                step_hours = dt_seconds / 3600.0
+
+        et0_accum_mm += et0_i / 24.0 * step_hours
+        valid_steps += 1
+
+    et0 = et0_accum_mm if valid_steps > 0 else float("nan")
+    balance = water_balance(base["precip_total"], et0)
+
+    st.session_state["station_lat"] = demo_lat
+    st.session_state["station_lon"] = demo_lon
+    st.session_state["station_elevation"] = demo_alt
+    if not connected:
+        has_chart_data = demo_series.get("has_data", False)
+        chart_epochs = demo_series["epochs"]
+        chart_temps = demo_series["temps"]
+        chart_humidities = demo_series["humidities"]
+        chart_pressures = []
+        chart_uv_indexes = demo_series["uv_indexes"]
+        chart_solar_radiations = demo_series["solar_radiations"]
+        chart_winds = demo_series["winds"]
+        chart_gusts = demo_series["gusts"]
+        chart_wind_dirs = demo_series["wind_dirs"]
+        st.session_state["chart_epochs"] = chart_epochs
+        st.session_state["chart_temps"] = chart_temps
+        st.session_state["chart_humidities"] = chart_humidities
+        st.session_state["chart_dewpts"] = []
+        st.session_state["chart_pressures"] = chart_pressures
+        st.session_state["chart_uv_indexes"] = chart_uv_indexes
+        st.session_state["chart_solar_radiations"] = chart_solar_radiations
+        st.session_state["chart_winds"] = chart_winds
+        st.session_state["chart_gusts"] = chart_gusts
+        st.session_state["chart_wind_dirs"] = chart_wind_dirs
+        st.session_state["has_chart_data"] = has_chart_data
+else:
+    st.session_state.pop("demo_radiation_series", None)
+
 # Mostrar metadata si está conectado (común para AEMET y WU)
 if connected:
     browser_tz_name = str(
@@ -3167,11 +4020,10 @@ if connected:
     ).strip()
 
     user_time_txt = es_datetime_from_epoch(base["epoch"], browser_tz_name)
-    user_time_label = (
-        f"{t('meta.user_time')} ({browser_tz_name})"
-        if browser_tz_name
-        else t("meta.user_time")
-    )
+    user_time_label = t("meta.user_time")
+    user_time_label_safe = html.escape(user_time_label)
+    user_time_fallback_label = html.escape(t("meta.user_time"))
+    user_time_txt_safe = html.escape(user_time_txt)
 
     station_time_txt = ""
     if station_tz_name:
@@ -3186,7 +4038,13 @@ if connected:
 
     st.markdown(
         html_clean(
-            f"<div class='meta'>{t('meta.last_data')} · {user_time_label}: {user_time_txt}{station_time_txt} · {t('meta.age')}: <span class='mlbx-live-age' data-epoch='{int(base['epoch'])}'>{html.escape(age_string(base['epoch']))}</span></div>"
+            (
+                f"<div class='meta'>{t('meta.last_data')} · "
+                f"<span class='mlbx-live-user-time-label' data-fallback-label='{user_time_fallback_label}'>{user_time_label_safe}</span>: "
+                f"<span class='mlbx-live-user-time' data-epoch='{int(base['epoch'])}'>{user_time_txt_safe}</span>"
+                f"{station_time_txt} · {t('meta.age')}: "
+                f"<span class='mlbx-live-age' data-epoch='{int(base['epoch'])}'>{html.escape(age_string(base['epoch']))}</span></div>"
+            )
         ),
         unsafe_allow_html=True
     )
@@ -3457,10 +4315,23 @@ if active_tab == "observation":
     if not connected or has_radiation:
         section_title(t("observation.sections.radiation"))
 
+        def _active_radiation_series() -> tuple[list, list, list]:
+            demo_series = st.session_state.get("demo_radiation_series")
+            if st.session_state.get("demo_radiation", False) and isinstance(demo_series, dict):
+                return (
+                    demo_series.get("epochs", []) or [],
+                    demo_series.get("solar_radiations", []) or [],
+                    demo_series.get("uv_indexes", []) or [],
+                )
+            return (
+                st.session_state.get("chart_epochs", []) or [],
+                st.session_state.get("chart_solar_radiations", []) or [],
+                st.session_state.get("chart_uv_indexes", []) or [],
+            )
+
         def _solar_energy_today_wh_m2() -> float:
             import math
-            epochs = st.session_state.get("chart_epochs", [])
-            solars = st.session_state.get("chart_solar_radiations", [])
+            epochs, solars, _ = _active_radiation_series()
             if not epochs or not solars:
                 return float("nan")
             points = []
@@ -3495,9 +4366,63 @@ if active_tab == "observation":
                 prev_ep, prev_s = ep, s
             return float(e_wh_m2) if e_wh_m2 > 0 else 0.0
 
+        def _erythemal_dose_today_metrics() -> tuple[float, float]:
+            import math
+            if is_nan(uv):
+                return float("nan"), float("nan")
+
+            epochs, _, uv_indexes = _active_radiation_series()
+            if not epochs or not uv_indexes:
+                return float("nan"), float("nan")
+
+            try:
+                if st.session_state.get("demo_radiation", False):
+                    now_ep = int(time.time())
+                else:
+                    now_ep = int(base.get("epoch", 0) or time.time())
+            except Exception:
+                now_ep = int(time.time())
+
+            points = []
+            for ep, uv_i in zip(epochs, uv_indexes):
+                try:
+                    ep_i = int(ep)
+                    uv_f = float(uv_i)
+                    if math.isnan(uv_f) or ep_i <= 0 or ep_i > now_ep:
+                        continue
+                    points.append((ep_i, max(0.0, uv_f)))
+                except Exception:
+                    continue
+
+            if not points:
+                return float("nan"), float("nan")
+
+            points.sort(key=lambda item: item[0])
+            dose_j_m2 = 0.0
+
+            for idx, (ep_i, uv_i) in enumerate(points):
+                if idx + 1 < len(points):
+                    next_ep = points[idx + 1][0]
+                else:
+                    next_ep = now_ep
+
+                dt_s = next_ep - ep_i
+                if dt_s <= 0 and idx > 0:
+                    dt_s = ep_i - points[idx - 1][0]
+                if dt_s <= 0:
+                    dt_s = 300
+
+                dt_s = max(60, min(1800, int(dt_s)))
+                dose_j_m2 += 0.025 * uv_i * dt_s
+
+            dose_j_m2 = max(0.0, float(dose_j_m2))
+            return dose_j_m2 / 100.0, dose_j_m2
+
         # Formatear valores
         solar_val = _fmt_radiation_display(solar_rad, decimals=0)
         uv_val = "—" if is_nan(uv) else f"{uv:.1f}"
+        erythemal_dose_sed, erythemal_dose_j_m2 = _erythemal_dose_today_metrics()
+        erythemal_dose_val = "—" if is_nan(erythemal_dose_sed) else f"{erythemal_dose_sed:.2f}"
         et0_val = _fmt_precip_display(et0, decimals=1)
         clarity_val = "—" if is_nan(clarity) else f"{clarity * 100:.0f}"
         balance_val = _fmt_precip_display(balance, decimals=1)
@@ -3513,6 +4438,8 @@ if active_tab == "observation":
         erythema_mw_m2 = float("nan") if is_nan(uv) else (25.0 * uv)
         erythema_txt = "—" if is_nan(erythema_mw_m2) else f"{erythema_mw_m2:.1f} mW/m²"
         uv_sub = f"<div>{t('observation.cards.radiation.uv_index.erythemal_irradiance')}: <b>{erythema_txt}</b></div>"
+        erythemal_dose_j_txt = "—" if is_nan(erythemal_dose_j_m2) else f"{erythemal_dose_j_m2:.0f} J/m²"
+        erythemal_dose_sub = f"<div>{t('observation.cards.radiation.erythemal_dose.dose_j_m2_label')}: <b>{erythemal_dose_j_txt}</b></div>"
 
         et0_sub = f"<div style='font-size:0.8rem; opacity:0.65; margin-top:2px;'>{t('observation.cards.radiation.et0_today.model')}</div>"
 
@@ -3564,20 +4491,21 @@ if active_tab == "observation":
         balance_label = _translate_balance_label(water_balance_label(balance))
         balance_sub = f"<div style='font-size:0.85rem; opacity:0.75; margin-top:2px;'>{balance_label}</div>"
 
-        # Grid de 4 columnas (como termodinámica)
-        # Primera fila: Solar, UV, ET0, Clarity
+        # Máximo 4 cards por fila.
+        # Primera fila: Solar, UV, Dosis eritemática, ET0
         cards_radiation_row1 = [
             card(t("observation.cards.radiation.irradiance.title"), solar_val, radiation_unit_txt, icon_kind="solar", subtitle_html=solar_sub, uid="r1", dark=dark, tooltip_key="irradiancia"),
             card(t("observation.cards.radiation.uv_index.title"), uv_val, "", icon_kind="uv", subtitle_html=uv_sub, uid="r2", dark=dark, tooltip_key="índice uv"),
-            card(t("observation.cards.radiation.et0_today.title"), et0_val, precip_unit_txt, icon_kind="et0", subtitle_html=et0_sub, uid="r3", dark=dark, tooltip_key="evapotranspiración hoy"),
-            card(t("observation.cards.radiation.sky_clarity.title"), clarity_val, "%", icon_kind="clarity", subtitle_html=clarity_sub, uid="r4", dark=dark, tooltip_key="claridad del cielo"),
+            card(t("observation.cards.radiation.erythemal_dose.title"), erythemal_dose_val, "SED", icon_kind="sed", subtitle_html=erythemal_dose_sub, uid="r3", dark=dark, tooltip_key="dosis eritemática"),
+            card(t("observation.cards.radiation.et0_today.title"), et0_val, precip_unit_txt, icon_kind="et0", subtitle_html=et0_sub, uid="r4", dark=dark, tooltip_key="evapotranspiración hoy"),
         ]
         render_grid(cards_radiation_row1, cols=4)
 
-        # Segunda fila: geometría solar y balance
+        # Segunda fila: claridad, geometría solar y balance
         cards_radiation_row2 = [
-            card(t("observation.cards.radiation.sun_altitude.title"), sun_altitude_val, "°", icon_kind="sunalt", subtitle_html=sun_altitude_sub, uid="r5", dark=dark, tooltip_key="altura del sol"),
-            card(t("observation.cards.radiation.water_balance_today.title"), balance_val, precip_unit_txt, icon_kind="balance", subtitle_html=balance_sub, uid="r6", dark=dark, tooltip_key="balance hídrico hoy"),
+            card(t("observation.cards.radiation.sky_clarity.title"), clarity_val, "%", icon_kind="clarity", subtitle_html=clarity_sub, uid="r5", dark=dark, tooltip_key="claridad del cielo"),
+            card(t("observation.cards.radiation.sun_altitude.title"), sun_altitude_val, "°", icon_kind="sunalt", subtitle_html=sun_altitude_sub, uid="r6", dark=dark, tooltip_key="altura del sol"),
+            card(t("observation.cards.radiation.water_balance_today.title"), balance_val, precip_unit_txt, icon_kind="balance", subtitle_html=balance_sub, uid="r7", dark=dark, tooltip_key="balance hídrico hoy"),
         ]
         render_grid(cards_radiation_row2, cols=4, extra_class="grid-row-spacing")
 
@@ -3929,7 +4857,7 @@ if active_tab == "observation":
                 gust_non_nan = [float(v) for v in df_wind_view["gust"].tolist() if not is_nan(v)]
                 vv_all_zero = (len(wind_non_nan) > 0) and (max(abs(v) for v in wind_non_nan) < 0.1)
                 gust_has_signal = (len(gust_non_nan) > 0) and (max(gust_non_nan) >= 1.0)
-                if is_aemet_connection() and vv_all_zero and gust_has_signal:
+                if _get_aemet_service().is_aemet_connection() and vv_all_zero and gust_has_signal:
                     df_wind_view["wind"] = float("nan")
                     st.caption(f"ℹ️ {t('observation.cards.charts.wind_no_mean')}")
 
@@ -4333,7 +5261,7 @@ if active_tab == "observation":
 
     if connected and not has_chart_data:
         section_title(t("common.charts"))
-        if is_aemet_connection():
+        if _get_aemet_service().is_aemet_connection():
             st.warning(t("observation.cards.info.invalid_aemet_tenmin"))
         else:
             st.info(t("observation.cards.info.no_series"))
@@ -4395,7 +5323,7 @@ elif active_tab == "trends":
                     logger.warning("Tendencias AEMET Hoy: falta idema")
                 else:
                     try:
-                        lookback_series = fetch_aemet_today_series_with_lookback(
+                        lookback_series = _get_aemet_service().fetch_aemet_today_series_with_lookback(
                             idema,
                             hours_before_start=3,
                         )
@@ -4455,7 +5383,7 @@ elif active_tab == "trends":
                     st.warning(t("trends.warnings.series_unavailable"))
                     logger.warning("Tendencias METEOCAT Hoy: falta station_code")
                 else:
-                    lookback_series = fetch_meteocat_today_series_with_lookback(
+                    lookback_series = _get_meteocat_service().fetch_meteocat_today_series_with_lookback(
                         station_code,
                         hours_before_start=3,
                     )
@@ -4565,7 +5493,7 @@ elif active_tab == "trends":
                     hourly7d = {"has_data": False, "epochs": [], "temps": [], "humidities": [], "pressures": []}
                 else:
                     with st.spinner("Obteniendo serie sinóptica reciente de AEMET..."):
-                        hourly7d = fetch_aemet_recent_synoptic_series(
+                        hourly7d = _get_aemet_service().fetch_aemet_recent_synoptic_series(
                             idema,
                             days_back=7,
                             step_hours=3,
@@ -4588,10 +5516,11 @@ elif active_tab == "trends":
                     st.session_state.get("meteofrance_station_id", "")
                     or st.session_state.get("provider_station_id", "")
                 ).strip()
+                meteofrance_service = _get_meteofrance_service()
                 with st.spinner("Obteniendo serie sinóptica reciente de Meteo-France..."):
-                    hourly7d = fetch_meteofrance_recent_synoptic_series(
+                    hourly7d = meteofrance_service.fetch_meteofrance_recent_synoptic_series(
                         station_id,
-                        METEOFRANCE_API_KEY,
+                        meteofrance_service.METEOFRANCE_API_KEY,
                         days_back=7,
                         step_hours=3,
                     )
@@ -4602,7 +5531,7 @@ elif active_tab == "trends":
                     or st.session_state.get("provider_station_id", "")
                 ).strip().upper()
                 with st.spinner("Obteniendo serie reciente de Meteocat..."):
-                    hourly7d = fetch_meteocat_recent_synoptic_series(
+                    hourly7d = _get_meteocat_service().fetch_meteocat_recent_synoptic_series(
                         station_code,
                         days_back=7,
                     )
@@ -4613,7 +5542,7 @@ elif active_tab == "trends":
                     or st.session_state.get("provider_station_id", "")
                 ).strip()
                 with st.spinner("Obteniendo serie reciente de MeteoGalicia..."):
-                    hourly7d = fetch_meteogalicia_recent_synoptic_series(
+                    hourly7d = _get_meteogalicia_service().fetch_meteogalicia_recent_synoptic_series(
                         station_id,
                         days_back=7,
                         step_hours=3,
@@ -5123,9 +6052,10 @@ elif active_tab == "trends":
                             or st.session_state.get("provider_station_id", "")
                         ).strip()
                         if station_id:
-                            pressure_payload = fetch_meteofrance_today_pressure_series_with_lookback(
+                            meteofrance_service = _get_meteofrance_service()
+                            pressure_payload = meteofrance_service.fetch_meteofrance_today_pressure_series_with_lookback(
                                 station_id,
-                                METEOFRANCE_API_KEY,
+                                meteofrance_service.METEOFRANCE_API_KEY,
                                 hours_before_start=3,
                             )
                             ext_epochs = pressure_payload.get("epochs", [])
@@ -5328,7 +6258,7 @@ elif active_tab == "historical":
                     or st.session_state.get("provider_station_id", "")
                 ).strip().upper()
                 api_key = None
-                series_start_iso = get_meteocat_station_series_start_date(station_id)
+                series_start_iso = _get_meteocat_service().get_meteocat_station_series_start_date(station_id)
                 if series_start_iso:
                     try:
                         start_txt = datetime.fromisoformat(series_start_iso).strftime("%d/%m/%Y")
@@ -5348,7 +6278,7 @@ elif active_tab == "historical":
                     st.session_state.get("aemet_station_id", "")
                     or st.session_state.get("provider_station_id", "")
                 ).strip().upper()
-                api_key = AEMET_API_KEY
+                api_key = _get_aemet_service().AEMET_API_KEY
             elif provider_id == "FROST":
                 station_id = str(
                     st.session_state.get("frost_station_id", "")
@@ -5360,8 +6290,9 @@ elif active_tab == "historical":
                     st.session_state.get("meteofrance_station_id", "")
                     or st.session_state.get("provider_station_id", "")
                 ).strip()
-                api_key = METEOFRANCE_API_KEY
-                series_start_iso = get_meteofrance_station_series_start_date(station_id)
+                meteofrance_service = _get_meteofrance_service()
+                api_key = meteofrance_service.METEOFRANCE_API_KEY
+                series_start_iso = meteofrance_service.get_meteofrance_station_series_start_date(station_id)
                 if series_start_iso:
                     st.caption(
                         t(
@@ -5396,6 +6327,7 @@ elif active_tab == "historical":
                 import pandas as pd
                 import plotly.graph_objects as go
                 from plotly.subplots import make_subplots
+                climograms_service = _get_climograms_service()
 
                 now_local = datetime.now()
                 min_year = 1990
@@ -5427,10 +6359,11 @@ elif active_tab == "historical":
                 frost_period_options = {"monthly": [], "annual": []}
 
                 if provider_id == "FROST":
-                    frost_period_options = get_frost_climo_period_options(
+                    frost_service = _get_frost_service()
+                    frost_period_options = frost_service.get_frost_climo_period_options(
                         station_id=station_id,
-                        client_id=FROST_CLIENT_ID,
-                        client_secret=FROST_CLIENT_SECRET,
+                        client_id=frost_service.FROST_CLIENT_ID,
+                        client_secret=frost_service.FROST_CLIENT_SECRET,
                     )
 
                 if provider_id == "FROST":
@@ -5534,7 +6467,7 @@ elif active_tab == "historical":
                 elif summary_mode == "monthly" and (len(selected_months) * len(selected_years) > max_monthly_blocks):
                     st.stop()
                 else:
-                    periods = build_period_specs(summary_mode, selected_years, selected_months)
+                    periods = climograms_service.build_period_specs(summary_mode, selected_years, selected_months)
                     if not periods:
                         st.warning(t("historical.warnings.invalid_period"))
                     else:
@@ -5542,7 +6475,7 @@ elif active_tab == "historical":
                         st.caption(
                             t(
                                 "historical.caption.period_summary",
-                                period_range=describe_period_range(periods),
+                                period_range=climograms_service.describe_period_range(periods),
                                 blocks=len(periods),
                                 days=total_days_requested,
                             )
@@ -5567,114 +6500,119 @@ elif active_tab == "historical":
                         with st.spinner(t("historical.spinner.loading", provider=provider_label)):
                             try:
                                 if provider_id == "WU":
-                                    daily_df = fetch_wu_daily_history_for_periods(
+                                    daily_df = climograms_service.fetch_wu_daily_history_for_periods(
                                         station_id=station_id,
                                         api_key=api_key,
                                         periods=periods,
                                     )
                                 elif provider_id == "FROST":
+                                    frost_service = _get_frost_service()
                                     if summary_mode == "monthly":
-                                        daily_df = fetch_frost_climo_monthly_for_period(
+                                        daily_df = frost_service.fetch_frost_climo_monthly_for_period(
                                             station_id=station_id,
                                             period=frost_selected_period,
                                             months=selected_months,
-                                            client_id=FROST_CLIENT_ID,
-                                            client_secret=FROST_CLIENT_SECRET,
+                                            client_id=frost_service.FROST_CLIENT_ID,
+                                            client_secret=frost_service.FROST_CLIENT_SECRET,
                                         )
                                     else:
-                                        daily_df = fetch_frost_climo_yearly_for_periods(
+                                        daily_df = frost_service.fetch_frost_climo_yearly_for_periods(
                                             station_id=station_id,
                                             periods=frost_selected_periods,
-                                            client_id=FROST_CLIENT_ID,
-                                            client_secret=FROST_CLIENT_SECRET,
+                                            client_id=frost_service.FROST_CLIENT_ID,
+                                            client_secret=frost_service.FROST_CLIENT_SECRET,
                                         )
                                 elif provider_id == "AEMET":
+                                    aemet_service = _get_aemet_service()
                                     if summary_mode == "monthly":
-                                        daily_df = fetch_aemet_climo_daily_for_periods(
+                                        daily_df = aemet_service.fetch_aemet_climo_daily_for_periods(
                                             idema=station_id,
                                             periods=periods,
                                             api_key=api_key,
                                         )
                                     elif len(selected_years) == 1:
-                                        daily_df = fetch_aemet_climo_monthly_for_year(
+                                        daily_df = aemet_service.fetch_aemet_climo_monthly_for_year(
                                             idema=station_id,
                                             year=int(selected_years[0]),
                                             api_key=api_key,
                                         )
                                     else:
-                                        daily_df = fetch_aemet_climo_yearly_for_years(
+                                        daily_df = aemet_service.fetch_aemet_climo_yearly_for_years(
                                             idema=station_id,
                                             years=[int(year) for year in selected_years],
                                             api_key=api_key,
                                         )
                                 elif provider_id == "METEOFRANCE":
+                                    meteofrance_service = _get_meteofrance_service()
                                     if summary_mode == "monthly":
-                                        daily_df = fetch_meteofrance_climo_daily_for_periods(
+                                        daily_df = meteofrance_service.fetch_meteofrance_climo_daily_for_periods(
                                             station_id=station_id,
                                             periods=periods,
                                             api_key=api_key,
                                         )
                                     elif len(selected_years) == 1:
-                                        daily_df = fetch_meteofrance_climo_monthly_for_year(
+                                        daily_df = meteofrance_service.fetch_meteofrance_climo_monthly_for_year(
                                             station_id=station_id,
                                             year=int(selected_years[0]),
                                             api_key=api_key,
                                         )
                                     else:
-                                        daily_df = fetch_meteofrance_climo_yearly_for_years(
+                                        daily_df = meteofrance_service.fetch_meteofrance_climo_yearly_for_years(
                                             station_id=station_id,
                                             years=[int(year) for year in selected_years],
                                             api_key=api_key,
                                         )
                                 elif provider_id == "METEOGALICIA":
+                                    meteogalicia_service = _get_meteogalicia_service()
                                     if summary_mode == "monthly":
-                                        daily_df = fetch_mgalicia_climo_daily_for_periods(
+                                        daily_df = meteogalicia_service.fetch_mgalicia_climo_daily_for_periods(
                                             station_id=station_id,
                                             periods=periods,
                                         )
                                     elif len(selected_years) == 1:
-                                        daily_df = fetch_mgalicia_climo_monthly_for_year(
+                                        daily_df = meteogalicia_service.fetch_mgalicia_climo_monthly_for_year(
                                             station_id=station_id,
                                             year=int(selected_years[0]),
                                         )
                                     else:
-                                        daily_df = fetch_mgalicia_climo_yearly_for_years(
+                                        daily_df = meteogalicia_service.fetch_mgalicia_climo_yearly_for_years(
                                             station_id=station_id,
                                             years=[int(year) for year in selected_years],
                                         )
                                 else:
+                                    meteocat_service = _get_meteocat_service()
                                     if summary_mode == "annual" and len(selected_years) > 1:
-                                        daily_df = fetch_meteocat_annual_history_for_years(
+                                        daily_df = meteocat_service.fetch_meteocat_annual_history_for_years(
                                             station_code=station_id,
                                             years=[int(year) for year in selected_years],
                                         )
                                     elif summary_mode == "annual" and len(selected_years) == 1:
                                         selected_year = int(selected_years[0])
-                                        daily_df = fetch_meteocat_monthly_history_for_year(
+                                        daily_df = meteocat_service.fetch_meteocat_monthly_history_for_year(
                                             station_code=station_id,
                                             year=selected_year,
                                         )
-                                        extremes_overrides = fetch_meteocat_daily_extremes_for_year(
+                                        extremes_overrides = meteocat_service.fetch_meteocat_daily_extremes_for_year(
                                             station_code=station_id,
                                             year=selected_year,
                                         )
                                     elif summary_mode == "monthly":
                                         if len(periods) == 1:
-                                            daily_df = fetch_meteocat_daily_history_for_periods(
+                                            daily_df = meteocat_service.fetch_meteocat_daily_history_for_periods(
                                                 station_code=station_id,
                                                 periods=periods,
                                             )
                                         else:
-                                            daily_df = fetch_meteocat_monthly_history_for_periods(
+                                            daily_df = meteocat_service.fetch_meteocat_monthly_history_for_periods(
                                                 station_code=station_id,
                                                 periods=periods,
                                             )
-                                        extremes_overrides = fetch_meteocat_daily_extremes_for_periods(
+                                        extremes_overrides = meteocat_service.fetch_meteocat_daily_extremes_for_periods(
                                             station_code=station_id,
                                             periods=periods,
                                         )
                                     else:
-                                        daily_df = fetch_meteocat_daily_history_for_periods(
+                                        daily_df = meteocat_service.fetch_meteocat_daily_history_for_periods(
                                             station_code=station_id,
                                             periods=periods,
                                         )
@@ -5723,25 +6661,25 @@ elif active_tab == "historical":
                                 )
 
                                 st.markdown(f"### {t('historical.sections.extremes')}")
-                                extremes_table_df = build_extremes_table(
+                                extremes_table_df = climograms_service.build_extremes_table(
                                     daily_df,
                                     overrides=extremes_overrides,
                                     unit_preferences=unit_preferences,
                                 )
-                                st.dataframe(extremes_table_df, width="stretch", hide_index=True)
+                                _render_theme_table(extremes_table_df)
 
                                 st.markdown(f"### {t('historical.sections.summary')}")
-                                general_table_df = build_general_metrics_table(
+                                general_table_df = climograms_service.build_general_metrics_table(
                                     daily_df,
                                     unit_preferences=unit_preferences,
                                 )
-                                st.dataframe(general_table_df, width="stretch", hide_index=True)
+                                _render_theme_table(general_table_df)
 
                                 if provider_id == "FROST":
                                     chart_granularity = "monthly" if summary_mode == "monthly" else "yearly"
                                 else:
-                                    chart_granularity = resolve_chart_granularity(summary_mode, len(periods))
-                                chart_df = build_chart_table(
+                                    chart_granularity = climograms_service.resolve_chart_granularity(summary_mode, len(periods))
+                                chart_df = climograms_service.build_chart_table(
                                     daily_df,
                                     chart_granularity,
                                     unit_preferences=unit_preferences,
@@ -5825,12 +6763,29 @@ elif active_tab == "historical":
                                     )
 
                                     fig_climo.update_layout(
-                                        title=t("historical.chart.title", scope=title_scope),
+                                        template="meteolabx_dark" if dark else "meteolabx_light",
+                                        title=dict(
+                                            text=t("historical.chart.title", scope=title_scope),
+                                            x=0.5,
+                                            xanchor="center",
+                                            y=0.98,
+                                            yanchor="top",
+                                            font=dict(color=text_color, size=18),
+                                            pad=dict(t=0, b=18),
+                                        ),
                                         height=500,
-                                        margin=dict(l=40, r=40, t=58, b=40),
+                                        margin=dict(l=40, r=40, t=92, b=40),
                                         hovermode="x unified",
-                                        legend=dict(orientation="h", y=1.12, x=0.0),
+                                        legend=dict(
+                                            orientation="h",
+                                            y=1.02,
+                                            x=0.0,
+                                            yanchor="bottom",
+                                            font=dict(color=text_color),
+                                        ),
                                         font=dict(color=text_color),
+                                        plot_bgcolor="rgba(0,0,0,0)",
+                                        paper_bgcolor="rgba(0,0,0,0)",
                                         annotations=[
                                             dict(
                                                 text="MeteoLabX",
@@ -5856,6 +6811,7 @@ elif active_tab == "historical":
                                     fig_climo.update_xaxes(
                                         title_text=x_title,
                                         showgrid=False,
+                                        title_font=dict(color=text_color),
                                         tickfont=dict(color=text_color),
                                     )
                                     fig_climo.update_yaxes(
@@ -5864,17 +6820,21 @@ elif active_tab == "historical":
                                         showgrid=True,
                                         gridcolor=grid_color,
                                         zeroline=False,
+                                        title_font=dict(color=text_color),
+                                        tickfont=dict(color=text_color),
                                     )
                                     fig_climo.update_yaxes(
                                         title_text=precip_unit_txt,
                                         secondary_y=True,
                                         showgrid=False,
                                         zeroline=False,
+                                        title_font=dict(color=text_color),
+                                        tickfont=dict(color=text_color),
                                     )
 
                                     _plotly_chart_stretch(
                                         fig_climo,
-                                        key=f"climogram_chart_{summary_mode}_{chart_granularity}_{len(chart_df)}",
+                                        key=f"climogram_chart_{theme_mode}_{summary_mode}_{chart_granularity}_{len(chart_df)}",
                                     )
 
                                     if chart_granularity == "daily":
@@ -5895,7 +6855,7 @@ elif active_tab == "historical":
                                             else t("historical.table.period_col.climate_period")
                                         )
 
-                                    units_df = build_units_table(
+                                    units_df = climograms_service.build_units_table(
                                         daily_df,
                                         chart_granularity,
                                         unit_preferences=unit_preferences,
@@ -5924,7 +6884,7 @@ elif active_tab == "historical":
                                         )
 
                                     st.markdown(f"### {t('historical.sections.data_by', scope=table_scope)}")
-                                    st.dataframe(table_df, width="stretch", hide_index=True)
+                                    _render_theme_table(table_df)
 
 
 # ============================================================
@@ -6169,13 +7129,15 @@ elif active_tab == "map":
     if "NWS" in effective_provider_ids:
         map_max_results = 90000
 
-    nearest = search_nearby_stations(
-        search_lat,
-        search_lon,
-        max_results=map_max_results,
-        provider_ids=effective_provider_ids or list(provider_filter),
-    )
-    nearest = [s for s in nearest if s.provider_id in provider_filter]
+    nearest = []
+    if effective_provider_ids:
+        nearest = _cached_map_search_nearby_stations(
+            float(search_lat),
+            float(search_lon),
+            int(map_max_results),
+            tuple(effective_provider_ids),
+        )
+        nearest = [s for s in nearest if s.provider_id in provider_filter]
     visible_station_count = len(nearest)
     visible_provider_count = len({s.provider_id for s in nearest})
 
@@ -6270,7 +7232,7 @@ elif active_tab == "map":
 
             if provider_id == "AEMET":
                 try:
-                    clear_aemet_runtime_cache()
+                    _get_aemet_service().clear_aemet_runtime_cache()
                 except Exception:
                     pass
 
@@ -6387,6 +7349,10 @@ elif active_tab == "map":
             if dark else
             "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
         )
+        map_tooltip_bg = "rgba(18, 18, 18, 0.92)" if dark else "rgba(255, 255, 255, 0.96)"
+        map_tooltip_text = "rgba(255, 255, 255, 0.96)" if dark else "rgba(15, 18, 25, 0.96)"
+        map_tooltip_border = "1px solid rgba(255,255,255,0.10)" if dark else "1px solid rgba(15,18,25,0.12)"
+        map_tooltip_shadow = "0 10px 24px rgba(0,0,0,0.28)" if dark else "0 10px 24px rgba(0,0,0,0.12)"
 
         map_layers = [
             pdk.Layer(
@@ -6435,9 +7401,13 @@ elif active_tab == "map":
             tooltip={
                 "html": "<b>{name}</b><br/>{provider} · ID {station_id}<br/>Distancia: {distance_txt}<br/>Altitud: {alt_txt}",
                 "style": {
-                    "backgroundColor": "rgba(18, 18, 18, 0.92)",
-                    "color": "white",
+                    "backgroundColor": map_tooltip_bg,
+                    "color": map_tooltip_text,
                     "fontSize": "12px",
+                    "border": map_tooltip_border,
+                    "borderRadius": "10px",
+                    "boxShadow": map_tooltip_shadow,
+                    "padding": "10px 12px",
                 },
             },
         )
@@ -6446,7 +7416,7 @@ elif active_tab == "map":
         try:
             deck_event = _pydeck_chart_stretch(
                 deck,
-                key="map_stations_chart",
+                key=f"map_stations_chart_{theme_mode}",
                 height=900,
             )
         except Exception as map_err:
@@ -6474,6 +7444,9 @@ elif active_tab == "map":
 
         st.markdown(f"#### {t('map.selected_station')}")
         if isinstance(selected_station, dict):
+            def _meta_chip(value: str) -> str:
+                return f"<span class='mlbx-map-chip'>{html.escape(str(value))}</span>"
+
             selected_name = str(selected_station.get("name", "Estación"))
             selected_provider = str(selected_station.get("provider", "Proveedor"))
             selected_station_id = str(selected_station.get("station_id", "—"))
@@ -6493,10 +7466,21 @@ elif active_tab == "map":
             info_col, action_col = st.columns([0.78, 0.22], gap="small")
             with info_col:
                 st.markdown(
-                    f"**{selected_name}** · {selected_provider}  \n"
-                    f"ID: `{selected_station_id}` · {t('map.table_columns.locality')}: `{selected_locality}` · "
-                    f"{t('map.table_columns.altitude').replace(' (m)', '')}: `{selected_alt_txt}` · {t('map.table_columns.distance').replace(' (km)', '')}: `{selected_dist_txt}` · "
-                    f"Lat/Lon: `{selected_coords_txt}`"
+                    html_clean(
+                        f"""
+                        <div style="color: var(--text); font-size: 1.05rem; font-weight: 700; margin-bottom: 0.3rem;">
+                            {html.escape(selected_name)} · {html.escape(selected_provider)}
+                        </div>
+                        <div class="mlbx-map-meta">
+                            <span class="mlbx-map-meta-item">ID: {_meta_chip(selected_station_id)}</span>
+                            <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.locality'))}: {_meta_chip(selected_locality)}</span>
+                            <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.altitude').replace(' (m)', ''))}: {_meta_chip(selected_alt_txt)}</span>
+                            <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.distance').replace(' (km)', ''))}: {_meta_chip(selected_dist_txt)}</span>
+                            <span class="mlbx-map-meta-item">Lat/Lon: {_meta_chip(selected_coords_txt)}</span>
+                        </div>
+                        """
+                    ),
+                    unsafe_allow_html=True,
                 )
                 saved_autoconnect = bool(get_stored_autoconnect())
                 saved_target = get_stored_autoconnect_target() or {}
@@ -6509,7 +7493,11 @@ elif active_tab == "map":
                 map_toggle_key = f"map_autoconnect_toggle_{selected_provider}_{selected_station_id}"
                 if map_toggle_key not in st.session_state:
                     st.session_state[map_toggle_key] = is_target_station
-                map_toggle_enabled = st.checkbox(t("map.autoconnect"), key=map_toggle_key)
+                map_toggle_enabled = st.toggle(
+                    t("map.autoconnect"),
+                    value=bool(st.session_state.get(map_toggle_key, False)),
+                    key=map_toggle_key,
+                )
                 if map_toggle_enabled and not is_target_station:
                     if _set_provider_autoconnect_from_map(selected_station):
                         _reset_map_autoconnect_toggle_state()
@@ -6534,114 +7522,6 @@ elif active_tab == "map":
         else:
             st.caption(t("map.select_station_hint"))
 
-        table_limit = 100
-        stations_rows = [
-            {
-                t("map.table_columns.station"): p["name"],
-                t("map.table_columns.provider"): p["provider"],
-                t("map.table_columns.id"): p["station_id"],
-                t("map.table_columns.locality"): p["locality"],
-                t("map.table_columns.altitude"): round(float(p["elevation_m"]), 0),
-                t("map.table_columns.distance"): round(float(p["distance_km"]), 2),
-                t("map.table_columns.lat"): round(float(p["lat"]), 5),
-                t("map.table_columns.lon"): round(float(p["lon"]), 5),
-            }
-            for p in points_sorted
-        ][:table_limit]
-        st.caption(t("map.table_showing", count=len(stations_rows)))
-        table_head_bg = "#0f1728" if dark else "#e9edf5"
-        table_row_bg = "#081121" if dark else "#ffffff"
-        table_row_alt_bg = "#0d1729" if dark else "#f7f9fc"
-        table_border = "rgba(255,255,255,0.10)" if dark else "rgba(15,18,25,0.14)"
-        table_text = "rgba(245,248,255,0.95)" if dark else "rgba(15,18,25,0.92)"
-        table_muted = "rgba(210,220,235,0.88)" if dark else "rgba(70,80,96,0.88)"
-
-        table_rows_html = ""
-        for row in stations_rows:
-            table_rows_html += (
-                "<tr>"
-                f"<td>{html.escape(str(row[t('map.table_columns.station')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.provider')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.id')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.locality')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.altitude')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.distance')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.lat')]))}</td>"
-                f"<td>{html.escape(str(row[t('map.table_columns.lon')]))}</td>"
-                "</tr>"
-            )
-
-        st.markdown(
-            f"""
-            <style>
-            .mlx-map-table-wrap {{
-                width: 100%;
-                border: 1px solid {table_border};
-                border-radius: 10px;
-                overflow: auto;
-                max-height: 430px;
-                background: {table_row_bg};
-            }}
-            .mlx-map-table {{
-                width: 100%;
-                border-collapse: collapse;
-                color: {table_text};
-                font-size: 0.95rem;
-            }}
-            .mlx-map-table thead th {{
-                position: sticky;
-                top: 0;
-                z-index: 2;
-                background: {table_head_bg};
-                color: {table_muted};
-                text-align: left;
-                padding: 10px 8px;
-                border-bottom: 1px solid {table_border};
-                border-right: 1px solid {table_border};
-                font-weight: 600;
-            }}
-            .mlx-map-table thead th:last-child {{
-                border-right: none;
-            }}
-            .mlx-map-table tbody tr:nth-child(odd) {{
-                background: {table_row_bg};
-            }}
-            .mlx-map-table tbody tr:nth-child(even) {{
-                background: {table_row_alt_bg};
-            }}
-            .mlx-map-table td {{
-                padding: 9px 8px;
-                border-bottom: 1px solid {table_border};
-                border-right: 1px solid {table_border};
-                white-space: nowrap;
-            }}
-            .mlx-map-table td:last-child {{
-                border-right: none;
-            }}
-            </style>
-            <div class="mlx-map-table-wrap">
-                <table class="mlx-map-table">
-                    <thead>
-                        <tr>
-                            <th>{t('map.table_columns.station')}</th>
-                            <th>{t('map.table_columns.provider')}</th>
-                            <th>{t('map.table_columns.id')}</th>
-                            <th>{t('map.table_columns.locality')}</th>
-                            <th>{t('map.table_columns.altitude')}</th>
-                            <th>{t('map.table_columns.distance')}</th>
-                            <th>{t('map.table_columns.lat')}</th>
-                            <th>{t('map.table_columns.lon')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {table_rows_html}
-                    </tbody>
-                </table>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
 # ============================================================
 # AUTOREFRESH SOLO EN OBSERVACIÓN
 # ============================================================
@@ -6650,6 +7530,7 @@ elif active_tab == "map":
 if st.session_state.get("connected", False):
     if active_tab == "observation":
         refresh_interval = _provider_refresh_seconds()
+        from streamlit_autorefresh import st_autorefresh
         st_autorefresh(interval=refresh_interval * 1000, key="refresh_data")
 
 # ============================================================
@@ -6714,32 +7595,25 @@ st.markdown(
         </style>
         <div class="mlb-footer">
           <div class="mlb-footer-top">
-            <span><b>MeteoLabX · Versión 0.9.0</b></span>
+            <span><b>MeteoLabX · Versión 0.9.1</b></span>
             <span class="mlb-footer-news">
               <details>
                 <summary>Novedades</summary>
                 <div class="mlb-footer-box">
-                  <h2 style="margin:0 0 0.6rem 0;">0.9.0</h2>
+                  <h2 style="margin:0 0 0.6rem 0;">0.9.1</h2>
                   <h3>Mejoras</h3>
                   <ul>
-                    <li>Nuevos proveedores: <b>Météo-France</b> y <b>MET Norway</b>.</li>
-                    <li>Se incorpora <b>Météo-France</b> a la pestaña <b>Histórico</b>.</li>
-                    <li>Nueva tarjeta de <b>altura solar</b>.</li>
-                    <li>Mejoras en la visualización en <b>pantallas pequeñas</b>.</li>
-                    <li>Se sustituye el gráfico de <b>claridad del cielo</b> por uno de <b>irradiancia medida y teórica</b>.</li>
-                    <li>Nueva sección para <b>calibrar sensores</b> en estaciones personales.</li>
-                    <li>Posibilidad de cambiar las <b>unidades de medida</b>.</li>
+                    <li>Nueva tarjeta de <b>dosis eritemática</b>.</li>
+                    <li>Mejoras internas y de <b>rendimiento</b>.</li>
+                    <li>Optimización del <b>arranque</b> de la app.</li>
+                    <li>Mejoras en la visualización y nitidez de los <b>iconos</b>.</li>
+                    <li>Pequeñas mejoras de la <b>interfaz</b>.</li>
                   </ul>
                   <h3>Correcciones</h3>
                   <ul>
+                    <li>Se corrigen los errores relacionados con el cambio de <b>tema</b>.</li>
                     <li>Se corrige un error que podía mostrar incorrectamente la <b>hora local</b>.</li>
-                    <li>La pestaña <b>Climogramas</b> pasa a llamarse <b>Histórico</b>.</li>
-                    <li>Se corrige un error que impedía mostrar los datos completos de <b>tendencia</b>.</li>
-                    <li>Se corrigen múltiples problemas con estaciones de <b>AEMET</b>.</li>
-                  </ul>
-                  <h3>Bugs conocidos</h3>
-                  <ul>
-                    <li>Las tablas de <b>Histórico</b> no actualizan sus colores al cambiar el <b>tema</b>.</li>
+                    <li>Se corrige la adaptación visual de <b>tablas, gráficos y controles del mapa</b> al tema activo.</li>
                   </ul>
                 </div>
               </details>

@@ -1,11 +1,13 @@
 """
 Generador de iconos SVG para las tarjetas meteorológicas
 """
+import re
 from urllib.parse import quote
 
 from utils.helpers import html_clean
 
 ICON_BASE_SIZE = 54
+ICON_RENDER_SIZE = ICON_BASE_SIZE * 2
 
 
 def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
@@ -416,6 +418,37 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
         </svg>
         """)
 
+    if kind == "sed":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FFD978"/>
+              <stop offset="0.55" stop-color="#FF8A5B"/>
+              <stop offset="1" stop-color="#FF5E7A"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})" fill="none" stroke="rgba(255,255,255,0.94)" stroke-linecap="round" stroke-linejoin="round">
+            <!-- small sun top-left -->
+            <circle cx="16.8" cy="16.2" r="4.4" stroke-width="2.5"/>
+            <path d="M16.8 9.2v2.6M16.8 20.6v2.6M9.8 16.2h2.6M21.2 16.2h2.6" stroke-width="2.1" opacity="0.9"/>
+            <path d="M11.9 11.3l1.8 1.8M19.9 19.3l1.8 1.8M21.7 11.3l-1.8 1.8M13.7 19.3l-1.8 1.8" stroke-width="1.9" opacity="0.72"/>
+
+            <!-- hourglass -->
+            <g transform="translate(3.0 1.8)">
+              <path d="M23.6 18.4h10.8M23.6 35.6h10.8" stroke-width="2.7"/>
+              <path d="M25.3 19.2h7.4L29.0 26.8L25.3 19.2z" stroke-width="2.4"/>
+              <path d="M25.3 34.8h7.4L29.0 27.2L25.3 34.8z" stroke-width="2.4"/>
+            </g>
+          </g>
+        </svg>
+        """)
+
     if kind == "et0":
         return html_clean(f"""
         <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
@@ -552,6 +585,19 @@ def icon_img(kind: str, uid: str, dark: bool = False) -> str:
         HTML <img> con data URI SVG
     """
     svg = icon_svg(kind, uid=uid, dark=dark)
+    svg = svg.replace(
+        f'width="{ICON_BASE_SIZE}" height="{ICON_BASE_SIZE}"',
+        f'width="{ICON_RENDER_SIZE}" height="{ICON_RENDER_SIZE}"',
+        1,
+    )
+    # Los filtros SVG suavizan demasiado los iconos a este tamaño y acaban viéndose borrosos.
+    svg = re.sub(r'\sfilter="url\(#.+?\)"', "", svg)
+    svg = svg.replace(
+        "<svg ",
+        '<svg shape-rendering="geometricPrecision" text-rendering="geometricPrecision" '
+        'color-rendering="optimizeQuality" ',
+        1,
+    )
     svg = " ".join(line.strip() for line in svg.splitlines() if line.strip())
     svg = svg.replace("<?xml version='1.0' encoding='UTF-8'?>", "").strip()
     data_uri = "data:image/svg+xml;charset=utf-8," + quote(svg, safe="")

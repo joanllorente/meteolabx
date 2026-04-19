@@ -5,9 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping
 
-import pandas as pd
-
-from models import vapor_pressure, dewpoint_from_vapor_pressure
+from models.thermodynamics import vapor_pressure, dewpoint_from_vapor_pressure
 
 
 WU_CALIBRATION_SPECS: Dict[str, Dict[str, Any]] = {
@@ -223,6 +221,8 @@ def apply_wu_series_calibration(series: Mapping[str, Any] | None, calibration: M
 
 
 def apply_wu_daily_history_calibration(frame: pd.DataFrame, calibration: Mapping[str, Any] | None) -> pd.DataFrame:
+    import pandas as pd
+
     if not isinstance(frame, pd.DataFrame) or frame.empty:
         return frame
 

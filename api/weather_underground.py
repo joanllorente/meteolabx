@@ -122,6 +122,7 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 "humidities": [],
                 "dewpts": [],
                 "pressures": [],
+                "uv_indexes": [],
                 "solar_radiations": [],
                 "winds": [],
                 "gusts": [],
@@ -140,6 +141,7 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 "humidities": [],
                 "dewpts": [],
                 "pressures": [],
+                "uv_indexes": [],
                 "solar_radiations": [],
                 "winds": [],
                 "gusts": [],
@@ -153,6 +155,7 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
         humidities = []
         dewpts = []
         pressures = []
+        uv_indexes = []
         solar_radiations = []
         winds = []
         gusts = []
@@ -198,6 +201,21 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
             pressure = safe_float(metric.get("pressureMin"))
             if is_nan(pressure):
                 pressure = safe_float(metric.get("pressureMax"))
+
+            uv_index = first_valid_number(
+                obs.get("uv"),
+                obs.get("uvAvg"),
+                obs.get("uvHigh"),
+                obs.get("uvIndex"),
+                obs.get("uvIndexAvg"),
+                obs.get("uvIndexHigh"),
+                metric.get("uv"),
+                metric.get("uvAvg"),
+                metric.get("uvHigh"),
+                metric.get("uvIndex"),
+                metric.get("uvIndexAvg"),
+                metric.get("uvIndexHigh"),
+            )
 
             # Radiación y viento para cálculos integrados (ET0, gráfica y rosa).
             solar_radiation = first_valid_number(
@@ -278,6 +296,7 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 humidities.append(float(humidity) if not is_nan(humidity) else float("nan"))
                 dewpts.append(float(dewpt) if not is_nan(dewpt) else float("nan"))
                 pressures.append(float(pressure) if not is_nan(pressure) else float("nan"))
+                uv_indexes.append(float(uv_index) if not is_nan(uv_index) else float("nan"))
                 solar_radiations.append(float(solar_radiation) if not is_nan(solar_radiation) else float("nan"))
                 winds.append(float(wind) if not is_nan(wind) else float("nan"))
                 gusts.append(float(gust) if not is_nan(gust) else float("nan"))
@@ -291,6 +310,7 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
             "humidities": humidities,
             "dewpts": dewpts,
             "pressures": pressures,
+            "uv_indexes": uv_indexes,
             "solar_radiations": solar_radiations,
             "winds": winds,
             "gusts": gusts,
@@ -308,6 +328,7 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
             "humidities": [],
             "dewpts": [],
             "pressures": [],
+            "uv_indexes": [],
             "solar_radiations": [],
             "winds": [],
             "gusts": [],

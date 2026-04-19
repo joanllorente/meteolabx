@@ -10,7 +10,9 @@
     "information": "Información",
     "charts": "Gráficos",
     "hour": "Hora",
-    "and": "y"
+    "and": "y",
+    "off": "Desactivado",
+    "on": "Activado"
   },
   "meta": {
     "last_data": "Último dato",
@@ -282,6 +284,10 @@
           "title": "Índice UV",
           "erythemal_irradiance": "Irradiancia eritematosa"
         },
+        "erythemal_dose": {
+          "title": "Dosis Eritemática",
+          "dose_j_m2_label": "Energía eritemática"
+        },
         "et0_today": {
           "title": "Evapotranspiración hoy",
           "model": "FAO-56 Penman-Monteith"
@@ -478,7 +484,7 @@
       "station": "Estación",
       "provider": "Proveedor",
       "id": "ID",
-      "locality": "Ciudad/Pueblo",
+      "locality": "Localidad",
       "altitude": "Altitud (m)",
       "distance": "Distancia (km)",
       "lat": "Lat",

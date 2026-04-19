@@ -10,7 +10,9 @@
     "information": "Information",
     "charts": "Charts",
     "hour": "Time",
-    "and": "and"
+    "and": "and",
+    "off": "Off",
+    "on": "On"
   },
   "meta": {
     "last_data": "Last data",
@@ -281,6 +283,10 @@
         "uv_index": {
           "title": "UV Index",
           "erythemal_irradiance": "Erythemal irradiance"
+        },
+        "erythemal_dose": {
+          "title": "Erythemal dose",
+          "dose_j_m2_label": "Erythemal energy"
         },
         "et0_today": {
           "title": "Evapotranspiration today",

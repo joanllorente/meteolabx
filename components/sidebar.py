@@ -303,15 +303,22 @@ def render_sidebar(_local_storage_unused=None):
     )
     if current_theme not in theme_options:
         current_theme = theme_options[0]
-    st.session_state["theme_selector"] = current_theme
+    if st.session_state.get("theme_selector") != current_theme:
+        st.session_state["theme_selector"] = current_theme
 
-    # Usar solo key/session_state (sin index manual) para evitar el doble clic.
-    theme_mode = st.sidebar.radio(
+    theme_mode = st.sidebar.segmented_control(
         t("sidebar.theme.label"),
         theme_options,
         format_func=lambda option: t(f"sidebar.theme.options.{option}"),
         key="theme_selector",
+        width="stretch",
     )
+    if theme_mode is None:
+        theme_mode = current_theme
+    if theme_mode != current_theme:
+        st.session_state["theme_selector"] = theme_mode
+        st.session_state["_pending_active_tab"] = st.session_state.get("active_tab", "observation")
+        st.rerun()
 
     # Conectar estación
     st.sidebar.markdown("---")
@@ -349,7 +356,7 @@ def render_sidebar(_local_storage_unused=None):
 
     connection_caption = str(t("sidebar.connection.caption") or "").strip()
     auto_connect_default = bool(st.session_state.get("auto_connect_wu_device", False))
-    auto_connect_wu_device = st.sidebar.checkbox(
+    auto_connect_wu_device = st.sidebar.toggle(
         t("sidebar.autoconnect.label"),
         value=auto_connect_default,
         key="auto_connect_wu_device",
@@ -625,12 +632,23 @@ def render_sidebar(_local_storage_unused=None):
     selected_unit_preferences = {}
     for category, options in UNIT_OPTIONS.items():
         widget_key = f"unit_pref_{category}"
-        value = st.sidebar.selectbox(
+        current_value = str(
+            st.session_state.get(
+                widget_key,
+                saved_unit_preferences.get(category, str(options[0])),
+            )
+        )
+        if current_value not in options:
+            current_value = str(options[0])
+        value = st.sidebar.segmented_control(
             t(f"sidebar.units.fields.{category}"),
             options,
             format_func=lambda option, category=category: UNIT_LABELS[category][str(option)],
             key=widget_key,
+            width="stretch",
         )
+        if value is None:
+            value = current_value
         selected_unit_preferences[category] = str(value)
 
     selected_unit_preferences = normalize_unit_preferences(selected_unit_preferences)
@@ -653,7 +671,7 @@ def render_sidebar(_local_storage_unused=None):
         st.sidebar.markdown("---")
         st.sidebar.markdown(f"### 🔬 {t('sidebar.demo.title')}")
         
-        demo_radiation = st.sidebar.checkbox(
+        demo_radiation = st.sidebar.toggle(
             t("sidebar.demo.enable"),
             value=False,
             help=t("sidebar.demo.enable_help"),
