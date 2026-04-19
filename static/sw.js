@@ -3,6 +3,8 @@ const CACHE_NAME = 'meteolabx-v4';
 const urlsToCache = [
   '/',
   '/favicon.png',
+  '/apple-touch-icon.png',
+  '/apple-touch-icon-precomposed.png',
   '/static/apple-touch-icon-pwa.png',
   '/static/icon-192-pwa.png',
   '/static/icon-512-pwa.png',

@@ -2079,13 +2079,13 @@ st.markdown(html_clean("""
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MeteoLabX">
 <link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" href="/static/apple-touch-icon-pwa.png?v=5">
-<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon-pwa.png?v=5">
-<link rel="apple-touch-icon-precomposed" href="/static/apple-touch-icon-pwa.png?v=5">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=6">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=6">
+<link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png?v=6">
 <meta name="theme-color" content="#2384ff">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3">
-<link rel="shortcut icon" href="/static/apple-touch-icon-pwa.png?v=5">
+<link rel="shortcut icon" href="/favicon.png?v=3">
 
 <script>
 (function () {
@@ -2106,12 +2106,12 @@ st.markdown(html_clean("""
     el.setAttribute("href", href);
   }
 
-  upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=5");
-  upsertLink("apple-touch-icon", "/static/apple-touch-icon-pwa.png?v=5", "180x180");
-  upsertLink("apple-touch-icon-precomposed", "/static/apple-touch-icon-pwa.png?v=5");
+  upsertLink("apple-touch-icon", "/apple-touch-icon.png?v=6");
+  upsertLink("apple-touch-icon", "/apple-touch-icon.png?v=6", "180x180");
+  upsertLink("apple-touch-icon-precomposed", "/apple-touch-icon-precomposed.png?v=6");
   upsertLink("icon", "/favicon-32x32.png?v=3", "32x32");
   upsertLink("icon", "/favicon-16x16.png?v=3", "16x16");
-  upsertLink("shortcut icon", "/static/apple-touch-icon-pwa.png?v=5");
+  upsertLink("shortcut icon", "/favicon.png?v=3");
 
   // Escribir timezone del navegador en query param para que Python la use en modo Auto
   try {
