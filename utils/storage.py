@@ -100,12 +100,17 @@ localS = _LocalStorageProxy()
 
 def _mk_key(prefix: str, item_key: str, key_suffix: str) -> str:
     """
-    Genera una key estable para los componentes de streamlit_local_storage.
-    NO cambia ninguna variable externa, solo ayuda a evitar colisiones.
+    Genera una key única para los componentes de streamlit_local_storage.
+
+    Streamlit no vuelve a montar un componente con la misma key, así que una
+    escritura posterior con el mismo identificador puede no ejecutar setItem en
+    el navegador. La parte aleatoria fuerza que cada persistencia llegue al
+    localStorage real.
     """
+    nonce = uuid4().hex[:8]
     if key_suffix:
-        return f"mlx_{prefix}_{item_key}_{key_suffix}"
-    return f"mlx_{prefix}_{item_key}"
+        return f"mlx_{prefix}_{item_key}_{key_suffix}_{nonce}"
+    return f"mlx_{prefix}_{item_key}_{nonce}"
 
 
 def _unwrap_ls_value(raw, item_key: str) -> str:

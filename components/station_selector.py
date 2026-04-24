@@ -362,14 +362,12 @@ def render_station_selector():
                     toggle_enabled = st.toggle(t("station_selector.autoconnect"), key=toggle_key)
                     if toggle_enabled and not is_target_station:
                         if persist_provider_autoconnect_target(station):
-                            reset_toggle_state("autoconnect_toggle_")
                             st.success(t("station_selector.autoconnect_saved", station=station.name))
-                            st.rerun()
-                        st.error(t("station_selector.autoconnect_save_error"))
+                        else:
+                            st.error(t("station_selector.autoconnect_save_error"))
                     elif (not toggle_enabled) and is_target_station:
                         disable_provider_autoconnect("autoconnect_toggle_")
                         st.info(t("station_selector.autoconnect_disabled"))
-                        st.rerun()
 
                 with col2:
                     st.metric(t("station_selector.distance"), f"{station.distance_km:.1f} km")

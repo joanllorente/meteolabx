@@ -495,15 +495,12 @@ def render_map_tab(ctx):
                 map_toggle_enabled = st.toggle(t("map.autoconnect"), key=map_toggle_key)
                 if map_toggle_enabled and not is_target_station:
                     if _set_provider_autoconnect_from_map(selected_station):
-                        reset_toggle_state("map_autoconnect_toggle_")
                         st.success(t("map.autoconnect_saved", station=selected_name))
-                        st.rerun()
                     else:
                         st.error(t("map.autoconnect_save_error"))
                 elif (not map_toggle_enabled) and is_target_station:
                     disable_provider_autoconnect("map_autoconnect_toggle_")
                     st.info(t("map.autoconnect_disabled"))
-                    st.rerun()
             with action_col:
                 connect_key = f"map_connect_btn_{selected_provider}_{selected_station_id}"
                 if st.button(t("sidebar.buttons.connect"), key=connect_key, type="primary", width="stretch"):
