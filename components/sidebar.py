@@ -158,6 +158,7 @@ def render_sidebar(_local_storage_unused=None):
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
         saved_z = get_stored_z()
+        saved_autoconnect_raw = str(get_local_storage_value(LS_AUTOCONNECT) or "").strip().lower()
         saved_autoconnect = bool(get_stored_autoconnect())
         saved_target = get_stored_autoconnect_target()
         is_wu_forgotten = str(get_local_storage_value(LS_WU_FORGOTTEN) or "").lower() in ("1", "true", "yes", "si", "on")
@@ -169,10 +170,27 @@ def render_sidebar(_local_storage_unused=None):
             if target_kind_raw == "WU":
                 saved_autoconnect = False
                 saved_target = None
+        else:
+            target_kind_raw = str((saved_target or {}).get("kind", "")).strip().upper()
+            if target_kind_raw == "WU":
+                # El objetivo de autoconexión guarda una copia completa de WU.
+                # Si alguna escritura auxiliar llega tarde, úsala para hidratar
+                # los campos al abrir una sesión nueva en producción.
+                if not str(saved_station or "").strip():
+                    saved_station = str((saved_target or {}).get("station", "") or "").strip() or None
+                if not str(saved_key or "").strip():
+                    saved_key = str((saved_target or {}).get("api_key", "") or "").strip() or None
+                if not str(saved_z or "").strip():
+                    saved_z = str((saved_target or {}).get("z", "") or "").strip() or None
 
         active_station = st.session_state.get("active_station", "")
         active_key = st.session_state.get("active_key", "")
         active_z = st.session_state.get("active_z", "0")
+        session_has_wu_credentials = bool(str(active_station or "").strip() and str(active_key or "").strip())
+        session_wu_autoconnect_enabled = bool(
+            st.session_state.get("auto_connect_wu_device", False)
+            and session_has_wu_credentials
+        )
 
         if first_sidebar_load:
             st.session_state["active_station"] = str(saved_station or "").strip()
@@ -195,12 +213,20 @@ def render_sidebar(_local_storage_unused=None):
             and str((saved_target or {}).get("station_id", "")).strip()
         )
         has_valid_target = valid_wu_target or valid_provider_target
+        if has_valid_target and saved_autoconnect_raw not in ("0", "false", "no", "off"):
+            saved_autoconnect = True
         if not has_valid_target:
             saved_autoconnect = False
 
         # Estado UI del toggle de sidebar: solo representa auto-conexión WU.
         wu_toggle_default = bool(saved_autoconnect and valid_wu_target)
         current_target_kind = target_kind if has_valid_target else ""
+        if session_wu_autoconnect_enabled and not has_valid_target:
+            # En producción, la escritura a localStorage puede llegar un ciclo
+            # más tarde que el rerun disparado por "Guardar". No apagues el
+            # toggle si las credenciales WU siguen presentes en session_state.
+            wu_toggle_default = True
+            current_target_kind = "WU"
         if st.session_state.get("_wu_autoconnect_ui_target_kind") != current_target_kind:
             st.session_state["auto_connect_wu_device"] = wu_toggle_default
             st.session_state["_wu_autoconnect_ui_target_kind"] = current_target_kind
@@ -437,6 +463,29 @@ def render_sidebar(_local_storage_unused=None):
         key_to_save = str(st.session_state.get("active_key", "")).strip()
         z_to_save = str(st.session_state.get("active_z", "")).strip()
         autoconnect_to_save = bool(st.session_state.get("auto_connect_wu_device", False))
+        current_target = get_stored_autoconnect_target() or {}
+        current_kind = str(current_target.get("kind", "")).strip().upper()
+        save_warning_shown = False
+
+        if autoconnect_to_save:
+            if not station_to_save:
+                station_to_save = str(
+                    st.session_state.get("wu_connected_station")
+                    or current_target.get("station", "")
+                    or ""
+                ).strip()
+            if not key_to_save:
+                key_to_save = str(
+                    st.session_state.get("wu_connected_api_key")
+                    or current_target.get("api_key", "")
+                    or ""
+                ).strip()
+            if not z_to_save:
+                z_to_save = str(
+                    st.session_state.get("wu_connected_z")
+                    or current_target.get("z", "")
+                    or ""
+                ).strip()
 
         set_local_storage(LS_STATION, station_to_save, "save")
         set_local_storage(LS_APIKEY, key_to_save, "save")
@@ -458,21 +507,21 @@ def render_sidebar(_local_storage_unused=None):
             st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
             st.session_state["_wu_autoconnect_ui_last_value"] = True
         elif autoconnect_to_save:
-            set_local_storage(LS_AUTOCONNECT, "0", "save")
-            set_stored_autoconnect_target(None)
-            st.session_state["auto_connect_wu_device"] = False
-            st.session_state["_wu_autoconnect_ui_target_kind"] = ""
-            st.session_state["_wu_autoconnect_ui_last_value"] = False
+            # No desactives la preferencia por una lectura tardía del formulario
+            # en producción; conserva el toggle y pide completar credenciales.
+            st.session_state["auto_connect_wu_device"] = True
+            st.session_state["_wu_autoconnect_ui_last_value"] = True
+            st.sidebar.warning(t("sidebar.autoconnect.missing_credentials"))
+            save_warning_shown = True
         else:
-            current_target = get_stored_autoconnect_target() or {}
-            current_kind = str(current_target.get("kind", "")).strip().upper()
             if current_kind == "WU":
                 set_local_storage(LS_AUTOCONNECT, "0", "save")
                 set_stored_autoconnect_target(None)
             st.session_state["_wu_autoconnect_ui_target_kind"] = ""
             st.session_state["_wu_autoconnect_ui_last_value"] = False
 
-        st.sidebar.success(t("sidebar.messages.saved_device"))
+        if not save_warning_shown:
+            st.sidebar.success(t("sidebar.messages.saved_device"))
 
     if forget_clicked:
         # Fase 1: escribir los marcadores en localStorage y marcar pendiente.

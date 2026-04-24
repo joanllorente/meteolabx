@@ -223,12 +223,13 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
 
         if value is None or value == "":
             forget_value = "0" if item_key == LS_AUTOCONNECT else _FORGET_MARKER
+            forget_payload = {item_key: forget_value}
             forget_key = _mk_key("forget", item_key, key_suffix)
             try:
-                storage.setItem(item_key, forget_value, key=forget_key)
+                storage.setItem(item_key, forget_payload, key=forget_key)
             except TypeError:
                 try:
-                    storage.setItem(item_key, forget_value)
+                    storage.setItem(item_key, forget_payload)
                 except Exception as exc:
                     logger.warning("No se pudo marcar localStorage como olvidado para %s: %s", item_key, exc)
                     pass
@@ -251,11 +252,15 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
             return
 
         # Guardado normal
+        # La librería persiste de forma fiable cuando recibe el wrapper
+        # {item_key: value}; con escalares, algunas sesiones solo quedaban
+        # salvadas en el cache Python y se perdían al cerrar el navegador.
+        payload = {item_key: value}
         try:
-            storage.setItem(item_key, value, key=k)
+            storage.setItem(item_key, payload, key=k)
         except TypeError:
             try:
-                storage.setItem(item_key, value)
+                storage.setItem(item_key, payload)
             except Exception as inner_exc:
                 logger.warning("No se pudo guardar %s en localStorage (fallback): %s", item_key, inner_exc)
         except Exception as exc:
