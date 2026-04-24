@@ -13,6 +13,9 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from data_files import METEOGALICIA_STATIONS_PATH
+from utils.provider_state import get_connected_provider_station_id, get_provider_station_id, is_provider_connection, resolve_state
+
 
 BASE_URL = "https://servizos.meteogalicia.gal/mgrss/observacion"
 TENMIN_ENDPOINT = f"{BASE_URL}/ultimos10minEstacionsMeteo.action"
@@ -91,7 +94,7 @@ def _request_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_meteogalicia.json") -> List[Dict[str, Any]]:
+def _load_stations(path: str = str(METEOGALICIA_STATIONS_PATH)) -> List[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -256,7 +259,7 @@ def _extract_measures(lista_medidas: Any) -> Dict[str, Tuple[float, str]]:
     return out
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_meteogalicia_current(station_id: str) -> Dict[str, Any]:
     sid = str(station_id).strip()
     params = {"idEst": sid} if sid else {}
@@ -284,7 +287,7 @@ def fetch_meteogalicia_current(station_id: str) -> Dict[str, Any]:
     return {"ok": True, "error": "", "item": item}
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_meteogalicia_hourly(station_id: str, num_hours: int = 24) -> Dict[str, Any]:
     sid = str(station_id).strip()
     # En la práctica el endpoint horario de MeteoGalicia parece quedar
@@ -377,7 +380,7 @@ def fetch_meteogalicia_hourly(station_id: str, num_hours: int = 24) -> Dict[str,
     }
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_meteogalicia_recent_synoptic_series(
     station_id: str,
     *,
@@ -523,19 +526,15 @@ def _latest_hourly_snapshot(hourly_series: Dict[str, Any]) -> Dict[str, float]:
 
 
 def is_meteogalicia_connection() -> bool:
-    return str(st.session_state.get("connection_type", "")).strip().upper() == "METEOGALICIA"
+    return is_provider_connection("METEOGALICIA", st.session_state)
 
 
-def get_meteogalicia_data() -> Optional[Dict[str, Any]]:
-    if not is_meteogalicia_connection():
+def get_meteogalicia_data(state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("METEOGALICIA", state):
         return None
 
-    station_id = (
-        st.session_state.get("meteogalicia_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_id = str(station_id).strip()
+    station_id = get_connected_provider_station_id("METEOGALICIA", state)
     if not station_id:
         return None
 

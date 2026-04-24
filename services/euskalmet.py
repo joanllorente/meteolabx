@@ -14,6 +14,20 @@ from zoneinfo import ZoneInfo
 import requests
 import streamlit as st
 
+from data_files import (
+    EUSKALMET_SENSOR_MAP_PATH as DEFAULT_EUSKALMET_SENSOR_MAP_PATH,
+    EUSKALMET_SENSORS_PATH as DEFAULT_EUSKALMET_SENSORS_PATH,
+    EUSKALMET_STATIONS_PATH as DEFAULT_EUSKALMET_STATIONS_PATH,
+)
+from utils.provider_state import (
+    clear_provider_runtime_error,
+    get_connected_provider_station_id,
+    get_provider_station_id,
+    is_provider_connection,
+    resolve_state,
+    set_provider_runtime_error,
+)
+
 
 BASE_URL = os.getenv("EUSKALMET_BASE_URL", "https://api.euskadi.eus")
 EUSKALMET_API_KEY = os.getenv(
@@ -30,10 +44,10 @@ EUSKALMET_JWT_EMAIL = os.getenv("EUSKALMET_JWT_EMAIL", "meteolabx@gmail.com")
 EUSKALMET_JWT_LOGIN_ID = os.getenv("EUSKALMET_JWT_LOGIN_ID", "")
 EUSKALMET_PRIVATE_KEY_PATH = os.getenv("EUSKALMET_PRIVATE_KEY_PATH", "")
 EUSKALMET_PUBLIC_KEY_PATH = os.getenv("EUSKALMET_PUBLIC_KEY_PATH", "")
-EUSKALMET_SENSORS_PATH = os.getenv("EUSKALMET_SENSORS_PATH", "")
+EUSKALMET_SENSORS_PATH = os.getenv("EUSKALMET_SENSORS_PATH", str(DEFAULT_EUSKALMET_SENSORS_PATH))
 EUSKALMET_SENSOR_MAP_PATH = os.getenv(
     "EUSKALMET_SENSOR_MAP_PATH",
-    "data_station_sensor_map_euskalmet.json",
+    str(DEFAULT_EUSKALMET_SENSOR_MAP_PATH),
 )
 EUSKALMET_STRICT_SENSOR_MAP = os.getenv("EUSKALMET_STRICT_SENSOR_MAP", "1") == "1"
 TIMEOUT_SECONDS = 12
@@ -183,6 +197,7 @@ def _load_sensor_inventory_ids(path_hint: str = "") -> List[str]:
     candidates = [
         str(path_hint or "").strip(),
         str(EUSKALMET_SENSORS_PATH).strip(),
+        str(DEFAULT_EUSKALMET_SENSORS_PATH),
         "data_sensors_euskalmet.json",
         "data_sensores_euskalmet.json",
         "/Users/joantisdale/Downloads/sensors.json",
@@ -383,9 +398,6 @@ def _generate_auto_jwt() -> str:
 def _resolve_jwt(jwt: Optional[str] = None) -> str:
     if jwt is not None and str(jwt).strip():
         return str(jwt).strip()
-    session_jwt = str(st.session_state.get("euskalmet_jwt", "")).strip()
-    if session_jwt:
-        return session_jwt
     env_jwt = str(EUSKALMET_JWT).strip()
     if env_jwt:
         return env_jwt
@@ -395,14 +407,6 @@ def _resolve_jwt(jwt: Optional[str] = None) -> str:
 def _resolve_api_key(api_key: Optional[str] = None) -> str:
     if api_key is not None and str(api_key).strip():
         return str(api_key).strip()
-    for key_name in (
-        "euskalmet_api_key",
-        "euskalmet_api_key_private",
-        "euskalmet_api_key_public",
-    ):
-        session_key = str(st.session_state.get(key_name, "")).strip()
-        if session_key:
-            return session_key
     for env_key in (EUSKALMET_API_KEY_PRIVATE, EUSKALMET_API_KEY, EUSKALMET_API_KEY_PUBLIC):
         val = str(env_key).strip()
         if val:
@@ -411,10 +415,6 @@ def _resolve_api_key(api_key: Optional[str] = None) -> str:
 
 
 def _resolve_public_key() -> str:
-    for key_name in ("euskalmet_api_key_public",):
-        session_key = str(st.session_state.get(key_name, "")).strip()
-        if session_key:
-            return session_key
     return str(EUSKALMET_API_KEY_PUBLIC).strip()
 
 
@@ -518,7 +518,7 @@ def _extract_sensor_ids(payload: Any, station_id: str = "") -> List[str]:
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_euskalmet.json"):
+def _load_stations(path: str = str(DEFAULT_EUSKALMET_STATIONS_PATH)):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -545,7 +545,7 @@ def _hour_points(year: int, month: int, day: int, hour: int, values: List[Any]) 
     return points
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_station_sensors(station_id: str, jwt: Optional[str] = None, api_key: Optional[str] = None) -> Dict[str, Any]:
     sid = str(station_id).strip().upper()
     if not sid:
@@ -606,7 +606,7 @@ def fetch_station_sensors(station_id: str, jwt: Optional[str] = None, api_key: O
     return {"ok": False, "error": err, "sensors": []}
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_hourly_reading(
     station_id: str,
     sensor_id: str,
@@ -654,7 +654,7 @@ def fetch_hourly_reading(
     return {"ok": True, "points": points}
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def resolve_sensor_for_measure(
     station_id: str,
     measure_type: str,
@@ -719,7 +719,7 @@ def resolve_sensor_for_measure(
     }
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_day_measure_series(
     station_id: str,
     measure_type: str,
@@ -799,7 +799,7 @@ def fetch_day_measure_series(
     }
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_euskalmet_day_series(
     station_id: str,
     day_local: Optional[datetime] = None,
@@ -876,30 +876,26 @@ def fetch_euskalmet_day_series(
 
 
 def is_euskalmet_connection() -> bool:
-    return str(st.session_state.get("connection_type", "")).strip().upper() == "EUSKALMET"
+    return is_provider_connection("EUSKALMET", st.session_state)
 
 
-def get_euskalmet_data(jwt: Optional[str] = None, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    if not is_euskalmet_connection():
+def get_euskalmet_data(jwt: Optional[str] = None, api_key: Optional[str] = None, state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("EUSKALMET", state):
         return None
 
-    st.session_state["euskalmet_last_error"] = ""
-    station_id = (
-        st.session_state.get("euskalmet_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_id = str(station_id).strip().upper()
+    clear_provider_runtime_error("EUSKALMET", state)
+    station_id = get_connected_provider_station_id("EUSKALMET", state).upper()
     if not station_id:
-        st.session_state["euskalmet_last_error"] = "station_id vacío"
+        set_provider_runtime_error("EUSKALMET", "station_id vacío", state)
         return None
 
     resolved_jwt = _resolve_jwt(jwt)
     resolved_api_key = _resolve_api_key(api_key)
     if not resolved_jwt:
-        st.session_state["euskalmet_last_error"] = (
+        set_provider_runtime_error("EUSKALMET", (
             "No hay JWT disponible (manual ni autogenerado desde PEM)."
-        )
+        ), state)
         return None
 
     series = fetch_euskalmet_day_series(
@@ -908,12 +904,12 @@ def get_euskalmet_data(jwt: Optional[str] = None, api_key: Optional[str] = None)
         api_key=resolved_api_key,
     )
     if not series.get("ok"):
-        st.session_state["euskalmet_last_error"] = str(series.get("error", "Serie sin datos"))
+        set_provider_runtime_error("EUSKALMET", str(series.get("error", "Serie sin datos")), state)
         return None
 
     epochs = series.get("epochs", [])
     if not epochs:
-        st.session_state["euskalmet_last_error"] = "Serie vacía para la estación"
+        set_provider_runtime_error("EUSKALMET", "Serie vacía para la estación", state)
         return None
 
     # Último punto válido por variable.

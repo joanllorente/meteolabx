@@ -6,8 +6,8 @@ import json
 from functools import lru_cache
 from typing import Any, Dict, List
 
-from aemet_utils import haversine_distance
-
+from data_files import POEM_STATIONS_PATH
+from .helpers import maybe_swap_coordinates, nearest_records
 from .types import StationCandidate
 
 
@@ -25,14 +25,24 @@ class PoemProvider:
     provider_id = "POEM"
     provider_name = "POEM"
 
-    def __init__(self, stations_path: str = "data_estaciones_poem.json"):
+    def __init__(self, stations_path: str = str(POEM_STATIONS_PATH)):
         self.stations_path = stations_path
 
     def search_nearby_stations(self, lat: float, lon: float, max_results: int = 5) -> List[StationCandidate]:
         stations = _load_stations(self.stations_path)
+        nearest = nearest_records(
+            lat,
+            lon,
+            stations,
+            max_results=max_results,
+            get_coords=lambda station: maybe_swap_coordinates(
+                float(station.get("lat")),
+                float(station.get("lon")),
+            ) if isinstance(station, dict) and station.get("lat") is not None and station.get("lon") is not None else None,
+        )
         results: List[StationCandidate] = []
 
-        for station in stations:
+        for station, dist_km in nearest:
             if not isinstance(station, dict):
                 continue
 
@@ -43,14 +53,6 @@ class PoemProvider:
             try:
                 s_lat = float(station.get("lat"))
                 s_lon = float(station.get("lon"))
-            except Exception:
-                continue
-
-            if not (-90.0 <= s_lat <= 90.0 and -180.0 <= s_lon <= 180.0):
-                continue
-
-            try:
-                dist_km = float(haversine_distance(lat, lon, s_lat, s_lon))
             except Exception:
                 continue
 
@@ -69,5 +71,4 @@ class PoemProvider:
                 )
             )
 
-        results.sort(key=lambda s: s.distance_km)
-        return results[: max(1, int(max_results))]
+        return results

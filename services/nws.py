@@ -13,6 +13,9 @@ from urllib.parse import quote
 import requests
 import streamlit as st
 
+from data_files import NWS_STATIONS_PATH
+from utils.provider_state import get_connected_provider_station_id, get_provider_station_id, is_provider_connection, resolve_state
+
 
 BASE_URL = "https://api.weather.gov"
 TIMEOUT_SECONDS = 16
@@ -142,7 +145,7 @@ def _request_json_with_headers(url: str, params: Optional[Dict[str, Any]] = None
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_nws.json") -> List[Dict[str, Any]]:
+def _load_stations(path: str = str(NWS_STATIONS_PATH)) -> List[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -269,7 +272,7 @@ def _series_from_features(features: List[Dict[str, Any]], elevation_m: float) ->
     }
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_nws_latest(station_id: str) -> Dict[str, Any]:
     sid = str(station_id).strip().upper()
     if not sid:
@@ -285,7 +288,7 @@ def fetch_nws_latest(station_id: str) -> Dict[str, Any]:
     return {"ok": True, "error": "", "feature": payload}
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_nws_observations(station_id: str, hours: int = 24, limit: int = 1200) -> Dict[str, Any]:
     sid = str(station_id).strip().upper()
     if not sid:
@@ -425,19 +428,15 @@ def _pressure_3h_reference(epochs: List[int], pressures_msl: List[float]) -> Tup
 
 
 def is_nws_connection() -> bool:
-    return str(st.session_state.get("connection_type", "")).strip().upper() == "NWS"
+    return is_provider_connection("NWS", st.session_state)
 
 
-def get_nws_data() -> Optional[Dict[str, Any]]:
-    if not is_nws_connection():
+def get_nws_data(state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("NWS", state):
         return None
 
-    station_id = (
-        st.session_state.get("nws_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_id = str(station_id).strip().upper()
+    station_id = get_connected_provider_station_id("NWS", state)
     if not station_id:
         return None
 

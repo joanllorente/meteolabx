@@ -3,10 +3,10 @@
 Construye el inventario de estaciones de Noruega desde MET Norway Frost.
 
 Uso:
-  python3 build_frost_inventory.py \
+  python3 scripts/build_frost_inventory.py \
       --client-id YOUR_CLIENT_ID \
       --client-secret YOUR_CLIENT_SECRET \
-      --output data_estaciones_frost.json
+      --output data/data_estaciones_frost.json
 """
 
 from __future__ import annotations
@@ -14,14 +14,21 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from data_files import FROST_STATIONS_PATH
+
 API_URL = "https://frost.met.no/sources/v0.jsonld"
-DEFAULT_OUTPUT = "data_estaciones_frost.json"
+DEFAULT_OUTPUT = str(FROST_STATIONS_PATH)
 DEFAULT_VALIDTIME = "1900-01-01/now"
 DEFAULT_FIELDS = (
     "id,name,shortName,country,countryCode,wmoId,geometry,masl,validFrom,validTo,"

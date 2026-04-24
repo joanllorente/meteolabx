@@ -14,7 +14,6 @@ from config import (
     RAIN_QUANTIZE_CORRECTION, RAIN_TIP_RESOLUTION
 )
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 WU_URL_CURRENT = "https://api.weather.com/v2/pws/observations/current"
@@ -108,8 +107,6 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
         "apiKey": api_key,
         "numericPrecision": "decimal"
     }
-
-    logger.info(f"Consultando series temporales (/all/1day)")
 
     try:
         r = requests.get(WU_URL_DAILY, params=params, timeout=WU_TIMEOUT_SECONDS)
@@ -302,8 +299,6 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
                 gusts.append(float(gust) if not is_nan(gust) else float("nan"))
                 wind_dirs.append(float(wind_dir) if not is_nan(wind_dir) else float("nan"))
         
-        logger.info(f"Series temporales: {len(epochs)} puntos obtenidos")
-        
         return {
             "epochs": epochs,
             "temps": temps,
@@ -339,6 +334,32 @@ def fetch_daily_timeseries(station_id: str, api_key: str) -> Dict:
         }
 
 
+def fetch_daily_timeseries_session_cached(station_id: str, api_key: str, ttl_s: int) -> Dict:
+    """
+    Cache de sesión para /all/1day, usado por gráficos de Observación.
+    Evita golpear la API en cada rerun al cambiar de tema/tab.
+    """
+    if "wu_cache_all1day" not in st.session_state:
+        st.session_state["wu_cache_all1day"] = OrderedDict()
+
+    cache = st.session_state["wu_cache_all1day"]
+    station_cache_key = str(station_id or "").strip().upper()
+    now = time.time()
+
+    if station_cache_key in cache:
+        age = now - cache[station_cache_key]["t"]
+        if age < float(ttl_s):
+            cache.move_to_end(station_cache_key)
+            return cache[station_cache_key]["data"]
+
+    if len(cache) >= MAX_CACHE_SIZE:
+        cache.popitem(last=False)
+
+    payload = fetch_daily_timeseries(station_id, api_key)
+    cache[station_cache_key] = {"t": now, "data": payload}
+    return payload
+
+
 def fetch_extremes_from_daily(station_id: str, api_key: str) -> Dict:
     """
     Obtiene extremos del DÍA COMPLETO procesando TODAS las observaciones
@@ -351,8 +372,6 @@ def fetch_extremes_from_daily(station_id: str, api_key: str) -> Dict:
         "apiKey": api_key,
         "numericPrecision": "decimal"
     }
-
-    logger.info(f"Consultando extremos diarios (/all/1day)")
 
     try:
         r = requests.get(WU_URL_DAILY, params=params, timeout=WU_TIMEOUT_SECONDS)
@@ -399,8 +418,6 @@ def fetch_extremes_from_daily(station_id: str, api_key: str) -> Dict:
         latest_epoch = observations[-1].get("epoch", 0)
         target_epoch = latest_epoch - (3 * 3600)  # 3 horas atrás
         
-        logger.info(f"Buscando presión cercana a 3h atrás (target epoch: {target_epoch})")
-        
         # Buscar la observación más cercana a hace 3 horas
         closest_diff = float('inf')
         
@@ -444,10 +461,7 @@ def fetch_extremes_from_daily(station_id: str, api_key: str) -> Dict:
                         epoch_3h_ago = obs_epoch
         
         # Log del resultado de presión
-        if not is_nan(pressure_3h_ago):
-            actual_hours_ago = (latest_epoch - epoch_3h_ago) / 3600.0
-            logger.info(f"✅ Presión hace {actual_hours_ago:.2f}h: {pressure_3h_ago:.1f} hPa (diff: {closest_diff}s)")
-        else:
+        if is_nan(pressure_3h_ago):
             logger.warning("⚠️ No se encontró presión de hace 3h en /all/1day")
             
             # Buscar presión más cercana a hace 3 horas
@@ -467,13 +481,6 @@ def fetch_extremes_from_daily(station_id: str, api_key: str) -> Dict:
         rh_max = max(all_rh_high) if all_rh_high else float("nan")
         rh_min = min(all_rh_low) if all_rh_low else float("nan")
         gust_max = max(all_gust_high) if all_gust_high else float("nan")
-        
-        logger.info(f"✅ Extremos del día (de {len(observations)} observaciones):")
-        logger.info(f"   T: {temp_max:.1f}° / {temp_min:.1f}°C")
-        logger.info(f"   RH: {rh_max:.0f}% / {rh_min:.0f}%")
-        logger.info(f"   Racha: {gust_max:.1f} km/h")
-        if not is_nan(pressure_3h_ago):
-            logger.info(f"   Presión hace 3h: {pressure_3h_ago:.1f} hPa")
         
         return {
             "temp_max": temp_max,
@@ -507,8 +514,6 @@ def fetch_wu_current(station_id: str, api_key: str) -> Dict:
         "apiKey": api_key,
         "numericPrecision": "decimal"
     }
-
-    logger.info(f"Consultando datos actuales (/current)")
 
     try:
         r = requests.get(WU_URL_CURRENT, params=params, timeout=WU_TIMEOUT_SECONDS)
@@ -582,13 +587,6 @@ def fetch_wu_current(station_id: str, api_key: str) -> Dict:
     if is_nan(elevation):
         elevation = safe_float(obs.get("elevation"))
 
-    logger.info(f"✅ Current: T={Tc:.1f}°C, RH={RH:.0f}%, P={p_hpa:.1f}hPa")
-    if not is_nan(solar_radiation):
-        uv_log = f"{uv_index:.1f}" if not is_nan(uv_index) else "N/A"
-        logger.info(f"   Solar: {solar_radiation:.0f} W/m², UV: {uv_log}")
-    if not is_nan(elevation):
-        logger.info(f"   Estación: lat={lat:.4f}, lon={lon:.4f}, elev={elevation:.1f}m")
-
     return {
         "Tc": Tc,
         "RH": RH,
@@ -622,40 +620,40 @@ def fetch_wu_current_session_cached(station_id: str, api_key: str, ttl_s: int) -
 
     cache_current = st.session_state.wu_cache_current
     cache_daily = st.session_state.wu_cache_daily
-    k = (station_id, api_key)
+    station_cache_key = str(station_id or "").strip().upper()
     now = time.time()
     
     # Datos current (frecuente)
     need_current = True
-    if k in cache_current:
-        age = now - cache_current[k]["t"]
+    if station_cache_key in cache_current:
+        age = now - cache_current[station_cache_key]["t"]
         if age < ttl_s:
-            cache_current.move_to_end(k)
-            base_data = cache_current[k]["data"]
+            cache_current.move_to_end(station_cache_key)
+            base_data = cache_current[station_cache_key]["data"]
             need_current = False
     
     if need_current:
         if len(cache_current) >= MAX_CACHE_SIZE:
             cache_current.popitem(last=False)
         base_data = fetch_wu_current(station_id, api_key)
-        cache_current[k] = {"t": now, "data": base_data}
+        cache_current[station_cache_key] = {"t": now, "data": base_data}
     
     # Extremos daily (menos frecuente - 10 minutos)
     TTL_DAILY = 600
     need_daily = True
     
-    if k in cache_daily:
-        age = now - cache_daily[k]["t"]
+    if station_cache_key in cache_daily:
+        age = now - cache_daily[station_cache_key]["t"]
         if age < TTL_DAILY:
-            cache_daily.move_to_end(k)
-            extremes_data = cache_daily[k]["data"]
+            cache_daily.move_to_end(station_cache_key)
+            extremes_data = cache_daily[station_cache_key]["data"]
             need_daily = False
     
     if need_daily:
         if len(cache_daily) >= MAX_CACHE_SIZE:
             cache_daily.popitem(last=False)
         extremes_data = fetch_extremes_from_daily(station_id, api_key)
-        cache_daily[k] = {"t": now, "data": extremes_data}
+        cache_daily[station_cache_key] = {"t": now, "data": extremes_data}
     
     result = base_data.copy()
     result.update(extremes_data)
@@ -675,19 +673,17 @@ def fetch_hourly_7day_session_cached(station_id: str, api_key: str) -> Dict:
         st.session_state["wu_cache_hourly7d"] = {}
     
     cache = st.session_state["wu_cache_hourly7d"]
-    k = (station_id, api_key)
+    station_cache_key = str(station_id or "").strip().upper()
     now = time.time()
     TTL_HOURLY_7D = 3600  # 1 hora
     
     # Verificar cache
-    if k in cache:
-        age = now - cache[k]["t"]
+    if station_cache_key in cache:
+        age = now - cache[station_cache_key]["t"]
         if age < TTL_HOURLY_7D:
-            logger.info(f"Cache hit hourly/7day (age: {age:.0f}s)")
-            return cache[k]["data"]
+            return cache[station_cache_key]["data"]
     
     # Llamar API
-    logger.info("Fetching hourly/7day data")
     params = {
         "stationId": station_id,
         "format": "json",
@@ -769,9 +765,8 @@ def fetch_hourly_7day_session_cached(station_id: str, api_key: str) -> Dict:
         }
         
         # Guardar en cache
-        cache[k] = {"t": now, "data": result}
+        cache[station_cache_key] = {"t": now, "data": result}
         
-        logger.info(f"hourly/7day: {len(epochs)} puntos obtenidos")
         return result
         
     except Exception as e:

@@ -4,6 +4,7 @@ Componentes de tarjetas y grillas para visualizacion de datos
 
 from functools import lru_cache
 from html import escape
+import json
 from pathlib import Path
 import unicodedata
 
@@ -15,6 +16,7 @@ from .icons import icon_img
 
 
 DEFINITIONS_PATH = Path(__file__).parent.parent / "definiciones.txt"
+DEFINITIONS_I18N_DIR = Path(__file__).parent.parent / "locales"
 FALLBACK_DEFINITIONS_ES = {
     "temperatura": "Temperatura del aire medida por la estación a la altura del sensor (habitualmente 1.5-2 m).",
     "humedad relativa": "Porcentaje de vapor de agua presente en el aire respecto al máximo posible a esa temperatura.",
@@ -37,30 +39,6 @@ FALLBACK_DEFINITIONS_ES = {
     "claridad del cielo": "Índice relativo de transparencia atmosférica deducido de la radiación observada frente a la potencial.",
     "altura del sol": "Altura angular del Sol sobre el horizonte para la ubicación y el instante de observación.",
     "balance hidrico": "Diferencia entre precipitación acumulada y evapotranspiración estimada en el día actual (mm).",
-}
-
-FALLBACK_DEFINITIONS_EN = {
-    "temperatura": "Air temperature measured by the station at sensor height (usually 1.5-2 m).",
-    "humedad relativa": "Percentage of water vapour present in the air relative to the maximum possible at that temperature.",
-    "punto de rocio": "Temperature at which the air would become saturated and condensation would begin if cooled at constant pressure.",
-    "presion": "Atmospheric pressure measured by the station barometer. It may be shown as absolute pressure or reduced to sea level.",
-    "viento": "Mean wind speed during the measurement interval. It is usually accompanied by direction and maximum gust.",
-    "precipitacion hoy": "Accumulated precipitation from 00:00 local time until the current observation.",
-    "humedad especifica": "Mass of water vapour per unit mass of moist air (g/kg).",
-    "humedad absoluta": "Mass of water vapour per unit volume of air (g/m³).",
-    "temperatura de bulbo humedo": "Temperature the air would reach if cooled by evaporation to saturation at approximately constant pressure.",
-    "temperatura virtual": "Equivalent temperature that dry air would have with the same density as the observed moist air.",
-    "temperatura equivalente": "Temperature resulting from condensing all the water vapour in the air and releasing its latent heat.",
-    "temperatura potencial": "Temperature an air parcel would have if brought adiabatically to 1000 hPa.",
-    "densidad del aire": "Mass of air per unit volume, calculated from temperature, humidity and pressure.",
-    "nivel de condensacion por ascenso": "Approximate height at which a rising air parcel would reach saturation (LCL cloud base).",
-    "radiacion solar": "Instantaneous global solar irradiance measured by the sensor (W/m²).",
-    "indice uv": "Surface erythemal ultraviolet radiation index.",
-    "dosis eritematica": "Accumulated erythemal UV dose from 00:00 until the current moment.\n- 1 SED equals 100 J/m² of effective erythemal radiation.\n- Skin phototype I: visible erythema roughly from 2 to 3 SED.\n- Skin phototype II: roughly 2.5 to 3.5 SED.\n- Skin phototype III: roughly 3.5 to 5 SED.\n- Skin phototype IV: roughly 5 to 7 SED.\n- Skin phototype V: roughly 7 to 10 SED.\n- Skin phototype VI: usually above 10 SED.",
-    "evapotranspiracion": "Combined water loss by evaporation and transpiration estimated for the current day (mm).",
-    "claridad del cielo": "Relative atmospheric transparency index derived from observed radiation versus the theoretical potential.",
-    "altura del sol": "Solar angular height above the horizon for the observation location and time.",
-    "balance hidrico": "Difference between accumulated precipitation and estimated evapotranspiration during the current day (mm).",
 }
 
 
@@ -137,9 +115,29 @@ def _load_definitions() -> dict:
     return definitions
 
 
+@lru_cache(maxsize=3)
+def _load_i18n_definitions(lang: str) -> dict:
+    lang = str(lang or "").strip().lower()
+    if lang == "es":
+        return _load_definitions()
+
+    path = DEFINITIONS_I18N_DIR / f"card_definitions.{lang}.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return {
+        _normalize_text(key): str(value)
+        for key, value in payload.items()
+        if str(key).strip()
+    }
+
+
 def _card_tooltip_text(title: str, tooltip_key: str = "") -> str:
     lang = get_language()
-    definitions = _load_definitions() if lang == "es" else {}
+    definitions = _load_i18n_definitions(lang)
     normalized_title = _normalize_text(tooltip_key or title)
 
     aliases = {
@@ -162,37 +160,33 @@ def _card_tooltip_text(title: str, tooltip_key: str = "") -> str:
                 text = val
                 break
     if normalized_title in ("radiacion solar", "irradiancia"):
-        extra = (
-            "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
-            if lang == "es"
-            else "- Energy today: integration of solar irradiance from 00:00 until now, expressed in MJ/m²."
-        )
+        if lang == "es":
+            extra = "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
+            fallback = "Radiación solar instantánea medida por piranómetro."
+        elif lang == "fr":
+            extra = "- Énergie du jour: intégration de l'irradiance solaire de 00:00 jusqu'à maintenant, exprimée en MJ/m²."
+            fallback = "Rayonnement solaire instantané mesuré par pyranomètre."
+        else:
+            extra = "- Energy today: integration of solar irradiance from 00:00 until now, expressed in MJ/m²."
+            fallback = "Instantaneous solar radiation measured by pyranometer."
         if text:
             return f"{text}\n{extra}"
-        return (
-            f"Radiación solar instantánea medida por piranómetro.\n{extra}"
-            if lang == "es"
-            else f"Instantaneous solar radiation measured by pyranometer.\n{extra}"
-        )
+        return f"{fallback}\n{extra}"
     if normalized_title == "altura del sol":
-        extra = (
-            "- Culminación: altura máxima que alcanza el Sol ese día al pasar por el meridiano local."
-            if lang == "es"
-            else "- Culmination: maximum solar altitude reached that day when the Sun crosses the local meridian."
-        )
+        if lang == "es":
+            extra = "- Culminación: altura máxima que alcanza el Sol ese día al pasar por el meridiano local."
+            fallback = "Altura angular del Sol sobre el horizonte."
+        elif lang == "fr":
+            extra = "- Culmination: hauteur maximale atteinte par le Soleil ce jour-là lors de son passage au méridien local."
+            fallback = "Hauteur angulaire du Soleil au-dessus de l'horizon."
+        else:
+            extra = "- Culmination: maximum solar altitude reached that day when the Sun crosses the local meridian."
+            fallback = "Angular height of the Sun above the horizon."
         if text:
             return f"{text}\n{extra}"
-        return (
-            f"Altura angular del Sol sobre el horizonte.\n{extra}"
-            if lang == "es"
-            else f"Angular height of the Sun above the horizon.\n{extra}"
-        )
-    if not text:
-        text = (
-            FALLBACK_DEFINITIONS_ES.get(lookup)
-            if lang == "es"
-            else FALLBACK_DEFINITIONS_EN.get(lookup) or FALLBACK_DEFINITIONS_ES.get(lookup)
-        )
+        return f"{fallback}\n{extra}"
+    if not text and lang != "es":
+        text = FALLBACK_DEFINITIONS_ES.get(lookup)
     if text:
         return text
     return t("cards.tooltip_unavailable")

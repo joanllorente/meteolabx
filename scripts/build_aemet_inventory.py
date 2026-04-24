@@ -3,10 +3,19 @@
 Script para construir inventario de estaciones AEMET
 Versión simple: usa solo /todas con timeout muy largo
 """
-import requests
 import json
+import sys
 import time
+from pathlib import Path
 from typing import List, Dict
+
+import requests
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from data_files import AEMET_STATIONS_PATH
 
 # API Key de AEMET
 API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZXRlb2xhYnhAZ21haWwuY29tIiwianRpIjoiNTdkMzE1MjYtMTk4My00YzNiLTgzNjAtYTdkZWJmMmIxMDFhIiwiaXNzIjoiQUVNRVQiLCJpYXQiOjE3NzAyNDQ1OTEsInVzZXJJZCI6IjU3ZDMxNTI2LTE5ODMtNGMzYi04MzYwLWE3ZGViZjJiMTAxYSIsInJvbGUiOiIifQ.GvliQHY3f94N691sU0ExhMHZxbTiGn2BCe-bIA22K8c"
@@ -103,7 +112,7 @@ def extract_station_info(raw_data: List[Dict]) -> List[Dict]:
     return stations
 
 
-def save_inventory(stations: List[Dict], filename: str = "estaciones_aemet.json"):
+def save_inventory(stations: List[Dict], filename: str = str(AEMET_STATIONS_PATH)):
     """Guarda el inventario en JSON"""
     stations_sorted = sorted(stations, key=lambda x: (x.get("provincia", ""), x.get("nombre", "")))
     
@@ -153,8 +162,6 @@ def main():
         print("\n\n⚠️  Cancelado por el usuario")
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
-        import traceback
-        traceback.print_exc()
 
 
 if __name__ == "__main__":

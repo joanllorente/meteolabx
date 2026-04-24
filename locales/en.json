@@ -20,6 +20,36 @@
     "station_time": "Station time zone",
     "age": "Age"
   },
+  "connection": {
+    "loading_title": "Connecting station..."
+  },
+  "header": {
+    "beta_notice": "Release Candidate — the interface and features may change",
+    "theme_label": "Theme",
+    "refresh_label": "Refresh",
+    "available_stations": "{count} available stations",
+    "station_id_short": "ID",
+    "altitude_short": "Alt",
+    "latitude_short": "Lat",
+    "longitude_short": "Lon",
+    "connect_prompt": "Connect your station from the side panel or explore nearby stations."
+  },
+  "footer": {
+    "version": "Version {version}",
+    "news": "What's new",
+    "improvements_title": "Improvements",
+    "fixes_title": "Fixes",
+    "improvements": {
+      "french_language": "The interface now includes <b>French language</b> support.",
+      "performance": "<b>Performance</b> and <b>stability</b> improvements across the app.",
+      "small_screens": "Improved layout and readability on <b>small screens</b>."
+    },
+    "fixes": {
+      "autoconnect_startup": "Fixed an issue that could prevent the saved station from loading automatically when <b>auto-connect</b> was enabled."
+    },
+    "sources": "Sources",
+    "unaffiliated": "Not affiliated"
+  },
   "cards": {
     "help_aria": "Help for {title}",
     "tooltip_unavailable": "Definition not available yet for this variable."
@@ -49,7 +79,8 @@
         "api_key": "Paste your API key here",
         "altitude": "Optional (fetched from API)"
       },
-      "caption": "Click Save to remember ID, API Key and altitude."
+      "caption": "Click Save to remember ID, API key and altitude in this browser.",
+      "api_key_help": "These details may be stored locally in this browser if you use Save. If you share this device or browser profile, someone else could reuse them. It is safer to store the API key in your device or browser password manager."
     },
     "autoconnect": {
       "label": "Connect automatically on startup",
@@ -208,6 +239,11 @@
       }
     },
     "table": {
+      "headers": {
+        "metric": "Metric",
+        "value": "Value",
+        "date": "Date"
+      },
       "scope": {
         "day": "day",
         "month": "month",
@@ -219,11 +255,47 @@
         "year": "Year"
       },
       "columns": {
-        "temp_abs_max": "Abs max (°C)",
-        "temp_abs_min": "Abs min (°C)",
-        "temp_mean": "Mean (°C)",
-        "precip": "Precipitation (mm)"
+        "temp_abs_max": "Abs max",
+        "temp_abs_min": "Abs min",
+        "temp_mean": "Mean",
+        "precip": "Precipitation"
       }
+    },
+    "units": {
+      "days": "days",
+      "nights": "nights"
+    },
+    "metrics": {
+      "absolute_max": "Absolute maximum",
+      "absolute_min": "Absolute minimum",
+      "warmest_year": "Warmest year (mean temperature)",
+      "coldest_year": "Coldest year (mean temperature)",
+      "windiest_year": "Windiest year (mean wind)",
+      "max_gust": "Maximum gust",
+      "wettest_year": "Wettest year",
+      "driest_year": "Driest year",
+      "most_rain_days_year": "Year with the most rainy days",
+      "max_precip_24h": "Maximum precipitation in 24 hours",
+      "sunniest_year": "Sunniest year",
+      "least_sunny_year": "Year with the least sunshine",
+      "lowest_maximum": "Lowest maximum",
+      "highest_minimum": "Highest minimum",
+      "windiest_month": "Windiest month (mean wind)",
+      "max_precip_24h_short": "Max precipitation in 24h",
+      "windiest_day": "Windiest day (mean wind)",
+      "rainiest_day": "Rainiest day",
+      "mean_temperature": "Mean temperature",
+      "mean_maximums": "Mean maximums",
+      "mean_minimums": "Mean minimums",
+      "temperature_stddev": "Temperature standard deviation",
+      "mean_wind": "Mean wind",
+      "accumulated_precipitation": "Accumulated precipitation",
+      "mean_precipitation": "Mean precipitation",
+      "mean_solar_irradiance": "Mean solar irradiance",
+      "mean_sunshine_hours": "Mean sunshine hours",
+      "tropical_nights": "Tropical nights (min > 20 °C)",
+      "frost_nights": "Frost nights (min ≤ 0 °C)",
+      "torrid_nights": "Torrid nights (min > 25 °C)"
     }
   },
   "observation": {
@@ -261,6 +333,7 @@
         "precipitation_today": {
           "title": "Precipitation today",
           "instantaneous": "Instantaneous",
+          "intensity": "Intensity",
           "minute_1": "1 min",
           "minute_5": "5 min"
         }
@@ -373,6 +446,8 @@
       "info": {
         "invalid_aemet_tenmin": "⚠️ This station is not currently returning a valid ten-minute series, so the chart cannot be drawn.",
         "no_series": "ℹ️ No time series is available to draw the chart right now.",
+        "loading_charts": "Loading observation series and charts...",
+        "loading_charts_unavailable": "ℹ️ The base data is already loaded, but the observation series is not available yet.",
         "wind_rose_unavailable": "⚠️ Wind rose unavailable: there are no valid direction samples in this period (valid direction: {valid_direction}, calm samples: {calm})."
       }
     }
@@ -407,6 +482,7 @@
       "aemet_weekly_caption": "7-day hourly endpoint without data or coverage for this station right now.",
       "no_theta_e": "⚠️ There is not enough data to calculate θe trend in this period.",
       "no_vapor_pressure": "⚠️ There is not enough data to calculate e trend in this period.",
+      "no_mixing_ratio": "⚠️ There is not enough data to calculate mixing ratio trend in this period.",
       "no_pressure": "⚠️ There is not enough data to calculate pressure trend in this period."
     },
     "notes": {
@@ -427,6 +503,7 @@
     "calculations": {
       "theta_e": "θe trend",
       "vapor_pressure": "vapor pressure trend",
+      "mixing_ratio": "mixing ratio trend",
       "pressure": "pressure trend"
     },
     "charts": {
@@ -434,6 +511,8 @@
       "theta_e_axis": "dθe/dt (K/h)",
       "vapor_pressure_title": "Vapor Pressure Trend (e)",
       "vapor_pressure_axis": "de/dt (hPa/h)",
+      "mixing_ratio_title": "Mixing Ratio Trend (r)",
+      "mixing_ratio_axis": "dr/dt (g/kg/h)",
       "uv_title": "Wind components",
       "uv_u": "u (zonal)",
       "uv_v": "v (meridional)",
@@ -444,6 +523,7 @@
     "errors": {
       "theta_e": "Error calculating θe trend: {error}",
       "vapor_pressure": "Error calculating e trend: {error}",
+      "mixing_ratio": "Error calculating mixing ratio trend: {error}",
       "uv": "Error calculating wind components (u/v): {error}",
       "pressure": "Error calculating pressure trend: {error}"
     }

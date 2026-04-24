@@ -16,6 +16,16 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from data_files import FROST_STATIONS_PATH
+from utils.provider_state import (
+    clear_provider_runtime_error,
+    get_connected_provider_station_id,
+    get_provider_station_id,
+    is_provider_connection,
+    resolve_state,
+    set_provider_runtime_error,
+)
+
 
 FROST_BASE_URL = os.getenv("FROST_BASE_URL", "https://frost.met.no").rstrip("/")
 FROST_TIMEOUT_SECONDS = int(os.getenv("FROST_TIMEOUT_SECONDS", "18"))
@@ -87,13 +97,7 @@ FROST_CLIMO_YEARLY_ELEMENT_MAP: Dict[str, str] = {
 }
 
 
-def _get_setting(session_key: str, env_key: str, default: str = "") -> str:
-    try:
-        raw = st.session_state.get(session_key, "")
-        if raw not in (None, ""):
-            return str(raw).strip()
-    except Exception:
-        pass
+def _get_setting(env_key: str, default: str = "") -> str:
     try:
         secret_val = st.secrets.get(env_key, "")
         if secret_val not in (None, ""):
@@ -103,9 +107,8 @@ def _get_setting(session_key: str, env_key: str, default: str = "") -> str:
     return str(os.getenv(env_key, default)).strip()
 
 
-FROST_CLIENT_ID = _get_setting("frost_client_id", "FROST_CLIENT_ID", _DEFAULT_FROST_CLIENT_ID)
+FROST_CLIENT_ID = _get_setting("FROST_CLIENT_ID", _DEFAULT_FROST_CLIENT_ID)
 FROST_CLIENT_SECRET = _get_setting(
-    "frost_client_secret",
     "FROST_CLIENT_SECRET",
     _DEFAULT_FROST_CLIENT_SECRET,
 )
@@ -343,7 +346,7 @@ def fetch_frost_climatenormals_available(
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_frost.json") -> List[Dict[str, Any]]:
+def _load_stations(path: str = str(FROST_STATIONS_PATH)) -> List[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -1008,27 +1011,23 @@ def fetch_frost_recent_series(
 
 
 def is_frost_connection() -> bool:
-    return str(st.session_state.get("connection_type", "")).strip().upper() == "FROST"
+    return is_provider_connection("FROST", st.session_state)
 
 
-def get_frost_data() -> Optional[Dict[str, Any]]:
-    if not is_frost_connection():
+def get_frost_data(state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("FROST", state):
         return None
 
     client_id = str(FROST_CLIENT_ID or "").strip()
     client_secret = str(FROST_CLIENT_SECRET or "").strip()
     if not client_id or not client_secret:
-        st.session_state["frost_last_error"] = "Faltan FROST_CLIENT_ID / FROST_CLIENT_SECRET."
+        set_provider_runtime_error("FROST", "Faltan FROST_CLIENT_ID / FROST_CLIENT_SECRET.", state)
         return None
 
-    station_id = (
-        st.session_state.get("frost_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_id = str(station_id).strip().upper()
+    station_id = get_connected_provider_station_id("FROST", state)
     if not station_id:
-        st.session_state["frost_last_error"] = "Falta station_id de Frost."
+        set_provider_runtime_error("FROST", "Falta station_id de Frost.", state)
         return None
 
     station_meta = _find_station(station_id)
@@ -1071,13 +1070,13 @@ def get_frost_data() -> Optional[Dict[str, Any]]:
             )
         )
     except Exception as exc:
-        st.session_state["frost_last_error"] = str(exc)
+        set_provider_runtime_error("FROST", str(exc), state)
         return None
 
     if not any(element in latest_elements for element in FROST_REQUIRED_ANY_ELEMENTS) and not today_elements:
-        st.session_state["frost_last_error"] = (
+        set_provider_runtime_error("FROST", (
             f"Frost no ofrece series vigentes compatibles para {station_id}."
-        )
+        ), state)
         return None
 
     try:
@@ -1103,7 +1102,7 @@ def get_frost_data() -> Optional[Dict[str, Any]]:
             elements=recent_elements,
         )
     except Exception as exc:
-        st.session_state["frost_last_error"] = str(exc)
+        set_provider_runtime_error("FROST", str(exc), state)
         return None
 
     latest_selected = _latest_selected_rows(latest_payload)
@@ -1111,7 +1110,7 @@ def get_frost_data() -> Optional[Dict[str, Any]]:
     recent_series = _bin_series(recent_payload, bin_seconds=3600)
 
     if not latest_selected and not today_series.get("has_data"):
-        st.session_state["frost_last_error"] = f"Sin datos de observación para {station_id}."
+        set_provider_runtime_error("FROST", f"Sin datos de observación para {station_id}.", state)
         return None
 
     current_epoch_candidates = [
@@ -1158,7 +1157,7 @@ def get_frost_data() -> Optional[Dict[str, Any]]:
     if epoch_now_ref is not None:
         base_epoch = int(epoch_now_ref)
 
-    st.session_state["frost_last_error"] = ""
+    clear_provider_runtime_error("FROST", state)
 
     return {
         "idema": station_id,
@@ -1199,6 +1198,8 @@ def get_frost_data() -> Optional[Dict[str, Any]]:
             "winds": list(today_series.get("winds", [])),
             "gusts": list(today_series.get("gusts", [])),
             "wind_dirs": list(today_series.get("wind_dirs", [])),
+            "precip_accum_mm": list(today_series.get("precip_accum_mm", [])),
+            "precip_step_mm": list(today_series.get("precip_step_mm", [])),
             "solar_radiations": [float("nan")] * len(today_series.get("epochs", [])),
             "has_data": bool(today_series.get("has_data", False)),
         },

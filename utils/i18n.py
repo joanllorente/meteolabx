@@ -14,6 +14,7 @@ DEFAULT_LANG = "es"
 SUPPORTED_LANGUAGES = {
     "es": "Español",
     "en": "English",
+    "fr": "Français",
 }
 
 _LOCALES_DIR = Path(__file__).resolve().parent.parent / "locales"

@@ -5,7 +5,8 @@ import json
 from functools import lru_cache
 from typing import List
 
-from aemet_utils import haversine_distance
+from data_files import METEOCAT_STATIONS_PATH
+from .helpers import maybe_swap_coordinates, nearest_records
 from .types import StationCandidate
 
 
@@ -35,19 +36,32 @@ class MeteocatProvider:
     provider_id = "METEOCAT"
     provider_name = "Meteocat"
 
-    def __init__(self, stations_path: str = "data_estaciones_meteocat.json"):
+    def __init__(self, stations_path: str = str(METEOCAT_STATIONS_PATH)):
         self.stations_path = stations_path
 
     def search_nearby_stations(self, lat: float, lon: float, max_results: int = 5) -> List[StationCandidate]:
-        stations = _load_meteocat_stations(self.stations_path)
+        stations = [
+            station
+            for station in _load_meteocat_stations(self.stations_path)
+            if isinstance(station, dict) and _has_open_status(station)
+        ]
+        nearest = nearest_records(
+            lat,
+            lon,
+            stations,
+            max_results=max_results,
+            get_coords=lambda station: maybe_swap_coordinates(
+                float((station.get("coordenades", {}) or {}).get("latitud")),
+                float((station.get("coordenades", {}) or {}).get("longitud")),
+            ) if isinstance(station, dict)
+            and isinstance(station.get("coordenades"), dict)
+            and (station.get("coordenades", {}) or {}).get("latitud") is not None
+            and (station.get("coordenades", {}) or {}).get("longitud") is not None
+            else None,
+        )
         results = []
 
-        for station in stations:
-            if not isinstance(station, dict):
-                continue
-            if not _has_open_status(station):
-                continue
-
+        for station, dist_km in nearest:
             coords = station.get("coordenades", {}) or {}
             s_lat = coords.get("latitud")
             s_lon = coords.get("longitud")
@@ -57,7 +71,6 @@ class MeteocatProvider:
             try:
                 s_lat = float(s_lat)
                 s_lon = float(s_lon)
-                dist_km = float(haversine_distance(lat, lon, s_lat, s_lon))
             except Exception:
                 continue
 
@@ -75,5 +88,4 @@ class MeteocatProvider:
                 )
             )
 
-        results.sort(key=lambda s: s.distance_km)
-        return results[:max_results]
+        return results

@@ -3,12 +3,12 @@
 Precalcula el mapa estación->medida->sensor para Euskalmet.
 
 Salida por defecto:
-  data_station_sensor_map_euskalmet.json
+  data/data_station_sensor_map_euskalmet.json
 
 Uso:
-  python3 build_euskalmet_sensor_map.py
-  python3 build_euskalmet_sensor_map.py --max-stations 20
-  python3 build_euskalmet_sensor_map.py --base-url https://api.sandbox.euskadi.eus
+  python3 scripts/build_euskalmet_sensor_map.py
+  python3 scripts/build_euskalmet_sensor_map.py --max-stations 20
+  python3 scripts/build_euskalmet_sensor_map.py --base-url https://api.sandbox.euskadi.eus
 """
 
 import argparse
@@ -16,12 +16,20 @@ import base64
 import json
 import os
 import subprocess
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 import requests
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from data_files import EUSKALMET_SENSOR_MAP_PATH, EUSKALMET_STATIONS_PATH
 
 
 LOCAL_TZ = ZoneInfo("Europe/Madrid")
@@ -107,7 +115,7 @@ def _build_auto_jwt(args: argparse.Namespace) -> str:
 
     private_key_path = str(args.private_key or os.getenv("EUSKALMET_PRIVATE_KEY_PATH", "")).strip()
     if not private_key_path:
-        private_key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keys", "euskalmet", "privateKey.pem")
+        private_key_path = str(ROOT_DIR / "keys" / "euskalmet" / "privateKey.pem")
     if not os.path.exists(private_key_path):
         return ""
 
@@ -415,8 +423,8 @@ def build_map(args: argparse.Namespace) -> Dict[str, Dict[str, str]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Construye mapa station->measure->sensor de Euskalmet")
     parser.add_argument("--base-url", default=os.getenv("EUSKALMET_BASE_URL", "https://api.euskadi.eus"))
-    parser.add_argument("--stations-path", default="data_estaciones_euskalmet.json")
-    parser.add_argument("--output", default="data_station_sensor_map_euskalmet.json")
+    parser.add_argument("--stations-path", default=str(EUSKALMET_STATIONS_PATH))
+    parser.add_argument("--output", default=str(EUSKALMET_SENSOR_MAP_PATH))
     parser.add_argument("--resume", action="store_true", default=True)
     parser.add_argument("--no-resume", dest="resume", action="store_false")
     parser.add_argument("--max-stations", type=int, default=0)

@@ -17,6 +17,16 @@ import requests
 import streamlit as st
 from requests.auth import HTTPBasicAuth
 
+from data_files import POEM_STATIONS_PATH
+from utils.provider_state import (
+    clear_provider_runtime_error,
+    get_connected_provider_station_id,
+    get_provider_station_id,
+    is_provider_connection,
+    resolve_state,
+    set_provider_runtime_error,
+)
+
 
 POEM_BASE_URL = os.getenv("POEM_BASE_URL", "https://poem.puertos.es").rstrip("/")
 POEM_TIMEOUT_SECONDS = int(os.getenv("POEM_TIMEOUT_SECONDS", "16"))
@@ -24,13 +34,7 @@ POEM_TR_MAX_AGE_SECONDS = int(os.getenv("POEM_TR_MAX_AGE_SECONDS", str(45 * 8640
 POEM_SERIES_KEEP_WINDOW_SECONDS = int(os.getenv("POEM_SERIES_KEEP_WINDOW_SECONDS", str(90 * 86400)))
 
 
-def _get_setting(session_key: str, env_key: str, default: str = "") -> str:
-    try:
-        raw = st.session_state.get(session_key, "")
-        if raw not in (None, ""):
-            return str(raw).strip()
-    except Exception:
-        pass
+def _get_setting(env_key: str, default: str = "") -> str:
     try:
         secret_val = st.secrets.get(env_key, "")
         if secret_val not in (None, ""):
@@ -46,16 +50,16 @@ def _poem_auth_config() -> Tuple[Dict[str, str], Dict[str, Any], Optional[HTTPBa
     auth: Optional[HTTPBasicAuth] = None
     configured = False
 
-    bearer_token = _get_setting("poem_bearer_token", "POEM_BEARER_TOKEN")
-    api_key = _get_setting("poem_api_key", "POEM_API_KEY")
-    api_key_header = _get_setting("poem_api_key_header", "POEM_API_KEY_HEADER", "X-API-Key")
-    basic_user = _get_setting("poem_basic_user", "POEM_BASIC_USER")
-    basic_password = _get_setting("poem_basic_password", "POEM_BASIC_PASSWORD")
-    generic_header = _get_setting("poem_auth_header", "POEM_AUTH_HEADER")
-    generic_value = _get_setting("poem_auth_value", "POEM_AUTH_VALUE")
-    cookie_value = _get_setting("poem_cookie", "POEM_COOKIE")
-    token_param = _get_setting("poem_token_param", "POEM_TOKEN_PARAM")
-    token_value = _get_setting("poem_token_value", "POEM_TOKEN_VALUE")
+    bearer_token = _get_setting("POEM_BEARER_TOKEN")
+    api_key = _get_setting("POEM_API_KEY")
+    api_key_header = _get_setting("POEM_API_KEY_HEADER", "X-API-Key")
+    basic_user = _get_setting("POEM_BASIC_USER")
+    basic_password = _get_setting("POEM_BASIC_PASSWORD")
+    generic_header = _get_setting("POEM_AUTH_HEADER")
+    generic_value = _get_setting("POEM_AUTH_VALUE")
+    cookie_value = _get_setting("POEM_COOKIE")
+    token_param = _get_setting("POEM_TOKEN_PARAM")
+    token_value = _get_setting("POEM_TOKEN_VALUE")
 
     if generic_header and generic_value:
         headers[generic_header] = generic_value
@@ -99,7 +103,7 @@ def _poem_auth_config() -> Tuple[Dict[str, str], Dict[str, Any], Optional[HTTPBa
 
 def _poem_auth_help() -> str:
     return (
-        "Configura auth POEM en env/session: "
+        "Configura auth POEM en env/secrets: "
         "POEM_BEARER_TOKEN o POEM_API_KEY (+POEM_API_KEY_HEADER), "
         "o POEM_BASIC_USER/POEM_BASIC_PASSWORD."
     )
@@ -240,7 +244,7 @@ def _request_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_poem.json") -> List[Dict[str, Any]]:
+def _load_stations(path: str = str(POEM_STATIONS_PATH)) -> List[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -450,6 +454,17 @@ def _kind_from_hint(text_norm: str, key_norm: str = "") -> str:
     return ""
 
 
+def _is_auxiliary_metric_key(key_norm: str) -> bool:
+    key = _normalize_key(key_norm)
+    if not key:
+        return False
+    if key.startswith(("qc_", "q_", "std", "stdev", "stddev", "sigma")):
+        return True
+    if any(token in key for token in ("desv", "desviacion", "desviaciontipica")):
+        return True
+    return False
+
+
 def _unit_is_mps(unit_hint: str) -> bool:
     unit = _normalize_text(unit_hint)
     return ("m/s" in unit) or ("m s-1" in unit) or ("m.s-1" in unit)
@@ -522,7 +537,7 @@ def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float
     # Formato "ancho": cada columna una variable.
     for key, value in items:
         key_norm = _normalize_key(key)
-        if key_norm.startswith("qc_"):
+        if _is_auxiliary_metric_key(key_norm):
             continue
         val = _safe_float(value)
         if _is_nan(val):
@@ -703,7 +718,7 @@ def _latest_epoch(series: Dict[str, Any]) -> Optional[int]:
         return None
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_poem_endpoint_series(endpoint: str, station_code: str, auth_cache_key: str = "") -> Dict[str, Any]:
     _ = auth_cache_key  # participa en key de caché para invalidar al cambiar auth
     sid = str(station_code).strip()
@@ -893,22 +908,18 @@ def _with_default_series(series: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def is_poem_connection() -> bool:
-    return str(st.session_state.get("connection_type", "")).strip().upper() == "POEM"
+    return is_provider_connection("POEM", st.session_state)
 
 
-def get_poem_data() -> Optional[Dict[str, Any]]:
-    if not is_poem_connection():
+def get_poem_data(state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("POEM", state):
         return None
 
-    st.session_state["poem_last_error"] = ""
-    station_id = (
-        st.session_state.get("poem_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_id = str(station_id).strip()
+    clear_provider_runtime_error("POEM", state)
+    station_id = get_connected_provider_station_id("POEM", state)
     if not station_id:
-        st.session_state["poem_last_error"] = "station_id vacío"
+        set_provider_runtime_error("POEM", "station_id vacío", state)
         return None
 
     station_meta = _find_station(station_id)
@@ -932,13 +943,13 @@ def get_poem_data() -> Optional[Dict[str, Any]]:
             if isinstance(cached_data, dict) and age >= 0 and age < 45:
                 cached_error = str(cached.get("error", "")).strip()
                 if cached_error:
-                    st.session_state["poem_last_error"] = cached_error
+                    set_provider_runtime_error("POEM", cached_error, state)
                 return dict(cached_data)
             # Error/None: TTL corto para permitir recuperación rápida.
             if cached_data is None and age >= 0 and age < 8:
                 cached_error = str(cached.get("error", "")).strip()
                 if cached_error:
-                    st.session_state["poem_last_error"] = cached_error
+                    set_provider_runtime_error("POEM", cached_error, state)
                 return None
 
     try:
@@ -958,7 +969,7 @@ def get_poem_data() -> Optional[Dict[str, Any]]:
     tr_endpoints, hourly_endpoints, feed_reason = _resolve_station_endpoints(station_meta)
     if not tr_endpoints and not hourly_endpoints:
         error_text = f"Sin endpoint POEM verificado para {station_id} ({feed_reason})"
-        st.session_state["poem_last_error"] = error_text
+        set_provider_runtime_error("POEM", error_text, state)
         if isinstance(runtime_cache, dict):
             runtime_cache[runtime_cache_key] = {"ts": time.time(), "data": None, "error": error_text}
             st.session_state["_poem_runtime_cache"] = runtime_cache
@@ -1016,7 +1027,7 @@ def get_poem_data() -> Optional[Dict[str, Any]]:
         error_text = " | ".join(debug_attempts[:6]) or "Sin datos en endpoints POEM"
         if (not auth_configured) and ("401" in error_text or "Unauthorized" in error_text):
             error_text = f"{error_text} | {_poem_auth_help()}"
-        st.session_state["poem_last_error"] = error_text
+        set_provider_runtime_error("POEM", error_text, state)
         if isinstance(runtime_cache, dict):
             runtime_cache[runtime_cache_key] = {"ts": time.time(), "data": None, "error": error_text}
             st.session_state["_poem_runtime_cache"] = runtime_cache
@@ -1024,7 +1035,7 @@ def get_poem_data() -> Optional[Dict[str, Any]]:
 
     epochs = current_series.get("epochs", [])
     if not epochs:
-        st.session_state["poem_last_error"] = "Serie sin epochs útiles"
+        set_provider_runtime_error("POEM", "Serie sin epochs útiles", state)
         if isinstance(runtime_cache, dict):
             runtime_cache[runtime_cache_key] = {"ts": time.time(), "data": None, "error": "Serie sin epochs útiles"}
             st.session_state["_poem_runtime_cache"] = runtime_cache

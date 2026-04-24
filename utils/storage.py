@@ -2,6 +2,7 @@
 Gestión de LocalStorage del navegador
 """
 import json
+import logging
 from uuid import uuid4
 from typing import Optional
 
@@ -16,7 +17,9 @@ from config import (
     LS_WU_CALIBRATIONS,
     LS_UNIT_PREFERENCES,
 )
-from utils.units import normalize_unit_preferences
+from utils.units import DEFAULT_UNIT_PREFERENCES, normalize_unit_preferences
+
+logger = logging.getLogger(__name__)
 
 _FORGET_MARKER = "__MLX_FORGOTTEN__"
 
@@ -25,6 +28,24 @@ _FORGET_MARKER = "__MLX_FORGOTTEN__"
 _LS_LEGACY_STATION = "meteolabx_station"
 _LS_LEGACY_APIKEY  = "meteolabx_apikey"
 _LS_LEGACY_Z       = "meteolabx_z"
+
+
+def _migrate_legacy_unit_preferences(payload) -> dict:
+    """
+    Corrige el antiguo perfil por defecto que arrancaba temperatura en Kelvin.
+    Solo migra el caso legacy exacto para no pisar elecciones reales del usuario.
+    """
+    normalized = normalize_unit_preferences(payload if isinstance(payload, dict) else None)
+    looks_like_legacy_default = (
+        normalized.get("temperature") == "k"
+        and normalized.get("wind") == DEFAULT_UNIT_PREFERENCES["wind"]
+        and normalized.get("pressure") == DEFAULT_UNIT_PREFERENCES["pressure"]
+        and normalized.get("precip") == DEFAULT_UNIT_PREFERENCES["precip"]
+        and normalized.get("radiation") == DEFAULT_UNIT_PREFERENCES["radiation"]
+    )
+    if looks_like_legacy_default:
+        normalized["temperature"] = DEFAULT_UNIT_PREFERENCES["temperature"]
+    return normalized
 
 
 def _session_storage_key() -> str:
@@ -38,7 +59,8 @@ def _session_storage_key() -> str:
             key = f"mlx_storage_{uuid4().hex}"
             st.session_state["_mlx_local_storage_key"] = key
         return key
-    except Exception:
+    except Exception as exc:
+        logger.warning("No se pudo resolver la key de sesión para localStorage: %s", exc)
         return "mlx_storage_fallback"
 
 
@@ -49,12 +71,14 @@ def _get_local_storage() -> Optional[LocalStorage]:
     """
     try:
         return LocalStorage(key=_session_storage_key())
-    except TypeError:
-        try:
-            return LocalStorage()
-        except Exception:
-            return None
-    except Exception:
+    except TypeError as exc:
+        logger.error(
+            "LocalStorage no acepta key de sesión; se desactiva la persistencia local por seguridad: %s",
+            exc,
+        )
+        return None
+    except Exception as exc:
+        logger.warning("No se pudo inicializar LocalStorage: %s", exc)
         return None
 
 
@@ -200,9 +224,11 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
             except TypeError:
                 try:
                     storage.setItem(item_key, forget_value)
-                except Exception:
+                except Exception as exc:
+                    logger.warning("No se pudo marcar localStorage como olvidado para %s: %s", item_key, exc)
                     pass
-            except Exception:
+            except Exception as exc:
+                logger.warning("No se pudo escribir el marcador de olvido para %s: %s", item_key, exc)
                 pass
 
             session_key = _session_storage_key()
@@ -223,9 +249,28 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
         try:
             storage.setItem(item_key, value, key=k)
         except TypeError:
-            storage.setItem(item_key, value)
+            try:
+                storage.setItem(item_key, value)
+            except Exception as inner_exc:
+                logger.warning("No se pudo guardar %s en localStorage (fallback): %s", item_key, inner_exc)
+        except Exception as exc:
+            logger.warning("No se pudo guardar %s en localStorage: %s", item_key, exc)
 
-    except Exception:
+        session_key = _session_storage_key()
+        try:
+            storage.storedItems[item_key] = value
+        except Exception:
+            pass
+        try:
+            cached = st.session_state.get(session_key)
+            if isinstance(cached, dict):
+                cached[item_key] = value
+                st.session_state[session_key] = cached
+        except Exception:
+            pass
+
+    except Exception as exc:
+        logger.warning("Error general escribiendo %s en localStorage: %s", item_key, exc)
         pass
 
 
@@ -409,7 +454,10 @@ def get_stored_unit_preferences():
         payload = json.loads(txt)
     except Exception:
         return normalize_unit_preferences(None)
-    return normalize_unit_preferences(payload if isinstance(payload, dict) else None)
+    normalized = _migrate_legacy_unit_preferences(payload if isinstance(payload, dict) else None)
+    if isinstance(payload, dict) and normalize_unit_preferences(payload) != normalized:
+        set_stored_unit_preferences(normalized)
+    return normalized
 
 
 def set_stored_unit_preferences(preferences: Optional[dict]):

@@ -56,8 +56,6 @@ def pressure_trend_3h(p_now: float = None, epoch_now: int = None,
         - arrow: Símbolo de flecha
     """
     from utils.helpers import is_nan
-    import logging
-    logger = logging.getLogger(__name__)
     
     # PRIORIDAD 1: Usar datos del API si están disponibles
     if (p_now is not None and p_3h_ago is not None and 
@@ -72,35 +70,20 @@ def pressure_trend_3h(p_now: float = None, epoch_now: int = None,
             dp = p_now - p_3h_ago
             rate_h = dp / dt_hours
             
-            # Log detallado
-            logger.info(f"📊 Tendencia presión (del API):")
-            logger.info(f"   Presión ahora:    {p_now:.2f} hPa")
-            logger.info(f"   Presión hace {dt_hours:.2f}h: {p_3h_ago:.2f} hPa")
-            logger.info(f"   Diferencia (Δp):  {dp:+.2f} hPa")
-            logger.info(f"   Tasa:             {rate_h:+.2f} hPa/h")
-            
             # Clasificar tendencia usando constantes de config
             if abs(dp) < PRESSURE_STABLE_THRESHOLD:
-                logger.info(f"   → Estable")
                 return (dp, rate_h, "Estable", "→")
             elif dp > 0:
                 if dp > PRESSURE_RAPID_CHANGE:
-                    logger.info(f"   → Subiendo rápido")
                     return (dp, rate_h, "Subiendo rápido", "⬆")
-                logger.info(f"   → Subiendo")
                 return (dp, rate_h, "Subiendo", "↗")
             else:
                 if dp < -PRESSURE_RAPID_CHANGE:
-                    logger.info(f"   → Bajando rápido")
                     return (dp, rate_h, "Bajando rápido", "⬇")
-                logger.info(f"   → Bajando")
                 return (dp, rate_h, "Bajando", "↘")
     
     # PRIORIDAD 2: Usar historial local (fallback)
-    logger.debug("Usando historial local para tendencia de presión (fallback)")
-    
     if "p_hist" not in st.session_state or len(st.session_state.p_hist) < 2:
-        logger.debug("Sin suficiente historial local")
         return (float("nan"), float("nan"), "—", "•")
     
     hist = st.session_state.p_hist

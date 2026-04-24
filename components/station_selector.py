@@ -10,12 +10,21 @@ from typing import Optional, Tuple
 import requests
 import streamlit as st
 from utils.i18n import t
-
-from config import LS_AUTOCONNECT
+from utils.provider_state import (
+    apply_station_selection,
+    clear_provider_runtime_cache,
+    disable_provider_autoconnect,
+    persist_provider_autoconnect_target,
+    reset_toggle_state,
+)
+from .geolocation_state import (
+    consume_browser_geolocation,
+    default_search_coords,
+    ensure_geo_state,
+    start_browser_geolocation_request,
+)
 from providers import search_nearby_stations
 from utils.storage import (
-    set_local_storage,
-    set_stored_autoconnect_target,
     get_stored_autoconnect,
     get_stored_autoconnect_target,
 )
@@ -86,62 +95,6 @@ CITY_COORDS_ES = {
     "merida": (38.9161, -6.3437),
     "pamplona": (42.8125, -1.6458),
 }
-
-
-def _in_lat_lon_range(lat: float, lon: float) -> bool:
-    return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
-
-
-def _normalize_coords_order(lat: float, lon: float):
-    """Corrige lat/lon invertidas usando rango y distancia a estaciones reales."""
-    lat = float(lat)
-    lon = float(lon)
-
-    if (lat < -90.0 or lat > 90.0) and (-90.0 <= lon <= 90.0) and (-180.0 <= lat <= 180.0):
-        return lon, lat, True
-    if (lon < -180.0 or lon > 180.0) and (-180.0 <= lat <= 180.0) and (-90.0 <= lon <= 90.0):
-        return lon, lat, True
-    if abs(lon) <= 90.0 and abs(lat) > 90.0 and abs(lat) <= 180.0:
-        return lon, lat, True
-
-    normal_ok = _in_lat_lon_range(lat, lon)
-    swapped_ok = _in_lat_lon_range(lon, lat)
-
-    if normal_ok and not swapped_ok:
-        return lat, lon, False
-    if swapped_ok and not normal_ok:
-        return lon, lat, True
-    if not normal_ok and not swapped_ok:
-        return lat, lon, False
-
-    best_normal = search_nearby_stations(lat, lon, max_results=1)
-    d_normal = best_normal[0].distance_km if best_normal else float("inf")
-
-    if d_normal > 500.0 and swapped_ok:
-        best_swapped = search_nearby_stations(lon, lat, max_results=1)
-        d_swapped = best_swapped[0].distance_km if best_swapped else float("inf")
-        if d_swapped < (d_normal * 0.5):
-            return lon, lat, True
-
-    return lat, lon, False
-
-
-def _default_search_coords():
-    """Coordenadas por defecto para búsqueda."""
-    lat = (
-        st.session_state.get("search_lat")
-        or st.session_state.get("provider_station_lat")
-        or st.session_state.get("aemet_station_lat")
-        or 41.39
-    )
-    lon = (
-        st.session_state.get("search_lon")
-        or st.session_state.get("provider_station_lon")
-        or st.session_state.get("aemet_station_lon")
-        or 2.17
-    )
-    return float(lat), float(lon)
-
 
 def _coords_from_city(city_name: str):
     if not city_name:
@@ -228,170 +181,45 @@ def _geocode_with_nominatim(query: str) -> Tuple[Optional[Tuple[float, float]], 
     return (lat, lon), ""
 
 
-def _apply_selected_station(station):
-    """Guarda estación seleccionada en session_state, con compatibilidad legacy."""
-    if station.provider_id == "AEMET":
-        try:
-            from services.aemet import clear_aemet_runtime_cache
-            clear_aemet_runtime_cache()
-        except Exception:
-            pass
-
-    st.session_state["connection_type"] = station.provider_id
-    st.session_state["provider_station_id"] = station.station_id
-    st.session_state["provider_station_name"] = station.name
-    st.session_state["provider_station_lat"] = station.lat
-    st.session_state["provider_station_lon"] = station.lon
-    st.session_state["provider_station_alt"] = station.elevation_m
-
-    if station.provider_id == "AEMET":
-        st.session_state["aemet_station_id"] = station.station_id
-        st.session_state["aemet_station_name"] = station.name
-        st.session_state["aemet_station_lat"] = station.lat
-        st.session_state["aemet_station_lon"] = station.lon
-        st.session_state["aemet_station_alt"] = station.elevation_m
-    elif station.provider_id == "METEOCAT":
-        st.session_state["meteocat_station_id"] = station.station_id
-        st.session_state["meteocat_station_name"] = station.name
-        st.session_state["meteocat_station_lat"] = station.lat
-        st.session_state["meteocat_station_lon"] = station.lon
-        st.session_state["meteocat_station_alt"] = station.elevation_m
-    elif station.provider_id == "EUSKALMET":
-        st.session_state["euskalmet_station_id"] = station.station_id
-        st.session_state["euskalmet_station_name"] = station.name
-        st.session_state["euskalmet_station_lat"] = station.lat
-        st.session_state["euskalmet_station_lon"] = station.lon
-        st.session_state["euskalmet_station_alt"] = station.elevation_m
-    elif station.provider_id == "METEOFRANCE":
-        st.session_state["meteofrance_station_id"] = station.station_id
-        st.session_state["meteofrance_station_name"] = station.name
-        st.session_state["meteofrance_station_lat"] = station.lat
-        st.session_state["meteofrance_station_lon"] = station.lon
-        st.session_state["meteofrance_station_alt"] = station.elevation_m
-    elif station.provider_id == "FROST":
-        st.session_state["frost_station_id"] = station.station_id
-        st.session_state["frost_station_name"] = station.name
-        st.session_state["frost_station_lat"] = station.lat
-        st.session_state["frost_station_lon"] = station.lon
-        st.session_state["frost_station_alt"] = station.elevation_m
-        st.session_state["provider_station_tz"] = "Europe/Oslo"
-    elif station.provider_id == "METEOGALICIA":
-        st.session_state["meteogalicia_station_id"] = station.station_id
-        st.session_state["meteogalicia_station_name"] = station.name
-        st.session_state["meteogalicia_station_lat"] = station.lat
-        st.session_state["meteogalicia_station_lon"] = station.lon
-        st.session_state["meteogalicia_station_alt"] = station.elevation_m
-    elif station.provider_id == "NWS":
-        st.session_state["nws_station_id"] = station.station_id
-        st.session_state["nws_station_name"] = station.name
-        st.session_state["nws_station_lat"] = station.lat
-        st.session_state["nws_station_lon"] = station.lon
-        st.session_state["nws_station_alt"] = station.elevation_m
-    elif station.provider_id == "POEM":
-        st.session_state["poem_station_id"] = station.station_id
-        st.session_state["poem_station_name"] = station.name
-        st.session_state["poem_station_lat"] = station.lat
-        st.session_state["poem_station_lon"] = station.lon
-        st.session_state["poem_station_alt"] = station.elevation_m
-
-    st.session_state["connected"] = True
-    st.session_state["show_results"] = False
-
-    for key in ("search_lat", "search_lon"):
-        if key in st.session_state:
-            del st.session_state[key]
-
-
-def _set_provider_autoconnect(station):
-    """Guarda en localStorage la estación de proveedor para auto-conexión."""
-    provider_id = str(getattr(station, "provider_id", "") or "").strip().upper()
-    station_id = str(getattr(station, "station_id", "") or "").strip()
-    if not provider_id or not station_id:
-        return False
-
-    set_stored_autoconnect_target(
-        {
-            "kind": "PROVIDER",
-            "provider_id": provider_id,
-            "station_id": station_id,
-            "station_name": str(getattr(station, "name", "") or station_id).strip(),
-            "lat": float(getattr(station, "lat", 0.0)),
-            "lon": float(getattr(station, "lon", 0.0)),
-            "elevation_m": float(getattr(station, "elevation_m", 0.0)),
-        }
-    )
-    set_local_storage(LS_AUTOCONNECT, "1", "save")
-    # Evita autoconectar inmediatamente en esta misma sesión;
-    # la auto-conexión se aplica al volver a entrar.
-    st.session_state["_autoconnect_attempted"] = True
-    return True
-
-
-def _reset_autoconnect_toggle_state():
-    """Limpia estado de toggles para resincronizar con la estación objetivo."""
-    for state_key in list(st.session_state.keys()):
-        if state_key.startswith("autoconnect_toggle_"):
-            del st.session_state[state_key]
-
-
 def render_station_selector():
     """Renderiza el selector de estaciones cercano, independiente del proveedor."""
     if st.session_state.get("connected"):
         return
 
-    if "geo_request_id" not in st.session_state:
-        st.session_state["geo_request_id"] = 0
-    if "geo_pending" not in st.session_state:
-        st.session_state["geo_pending"] = False
-    if "geo_last_error" not in st.session_state:
-        st.session_state["geo_last_error"] = ""
-    if "geo_debug_msg" not in st.session_state:
-        st.session_state["geo_debug_msg"] = ""
+    ensure_geo_state("geo", request_id_start=0)
     if "nominatim_last_match" not in st.session_state:
         st.session_state["nominatim_last_match"] = ""
     if "nominatim_last_error" not in st.session_state:
         st.session_state["nominatim_last_error"] = ""
 
-    browser_geo_result = None
-    # Renderizar el componente custom solo cuando hay solicitud activa.
-    # Evita huecos verticales cuando no se está pidiendo geolocalización.
-    if st.session_state.get("geo_pending"):
-        browser_geo_result = get_browser_geolocation(
-            request_id=st.session_state["geo_request_id"],
-            timeout_ms=12000,
-            high_accuracy=True,
-        )
-
-    if st.session_state.get("geo_pending") and isinstance(browser_geo_result, dict):
-        st.session_state["geo_pending"] = False
+    browser_geo_result = consume_browser_geolocation(
+        "geo",
+        get_browser_geolocation=get_browser_geolocation,
+        timeout_ms=12000,
+        high_accuracy=True,
+    )
+    if isinstance(browser_geo_result, dict):
         if browser_geo_result.get("ok"):
-            lat = browser_geo_result.get("lat")
-            lon = browser_geo_result.get("lon")
-            if lat is not None and lon is not None:
-                lat, lon, swapped = _normalize_coords_order(lat, lon)
-                st.session_state["search_lat"] = lat
-                st.session_state["search_lon"] = lon
-                st.session_state["show_results"] = True
-                acc = browser_geo_result.get("accuracy_m")
-                if isinstance(acc, (int, float)):
-                    st.session_state["geo_debug_msg"] = t("station_selector.geo_detected_accuracy", accuracy=acc)
-                else:
-                    st.session_state["geo_debug_msg"] = t("station_selector.geo_detected")
-                if swapped:
-                    st.session_state["geo_debug_msg"] += t("station_selector.coords_swapped")
-                st.session_state["geo_last_error"] = ""
-                st.rerun()
-
-        error_message = browser_geo_result.get("error_message") or t("station_selector.geo_error_default")
-        st.session_state["geo_last_error"] = str(error_message)
-        st.session_state["geo_debug_msg"] = ""
+            st.session_state["search_lat"] = browser_geo_result["lat"]
+            st.session_state["search_lon"] = browser_geo_result["lon"]
+            st.session_state["show_results"] = True
+            acc = browser_geo_result.get("accuracy_m")
+            if isinstance(acc, (int, float)):
+                st.session_state["geo_debug_msg"] = t("station_selector.geo_detected_accuracy", accuracy=acc)
+            else:
+                st.session_state["geo_debug_msg"] = t("station_selector.geo_detected")
+            if browser_geo_result.get("swapped"):
+                st.session_state["geo_debug_msg"] += t("station_selector.coords_swapped")
+            st.session_state["geo_last_error"] = ""
+            st.rerun()
+        else:
+            error_message = browser_geo_result.get("error_message") or t("station_selector.geo_error_default")
+            st.session_state["geo_last_error"] = str(error_message)
+            st.session_state["geo_debug_msg"] = ""
 
     st.markdown("<div class='station-selector-gap'></div>", unsafe_allow_html=True)
     if st.button(t("station_selector.search_near_me"), type="primary", width="stretch"):
-        st.session_state["geo_request_id"] += 1
-        st.session_state["geo_pending"] = True
-        st.session_state["geo_last_error"] = ""
-        st.session_state["geo_debug_msg"] = t("station_selector.requesting_geo")
+        start_browser_geolocation_request("geo", message=t("station_selector.requesting_geo"))
         st.rerun()
 
     if st.session_state.get("geo_pending"):
@@ -416,7 +244,20 @@ def render_station_selector():
         st.caption(t("station_selector.nominatim_caption"))
         st.caption(t("station_selector.osm_caption"))
 
-        base_lat, base_lon = _default_search_coords()
+        base_lat, base_lon = default_search_coords(
+            search_lat_key="search_lat",
+            search_lon_key="search_lon",
+            fallback_lat_values=(
+                st.session_state.get("provider_station_lat"),
+                st.session_state.get("aemet_station_lat"),
+            ),
+            fallback_lon_values=(
+                st.session_state.get("provider_station_lon"),
+                st.session_state.get("aemet_station_lon"),
+            ),
+            default_lat=41.39,
+            default_lon=2.17,
+        )
         city_coords = _coords_from_city(city_input)
         if city_coords is not None:
             base_lat, base_lon = city_coords
@@ -478,7 +319,20 @@ def render_station_selector():
         st.markdown("---")
         st.markdown(f"### {t('station_selector.nearby_title')}")
 
-        lat, lon = _default_search_coords()
+        lat, lon = default_search_coords(
+            search_lat_key="search_lat",
+            search_lon_key="search_lon",
+            fallback_lat_values=(
+                st.session_state.get("provider_station_lat"),
+                st.session_state.get("aemet_station_lat"),
+            ),
+            fallback_lon_values=(
+                st.session_state.get("provider_station_lon"),
+                st.session_state.get("aemet_station_lon"),
+            ),
+            default_lat=41.39,
+            default_lon=2.17,
+        )
         nearest = search_nearby_stations(lat, lon, max_results=5)
 
         if not nearest:
@@ -505,18 +359,15 @@ def render_station_selector():
                     toggle_key = f"autoconnect_toggle_{station.provider_id}_{station.station_id}"
                     if toggle_key not in st.session_state:
                         st.session_state[toggle_key] = is_target_station
-                    toggle_enabled = st.checkbox(t("station_selector.autoconnect"), key=toggle_key)
+                    toggle_enabled = st.toggle(t("station_selector.autoconnect"), key=toggle_key)
                     if toggle_enabled and not is_target_station:
-                        if _set_provider_autoconnect(station):
-                            _reset_autoconnect_toggle_state()
+                        if persist_provider_autoconnect_target(station):
+                            reset_toggle_state("autoconnect_toggle_")
                             st.success(t("station_selector.autoconnect_saved", station=station.name))
                             st.rerun()
                         st.error(t("station_selector.autoconnect_save_error"))
                     elif (not toggle_enabled) and is_target_station:
-                        set_local_storage(LS_AUTOCONNECT, "0", "save")
-                        set_stored_autoconnect_target(None)
-                        st.session_state["_autoconnect_attempted"] = True
-                        _reset_autoconnect_toggle_state()
+                        disable_provider_autoconnect("autoconnect_toggle_")
                         st.info(t("station_selector.autoconnect_disabled"))
                         st.rerun()
 
@@ -529,7 +380,13 @@ def render_station_selector():
                         key=f"connect_{station.provider_id}_{station.station_id}",
                         width="stretch",
                     ):
-                        _apply_selected_station(station)
+                        apply_station_selection(
+                            station,
+                            connected=True,
+                            show_results=False,
+                            clear_runtime_cache=True,
+                            clear_search_coords=True,
+                        )
                         st.success(t("station_selector.connect_success", station=station.name, provider=station.provider_name))
                         st.rerun()
 
@@ -559,5 +416,5 @@ def show_provider_connection_status():
         width="stretch",
         help=t("sidebar.provider_status.refresh_help"),
     ):
-        st.cache_data.clear()
+        clear_provider_runtime_cache(provider_id)
         st.rerun()

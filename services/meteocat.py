@@ -14,6 +14,9 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from data_files import METEOCAT_STATIONS_PATH
+from utils.provider_state import get_connected_provider_station_id, get_provider_station_id, is_provider_connection, resolve_state
+
 
 METEOCAT_API_KEY = os.getenv(
     "METEOCAT_API_KEY",
@@ -23,7 +26,7 @@ METEOCAT_API_KEY = os.getenv(
 BASE_URL = "https://api.meteo.cat/xema/v1"
 TIMEOUT_SECONDS = 14
 CAT_TZ = ZoneInfo("Europe/Madrid")
-METEOCAT_SERIES_CACHE_VERSION = 5
+METEOCAT_SERIES_CACHE_VERSION = 6
 
 
 # Variables de interés.
@@ -50,7 +53,7 @@ METEOCAT_LATEST_VARIABLES = {
     "temp": [V_TEMP],
     "rh": [V_RH],
     "pressure_abs": [V_PRESSURE],
-    "precip_total": [V_PRECIP_ACC, V_PRECIP],
+    "precip_total": [V_PRECIP],
     "solar": [V_SOLAR],
     "uv": [V_UV],
     "wind": [V_WIND, 20],
@@ -169,6 +172,125 @@ CLIMO_ANNUAL_EXTRA_SCHEMA = [
     "precip_max_24h_date",
 ]
 
+CLIMO_WIND_METRICS = {"wind_mean", "gust_max"}
+CLIMO_DATE_COLUMN_BY_METRIC = {
+    "temp_abs_max": "temp_abs_max_date",
+    "temp_abs_min": "temp_abs_min_date",
+    "gust_max": "gust_abs_max_date",
+    "precip_max_24h": "precip_max_24h_date",
+}
+CLIMO_NUMERIC_COLUMNS = [
+    "epoch",
+    "temp_mean",
+    "temp_max",
+    "temp_min",
+    "wind_mean",
+    "gust_max",
+    "precip_total",
+    "solar_mean",
+    "precip_max_24h",
+    "rain_days",
+    "temp_abs_max",
+    "temp_abs_min",
+]
+
+
+def _empty_climo_row(date_label: str, epoch: float) -> Dict[str, Any]:
+    return {
+        "date": date_label,
+        "epoch": epoch,
+        "temp_mean": float("nan"),
+        "temp_max": float("nan"),
+        "temp_min": float("nan"),
+        "wind_mean": float("nan"),
+        "gust_max": float("nan"),
+        "precip_total": float("nan"),
+        "solar_mean": float("nan"),
+        "precip_max_24h": float("nan"),
+        "rain_days": float("nan"),
+        "temp_abs_max": float("nan"),
+        "temp_abs_max_date": None,
+        "temp_abs_min": float("nan"),
+        "temp_abs_min_date": None,
+        "gust_abs_max_date": None,
+        "precip_max_24h_date": None,
+    }
+
+
+def _finalize_climo_frame(frame: pd.DataFrame, *, fill_temp_mean: bool = True) -> pd.DataFrame:
+    for col in CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA:
+        if col not in frame.columns:
+            frame[col] = float("nan")
+
+    for col in CLIMO_NUMERIC_COLUMNS:
+        frame[col] = pd.to_numeric(frame[col], errors="coerce")
+
+    if fill_temp_mean:
+        missing_mean = frame["temp_mean"].isna() & frame["temp_max"].notna() & frame["temp_min"].notna()
+        if missing_mean.any():
+            frame.loc[missing_mean, "temp_mean"] = (
+                frame.loc[missing_mean, "temp_max"] + frame.loc[missing_mean, "temp_min"]
+            ) / 2.0
+
+    frame["precip_total"] = frame["precip_total"].clip(lower=0)
+    frame["precip_max_24h"] = frame["precip_max_24h"].clip(lower=0)
+    frame["rain_days"] = frame["rain_days"].clip(lower=0)
+    return frame.sort_values("date").reset_index(drop=True)[CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA]
+
+
+def _climo_epoch_from_label(date_label: str) -> float:
+    try:
+        return float(datetime.fromisoformat(str(date_label)).replace(tzinfo=timezone.utc).timestamp())
+    except Exception:
+        return float("nan")
+
+
+def _build_climo_rows(date_labels: List[str]) -> Dict[Any, Dict[str, Any]]:
+    return {
+        str(date_label): _empty_climo_row(str(date_label), _climo_epoch_from_label(str(date_label)))
+        for date_label in date_labels
+    }
+
+
+def _metric_value_available(item: Any) -> bool:
+    return isinstance(item, dict) and (not _is_nan(_safe_float(item.get("value"))))
+
+
+def _select_metric_candidate_code(candidate_codes: List[int], has_data_for_code) -> Optional[int]:
+    normalized = [int(code) for code in candidate_codes]
+    if not normalized:
+        return None
+    chosen_code = int(normalized[0])
+    for candidate_code in normalized:
+        try:
+            if has_data_for_code(int(candidate_code)):
+                chosen_code = int(candidate_code)
+                break
+        except Exception:
+            continue
+    return chosen_code
+
+
+def _apply_climo_metric_value(row: Dict[str, Any], metric_name: str, payload: Dict[str, Any]) -> None:
+    value = _safe_float(payload.get("value"))
+    if _is_nan(value):
+        return
+    if metric_name in CLIMO_WIND_METRICS:
+        value = _ms_to_kmh(value)
+    row[metric_name] = float(value)
+    date_col = CLIMO_DATE_COLUMN_BY_METRIC.get(metric_name)
+    if date_col:
+        row[date_col] = _parse_stats_date(payload.get("date"))
+
+
+def _finalize_climo_rows(rows_by_key: Dict[Any, Dict[str, Any]], *, fill_temp_mean: bool = True) -> pd.DataFrame:
+    if not rows_by_key:
+        return pd.DataFrame(columns=CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA)
+    frame = pd.DataFrame(rows_by_key.values())
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+    frame = frame.dropna(subset=["date"]).copy()
+    return _finalize_climo_frame(frame, fill_temp_mean=fill_temp_mean)
+
 
 def _safe_float(value: Any, default: float = float("nan")) -> float:
     if value is None:
@@ -237,7 +359,7 @@ def _absolute_to_msl(p_abs_hpa: float, elevation_m: float) -> float:
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_meteocat.json"):
+def _load_stations(path: str = str(METEOCAT_STATIONS_PATH)):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -353,7 +475,7 @@ def _parse_stats_month(raw_value: Any) -> Optional[str]:
         return None
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_meteocat_daily_stats_month(
     station_code: str,
     variable_code: int,
@@ -555,7 +677,7 @@ def _extract_annual_item_date(item: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_meteocat_annual_stats_series(
     station_code: str,
     variable_code: int,
@@ -601,7 +723,7 @@ def fetch_meteocat_annual_stats_series(
     return {"ok": True, "error": "", "data": per_year}
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_meteocat_monthly_stats_year(
     station_code: str,
     variable_code: int,
@@ -657,42 +779,7 @@ def fetch_meteocat_monthly_history_for_year(
     if not code:
         return pd.DataFrame(columns=CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA)
 
-    rows_by_month: Dict[str, Dict[str, Any]] = {}
-    wind_metrics = {"wind_mean", "gust_max"}
-    date_column_by_metric = {
-        "temp_abs_max": "temp_abs_max_date",
-        "temp_abs_min": "temp_abs_min_date",
-        "gust_max": "gust_abs_max_date",
-        "precip_max_24h": "precip_max_24h_date",
-    }
-
-    for mm in range(1, 13):
-        day_txt = f"{yy:04d}-{mm:02d}-01"
-        epoch = float("nan")
-        try:
-            epoch = float(datetime.fromisoformat(day_txt).replace(tzinfo=timezone.utc).timestamp())
-        except Exception:
-            pass
-
-        rows_by_month[day_txt] = {
-            "date": day_txt,
-            "epoch": epoch,
-            "temp_mean": float("nan"),
-            "temp_max": float("nan"),
-            "temp_min": float("nan"),
-            "wind_mean": float("nan"),
-            "gust_max": float("nan"),
-            "precip_total": float("nan"),
-            "solar_mean": float("nan"),
-            "precip_max_24h": float("nan"),
-            "rain_days": float("nan"),
-            "temp_abs_max": float("nan"),
-            "temp_abs_max_date": None,
-            "temp_abs_min": float("nan"),
-            "temp_abs_min_date": None,
-            "gust_abs_max_date": None,
-            "precip_max_24h_date": None,
-        }
+    rows_by_month = _build_climo_rows([f"{yy:04d}-{mm:02d}-01" for mm in range(1, 13)])
 
     monthly_payload_cache: Dict[int, Dict[str, Dict[str, Any]]] = {}
 
@@ -713,71 +800,23 @@ def fetch_meteocat_monthly_history_for_year(
         return out
 
     for metric_name, candidates in METEOCAT_MONTHLY_CLIMO_CODES.items():
-        candidate_codes = [int(c) for c in candidates]
-        if not candidate_codes:
+        chosen_code = _select_metric_candidate_code(
+            [int(c) for c in candidates],
+            lambda var_code: any(
+                (month_key in rows_by_month) and _metric_value_available(item)
+                for month_key, item in _fetch_cached_series(int(var_code)).items()
+            ),
+        )
+        if chosen_code is None:
             continue
-
-        chosen_code = int(candidate_codes[0])
-        for var_code in candidate_codes:
-            series_by_month = _fetch_cached_series(int(var_code))
-            has_any = any(
-                (month_key in rows_by_month) and (not _is_nan(_safe_float(item.get("value"))))
-                for month_key, item in series_by_month.items()
-                if isinstance(item, dict)
-            )
-            if has_any:
-                chosen_code = int(var_code)
-                break
 
         chosen_series = _fetch_cached_series(chosen_code)
         for month_key, data in chosen_series.items():
             if month_key not in rows_by_month or not isinstance(data, dict):
                 continue
-            value = _safe_float(data.get("value"))
-            if _is_nan(value):
-                continue
-            if metric_name in wind_metrics:
-                value = _ms_to_kmh(value)
-            rows_by_month[month_key][metric_name] = float(value)
+            _apply_climo_metric_value(rows_by_month[month_key], metric_name, data)
 
-            date_col = date_column_by_metric.get(metric_name)
-            if date_col:
-                rows_by_month[month_key][date_col] = _parse_stats_date(data.get("date"))
-
-    frame = pd.DataFrame(rows_by_month.values())
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
-    frame = frame.dropna(subset=["date"]).copy()
-
-    for col in CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA:
-        if col not in frame.columns:
-            frame[col] = float("nan")
-
-    numeric_cols = [
-        "epoch",
-        "temp_mean",
-        "temp_max",
-        "temp_min",
-        "wind_mean",
-        "gust_max",
-        "precip_total",
-        "solar_mean",
-        "precip_max_24h",
-        "rain_days",
-        "temp_abs_max",
-        "temp_abs_min",
-    ]
-    for col in numeric_cols:
-        frame[col] = pd.to_numeric(frame[col], errors="coerce")
-
-    missing_mean = frame["temp_mean"].isna() & frame["temp_max"].notna() & frame["temp_min"].notna()
-    if missing_mean.any():
-        frame.loc[missing_mean, "temp_mean"] = (frame.loc[missing_mean, "temp_max"] + frame.loc[missing_mean, "temp_min"]) / 2.0
-
-    frame["precip_total"] = frame["precip_total"].clip(lower=0)
-    frame["precip_max_24h"] = frame["precip_max_24h"].clip(lower=0)
-    frame["rain_days"] = frame["rain_days"].clip(lower=0)
-
-    return frame.sort_values("date").reset_index(drop=True)[CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA]
+    return _finalize_climo_rows(rows_by_month)
 
 
 def fetch_meteocat_monthly_history_for_periods(
@@ -796,40 +835,8 @@ def fetch_meteocat_monthly_history_for_periods(
         key = f"{yy:04d}-{mm:02d}-01"
         requested_months[key] = (yy, mm)
 
-    rows_by_month: Dict[str, Dict[str, Any]] = {}
-    for month_key, (yy, mm) in requested_months.items():
-        epoch = float("nan")
-        try:
-            epoch = float(datetime.fromisoformat(month_key).replace(tzinfo=timezone.utc).timestamp())
-        except Exception:
-            pass
-        rows_by_month[month_key] = {
-            "date": month_key,
-            "epoch": epoch,
-            "temp_mean": float("nan"),
-            "temp_max": float("nan"),
-            "temp_min": float("nan"),
-            "wind_mean": float("nan"),
-            "gust_max": float("nan"),
-            "precip_total": float("nan"),
-            "solar_mean": float("nan"),
-            "precip_max_24h": float("nan"),
-            "rain_days": float("nan"),
-            "temp_abs_max": float("nan"),
-            "temp_abs_max_date": None,
-            "temp_abs_min": float("nan"),
-            "temp_abs_min_date": None,
-            "gust_abs_max_date": None,
-            "precip_max_24h_date": None,
-        }
+    rows_by_month = _build_climo_rows(list(requested_months.keys()))
 
-    wind_metrics = {"wind_mean", "gust_max"}
-    date_column_by_metric = {
-        "temp_abs_max": "temp_abs_max_date",
-        "temp_abs_min": "temp_abs_min_date",
-        "gust_max": "gust_abs_max_date",
-        "precip_max_24h": "precip_max_24h_date",
-    }
     monthly_payload_cache: Dict[Tuple[int, int], Dict[str, Dict[str, Any]]] = {}
 
     def _fetch_cached_series(var_code: int, year: int) -> Dict[str, Dict[str, Any]]:
@@ -850,71 +857,25 @@ def fetch_meteocat_monthly_history_for_periods(
 
     years = sorted({int(year) for year, _ in requested_months.values()})
     for metric_name, candidates in METEOCAT_MONTHLY_CLIMO_CODES.items():
-        candidate_codes = [int(c) for c in candidates]
-        if not candidate_codes:
+        chosen_code = _select_metric_candidate_code(
+            [int(c) for c in candidates],
+            lambda var_code: any(
+                (month_key in rows_by_month) and _metric_value_available(item)
+                for yy in years
+                for month_key, item in _fetch_cached_series(int(var_code), yy).items()
+            ),
+        )
+        if chosen_code is None:
             continue
-
-        chosen_code = int(candidate_codes[0])
-        for var_code in candidate_codes:
-            has_any = False
-            for yy in years:
-                series_by_month = _fetch_cached_series(int(var_code), yy)
-                if any((month_key in rows_by_month) for month_key in series_by_month.keys()):
-                    has_any = True
-                    break
-            if has_any:
-                chosen_code = int(var_code)
-                break
 
         for yy in years:
             chosen_series = _fetch_cached_series(chosen_code, yy)
             for month_key, data in chosen_series.items():
                 if month_key not in rows_by_month or not isinstance(data, dict):
                     continue
-                value = _safe_float(data.get("value"))
-                if _is_nan(value):
-                    continue
-                if metric_name in wind_metrics:
-                    value = _ms_to_kmh(value)
-                rows_by_month[month_key][metric_name] = float(value)
-                date_col = date_column_by_metric.get(metric_name)
-                if date_col:
-                    rows_by_month[month_key][date_col] = _parse_stats_date(data.get("date"))
+                _apply_climo_metric_value(rows_by_month[month_key], metric_name, data)
 
-    frame = pd.DataFrame(rows_by_month.values())
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
-    frame = frame.dropna(subset=["date"]).copy()
-
-    for col in CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA:
-        if col not in frame.columns:
-            frame[col] = float("nan")
-
-    numeric_cols = [
-        "epoch",
-        "temp_mean",
-        "temp_max",
-        "temp_min",
-        "wind_mean",
-        "gust_max",
-        "precip_total",
-        "solar_mean",
-        "precip_max_24h",
-        "rain_days",
-        "temp_abs_max",
-        "temp_abs_min",
-    ]
-    for col in numeric_cols:
-        frame[col] = pd.to_numeric(frame[col], errors="coerce")
-
-    missing_mean = frame["temp_mean"].isna() & frame["temp_max"].notna() & frame["temp_min"].notna()
-    if missing_mean.any():
-        frame.loc[missing_mean, "temp_mean"] = (frame.loc[missing_mean, "temp_max"] + frame.loc[missing_mean, "temp_min"]) / 2.0
-
-    frame["precip_total"] = frame["precip_total"].clip(lower=0)
-    frame["precip_max_24h"] = frame["precip_max_24h"].clip(lower=0)
-    frame["rain_days"] = frame["rain_days"].clip(lower=0)
-
-    return frame.sort_values("date").reset_index(drop=True)[CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA]
+    return _finalize_climo_rows(rows_by_month)
 
 
 def _fetch_daily_metric_for_months(
@@ -1161,42 +1122,10 @@ def fetch_meteocat_annual_history_for_years(
     if not code or not valid_years:
         return pd.DataFrame(columns=CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA)
 
-    rows_by_year: Dict[int, Dict[str, Any]] = {}
-    wind_metrics = {"wind_mean", "gust_max"}
-    date_column_by_metric = {
-        "temp_abs_max": "temp_abs_max_date",
-        "temp_abs_min": "temp_abs_min_date",
-        "gust_max": "gust_abs_max_date",
-        "precip_max_24h": "precip_max_24h_date",
+    rows_by_year: Dict[int, Dict[str, Any]] = {
+        int(year): _empty_climo_row(f"{int(year):04d}-01-01", _climo_epoch_from_label(f"{int(year):04d}-01-01"))
+        for year in valid_years
     }
-
-    for year in valid_years:
-        day_txt = f"{int(year):04d}-01-01"
-        epoch = float("nan")
-        try:
-            epoch = float(datetime.fromisoformat(day_txt).replace(tzinfo=timezone.utc).timestamp())
-        except Exception:
-            pass
-
-        rows_by_year[int(year)] = {
-            "date": day_txt,
-            "epoch": epoch,
-            "temp_mean": float("nan"),
-            "temp_max": float("nan"),
-            "temp_min": float("nan"),
-            "wind_mean": float("nan"),
-            "gust_max": float("nan"),
-            "precip_total": float("nan"),
-            "solar_mean": float("nan"),
-            "precip_max_24h": float("nan"),
-            "rain_days": float("nan"),
-            "temp_abs_max": float("nan"),
-            "temp_abs_max_date": None,
-            "temp_abs_min": float("nan"),
-            "temp_abs_min_date": None,
-            "gust_abs_max_date": None,
-            "precip_max_24h_date": None,
-        }
 
     # Cache local para evitar repetir la misma llamada (variable).
     annual_payload_cache: Dict[int, Dict[int, Dict[str, Any]]] = {}
@@ -1221,41 +1150,22 @@ def fetch_meteocat_annual_history_for_years(
     # 2) Con ese código, rellenar todos los años usando la serie ya descargada.
     selected_years = {int(y) for y in valid_years}
     for metric_name, candidates in METEOCAT_ANNUAL_CLIMO_CODES.items():
-        candidate_codes = [int(c) for c in candidates]
-        if not candidate_codes:
+        chosen_code = _select_metric_candidate_code(
+            [int(c) for c in candidates],
+            lambda var_code: any(
+                (int(y) in selected_years) and _metric_value_available(item)
+                for y, item in _fetch_cached_series(int(var_code)).items()
+            ),
+        )
+        if chosen_code is None:
             continue
-
-        chosen_code = int(candidate_codes[0])
-        for var_code in candidate_codes:
-            series_by_year = _fetch_cached_series(int(var_code))
-            has_any = any(
-                (int(y) in selected_years) and (not _is_nan(_safe_float(item.get("value"))))
-                for y, item in series_by_year.items()
-                if isinstance(item, dict)
-            )
-            if has_any:
-                chosen_code = int(var_code)
-                break
 
         chosen_series = _fetch_cached_series(chosen_code)
         for year in valid_years:
             data = chosen_series.get(int(year), {})
             if not data:
                 continue
-
-            value = _safe_float(data.get("value"))
-            if _is_nan(value):
-                continue
-
-            if metric_name in wind_metrics:
-                value = _ms_to_kmh(value)
-
-            rows_by_year[int(year)][metric_name] = float(value)
-
-            date_col = date_column_by_metric.get(metric_name)
-            if date_col:
-                metric_date = _parse_stats_date(data.get("date"))
-                rows_by_year[int(year)][date_col] = metric_date
+            _apply_climo_metric_value(rows_by_year[int(year)], metric_name, data)
 
     for year in valid_years:
         missing_mean = (
@@ -1268,40 +1178,7 @@ def fetch_meteocat_annual_history_for_years(
                 rows_by_year[int(year)]["temp_max"] + rows_by_year[int(year)]["temp_min"]
             ) / 2.0
 
-    if not rows_by_year:
-        return pd.DataFrame(columns=CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA)
-
-    frame = pd.DataFrame(rows_by_year.values())
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
-    frame = frame.dropna(subset=["date"]).copy()
-
-    for col in CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA:
-        if col not in frame.columns:
-            frame[col] = float("nan")
-
-    numeric_cols = [
-        "epoch",
-        "temp_mean",
-        "temp_max",
-        "temp_min",
-        "wind_mean",
-        "gust_max",
-        "precip_total",
-        "solar_mean",
-        "precip_max_24h",
-        "rain_days",
-        "temp_abs_max",
-        "temp_abs_min",
-    ]
-    for col in numeric_cols:
-        frame[col] = pd.to_numeric(frame[col], errors="coerce")
-
-    frame["precip_total"] = frame["precip_total"].clip(lower=0)
-    frame["precip_max_24h"] = frame["precip_max_24h"].clip(lower=0)
-    frame["rain_days"] = frame["rain_days"].clip(lower=0)
-
-    frame = frame.sort_values("date").reset_index(drop=True)
-    return frame[CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA]
+    return _finalize_climo_rows(rows_by_year, fill_temp_mean=False)
 
 
 def _request_json(url: str, api_key: str, params: Optional[Dict[str, Any]] = None) -> Any:
@@ -1340,7 +1217,7 @@ def _request_latest_variable(station_code: str, variable_code: int, api_key: str
     return best_value, best_epoch, best_ts
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_meteocat_station_snapshot(station_code: str, api_key: Optional[str] = None) -> Dict[str, Any]:
     code = str(station_code).strip().upper()
     key = str(api_key or METEOCAT_API_KEY).strip()
@@ -1388,7 +1265,7 @@ def _local_day_parts(day_local: Optional[datetime]) -> Tuple[int, int, int]:
     return day.year, day.month, day.day
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_meteocat_station_day(station_code: str, year: int, month: int, day: int, api_key: Optional[str] = None) -> Dict[str, Any]:
     code = str(station_code).strip().upper()
     key = str(api_key or METEOCAT_API_KEY).strip()
@@ -1464,14 +1341,8 @@ def _sum_series(series: List[Tuple[int, float]]) -> float:
 
 
 def _precip_today_mm(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
-    # Preferir acumulada si existe.
-    s_acc = _series_from_map(var_map, V_PRECIP_ACC)
-    if s_acc:
-        vals = [v for _, v in s_acc if not _is_nan(v)]
-        if vals:
-            return max(vals)
-
-    # Fallback: precipitación por intervalo (sumar).
+    # PPT (codi 35) es la precipitación por intervalo; PPTacu (codi 70)
+    # es un contador del datalogger y no representa la lluvia del día.
     s = _series_from_map(var_map, V_PRECIP)
     return _sum_series(s)
 
@@ -1480,24 +1351,9 @@ def _precip_window_mm(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
     """
     Calcula la precipitación acumulada dentro de una ventana temporal local.
 
-    Para series acumuladas no se debe tomar el máximo cuando la ventana empieza
-    a mitad del día UTC, porque el primer valor ya arrastra lluvia previa.
+    Se usa solo PPT (codi 35). PPTacu (codi 70) es un contador acumulado
+    del datalogger y puede arrastrar precipitación ajena al día local.
     """
-    s_acc = _series_from_map(var_map, V_PRECIP_ACC)
-    vals = [max(0.0, float(v)) for _, v in s_acc if not _is_nan(v)]
-    if len(vals) >= 2:
-        total = 0.0
-        for i in range(1, len(vals)):
-            diff = vals[i] - vals[i - 1]
-            if diff >= -0.05:
-                total += max(0.0, diff)
-            else:
-                total += max(0.0, vals[i])
-        return float(total)
-
-    if len(vals) == 1:
-        return 0.0
-
     s = _series_from_map(var_map, V_PRECIP)
     return _sum_series(s)
 
@@ -1614,7 +1470,7 @@ def _filter_var_map_by_epoch_range(
     return filtered
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_meteocat_local_day_window(
     station_code: str,
     hours_before_start: int = 0,
@@ -1708,7 +1564,7 @@ def _merge_timeseries_dicts(series_list: List[Dict[str, List[float]]]) -> Dict[s
     }
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_meteocat_today_series_with_lookback(
     station_code: str,
     hours_before_start: int = 3,
@@ -1725,7 +1581,7 @@ def fetch_meteocat_today_series_with_lookback(
     return {"epochs": [], "has_data": False}
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_meteocat_recent_synoptic_series(
     station_code: str,
     days_back: int = 7,
@@ -1764,19 +1620,15 @@ def fetch_meteocat_recent_synoptic_series(
 
 
 def is_meteocat_connection() -> bool:
-    return st.session_state.get("connection_type") == "METEOCAT"
+    return is_provider_connection("METEOCAT", st.session_state)
 
 
-def get_meteocat_data(api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    if not is_meteocat_connection():
+def get_meteocat_data(api_key: Optional[str] = None, state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("METEOCAT", state):
         return None
 
-    station_code = (
-        st.session_state.get("meteocat_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_code = str(station_code).strip().upper()
+    station_code = get_connected_provider_station_id("METEOCAT", state)
     if not station_code:
         return None
 

@@ -15,6 +15,16 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from data_files import METEOFRANCE_STATIONS_PATH
+from utils.provider_state import (
+    clear_provider_runtime_error,
+    get_connected_provider_station_id,
+    get_provider_station_id,
+    is_provider_connection,
+    resolve_state,
+    set_provider_runtime_error,
+)
+
 
 METEOFRANCE_BASE_URL = os.getenv(
     "METEOFRANCE_BASE_URL",
@@ -79,13 +89,7 @@ _DEFAULT_METEOFRANCE_API_KEY = (
 )
 
 
-def _get_setting(session_key: str, env_key: str, default: str = "") -> str:
-    try:
-        raw = st.session_state.get(session_key, "")
-        if raw not in (None, ""):
-            return str(raw).strip()
-    except Exception:
-        pass
+def _get_setting(env_key: str, default: str = "") -> str:
     try:
         secret_val = st.secrets.get(env_key, "")
         if secret_val not in (None, ""):
@@ -96,7 +100,6 @@ def _get_setting(session_key: str, env_key: str, default: str = "") -> str:
 
 
 METEOFRANCE_API_KEY = _get_setting(
-    "meteofrance_api_key",
     "METEOFRANCE_API_KEY",
     _DEFAULT_METEOFRANCE_API_KEY,
 )
@@ -296,7 +299,7 @@ def _request_response(
 
 
 @lru_cache(maxsize=2)
-def _load_stations(path: str = "data_estaciones_meteofrance.json") -> List[Dict[str, Any]]:
+def _load_stations(path: str = str(METEOFRANCE_STATIONS_PATH)) -> List[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
@@ -989,26 +992,22 @@ def _pressure_3h_reference(rows: List[Dict[str, Any]]) -> Tuple[float, Optional[
 
 
 def is_meteofrance_connection() -> bool:
-    return str(st.session_state.get("connection_type", "")).strip().upper() == "METEOFRANCE"
+    return is_provider_connection("METEOFRANCE", st.session_state)
 
 
-def get_meteofrance_data() -> Optional[Dict[str, Any]]:
-    if not is_meteofrance_connection():
+def get_meteofrance_data(state=None) -> Optional[Dict[str, Any]]:
+    state = resolve_state(state)
+    if not is_provider_connection("METEOFRANCE", state):
         return None
 
     api_key = str(METEOFRANCE_API_KEY or "").strip()
     if not api_key:
-        st.session_state["meteofrance_last_error"] = "Falta METEOFRANCE_API_KEY."
+        set_provider_runtime_error("METEOFRANCE", "Falta METEOFRANCE_API_KEY.", state)
         return None
 
-    station_id = (
-        st.session_state.get("meteofrance_station_id")
-        or st.session_state.get("provider_station_id")
-        or ""
-    )
-    station_id = str(station_id).strip()
+    station_id = get_connected_provider_station_id("METEOFRANCE", state)
     if not station_id:
-        st.session_state["meteofrance_last_error"] = "Falta id_station de Meteo-France."
+        set_provider_runtime_error("METEOFRANCE", "Falta id_station de Meteo-France.", state)
         return None
 
     station_meta = _find_station(station_id)
@@ -1023,7 +1022,7 @@ def get_meteofrance_data() -> Optional[Dict[str, Any]]:
         latest_rows_raw = fetch_meteofrance_latest_6m(station_id, api_key=api_key)
         hourly_rows_raw = fetch_meteofrance_hourly_series_today(station_id, api_key=api_key)
     except Exception as exc:
-        st.session_state["meteofrance_last_error"] = str(exc)
+        set_provider_runtime_error("METEOFRANCE", str(exc), state)
         return None
 
     latest_rows = [_parse_obs_row(row, elevation) for row in latest_rows_raw if isinstance(row, dict)]
@@ -1035,7 +1034,7 @@ def get_meteofrance_data() -> Optional[Dict[str, Any]]:
 
     current = latest_rows[-1] if latest_rows else (hourly_rows[-1] if hourly_rows else None)
     if current is None:
-        st.session_state["meteofrance_last_error"] = f"Sin datos de observación para {station_id}."
+        set_provider_runtime_error("METEOFRANCE", f"Sin datos de observación para {station_id}.", state)
         return None
 
     chart_epochs = [int(row["epoch"]) for row in hourly_rows]
@@ -1138,6 +1137,7 @@ def get_meteofrance_data() -> Optional[Dict[str, Any]]:
             "winds": chart_winds,
             "gusts": chart_gusts,
             "wind_dirs": chart_dirs,
+            "precips": chart_precips,
             "solar_radiations": [float("nan")] * len(chart_epochs),
             "has_data": bool(chart_epochs),
         },
@@ -1149,5 +1149,5 @@ def get_meteofrance_data() -> Optional[Dict[str, Any]]:
             "has_data": bool(chart_epochs),
         },
     }
-    st.session_state["meteofrance_last_error"] = ""
+    clear_provider_runtime_error("METEOFRANCE", state)
     return base

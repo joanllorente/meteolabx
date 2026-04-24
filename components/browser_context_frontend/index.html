@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser Context Component</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        let mediaQuery = null;
+        let resizeTimer = null;
+        let lastPayload = "";
+        let attached = false;
+
+        function sendMessage(type, payload) {
+          const message = Object.assign(
+            {
+              isStreamlitMessage: true,
+              type: type,
+            },
+            payload || {}
+          );
+          window.parent.postMessage(message, "*");
+        }
+
+        function setComponentValue(value) {
+          sendMessage("streamlit:setComponentValue", { value: value });
+        }
+
+        function setFrameHeight(height) {
+          sendMessage("streamlit:setFrameHeight", { height: height });
+        }
+
+        function componentReady() {
+          sendMessage("streamlit:componentReady", { apiVersion: 1 });
+        }
+
+        function currentContext() {
+          const hostWin = window.parent || window;
+          const mediaWin =
+            hostWin && typeof hostWin.matchMedia === "function" ? hostWin : window;
+          return {
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+            vw: Math.round(hostWin.innerWidth || window.innerWidth || 0),
+            cs:
+              mediaWin.matchMedia &&
+              mediaWin.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light",
+          };
+        }
+
+        function emitIfChanged() {
+          const payload = currentContext();
+          const serialized = JSON.stringify(payload);
+          if (serialized === lastPayload) return;
+          lastPayload = serialized;
+          setComponentValue(payload);
+        }
+
+        function scheduleEmit() {
+          if (resizeTimer) {
+            window.clearTimeout(resizeTimer);
+          }
+          resizeTimer = window.setTimeout(emitIfChanged, 120);
+        }
+
+        function detachListeners() {
+          if (!attached) return;
+          attached = false;
+          try {
+            window.removeEventListener("resize", scheduleEmit);
+          } catch (_e) {}
+          try {
+            if (mediaQuery) {
+              if (typeof mediaQuery.removeEventListener === "function") {
+                mediaQuery.removeEventListener("change", scheduleEmit);
+              } else if (typeof mediaQuery.removeListener === "function") {
+                mediaQuery.removeListener(scheduleEmit);
+              }
+            }
+          } catch (_e) {}
+          mediaQuery = null;
+        }
+
+        function attachListeners(enabled, viewportEnabled) {
+          detachListeners();
+          if (!enabled) return;
+          attached = true;
+          const hostWin = window.parent || window;
+          const mediaWin =
+            hostWin && typeof hostWin.matchMedia === "function" ? hostWin : window;
+          if (viewportEnabled) {
+            try {
+              window.addEventListener("resize", scheduleEmit);
+            } catch (_e) {}
+          }
+          try {
+            mediaQuery = mediaWin.matchMedia("(prefers-color-scheme: dark)");
+            if (typeof mediaQuery.addEventListener === "function") {
+              mediaQuery.addEventListener("change", scheduleEmit);
+            } else if (typeof mediaQuery.addListener === "function") {
+              mediaQuery.addListener(scheduleEmit);
+            }
+          } catch (_e) {}
+        }
+
+        function onRender(event) {
+          const data = event.data;
+          if (!data || data.type !== "streamlit:render") {
+            return;
+          }
+          const args = data.args || {};
+          setFrameHeight(0);
+          attachListeners(Boolean(args.listen_changes), Boolean(args.listen_viewport_changes));
+          emitIfChanged();
+        }
+
+        window.addEventListener("message", onRender);
+        componentReady();
+        setFrameHeight(0);
+      })();
+    </script>
+  </body>
+</html>
