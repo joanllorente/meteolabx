@@ -79,7 +79,7 @@ def hydrate_browser_context_live(get_browser_context) -> None:
         st.session_state[BROWSER_VIEWPORT_WIDTH] = viewport_width
 
 
-def render_connection_loading_overlay(payload: Optional[dict], *, title_text: str) -> None:
+def render_connection_loading_overlay(payload: Optional[dict], *, title_text: str, dark: bool = True) -> None:
     info = payload if isinstance(payload, dict) else {}
     provider = html.escape(str(info.get("provider", "Estación") or "Estación"))
     station_name = html.escape(str(info.get("station_name", "") or info.get("station_id", "") or "").strip())
@@ -87,6 +87,24 @@ def render_connection_loading_overlay(payload: Optional[dict], *, title_text: st
     safe_subtitle = html.escape(subtitle)
     safe_title = html.escape(str(title_text or "Conectando estación…"))
     host_id = f"mlx-connection-loading-{int(time.time() * 1000)}"
+    if dark:
+        overlay_bg = "rgba(9, 13, 20, 0.42)"
+        card_bg = "linear-gradient(180deg, rgba(22, 29, 42, 0.96), rgba(10, 14, 22, 0.96))"
+        card_border = "rgba(139, 190, 255, 0.22)"
+        card_shadow = "0 20px 60px rgba(0, 0, 0, 0.28)"
+        card_text = "rgba(245, 248, 255, 0.98)"
+        spinner_track = "rgba(140, 180, 255, 0.16)"
+        spinner_active = "rgba(140, 180, 255, 0.92)"
+        dot_bg = "rgba(140, 180, 255, 0.95)"
+    else:
+        overlay_bg = "rgba(244, 248, 255, 0.62)"
+        card_bg = "linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 246, 252, 0.98))"
+        card_border = "rgba(51, 126, 215, 0.20)"
+        card_shadow = "0 20px 55px rgba(44, 70, 112, 0.16)"
+        card_text = "rgba(15, 18, 25, 0.96)"
+        spinner_track = "rgba(51, 126, 215, 0.14)"
+        spinner_active = "rgba(51, 126, 215, 0.88)"
+        dot_bg = "rgba(51, 126, 215, 0.90)"
     st.markdown(
         html_clean(
             f"""
@@ -98,7 +116,7 @@ def render_connection_loading_overlay(payload: Optional[dict], *, title_text: st
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: rgba(9, 13, 20, 0.42);
+                background: {overlay_bg};
                 backdrop-filter: blur(3px);
                 pointer-events: none;
                 animation: mlbxConnectionFadeIn .18s ease-out;
@@ -108,10 +126,10 @@ def render_connection_loading_overlay(payload: Optional[dict], *, title_text: st
                 max-width: min(420px, calc(100vw - 40px));
                 padding: 22px 22px 18px;
                 border-radius: 22px;
-                border: 1px solid rgba(139, 190, 255, 0.22);
-                background: linear-gradient(180deg, rgba(22, 29, 42, 0.96), rgba(10, 14, 22, 0.96));
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
-                color: rgba(245, 248, 255, 0.98);
+                border: 1px solid {card_border};
+                background: {card_bg};
+                box-shadow: {card_shadow};
+                color: {card_text};
                 text-align: center;
               }}
               #{host_id} .mlbx-connection-spinner {{
@@ -119,8 +137,8 @@ def render_connection_loading_overlay(payload: Optional[dict], *, title_text: st
                 height: 48px;
                 margin: 0 auto 14px;
                 border-radius: 999px;
-                border: 3px solid rgba(140, 180, 255, 0.16);
-                border-top-color: rgba(140, 180, 255, 0.92);
+                border: 3px solid {spinner_track};
+                border-top-color: {spinner_active};
                 animation: mlbxConnectionSpin .8s linear infinite;
               }}
               #{host_id} .mlbx-connection-title {{
@@ -142,7 +160,7 @@ def render_connection_loading_overlay(payload: Optional[dict], *, title_text: st
                 width: 7px;
                 height: 7px;
                 border-radius: 999px;
-                background: rgba(140, 180, 255, 0.95);
+                background: {dot_bg};
                 animation: mlbxConnectionPulse 1.05s ease-in-out infinite;
               }}
               #{host_id} .mlbx-connection-dots span:nth-child(2) {{ animation-delay: .15s; }}

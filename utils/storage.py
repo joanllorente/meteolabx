@@ -168,11 +168,12 @@ def forget_local_storage_keys() -> None:
     if storage is not None:
         for item_key in keys_to_forget + legacy_keys:
             ck = f"mlx_forget_{item_key}_{uuid4().hex[:8]}"
+            forget_payload = {item_key: _FORGET_MARKER}
             try:
-                storage.setItem(item_key, _FORGET_MARKER, key=ck)
+                storage.setItem(item_key, forget_payload, key=ck)
             except TypeError:
                 try:
-                    storage.setItem(item_key, _FORGET_MARKER)
+                    storage.setItem(item_key, forget_payload)
                 except Exception:
                     pass
             except Exception:
@@ -180,14 +181,14 @@ def forget_local_storage_keys() -> None:
 
         # LS_AUTOCONNECT: su getter usa "0" como False
         try:
-            storage.setItem(LS_AUTOCONNECT, "0",
+            storage.setItem(LS_AUTOCONNECT, {LS_AUTOCONNECT: "0"},
                             key=f"mlx_forget_{LS_AUTOCONNECT}_{uuid4().hex[:8]}")
         except Exception:
             pass
 
         # LS_WU_FORGOTTEN = "1" → sidebar detecta estado olvidado en recargas
         try:
-            storage.setItem(LS_WU_FORGOTTEN, "1",
+            storage.setItem(LS_WU_FORGOTTEN, {LS_WU_FORGOTTEN: "1"},
                             key=f"mlx_forget_{LS_WU_FORGOTTEN}_{uuid4().hex[:8]}")
         except Exception:
             pass

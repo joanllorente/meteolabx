@@ -99,7 +99,6 @@ def render_map_tab(ctx):
     apply_station_selection = ctx["apply_station_selection"]
     disable_provider_autoconnect = ctx["disable_provider_autoconnect"]
     persist_provider_autoconnect_target = ctx["persist_provider_autoconnect_target"]
-    reset_toggle_state = ctx["reset_toggle_state"]
     _cached_map_search_nearby_stations = ctx["_cached_map_search_nearby_stations"]
     _pydeck_chart_stretch = ctx["_pydeck_chart_stretch"]
     import pydeck as pdk

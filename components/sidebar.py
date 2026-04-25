@@ -509,7 +509,6 @@ def render_sidebar(_local_storage_unused=None):
         elif autoconnect_to_save:
             # No desactives la preferencia por una lectura tardía del formulario
             # en producción; conserva el toggle y pide completar credenciales.
-            st.session_state["auto_connect_wu_device"] = True
             st.session_state["_wu_autoconnect_ui_last_value"] = True
             st.sidebar.warning(t("sidebar.autoconnect.missing_credentials"))
             save_warning_shown = True

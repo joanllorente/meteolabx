@@ -15,7 +15,6 @@ from utils.provider_state import (
     clear_provider_runtime_cache,
     disable_provider_autoconnect,
     persist_provider_autoconnect_target,
-    reset_toggle_state,
 )
 from .geolocation_state import (
     consume_browser_geolocation,
@@ -288,17 +287,15 @@ def render_station_selector():
             city_query = city_input.strip()
 
             if city_query:
-                coords, nom_err = _geocode_with_nominatim(city_query)
-                if coords is not None:
-                    chosen_lat, chosen_lon = coords
+                fallback = _coords_from_city(city_query)
+                if fallback is not None:
+                    chosen_lat, chosen_lon = fallback
+                    st.session_state["nominatim_last_match"] = ""
+                    st.session_state["nominatim_last_error"] = ""
                 else:
-                    fallback = _coords_from_city(city_query)
-                    if fallback is not None:
-                        chosen_lat, chosen_lon = fallback
-                        st.session_state["nominatim_last_match"] = ""
-                        st.session_state["nominatim_last_error"] = (
-                            f"{nom_err} Se usaron coordenadas locales de respaldo."
-                        )
+                    coords, nom_err = _geocode_with_nominatim(city_query)
+                    if coords is not None:
+                        chosen_lat, chosen_lon = coords
                     else:
                         st.session_state["nominatim_last_match"] = ""
                         st.session_state["nominatim_last_error"] = nom_err
@@ -339,16 +336,20 @@ def render_station_selector():
             st.warning(t("station_selector.no_nearby"))
             return
 
+        saved_autoconnect = bool(get_stored_autoconnect())
+        saved_target = get_stored_autoconnect_target() or {}
+        saved_target_kind = str(saved_target.get("kind", "")).strip().upper()
+        saved_target_provider = str(saved_target.get("provider_id", "")).strip().upper()
+        saved_target_station = str(saved_target.get("station_id", "")).strip()
+
         for station in nearest:
             with st.container():
                 col1, col2, col3 = st.columns([3, 2, 1])
-                saved_autoconnect = bool(get_stored_autoconnect())
-                saved_target = get_stored_autoconnect_target() or {}
                 is_target_station = bool(
                     saved_autoconnect
-                    and str(saved_target.get("kind", "")).strip().upper() == "PROVIDER"
-                    and str(saved_target.get("provider_id", "")).strip().upper() == str(station.provider_id).strip().upper()
-                    and str(saved_target.get("station_id", "")).strip() == str(station.station_id).strip()
+                    and saved_target_kind == "PROVIDER"
+                    and saved_target_provider == str(station.provider_id).strip().upper()
+                    and saved_target_station == str(station.station_id).strip()
                 )
 
                 with col1:

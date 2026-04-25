@@ -63,6 +63,16 @@ def init_language() -> str:
 
 
 def get_language() -> str:
+    raw_query_lang = str(st.query_params.get("lang", "")).strip().lower()
+    if raw_query_lang in SUPPORTED_LANGUAGES:
+        if st.session_state.get("lang") != raw_query_lang:
+            st.session_state["lang"] = raw_query_lang
+        return raw_query_lang
+
+    raw_session_lang = str(st.session_state.get("lang", "")).strip().lower()
+    if raw_session_lang in SUPPORTED_LANGUAGES:
+        return raw_session_lang
+
     return init_language()
 
 

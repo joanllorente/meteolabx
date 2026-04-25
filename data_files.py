@@ -29,3 +29,7 @@ STATION_CATALOG_PATHS = [
     NWS_STATIONS_PATH,
     POEM_STATIONS_PATH,
 ]
+
+# Conteo precomputado para evitar leer ~12 MB de catalogos JSON en cada
+# arranque frío solo para pintar el total del encabezado.
+STATION_CATALOG_TOTAL = 42666

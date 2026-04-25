@@ -492,26 +492,16 @@ def persist_provider_autoconnect_target(station: Any) -> bool:
     return True
 
 
-def disable_provider_autoconnect(toggle_prefix: str) -> None:
+def disable_provider_autoconnect(_toggle_prefix: str) -> None:
     """
     Desactiva la autoconexión de proveedor y limpia el estado efímero asociado.
     """
     set_local_storage(LS_AUTOCONNECT, "0", "save")
     set_stored_autoconnect_target(None)
     st.session_state[AUTOCONNECT_ATTEMPTED] = False
-    reset_toggle_state(toggle_prefix)
-
-
-def reset_toggle_state(prefix: str) -> None:
-    """
-    Limpia toggles temporales de UI que comparten prefijo.
-    """
-    prefix = str(prefix or "")
-    if not prefix:
-        return
-    for state_key in list(st.session_state.keys()):
-        if state_key.startswith(prefix):
-            del st.session_state[state_key]
+    # No borrar aquí los toggles renderizados en este mismo ciclo: Streamlit
+    # puede rechazar cambios sobre keys de widgets ya instanciados. El valor
+    # visible ya es False y el siguiente rerun se hidrata desde localStorage.
 
 
 def resolve_provider_locality(provider_id: str, metadata: Any, fallback: str = "") -> str:

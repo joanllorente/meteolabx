@@ -6,6 +6,7 @@ import streamlit as st
 import requests
 import logging
 import time
+import hashlib
 from collections import OrderedDict
 from typing import Dict, Optional
 from config import (
@@ -49,6 +50,13 @@ def first_valid_number(*vals):
         if not is_nan(f):
             return f
     return float("nan")
+
+
+def _wu_cache_key(station_id: str, api_key: str) -> tuple[str, str]:
+    station_norm = str(station_id or "").strip().upper()
+    key_norm = str(api_key or "").strip()
+    key_hash = hashlib.sha1(key_norm.encode("utf-8")).hexdigest()[:12] if key_norm else ""
+    return station_norm, key_hash
 
 
 CARDINAL_16 = [
@@ -343,7 +351,7 @@ def fetch_daily_timeseries_session_cached(station_id: str, api_key: str, ttl_s: 
         st.session_state["wu_cache_all1day"] = OrderedDict()
 
     cache = st.session_state["wu_cache_all1day"]
-    station_cache_key = str(station_id or "").strip().upper()
+    station_cache_key = _wu_cache_key(station_id, api_key)
     now = time.time()
 
     if station_cache_key in cache:
@@ -620,7 +628,7 @@ def fetch_wu_current_session_cached(station_id: str, api_key: str, ttl_s: int) -
 
     cache_current = st.session_state.wu_cache_current
     cache_daily = st.session_state.wu_cache_daily
-    station_cache_key = str(station_id or "").strip().upper()
+    station_cache_key = _wu_cache_key(station_id, api_key)
     now = time.time()
     
     # Datos current (frecuente)
@@ -673,7 +681,7 @@ def fetch_hourly_7day_session_cached(station_id: str, api_key: str) -> Dict:
         st.session_state["wu_cache_hourly7d"] = {}
     
     cache = st.session_state["wu_cache_hourly7d"]
-    station_cache_key = str(station_id or "").strip().upper()
+    station_cache_key = _wu_cache_key(station_id, api_key)
     now = time.time()
     TTL_HOURLY_7D = 3600  # 1 hora
     

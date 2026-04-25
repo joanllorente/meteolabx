@@ -14,16 +14,14 @@ import time
 import math
 import logging
 import html
-import json
 import os
 import hashlib
 from typing import Optional
 from datetime import datetime, timedelta
-from pathlib import Path
 
 # Imports locales
 from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT, RD
-from data_files import STATION_CATALOG_PATHS
+from data_files import STATION_CATALOG_TOTAL
 from utils import html_clean, is_nan, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t
 from utils.storage import (
     set_local_storage,
@@ -37,7 +35,6 @@ from utils.provider_state import (
     disable_provider_autoconnect,
     disconnect_active_station,
     persist_provider_autoconnect_target,
-    reset_toggle_state,
     get_provider_label as resolve_provider_label,
     get_provider_station_id as resolve_provider_station_id,
     resolve_provider_locality,
@@ -126,10 +123,8 @@ from components import (
 )
 from components.app_header import render_app_header, render_connection_banner
 
-from components.station_selector import render_station_selector
 from components.browser_context import get_browser_context
 from components.browser_geolocation import get_browser_geolocation
-from providers import search_nearby_stations
 from tabs import (
     build_observation_context,
     render_observation_tab,
@@ -141,6 +136,74 @@ from tabs import (
 # Configurar logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
+
+PWA_ASSET_VERSION = "8"
+PWA_STATIC_BASE = "/app/static"
+
+
+def _inject_pwa_metadata() -> None:
+    """Sincroniza manifest e iconos en el head real para web apps instalables."""
+    components.html(
+        f"""
+        <script>
+        (function () {{
+          try {{
+            const doc = window.parent && window.parent.document ? window.parent.document : document;
+            const head = doc.head;
+            if (!head) return;
+            const base = "{PWA_STATIC_BASE}";
+            const version = "{PWA_ASSET_VERSION}";
+            const asset = (name) => `${{base}}/${{name}}?v=${{version}}`;
+
+            function upsertMeta(name, content) {{
+              let el = head.querySelector(`meta[name="${{name}}"]`);
+              if (!el) {{
+                el = doc.createElement("meta");
+                el.setAttribute("name", name);
+                head.appendChild(el);
+              }}
+              el.setAttribute("content", content);
+            }}
+
+            function upsertLink(rel, href, attrs) {{
+              attrs = attrs || {{}};
+              const sizes = attrs.sizes || "";
+              const selector = sizes
+                ? `link[rel="${{rel}}"][sizes="${{sizes}}"]`
+                : `link[rel="${{rel}}"]:not([sizes])`;
+              let el = head.querySelector(selector);
+              if (!el) {{
+                el = doc.createElement("link");
+                el.setAttribute("rel", rel);
+                if (sizes) el.setAttribute("sizes", sizes);
+                head.appendChild(el);
+              }}
+              Object.keys(attrs).forEach((key) => el.setAttribute(key, attrs[key]));
+              el.setAttribute("href", href);
+            }}
+
+            upsertMeta("viewport", "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes");
+            upsertMeta("mobile-web-app-capable", "yes");
+            upsertMeta("apple-mobile-web-app-capable", "yes");
+            upsertMeta("apple-mobile-web-app-status-bar-style", "black-translucent");
+            upsertMeta("apple-mobile-web-app-title", "MeteoLabX");
+            upsertMeta("theme-color", "#2384ff");
+
+            upsertLink("manifest", asset("manifest.json"));
+            upsertLink("apple-touch-icon", asset("apple-touch-icon-pwa.png"));
+            upsertLink("apple-touch-icon", asset("apple-touch-icon-pwa.png"), {{ sizes: "180x180" }});
+            upsertLink("apple-touch-icon-precomposed", asset("apple-touch-icon-pwa.png"));
+            upsertLink("icon", asset("icon-192-pwa.png"), {{ type: "image/png", sizes: "192x192" }});
+            upsertLink("icon", asset("icon-512-pwa.png"), {{ type: "image/png", sizes: "512x512" }});
+            upsertLink("shortcut icon", asset("icon-192-pwa.png"), {{ type: "image/png" }});
+          }} catch (_e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 def _get_frost_service():
@@ -875,7 +938,6 @@ def _build_map_tab_context() -> dict:
         "apply_station_selection": apply_station_selection,
         "disable_provider_autoconnect": disable_provider_autoconnect,
         "persist_provider_autoconnect_target": persist_provider_autoconnect_target,
-        "reset_toggle_state": reset_toggle_state,
         "_cached_map_search_nearby_stations": _cached_map_search_nearby_stations,
         "_pydeck_chart_stretch": _pydeck_chart_stretch,
     }
@@ -1095,6 +1157,9 @@ def _compact_plotly_for_mobile(fig) -> None:
     if not _is_small_mobile_client():
         return
     _apply_compact_plotly_layout(fig)
+    fig.update_layout(dragmode=False)
+    fig.for_each_xaxis(lambda axis: axis.update(fixedrange=True))
+    fig.for_each_yaxis(lambda axis: axis.update(fixedrange=True))
 
 
 def _mobile_plotly_config(config: Optional[dict] = None) -> dict:
@@ -1111,11 +1176,50 @@ def _mobile_plotly_config(config: Optional[dict] = None) -> dict:
         "responsive": True,
     }
     mobile_cfg.update(base)
+    mobile_cfg.update({
+        "displayModeBar": False,
+        "scrollZoom": False,
+        "doubleClick": False,
+        "showAxisDragHandles": False,
+        "staticPlot": True,
+    })
     return mobile_cfg
+
+
+def _ensure_plotly_template(fig) -> None:
+    """Configura el template de Plotly bajo demanda, justo antes de renderizar."""
+    try:
+        import plotly.io as pio
+    except Exception:
+        return
+
+    if dark:
+        template_name = "meteolabx_dark"
+        if template_name not in pio.templates:
+            pio.templates[template_name] = pio.templates["plotly_dark"]
+            pio.templates[template_name].layout.font.color = "rgba(255, 255, 255, 0.92)"
+            pio.templates[template_name].layout.title.font.color = "rgba(255, 255, 255, 0.92)"
+            pio.templates[template_name].layout.xaxis.title.font.color = "rgba(255, 255, 255, 0.92)"
+            pio.templates[template_name].layout.yaxis.title.font.color = "rgba(255, 255, 255, 0.92)"
+    else:
+        template_name = "meteolabx_light"
+        if template_name not in pio.templates:
+            pio.templates[template_name] = pio.templates["plotly_white"]
+            pio.templates[template_name].layout.font.color = "rgba(15, 18, 25, 0.92)"
+            pio.templates[template_name].layout.title.font.color = "rgba(15, 18, 25, 0.92)"
+            pio.templates[template_name].layout.xaxis.title.font.color = "rgba(15, 18, 25, 0.92)"
+            pio.templates[template_name].layout.yaxis.title.font.color = "rgba(15, 18, 25, 0.92)"
+
+    pio.templates.default = template_name
+    try:
+        fig.update_layout(template=template_name)
+    except Exception:
+        pass
 
 
 def _plotly_chart_stretch(fig, key: str, config: Optional[dict] = None, compact: bool = False):
     """Renderiza Plotly ocupando todo el ancho del contenedor."""
+    _ensure_plotly_template(fig)
     if compact:
         _apply_compact_plotly_layout(fig)
     else:
@@ -1272,21 +1376,24 @@ def _inject_mobile_plotly_compactor() -> None:
                 tickangle: layout.xaxis && layout.xaxis.tickangle != null ? layout.xaxis.tickangle : 0,
                 automargin: !!(layout.xaxis && layout.xaxis.automargin),
                 nticks: layout.xaxis && layout.xaxis.nticks != null ? layout.xaxis.nticks : null,
-                tickfontSize: layout.xaxis && layout.xaxis.tickfont && layout.xaxis.tickfont.size != null ? layout.xaxis.tickfont.size : null
+                tickfontSize: layout.xaxis && layout.xaxis.tickfont && layout.xaxis.tickfont.size != null ? layout.xaxis.tickfont.size : null,
+                fixedrange: !!(layout.xaxis && layout.xaxis.fixedrange)
               },
               yaxis: {
                 title: titleText(layout.yaxis),
                 automargin: !!(layout.yaxis && layout.yaxis.automargin),
                 tickfontSize: layout.yaxis && layout.yaxis.tickfont && layout.yaxis.tickfont.size != null ? layout.yaxis.tickfont.size : null,
                 ticklabelposition: layout.yaxis && layout.yaxis.ticklabelposition != null ? layout.yaxis.ticklabelposition : null,
-                ticklabelstandoff: layout.yaxis && layout.yaxis.ticklabelstandoff != null ? layout.yaxis.ticklabelstandoff : null
+                ticklabelstandoff: layout.yaxis && layout.yaxis.ticklabelstandoff != null ? layout.yaxis.ticklabelstandoff : null,
+                fixedrange: !!(layout.yaxis && layout.yaxis.fixedrange)
               },
               yaxis2: {
                 title: titleText(layout.yaxis2),
                 automargin: !!(layout.yaxis2 && layout.yaxis2.automargin),
                 tickfontSize: layout.yaxis2 && layout.yaxis2.tickfont && layout.yaxis2.tickfont.size != null ? layout.yaxis2.tickfont.size : null,
                 ticklabelposition: layout.yaxis2 && layout.yaxis2.ticklabelposition != null ? layout.yaxis2.ticklabelposition : null,
-                ticklabelstandoff: layout.yaxis2 && layout.yaxis2.ticklabelstandoff != null ? layout.yaxis2.ticklabelstandoff : null
+                ticklabelstandoff: layout.yaxis2 && layout.yaxis2.ticklabelstandoff != null ? layout.yaxis2.ticklabelstandoff : null,
+                fixedrange: !!(layout.yaxis2 && layout.yaxis2.fixedrange)
               }
             };
             return plot.__mlbxOriginalLayout;
@@ -1316,16 +1423,20 @@ def _inject_mobile_plotly_compactor() -> None:
               "xaxis.nticks": 4,
               "xaxis.tickfont.size": 11,
               "xaxis.ticklabeloverflow": "allow",
+              "xaxis.fixedrange": true,
               "yaxis.title.text": "",
               "yaxis.automargin": false,
               "yaxis.tickfont.size": 11,
               "yaxis.ticklabelposition": "inside",
               "yaxis.ticklabelstandoff": -2,
+              "yaxis.fixedrange": true,
               "yaxis2.title.text": "",
               "yaxis2.automargin": false,
               "yaxis2.tickfont.size": 11,
               "yaxis2.ticklabelposition": "inside",
-              "yaxis2.ticklabelstandoff": -2
+              "yaxis2.ticklabelstandoff": -2,
+              "yaxis2.fixedrange": true,
+              "dragmode": false
             }).then(function () {
               plot.dataset.mlbxCompactMode = "mobile";
             }).catch(function () {});
@@ -1351,16 +1462,19 @@ def _inject_mobile_plotly_compactor() -> None:
               "xaxis.automargin": original.xaxis.automargin,
               "xaxis.nticks": original.xaxis.nticks,
               "xaxis.tickfont.size": original.xaxis.tickfontSize,
+              "xaxis.fixedrange": original.xaxis.fixedrange,
               "yaxis.title.text": original.yaxis.title,
               "yaxis.automargin": original.yaxis.automargin,
               "yaxis.tickfont.size": original.yaxis.tickfontSize,
               "yaxis.ticklabelposition": original.yaxis.ticklabelposition,
               "yaxis.ticklabelstandoff": original.yaxis.ticklabelstandoff,
+              "yaxis.fixedrange": original.yaxis.fixedrange,
               "yaxis2.title.text": original.yaxis2.title,
               "yaxis2.automargin": original.yaxis2.automargin,
               "yaxis2.tickfont.size": original.yaxis2.tickfontSize,
               "yaxis2.ticklabelposition": original.yaxis2.ticklabelposition,
-              "yaxis2.ticklabelstandoff": original.yaxis2.ticklabelstandoff
+              "yaxis2.ticklabelstandoff": original.yaxis2.ticklabelstandoff,
+              "yaxis2.fixedrange": original.yaxis2.fixedrange
             }).then(function () {
               plot.dataset.mlbxCompactMode = "desktop";
             }).catch(function () {});
@@ -1510,6 +1624,11 @@ def _inject_live_age_updater() -> None:
 
 def _pydeck_chart_stretch(deck, key: str, height: int = 900):
     """Renderiza pydeck de forma compatible entre versiones de Streamlit."""
+    viewport_width = _browser_viewport_width()
+    if 0 < viewport_width <= 520:
+        height = min(int(height), 420)
+    elif 0 < viewport_width <= 900:
+        height = min(int(height), 540)
     try:
         return st.pydeck_chart(
             deck, use_container_width=True, height=int(height), key=key,
@@ -1996,35 +2115,14 @@ def _cached_map_search_nearby_stations(
     provider_ids: tuple[str, ...],
 ):
     """Cache corto para que cambiar el tema no dispare de nuevo toda la búsqueda del mapa."""
+    from providers import search_nearby_stations
+
     return search_nearby_stations(
         lat,
         lon,
         max_results=max_results,
         provider_ids=list(provider_ids),
     )
-
-# Configuración global de Plotly según tema
-import plotly.io as pio
-
-# Crear template personalizado basado en el tema
-if dark:
-    # Template oscuro
-    pio.templates["meteolabx_dark"] = pio.templates["plotly_dark"]
-    pio.templates["meteolabx_dark"].layout.font.color = "rgba(255, 255, 255, 0.92)"
-    pio.templates["meteolabx_dark"].layout.title.font.color = "rgba(255, 255, 255, 0.92)"
-    pio.templates["meteolabx_dark"].layout.xaxis.title.font.color = "rgba(255, 255, 255, 0.92)"
-    pio.templates["meteolabx_dark"].layout.yaxis.title.font.color = "rgba(255, 255, 255, 0.92)"
-    pio.templates.default = "meteolabx_dark"
-    plotly_title_color = "rgba(255, 255, 255, 0.92)"
-else:
-    # Template claro
-    pio.templates["meteolabx_light"] = pio.templates["plotly_white"]
-    pio.templates["meteolabx_light"].layout.font.color = "rgba(15, 18, 25, 0.92)"
-    pio.templates["meteolabx_light"].layout.title.font.color = "rgba(15, 18, 25, 0.92)"
-    pio.templates["meteolabx_light"].layout.xaxis.title.font.color = "rgba(15, 18, 25, 0.92)"
-    pio.templates["meteolabx_light"].layout.yaxis.title.font.color = "rgba(15, 18, 25, 0.92)"
-    pio.templates.default = "meteolabx_light"
-    plotly_title_color = "rgba(15, 18, 25, 0.92)"
 
 # CSS para sidebar y botones
 sidebar_bg = "#f4f6fb" if not dark else "#262730"
@@ -2752,6 +2850,33 @@ button[data-testid="collapsedControl"] {{
     display: none !important;
 }}
 
+/* Ocultar indicador de ejecución/stop de Streamlit: evita la "bicicleta" en móvil */
+[data-testid="stStatusWidget"],
+[data-testid="stStatusWidget"] *,
+.stStatusWidget,
+.stStatusWidget * {{
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}}
+
+@media (max-width: 900px) {{
+    [data-testid="stPlotlyChart"],
+    [data-testid="stPlotlyChart"] .js-plotly-plot,
+    [data-testid="stPlotlyChart"] .plot-container,
+    [data-testid="stPlotlyChart"] .svg-container {{
+        max-width: 100% !important;
+        overflow: hidden !important;
+        touch-action: pan-y !important;
+    }}
+
+    [data-testid="stPlotlyChart"] .draglayer,
+    [data-testid="stPlotlyChart"] .nsewdrag,
+    [data-testid="stPlotlyChart"] .drag {{
+        pointer-events: none !important;
+    }}
+}}
+
 /* Texto del contenido principal dependiente de tema */
 [data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] p,
 [data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] li,
@@ -3111,81 +3236,10 @@ h1, h2, h3, h4, h5, h6 {{
 </style>
 """, unsafe_allow_html=True)
 
+_inject_pwa_metadata()
+
 # CSS de componentes y responsive mobile
 st.markdown(html_clean("""
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="MeteoLabX">
-<link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=6">
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=6">
-<link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png?v=6">
-<meta name="theme-color" content="#2384ff">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3">
-<link rel="shortcut icon" href="/favicon.png?v=3">
-
-<script>
-(function () {
-  const appWin = window;
-  const appDoc = document;
-  const hostWin = window.parent || window;
-  const head = appDoc.head || document.head;
-  if (!head) return;
-
-  function upsertLink(rel, href, sizes) {
-    let el = head.querySelector(`link[rel="${rel}"]${sizes ? `[sizes="${sizes}"]` : ""}`);
-    if (!el) {
-      el = appDoc.createElement("link");
-      el.setAttribute("rel", rel);
-      if (sizes) el.setAttribute("sizes", sizes);
-      head.appendChild(el);
-    }
-    el.setAttribute("href", href);
-  }
-
-  upsertLink("apple-touch-icon", "/apple-touch-icon.png?v=6");
-  upsertLink("apple-touch-icon", "/apple-touch-icon.png?v=6", "180x180");
-  upsertLink("apple-touch-icon-precomposed", "/apple-touch-icon-precomposed.png?v=6");
-  upsertLink("icon", "/favicon-32x32.png?v=3", "32x32");
-  upsertLink("icon", "/favicon-16x16.png?v=3", "16x16");
-  upsertLink("shortcut icon", "/favicon.png?v=3");
-
-  // En el arranque inicial esto ya se sincroniza antes de renderizar la sidebar.
-  // Aquí solo dejamos la URL consistente sin provocar una recarga completa extra.
-  try {
-    var _tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    var _vw = Math.round(appWin.innerWidth || appDoc.documentElement.clientWidth || 0);
-    var _mediaWin = (hostWin && typeof hostWin.matchMedia === 'function') ? hostWin : appWin;
-    var _cs = _mediaWin.matchMedia && _mediaWin.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    var _url = new URL(hostWin.location.href);
-    var _dirty = false;
-    var _missingBootstrapParams = !_url.searchParams.get("_tz") || !_url.searchParams.get("_cs") || !_url.searchParams.get("_vw");
-    if (_url.searchParams.get("_tz") !== _tz) {
-      _url.searchParams.set("_tz", _tz);
-      _dirty = true;
-    }
-    if (_url.searchParams.get("_vw") !== String(_vw)) {
-      _url.searchParams.set("_vw", String(_vw));
-      _dirty = true;
-    }
-    if (_url.searchParams.get("_cs") !== _cs) {
-      _url.searchParams.set("_cs", _cs);
-      _dirty = true;
-    }
-    if (_dirty) {
-      if (_missingBootstrapParams) {
-        hostWin.location.replace(_url.toString());
-      } else if (hostWin.history && typeof hostWin.history.replaceState === 'function') {
-        hostWin.history.replaceState(null, "", _url.toString());
-      }
-    }
-  } catch (_e) {}
-})();
-</script>
-
 <style>
   .block-container { 
     padding-top: 1.2rem; 
@@ -3766,40 +3820,10 @@ st.markdown(html_clean("""
 </style>
 """), unsafe_allow_html=True)
 
-_inject_mobile_plotly_compactor()
-_inject_live_age_updater()
-
-# Registro del Service Worker para PWA
-st.markdown(html_clean("""
-<script>
-  // Registrar Service Worker para funcionalidad PWA
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(registration => {
-          console.log('SW registrado:', registration.scope);
-        })
-        .catch(err => {
-          console.log('SW falló:', err);
-        });
-    });
-  }
-  
-  // Prompt de instalación PWA
-  let deferredPrompt;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    console.log('PWA instalable');
-  });
-  
-  // Detectar si ya está instalado como PWA
-  window.addEventListener('appinstalled', () => {
-    console.log('PWA instalada');
-    deferredPrompt = null;
-  });
-</script>
-"""), unsafe_allow_html=True)
+if st.session_state.get(CONNECTED, False):
+    if active_tab in {"observation", "trends", "historical"}:
+        _inject_mobile_plotly_compactor()
+    _inject_live_age_updater()
 
 # ============================================================
 # HEADER
@@ -3846,34 +3870,8 @@ def _fmt_pressure_for_provider(value, provider_id: str) -> str:
     return f"{v:.{decimals}f}"
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def _total_catalog_stations() -> int:
-    def _count_payload(payload) -> int:
-        if isinstance(payload, list):
-            return len(payload)
-        if isinstance(payload, dict):
-            for key in (
-                "stations",
-                "estaciones",
-                "listaEstacionsMeteo",
-                "lista_estaciones",
-                "items",
-                "data",
-            ):
-                value = payload.get(key)
-                if isinstance(value, list):
-                    return len(value)
-        return 0
-
-    total = 0
-    for path in STATION_CATALOG_PATHS:
-        try:
-            with Path(path).open("r", encoding="utf-8") as f:
-                payload = json.load(f)
-            total += _count_payload(payload)
-        except Exception:
-            continue
-    return int(total)
+    return int(STATION_CATALOG_TOTAL)
 
 
 header_refresh_seconds = _provider_refresh_seconds() if st.session_state.get(CONNECTED, False) else REFRESH_SECONDS
@@ -3928,12 +3926,14 @@ if not has_connection_banner:
     )
 
     # Mostrar selector de estaciones en pantalla principal
+    from components.station_selector import render_station_selector
+
     render_station_selector()
 
 connection_loading_payload = st.session_state.get(CONNECTION_LOADING)
 loading_in_progress = isinstance(connection_loading_payload, dict)
 if loading_in_progress:
-    render_connection_loading_overlay(connection_loading_payload, title_text=t("connection.loading_title"))
+    render_connection_loading_overlay(connection_loading_payload, title_text=t("connection.loading_title"), dark=dark)
 else:
     clear_connection_loading_overlay()
 
@@ -4534,8 +4534,9 @@ if (connected or loading_in_progress) and not runtime_snapshot:
 
 
             # ========== SERIES TEMPORALES PARA GRÁFICOS ==========
-            defer_wu_chart_fetch = active_tab == "observation" and not _chart_series_fresh_for_station("WU", station_id)
-            if defer_wu_chart_fetch:
+            wu_chart_series_is_fresh = _chart_series_fresh_for_station("WU", station_id)
+            use_cached_wu_chart_series = wu_chart_series_is_fresh or active_tab != "observation"
+            if use_cached_wu_chart_series:
                 chart_state = series_from_state(st.session_state, "chart", pressure_key="pressures_abs")
                 chart_station_id = str(st.session_state.get("chart_series_station_id", "")).strip().upper()
                 chart_epochs = chart_state.get("epochs", [])

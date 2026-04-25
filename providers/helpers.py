@@ -61,14 +61,15 @@ def nearest_records(
     lat = float(lat)
     lon = float(lon)
     limit = max(1, int(max_results))
-    all_records = list(records)
+    all_records = records if isinstance(records, list) else list(records)
     if not all_records:
         return []
 
     best: list[tuple[float, RecordT]] = []
     seen_ids: set[int] = set()
+    search_radii = (None,) if limit >= len(all_records) else _SEARCH_RADII_KM
 
-    for radius_km in _SEARCH_RADII_KM:
+    for radius_km in search_radii:
         bbox = _radius_bbox(lat, lon, radius_km) if radius_km is not None else None
         candidates: list[tuple[float, RecordT]] = []
 
@@ -89,7 +90,11 @@ def nearest_records(
             candidates.append((distance, record))
 
         if candidates:
-            best = heapq.nsmallest(limit, candidates, key=lambda item: item[0])
+            best = (
+                sorted(candidates, key=lambda item: item[0])
+                if len(candidates) <= limit
+                else heapq.nsmallest(limit, candidates, key=lambda item: item[0])
+            )
             seen_ids = {id(record) for _, record in best}
             if len(best) >= limit or radius_km is None:
                 break
