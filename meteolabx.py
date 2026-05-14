@@ -171,6 +171,7 @@ from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, L
 from data_files import STATION_CATALOG_TOTAL
 from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t
 from utils.storage import (
+    flush_local_storage_writes,
     set_local_storage,
     set_stored_autoconnect_target,
     get_stored_autoconnect,
@@ -4478,12 +4479,8 @@ if (connected or loading_in_progress) and not runtime_snapshot:
 
         if not station_id:
             station_id = str(st.session_state.get("wu_connected_station", "")).strip()
-            if station_id:
-                st.session_state[ACTIVE_STATION] = station_id
         if not api_key:
             api_key = str(st.session_state.get("wu_connected_api_key", "")).strip()
-            if api_key:
-                st.session_state[ACTIVE_KEY] = api_key
 
         # Verificar que tenemos los datos mínimos necesarios
         if not station_id or not api_key:
@@ -5174,3 +5171,4 @@ footer_html = footer_html % (
 )
 
 st.markdown(html_clean(footer_html), unsafe_allow_html=True)
+flush_local_storage_writes("mlx_local_storage_app_flush")

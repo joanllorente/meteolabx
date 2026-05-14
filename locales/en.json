@@ -89,12 +89,15 @@
       "disabled": "Auto-connect on startup disabled.",
       "missing_credentials": "To enable WU auto-connect, fill in Station ID and API Key."
     },
-  "calibration": {
-    "title": "Sensor calibration",
-    "loading": "Loading Weather Underground sensors...",
-    "range_help": "Allowed range: {min} to {max} {unit}",
-      "fields": {
-        "barometer": "Barometer (hPa)",
+        "calibration": {
+            "title": "Sensor calibration",
+            "loading": "Loading Weather Underground sensors...",
+            "range_help": "Allowed range: {min} to {max} {unit}",
+            "save": "Save calibration",
+            "saved": "Calibration saved ✅",
+            "unsaved": "Calibration changes are not saved yet.",
+            "fields": {
+                "barometer": "Barometer (hPa)",
         "wind_vane": "Wind vane (°)",
         "thermometer": "Thermometer (°C)",
         "hygrometer": "Hygrometer (%)",

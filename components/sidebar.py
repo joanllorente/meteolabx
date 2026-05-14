@@ -4,7 +4,16 @@ Componentes de sidebar y funciones auxiliares
 import streamlit as st
 import os
 from datetime import datetime
-from config import LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT, LS_WU_FORGOTTEN
+from config import (
+    LS_STATION,
+    LS_APIKEY,
+    LS_Z,
+    LS_AUTOCONNECT,
+    LS_AUTOCONNECT_TARGET,
+    LS_WU_FORGOTTEN,
+    LS_WU_CALIBRATIONS,
+    LS_UNIT_PREFERENCES,
+)
 from utils.i18n import (
     get_language_label,
     get_supported_languages,
@@ -16,7 +25,11 @@ from utils.storage import (
     set_local_storage,
     set_stored_autoconnect_target,
     forget_local_storage_keys,
+    consume_local_storage_writes,
+    flush_local_storage_writes,
     get_stored_unit_preferences,
+    hydrate_local_storage_snapshot,
+    local_storage_snapshot_ready,
     set_stored_unit_preferences,
 )
 from utils.helpers import normalize_text_input, is_nan, coerce_str
@@ -33,6 +46,19 @@ from utils.provider_state import (
     disconnect_active_station,
 )
 from utils.state_keys import AUTOCONNECT_ATTEMPTED
+from local_storage_bridge import sync_local_storage
+
+
+LOCAL_STORAGE_BOOTSTRAP_KEYS = [
+    LS_STATION,
+    LS_APIKEY,
+    LS_Z,
+    LS_AUTOCONNECT,
+    LS_AUTOCONNECT_TARGET,
+    LS_WU_FORGOTTEN,
+    LS_WU_CALIBRATIONS,
+    LS_UNIT_PREFERENCES,
+]
 
 
 def _now_local() -> datetime:
@@ -138,6 +164,30 @@ def render_sidebar(_local_storage_unused=None):
         set_stored_wu_station_calibration,
     )
 
+    boot_id = str(st.query_params.get("_mlx_boot", "") or "").strip()
+    if boot_id and st.session_state.get("_mlx_seen_boot_id") != boot_id:
+        st.session_state["_mlx_seen_boot_id"] = boot_id
+        st.session_state[AUTOCONNECT_ATTEMPTED] = False
+        st.session_state["_sidebar_inputs_initialized"] = False
+        st.session_state.pop("_mlx_local_storage_snapshot_ready", None)
+        st.session_state.pop("_mlx_local_storage_snapshot", None)
+        st.session_state.pop("_mlx_session_autoconnect_target", None)
+        st.session_state.pop("_mlx_session_autoconnect_enabled", None)
+        st.session_state.pop("_wu_calibration_widget_station", None)
+
+    bootstrap_writes = consume_local_storage_writes()
+    storage_payload = sync_local_storage(
+        keys=LOCAL_STORAGE_BOOTSTRAP_KEYS,
+        writes=bootstrap_writes,
+        key=f"mlx_local_storage_bootstrap_{boot_id or 'initial'}",
+    )
+    if isinstance(storage_payload, dict) and storage_payload.get("ready"):
+        hydrate_local_storage_snapshot(storage_payload.get("values"))
+    storage_ready = local_storage_snapshot_ready()
+    for _bad_input_key in ("active_station", "active_key", "active_z"):
+        if str(st.session_state.get(_bad_input_key, "")).strip() == "[object Object]":
+            st.session_state[_bad_input_key] = ""
+
     # Fase 2 del Olvidar: los setItem del ciclo anterior ya llegaron al navegador.
     # Ahora limpiamos el estado de sesión y forzamos el rerun de limpieza de UI.
     if st.session_state.pop("_forget_pending", False):
@@ -159,13 +209,28 @@ def render_sidebar(_local_storage_unused=None):
     allow_local_prefill = os.getenv("MLX_ENABLE_LOCAL_PREFILL", "1") == "1"
 
     skip_prefill_once = bool(st.session_state.pop("_skip_local_prefill_once", False))
-    if allow_local_prefill and not skip_prefill_once:
+    defer_local_prefill = bool(allow_local_prefill and not skip_prefill_once and not storage_ready)
+    if allow_local_prefill and not skip_prefill_once and storage_ready:
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
         saved_z = get_stored_z()
         saved_autoconnect_raw = coerce_str(get_local_storage_value(LS_AUTOCONNECT), lower=True)
         saved_autoconnect = bool(get_stored_autoconnect())
         saved_target = get_stored_autoconnect_target()
+        session_autoconnect_enabled = st.session_state.get("_mlx_session_autoconnect_enabled", None)
+        session_autoconnect_target = st.session_state.get("_mlx_session_autoconnect_target")
+        if isinstance(session_autoconnect_target, dict) and session_autoconnect_enabled is not False:
+            # Si el usuario acaba de cambiar de proveedor a WU (o viceversa),
+            # el snapshot del navegador puede tardar un rerun en reflejarlo.
+            # La intención más reciente de esta sesión manda sobre localStorage
+            # para que el toggle visible no "rebote" apagado.
+            saved_target = session_autoconnect_target
+            saved_autoconnect = True
+            saved_autoconnect_raw = "1"
+        elif session_autoconnect_enabled is False:
+            saved_target = None
+            saved_autoconnect = False
+            saved_autoconnect_raw = "0"
         is_wu_forgotten = str(get_local_storage_value(LS_WU_FORGOTTEN) or "").lower() in ("1", "true", "yes", "si", "on")
         if is_wu_forgotten:
             saved_station = None
@@ -232,13 +297,15 @@ def render_sidebar(_local_storage_unused=None):
             # toggle si las credenciales WU siguen presentes en session_state.
             wu_toggle_default = True
             current_target_kind = "WU"
-        if st.session_state.get("_wu_autoconnect_ui_target_kind") != current_target_kind:
-            st.session_state["auto_connect_wu_device"] = wu_toggle_default
-            st.session_state["_wu_autoconnect_ui_target_kind"] = current_target_kind
-            st.session_state["_wu_autoconnect_ui_last_value"] = wu_toggle_default
-        elif "auto_connect_wu_device" not in st.session_state:
-            st.session_state["auto_connect_wu_device"] = wu_toggle_default
-            st.session_state["_wu_autoconnect_ui_last_value"] = wu_toggle_default
+        wu_toggle_changed_this_run = bool(st.session_state.get("_wu_autoconnect_toggle_changed", False))
+        if not wu_toggle_changed_this_run:
+            if st.session_state.get("_wu_autoconnect_ui_target_kind") != current_target_kind:
+                st.session_state["auto_connect_wu_device"] = wu_toggle_default
+                st.session_state["_wu_autoconnect_ui_target_kind"] = current_target_kind
+                st.session_state["_wu_autoconnect_ui_last_value"] = wu_toggle_default
+            elif "auto_connect_wu_device" not in st.session_state:
+                st.session_state["auto_connect_wu_device"] = wu_toggle_default
+                st.session_state["_wu_autoconnect_ui_last_value"] = wu_toggle_default
 
         # Autoconexion al abrir si hay target guardado y el toggle estaba activo.
         should_autoconnect_wu = (
@@ -304,17 +371,18 @@ def render_sidebar(_local_storage_unused=None):
                     },
                     connected=True,
                 )
-                if not selection_ok:
-                    # Target inválido: desactivamos auto-conexión para no
-                    # reintentar el mismo error en cada arranque.
-                    st.session_state["auto_connect_wu_device"] = False
-                st.rerun()
-    elif first_sidebar_load:
+            if not selection_ok:
+                # Target inválido: desactivamos auto-conexión para no
+                # reintentar el mismo error en cada arranque.
+                st.session_state["auto_connect_wu_device"] = False
+            st.rerun()
+    elif first_sidebar_load and not defer_local_prefill:
         st.session_state["active_station"] = ""
         st.session_state["active_key"] = ""
         st.session_state["active_z"] = ""
 
-    st.session_state["_sidebar_inputs_initialized"] = True
+    if not defer_local_prefill:
+        st.session_state["_sidebar_inputs_initialized"] = True
 
     # Solo reescribir si la normalización cambia el valor, así evitamos una
     # escritura innecesaria en cada rerun y prevenimos warnings de Streamlit
@@ -434,10 +502,14 @@ def render_sidebar(_local_storage_unused=None):
     )
 
     connection_caption = coerce_str(t("sidebar.connection.caption"))
+    def _mark_wu_autoconnect_toggle_changed() -> None:
+        st.session_state["_wu_autoconnect_toggle_changed"] = True
+
     auto_connect_default = bool(st.session_state.get("auto_connect_wu_device", False))
     auto_connect_wu_device = st.sidebar.toggle(
         t("sidebar.autoconnect.label"),
         key="auto_connect_wu_device",
+        on_change=_mark_wu_autoconnect_toggle_changed,
     )
     autoconnect_caption = coerce_str(t("sidebar.autoconnect.caption"))
     if autoconnect_caption and autoconnect_caption != "sidebar.autoconnect.caption":
@@ -446,12 +518,37 @@ def render_sidebar(_local_storage_unused=None):
     if "_wu_autoconnect_ui_last_value" not in st.session_state:
         st.session_state["_wu_autoconnect_ui_last_value"] = auto_connect_default
     last_wu_toggle_value = bool(st.session_state.get("_wu_autoconnect_ui_last_value", auto_connect_default))
-    if auto_connect_wu_device != last_wu_toggle_value:
+    wu_toggle_changed = bool(st.session_state.pop("_wu_autoconnect_toggle_changed", False))
+    if wu_toggle_changed or auto_connect_wu_device != last_wu_toggle_value:
         station_for_target = str(st.session_state.get("active_station", "")).strip()
         key_for_target = str(st.session_state.get("active_key", "")).strip()
         z_for_target = str(st.session_state.get("active_z", "")).strip()
 
         if auto_connect_wu_device:
+            current_target = get_stored_autoconnect_target() or {}
+            current_kind = str(current_target.get("kind", "")).strip().upper()
+            if not station_for_target:
+                station_for_target = str(
+                    st.session_state.get("wu_connected_station")
+                    or (current_target.get("station", "") if current_kind == "WU" else "")
+                    or get_stored_station()
+                    or ""
+                ).strip()
+            if not key_for_target:
+                key_for_target = str(
+                    st.session_state.get("wu_connected_api_key")
+                    or (current_target.get("api_key", "") if current_kind == "WU" else "")
+                    or get_stored_apikey()
+                    or ""
+                ).strip()
+            if not z_for_target:
+                z_for_target = str(
+                    st.session_state.get("wu_connected_z")
+                    or (current_target.get("z", "") if current_kind == "WU" else "")
+                    or get_stored_z()
+                    or ""
+                ).strip()
+
             if station_for_target and key_for_target:
                 # Persistir también las credenciales individuales para que la
                 # próxima carga las recupere aunque el usuario no haya pulsado
@@ -490,43 +587,6 @@ def render_sidebar(_local_storage_unused=None):
         # Evita autoconectar en caliente en esta misma sesión.
         st.session_state[AUTOCONNECT_ATTEMPTED] = True
         st.session_state["_wu_autoconnect_ui_last_value"] = bool(auto_connect_wu_device)
-
-    # Auto-persistencia del estado del toggle WU mientras está activo.
-    # Reproduce el comportamiento de los toggles de los proveedores: si el
-    # usuario tiene la auto-conexión activada y edita la Station/API key/altitud
-    # en el sidebar, los nuevos valores se persisten en localStorage al vuelo,
-    # sin necesidad de pulsar "Guardar".
-    if bool(st.session_state.get("auto_connect_wu_device", False)):
-        live_station = str(st.session_state.get("active_station", "")).strip()
-        live_key = str(st.session_state.get("active_key", "")).strip()
-        live_z = str(st.session_state.get("active_z", "")).strip()
-        if live_station and live_key:
-            existing_target = get_stored_autoconnect_target() or {}
-            existing_kind = str(existing_target.get("kind", "")).strip().upper()
-            existing_station = str(existing_target.get("station", "")).strip()
-            existing_key = str(existing_target.get("api_key", "")).strip()
-            existing_z = str(existing_target.get("z", "")).strip()
-            credentials_changed = (
-                existing_kind != "WU"
-                or existing_station != live_station
-                or existing_key != live_key
-                or existing_z != live_z
-            )
-            if credentials_changed:
-                set_local_storage(LS_STATION, live_station, "live")
-                set_local_storage(LS_APIKEY, live_key, "live")
-                set_local_storage(LS_Z, live_z, "live")
-                set_local_storage(LS_AUTOCONNECT, "1", "live")
-                set_local_storage(LS_WU_FORGOTTEN, "0", "live")
-                set_stored_autoconnect_target(
-                    {
-                        "kind": "WU",
-                        "station": live_station,
-                        "api_key": live_key,
-                        "z": live_z,
-                    }
-                )
-                st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
 
     cS, cF = st.sidebar.columns(2)
     with cS:
@@ -727,7 +787,17 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["wu_station_calibration_station"] = wu_station_id
 
         st.sidebar.markdown(f"### 🎛️ {t('sidebar.calibration.title')}")
-        if isinstance(sensor_presence, dict) and any(bool(sensor_presence.get(sensor)) for sensor in WU_CALIBRATION_ORDER):
+        if not storage_ready:
+            st.sidebar.caption(t("sidebar.calibration.loading"))
+        elif isinstance(sensor_presence, dict) and any(bool(sensor_presence.get(sensor)) for sensor in WU_CALIBRATION_ORDER):
+            widget_station_key = "_wu_calibration_widget_station"
+            if st.session_state.get(widget_station_key) != wu_station_id:
+                for sensor in WU_CALIBRATION_ORDER:
+                    st.session_state[f"wu_calibration_{wu_station_id}_{sensor}"] = float(
+                        stored_calibration.get(sensor, 0.0)
+                    )
+                st.session_state[widget_station_key] = wu_station_id
+
             for sensor in WU_CALIBRATION_ORDER:
                 if not bool(sensor_presence.get(sensor)):
                     continue
@@ -857,5 +927,7 @@ def render_sidebar(_local_storage_unused=None):
         dark = True
     else:
         dark = False
+
+    flush_local_storage_writes("mlx_local_storage_sidebar_flush")
 
     return theme_mode, dark

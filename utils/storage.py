@@ -29,6 +29,12 @@ _LS_LEGACY_STATION = "meteolabx_station"
 _LS_LEGACY_APIKEY  = "meteolabx_apikey"
 _LS_LEGACY_Z       = "meteolabx_z"
 
+_SNAPSHOT_STATE_KEY = "_mlx_local_storage_snapshot"
+_SNAPSHOT_READY_KEY = "_mlx_local_storage_snapshot_ready"
+_SESSION_AUTOCONNECT_TARGET_KEY = "_mlx_session_autoconnect_target"
+_SESSION_AUTOCONNECT_ENABLED_KEY = "_mlx_session_autoconnect_enabled"
+_PENDING_WRITES_KEY = "_mlx_local_storage_pending_writes"
+
 
 def _migrate_legacy_unit_preferences(payload) -> dict:
     """
@@ -105,21 +111,6 @@ class _LocalStorageProxy:
 localS = _LocalStorageProxy()
 
 
-def _mk_key(prefix: str, item_key: str, key_suffix: str) -> str:
-    """
-    Genera una key única para los componentes de streamlit_local_storage.
-
-    Streamlit no vuelve a montar un componente con la misma key, así que una
-    escritura posterior con el mismo identificador puede no ejecutar setItem en
-    el navegador. La parte aleatoria fuerza que cada persistencia llegue al
-    localStorage real.
-    """
-    nonce = uuid4().hex[:8]
-    if key_suffix:
-        return f"mlx_{prefix}_{item_key}_{key_suffix}_{nonce}"
-    return f"mlx_{prefix}_{item_key}_{nonce}"
-
-
 def _unwrap_ls_value(raw, item_key: str) -> str:
     """
     La librería streamlit_local_storage almacena los valores en el navegador
@@ -139,78 +130,119 @@ def _unwrap_ls_value(raw, item_key: str) -> str:
         # Intentar extraer por la key exacta primero
         if item_key in raw:
             inner = raw[item_key]
-            if isinstance(inner, bool):
-                return "1" if inner else "0"
-            return str(inner or "").strip()
+            return _unwrap_ls_value(inner, item_key)
         # Si solo hay un valor en el dict, devolverlo
         if len(raw) == 1:
             inner = next(iter(raw.values()))
-            if isinstance(inner, bool):
-                return "1" if inner else "0"
-            return str(inner or "").strip()
+            return _unwrap_ls_value(inner, item_key)
         return ""
     # Caso string normal
-    return str(raw).strip()
+    text = str(raw).strip()
+    if text == "[object Object]":
+        return ""
+    return text
+
+
+def hydrate_local_storage_snapshot(values: Optional[dict]) -> None:
+    """Guarda en session_state el snapshot fiable emitido por el navegador."""
+    if not isinstance(values, dict):
+        return
+    normalized = {
+        str(item_key): _unwrap_ls_value(value, str(item_key))
+        for item_key, value in values.items()
+    }
+    st.session_state[_SNAPSHOT_STATE_KEY] = normalized
+    st.session_state[_SNAPSHOT_READY_KEY] = True
+
+
+def local_storage_snapshot_ready() -> bool:
+    """Indica si el bridge propio ya ha devuelto datos del navegador."""
+    return bool(st.session_state.get(_SNAPSHOT_READY_KEY, False))
+
+
+def _snapshot_item(item_key: str) -> tuple[bool, str]:
+    snapshot = st.session_state.get(_SNAPSHOT_STATE_KEY)
+    if not isinstance(snapshot, dict):
+        return False, ""
+    if item_key not in snapshot:
+        return False, ""
+    return True, _unwrap_ls_value(snapshot.get(item_key), item_key)
+
+
+def queue_local_storage_writes(updates: dict) -> None:
+    """Encola escrituras para enviarlas al navegador en una sola operación."""
+    if not isinstance(updates, dict) or not updates:
+        return
+    try:
+        pending = st.session_state.get(_PENDING_WRITES_KEY)
+        if not isinstance(pending, dict):
+            pending = {}
+        snapshot = st.session_state.get(_SNAPSHOT_STATE_KEY)
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        for item_key, value in updates.items():
+            key = str(item_key)
+            pending[key] = value
+            snapshot[key] = _unwrap_ls_value(value, key)
+        st.session_state[_PENDING_WRITES_KEY] = pending
+        st.session_state[_SNAPSHOT_STATE_KEY] = snapshot
+        st.session_state[_SNAPSHOT_READY_KEY] = True
+    except Exception as exc:
+        logger.warning("No se pudieron encolar escrituras de localStorage: %s", exc)
+
+
+def consume_local_storage_writes() -> dict:
+    """Extrae las escrituras pendientes para renderizarlas con el bridge."""
+    try:
+        pending = st.session_state.pop(_PENDING_WRITES_KEY, {})
+    except Exception:
+        return {}
+    return pending if isinstance(pending, dict) else {}
+
+
+def flush_local_storage_writes(component_key: str = "mlx_local_storage_flush") -> None:
+    """Renderiza una única escritura batch pendiente hacia localStorage."""
+    pending = consume_local_storage_writes()
+    if not pending:
+        return
+    try:
+        from local_storage_bridge import sync_local_storage
+
+        seq_key = f"{component_key}_seq"
+        seq = int(st.session_state.get(seq_key, 0) or 0) + 1
+        st.session_state[seq_key] = seq
+        sync_local_storage(
+            keys=list(pending.keys()),
+            writes=pending,
+            emit=False,
+            key=f"{component_key}_{seq}",
+        )
+    except Exception as exc:
+        logger.warning("No se pudieron volcar escrituras de localStorage: %s", exc)
+        queue_local_storage_writes(pending)
 
 
 def forget_local_storage_keys() -> None:
     """
     Marca todas las keys de credenciales como olvidadas en el localStorage
-    usando setItem del componente streamlit_local_storage (que opera en el
-    localStorage real de la página, no en un iframe sandboxed).
+    mediante la cola batch del bridge propio.
 
-    Usa UUIDs únicos como key de componente para garantizar que Streamlit
-    envíe el widget al frontend en este ciclo de render.
     También borra keys legacy que versiones anteriores pudieron haber escrito.
     """
     from config import LS_WU_FORGOTTEN
-
-    storage = _get_local_storage()
 
     # Keys actuales a marcar con el marcador de olvidado
     keys_to_forget = [LS_STATION, LS_APIKEY, LS_Z, LS_AUTOCONNECT_TARGET, LS_WU_CALIBRATIONS]
     # Keys legacy a marcar también (pueden tener datos de versiones anteriores)
     legacy_keys = [_LS_LEGACY_STATION, _LS_LEGACY_APIKEY, _LS_LEGACY_Z]
 
-    if storage is not None:
-        for item_key in keys_to_forget + legacy_keys:
-            ck = f"mlx_forget_{item_key}_{uuid4().hex[:8]}"
-            forget_payload = {item_key: _FORGET_MARKER}
-            try:
-                storage.setItem(item_key, forget_payload, key=ck)
-            except TypeError:
-                try:
-                    storage.setItem(item_key, forget_payload)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-
-        # LS_AUTOCONNECT: su getter usa "0" como False
-        try:
-            storage.setItem(LS_AUTOCONNECT, {LS_AUTOCONNECT: "0"},
-                            key=f"mlx_forget_{LS_AUTOCONNECT}_{uuid4().hex[:8]}")
-        except Exception:
-            pass
-
-        # LS_WU_FORGOTTEN = "1" → sidebar detecta estado olvidado en recargas
-        try:
-            storage.setItem(LS_WU_FORGOTTEN, {LS_WU_FORGOTTEN: "1"},
-                            key=f"mlx_forget_{LS_WU_FORGOTTEN}_{uuid4().hex[:8]}")
-        except Exception:
-            pass
-
     # Actualizar el caché Python para que el rerun inmediato vea campos vacíos
     updates = {k: _FORGET_MARKER for k in keys_to_forget + legacy_keys}
     updates[LS_AUTOCONNECT] = "0"
     updates[LS_WU_FORGOTTEN] = "1"
+    queue_local_storage_writes(updates)
 
     session_key = _session_storage_key()
-    try:
-        if storage is not None:
-            storage.storedItems.update(updates)
-    except Exception:
-        pass
     try:
         cached = st.session_state.get(session_key)
         if isinstance(cached, dict):
@@ -223,33 +255,10 @@ def forget_local_storage_keys() -> None:
 def set_local_storage(item_key: str, value, key_suffix: str) -> None:
     """Guarda un valor en LocalStorage (o lo marca como olvidado si value es None/'')"""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return
-
-        k = _mk_key("set", item_key, key_suffix)
-
         if value is None or value == "":
             forget_value = "0" if item_key == LS_AUTOCONNECT else _FORGET_MARKER
-            forget_payload = {item_key: forget_value}
-            forget_key = _mk_key("forget", item_key, key_suffix)
-            try:
-                storage.setItem(item_key, forget_payload, key=forget_key)
-            except TypeError:
-                try:
-                    storage.setItem(item_key, forget_payload)
-                except Exception as exc:
-                    logger.warning("No se pudo marcar localStorage como olvidado para %s: %s", item_key, exc)
-                    pass
-            except Exception as exc:
-                logger.warning("No se pudo escribir el marcador de olvido para %s: %s", item_key, exc)
-                pass
-
+            queue_local_storage_writes({item_key: forget_value})
             session_key = _session_storage_key()
-            try:
-                storage.storedItems[item_key] = forget_value
-            except Exception:
-                pass
             try:
                 cached = st.session_state.get(session_key)
                 if isinstance(cached, dict):
@@ -259,26 +268,8 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
                 pass
             return
 
-        # Guardado normal
-        # La librería persiste de forma fiable cuando recibe el wrapper
-        # {item_key: value}; con escalares, algunas sesiones solo quedaban
-        # salvadas en el cache Python y se perdían al cerrar el navegador.
-        payload = {item_key: value}
-        try:
-            storage.setItem(item_key, payload, key=k)
-        except TypeError:
-            try:
-                storage.setItem(item_key, payload)
-            except Exception as inner_exc:
-                logger.warning("No se pudo guardar %s en localStorage (fallback): %s", item_key, inner_exc)
-        except Exception as exc:
-            logger.warning("No se pudo guardar %s en localStorage: %s", item_key, exc)
-
+        queue_local_storage_writes({item_key: value})
         session_key = _session_storage_key()
-        try:
-            storage.storedItems[item_key] = value
-        except Exception:
-            pass
         try:
             cached = st.session_state.get(session_key)
             if isinstance(cached, dict):
@@ -294,6 +285,9 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
 
 def _read_ls_item(storage: LocalStorage, item_key: str, getter_key: str) -> str:
     """Lee una key del localStorage y desenvuelve el formato wrapper si es necesario."""
+    has_snapshot, snapshot_value = _snapshot_item(item_key)
+    if has_snapshot:
+        return snapshot_value
     try:
         raw = storage.getItem(item_key, key=getter_key)
     except TypeError:
@@ -362,6 +356,11 @@ def get_stored_autoconnect():
 def set_stored_autoconnect_target(target: Optional[dict]):
     """Guarda el objetivo de autoconexión (WU o proveedor) en localStorage."""
     if not target:
+        try:
+            st.session_state[_SESSION_AUTOCONNECT_ENABLED_KEY] = False
+            st.session_state.pop(_SESSION_AUTOCONNECT_TARGET_KEY, None)
+        except Exception:
+            pass
         set_local_storage(LS_AUTOCONNECT_TARGET, "", "forget")
         return
 
@@ -370,6 +369,11 @@ def set_stored_autoconnect_target(target: Optional[dict]):
     except Exception:
         return
 
+    try:
+        st.session_state[_SESSION_AUTOCONNECT_TARGET_KEY] = dict(target)
+        st.session_state[_SESSION_AUTOCONNECT_ENABLED_KEY] = True
+    except Exception:
+        pass
     set_local_storage(LS_AUTOCONNECT_TARGET, payload, "save")
 
 

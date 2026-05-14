@@ -93,6 +93,9 @@
       "title": "Calibration des capteurs",
       "loading": "Chargement des capteurs Weather Underground...",
       "range_help": "Plage autorisée : {min} à {max} {unit}",
+      "save": "Enregistrer la calibration",
+      "saved": "Calibration enregistrée ✅",
+      "unsaved": "Calibration en attente d'enregistrement.",
       "fields": {
         "barometer": "Baromètre (hPa)",
         "wind_vane": "Girouette (°)",
