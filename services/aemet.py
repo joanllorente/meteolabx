@@ -1,14 +1,17 @@
 """
 Servicio para interactuar con AEMET OpenData API
 """
+import os
+import re
+import time
+from datetime import datetime, timedelta, timezone, date
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
+
+import pandas as pd
 import requests
 import streamlit as st
-import time
-from typing import Dict, Optional, List, Any, Tuple
-from datetime import datetime, timedelta, timezone, date
-from urllib.parse import quote
-import re
-import pandas as pd
+
 from config import MAX_DATA_AGE_MINUTES
 from utils.provider_state import (
     clear_provider_runtime_error,
@@ -19,8 +22,18 @@ from utils.provider_state import (
     set_provider_runtime_error,
 )
 
-# API Key de AEMET
-AEMET_API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZXRlb2xhYnhAZ21haWwuY29tIiwianRpIjoiNTdkMzE1MjYtMTk4My00YzNiLTgzNjAtYTdkZWJmMmIxMDFhIiwiaXNzIjoiQUVNRVQiLCJpYXQiOjE3NzAyNDQ1OTEsInVzZXJJZCI6IjU3ZDMxNTI2LTE5ODMtNGMzYi04MzYwLWE3ZGViZjJiMTAxYSIsInJvbGUiOiIifQ.GvliQHY3f94N691sU0ExhMHZxbTiGn2BCe-bIA22K8c"
+# API Key de AEMET. Configurable vía la variable de entorno ``AEMET_API_KEY``;
+# se mantiene el valor original como fallback para que la app siga funcionando
+# en deploys que aún no la hayan definido. Si el repo se publica, recomienda
+# rotar esta key y dejar solo el ``os.getenv`` sin fallback.
+_AEMET_API_KEY_FALLBACK = (
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZXRlb2xhYnhAZ21haWwuY29tIiwianRpIjoi"
+    "NTdkMzE1MjYtMTk4My00YzNiLTgzNjAtYTdkZWJmMmIxMDFhIiwiaXNzIjoiQUVNRVQi"
+    "LCJpYXQiOjE3NzAyNDQ1OTEsInVzZXJJZCI6IjU3ZDMxNTI2LTE5ODMtNGMzYi04MzYw"
+    "LWE3ZGViZjJiMTAxYSIsInJvbGUiOiIifQ"
+    ".GvliQHY3f94N691sU0ExhMHZxbTiGn2BCe-bIA22K8c"
+)
+AEMET_API_KEY = os.getenv("AEMET_API_KEY", _AEMET_API_KEY_FALLBACK)
 
 BASE_URL = "https://opendata.aemet.es/opendata/api"
 AEMET_SERIES_FRESHNESS_MINUTES = max(1, int(MAX_DATA_AGE_MINUTES))
@@ -643,11 +656,12 @@ def fetch_aemet_station_data(idema: str) -> Optional[Dict]:
         # AEMET usa latin-1 encoding
         try:
             data = data_response.json()
-        except:
-            # Intentar con latin-1 si UTF-8 falla
-            data = data_response.content.decode('latin-1')
+        except ValueError:
+            # JSONDecodeError es subclass de ValueError; reintentar con latin-1
+            # si UTF-8 falla. Evitamos `except:` para no tragar KeyboardInterrupt
+            # ni SystemExit.
             import json
-            data = json.loads(data)
+            data = json.loads(data_response.content.decode('latin-1'))
         
         # Devolver el ÚLTIMO elemento (datos más recientes)
         # AEMET devuelve lista ordenada cronológicamente, el último es el más nuevo

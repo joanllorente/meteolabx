@@ -9,6 +9,7 @@ from components.geolocation_state import (
 )
 from providers.types import StationCandidate
 from utils.geo import haversine_distance
+from utils.helpers import coerce_str
 
 
 ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM"]
@@ -41,7 +42,7 @@ def is_norway_map_center(lat: float, lon: float) -> bool:
 
 
 def provider_is_near_center(provider_id: str, lat: float, lon: float) -> bool:
-    pid = str(provider_id or "").strip().upper()
+    pid = coerce_str(provider_id, upper=True)
     if pid == "NWS":
         return is_us_map_center(lat, lon)
     if pid == "FROST":
@@ -54,7 +55,7 @@ def provider_is_near_center(provider_id: str, lat: float, lon: float) -> bool:
 
 
 def regional_catalog_spec(provider_id: str) -> Optional[dict]:
-    return REGIONAL_CATALOG_SPECS.get(str(provider_id or "").strip().upper())
+    return REGIONAL_CATALOG_SPECS.get(coerce_str(provider_id, upper=True))
 
 
 def split_map_provider_options(lat: float, lon: float, provider_options=None):
@@ -78,7 +79,7 @@ PROVIDER_COLORS = {
 
 def _map_cache_key(provider_id: str, lat: float, lon: float) -> tuple[str, float, float]:
     return (
-        str(provider_id or "").strip().upper(),
+        coerce_str(provider_id, upper=True),
         round(float(lat), 4),
         round(float(lon), 4),
     )

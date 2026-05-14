@@ -4,12 +4,159 @@ Aplicación principal
 """
 import streamlit as st
 import streamlit.components.v1 as components
+from pathlib import Path as _Path
+
+
+def _load_favicon_for_page_config():
+    """
+    Carga el favicon como ``PIL.Image`` para que Streamlit lo embeba
+    correctamente en el HTML inicial.
+
+    Pasar un string-path falla en algunos lanzamientos locales (depende del
+    cwd desde el que arranque ``streamlit run``). Pasar bytes de un ``.ico``
+    también falla porque internamente Streamlit asume PNG. Pasar un objeto
+    PIL.Image es lo que mejor soporte tiene en todas las versiones.
+    """
+    candidates = [
+        _Path(__file__).parent / "static" / "favicon.png",
+        _Path(__file__).parent / "favicon.png",
+        _Path(__file__).parent / "static" / "favicon-32x32.png",
+        _Path(__file__).parent / "favicon-32x32.png",
+    ]
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            from PIL import Image
+            return Image.open(str(candidate))
+        except Exception:
+            continue
+    return None
+
+
+_FAVICON_IMAGE = _load_favicon_for_page_config()
+
 st.set_page_config(
     page_title="MeteoLabX",
-    page_icon="favicon.png",
+    # Favicon de la pestaña del navegador: usamos el favicon "neutro" (no el
+    # icono azul de webapp). El icono azul con isobaras se reserva para PWA
+    # / home screen via apple-touch-icon.
+    page_icon=_FAVICON_IMAGE if _FAVICON_IMAGE is not None else "🌤️",
     layout="wide",
     initial_sidebar_state="collapsed"  # Sidebar colapsada por defecto en móvil
 )
+
+# ============================================================
+# PWA METADATA — se inyecta lo antes posible para que iOS Safari encuentre
+# los <link rel="apple-touch-icon"> y rel="manifest" antes de que el usuario
+# pulse "Añadir a pantalla de inicio". Si se inyecta tarde, iOS toma un
+# screenshot de la página como icono porque ya ha leído el DOM inicial sin
+# los tags. También ayuda a Safari de escritorio a pintar el favicon
+# correctamente en la primera carga.
+# ============================================================
+# Bump esta versión cada vez que cambien los iconos / manifest para forzar
+# que el navegador (y la pantalla de inicio de iOS) recarguen los assets en
+# vez de servir el icono cacheado.
+PWA_ASSET_VERSION = "9"
+PWA_STATIC_BASE = "/app/static"
+
+
+def _inject_pwa_metadata() -> None:
+    """Sincroniza manifest e iconos en el head real para web apps instalables."""
+    components.html(
+        f"""
+        <script>
+        (function () {{
+          try {{
+            const doc = window.parent && window.parent.document ? window.parent.document : document;
+            const head = doc.head;
+            if (!head) return;
+            const base = "{PWA_STATIC_BASE}";
+            const version = "{PWA_ASSET_VERSION}";
+            const asset = (name) => `${{base}}/${{name}}?v=${{version}}`;
+
+            function upsertMeta(name, content) {{
+              let el = head.querySelector(`meta[name="${{name}}"]`);
+              if (!el) {{
+                el = doc.createElement("meta");
+                el.setAttribute("name", name);
+                head.appendChild(el);
+              }}
+              el.setAttribute("content", content);
+            }}
+
+            function upsertLink(rel, href, attrs) {{
+              attrs = attrs || {{}};
+              const sizes = attrs.sizes || "";
+              const selector = sizes
+                ? `link[rel="${{rel}}"][sizes="${{sizes}}"]`
+                : `link[rel="${{rel}}"]:not([sizes])`;
+              let el = head.querySelector(selector);
+              if (!el) {{
+                el = doc.createElement("link");
+                el.setAttribute("rel", rel);
+                if (sizes) el.setAttribute("sizes", sizes);
+                head.appendChild(el);
+              }}
+              Object.keys(attrs).forEach((key) => el.setAttribute(key, attrs[key]));
+              el.setAttribute("href", href);
+            }}
+
+            upsertMeta("viewport", "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes");
+            upsertMeta("mobile-web-app-capable", "yes");
+            upsertMeta("apple-mobile-web-app-capable", "yes");
+            upsertMeta("apple-mobile-web-app-status-bar-style", "black-translucent");
+            upsertMeta("apple-mobile-web-app-title", "MeteoLabX");
+            upsertMeta("theme-color", "#2384ff");
+
+            // Borrar TODOS los <link rel="icon"> y rel="shortcut icon" /
+            // rel="apple-touch-icon" que ya pinte Streamlit por defecto.
+            // Si no los quitamos, el navegador puede seguir mostrando el
+            // logo de Streamlit aunque después añadamos los nuestros.
+            const REMOVE_RELS = [
+              "icon",
+              "shortcut icon",
+              "apple-touch-icon",
+              "apple-touch-icon-precomposed",
+              "mask-icon",
+            ];
+            REMOVE_RELS.forEach(function (rel) {{
+              const existing = head.querySelectorAll(`link[rel="${{rel}}"]`);
+              existing.forEach(function (node) {{ node.parentNode.removeChild(node); }});
+            }});
+
+            upsertLink("manifest", asset("manifest.json"));
+
+            // --- Favicon de la pestaña del navegador ---
+            // IMPORTANTE: los <link rel="icon"> se evalúan en orden. Streamlit
+            // sirve los PNGs vía /app/static/ pero NO sirve .ico en esa ruta
+            // (devuelve HTML). Por tanto declaramos primero los PNG para que
+            // el navegador tenga un fallback fiable, y el .ico solo como
+            // último recurso por compatibilidad con producción tras proxy.
+            upsertLink("icon", asset("favicon-32x32.png"), {{ type: "image/png", sizes: "32x32" }});
+            upsertLink("icon", asset("favicon-16x16.png"), {{ type: "image/png", sizes: "16x16" }});
+            upsertLink("shortcut icon", asset("favicon.png"), {{ type: "image/png" }});
+            // .ico al final - si Streamlit no lo sirve, ya están los PNG
+            // antes y el navegador no falla. En producción con proxy nginx
+            // sí se servirá correctamente y Safari lo aprovechará.
+            upsertLink("icon", asset("favicon.ico"), {{ type: "image/x-icon" }});
+
+            // --- Icono de PWA / "Añadir a pantalla de inicio" ---
+            // Aquí sí usamos el icono azul con isobaras.
+            upsertLink("apple-touch-icon", asset("apple-touch-icon-pwa.png"));
+            upsertLink("apple-touch-icon", asset("apple-touch-icon-pwa.png"), {{ sizes: "180x180" }});
+            upsertLink("apple-touch-icon-precomposed", asset("apple-touch-icon-pwa.png"));
+          }} catch (_e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+_inject_pwa_metadata()
+
 import time
 import math
 import logging
@@ -22,7 +169,7 @@ from datetime import datetime, timedelta
 # Imports locales
 from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT, RD
 from data_files import STATION_CATALOG_TOTAL
-from utils import html_clean, is_nan, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t
+from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t
 from utils.storage import (
     set_local_storage,
     set_stored_autoconnect_target,
@@ -125,139 +272,92 @@ from components.app_header import render_app_header, render_connection_banner
 
 from components.browser_context import get_browser_context
 from components.browser_geolocation import get_browser_geolocation
-from tabs import (
-    build_observation_context,
-    render_observation_tab,
-    render_trends_tab,
-    render_historical_tab,
-    render_map_tab,
-)
+
+# Las tabs son los módulos más grandes del proyecto (observation, trends,
+# historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
+# que se importan bajo demanda mediante :func:`_get_tab_renderer`.
 
 # Configurar logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-PWA_ASSET_VERSION = "8"
-PWA_STATIC_BASE = "/app/static"
+# Las constantes y la función _inject_pwa_metadata se definen ahora al inicio
+# del archivo (justo después de set_page_config) para que el JS de iconos se
+# ejecute lo antes posible. Ver bloque "PWA METADATA" en las primeras líneas.
 
 
-def _inject_pwa_metadata() -> None:
-    """Sincroniza manifest e iconos en el head real para web apps instalables."""
-    components.html(
-        f"""
-        <script>
-        (function () {{
-          try {{
-            const doc = window.parent && window.parent.document ? window.parent.document : document;
-            const head = doc.head;
-            if (!head) return;
-            const base = "{PWA_STATIC_BASE}";
-            const version = "{PWA_ASSET_VERSION}";
-            const asset = (name) => `${{base}}/${{name}}?v=${{version}}`;
-
-            function upsertMeta(name, content) {{
-              let el = head.querySelector(`meta[name="${{name}}"]`);
-              if (!el) {{
-                el = doc.createElement("meta");
-                el.setAttribute("name", name);
-                head.appendChild(el);
-              }}
-              el.setAttribute("content", content);
-            }}
-
-            function upsertLink(rel, href, attrs) {{
-              attrs = attrs || {{}};
-              const sizes = attrs.sizes || "";
-              const selector = sizes
-                ? `link[rel="${{rel}}"][sizes="${{sizes}}"]`
-                : `link[rel="${{rel}}"]:not([sizes])`;
-              let el = head.querySelector(selector);
-              if (!el) {{
-                el = doc.createElement("link");
-                el.setAttribute("rel", rel);
-                if (sizes) el.setAttribute("sizes", sizes);
-                head.appendChild(el);
-              }}
-              Object.keys(attrs).forEach((key) => el.setAttribute(key, attrs[key]));
-              el.setAttribute("href", href);
-            }}
-
-            upsertMeta("viewport", "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes");
-            upsertMeta("mobile-web-app-capable", "yes");
-            upsertMeta("apple-mobile-web-app-capable", "yes");
-            upsertMeta("apple-mobile-web-app-status-bar-style", "black-translucent");
-            upsertMeta("apple-mobile-web-app-title", "MeteoLabX");
-            upsertMeta("theme-color", "#2384ff");
-
-            upsertLink("manifest", asset("manifest.json"));
-            upsertLink("apple-touch-icon", asset("apple-touch-icon-pwa.png"));
-            upsertLink("apple-touch-icon", asset("apple-touch-icon-pwa.png"), {{ sizes: "180x180" }});
-            upsertLink("apple-touch-icon-precomposed", asset("apple-touch-icon-pwa.png"));
-            upsertLink("icon", asset("icon-192-pwa.png"), {{ type: "image/png", sizes: "192x192" }});
-            upsertLink("icon", asset("icon-512-pwa.png"), {{ type: "image/png", sizes: "512x512" }});
-            upsertLink("shortcut icon", asset("icon-192-pwa.png"), {{ type: "image/png" }});
-          }} catch (_e) {{}}
-        }})();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
+_SERVICE_MODULE_REGISTRY: dict[str, str] = {
+    "frost": "services.frost",
+    "meteofrance": "services.meteofrance",
+    "climograms": "services.climograms",
+    "aemet": "services.aemet",
+    "meteocat": "services.meteocat",
+    "euskalmet": "services.euskalmet",
+    "meteogalicia": "services.meteogalicia",
+    "poem": "services.poem",
+    "nws": "services.nws",
+}
+_SERVICE_MODULE_CACHE: dict[str, object] = {}
 
 
-def _get_frost_service():
-    """Importa Frost bajo demanda para aligerar el arranque inicial."""
-    from services import frost as frost_service
-    return frost_service
+def _get_service(name: str):
+    """
+    Importa y memoiza un servicio bajo demanda para aligerar el arranque
+    inicial. Toda la fábrica se centraliza en un solo helper en lugar de
+    nueve funciones casi idénticas.
+    """
+    cached = _SERVICE_MODULE_CACHE.get(name)
+    if cached is not None:
+        return cached
+    try:
+        module_path = _SERVICE_MODULE_REGISTRY[name]
+    except KeyError as exc:
+        raise KeyError(f"Servicio desconocido: {name!r}") from exc
+    import importlib
+    module = importlib.import_module(module_path)
+    _SERVICE_MODULE_CACHE[name] = module
+    return module
 
 
-def _get_meteofrance_service():
-    """Importa Meteo-France bajo demanda para aligerar el arranque inicial."""
-    from services import meteofrance as meteofrance_service
-    return meteofrance_service
+# Wrappers individuales hacia :func:`_get_service`. Antes eran 9 funciones
+# de una sola línea cada una; ahora se generan en bloque con ``partial``
+# para reducir ruido visual sin cambiar la API pública del módulo.
+from functools import partial
+
+_get_frost_service = partial(_get_service, "frost")
+_get_meteofrance_service = partial(_get_service, "meteofrance")
+_get_climograms_service = partial(_get_service, "climograms")
+_get_aemet_service = partial(_get_service, "aemet")
+_get_meteocat_service = partial(_get_service, "meteocat")
+_get_euskalmet_service = partial(_get_service, "euskalmet")
+_get_meteogalicia_service = partial(_get_service, "meteogalicia")
+_get_poem_service = partial(_get_service, "poem")
+_get_nws_service = partial(_get_service, "nws")
 
 
-def _get_climograms_service():
-    """Importa cálculos de climogramas bajo demanda para aligerar el arranque inicial."""
-    from services import climograms as climograms_service
-    return climograms_service
+_TAB_MODULE_CACHE: dict[str, object] = {}
 
 
-def _get_aemet_service():
-    """Importa AEMET bajo demanda para aligerar el arranque inicial."""
-    from services import aemet as aemet_service
-    return aemet_service
+def _get_tab_module():
+    """
+    Importa ``tabs`` bajo demanda y memoiza el módulo.
+
+    Las cuatro tabs (observation, trends, historical, map) suman ~2.770 líneas
+    y solo se renderiza una a la vez, así que cargarlas en arranque era un
+    coste innecesario para reruns que ni siquiera tocan la UI principal.
+    """
+    cached = _TAB_MODULE_CACHE.get("tabs")
+    if cached is not None:
+        return cached
+    import tabs as tabs_module
+    _TAB_MODULE_CACHE["tabs"] = tabs_module
+    return tabs_module
 
 
-def _get_meteocat_service():
-    """Importa Meteocat bajo demanda para aligerar el arranque inicial."""
-    from services import meteocat as meteocat_service
-    return meteocat_service
-
-
-def _get_euskalmet_service():
-    """Importa Euskalmet bajo demanda para aligerar el arranque inicial."""
-    from services import euskalmet as euskalmet_service
-    return euskalmet_service
-
-
-def _get_meteogalicia_service():
-    """Importa MeteoGalicia bajo demanda para aligerar el arranque inicial."""
-    from services import meteogalicia as meteogalicia_service
-    return meteogalicia_service
-
-
-def _get_poem_service():
-    """Importa POEM bajo demanda para aligerar el arranque inicial."""
-    from services import poem as poem_service
-    return poem_service
-
-
-def _get_nws_service():
-    """Importa NWS bajo demanda para aligerar el arranque inicial."""
-    from services import nws as nws_service
-    return nws_service
+def build_observation_context(*args, **kwargs):
+    """Facade lazy hacia :func:`tabs.build_observation_context`."""
+    return _get_tab_module().build_observation_context(*args, **kwargs)
 
 
 def _get_provider_label(provider_id: str) -> str:
@@ -269,7 +369,7 @@ def _get_provider_station_id(provider_id: str) -> str:
 
 
 def _get_provider_api_key(provider_id: str):
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     api_key_resolvers = {
         "WU": lambda: str(
             st.session_state.get("active_key", "")
@@ -298,7 +398,7 @@ SERIES_START_LOADERS = {
 
 
 def _render_historical_provider_series_start(provider_id: str, station_id: str) -> None:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     if not station_id:
         return
 
@@ -328,7 +428,7 @@ def _render_historical_provider_series_start(provider_id: str, station_id: str) 
 
 
 def _get_historical_missing_message(provider_id: str, station_id: str, api_key) -> str:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     provider_feature = get_provider_feature(provider_id)
     key = str(provider_feature.get("historical_missing_key", "")).strip()
     if not key:
@@ -410,7 +510,7 @@ def _extract_provider_series_7d(base: dict, mode: str) -> Optional[dict]:
 
 
 def _process_standard_provider_connection(provider_id: str) -> tuple[dict, "ProcessedData"]:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     config = _standard_provider_runtime_config().get(provider_id)
     if not config:
         raise KeyError(f"Proveedor estándar no soportado: {provider_id}")
@@ -434,7 +534,7 @@ def _process_standard_provider_connection(provider_id: str) -> tuple[dict, "Proc
 
 
 def _fetch_provider_synoptic_series_from_state(provider_id: str) -> tuple[dict, str]:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     hourly7d = store_trend_hourly_series(st.session_state, series_from_state(st.session_state, "trend_hourly"))
     hourly7d["has_data"] = bool(hourly7d.get("has_data")) or len(hourly7d["epochs"]) > 0
     return hourly7d, t("trends.sources.generic_synoptic", provider=provider_id)
@@ -497,17 +597,17 @@ def _has_live_connection_payload(payload: dict) -> bool:
 
 
 def _set_chart_series_owner(provider_id: str, station_id: str) -> None:
-    st.session_state["chart_series_provider_id"] = str(provider_id or "").strip().upper()
-    st.session_state["chart_series_station_id"] = str(station_id or "").strip().upper()
+    st.session_state["chart_series_provider_id"] = coerce_str(provider_id, upper=True)
+    st.session_state["chart_series_station_id"] = coerce_str(station_id, upper=True)
 
 
 def _chart_series_fresh_for_station(provider_id: str, station_id: str, *, max_age_s: Optional[int] = None) -> bool:
-    provider_norm = str(provider_id or "").strip().upper()
-    station_norm = str(station_id or "").strip().upper()
+    provider_norm = coerce_str(provider_id, upper=True)
+    station_norm = coerce_str(station_id, upper=True)
     if not provider_norm or not station_norm:
         return False
-    chart_provider = str(st.session_state.get("chart_series_provider_id", "")).strip().upper()
-    chart_station = str(st.session_state.get("chart_series_station_id", "")).strip().upper()
+    chart_provider = coerce_str(st.session_state.get("chart_series_provider_id", ""), upper=True)
+    chart_station = coerce_str(st.session_state.get("chart_series_station_id", ""), upper=True)
     if chart_provider != provider_norm or chart_station != station_norm:
         return False
     chart_state = series_from_state(st.session_state, "chart", pressure_key="pressures_abs")
@@ -524,7 +624,7 @@ def _chart_series_fresh_for_station(provider_id: str, station_id: str, *, max_ag
 
 
 def _normalize_observation_chart_series(provider_id: str, payload: Optional[dict]) -> dict:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     series = payload if isinstance(payload, dict) else {}
     epochs = list(series.get("epochs", []))
     normalized = {
@@ -549,8 +649,8 @@ def _normalize_observation_chart_series(provider_id: str, payload: Optional[dict
 
 
 def _fetch_deferred_observation_chart_series(provider_id: str, station_id: str) -> dict:
-    provider_id = str(provider_id or "").strip().upper()
-    station_id = str(station_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
+    station_id = coerce_str(station_id, upper=True)
     if not provider_id or not station_id:
         return {"epochs": [], "has_data": False}
 
@@ -634,7 +734,7 @@ def _synoptic_provider_registry() -> dict[str, dict]:
 
 
 def _fetch_trends_synoptic_series(provider_id: str):
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     station_id = _get_provider_station_id(provider_id)
     provider_feature = get_provider_feature(provider_id)
     state_hourly7d, state_source_label = _fetch_provider_synoptic_series_from_state(provider_id)
@@ -3236,7 +3336,11 @@ h1, h2, h3, h4, h5, h6 {{
 </style>
 """, unsafe_allow_html=True)
 
-_inject_pwa_metadata()
+# NOTA: _inject_pwa_metadata() se llama ahora al principio del script (justo
+# después de set_page_config) para que iOS Safari encuentre los <link
+# rel="apple-touch-icon"> y rel="manifest" en el DOM cuando el usuario hace
+# "Añadir a pantalla de inicio". Si se inyecta tarde, iOS usa un screenshot
+# como icono porque no le da tiempo a leer los tags inyectados por JS.
 
 # CSS de componentes y responsive mobile
 st.markdown(html_clean("""
@@ -3932,10 +4036,17 @@ if not has_connection_banner:
 
 connection_loading_payload = st.session_state.get(CONNECTION_LOADING)
 loading_in_progress = isinstance(connection_loading_payload, dict)
+_overlay_state_key = "_overlay_was_visible"
+_overlay_was_visible = bool(st.session_state.get(_overlay_state_key, False))
 if loading_in_progress:
     render_connection_loading_overlay(connection_loading_payload, title_text=t("connection.loading_title"), dark=dark)
-else:
+    st.session_state[_overlay_state_key] = True
+elif _overlay_was_visible:
+    # Solo inyectamos el <iframe> de limpieza si el overlay estuvo activo en
+    # un rerun anterior. Antes se enviaba en cada rerun y añadía un iframe
+    # vacío al DOM cada vez, lo cual es ruido para el navegador.
     clear_connection_loading_overlay()
+    st.session_state[_overlay_state_key] = False
 
 
 
@@ -4078,7 +4189,6 @@ if (connected or loading_in_progress) and not runtime_snapshot:
             
             # Último punto del gráfico
             last_idx = -1
-            from datetime import datetime
             chart_last_epoch = chart_epochs[last_idx]
             base_epoch = base.get("epoch", 0)
             use_chart_for_current = (
@@ -4108,7 +4218,6 @@ if (connected or loading_in_progress) and not runtime_snapshot:
                     base["precip_total"] = chart_precips[last_idx]
             
             # Calcular max/min solo del día ACTUAL (desde medianoche de hoy)
-            from datetime import datetime
             now_local = datetime.now()
             today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
             today_start_epoch = int(today_start.timestamp())
@@ -4647,17 +4756,21 @@ if (connected or loading_in_progress) and not runtime_snapshot:
                 st.session_state["chart_et0"] = et0
                 st.session_state["chart_balance"] = balance
 
-        except WuError as e:
+        except WuError as wu_error:
+            # OJO: no usar `as e` aquí. Python borra el nombre vinculado en la
+            # cláusula except al salir del bloque, lo que eliminaría la variable
+            # de módulo `e` (presión de vapor) y dispararía NameError al
+            # construir el contexto del tab de observación.
             _cancel_connection_loading()
-            if e.kind == "unauthorized":
+            if wu_error.kind == "unauthorized":
                 st.error("❌ API key inválida o sin permisos.")
-            elif e.kind == "notfound":
+            elif wu_error.kind == "notfound":
                 st.error("❌ Station ID no encontrado.")
-            elif e.kind == "ratelimit":
+            elif wu_error.kind == "ratelimit":
                 st.error("❌ Demasiadas peticiones. Aumenta el refresh.")
-            elif e.kind == "timeout":
+            elif wu_error.kind == "timeout":
                 st.error("❌ Timeout consultando Weather Underground.")
-            elif e.kind == "network":
+            elif wu_error.kind == "network":
                 st.error("❌ Error de red.")
             else:
                 st.error("❌ Error consultando Weather Underground.")
@@ -4668,9 +4781,16 @@ if (connected or loading_in_progress) and not runtime_snapshot:
             logger.error(f"Error inesperado: {repr(err)}")
 
 if st.session_state.get(CONNECTION_LOADING) and _has_live_connection_payload(base):
+    _loading_payload_for_clear = st.session_state.get(CONNECTION_LOADING)
+    _loading_started_at = None
+    if isinstance(_loading_payload_for_clear, dict):
+        _loading_started_at = _loading_payload_for_clear.get("started_at")
     st.session_state[CONNECTED] = True
     st.session_state.pop(CONNECTION_LOADING, None)
-    clear_connection_loading_overlay()
+    # Pasamos started_at para garantizar que el overlay se vea un mínimo de
+    # tiempo aunque la respuesta venga de caché (evita el parpadeo que ocurría
+    # en conexiones posteriores a la primera).
+    clear_connection_loading_overlay(started_at=_loading_started_at)
 
 if st.session_state.get("demo_radiation", False):
     demo_solar = _first_valid_float(st.session_state.get("demo_solar"), default=650.0)
@@ -4920,28 +5040,28 @@ active_tab = st.radio(
 
 # TAB 1: OBSERVACIÓN
 if active_tab == "observation":
-    render_observation_tab(_build_observation_tab_context())
+    _get_tab_module().render_observation_tab(_build_observation_tab_context())
 
 # ============================================================
 # TAB 2: TENDENCIAS
 # ============================================================
 
 elif active_tab == "trends":
-    render_trends_tab(_build_trends_tab_context())
+    _get_tab_module().render_trends_tab(_build_trends_tab_context())
 
 # ============================================================
 # TAB 3: HISTORICO
 # ============================================================
 
 elif active_tab == "historical":
-    render_historical_tab(_build_historical_tab_context())
+    _get_tab_module().render_historical_tab(_build_historical_tab_context())
 
 # ============================================================
 # TAB 4: MAPA
 # ============================================================
 
 elif active_tab == "map":
-    render_map_tab(_build_map_tab_context())
+    _get_tab_module().render_map_tab(_build_map_tab_context())
 
 # ============================================================
 # AUTOREFRESH SOLO EN OBSERVACIÓN

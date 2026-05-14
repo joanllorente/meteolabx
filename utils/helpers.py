@@ -26,6 +26,30 @@ def normalize_text_input(value) -> str:
     return str(value)
 
 
+def coerce_str(value, *, upper: bool = False, lower: bool = False) -> str:
+    """
+    Normaliza un valor heterogéneo a string limpio.
+
+    Reemplaza el patrón repetido en toda la base de código
+    ``str(x or "").strip()`` (y sus variantes con ``.upper()`` / ``.lower()``).
+    Trata ``None`` y cadenas vacías de forma equivalente y devuelve siempre
+    un ``str`` (nunca ``None``).
+
+    Args:
+        value: cualquier objeto. ``None`` se convierte en cadena vacía antes
+            del cast a ``str`` para no producir ``"None"``.
+        upper: si es ``True`` devuelve el resultado en mayúsculas.
+        lower: si es ``True`` devuelve el resultado en minúsculas. ``upper``
+            tiene prioridad si ambos son ``True``.
+    """
+    text = str(value or "").strip()
+    if upper:
+        return text.upper()
+    if lower:
+        return text.lower()
+    return text
+
+
 def es_datetime_from_epoch(epoch: int, tz_name: str = "") -> str:
     """Convierte epoch a datetime en la timezone indicada si existe."""
     try:

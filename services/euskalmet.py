@@ -19,6 +19,8 @@ from data_files import (
     EUSKALMET_SENSORS_PATH as DEFAULT_EUSKALMET_SENSORS_PATH,
     EUSKALMET_STATIONS_PATH as DEFAULT_EUSKALMET_STATIONS_PATH,
 )
+from services._common import find_station_by_field, load_stations_json
+from utils.helpers import coerce_str
 from utils.provider_state import (
     clear_provider_runtime_error,
     get_connected_provider_station_id,
@@ -230,7 +232,7 @@ def _load_sensor_inventory_ids(path_hint: str = "") -> List[str]:
 
 
 def _candidate_inventory_sensors(station_id: str, measure_type: str, measure_id: str) -> List[str]:
-    sid = str(station_id or "").strip().upper()
+    sid = coerce_str(station_id, upper=True)
     all_ids = _load_sensor_inventory_ids()
     if not all_ids:
         return []
@@ -519,20 +521,11 @@ def _extract_sensor_ids(payload: Any, station_id: str = "") -> List[str]:
 
 @lru_cache(maxsize=2)
 def _load_stations(path: str = str(DEFAULT_EUSKALMET_STATIONS_PATH)):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    return load_stations_json(path)
 
 
 def _find_station(station_id: str) -> Dict[str, Any]:
-    sid = str(station_id).strip().upper()
-    for station in _load_stations():
-        if str(station.get("stationId", "")).strip().upper() == sid:
-            return station
-    return {}
+    return find_station_by_field(_load_stations(), field="stationId", target=station_id)
 
 
 def _hour_points(year: int, month: int, day: int, hour: int, values: List[Any]) -> List[Tuple[int, float]]:

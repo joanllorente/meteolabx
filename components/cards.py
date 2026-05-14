@@ -15,8 +15,14 @@ from utils.i18n import get_language, t
 from .icons import icon_img
 
 
-DEFINITIONS_PATH = Path(__file__).parent.parent / "definiciones.txt"
 DEFINITIONS_I18N_DIR = Path(__file__).parent.parent / "locales"
+# Ubicación canónica del corpus de definiciones en español. El archivo se mueve
+# bajo ``locales/`` para agruparlo con los homólogos de otros idiomas
+# (``card_definitions.{en,fr}.json``). Mantenemos un fallback al path antiguo
+# en el root por compatibilidad con instalaciones previas que aún no hayan
+# replicado el move.
+DEFINITIONS_PATH = DEFINITIONS_I18N_DIR / "definiciones.es.txt"
+_LEGACY_DEFINITIONS_PATH = Path(__file__).parent.parent / "definiciones.txt"
 FALLBACK_DEFINITIONS_ES = {
     "temperatura": "Temperatura del aire medida por la estación a la altura del sensor (habitualmente 1.5-2 m).",
     "humedad relativa": "Porcentaje de vapor de agua presente en el aire respecto al máximo posible a esa temperatura.",
@@ -56,7 +62,13 @@ def _normalize_text(text: str) -> str:
 @lru_cache(maxsize=1)
 def _load_definitions() -> dict:
     definitions = {}
-    if not DEFINITIONS_PATH.exists():
+    # Preferimos el path nuevo dentro de ``locales/`` pero caemos al legacy
+    # del root si la copia no ha sido migrada aún.
+    if DEFINITIONS_PATH.exists():
+        active_path = DEFINITIONS_PATH
+    elif _LEGACY_DEFINITIONS_PATH.exists():
+        active_path = _LEGACY_DEFINITIONS_PATH
+    else:
         return definitions
 
     current_key = ""
@@ -66,7 +78,7 @@ def _load_definitions() -> dict:
         if current_key:
             definitions[current_key] = "\n".join(p for p in current_parts if p)
 
-    lines = DEFINITIONS_PATH.read_text(encoding="utf-8", errors="ignore").splitlines()
+    lines = active_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     for raw_line in lines:
         stripped = raw_line.strip()
         if not stripped:

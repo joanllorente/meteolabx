@@ -18,6 +18,7 @@ import streamlit as st
 from requests.auth import HTTPBasicAuth
 
 from data_files import POEM_STATIONS_PATH
+from services._common import load_stations_json, parse_epoch as _parse_epoch
 from utils.provider_state import (
     clear_provider_runtime_error,
     get_connected_provider_station_id,
@@ -146,59 +147,6 @@ def _normalize_station_token(value: Any) -> str:
     return token
 
 
-def _parse_epoch(value: Any) -> Optional[int]:
-    if value is None:
-        return None
-
-    if isinstance(value, (int, float)):
-        try:
-            iv = int(value)
-        except Exception:
-            return None
-        if iv <= 0:
-            return None
-        if iv > 10**12:  # milisegundos
-            iv = int(iv / 1000)
-        return iv
-
-    raw = str(value).strip()
-    if not raw:
-        return None
-
-    if raw.isdigit():
-        iv = int(raw)
-        if iv > 10**12:
-            iv = int(iv / 1000)
-        return iv if iv > 0 else None
-
-    iso_raw = raw.replace(" ", "T")
-    if iso_raw.endswith("Z"):
-        iso_raw = iso_raw[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(iso_raw)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
-    except Exception:
-        pass
-
-    fmts = [
-        "%Y%m%d@%H%M",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y/%m/%d %H:%M:%S",
-        "%d/%m/%Y %H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d %H:%M",
-        "%d/%m/%Y %H:%M",
-    ]
-    for fmt in fmts:
-        try:
-            dt = datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
-            return int(dt.timestamp())
-        except Exception:
-            continue
-    return None
-
 
 def _request_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
     headers = {
@@ -245,12 +193,7 @@ def _request_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
 
 @lru_cache(maxsize=2)
 def _load_stations(path: str = str(POEM_STATIONS_PATH)) -> List[Dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception:
-        return []
-    return payload if isinstance(payload, list) else []
+    return load_stations_json(path)
 
 
 def _find_station(station_code: str) -> Dict[str, Any]:

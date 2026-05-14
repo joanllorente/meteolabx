@@ -33,6 +33,7 @@ from utils.state_keys import (
     STATION_LON,
 )
 from utils.storage import set_local_storage, set_stored_autoconnect_target
+from utils.helpers import coerce_str
 
 
 def _meteocat_locality(meta: dict[str, Any]) -> str:
@@ -157,6 +158,28 @@ WU_RUNTIME_KEYS = (
     "wu_station_calibration_station",
 )
 
+# Caches con datos de WU que se mantenían en ``st.session_state`` aunque el
+# usuario hubiera desconectado, lo cual dejaba en memoria observaciones
+# privadas. Se borran en :func:`disconnect_active_station`.
+WU_CACHE_KEYS = (
+    "wu_cache_current",
+    "wu_cache_daily",
+    "wu_cache_hourly7d",
+    "wu_history_cache",
+    "chart_series",
+    "chart_series_provider_id",
+    "chart_series_station_id",
+    "chart_series_t",
+    "chart_et0",
+    "chart_balance",
+    "p_hist",
+    "rain_hist",
+    "last_tip",
+    "prev_tip",
+    "last_precip_change_time",
+    "last_update_time",
+)
+
 CONNECTION_SNAPSHOT_BASE_KEYS = (
     CONNECTED,
     CONNECTION_TYPE,
@@ -203,18 +226,18 @@ def resolve_state(state: Any = None) -> Any:
 
 
 def get_provider_spec(provider_id: str) -> dict[str, Any]:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     return PROVIDER_SPECS.get(provider_id, {})
 
 
 def get_provider_label(provider_id: str) -> str:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     spec = get_provider_spec(provider_id)
     return str(spec.get("label", provider_id or "Proveedor")).strip() or "Proveedor"
 
 
 def get_provider_station_id(state: Any, provider_id: str) -> str:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     spec = get_provider_spec(provider_id)
     keys = tuple(spec.get("station_id_keys", ("provider_station_id",)))
     uppercase = bool(spec.get("station_id_upper"))
@@ -242,14 +265,14 @@ def current_connection_type(state: Any = None) -> str:
 
 
 def is_provider_connection(provider_id: str, state: Any = None) -> bool:
-    return current_connection_type(state) == str(provider_id or "").strip().upper()
+    return current_connection_type(state) == coerce_str(provider_id, upper=True)
 
 
 def clear_provider_runtime_cache(provider_id: str) -> None:
     """
     Limpia cachés runtime del proveedor cuando existe soporte específico.
     """
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     if provider_id == "AEMET":
         try:
             from services.aemet import clear_aemet_runtime_cache
@@ -302,7 +325,7 @@ def set_connection_loading(
     *,
     previous_state: dict[str, Any] | None = None,
 ) -> None:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     station_id = str(station_id or "").strip()
     station_name = str(station_name or station_id).strip() or station_id
     if not provider_id or not station_id:
@@ -325,8 +348,13 @@ def _clear_prefixed_session_keys(prefixes: tuple[str, ...]) -> None:
 def disconnect_active_station(*, clear_runtime_cache: bool = True) -> None:
     """
     Limpia el estado runtime de la conexión actual, sea WU o proveedor.
+
+    Además de las claves de credenciales (``WU_RUNTIME_KEYS``) y los
+    prefijos de proveedor (``PROVIDER_RUNTIME_PREFIXES``), borra los caches
+    de observaciones en memoria (``WU_CACHE_KEYS``) para que al desconectar
+    no queden datos privados de la estación previa en ``st.session_state``.
     """
-    current_provider = str(st.session_state.get(CONNECTION_TYPE, "")).strip().upper()
+    current_provider = coerce_str(st.session_state.get(CONNECTION_TYPE, ""), upper=True)
     if clear_runtime_cache and current_provider:
         clear_provider_runtime_cache(current_provider)
 
@@ -335,6 +363,9 @@ def disconnect_active_station(*, clear_runtime_cache: bool = True) -> None:
     st.session_state.pop(CONNECTION_LOADING, None)
 
     for key in WU_RUNTIME_KEYS:
+        st.session_state.pop(key, None)
+
+    for key in WU_CACHE_KEYS:
         st.session_state.pop(key, None)
 
     _clear_prefixed_session_keys(PROVIDER_RUNTIME_PREFIXES)
@@ -358,6 +389,16 @@ def apply_wu_station_state(
 
     previous_state = _capture_connection_state() if connected else None
     _clear_prefixed_session_keys(PROVIDER_RUNTIME_PREFIXES)
+
+    # Si la sesión venía de otra estación o de otro proveedor, descartamos
+    # los caches en memoria de la conexión anterior. Esto evita que queden
+    # observaciones privadas de otra estación accesibles en session_state.
+    prev_station = str(st.session_state.get("wu_connected_station", "") or "").strip()
+    prev_provider = str(st.session_state.get(CONNECTION_TYPE, "") or "").strip().upper()
+    if prev_provider != "WU" or (prev_station and prev_station != station_id):
+        for cache_key in WU_CACHE_KEYS:
+            st.session_state.pop(cache_key, None)
+
     st.session_state[CONNECTION_TYPE] = "WU"
     st.session_state["wu_connected_station"] = station_id
     st.session_state["wu_connected_api_key"] = api_key
@@ -391,7 +432,7 @@ def apply_provider_station_state(
     """
     Sincroniza en session_state la estación seleccionada de un proveedor.
     """
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     station_id = str(station_id or "").strip()
     station_name = str(station_name or station_id).strip() or station_id
     spec = get_provider_spec(provider_id)
@@ -404,6 +445,17 @@ def apply_provider_station_state(
 
     if clear_runtime_cache:
         clear_provider_runtime_cache(provider_id)
+
+    # Si venimos de otro proveedor o estación, vaciamos los caches en memoria
+    # para no servir series de la conexión previa al renderizar la nueva.
+    prev_provider = str(st.session_state.get(CONNECTION_TYPE, "") or "").strip().upper()
+    prev_station = str(st.session_state.get(PROVIDER_STATION_ID, "") or "").strip()
+    if (
+        prev_provider != provider_id
+        or (prev_station and prev_station != station_id)
+    ):
+        for cache_key in WU_CACHE_KEYS:
+            st.session_state.pop(cache_key, None)
 
     st.session_state[CONNECTION_TYPE] = provider_id
     st.session_state[PROVIDER_STATION_ID] = station_id
@@ -446,7 +498,7 @@ def apply_station_selection(
     Aplica al session_state una estación seleccionada, venga de dict o de objeto.
     """
     success = apply_provider_station_state(
-        str(_station_value(station, "provider_id", "") or "").strip().upper(),
+        coerce_str(_station_value(station, "provider_id", ""), upper=True),
         str(_station_value(station, "station_id", "") or "").strip(),
         str(_station_value(station, "name", "") or _station_value(station, "station_id", "") or "").strip(),
         _station_value(station, "lat"),
@@ -468,7 +520,7 @@ def persist_provider_autoconnect_target(station: Any) -> bool:
     """
     Guarda una estación de proveedor como objetivo de auto-conexión.
     """
-    provider_id = str(_station_value(station, "provider_id", "") or "").strip().upper()
+    provider_id = coerce_str(_station_value(station, "provider_id", ""), upper=True)
     station_id = str(_station_value(station, "station_id", "") or "").strip()
     if not provider_id or not station_id:
         return False
@@ -508,7 +560,7 @@ def resolve_provider_locality(provider_id: str, metadata: Any, fallback: str = "
     """
     Devuelve la mejor localidad legible para una estación según su proveedor.
     """
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     meta = metadata if isinstance(metadata, dict) else {}
 
     resolver: Callable[[dict[str, Any]], str] | None = get_provider_spec(provider_id).get("locality_resolver")
@@ -532,7 +584,7 @@ def resolve_provider_locality(provider_id: str, metadata: Any, fallback: str = "
 
 def set_provider_runtime_error(provider_id: str, message: str, state: Any = None) -> None:
     state = resolve_state(state)
-    error_key = PROVIDER_ERROR_KEYS.get(str(provider_id or "").strip().upper())
+    error_key = PROVIDER_ERROR_KEYS.get(coerce_str(provider_id, upper=True))
     if error_key:
         state[error_key] = str(message or "")
 
@@ -543,7 +595,7 @@ def clear_provider_runtime_error(provider_id: str, state: Any = None) -> None:
 
 def get_provider_runtime_error(provider_id: str, state: Any = None) -> str:
     state = resolve_state(state)
-    error_key = PROVIDER_ERROR_KEYS.get(str(provider_id or "").strip().upper())
+    error_key = PROVIDER_ERROR_KEYS.get(coerce_str(provider_id, upper=True))
     return str(state.get(error_key, "")).strip() if error_key else ""
 
 

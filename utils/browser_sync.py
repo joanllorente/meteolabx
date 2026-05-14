@@ -192,29 +192,61 @@ def render_connection_loading_overlay(payload: Optional[dict], *, title_text: st
     )
 
 
-def clear_connection_loading_overlay() -> None:
+def clear_connection_loading_overlay(
+    *,
+    started_at: Optional[float] = None,
+    min_visible_ms: int = 450,
+) -> None:
+    """
+    Oculta el overlay de carga.
+
+    Si se proporciona ``started_at`` (epoch en segundos) y aún no han pasado
+    ``min_visible_ms`` desde entonces, el cierre se retrasa con un setTimeout en
+    el navegador para evitar que el overlay parpadee cuando la respuesta llega
+    desde caché. Sin parámetros, se oculta inmediatamente (comportamiento
+    legacy usado en los reruns en los que no hay conexión activa).
+    """
+    delay_ms = 0
+    if started_at is not None:
+        try:
+            elapsed_ms = max(0, int((time.time() - float(started_at)) * 1000))
+        except Exception:
+            elapsed_ms = min_visible_ms
+        delay_ms = max(0, int(min_visible_ms) - elapsed_ms)
+
     components.html(
-        """
+        f"""
         <script>
-        (function () {
-          const host = window.parent || window;
-          const docs = [];
-          try { if (document) docs.push(document); } catch (_e) {}
-          try {
-            if (host.document && host.document !== document) docs.push(host.document);
-          } catch (_e) {}
-          docs.forEach(function (doc) {
-            try {
-              Array.from(doc.querySelectorAll('.mlbx-connection-overlay')).forEach(function (overlay) {
-                if (!overlay) return;
-                overlay.style.opacity = "0";
-                overlay.style.visibility = "hidden";
-                overlay.style.pointerEvents = "none";
-                overlay.style.display = "none";
-              });
-            } catch (_hideErr) {}
-          });
-        })();
+        (function () {{
+          const hideOverlays = function () {{
+            const host = window.parent || window;
+            const docs = [];
+            try {{ if (document) docs.push(document); }} catch (_e) {{}}
+            try {{
+              if (host.document && host.document !== document) docs.push(host.document);
+            }} catch (_e) {{}}
+            docs.forEach(function (doc) {{
+              try {{
+                Array.from(doc.querySelectorAll('.mlbx-connection-overlay')).forEach(function (overlay) {{
+                  if (!overlay) return;
+                  overlay.style.transition = "opacity 180ms ease-out";
+                  overlay.style.opacity = "0";
+                  setTimeout(function () {{
+                    overlay.style.visibility = "hidden";
+                    overlay.style.pointerEvents = "none";
+                    overlay.style.display = "none";
+                  }}, 200);
+                }});
+              }} catch (_hideErr) {{}}
+            }});
+          }};
+          const delay = {delay_ms};
+          if (delay > 0) {{
+            setTimeout(hideOverlays, delay);
+          }} else {{
+            hideOverlays();
+          }}
+        }})();
         </script>
         """,
         height=0,

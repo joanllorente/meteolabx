@@ -17,6 +17,8 @@ import requests
 import streamlit as st
 
 from data_files import FROST_STATIONS_PATH
+from services._common import find_station_by_field, load_stations_json, parse_epoch as _parse_epoch
+from utils.helpers import coerce_str
 from utils.provider_state import (
     clear_provider_runtime_error,
     get_connected_provider_station_id,
@@ -125,21 +127,6 @@ def _safe_float(value: Any, default: float = float("nan")) -> float:
 
 def _is_nan(value: float) -> bool:
     return value != value
-
-
-def _parse_epoch(value: Any) -> Optional[int]:
-    raw = str(value or "").strip()
-    if not raw:
-        return None
-    if raw.endswith("Z"):
-        raw = raw[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(raw)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
-    except Exception:
-        return None
 
 
 def _to_iso_z(dt: datetime) -> str:
@@ -347,22 +334,11 @@ def fetch_frost_climatenormals_available(
 
 @lru_cache(maxsize=2)
 def _load_stations(path: str = str(FROST_STATIONS_PATH)) -> List[Dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception:
-        return []
-    return payload if isinstance(payload, list) else []
+    return load_stations_json(path)
 
 
 def _find_station(station_id: str) -> Dict[str, Any]:
-    target = str(station_id or "").strip().upper()
-    if not target:
-        return {}
-    for station in _load_stations():
-        if str(station.get("id", "")).strip().upper() == target:
-            return station
-    return {}
+    return find_station_by_field(_load_stations(), field="id", target=station_id)
 
 
 def _station_day_window(tz_name: str = FROST_STATION_TZ) -> Tuple[datetime, datetime]:
@@ -525,7 +501,7 @@ def _level_value(obs: Dict[str, Any]) -> Optional[float]:
 
 
 def _resolution_rank(resolution: str, canonical: str) -> int:
-    res = str(resolution or "").strip().upper()
+    res = coerce_str(resolution, upper=True)
     if canonical in {"temp_c", "rh", "p_abs_hpa"}:
         order = {"PT1M": 4, "PT10M": 3, "PT1H": 2, "PT6H": 1}
     elif canonical in {"wind_ms", "gust_ms", "wind_dir_deg"}:

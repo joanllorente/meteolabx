@@ -4,6 +4,9 @@ Pipeline común para preparar datasets de tendencias.
 
 from __future__ import annotations
 
+import math
+from datetime import datetime, timedelta
+
 
 def build_trends_frame(epochs, temps, humidities, pressures):
     import pandas as pd
@@ -65,7 +68,6 @@ def derive_mixing_ratio_series(df_trends, vapor_pressure, mixing_ratio):
 
 def prepare_today_trends_dataset(df_trends, now_local, infer_series_step_minutes, *, min_source_step: int):
     import pandas as pd
-    from datetime import timedelta
 
     if df_trends.empty:
         return None
@@ -160,8 +162,6 @@ def load_synoptic_trends_source(
     pressures_7d = hourly7d.get("pressures", [])
 
     if provider_id == "WU":
-        import math
-
         pressure_factor = math.exp(-float(station_elevation or 0) / 8000.0)
         pressures_7d = [
             p * pressure_factor if not is_nan(p) else float("nan")
@@ -219,7 +219,6 @@ def extend_today_pressure_trend(
 ):
     import numpy as np
     import pandas as pd
-    from datetime import datetime
     from models.trends import calculate_trend
 
     provider_id = str(provider_id or "").strip().upper()

@@ -1,13 +1,14 @@
 from datetime import datetime
 
 import streamlit as st
+from utils.helpers import coerce_str
 from utils.provider_features import SUPPORTED_HISTORICAL_PROVIDERS, get_provider_feature
 LEGACY_SUMMARY_MODE_ALIASES = {"Mensual": "monthly", "Anual": "annual"}
 SUMMARY_MODE_OPTIONS = ["monthly", "annual"]
 
 
 def _historical_provider_is_supported(provider_id, render_neutral_info_note, t) -> bool:
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     provider_config = get_provider_feature(provider_id)
     if provider_config and not provider_config.get("historical_supported", False):
         note_key = str(provider_config.get("historical_note_key", "")).strip()
@@ -37,7 +38,7 @@ def _year_options(now_local: datetime, *, min_year: int = 1990, lookback_years: 
 
 
 def _load_frost_period_options(provider_id, station_id, get_frost_service):
-    if str(provider_id or "").strip().upper() != "FROST":
+    if coerce_str(provider_id, upper=True) != "FROST":
         return {"monthly": [], "annual": []}
     frost_service = get_frost_service()
     return frost_service.get_frost_climo_period_options(

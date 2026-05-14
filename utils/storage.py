@@ -66,8 +66,15 @@ def _session_storage_key() -> str:
 
 def _get_local_storage() -> Optional[LocalStorage]:
     """
-    Crea una instancia de LocalStorage ligada a la sesión actual.
-    Nunca reutiliza un singleton global con estado interno compartido.
+    Crea una instancia de ``LocalStorage`` ligada a la sesión actual.
+
+    IMPORTANTE: NO cachear la instancia entre llamadas. ``streamlit_local_storage``
+    renderiza widgets de Streamlit internamente cada vez que se llama a
+    ``setItem``/``getItem``, y reusar la misma instancia para varias
+    operaciones provoca colisiones del estilo
+    ``"multiple elements with the same key='set'"`` y warnings tipo
+    ``'NoneType' object does not support item assignment``. Cada llamada
+    necesita su propia instancia para que el componente reciba una key fresca.
     """
     try:
         return LocalStorage(key=_session_storage_key())

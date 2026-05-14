@@ -5,6 +5,7 @@ from .helpers import (
     html_clean,
     is_nan,
     normalize_text_input,
+    coerce_str,
     es_datetime_from_epoch,
     age_string,
     fmt_hpa
@@ -29,6 +30,7 @@ __all__ = [
     'html_clean',
     'is_nan',
     'normalize_text_input',
+    'coerce_str',
     'es_datetime_from_epoch',
     'age_string',
     'fmt_hpa',

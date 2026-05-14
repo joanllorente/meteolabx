@@ -14,6 +14,7 @@ import requests
 import streamlit as st
 
 from data_files import NWS_STATIONS_PATH
+from services._common import find_station_by_field, load_stations_json, parse_epoch as _parse_epoch
 from utils.provider_state import get_connected_provider_station_id, get_provider_station_id, is_provider_connection, resolve_state
 
 
@@ -39,23 +40,6 @@ def _measure_value(raw: Any) -> Tuple[float, str]:
     if isinstance(raw, dict):
         return _safe_float(raw.get("value")), str(raw.get("unitCode", "")).strip()
     return _safe_float(raw), ""
-
-
-def _parse_epoch(value: Any) -> Optional[int]:
-    if value is None:
-        return None
-    raw = str(value).strip()
-    if not raw:
-        return None
-    if raw.endswith("Z"):
-        raw = raw[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(raw)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
-    except Exception:
-        return None
 
 
 def _unit_norm(unit_code: str) -> str:
@@ -146,22 +130,11 @@ def _request_json_with_headers(url: str, params: Optional[Dict[str, Any]] = None
 
 @lru_cache(maxsize=2)
 def _load_stations(path: str = str(NWS_STATIONS_PATH)) -> List[Dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception:
-        return []
-    return payload if isinstance(payload, list) else []
+    return load_stations_json(path)
 
 
 def _find_station(station_id: str) -> Dict[str, Any]:
-    target = str(station_id).strip().upper()
-    if not target:
-        return {}
-    for station in _load_stations():
-        if str(station.get("id", "")).strip().upper() == target:
-            return station
-    return {}
+    return find_station_by_field(_load_stations(), field="id", target=station_id)
 
 
 def _parse_observation_feature(feature: Dict[str, Any], elevation_m: float) -> Dict[str, float]:

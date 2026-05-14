@@ -1,4 +1,9 @@
+import math
+from datetime import datetime, timedelta
+
 import streamlit as st
+
+from utils.helpers import coerce_str
 from utils.provider_features import get_provider_feature
 from utils.series_state import series_from_state
 from utils.trends_pipeline import (
@@ -74,7 +79,7 @@ def _load_today_trends_source(
                 )
                 return local_prepared
 
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     provider_feature = get_provider_feature(provider_id)
     provider_today_sources = {
         "AEMET": {
@@ -144,7 +149,7 @@ def _load_today_trends_source(
 
 
 def _render_synoptic_unavailable_notice(provider_id, *, t, render_neutral_info_note, logger):
-    provider_id = str(provider_id or "").strip().upper()
+    provider_id = coerce_str(provider_id, upper=True)
     provider_feature = get_provider_feature(provider_id)
     warning_key = str(provider_feature.get("synoptic_unavailable_warning_key", "")).strip()
     caption_key = str(provider_feature.get("synoptic_unavailable_caption_key", "")).strip()
@@ -257,10 +262,10 @@ def render_trends_tab(ctx):
     if not connected:
         st.info(t("trends.connect_prompt"))
     else:
-        from datetime import datetime, timedelta
+        # Las librerías pesadas (pandas/plotly/numpy y models.trends) se mantienen
+        # bajo demanda para aligerar el arranque cuando no se entra a esta tab.
         import pandas as pd
         import plotly.graph_objects as go
-        import math
         import numpy as np
         from models.trends import (
             specific_humidity, equivalent_potential_temperature,

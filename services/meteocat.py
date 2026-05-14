@@ -15,6 +15,7 @@ import requests
 import streamlit as st
 
 from data_files import METEOCAT_STATIONS_PATH
+from services._common import find_station_by_field, load_stations_json
 from utils.provider_state import get_connected_provider_station_id, get_provider_station_id, is_provider_connection, resolve_state
 
 
@@ -360,20 +361,11 @@ def _absolute_to_msl(p_abs_hpa: float, elevation_m: float) -> float:
 
 @lru_cache(maxsize=2)
 def _load_stations(path: str = str(METEOCAT_STATIONS_PATH)):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    return load_stations_json(path)
 
 
 def _find_station(station_code: str) -> Dict[str, Any]:
-    code = str(station_code).strip().upper()
-    for station in _load_stations():
-        if str(station.get("codi", "")).strip().upper() == code:
-            return station
-    return {}
+    return find_station_by_field(_load_stations(), field="codi", target=station_code)
 
 
 @lru_cache(maxsize=512)

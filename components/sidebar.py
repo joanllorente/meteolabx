@@ -19,7 +19,7 @@ from utils.storage import (
     get_stored_unit_preferences,
     set_stored_unit_preferences,
 )
-from utils.helpers import normalize_text_input, is_nan
+from utils.helpers import normalize_text_input, is_nan, coerce_str
 from utils.units import DEFAULT_UNIT_PREFERENCES, UNIT_LABELS, UNIT_OPTIONS, normalize_unit_preferences
 from services.wu_calibration import (
     WU_CALIBRATION_ORDER,
@@ -27,7 +27,12 @@ from services.wu_calibration import (
     default_wu_calibration,
     normalize_wu_calibration,
 )
-from utils.provider_state import apply_wu_station_state, disconnect_active_station
+from utils.provider_state import (
+    apply_station_selection,
+    apply_wu_station_state,
+    disconnect_active_station,
+)
+from utils.state_keys import AUTOCONNECT_ATTEMPTED
 
 
 def _now_local() -> datetime:
@@ -140,7 +145,7 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["_clear_inputs"] = True
         st.session_state["connected"] = False
         st.session_state["connection_type"] = None
-        st.session_state["_autoconnect_attempted"] = False
+        st.session_state[AUTOCONNECT_ATTEMPTED] = False
         for _k in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
             st.session_state.pop(_k, None)
         st.session_state.pop("wu_cache_current", None)
@@ -158,7 +163,7 @@ def render_sidebar(_local_storage_unused=None):
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
         saved_z = get_stored_z()
-        saved_autoconnect_raw = str(get_local_storage_value(LS_AUTOCONNECT) or "").strip().lower()
+        saved_autoconnect_raw = coerce_str(get_local_storage_value(LS_AUTOCONNECT), lower=True)
         saved_autoconnect = bool(get_stored_autoconnect())
         saved_target = get_stored_autoconnect_target()
         is_wu_forgotten = str(get_local_storage_value(LS_WU_FORGOTTEN) or "").lower() in ("1", "true", "yes", "si", "on")
@@ -176,25 +181,25 @@ def render_sidebar(_local_storage_unused=None):
                 # El objetivo de autoconexión guarda una copia completa de WU.
                 # Si alguna escritura auxiliar llega tarde, úsala para hidratar
                 # los campos al abrir una sesión nueva en producción.
-                if not str(saved_station or "").strip():
-                    saved_station = str((saved_target or {}).get("station", "") or "").strip() or None
-                if not str(saved_key or "").strip():
-                    saved_key = str((saved_target or {}).get("api_key", "") or "").strip() or None
-                if not str(saved_z or "").strip():
-                    saved_z = str((saved_target or {}).get("z", "") or "").strip() or None
+                if not coerce_str(saved_station):
+                    saved_station = coerce_str((saved_target or {}).get("station", "")) or None
+                if not coerce_str(saved_key):
+                    saved_key = coerce_str((saved_target or {}).get("api_key", "")) or None
+                if not coerce_str(saved_z):
+                    saved_z = coerce_str((saved_target or {}).get("z", "")) or None
 
         active_station = st.session_state.get("active_station", "")
         active_key = st.session_state.get("active_key", "")
         active_z = st.session_state.get("active_z", "0")
-        session_has_wu_credentials = bool(str(active_station or "").strip() and str(active_key or "").strip())
+        session_has_wu_credentials = bool(coerce_str(active_station) and coerce_str(active_key))
         session_wu_autoconnect_enabled = bool(
             st.session_state.get("auto_connect_wu_device", False)
             and session_has_wu_credentials
         )
 
         if first_sidebar_load:
-            st.session_state["active_station"] = str(saved_station or "").strip()
-            st.session_state["active_key"] = str(saved_key or "").strip()
+            st.session_state["active_station"] = coerce_str(saved_station)
+            st.session_state["active_key"] = coerce_str(saved_key)
             st.session_state["active_z"] = normalize_text_input(saved_z or "")
         else:
             if not active_station and saved_station:
@@ -204,7 +209,7 @@ def render_sidebar(_local_storage_unused=None):
             if (not str(active_z).strip() or active_z == "0") and saved_z:
                 st.session_state["active_z"] = normalize_text_input(saved_z)
 
-        has_saved_credentials = bool(str(saved_station or "").strip() and str(saved_key or "").strip())
+        has_saved_credentials = bool(coerce_str(saved_station) and coerce_str(saved_key))
         target_kind = str((saved_target or {}).get("kind", "")).strip().upper()
         valid_wu_target = bool(target_kind == "WU" and has_saved_credentials)
         valid_provider_target = bool(
@@ -240,24 +245,38 @@ def render_sidebar(_local_storage_unused=None):
             saved_autoconnect
             and valid_wu_target
             and not st.session_state.get("connected", False)
-            and not st.session_state.get("_autoconnect_attempted", False)
+            and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
         )
         should_autoconnect_provider = (
             saved_autoconnect
             and valid_provider_target
             and not st.session_state.get("connected", False)
+            and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
         )
         if should_autoconnect_wu or should_autoconnect_provider:
             if should_autoconnect_wu:
-                st.session_state["connection_type"] = "WU"
-                st.session_state["connected"] = True
-                st.session_state["wu_connected_station"] = str(saved_station).strip()
-                st.session_state["wu_connected_api_key"] = str(saved_key).strip()
-                st.session_state["wu_connected_z"] = normalize_text_input(saved_z or "")
-                st.session_state["active_station"] = str(saved_station).strip()
-                st.session_state["active_key"] = str(saved_key).strip()
-                st.session_state["active_z"] = normalize_text_input(saved_z or "")
-                st.session_state["_autoconnect_attempted"] = True
+                station_clean = str(saved_station).strip()
+                key_clean = str(saved_key).strip()
+                z_clean = normalize_text_input(saved_z or "")
+
+                # Sembrar los widgets antes de que se instancien para evitar
+                # warnings de Streamlit y garantizar que el usuario vea sus
+                # credenciales en el sidebar mientras se autoconecta.
+                st.session_state["active_station"] = station_clean
+                st.session_state["active_key"] = key_clean
+                st.session_state["active_z"] = z_clean
+
+                # Usar el flujo unificado de conexión WU: setea el overlay de
+                # carga, limpia caches de proveedor previos y deja la sesión
+                # lista para que el ciclo principal haga el fetch real.
+                apply_wu_station_state(
+                    station_clean,
+                    key_clean,
+                    z_clean,
+                    connected=True,
+                )
+
+                st.session_state[AUTOCONNECT_ATTEMPTED] = True
                 st.rerun()
             elif should_autoconnect_provider:
                 provider_id = str(saved_target.get("provider_id", "")).strip().upper()
@@ -267,9 +286,13 @@ def render_sidebar(_local_storage_unused=None):
                 lon = saved_target.get("lon")
                 elevation_m = saved_target.get("elevation_m")
 
-                from utils.provider_state import apply_station_selection
+                # Marcar el intento ANTES de rerun para evitar bucles de
+                # auto-conexión si la conexión falla más adelante en el ciclo
+                # principal (donde se restaura el estado y `connected` vuelve
+                # a False).
+                st.session_state[AUTOCONNECT_ATTEMPTED] = True
 
-                if not apply_station_selection(
+                selection_ok = apply_station_selection(
                     {
                         "provider_id": provider_id,
                         "station_id": station_id,
@@ -279,12 +302,12 @@ def render_sidebar(_local_storage_unused=None):
                         "elevation_m": elevation_m,
                         "station_tz": saved_target.get("station_tz", ""),
                     },
-                        connected=True,
-                    ):
-                        st.session_state["auto_connect_wu_device"] = False
-                        st.session_state["_autoconnect_attempted"] = False
-                        st.rerun()
-                st.session_state["_autoconnect_attempted"] = False
+                    connected=True,
+                )
+                if not selection_ok:
+                    # Target inválido: desactivamos auto-conexión para no
+                    # reintentar el mismo error en cada arranque.
+                    st.session_state["auto_connect_wu_device"] = False
                 st.rerun()
     elif first_sidebar_load:
         st.session_state["active_station"] = ""
@@ -293,7 +316,13 @@ def render_sidebar(_local_storage_unused=None):
 
     st.session_state["_sidebar_inputs_initialized"] = True
 
-    st.session_state["active_z"] = normalize_text_input(st.session_state.get("active_z"))
+    # Solo reescribir si la normalización cambia el valor, así evitamos una
+    # escritura innecesaria en cada rerun y prevenimos warnings de Streamlit
+    # cuando el widget ya esté instanciado en futuras reorganizaciones.
+    _current_active_z = st.session_state.get("active_z")
+    _normalized_active_z = normalize_text_input(_current_active_z)
+    if _current_active_z != _normalized_active_z:
+        st.session_state["active_z"] = _normalized_active_z
 
     current_lang = init_language()
     saved_unit_preferences = get_stored_unit_preferences()
@@ -340,15 +369,17 @@ def render_sidebar(_local_storage_unused=None):
         st.rerun()
 
     def _handle_theme_selector_change() -> None:
+        # Al cambiar el tema, Streamlit dispara un rerun pero los segmented_control
+        # pueden perder el ``active_tab`` actual durante el ciclo. Memorizamos la
+        # pestaña aquí para que :func:`_sync_active_tab_state` la restaure en el
+        # siguiente render.
         st.session_state["_pending_active_tab"] = st.session_state.get("active_tab", "observation")
         st.session_state["_theme_force_refresh"] = True
 
     theme_options = ["auto", "light", "dark"]
     legacy_theme_aliases = {"Auto": "auto", "Claro": "light", "Oscuro": "dark"}
-    current_theme = legacy_theme_aliases.get(
-        str(st.session_state.get("theme_selector", "")).strip(),
-        str(st.session_state.get("theme_selector", "")).strip(),
-    )
+    raw_theme = coerce_str(st.session_state.get("theme_selector", ""))
+    current_theme = legacy_theme_aliases.get(raw_theme, raw_theme)
     if current_theme not in theme_options:
         current_theme = theme_options[0]
     if st.session_state.get("theme_selector") != current_theme:
@@ -402,13 +433,13 @@ def render_sidebar(_local_storage_unused=None):
         autocomplete="off",
     )
 
-    connection_caption = str(t("sidebar.connection.caption") or "").strip()
+    connection_caption = coerce_str(t("sidebar.connection.caption"))
     auto_connect_default = bool(st.session_state.get("auto_connect_wu_device", False))
     auto_connect_wu_device = st.sidebar.toggle(
         t("sidebar.autoconnect.label"),
         key="auto_connect_wu_device",
     )
-    autoconnect_caption = str(t("sidebar.autoconnect.caption") or "").strip()
+    autoconnect_caption = coerce_str(t("sidebar.autoconnect.caption"))
     if autoconnect_caption and autoconnect_caption != "sidebar.autoconnect.caption":
         st.sidebar.caption(autoconnect_caption)
 
@@ -422,6 +453,14 @@ def render_sidebar(_local_storage_unused=None):
 
         if auto_connect_wu_device:
             if station_for_target and key_for_target:
+                # Persistir también las credenciales individuales para que la
+                # próxima carga las recupere aunque el usuario no haya pulsado
+                # "Guardar". Esto evita que quede una API key vieja en
+                # localStorage cuando solo se ha cambiado el input pero no se
+                # ha guardado explícitamente.
+                set_local_storage(LS_STATION, station_for_target, "save")
+                set_local_storage(LS_APIKEY, key_for_target, "save")
+                set_local_storage(LS_Z, z_for_target, "save")
                 set_local_storage(LS_AUTOCONNECT, "1", "save")
                 set_local_storage(LS_WU_FORGOTTEN, "0", "save")
                 set_stored_autoconnect_target(
@@ -449,8 +488,45 @@ def render_sidebar(_local_storage_unused=None):
                 st.sidebar.info(t("sidebar.autoconnect.disabled"))
 
         # Evita autoconectar en caliente en esta misma sesión.
-        st.session_state["_autoconnect_attempted"] = True
+        st.session_state[AUTOCONNECT_ATTEMPTED] = True
         st.session_state["_wu_autoconnect_ui_last_value"] = bool(auto_connect_wu_device)
+
+    # Auto-persistencia del estado del toggle WU mientras está activo.
+    # Reproduce el comportamiento de los toggles de los proveedores: si el
+    # usuario tiene la auto-conexión activada y edita la Station/API key/altitud
+    # en el sidebar, los nuevos valores se persisten en localStorage al vuelo,
+    # sin necesidad de pulsar "Guardar".
+    if bool(st.session_state.get("auto_connect_wu_device", False)):
+        live_station = str(st.session_state.get("active_station", "")).strip()
+        live_key = str(st.session_state.get("active_key", "")).strip()
+        live_z = str(st.session_state.get("active_z", "")).strip()
+        if live_station and live_key:
+            existing_target = get_stored_autoconnect_target() or {}
+            existing_kind = str(existing_target.get("kind", "")).strip().upper()
+            existing_station = str(existing_target.get("station", "")).strip()
+            existing_key = str(existing_target.get("api_key", "")).strip()
+            existing_z = str(existing_target.get("z", "")).strip()
+            credentials_changed = (
+                existing_kind != "WU"
+                or existing_station != live_station
+                or existing_key != live_key
+                or existing_z != live_z
+            )
+            if credentials_changed:
+                set_local_storage(LS_STATION, live_station, "live")
+                set_local_storage(LS_APIKEY, live_key, "live")
+                set_local_storage(LS_Z, live_z, "live")
+                set_local_storage(LS_AUTOCONNECT, "1", "live")
+                set_local_storage(LS_WU_FORGOTTEN, "0", "live")
+                set_stored_autoconnect_target(
+                    {
+                        "kind": "WU",
+                        "station": live_station,
+                        "api_key": live_key,
+                        "z": live_z,
+                    }
+                )
+                st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
 
     cS, cF = st.sidebar.columns(2)
     with cS:
@@ -622,7 +698,7 @@ def render_sidebar(_local_storage_unused=None):
                         "z": z_raw,
                     }
                 )
-                st.session_state["_autoconnect_attempted"] = True
+                st.session_state[AUTOCONNECT_ATTEMPTED] = True
 
     if connection_caption and connection_caption != "sidebar.connection.caption":
         st.sidebar.caption(connection_caption)

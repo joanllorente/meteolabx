@@ -14,6 +14,7 @@ import requests
 import streamlit as st
 
 from data_files import METEOGALICIA_STATIONS_PATH
+from services._common import find_station_by_field, load_stations_json, parse_epoch as _parse_epoch
 from utils.provider_state import get_connected_provider_station_id, get_provider_station_id, is_provider_connection, resolve_state
 
 
@@ -44,48 +45,6 @@ def _normalize_text(value: Any) -> str:
     return txt
 
 
-def _parse_epoch(value: Any) -> Optional[int]:
-    if value is None:
-        return None
-
-    if isinstance(value, (int, float)):
-        try:
-            iv = int(value)
-            return iv if iv > 0 else None
-        except Exception:
-            return None
-
-    raw = str(value).strip()
-    if not raw:
-        return None
-
-    iso_raw = raw.replace(" ", "T")
-    if iso_raw.endswith("Z"):
-        iso_raw = iso_raw[:-1] + "+00:00"
-
-    try:
-        dt = datetime.fromisoformat(iso_raw)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return int(dt.timestamp())
-    except Exception:
-        pass
-
-    formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y/%m/%d %H:%M:%S",
-        "%d/%m/%Y %H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S",
-    ]
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
-            return int(dt.timestamp())
-        except Exception:
-            continue
-    return None
-
-
 def _request_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
     headers = {"Accept": "application/json"}
     response = requests.get(url, params=params or {}, headers=headers, timeout=TIMEOUT_SECONDS)
@@ -95,28 +54,21 @@ def _request_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
 
 @lru_cache(maxsize=2)
 def _load_stations(path: str = str(METEOGALICIA_STATIONS_PATH)) -> List[Dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-    except Exception:
-        return []
-
-    if isinstance(payload, dict):
-        stations = payload.get("listaEstacionsMeteo", [])
-    elif isinstance(payload, list):
-        stations = payload
-    else:
-        stations = []
-
-    return stations if isinstance(stations, list) else []
+    # MeteoGalicia sirve el listado envuelto en ``{"listaEstacionsMeteo": [...]}``
+    # cuando se descarga directo del API; los inventarios locales suelen ser
+    # ya una lista en el nivel raíz. ``load_stations_json`` cubre ambos casos.
+    return load_stations_json(path, dict_key="listaEstacionsMeteo")
 
 
 def _find_station(station_id: str) -> Dict[str, Any]:
-    sid = str(station_id).strip()
-    for station in _load_stations():
-        if str(station.get("idEstacion", "")).strip() == sid:
-            return station
-    return {}
+    # MeteoGalicia preserva mayúsculas/minúsculas en idEstacion, por eso
+    # comparamos case-sensitive.
+    return find_station_by_field(
+        _load_stations(),
+        field="idEstacion",
+        target=station_id,
+        case_insensitive=False,
+    )
 
 
 def _extract_items(payload: Any, keys: List[str]) -> List[Dict[str, Any]]:
