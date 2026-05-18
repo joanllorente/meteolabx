@@ -12,19 +12,19 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/app/static/apple-touch-icon-pwa.png?v=9",
+      "src": "/app/static/apple-touch-icon-pwa.png?v=10",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/app/static/icon-192-pwa.png?v=9",
+      "src": "/app/static/icon-192-pwa.png?v=10",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/app/static/icon-512-pwa.png?v=9",
+      "src": "/app/static/icon-512-pwa.png?v=10",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

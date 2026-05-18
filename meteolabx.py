@@ -57,7 +57,7 @@ st.set_page_config(
 # Bump esta versión cada vez que cambien los iconos / manifest para forzar
 # que el navegador (y la pantalla de inicio de iOS) recarguen los assets en
 # vez de servir el icono cacheado.
-PWA_ASSET_VERSION = "9"
+PWA_ASSET_VERSION = "10"
 PWA_STATIC_BASE = "/app/static"
 
 
@@ -128,18 +128,14 @@ def _inject_pwa_metadata() -> None:
             upsertLink("manifest", asset("manifest.json"));
 
             // --- Favicon de la pestaña del navegador ---
-            // IMPORTANTE: los <link rel="icon"> se evalúan en orden. Streamlit
-            // sirve los PNGs vía /app/static/ pero NO sirve .ico en esa ruta
-            // (devuelve HTML). Por tanto declaramos primero los PNG para que
-            // el navegador tenga un fallback fiable, y el .ico solo como
-            // último recurso por compatibilidad con producción tras proxy.
+            // Solo PNG. Streamlit sirve los PNG en /app/static/ con
+            // Content-Type: image/png (verificado vía curl). Streamlit NO
+            // mapea correctamente el MIME type de los .ico (los sirve como
+            // text/plain), así que los excluimos: con PNG todos los
+            // navegadores modernos pintan el favicon sin problema.
             upsertLink("icon", asset("favicon-32x32.png"), {{ type: "image/png", sizes: "32x32" }});
             upsertLink("icon", asset("favicon-16x16.png"), {{ type: "image/png", sizes: "16x16" }});
             upsertLink("shortcut icon", asset("favicon.png"), {{ type: "image/png" }});
-            // .ico al final - si Streamlit no lo sirve, ya están los PNG
-            // antes y el navegador no falla. En producción con proxy nginx
-            // sí se servirá correctamente y Safari lo aprovechará.
-            upsertLink("icon", asset("favicon.ico"), {{ type: "image/x-icon" }});
 
             // --- Icono de PWA / "Añadir a pantalla de inicio" ---
             // Aquí sí usamos el icono azul con isobaras.
@@ -2318,6 +2314,51 @@ st.markdown(f"""
 [data-testid="stSidebar"] [data-testid="stMultiSelect"] svg path {{
     fill: var(--mlbx-sidebar-text) !important;
     stroke: var(--mlbx-sidebar-text) !important;
+}}
+
+/* Iconos de ayuda (?) que aparecen junto al label de los widgets cuando se
+   pasa `help="..."`. Streamlit los pinta con un color fijo que sobre el
+   tema claro queda como un círculo negro sólido. Aquí los forzamos a tomar
+   el color tintado del sidebar y a tener un fondo transparente, para que se
+   vea como un icono y no como un punto opaco. Cubrimos varios selectores
+   porque Streamlit ha cambiado el data-testid en distintas versiones. */
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"],
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"],
+[data-testid="stSidebar"] [data-testid="tooltipHoverTarget"],
+[data-testid="stSidebar"] [class*="tooltipHoverTarget"],
+[data-testid="stSidebar"] [class*="StyledTooltipIcon"],
+[data-testid="stSidebar"] [class*="HelpIcon"] {{
+    color: var(--mlbx-sidebar-text) !important;
+    background: transparent !important;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}}
+
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"]:hover,
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"]:hover,
+[data-testid="stSidebar"] [data-testid="tooltipHoverTarget"]:hover,
+[data-testid="stSidebar"] [class*="tooltipHoverTarget"]:hover,
+[data-testid="stSidebar"] [class*="StyledTooltipIcon"]:hover,
+[data-testid="stSidebar"] [class*="HelpIcon"]:hover {{
+    opacity: 1;
+}}
+
+/* El SVG dentro del icono de help: forzamos el stroke/fill al color del
+   texto del sidebar. Streamlit usa `currentColor` en algunos casos y un
+   color absoluto en otros, así que cubrimos ambos. */
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg,
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg path,
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg,
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg path,
+[data-testid="stSidebar"] [class*="tooltipHoverTarget"] svg,
+[data-testid="stSidebar"] [class*="tooltipHoverTarget"] svg path,
+[data-testid="stSidebar"] [class*="StyledTooltipIcon"] svg,
+[data-testid="stSidebar"] [class*="StyledTooltipIcon"] svg path,
+[data-testid="stSidebar"] [class*="HelpIcon"] svg,
+[data-testid="stSidebar"] [class*="HelpIcon"] svg path {{
+    fill: currentColor !important;
+    stroke: currentColor !important;
+    color: var(--mlbx-sidebar-text) !important;
 }}
 
 /* Botón del ojo de la API key (evitar cuadro negro) */

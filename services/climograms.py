@@ -633,6 +633,17 @@ def build_general_metrics_table(
 
     unique_years = frame["date"].dt.year.nunique(dropna=True)
 
+    # Para "Media de precipitación" queremos la precipitación MENSUAL media
+    # (cuánto llueve, en promedio, en uno de los meses seleccionados), NO la
+    # diaria. Antes se hacía ``precip_series.mean()`` sobre el dataframe
+    # diario y eso devolvía mm/día (~2 mm), lo que parecía absurdamente bajo
+    # cuando se acumulaban muchos abriles. Ahora agrupamos por (año, mes),
+    # sumamos la precipitación de cada (año, mes) y promediamos esas sumas.
+    monthly_precip_totals = precip_series.groupby(
+        [frame["date"].dt.year, frame["date"].dt.month]
+    ).sum(min_count=1)
+    mean_monthly_precip = monthly_precip_totals.mean()
+
     rows = [
         _table_row("Temperatura media", _format_temperature_value(temp_mean_series.mean(), unit_preferences, decimals=1), None),
         _table_row("Media de máximas", _format_temperature_value(temp_max_series.mean(), unit_preferences, decimals=1), None),
@@ -644,7 +655,11 @@ def build_general_metrics_table(
     if int(unique_years) > 1:
         rows.insert(
             5,
-            _table_row("Media de precipitación", _format_precip_value(precip_series.mean(), unit_preferences, decimals=1), None),
+            _table_row(
+                "Media de precipitación",
+                _format_precip_value(mean_monthly_precip, unit_preferences, decimals=1),
+                None,
+            ),
         )
 
     # Solo añadir filas solares si hay datos reales (sin fallback a "—" vacío).
