@@ -337,8 +337,8 @@
           "title": "Precipitation today",
           "instantaneous": "Instantaneous",
           "intensity": "Intensity",
-          "minute_1": "1 min",
-          "minute_5": "5 min"
+          "minute_5": "5 min",
+          "minute_10": "10 min"
         }
       },
       "thermo": {

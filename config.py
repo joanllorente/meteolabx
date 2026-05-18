@@ -16,11 +16,6 @@ WU_TIMEOUT_SECONDS = 15
 MAX_DATA_AGE_MINUTES = 70  # Advertir si datos son más antiguos
 
 # ============================================================
-# CORRECCIÓN DE DIRECCIÓN DEL VIENTO
-# ============================================================
-WIND_DIR_OFFSET_DEG = 30.0
-
-# ============================================================
 # KEYS PARA LOCALSTORAGE
 # ============================================================
 LS_STATION = "meteolabx_active_station"

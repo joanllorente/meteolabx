@@ -192,8 +192,8 @@ class ObservationContext:
     pressure_unit_pref: Any
     pressure_unit_txt: Any
     q_gkg: Any
-    r1_mm_h: Any
     r5_mm_h: Any
+    r10_mm_h: Any
     radiation_energy_unit_txt: Any
     radiation_unit_pref: Any
     radiation_unit_txt: Any
@@ -288,8 +288,8 @@ def render_observation_tab(ctx):
     pressure_unit_pref = ctx.pressure_unit_pref
     pressure_unit_txt = ctx.pressure_unit_txt
     q_gkg = ctx.q_gkg
-    r1_mm_h = ctx.r1_mm_h
     r5_mm_h = ctx.r5_mm_h
+    r10_mm_h = ctx.r10_mm_h
     radiation_energy_unit_txt = ctx.radiation_energy_unit_txt
     radiation_unit_pref = ctx.radiation_unit_pref
     radiation_unit_txt = ctx.radiation_unit_txt
@@ -390,8 +390,8 @@ def render_observation_tab(ctx):
     if is_wu_connection:
         rain_windows_html = (
             f"<div style='margin-top:6px; font-size:0.8rem; opacity:0.6;'>"
-            f"{t('observation.cards.basic.precipitation_today.minute_1')}: {fmt_rate(r1_mm_h)} · "
-            f"{t('observation.cards.basic.precipitation_today.minute_5')}: {fmt_rate(r5_mm_h)}</div>"
+            f"{t('observation.cards.basic.precipitation_today.minute_5')}: {fmt_rate(r5_mm_h)} · "
+            f"{t('observation.cards.basic.precipitation_today.minute_10')}: {fmt_rate(r10_mm_h)}</div>"
         )
 
     # Extremos

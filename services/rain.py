@@ -44,7 +44,7 @@ def rain_rates_from_total(precip_total_mm: float, data_epoch: float):
         data_epoch: Timestamp del dato de WU (cuando se recibió)
         
     Returns:
-        Tupla (inst_mm_h, r1_mm_h, r5_mm_h) con tasas en mm/h
+        Tupla (inst_mm_h, r5_mm_h, r10_mm_h) con tasas en mm/h
     """
     ensure_rain_history()
 
@@ -157,10 +157,10 @@ def rain_rates_from_total(precip_total_mm: float, data_epoch: float):
         # la intensidad es (0.4 / 2min) * 60 = 12 mm/h
         return (dp / dt) * 3600.0
 
-    r1 = window_rate(60.0)   # 1 minuto
-    r5 = window_rate(300.0)  # 5 minutos
+    r5 = window_rate(300.0)   # 5 minutos
+    r10 = window_rate(600.0)  # 10 minutos
 
-    return inst, r1, r5
+    return inst, r5, r10
 
 
 def rain_intensity_label(rate_mm_h: float) -> str:

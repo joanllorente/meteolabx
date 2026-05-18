@@ -29,7 +29,7 @@ FALLBACK_DEFINITIONS_ES = {
     "punto de rocio": "Temperatura a la que el aire se saturaría y comenzaría la condensación si se enfría a presión constante.",
     "presion": "Presión atmosférica medida por el barómetro de la estación. Puede mostrarse como presión absoluta o referida al nivel del mar.",
     "viento": "Velocidad media del viento en el intervalo de medida. Suele acompañarse de dirección y racha máxima.",
-    "precipitacion hoy": "Precipitación acumulada desde las 00:00 (hora local) hasta el instante actual.",
+    "precipitacion hoy": "Precipitación acumulada desde las 00:00 (hora local) hasta el instante actual.\n- Intensidad instantánea: calculada desde el último aumento del acumulado.\n- Intensidad 5-minutal: intensidad media en los últimos 5 min (solo en WU).\n- Intensidad 10-minutal: intensidad media en los últimos 10 min (solo en WU).",
     "humedad especifica": "Masa de vapor de agua por unidad de masa de aire húmedo (g/kg).",
     "humedad absoluta": "Masa de vapor de agua por unidad de volumen de aire (g/m³).",
     "temperatura de bulbo humedo": "Temperatura que alcanzaría el aire al enfriarse por evaporación hasta saturación, a presión aproximadamente constante.",

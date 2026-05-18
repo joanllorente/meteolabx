@@ -10,7 +10,7 @@ import hashlib
 from collections import OrderedDict
 from typing import Dict, Optional
 from config import (
-    WIND_DIR_OFFSET_DEG, WU_TIMEOUT_SECONDS, MAX_CACHE_SIZE,
+    WU_TIMEOUT_SECONDS, MAX_CACHE_SIZE,
     HEAT_INDEX_MIN_TEMP, WIND_CHILL_MAX_TEMP, WIND_CHILL_MIN_SPEED,
     RAIN_QUANTIZE_CORRECTION, RAIN_TIP_RESOLUTION
 )
@@ -548,7 +548,7 @@ def fetch_wu_current(station_id: str, api_key: str) -> Dict:
 
     raw_dir = safe_float(obs.get("winddir"))
     if not is_nan(raw_dir):
-        wind_dir_deg = (raw_dir + WIND_DIR_OFFSET_DEG) % 360
+        wind_dir_deg = raw_dir % 360
     else:
         wind_dir_deg = float("nan")
 

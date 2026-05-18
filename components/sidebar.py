@@ -45,7 +45,7 @@ from utils.provider_state import (
     apply_wu_station_state,
     disconnect_active_station,
 )
-from utils.state_keys import AUTOCONNECT_ATTEMPTED
+from utils.state_keys import AUTOCONNECT_ATTEMPTED, CONNECTION_LOADING
 from local_storage_bridge import sync_local_storage
 
 
@@ -406,9 +406,26 @@ def render_sidebar(_local_storage_unused=None):
             if current_state_value not in UNIT_OPTIONS[category]:
                 st.session_state[state_key] = saved_value
 
-    # Si hay conexión WU activa, mantener credenciales en sesión aunque un rerun
-    # temporalmente deje vacíos los widgets de entrada (ej. cambio de tema).
-    if st.session_state.get("connected") and st.session_state.get("connection_type") == "WU":
+    # Si hay conexión WU activa o recién aplicada, mantener credenciales en
+    # sesión aunque un rerun temporalmente deje vacíos los widgets de entrada.
+    # Esto cubre también el ciclo justo después de una autoconexión, donde las
+    # claves wu_connected_* ya existen aunque el resto del estado aún se esté
+    # asentando.
+    current_connection_type = str(st.session_state.get("connection_type", "")).strip().upper()
+    loading_payload = st.session_state.get(CONNECTION_LOADING)
+    loading_provider = (
+        str(loading_payload.get("provider", "")).strip().upper()
+        if isinstance(loading_payload, dict)
+        else ""
+    )
+    has_wu_runtime_credentials = bool(
+        str(st.session_state.get("wu_connected_station", "")).strip()
+        and str(st.session_state.get("wu_connected_api_key", "")).strip()
+    )
+    if (
+        current_connection_type == "WU"
+        or (loading_provider == "WU" and has_wu_runtime_credentials)
+    ):
         if not str(st.session_state.get("active_station", "")).strip():
             st.session_state["active_station"] = str(st.session_state.get("wu_connected_station", "")).strip()
         if not str(st.session_state.get("active_key", "")).strip():

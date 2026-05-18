@@ -343,8 +343,8 @@
           "title": "Précipitation du jour",
           "instantaneous": "Instantanée",
           "intensity": "Intensité",
-          "minute_1": "1 min",
-          "minute_5": "5 min"
+          "minute_5": "5 min",
+          "minute_10": "10 min"
         }
       },
       "thermo": {

@@ -926,8 +926,9 @@ def _build_observation_tab_context() -> dict:
             "pressure_unit_pref": pressure_unit_pref,
             "pressure_unit_txt": pressure_unit_txt,
             "q_gkg": q_gkg,
-            "r1_mm_h": r1_mm_h,
+            "r1_mm_h": r5_mm_h,  # Compatibilidad con módulos tabs.observation ya importados en Streamlit.
             "r5_mm_h": r5_mm_h,
+            "r10_mm_h": r10_mm_h,
             "radiation_energy_unit_txt": radiation_energy_unit_txt,
             "radiation_unit_pref": radiation_unit_pref,
             "radiation_unit_txt": radiation_unit_txt,
@@ -1888,8 +1889,8 @@ class ProcessedData:
     p_label: str
     p_arrow: str
     inst_mm_h: float
-    r1_mm_h: float
     r5_mm_h: float
+    r10_mm_h: float
     inst_label: str
     e_sat: float
     e: float
@@ -1949,7 +1950,7 @@ def process_standard_provider(
         logger.warning(f"Datos {provider_name} antiguos: {data_age_minutes:.1f} minutos")
 
     # 3. Lluvia: fuera de WU se calcula desde la serie, no desde historial de tips.
-    inst_mm_h = r1_mm_h = r5_mm_h = NaN
+    inst_mm_h = r5_mm_h = r10_mm_h = NaN
     inst_label = rain_intensity_label(inst_mm_h)
 
     # 4. Presión
@@ -2024,7 +2025,7 @@ def process_standard_provider(
         raw = base.get("_series")
         series = raw if isinstance(raw, dict) else {}
     inst_mm_h = _precip_rate_from_series(series)
-    r1_mm_h = r5_mm_h = NaN
+    r5_mm_h = r10_mm_h = NaN
     inst_label = rain_intensity_label(inst_mm_h)
     chart_series = store_chart_series(st.session_state, series)
     chart_epochs = chart_series["epochs"]
@@ -2091,7 +2092,7 @@ def process_standard_provider(
     return ProcessedData(
         z=z, p_abs=p_abs, p_msl=p_msl, p_abs_disp=p_abs_disp, p_msl_disp=p_msl_disp,
         dp3=dp3, rate_h=rate_h, p_label=p_label, p_arrow=p_arrow,
-        inst_mm_h=inst_mm_h, r1_mm_h=r1_mm_h, r5_mm_h=r5_mm_h, inst_label=inst_label,
+        inst_mm_h=inst_mm_h, r5_mm_h=r5_mm_h, r10_mm_h=r10_mm_h, inst_label=inst_label,
         e_sat=e_sat, e=e_v, Td_calc=Td_calc, Tw=Tw, q=q_val, q_gkg=q_gkg,
         theta=theta, Tv=Tv_val, Te=Te_val, rho=rho_val, rho_v_gm3=rho_v_gm3, lcl=lcl_val,
         solar_rad=solar_rad, uv=uv, et0=et0, clarity=clarity, balance=balance,
@@ -2104,7 +2105,7 @@ def _unpack_processed(r: ProcessedData) -> tuple:
     return (
         r.z, r.p_abs, r.p_msl, r.p_abs_disp, r.p_msl_disp,
         r.dp3, r.rate_h, r.p_label, r.p_arrow,
-        r.inst_mm_h, r.r1_mm_h, r.r5_mm_h, r.inst_label,
+        r.inst_mm_h, r.r5_mm_h, r.r10_mm_h, r.inst_label,
         r.e_sat, r.e, r.Td_calc, r.Tw, r.q, r.q_gkg,
         r.theta, r.Tv, r.Te, r.rho, r.rho_v_gm3, r.lcl,
         r.solar_rad, r.uv, r.et0, r.clarity, r.balance,
@@ -2317,48 +2318,21 @@ st.markdown(f"""
 }}
 
 /* Iconos de ayuda (?) que aparecen junto al label de los widgets cuando se
-   pasa `help="..."`. Streamlit los pinta con un color fijo que sobre el
-   tema claro queda como un círculo negro sólido. Aquí los forzamos a tomar
-   el color tintado del sidebar y a tener un fondo transparente, para que se
-   vea como un icono y no como un punto opaco. Cubrimos varios selectores
-   porque Streamlit ha cambiado el data-testid en distintas versiones. */
+   pasa `help="..."`. Solo usamos data-testid específicos para no afectar
+   accidentalmente a otros componentes del sidebar (toggles, inputs...). El
+   `*` y los selectores [class*="..."] tan amplios que tenía antes podían
+   propagar `color: inherit` a inputs y dejar el texto invisible, lo que
+   hacía parecer que las credenciales se habían borrado. */
 [data-testid="stSidebar"] [data-testid="stTooltipIcon"],
-[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"],
-[data-testid="stSidebar"] [data-testid="tooltipHoverTarget"],
-[data-testid="stSidebar"] [class*="tooltipHoverTarget"],
-[data-testid="stSidebar"] [class*="StyledTooltipIcon"],
-[data-testid="stSidebar"] [class*="HelpIcon"] {{
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] {{
     color: var(--mlbx-sidebar-text) !important;
-    background: transparent !important;
-    opacity: 0.7;
+    opacity: 0.55;
     transition: opacity 0.15s ease;
 }}
 
 [data-testid="stSidebar"] [data-testid="stTooltipIcon"]:hover,
-[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"]:hover,
-[data-testid="stSidebar"] [data-testid="tooltipHoverTarget"]:hover,
-[data-testid="stSidebar"] [class*="tooltipHoverTarget"]:hover,
-[data-testid="stSidebar"] [class*="StyledTooltipIcon"]:hover,
-[data-testid="stSidebar"] [class*="HelpIcon"]:hover {{
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"]:hover {{
     opacity: 1;
-}}
-
-/* El SVG dentro del icono de help: forzamos el stroke/fill al color del
-   texto del sidebar. Streamlit usa `currentColor` en algunos casos y un
-   color absoluto en otros, así que cubrimos ambos. */
-[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg,
-[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg path,
-[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg,
-[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg path,
-[data-testid="stSidebar"] [class*="tooltipHoverTarget"] svg,
-[data-testid="stSidebar"] [class*="tooltipHoverTarget"] svg path,
-[data-testid="stSidebar"] [class*="StyledTooltipIcon"] svg,
-[data-testid="stSidebar"] [class*="StyledTooltipIcon"] svg path,
-[data-testid="stSidebar"] [class*="HelpIcon"] svg,
-[data-testid="stSidebar"] [class*="HelpIcon"] svg path {{
-    fill: currentColor !important;
-    stroke: currentColor !important;
-    color: var(--mlbx-sidebar-text) !important;
 }}
 
 /* Botón del ojo de la API key (evitar cuadro negro) */
@@ -4120,8 +4094,8 @@ base = {
 
 z = 0
 inst_mm_h = float("nan")
-r1_mm_h = float("nan")
 r5_mm_h = float("nan")
+r10_mm_h = float("nan")
 inst_label = "—"
 p_abs = float("nan")
 p_msl = float("nan")
@@ -4159,8 +4133,8 @@ if runtime_snapshot:
     base = dict(runtime_snapshot.get("base", base))
     z = runtime_snapshot.get("z", z)
     inst_mm_h = runtime_snapshot.get("inst_mm_h", inst_mm_h)
-    r1_mm_h = runtime_snapshot.get("r1_mm_h", r1_mm_h)
     r5_mm_h = runtime_snapshot.get("r5_mm_h", r5_mm_h)
+    r10_mm_h = runtime_snapshot.get("r10_mm_h", r10_mm_h)
     inst_label = runtime_snapshot.get("inst_label", inst_label)
     p_abs = runtime_snapshot.get("p_abs", p_abs)
     p_msl = runtime_snapshot.get("p_msl", p_msl)
@@ -4379,7 +4353,7 @@ if (connected or loading_in_progress) and not runtime_snapshot:
         # Lluvia: AEMET y demás proveedores no-WU usan la intensidad entre
         # las dos últimas muestras de serie; las ventanas 1/5 min son solo WU.
         inst_mm_h = _precip_rate_between_last_measurements(chart_epochs, chart_precips)
-        r1_mm_h = r5_mm_h = float("nan")
+        r5_mm_h = r10_mm_h = float("nan")
         inst_label = rain_intensity_label(inst_mm_h)
         
         # Presión - AEMET puede devolver None si no tiene dato
@@ -4507,7 +4481,7 @@ if (connected or loading_in_progress) and not runtime_snapshot:
         base, _r = _process_standard_provider_connection(provider_id)
         (z, p_abs, p_msl, p_abs_disp, p_msl_disp,
          dp3, rate_h, p_label, p_arrow,
-         inst_mm_h, r1_mm_h, r5_mm_h, inst_label,
+         inst_mm_h, r5_mm_h, r10_mm_h, inst_label,
          e_sat, e, Td_calc, Tw, q, q_gkg,
          theta, Tv, Te, rho, rho_v_gm3, lcl,
          solar_rad, uv, et0, clarity, balance,
@@ -4587,7 +4561,7 @@ if (connected or loading_in_progress) and not runtime_snapshot:
                 logger.warning(f"Datos antiguos: {data_age_minutes:.1f} minutos")
 
             # ========== LLUVIA ==========
-            inst_mm_h, r1_mm_h, r5_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
+            inst_mm_h, r5_mm_h, r10_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
             inst_label = rain_intensity_label(inst_mm_h)
 
             # ========== PRESIÓN ==========
@@ -4930,8 +4904,8 @@ if connected and int(base.get("epoch", 0) or 0) > 0:
         base=base,
         z=z,
         inst_mm_h=inst_mm_h,
-        r1_mm_h=r1_mm_h,
         r5_mm_h=r5_mm_h,
+        r10_mm_h=r10_mm_h,
         inst_label=inst_label,
         p_abs=p_abs,
         p_msl=p_msl,

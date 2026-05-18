@@ -34,9 +34,9 @@
 
 	- Intensidad instantánea: se calcula a partir del tiempo entre dos medidas de la estación.
 
-	- Intensidad minutal: intensidad media en los últimos 60 s (solo en WU).
-
 	- Intensidad 5-minutal: intensidad media en los últimos 5 min (solo en WU).
+
+	- Intensidad 10-minutal: intensidad media en los últimos 10 min (solo en WU).
 
 ==============================================================================
 - Humedad específica (q): masa de vapor de agua por unidad de masa de aire húmedo (g/kg). Se calcula a partir de la presión, la temperatura y la humedad.
