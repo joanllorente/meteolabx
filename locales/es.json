@@ -24,7 +24,6 @@
     "loading_title": "Conectando estación..."
   },
   "header": {
-    "beta_notice": "Release Candidate — la interfaz y las funciones pueden cambiar",
     "theme_label": "Tema",
     "refresh_label": "Refresh",
     "available_stations": "{count} estaciones disponibles",
@@ -36,7 +35,6 @@
   },
   "footer": {
     "version": "Versión {version}",
-    "news": "Novedades",
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
     "improvements": {
@@ -86,7 +84,7 @@
     "autoconnect": {
       "label": "Conectar automáticamente al iniciar",
       "caption": "",
-      "enabled": "Auto-conexión al iniciar activada (WU) ✅",
+      "enabled": "Auto-conexión al iniciar activada (WU)",
       "disabled": "Auto-conexión al iniciar desactivada.",
       "missing_credentials": "Para activar auto-conexión WU, completa Station ID y API Key."
     },
@@ -95,7 +93,7 @@
             "loading": "Cargando sensores de Weather Underground...",
             "range_help": "Rango permitido: {min} a {max} {unit}",
             "save": "Guardar calibración",
-            "saved": "Calibración guardada ✅",
+            "saved": "Calibración guardada",
             "unsaved": "Calibración pendiente de guardar.",
             "fields": {
                 "barometer": "Barómetro (hPa)",
@@ -122,11 +120,11 @@
       "forget": "Olvidar",
       "connect": "Conectar",
       "disconnect": "Desconectar",
-      "refresh": "🔄 Actualizar"
+      "refresh": "Actualizar"
     },
     "messages": {
-      "saved_device": "Guardado en este dispositivo ✅",
-      "data_erased": "✅ Datos borrados",
+      "saved_device": "Guardado en este dispositivo",
+      "data_erased": "Datos borrados",
       "missing_station_or_key": "Falta Station ID o API key.",
       "altitude_out_of_range": "Altitud fuera de rango ({min} a {max}m)",
       "altitude_invalid": "Altitud inválida. Usa un número (ej: 12.5)"
@@ -142,7 +140,7 @@
       "hours_minutes": "hace {hours}h {minutes}min"
     },
     "provider_status": {
-      "connected_to": "📡 Conectado a {provider}",
+      "connected_to": "Conectado a {provider}",
       "station_id": "ID: {station_id}",
       "altitude": "Alt: {altitude}m",
       "refresh_help": "Forzar actualización de datos (bypass caché)"
@@ -151,15 +149,15 @@
       "title": "Modo Demo (Interno)",
       "enable": "Activar datos de radiación demo",
       "enable_help": "Muestra controles para simular datos de radiación solar y UV cuando tu estación no tiene estos sensores",
-      "intro": "📊 **Simula datos de radiación**",
+      "intro": "**Simula datos de radiación**",
       "solar_label": "Radiación solar (W/m²)",
       "solar_help": "Valores típicos: Nublado 100-300, Parcialmente nublado 400-700, Despejado 800-1200",
       "uv_label": "Índice UV",
       "uv_help": "Valores típicos: Bajo 0-2, Moderado 3-5, Alto 6-7, Muy alto 8-10, Extremo 11+",
-      "quick_ref": "💡 **Referencia rápida:**",
-      "cloudy": "• ☁️ Nublado: Solar ~200, UV ~2",
-      "partial": "• ⛅ Parcial: Solar ~500, UV ~5",
-      "clear": "• ☀️ Despejado: Solar ~900, UV ~8"
+      "quick_ref": "**Referencia rápida:**",
+      "cloudy": "• Nublado: Solar ~200, UV ~2",
+      "partial": "• Parcial: Solar ~500, UV ~5",
+      "clear": "• Despejado: Solar ~900, UV ~8"
     }
   },
   "historical": {

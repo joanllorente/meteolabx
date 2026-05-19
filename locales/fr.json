@@ -24,7 +24,6 @@
     "loading_title": "Connexion de la station..."
   },
   "header": {
-    "beta_notice": "Release Candidate — l'interface et les fonctions peuvent changer",
     "theme_label": "Thème",
     "refresh_label": "Rafraîchissement",
     "available_stations": "{count} stations disponibles",
@@ -36,7 +35,6 @@
   },
   "footer": {
     "version": "Version {version}",
-    "news": "Nouveautés",
     "improvements_title": "Améliorations",
     "fixes_title": "Corrections",
     "improvements": {
@@ -86,7 +84,7 @@
     "autoconnect": {
       "label": "Se connecter automatiquement au démarrage",
       "caption": "",
-      "enabled": "Connexion automatique au démarrage activée (WU) ✅",
+      "enabled": "Connexion automatique au démarrage activée (WU)",
       "disabled": "Connexion automatique au démarrage désactivée.",
       "missing_credentials": "Pour activer la connexion automatique WU, renseignez l'ID de station et la clé API."
     },
@@ -95,7 +93,7 @@
       "loading": "Chargement des capteurs Weather Underground...",
       "range_help": "Plage autorisée : {min} à {max} {unit}",
       "save": "Enregistrer la calibration",
-      "saved": "Calibration enregistrée ✅",
+      "saved": "Calibration enregistrée",
       "unsaved": "Calibration en attente d'enregistrement.",
       "fields": {
         "barometer": "Baromètre (hPa)",
@@ -122,11 +120,11 @@
       "forget": "Oublier",
       "connect": "Connecter",
       "disconnect": "Déconnecter",
-      "refresh": "🔄 Actualiser"
+      "refresh": "Actualiser"
     },
     "messages": {
-      "saved_device": "Enregistré sur cet appareil ✅",
-      "data_erased": "✅ Données supprimées",
+      "saved_device": "Enregistré sur cet appareil",
+      "data_erased": "Données supprimées",
       "missing_station_or_key": "L'ID de station ou la clé API est manquant.",
       "altitude_out_of_range": "Altitude hors plage ({min} à {max}m)",
       "altitude_invalid": "Altitude invalide. Utilisez un nombre (ex. 12.5)"
@@ -142,7 +140,7 @@
       "hours_minutes": "il y a {hours}h {minutes} min"
     },
     "provider_status": {
-      "connected_to": "📡 Connecté à {provider}",
+      "connected_to": "Connecté à {provider}",
       "station_id": "ID : {station_id}",
       "altitude": "Alt : {altitude}m",
       "refresh_help": "Forcer l'actualisation des données (sans cache)"
@@ -151,15 +149,15 @@
       "title": "Mode démo (interne)",
       "enable": "Activer les données de rayonnement démo",
       "enable_help": "Affiche des contrôles pour simuler les données de rayonnement solaire et UV lorsque votre station ne possède pas ces capteurs",
-      "intro": "📊 **Simuler des données de rayonnement**",
+      "intro": "**Simuler des données de rayonnement**",
       "solar_label": "Rayonnement solaire (W/m²)",
       "solar_help": "Valeurs typiques : Nuageux 100-300, Partiellement nuageux 400-700, Ciel clair 800-1200",
       "uv_label": "Indice UV",
       "uv_help": "Valeurs typiques : Faible 0-2, Modéré 3-5, Élevé 6-7, Très élevé 8-10, Extrême 11+",
-      "quick_ref": "💡 **Référence rapide :**",
-      "cloudy": "• ☁️ Nuageux : Solaire ~200, UV ~2",
-      "partial": "• ⛅ Partiellement nuageux : Solaire ~500, UV ~5",
-      "clear": "• ☀️ Ciel clair : Solaire ~900, UV ~8"
+      "quick_ref": "**Référence rapide :**",
+      "cloudy": "• Nuageux : Solaire ~200, UV ~2",
+      "partial": "• Partiellement nuageux : Solaire ~500, UV ~5",
+      "clear": "• Ciel clair : Solaire ~900, UV ~8"
     }
   },
   "historical": {

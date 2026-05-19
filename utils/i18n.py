@@ -34,6 +34,17 @@ def _lookup_key(payload: dict[str, Any], key: str) -> Optional[str]:
     return current if isinstance(current, str) else None
 
 
+def _query_lang_once() -> Optional[str]:
+    """Lee un idioma legacy de la URL y limpia ``?lang=`` para no ensuciarla."""
+    try:
+        raw_query_lang = str(st.query_params.get("lang", "")).strip().lower()
+        if "lang" in st.query_params:
+            del st.query_params["lang"]
+    except Exception:
+        raw_query_lang = ""
+    return raw_query_lang if raw_query_lang in SUPPORTED_LANGUAGES else None
+
+
 @st.cache_data(show_spinner=False)
 def _load_catalog_cached(path_str: str, mtime_ns: int) -> dict[str, Any]:
     del mtime_ns  # parte de la clave de caché para invalidar al cambiar el archivo
@@ -50,10 +61,9 @@ def load_catalog(lang: str) -> dict[str, Any]:
 
 
 def init_language() -> str:
-    raw_query_lang = str(st.query_params.get("lang", "")).strip().lower()
     raw_session_lang = str(st.session_state.get("lang", "")).strip().lower()
 
-    query_lang = raw_query_lang if raw_query_lang in SUPPORTED_LANGUAGES else None
+    query_lang = _query_lang_once()
     session_lang = raw_session_lang if raw_session_lang in SUPPORTED_LANGUAGES else None
 
     lang = query_lang or session_lang or DEFAULT_LANG
@@ -63,11 +73,11 @@ def init_language() -> str:
 
 
 def get_language() -> str:
-    raw_query_lang = str(st.query_params.get("lang", "")).strip().lower()
-    if raw_query_lang in SUPPORTED_LANGUAGES:
-        if st.session_state.get("lang") != raw_query_lang:
-            st.session_state["lang"] = raw_query_lang
-        return raw_query_lang
+    query_lang = _query_lang_once()
+    if query_lang:
+        if st.session_state.get("lang") != query_lang:
+            st.session_state["lang"] = query_lang
+        return query_lang
 
     raw_session_lang = str(st.session_state.get("lang", "")).strip().lower()
     if raw_session_lang in SUPPORTED_LANGUAGES:
@@ -80,8 +90,8 @@ def set_language(lang: str) -> str:
     normalized = _normalize_lang(lang)
     st.session_state["lang"] = normalized
     try:
-        if str(st.query_params.get("lang", "")).strip().lower() != normalized:
-            st.query_params["lang"] = normalized
+        if "lang" in st.query_params:
+            del st.query_params["lang"]
     except Exception:
         pass
     return normalized

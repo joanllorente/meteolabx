@@ -15,9 +15,8 @@ def render_app_header(*, t, dark: bool, header_refresh_label: str, total_station
     st.markdown(
         html_clean(f"""
         <div class="header">
-          <h1>MeteoLabx <span style="opacity:0.6; font-size:0.7em;">Release Candidate</span></h1>
+          <h1>MeteoLabx</h1>
           <div class="meta">
-            {t("header.beta_notice")} ·
             {t("header.theme_label")}: {t(f"sidebar.theme.options.{'dark' if dark else 'light'}")} ·
             {t("header.refresh_label")}: {header_refresh_label}
           </div>

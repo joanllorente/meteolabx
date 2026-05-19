@@ -595,7 +595,7 @@ def render_sidebar(_local_storage_unused=None):
         _sync_wu_input_widgets_from_active(overwrite_if_pristine=True)
 
     # Idioma + tema
-    st.sidebar.title(f"⚙️ {t('sidebar.settings_title')}")
+    st.sidebar.title(t("sidebar.settings_title"))
 
     supported_languages = get_supported_languages()
     selector_lang = str(st.session_state.get("lang_selector", "")).strip().lower()
@@ -646,7 +646,7 @@ def render_sidebar(_local_storage_unused=None):
 
     # Conectar estación
     st.sidebar.markdown("---")
-    st.sidebar.markdown(f"### 🔌 {t('sidebar.connection.title')}")
+    st.sidebar.markdown(f"### {t('sidebar.connection.title')}")
 
     if defer_local_prefill:
         defer_count = int(st.session_state.get("_local_prefill_defer_count", 0) or 0) + 1
@@ -1058,7 +1058,7 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["wu_station_calibration"] = current_calibration
         st.session_state["wu_station_calibration_station"] = wu_station_id
 
-        st.sidebar.markdown(f"### 🎛️ {t('sidebar.calibration.title')}")
+        st.sidebar.markdown(f"### {t('sidebar.calibration.title')}")
         if not storage_ready:
             st.sidebar.caption(t("sidebar.calibration.loading"))
         elif isinstance(sensor_presence, dict) and any(bool(sensor_presence.get(sensor)) for sensor in WU_CALIBRATION_ORDER):
@@ -1111,7 +1111,7 @@ def render_sidebar(_local_storage_unused=None):
 
         st.sidebar.markdown("---")
 
-    st.sidebar.markdown(f"### 📏 {t('sidebar.units.title')}")
+    st.sidebar.markdown(f"### {t('sidebar.units.title')}")
     selected_unit_preferences = {}
     for category, options in UNIT_OPTIONS.items():
         widget_key = f"unit_pref_{category}"
@@ -1154,7 +1154,7 @@ def render_sidebar(_local_storage_unused=None):
     
     if os.getenv("DEMO_MODE") == "1" or os.getenv("METEOLABX_DEMO") == "1":
         st.sidebar.markdown("---")
-        st.sidebar.markdown(f"### 🔬 {t('sidebar.demo.title')}")
+        st.sidebar.markdown(f"### {t('sidebar.demo.title')}")
         
         demo_radiation = st.sidebar.toggle(
             t("sidebar.demo.enable"),

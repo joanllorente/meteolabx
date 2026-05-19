@@ -24,7 +24,6 @@
     "loading_title": "Connecting station..."
   },
   "header": {
-    "beta_notice": "Release Candidate — the interface and features may change",
     "theme_label": "Theme",
     "refresh_label": "Refresh",
     "available_stations": "{count} available stations",
@@ -36,7 +35,6 @@
   },
   "footer": {
     "version": "Version {version}",
-    "news": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
     "improvements": {
@@ -86,7 +84,7 @@
     "autoconnect": {
       "label": "Connect automatically on startup",
       "caption": "",
-      "enabled": "Auto-connect on startup enabled (WU) ✅",
+      "enabled": "Auto-connect on startup enabled (WU)",
       "disabled": "Auto-connect on startup disabled.",
       "missing_credentials": "To enable WU auto-connect, fill in Station ID and API Key."
     },
@@ -95,7 +93,7 @@
             "loading": "Loading Weather Underground sensors...",
             "range_help": "Allowed range: {min} to {max} {unit}",
             "save": "Save calibration",
-            "saved": "Calibration saved ✅",
+            "saved": "Calibration saved",
             "unsaved": "Calibration changes are not saved yet.",
             "fields": {
                 "barometer": "Barometer (hPa)",
@@ -122,11 +120,11 @@
       "forget": "Forget",
       "connect": "Connect",
       "disconnect": "Disconnect",
-      "refresh": "🔄 Refresh"
+      "refresh": "Refresh"
     },
     "messages": {
-      "saved_device": "Saved on this device ✅",
-      "data_erased": "✅ Data removed",
+      "saved_device": "Saved on this device",
+      "data_erased": "Data removed",
       "missing_station_or_key": "Station ID or API key is missing.",
       "altitude_out_of_range": "Altitude out of range ({min} to {max}m)",
       "altitude_invalid": "Invalid altitude. Use a number (e.g. 12.5)"
@@ -142,7 +140,7 @@
       "hours_minutes": "{hours}h {minutes} min ago"
     },
     "provider_status": {
-      "connected_to": "📡 Connected to {provider}",
+      "connected_to": "Connected to {provider}",
       "station_id": "ID: {station_id}",
       "altitude": "Alt: {altitude}m",
       "refresh_help": "Force data refresh (cache bypass)"
@@ -151,15 +149,15 @@
       "title": "Demo Mode (Internal)",
       "enable": "Enable demo radiation data",
       "enable_help": "Shows controls to simulate solar radiation and UV data when your station does not have those sensors",
-      "intro": "📊 **Simulate radiation data**",
+      "intro": "**Simulate radiation data**",
       "solar_label": "Solar radiation (W/m²)",
       "solar_help": "Typical values: Cloudy 100-300, Partly cloudy 400-700, Clear 800-1200",
       "uv_label": "UV Index",
       "uv_help": "Typical values: Low 0-2, Moderate 3-5, High 6-7, Very high 8-10, Extreme 11+",
-      "quick_ref": "💡 **Quick reference:**",
-      "cloudy": "• ☁️ Cloudy: Solar ~200, UV ~2",
-      "partial": "• ⛅ Partly cloudy: Solar ~500, UV ~5",
-      "clear": "• ☀️ Clear: Solar ~900, UV ~8"
+      "quick_ref": "**Quick reference:**",
+      "cloudy": "• Cloudy: Solar ~200, UV ~2",
+      "partial": "• Partly cloudy: Solar ~500, UV ~5",
+      "clear": "• Clear: Solar ~900, UV ~8"
     }
   },
   "historical": {

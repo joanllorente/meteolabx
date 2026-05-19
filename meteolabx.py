@@ -5150,7 +5150,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "Release Candidate"
+APP_VERSION = "1.0.0"
 
 footer_html = """
         <style>
@@ -5167,39 +5167,6 @@ footer_html = """
             gap: 0.65rem;
             flex-wrap: wrap;
         }
-        .mlb-footer-news details{
-            display: inline-block;
-        }
-        .mlb-footer-news summary{
-            list-style: none;
-            cursor: pointer;
-            color: #2f9cff;
-            text-decoration: underline;
-            text-underline-offset: 2px;
-        }
-        .mlb-footer-news summary::-webkit-details-marker{
-            display: none;
-        }
-        .mlb-footer-box{
-            margin-top: 0.6rem;
-            padding: 0.8rem 0.95rem;
-            border-radius: 10px;
-            border: 1px solid var(--line);
-            background: rgba(66, 133, 244, 0.08);
-            color: var(--text);
-            max-width: 920px;
-        }
-        .mlb-footer-box h3{
-            margin: 0.55rem 0 0.3rem 0;
-            font-size: 1.05rem;
-        }
-        .mlb-footer-box h3:first-child{
-            margin-top: 0;
-        }
-        .mlb-footer-box ul{
-            margin: 0.12rem 0 0.35rem 1.1rem;
-            padding: 0;
-        }
         .mlb-footer-bottom{
             margin-top: 0.52rem;
             font-size: 0.86rem;
@@ -5209,38 +5176,12 @@ footer_html = """
         <div class="mlb-footer">
           <div class="mlb-footer-top">
             <span><b>MeteoLabX · %s</b></span>
-            <span class="mlb-footer-news">
-              <details>
-                <summary>%s</summary>
-                <div class="mlb-footer-box">
-                  <h2 style="margin:0 0 0.6rem 0;">%s</h2>
-                  <h3>%s</h3>
-                  <ul>
-                    <li>%s</li>
-                    <li>%s</li>
-                    <li>%s</li>
-                  </ul>
-                  <h3>%s</h3>
-                  <ul>
-                    <li>%s</li>
-                  </ul>
-                </div>
-              </details>
-            </span>
           </div>
           <div class="mlb-footer-bottom">%s: WU · AEMET · Meteocat · Euskalmet · Frost · Meteo-France · MeteoGalicia · NWS · POEM · %s · © 2026</div>
         </div>
         """
 footer_html = footer_html % (
     t("footer.version", version=APP_VERSION),
-    t("footer.news"),
-    APP_VERSION,
-    t("footer.improvements_title"),
-    t("footer.improvements.french_language"),
-    t("footer.improvements.performance"),
-    t("footer.improvements.small_screens"),
-    t("footer.fixes_title"),
-    t("footer.fixes.autoconnect_startup"),
     t("footer.sources"),
     t("footer.unaffiliated"),
 )
