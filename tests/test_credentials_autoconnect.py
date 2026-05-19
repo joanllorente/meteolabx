@@ -256,6 +256,8 @@ def test_provider_autoconnect_replaces_wu_target_without_deleting_saved_wu_crede
 ):
     _patch_storage(monkeypatch, patch_streamlit)
     patch_streamlit(provider_state)
+    fake_session_state["auto_connect_wu_device"] = True
+    fake_session_state["_wu_autoconnect_toggle_changed"] = True
 
     storage.set_local_storage(LS_STATION, "IWU123", "save")
     storage.set_local_storage(LS_APIKEY, "secret-key", "save")
@@ -281,6 +283,11 @@ def test_provider_autoconnect_replaces_wu_target_without_deleting_saved_wu_crede
     assert storage.get_stored_station() == "IWU123"
     assert storage.get_stored_apikey() == "secret-key"
     assert storage.get_stored_z() == "42"
+    assert fake_session_state["auto_connect_wu_device"] is True
+    assert "_wu_autoconnect_toggle_changed" not in fake_session_state
+    assert fake_session_state["_wu_autoconnect_ui_target_kind"] == "PROVIDER"
+    assert fake_session_state["_wu_autoconnect_ui_last_value"] is False
+    assert fake_session_state["_provider_autoconnect_takeover_pending"] is True
 
 
 def test_pending_local_storage_writes_are_consumed_once(
@@ -297,3 +304,128 @@ def test_pending_local_storage_writes_are_consumed_once(
         LS_AUTOCONNECT: "1",
     }
     assert storage.consume_local_storage_writes() == {}
+
+
+def test_local_storage_reads_use_write_cache_before_empty_component_instance(
+    patch_streamlit,
+    fake_session_state,
+    monkeypatch,
+):
+    patch_streamlit(storage)
+    target = {
+        "kind": "PROVIDER",
+        "provider_id": "METEOCAT",
+        "station_id": "Z6",
+        "station_name": "Sasseuva",
+    }
+    fake_session_state["_mlx_local_storage_key"] = "mlx_storage_test"
+    fake_session_state[storage._WRITE_CACHE_KEY] = {
+        LS_AUTOCONNECT: "1",
+        LS_AUTOCONNECT_TARGET: json.dumps(target, separators=(",", ":")),
+    }
+    fake_session_state["_mlx_local_storage_snapshot"] = {
+        LS_AUTOCONNECT: "",
+        LS_AUTOCONNECT_TARGET: "",
+    }
+    monkeypatch.setattr(
+        storage,
+        "_get_local_storage",
+        lambda: SimpleNamespace(getItem=lambda *args, **kwargs: ""),
+    )
+
+    assert storage.get_stored_autoconnect() is True
+    assert storage.get_stored_autoconnect_target() == target
+
+
+def test_passive_empty_snapshot_does_not_become_authoritative_cache(
+    patch_streamlit,
+    fake_session_state,
+    monkeypatch,
+):
+    _patch_storage(monkeypatch, patch_streamlit)
+
+    storage.hydrate_local_storage_snapshot(
+        {
+            LS_AUTOCONNECT: "",
+            LS_AUTOCONNECT_TARGET: "",
+        }
+    )
+
+    assert storage._WRITE_CACHE_KEY not in fake_session_state
+    assert storage.get_stored_autoconnect() is False
+    assert storage.get_stored_autoconnect_target() is None
+
+
+def test_authoritative_provider_write_survives_later_empty_snapshot(
+    patch_streamlit,
+    fake_session_state,
+    monkeypatch,
+):
+    _patch_storage(monkeypatch, patch_streamlit)
+    target = {
+        "kind": "PROVIDER",
+        "provider_id": "METEOCAT",
+        "station_id": "Z6",
+        "station_name": "Sasseuva",
+    }
+
+    storage.set_stored_autoconnect_target(target)
+    storage.set_local_storage(LS_AUTOCONNECT, "1", "save")
+    storage.hydrate_local_storage_snapshot(
+        {
+            LS_AUTOCONNECT: "",
+            LS_AUTOCONNECT_TARGET: "",
+        }
+    )
+
+    assert storage.get_stored_autoconnect() is True
+    assert storage.get_stored_autoconnect_target() == target
+
+
+def test_local_storage_writes_create_session_cache_for_immediate_rerun(
+    patch_streamlit,
+    fake_session_state,
+    monkeypatch,
+):
+    _patch_storage(monkeypatch, patch_streamlit)
+    target = {
+        "kind": "PROVIDER",
+        "provider_id": "METEOCAT",
+        "station_id": "Z6",
+        "station_name": "Sasseuva",
+    }
+
+    storage.set_stored_autoconnect_target(target)
+    storage.set_local_storage(LS_AUTOCONNECT, "1", "save")
+
+    session_key = fake_session_state["_mlx_local_storage_key"]
+    assert json.loads(fake_session_state[session_key][LS_AUTOCONNECT_TARGET]) == target
+    assert fake_session_state[session_key][LS_AUTOCONNECT] == "1"
+    assert json.loads(fake_session_state[storage._WRITE_CACHE_KEY][LS_AUTOCONNECT_TARGET]) == target
+    assert fake_session_state[storage._WRITE_CACHE_KEY][LS_AUTOCONNECT] == "1"
+    assert storage.get_stored_autoconnect() is True
+    assert storage.get_stored_autoconnect_target() == target
+
+
+def test_provider_autoconnect_widget_state_can_be_cleared_when_wu_becomes_target(
+    patch_streamlit,
+    fake_session_state,
+):
+    patch_streamlit(provider_state)
+    fake_session_state.update(
+        {
+            "autoconnect_toggle_METEOCAT_Z6": True,
+            "map_autoconnect_toggle_Meteocat_Z6": True,
+            "_provider_autoconnect_toggle_changed": "autoconnect_toggle_METEOCAT_Z6",
+            "_map_provider_autoconnect_toggle_changed": "map_autoconnect_toggle_Meteocat_Z6",
+            "auto_connect_wu_device": True,
+        }
+    )
+
+    provider_state.clear_provider_autoconnect_widget_state()
+
+    assert "autoconnect_toggle_METEOCAT_Z6" not in fake_session_state
+    assert "map_autoconnect_toggle_Meteocat_Z6" not in fake_session_state
+    assert "_provider_autoconnect_toggle_changed" not in fake_session_state
+    assert "_map_provider_autoconnect_toggle_changed" not in fake_session_state
+    assert fake_session_state["auto_connect_wu_device"] is True

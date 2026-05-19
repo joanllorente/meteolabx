@@ -34,6 +34,7 @@ _SNAPSHOT_READY_KEY = "_mlx_local_storage_snapshot_ready"
 _SESSION_AUTOCONNECT_TARGET_KEY = "_mlx_session_autoconnect_target"
 _SESSION_AUTOCONNECT_ENABLED_KEY = "_mlx_session_autoconnect_enabled"
 _PENDING_WRITES_KEY = "_mlx_local_storage_pending_writes"
+_WRITE_CACHE_KEY = "_mlx_local_storage_write_cache"
 
 
 def _migrate_legacy_unit_preferences(payload) -> dict:
@@ -95,6 +96,46 @@ def _get_local_storage() -> Optional[LocalStorage]:
         return None
 
 
+def _merge_session_storage_cache(updates: dict, *, authoritative: bool = False) -> None:
+    """
+    Mantiene una copia en ``st.session_state`` de valores de localStorage.
+
+    ``streamlit_local_storage`` crea instancias nuevas y su cache interno puede
+    llegar vacío justo después de un rerun. Para evitar carreras, distinguimos
+    snapshots pasivos del navegador de escrituras reales hechas por la app:
+    solo las escrituras autoritativas ganan en lecturas inmediatas.
+    """
+    if not isinstance(updates, dict) or not updates:
+        return
+    try:
+        session_key = _session_storage_key()
+        normalized = {str(item_key): value for item_key, value in updates.items()}
+        cached = st.session_state.get(session_key)
+        if not isinstance(cached, dict):
+            cached = {}
+        cached.update(normalized)
+        st.session_state[session_key] = cached
+
+        if authoritative:
+            write_cached = st.session_state.get(_WRITE_CACHE_KEY)
+            if not isinstance(write_cached, dict):
+                write_cached = {}
+            write_cached.update(normalized)
+            st.session_state[_WRITE_CACHE_KEY] = write_cached
+    except Exception:
+        pass
+
+
+def _session_cached_item(item_key: str) -> tuple[bool, str]:
+    try:
+        cached = st.session_state.get(_WRITE_CACHE_KEY)
+    except Exception:
+        return False, ""
+    if not isinstance(cached, dict) or item_key not in cached:
+        return False, ""
+    return True, _unwrap_ls_value(cached.get(item_key), item_key)
+
+
 class _LocalStorageProxy:
     """
     Proxy compatible con imports legacy (`localS`) sin estado global persistente.
@@ -151,8 +192,22 @@ def hydrate_local_storage_snapshot(values: Optional[dict]) -> None:
         str(item_key): _unwrap_ls_value(value, str(item_key))
         for item_key, value in values.items()
     }
+    previous = st.session_state.get(_SNAPSHOT_STATE_KEY)
+    if isinstance(previous, dict):
+        merged = dict(previous)
+        for item_key, value in normalized.items():
+            previous_value = _unwrap_ls_value(previous.get(item_key), item_key)
+            # Un primer snapshot vacío puede llegar desde el componente antes
+            # de que el navegador haya reconciliado localStorage. No dejes que
+            # ese vacío borre una intención ya conocida en la sesión; las
+            # acciones reales de "Olvidar" usan _FORGET_MARKER o "0".
+            if value == "" and previous_value:
+                continue
+            merged[item_key] = value
+        normalized = merged
     st.session_state[_SNAPSHOT_STATE_KEY] = normalized
     st.session_state[_SNAPSHOT_READY_KEY] = True
+    _merge_session_storage_cache(normalized)
 
 
 def local_storage_snapshot_ready() -> bool:
@@ -187,6 +242,7 @@ def queue_local_storage_writes(updates: dict) -> None:
         st.session_state[_PENDING_WRITES_KEY] = pending
         st.session_state[_SNAPSHOT_STATE_KEY] = snapshot
         st.session_state[_SNAPSHOT_READY_KEY] = True
+        _merge_session_storage_cache(updates, authoritative=True)
     except Exception as exc:
         logger.warning("No se pudieron encolar escrituras de localStorage: %s", exc)
 
@@ -242,15 +298,6 @@ def forget_local_storage_keys() -> None:
     updates[LS_WU_FORGOTTEN] = "1"
     queue_local_storage_writes(updates)
 
-    session_key = _session_storage_key()
-    try:
-        cached = st.session_state.get(session_key)
-        if isinstance(cached, dict):
-            cached.update(updates)
-            st.session_state[session_key] = cached
-    except Exception:
-        pass
-
 
 def set_local_storage(item_key: str, value, key_suffix: str) -> None:
     """Guarda un valor en LocalStorage (o lo marca como olvidado si value es None/'')"""
@@ -258,25 +305,9 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
         if value is None or value == "":
             forget_value = "0" if item_key == LS_AUTOCONNECT else _FORGET_MARKER
             queue_local_storage_writes({item_key: forget_value})
-            session_key = _session_storage_key()
-            try:
-                cached = st.session_state.get(session_key)
-                if isinstance(cached, dict):
-                    cached[item_key] = forget_value
-                    st.session_state[session_key] = cached
-            except Exception:
-                pass
             return
 
         queue_local_storage_writes({item_key: value})
-        session_key = _session_storage_key()
-        try:
-            cached = st.session_state.get(session_key)
-            if isinstance(cached, dict):
-                cached[item_key] = value
-                st.session_state[session_key] = cached
-        except Exception:
-            pass
 
     except Exception as exc:
         logger.warning("Error general escribiendo %s en localStorage: %s", item_key, exc)
@@ -285,6 +316,9 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
 
 def _read_ls_item(storage: LocalStorage, item_key: str, getter_key: str) -> str:
     """Lee una key del localStorage y desenvuelve el formato wrapper si es necesario."""
+    has_cached, cached_value = _session_cached_item(item_key)
+    if has_cached:
+        return cached_value
     has_snapshot, snapshot_value = _snapshot_item(item_key)
     if has_snapshot:
         return snapshot_value

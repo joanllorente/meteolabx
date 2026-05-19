@@ -33,7 +33,10 @@
         }
 
         function setComponentValue(value) {
-          sendMessage("streamlit:setComponentValue", { value: value });
+          sendMessage("streamlit:setComponentValue", {
+            value: value,
+            dataType: "json",
+          });
         }
 
         function setFrameHeight(height) {

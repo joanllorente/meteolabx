@@ -80,6 +80,7 @@
         "altitude": "Optionnel (récupéré depuis l'API)"
       },
       "caption": "Cliquez sur Enregistrer pour mémoriser l'ID, la clé API et l'altitude dans ce navigateur.",
+      "loading_saved": "Chargement des données enregistrées du navigateur...",
       "api_key_help": "Ces données peuvent être stockées localement dans ce navigateur si vous utilisez Enregistrer. Si vous partagez cet appareil ou ce profil de navigateur, une autre personne pourrait les réutiliser. Il est plus sûr d'enregistrer la clé API dans le gestionnaire de mots de passe de l'appareil ou du navigateur."
     },
     "autoconnect": {

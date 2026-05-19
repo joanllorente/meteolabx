@@ -72,6 +72,23 @@
 	- Irradiancia eritematosa (E_ery): irradiancia UV ponderada por la sensibilidad de la piel al eritema
 
 ==============================================================================
+- Dosis eritemática: dosis acumulada de radiación UV eritemática desde las 00:00 hasta el momento actual. Se expresa en SED (Standard Erythema Dose).
+
+	- 1 SED equivale a 100 J/m² de radiación eritemática efectiva.
+
+	- Fototipo I: eritema visible aproximadamente desde 2 a 3 SED.
+
+	- Fototipo II: aproximadamente 2.5 a 3.5 SED.
+
+	- Fototipo III: aproximadamente 3.5 a 5 SED.
+
+	- Fototipo IV: aproximadamente 5 a 7 SED.
+
+	- Fototipo V: aproximadamente 7 a 10 SED.
+
+	- Fototipo VI: habitualmente por encima de 10 SED.
+
+==============================================================================
 - Evapotranspiración (ET): cantidad de agua que se pierde hacia la atmósfera por evaporación del suelo y transpiración de las plantas. Se calcula según el estándar internacional FAO-56 on el método de Penman–Monteith.
 
 ==============================================================================

@@ -7,15 +7,16 @@ import streamlit.components.v1 as components
 from pathlib import Path as _Path
 
 
-def _load_favicon_for_page_config():
+def _resolve_favicon_path() -> str:
     """
-    Carga el favicon como ``PIL.Image`` para que Streamlit lo embeba
-    correctamente en el HTML inicial.
+    Devuelve un path ABSOLUTO al favicon, evitando dependencia de cwd.
 
-    Pasar un string-path falla en algunos lanzamientos locales (depende del
-    cwd desde el que arranque ``streamlit run``). Pasar bytes de un ``.ico``
-    también falla porque internamente Streamlit asume PNG. Pasar un objeto
-    PIL.Image es lo que mejor soporte tiene en todas las versiones.
+    Streamlit acepta un string-path como ``page_icon``; el problema con el
+    string anterior ("favicon.png") era que se resolvía relativo al cwd y
+    en algunos lanzamientos locales fallaba. Usando ``Path(__file__).parent``
+    nos aseguramos de un path estable sin pagar el coste de instanciar
+    ``PIL.Image`` (que ralentizaba el primer render y dejaba los widgets
+    del sidebar sin valor seleccionado hasta el siguiente rerun).
     """
     candidates = [
         _Path(__file__).parent / "static" / "favicon.png",
@@ -24,24 +25,19 @@ def _load_favicon_for_page_config():
         _Path(__file__).parent / "favicon-32x32.png",
     ]
     for candidate in candidates:
-        if not candidate.is_file():
-            continue
-        try:
-            from PIL import Image
-            return Image.open(str(candidate))
-        except Exception:
-            continue
-    return None
+        if candidate.is_file():
+            return str(candidate)
+    return ""
 
 
-_FAVICON_IMAGE = _load_favicon_for_page_config()
+_FAVICON_PATH = _resolve_favicon_path()
 
 st.set_page_config(
     page_title="MeteoLabX",
     # Favicon de la pestaña del navegador: usamos el favicon "neutro" (no el
     # icono azul de webapp). El icono azul con isobaras se reserva para PWA
     # / home screen via apple-touch-icon.
-    page_icon=_FAVICON_IMAGE if _FAVICON_IMAGE is not None else "🌤️",
+    page_icon=_FAVICON_PATH or "🌤️",
     layout="wide",
     initial_sidebar_state="collapsed"  # Sidebar colapsada por defecto en móvil
 )

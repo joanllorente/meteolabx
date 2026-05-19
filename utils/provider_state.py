@@ -148,6 +148,18 @@ PROVIDER_RUNTIME_PREFIXES = (
     "poem_",
 )
 
+PROVIDER_AUTOCONNECT_WIDGET_PREFIXES = (
+    "autoconnect_toggle_",
+    "map_autoconnect_toggle_",
+)
+
+PROVIDER_AUTOCONNECT_CHANGED_KEYS = (
+    "_provider_autoconnect_toggle_changed",
+    "_map_provider_autoconnect_toggle_changed",
+    "_provider_autoconnect_takeover_pending",
+    "_provider_autoconnect_takeover_grace",
+)
+
 WU_RUNTIME_KEYS = (
     "wu_connected_station",
     "wu_connected_api_key",
@@ -345,6 +357,19 @@ def _clear_prefixed_session_keys(prefixes: tuple[str, ...]) -> None:
             del st.session_state[state_key]
 
 
+def clear_provider_autoconnect_widget_state() -> None:
+    """
+    Limpia toggles efímeros de auto-conexión de proveedores.
+
+    Se usa cuando WU pasa a ser el objetivo de auto-conexión para que ningún
+    toggle antiguo de proveedor pueda volver a guardar su target en un rerun
+    posterior solo porque Streamlit conservó su valor frontend.
+    """
+    _clear_prefixed_session_keys(PROVIDER_AUTOCONNECT_WIDGET_PREFIXES)
+    for state_key in PROVIDER_AUTOCONNECT_CHANGED_KEYS:
+        st.session_state.pop(state_key, None)
+
+
 def disconnect_active_station(*, clear_runtime_cache: bool = True) -> None:
     """
     Limpia el estado runtime de la conexión actual, sea WU o proveedor.
@@ -540,6 +565,16 @@ def persist_provider_autoconnect_target(station: Any) -> bool:
         }
     )
     set_local_storage(LS_AUTOCONNECT, "1", "save")
+    # Al mover la auto-conexión a un proveedor, el toggle WU de la sidebar ya
+    # puede estar instanciado en este ciclo. No tocamos su key visible aquí,
+    # pero sí dejamos preparado el siguiente rerun para que lo pinte apagado y
+    # no procese un callback WU atrasado.
+    st.session_state.pop("_wu_autoconnect_toggle_changed", None)
+    st.session_state["_wu_autoconnect_ui_target_kind"] = "PROVIDER"
+    st.session_state["_wu_autoconnect_ui_last_value"] = False
+    st.session_state["_wu_autoconnect_disable_armed"] = False
+    st.session_state["_provider_autoconnect_takeover_pending"] = True
+    st.session_state["_provider_autoconnect_takeover_grace"] = 5
     st.session_state[AUTOCONNECT_ATTEMPTED] = False
     return True
 

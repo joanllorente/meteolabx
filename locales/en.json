@@ -80,6 +80,7 @@
         "altitude": "Optional (fetched from API)"
       },
       "caption": "Click Save to remember ID, API key and altitude in this browser.",
+      "loading_saved": "Loading saved browser data...",
       "api_key_help": "These details may be stored locally in this browser if you use Save. If you share this device or browser profile, someone else could reuse them. It is safer to store the API key in your device or browser password manager."
     },
     "autoconnect": {

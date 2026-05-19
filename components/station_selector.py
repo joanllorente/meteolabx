@@ -29,6 +29,48 @@ from utils.storage import (
 )
 from .browser_geolocation import get_browser_geolocation
 
+PROVIDER_AUTOCONNECT_CHANGED_KEY = "_provider_autoconnect_toggle_changed"
+
+
+def _mark_provider_autoconnect_toggle_changed(toggle_key: str) -> None:
+    st.session_state[PROVIDER_AUTOCONNECT_CHANGED_KEY] = toggle_key
+
+
+def _sync_provider_autoconnect_toggle(toggle_key: str, is_target_station: bool) -> bool:
+    changed_key = str(st.session_state.get(PROVIDER_AUTOCONNECT_CHANGED_KEY, ""))
+    if changed_key != toggle_key:
+        st.session_state[toggle_key] = bool(is_target_station)
+    return changed_key == toggle_key
+
+
+def _clear_provider_autoconnect_toggle_changed(toggle_key: str) -> None:
+    if st.session_state.get(PROVIDER_AUTOCONNECT_CHANGED_KEY) == toggle_key:
+        st.session_state.pop(PROVIDER_AUTOCONNECT_CHANGED_KEY, None)
+
+
+def _handle_provider_autoconnect_toggle_change(toggle_key: str, station, is_target_station: bool) -> None:
+    _mark_provider_autoconnect_toggle_changed(toggle_key)
+    toggle_enabled = bool(st.session_state.get(toggle_key, False))
+    if toggle_enabled:
+        st.session_state["auto_connect_wu_device"] = False
+        if persist_provider_autoconnect_target(station):
+            st.session_state["_provider_autoconnect_flash"] = t(
+                "station_selector.autoconnect_saved",
+                station=getattr(station, "name", None)
+                or (station.get("name") if isinstance(station, dict) else "")
+                or "",
+            )
+            st.session_state["_provider_autoconnect_flash_kind"] = "success"
+        else:
+            st.session_state["_provider_autoconnect_flash"] = t("station_selector.autoconnect_save_error")
+            st.session_state["_provider_autoconnect_flash_kind"] = "error"
+    elif is_target_station:
+        disable_provider_autoconnect("autoconnect_toggle_")
+        st.session_state["_provider_autoconnect_flash"] = t(
+            "station_selector.autoconnect_disabled"
+        )
+        st.session_state["_provider_autoconnect_flash_kind"] = "info"
+
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_USER_AGENT = "MeteoLabX/1.0 (contact: meteolabx@gmail.com)"
 
@@ -190,6 +232,13 @@ def render_station_selector():
         st.session_state["nominatim_last_match"] = ""
     if "nominatim_last_error" not in st.session_state:
         st.session_state["nominatim_last_error"] = ""
+    provider_autoconnect_flash = st.session_state.pop("_provider_autoconnect_flash", "")
+    provider_autoconnect_flash_kind = st.session_state.pop("_provider_autoconnect_flash_kind", "success")
+    if provider_autoconnect_flash:
+        if provider_autoconnect_flash_kind == "info":
+            st.info(provider_autoconnect_flash)
+        else:
+            st.success(provider_autoconnect_flash)
 
     browser_geo_result = consume_browser_geolocation(
         "geo",
@@ -358,17 +407,38 @@ def render_station_selector():
                         f"{station.provider_name} | ID: {station.station_id} | Alt: {station.elevation_m:.0f}m"
                     )
                     toggle_key = f"autoconnect_toggle_{station.provider_id}_{station.station_id}"
-                    if toggle_key not in st.session_state:
-                        st.session_state[toggle_key] = is_target_station
-                    toggle_enabled = st.toggle(t("station_selector.autoconnect"), key=toggle_key)
-                    if toggle_enabled and not is_target_station:
+                    toggle_changed = _sync_provider_autoconnect_toggle(
+                        toggle_key,
+                        is_target_station,
+                    )
+                    toggle_enabled = st.toggle(
+                        t("station_selector.autoconnect"),
+                        key=toggle_key,
+                        on_change=_handle_provider_autoconnect_toggle_change,
+                        args=(toggle_key, station, is_target_station),
+                    )
+                    if toggle_changed and toggle_enabled and not is_target_station:
                         if persist_provider_autoconnect_target(station):
-                            st.success(t("station_selector.autoconnect_saved", station=station.name))
+                            st.session_state["_provider_autoconnect_flash"] = t(
+                                "station_selector.autoconnect_saved",
+                                station=station.name,
+                            )
+                            st.session_state["_provider_autoconnect_flash_kind"] = "success"
+                            _clear_provider_autoconnect_toggle_changed(toggle_key)
+                            st.rerun()
                         else:
+                            _clear_provider_autoconnect_toggle_changed(toggle_key)
                             st.error(t("station_selector.autoconnect_save_error"))
-                    elif (not toggle_enabled) and is_target_station:
+                    elif toggle_changed and (not toggle_enabled) and is_target_station:
                         disable_provider_autoconnect("autoconnect_toggle_")
-                        st.info(t("station_selector.autoconnect_disabled"))
+                        st.session_state["_provider_autoconnect_flash"] = t(
+                            "station_selector.autoconnect_disabled"
+                        )
+                        st.session_state["_provider_autoconnect_flash_kind"] = "info"
+                        _clear_provider_autoconnect_toggle_changed(toggle_key)
+                        st.rerun()
+                    elif toggle_changed:
+                        _clear_provider_autoconnect_toggle_changed(toggle_key)
 
                 with col2:
                     st.metric(t("station_selector.distance"), f"{station.distance_km:.1f} km")

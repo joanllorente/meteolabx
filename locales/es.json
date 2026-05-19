@@ -80,6 +80,7 @@
         "altitude": "Opcional (se obtiene de API)"
       },
       "caption": "Pulsa Guardar para recordar ID, API Key y altitud en este navegador.",
+      "loading_saved": "Cargando datos guardados del navegador...",
       "api_key_help": "Estos datos pueden guardarse localmente en este navegador si usas Guardar. Si compartes dispositivo o perfil del navegador, otra persona podría reutilizarlos. Es más recomendable guardarlos con el gestor de contraseñas del dispositivo o del navegador."
     },
     "autoconnect": {

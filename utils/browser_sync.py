@@ -20,41 +20,27 @@ def sync_browser_context_early() -> None:
         """
         <script>
         (function () {
-          const appWin = window;
           const hostWin = window.parent || window;
           try {
-            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-            const vw = Math.round(hostWin.innerWidth || appWin.innerWidth || 0);
-            const mediaWin = (hostWin && typeof hostWin.matchMedia === 'function') ? hostWin : appWin;
-            const cs = mediaWin.matchMedia && mediaWin.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            let bootId = "";
             try {
-              bootId = hostWin.sessionStorage.getItem("meteolabx_boot_id") || "";
-              if (!bootId) {
-                bootId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+              if (!hostWin.sessionStorage.getItem("meteolabx_boot_id")) {
+                const bootId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
                 hostWin.sessionStorage.setItem("meteolabx_boot_id", bootId);
               }
             } catch (_e) {}
+
+            // Versiones anteriores usaban query params (_tz, _vw, _cs,
+            // _mlx_boot) para pasar contexto del navegador a Python. Ahora lo
+            // hace el componente browser_context sin ensuciar la URL.
             const url = new URL(hostWin.location.href);
-            const tzChanged = url.searchParams.get("_tz") !== tz;
-            const csChanged = url.searchParams.get("_cs") !== cs;
-            const vwChanged = url.searchParams.get("_vw") !== String(vw);
-            const bootChanged = bootId && url.searchParams.get("_mlx_boot") !== bootId;
-            const missingBootstrapParams = !url.searchParams.get("_tz") || !url.searchParams.get("_cs") || !url.searchParams.get("_vw") || (bootId && !url.searchParams.get("_mlx_boot"));
-            if (tzChanged || csChanged || vwChanged || bootChanged) {
-              url.searchParams.set("_tz", tz);
-              url.searchParams.set("_vw", String(vw));
-              url.searchParams.set("_cs", cs);
-              if (bootId) {
-                url.searchParams.set("_mlx_boot", bootId);
+            let changed = false;
+            ["_tz", "_vw", "_cs", "_mlx_boot"].forEach(function (key) {
+              if (url.searchParams.has(key)) {
+                url.searchParams.delete(key);
+                changed = true;
               }
-              if (missingBootstrapParams || bootChanged) {
-                hostWin.location.replace(url.toString());
-              } else if (hostWin.history && typeof hostWin.history.replaceState === 'function') {
-                hostWin.history.replaceState(null, "", url.toString());
-              }
-            } else if (vwChanged && hostWin.history && typeof hostWin.history.replaceState === 'function') {
-              url.searchParams.set("_vw", String(vw));
+            });
+            if (changed && hostWin.history && typeof hostWin.history.replaceState === 'function') {
               hostWin.history.replaceState(null, "", url.toString());
             }
           } catch (_e) {}
