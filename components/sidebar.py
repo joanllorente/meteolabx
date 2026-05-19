@@ -250,6 +250,7 @@ def render_sidebar(_local_storage_unused=None):
 
     skip_prefill_once = bool(st.session_state.pop("_skip_local_prefill_once", False))
     defer_local_prefill = bool(allow_local_prefill and not skip_prefill_once and not storage_ready)
+    provider_takeover_guard_this_run = False
     if allow_local_prefill and not skip_prefill_once and storage_ready:
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
@@ -338,6 +339,15 @@ def render_sidebar(_local_storage_unused=None):
         # Estado UI del toggle de sidebar: solo representa auto-conexión WU.
         wu_toggle_default = bool(saved_autoconnect and valid_wu_target)
         current_target_kind = target_kind if has_valid_target else ""
+        wu_target_token = ""
+        if wu_toggle_default:
+            wu_target_token = "|".join(
+                (
+                    "WU",
+                    coerce_str(saved_station),
+                    normalize_text_input(saved_z or ""),
+                )
+            )
         if session_wu_autoconnect_enabled and not has_valid_target:
             # En producción, la escritura a localStorage puede llegar un ciclo
             # más tarde que el rerun disparado por "Guardar". No apagues el
@@ -346,16 +356,37 @@ def render_sidebar(_local_storage_unused=None):
             current_target_kind = "WU"
         wu_toggle_changed_this_run = bool(st.session_state.get("_wu_autoconnect_toggle_changed", False))
         wu_toggle_event_armed = bool(st.session_state.get("_wu_autoconnect_event_armed", False))
+        if (
+            wu_toggle_default
+            and wu_target_token
+            and st.session_state.get("_wu_autoconnect_hydrated_token") != wu_target_token
+        ):
+            # Primera hidratación visual de un target WU guardado. Safari /
+            # Streamlit pueden entregar un valor frontend viejo (False) antes
+            # de que el toggle se pinte con el target real. Ese primer pulso
+            # no es una acción del usuario, así que sembramos el valor correcto
+            # antes de instanciar el widget.
+            st.session_state.pop("_wu_autoconnect_toggle_changed", None)
+            st.session_state["auto_connect_wu_device"] = True
+            st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
+            st.session_state["_wu_autoconnect_ui_last_value"] = True
+            st.session_state["_wu_autoconnect_disable_armed"] = False
+            st.session_state["_wu_autoconnect_hydrated_token"] = wu_target_token
+            wu_toggle_changed_this_run = False
         provider_takeover_pending = bool(
             st.session_state.pop("_provider_autoconnect_takeover_pending", False)
         )
-        provider_takeover_grace = int(
-            st.session_state.get("_provider_autoconnect_takeover_grace", 0) or 0
+        provider_takeover_grace = min(
+            1,
+            int(st.session_state.get("_provider_autoconnect_takeover_grace", 0) or 0),
         )
         provider_takeover_guard = bool(provider_takeover_pending or provider_takeover_grace > 0)
+        provider_takeover_guard_this_run = bool(
+            provider_takeover_guard and current_target_kind == "PROVIDER"
+        )
         if provider_takeover_grace > 0:
             st.session_state["_provider_autoconnect_takeover_grace"] = provider_takeover_grace - 1
-        if provider_takeover_guard and current_target_kind == "PROVIDER":
+        if provider_takeover_guard_this_run:
             # Acabamos de guardar un proveedor como target. En el rerun
             # inmediato puede llegar un callback viejo del toggle WU en True;
             # si lo aceptamos, sobrescribe otra vez el target con WU. La
@@ -705,7 +736,8 @@ def render_sidebar(_local_storage_unused=None):
             current_target = get_stored_autoconnect_target() or {}
             current_kind = str(current_target.get("kind", "")).strip().upper()
             provider_takeover_guard_late = bool(
-                st.session_state.get("_provider_autoconnect_takeover_grace", 0) or 0
+                provider_takeover_guard_this_run
+                or st.session_state.get("_provider_autoconnect_takeover_grace", 0)
             )
 
             # Defensa contra callback fantasma del toggle WU: si en

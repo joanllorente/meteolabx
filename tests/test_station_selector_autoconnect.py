@@ -140,6 +140,11 @@ def test_provider_autoconnect_callback_persists_target(monkeypatch):
 
     assert calls == [station]
     assert fake_st.session_state["_provider_autoconnect_flash_kind"] == "success"
+    assert fake_st.session_state[station_selector.PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY] == {
+        "action": "enable",
+        "key": toggle_key,
+    }
+    assert fake_st.session_state[toggle_key] is True
 
 
 def test_stale_provider_autoconnect_toggle_true_does_not_overwrite_wu_target(monkeypatch):
@@ -197,3 +202,8 @@ def test_provider_autoconnect_callback_disables_current_target(monkeypatch):
 
     assert calls == ["autoconnect_toggle_"]
     assert fake_st.session_state["_provider_autoconnect_flash_kind"] == "info"
+    assert fake_st.session_state[station_selector.PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY] == {
+        "action": "disable",
+        "key": toggle_key,
+    }
+    assert fake_st.session_state[toggle_key] is False

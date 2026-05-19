@@ -574,7 +574,7 @@ def persist_provider_autoconnect_target(station: Any) -> bool:
     st.session_state["_wu_autoconnect_ui_last_value"] = False
     st.session_state["_wu_autoconnect_disable_armed"] = False
     st.session_state["_provider_autoconnect_takeover_pending"] = True
-    st.session_state["_provider_autoconnect_takeover_grace"] = 5
+    st.session_state["_provider_autoconnect_takeover_grace"] = 1
     st.session_state[AUTOCONNECT_ATTEMPTED] = False
     return True
 

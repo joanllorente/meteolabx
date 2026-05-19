@@ -288,6 +288,7 @@ def test_provider_autoconnect_replaces_wu_target_without_deleting_saved_wu_crede
     assert fake_session_state["_wu_autoconnect_ui_target_kind"] == "PROVIDER"
     assert fake_session_state["_wu_autoconnect_ui_last_value"] is False
     assert fake_session_state["_provider_autoconnect_takeover_pending"] is True
+    assert fake_session_state["_provider_autoconnect_takeover_grace"] == 1
 
 
 def test_pending_local_storage_writes_are_consumed_once(

@@ -69,6 +69,18 @@ class _SidebarStub:
         self.error_messages.append(message)
 
 
+class _SidebarStaleWuToggleStub(_SidebarStub):
+    def toggle(self, *args, **kwargs):
+        key = kwargs.get("key")
+        if key == "auto_connect_wu_device":
+            self.session_state[key] = True
+            callback = kwargs.get("on_change")
+            if callable(callback):
+                callback()
+            return True
+        return super().toggle(*args, **kwargs)
+
+
 def test_sidebar_defers_wu_controls_until_local_storage_snapshot_ready(monkeypatch):
     fake_sidebar = _SidebarStub()
     fake_st = SimpleNamespace(
@@ -479,7 +491,7 @@ def test_sidebar_provider_takeover_ignores_stale_wu_true_callback(monkeypatch):
         "_wu_autoconnect_event_armed": True,
         "_wu_autoconnect_disable_armed": False,
         "_provider_autoconnect_takeover_pending": True,
-        "_provider_autoconnect_takeover_grace": 5,
+        "_provider_autoconnect_takeover_grace": 1,
     }
     fake_sidebar = _SidebarStub(session_state)
     fake_st = SimpleNamespace(
@@ -514,6 +526,66 @@ def test_sidebar_provider_takeover_ignores_stale_wu_true_callback(monkeypatch):
     assert "sidebar.autoconnect.enabled" not in fake_sidebar.success_messages
 
 
+def test_sidebar_provider_takeover_ignores_wu_callback_created_by_widget(monkeypatch):
+    provider_target_json = (
+        '{"kind":"PROVIDER","provider_id":"METEOCAT","station_id":"WW",'
+        '"station_name":"Artés","lat":41.7942,"lon":1.9368,"elevation_m":278}'
+    )
+    session_state = {
+        "_sidebar_inputs_initialized": True,
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {
+            LS_AUTOCONNECT: "1",
+            LS_AUTOCONNECT_TARGET: provider_target_json,
+        },
+        "active_station": "ILHOSP26",
+        "active_key": "secret-key",
+        "active_z": "39",
+        sidebar.WU_STATION_INPUT_KEY: "ILHOSP26",
+        sidebar.WU_API_KEY_INPUT_KEY: "secret-key",
+        sidebar.WU_ALTITUDE_INPUT_KEY: "39",
+        "connected": True,
+        "connection_type": "WU",
+        "auto_connect_wu_device": False,
+        "_wu_autoconnect_ui_last_value": False,
+        "_wu_autoconnect_ui_target_kind": "PROVIDER",
+        "_wu_autoconnect_event_armed": True,
+        "_wu_autoconnect_disable_armed": False,
+        "_provider_autoconnect_takeover_pending": True,
+        "_provider_autoconnect_takeover_grace": 1,
+    }
+    fake_sidebar = _SidebarStaleWuToggleStub(session_state)
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+        rerun=lambda: (_ for _ in ()).throw(RuntimeError("unexpected_rerun")),
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: object())
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    snap = session_state["_mlx_local_storage_snapshot"]
+    assert '"kind":"PROVIDER"' in snap[LS_AUTOCONNECT_TARGET]
+    assert '"kind":"WU"' not in snap[LS_AUTOCONNECT_TARGET]
+    assert session_state["auto_connect_wu_device"] is False
+    assert "sidebar.autoconnect.enabled" not in fake_sidebar.success_messages
+
+
 def test_sidebar_provider_takeover_grace_ignores_late_wu_true_callback(monkeypatch):
     provider_target_json = (
         '{"kind":"PROVIDER","provider_id":"AEMET","station_id":"8210Y",'
@@ -542,7 +614,7 @@ def test_sidebar_provider_takeover_grace_ignores_late_wu_true_callback(monkeypat
         "_wu_autoconnect_disable_armed": False,
         # El callback stale llega un rerun después: pending ya se consumió,
         # pero la ventana de gracia sigue activa.
-        "_provider_autoconnect_takeover_grace": 3,
+        "_provider_autoconnect_takeover_grace": 1,
     }
     fake_sidebar = _SidebarStub(session_state)
     fake_st = SimpleNamespace(
@@ -573,7 +645,7 @@ def test_sidebar_provider_takeover_grace_ignores_late_wu_true_callback(monkeypat
     assert '"kind":"PROVIDER"' in snap[LS_AUTOCONNECT_TARGET]
     assert '"kind":"WU"' not in snap[LS_AUTOCONNECT_TARGET]
     assert session_state["auto_connect_wu_device"] is False
-    assert session_state["_provider_autoconnect_takeover_grace"] == 2
+    assert session_state["_provider_autoconnect_takeover_grace"] == 0
     assert "sidebar.autoconnect.enabled" not in fake_sidebar.success_messages
 
 

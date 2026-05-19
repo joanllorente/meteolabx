@@ -49,7 +49,12 @@ def test_map_autoconnect_callback_persists_target(monkeypatch):
     )
 
     assert calls == [station]
-    assert session_state[map_tab.MAP_AUTOCONNECT_CHANGED_KEY] == toggle_key
+    assert map_tab.MAP_AUTOCONNECT_CHANGED_KEY not in session_state
+    assert session_state[map_tab.MAP_AUTOCONNECT_SYNC_RERUN_KEY] == {
+        "action": "enable",
+        "key": toggle_key,
+    }
+    assert session_state[toggle_key] is True
     assert session_state["_map_provider_autoconnect_flash_kind"] == "success"
 
 
@@ -70,5 +75,10 @@ def test_map_autoconnect_callback_disables_current_target(monkeypatch):
     )
 
     assert calls == ["map_autoconnect_toggle_"]
-    assert session_state[map_tab.MAP_AUTOCONNECT_CHANGED_KEY] == toggle_key
+    assert map_tab.MAP_AUTOCONNECT_CHANGED_KEY not in session_state
+    assert session_state[map_tab.MAP_AUTOCONNECT_SYNC_RERUN_KEY] == {
+        "action": "disable",
+        "key": toggle_key,
+    }
+    assert session_state[toggle_key] is False
     assert session_state["_map_provider_autoconnect_flash_kind"] == "info"

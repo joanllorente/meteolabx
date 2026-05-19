@@ -2243,6 +2243,8 @@ st.markdown(f"""
     --mlbx-control-bg-hover: {'#f3f5fa' if not dark else '#141821'};
     --mlbx-control-border: {button_border};
     --mlbx-sidebar-text: {sidebar_text};
+    --mlbx-sidebar-muted: {'rgba(45, 52, 66, 0.58)' if not dark else 'rgba(232, 238, 248, 0.62)'};
+    --mlbx-sidebar-tooltip-bg: {'rgba(255, 255, 255, 0.92)' if not dark else 'rgba(14, 17, 23, 0.88)'};
 }}
 
 [data-testid="stSidebar"],
@@ -2321,14 +2323,45 @@ st.markdown(f"""
    hacía parecer que las credenciales se habían borrado. */
 [data-testid="stSidebar"] [data-testid="stTooltipIcon"],
 [data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] {{
-    color: var(--mlbx-sidebar-text) !important;
-    opacity: 0.55;
+    background: transparent !important;
+    color: var(--mlbx-sidebar-muted) !important;
+    opacity: 0.78;
     transition: opacity 0.15s ease;
+    box-shadow: none !important;
+    border: 0 !important;
 }}
 
 [data-testid="stSidebar"] [data-testid="stTooltipIcon"]:hover,
 [data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"]:hover {{
     opacity: 1;
+}}
+
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg,
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg {{
+    color: var(--mlbx-sidebar-muted) !important;
+    fill: transparent !important;
+    stroke: var(--mlbx-sidebar-muted) !important;
+    background: transparent !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg circle,
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg circle {{
+    fill: transparent !important;
+    stroke: var(--mlbx-sidebar-muted) !important;
+}}
+
+[data-testid="stSidebar"] [data-testid="stTooltipIcon"] svg path,
+[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"] svg path {{
+    fill: var(--mlbx-sidebar-muted) !important;
+    stroke: var(--mlbx-sidebar-muted) !important;
+}}
+
+[data-testid="stTooltipContent"],
+[data-baseweb="tooltip"] {{
+    background: var(--mlbx-sidebar-tooltip-bg) !important;
+    color: var(--mlbx-sidebar-text) !important;
+    border: 1px solid var(--mlbx-control-border) !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18) !important;
 }}
 
 /* Botón del ojo de la API key (evitar cuadro negro) */
@@ -2596,6 +2629,16 @@ st.markdown(f"""
     z-index: 2 !important;
 }}
 
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-pressed="true"],
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-selected="true"],
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-selected="true"] {{
+    background: #ff4b4b !important;
+    color: #ffffff !important;
+    border-color: #ff4b4b !important;
+    font-weight: 700 !important;
+    z-index: 2 !important;
+}}
+
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] {{
     background: #ff4b4b !important;
     color: #ffffff !important;
@@ -2613,6 +2656,12 @@ st.markdown(f"""
     background: #ff5f5f !important;
 }}
 
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-pressed="true"]:hover,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-selected="true"]:hover,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-selected="true"]:hover {{
+    background: #ff5f5f !important;
+}}
+
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] *,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] div,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-checked="true"] span,
@@ -2621,6 +2670,18 @@ st.markdown(f"""
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] div,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] span,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-testid="stBaseButton-segmented_controlActive"] p,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-pressed="true"] *,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-pressed="true"] div,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-pressed="true"] span,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-pressed="true"] p,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-selected="true"] *,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-selected="true"] div,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-selected="true"] span,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[aria-selected="true"] p,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-selected="true"] *,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-selected="true"] div,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-selected="true"] span,
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button[data-selected="true"] p,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] *,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] div,
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] [role="radio"][aria-checked="true"] span,
@@ -2721,6 +2782,9 @@ components.html(f"""
 
       group.querySelectorAll('[role="radio"], button').forEach((btn) => {{
         const checked = btn.getAttribute('aria-checked') === 'true'
+          || btn.getAttribute('aria-pressed') === 'true'
+          || btn.getAttribute('aria-selected') === 'true'
+          || btn.getAttribute('data-selected') === 'true'
           || btn.getAttribute('data-testid') === 'stBaseButton-segmented_controlActive';
         btn.style.background = checked ? ACTIVE : SIDEBAR_BG;
         btn.style.color = checked ? "#ffffff" : SIDEBAR_TEXT;

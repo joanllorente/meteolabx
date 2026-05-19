@@ -30,6 +30,7 @@ from utils.storage import (
 from .browser_geolocation import get_browser_geolocation
 
 PROVIDER_AUTOCONNECT_CHANGED_KEY = "_provider_autoconnect_toggle_changed"
+PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY = "_provider_autoconnect_sync_rerun"
 
 
 def _mark_provider_autoconnect_toggle_changed(toggle_key: str) -> None:
@@ -61,6 +62,11 @@ def _handle_provider_autoconnect_toggle_change(toggle_key: str, station, is_targ
                 or "",
             )
             st.session_state["_provider_autoconnect_flash_kind"] = "success"
+            st.session_state[PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY] = {
+                "action": "enable",
+                "key": toggle_key,
+            }
+            _clear_provider_autoconnect_toggle_changed(toggle_key)
         else:
             st.session_state["_provider_autoconnect_flash"] = t("station_selector.autoconnect_save_error")
             st.session_state["_provider_autoconnect_flash_kind"] = "error"
@@ -70,6 +76,11 @@ def _handle_provider_autoconnect_toggle_change(toggle_key: str, station, is_targ
             "station_selector.autoconnect_disabled"
         )
         st.session_state["_provider_autoconnect_flash_kind"] = "info"
+        st.session_state[PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY] = {
+            "action": "disable",
+            "key": toggle_key,
+        }
+        _clear_provider_autoconnect_toggle_changed(toggle_key)
 
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_USER_AGENT = "MeteoLabX/1.0 (contact: meteolabx@gmail.com)"
@@ -417,7 +428,20 @@ def render_station_selector():
                         on_change=_handle_provider_autoconnect_toggle_change,
                         args=(toggle_key, station, is_target_station),
                     )
+                    sync_payload = st.session_state.get(PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY)
+                    if (
+                        isinstance(sync_payload, dict)
+                        and sync_payload.get("key") == toggle_key
+                    ):
+                        st.session_state.pop(PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY, None)
+                        _clear_provider_autoconnect_toggle_changed(toggle_key)
+                        if sync_payload.get("action") == "enable":
+                            persist_provider_autoconnect_target(station)
+                        elif sync_payload.get("action") == "disable":
+                            disable_provider_autoconnect("autoconnect_toggle_")
+                        st.rerun()
                     if toggle_changed and toggle_enabled and not is_target_station:
+                        st.session_state["auto_connect_wu_device"] = False
                         if persist_provider_autoconnect_target(station):
                             st.session_state["_provider_autoconnect_flash"] = t(
                                 "station_selector.autoconnect_saved",

@@ -14,6 +14,7 @@ from utils.helpers import coerce_str
 
 ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM"]
 MAP_AUTOCONNECT_CHANGED_KEY = "_map_provider_autoconnect_toggle_changed"
+MAP_AUTOCONNECT_SYNC_RERUN_KEY = "_map_provider_autoconnect_sync_rerun"
 REGIONAL_CATALOG_SPECS = {
     "AEMET": {"lat": 40.4168, "lon": -3.7038, "max_results": 1200},
     "METEOCAT": {"lat": 41.6200, "lon": 1.7500, "max_results": 260},
@@ -61,6 +62,11 @@ def _handle_map_autoconnect_toggle_change(
                 station=selected_name,
             )
             st.session_state["_map_provider_autoconnect_flash_kind"] = "success"
+            st.session_state[MAP_AUTOCONNECT_SYNC_RERUN_KEY] = {
+                "action": "enable",
+                "key": toggle_key,
+            }
+            _clear_map_autoconnect_toggle_changed(toggle_key)
         else:
             st.session_state["_map_provider_autoconnect_flash"] = t_func("map.autoconnect_save_error")
             st.session_state["_map_provider_autoconnect_flash_kind"] = "error"
@@ -68,6 +74,11 @@ def _handle_map_autoconnect_toggle_change(
         disable_provider_autoconnect("map_autoconnect_toggle_")
         st.session_state["_map_provider_autoconnect_flash"] = t_func("map.autoconnect_disabled")
         st.session_state["_map_provider_autoconnect_flash_kind"] = "info"
+        st.session_state[MAP_AUTOCONNECT_SYNC_RERUN_KEY] = {
+            "action": "disable",
+            "key": toggle_key,
+        }
+        _clear_map_autoconnect_toggle_changed(toggle_key)
 
 
 def is_us_map_center(lat: float, lon: float) -> bool:
@@ -553,7 +564,20 @@ def render_map_tab(ctx):
                         t,
                     ),
                 )
+                sync_payload = st.session_state.get(MAP_AUTOCONNECT_SYNC_RERUN_KEY)
+                if (
+                    isinstance(sync_payload, dict)
+                    and sync_payload.get("key") == map_toggle_key
+                ):
+                    st.session_state.pop(MAP_AUTOCONNECT_SYNC_RERUN_KEY, None)
+                    _clear_map_autoconnect_toggle_changed(map_toggle_key)
+                    if sync_payload.get("action") == "enable":
+                        _set_provider_autoconnect_from_map(selected_station)
+                    elif sync_payload.get("action") == "disable":
+                        disable_provider_autoconnect("map_autoconnect_toggle_")
+                    st.rerun()
                 if map_toggle_changed and map_toggle_enabled and not is_target_station:
+                    st.session_state["auto_connect_wu_device"] = False
                     if _set_provider_autoconnect_from_map(selected_station):
                         _clear_map_autoconnect_toggle_changed(map_toggle_key)
                         st.success(t("map.autoconnect_saved", station=selected_name))
