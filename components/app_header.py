@@ -61,7 +61,7 @@ def render_connection_banner(
             html_clean(
                 f"""
                 <div style="
-                    margin: 0.2rem 0 0.75rem 0;
+                    margin: 0.2rem 0 1.05rem 0;
                     display: inline-block;
                     padding: 0.52rem 0.82rem;
                     border-radius: 14px;

@@ -237,6 +237,8 @@ def apply_wu_daily_history_calibration(frame: pd.DataFrame, calibration: Mapping
         out["wind_mean"] = (pd.to_numeric(out["wind_mean"], errors="coerce") + cal["anemometer"]).clip(lower=0.0)
     if "gust_max" in out.columns:
         out["gust_max"] = (pd.to_numeric(out["gust_max"], errors="coerce") + cal["anemometer"]).clip(lower=0.0)
+    if "wind_dir_mean" in out.columns:
+        out["wind_dir_mean"] = (pd.to_numeric(out["wind_dir_mean"], errors="coerce") + cal["wind_vane"]) % 360.0
     if "precip_total" in out.columns:
         out["precip_total"] = (pd.to_numeric(out["precip_total"], errors="coerce") + cal["rain_gauge"]).clip(lower=0.0)
     return out

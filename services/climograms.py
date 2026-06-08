@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from api import fetch_wu_history_daily
-from api.weather_underground import quantize_rain_mm_wu
+from api.weather_underground import first_valid_wind_dir, quantize_rain_mm_wu
 from services.wu_calibration import apply_wu_daily_history_calibration, default_wu_calibration
 from utils.i18n import month_name, t
 from utils.units import (
@@ -65,6 +65,7 @@ DAILY_SCHEMA = [
     "temp_max",
     "temp_min",
     "wind_mean",
+    "wind_dir_mean",
     "gust_max",
     "precip_total",
 ]
@@ -207,6 +208,18 @@ def _normalize_wu_daily_payload(payload: Dict[str, Any]) -> pd.DataFrame:
                     metric.get("windspeed"),
                     metric.get("windSpeed"),
                 ),
+                "wind_dir_mean": first_valid_wind_dir(
+                    metric.get("winddirAvg"),
+                    metric.get("windDirAvg"),
+                    metric.get("winddir"),
+                    metric.get("windDir"),
+                    metric.get("windDirection"),
+                    observation.get("winddirAvg"),
+                    observation.get("windDirAvg"),
+                    observation.get("winddir"),
+                    observation.get("windDir"),
+                    observation.get("windDirection"),
+                ),
                 "gust_max": _first_valid_float(
                     metric.get("windgustHigh"),
                     metric.get("windGust"),
@@ -226,7 +239,7 @@ def _normalize_wu_daily_payload(payload: Dict[str, Any]) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = pd.NA
 
-    numeric_columns = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "gust_max", "precip_total"]
+    numeric_columns = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total"]
     for column in numeric_columns:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
@@ -254,6 +267,26 @@ def _iter_chunks(start_date: date, end_date: date, max_days: int = 31) -> Iterab
         chunk_end = min(cursor + timedelta(days=delta_days), end_date)
         yield cursor, chunk_end
         cursor = chunk_end + timedelta(days=1)
+
+
+def clip_periods_to_today(
+    periods: Sequence[ClimogramPeriod],
+    *,
+    today_date: Optional[date] = None,
+) -> List[ClimogramPeriod]:
+    today = today_date or date.today()
+    clipped: List[ClimogramPeriod] = []
+    for period in periods:
+        if period.start > today:
+            continue
+        clipped.append(
+            ClimogramPeriod(
+                label=period.label,
+                start=period.start,
+                end=min(period.end, today),
+            )
+        )
+    return clipped
 
 
 def build_period_specs(
@@ -300,6 +333,7 @@ def fetch_wu_daily_history_for_periods(
     api_key: str,
     periods: Sequence[ClimogramPeriod],
     ttl_seconds: int = 3 * 3600,
+    today_date: Optional[date] = None,
 ) -> pd.DataFrame:
     if not periods:
         return _empty_daily_dataframe()
@@ -307,8 +341,9 @@ def fetch_wu_daily_history_for_periods(
     cache = st.session_state.setdefault("wu_cache_history_daily", {})
     now = time.time()
     chunks_data: List[pd.DataFrame] = []
+    available_periods = clip_periods_to_today(periods, today_date=today_date)
 
-    for period in periods:
+    for period in available_periods:
         for chunk_start, chunk_end in _iter_chunks(period.start, period.end, max_days=31):
             start_txt = chunk_start.strftime("%Y%m%d")
             end_txt = chunk_end.strftime("%Y%m%d")

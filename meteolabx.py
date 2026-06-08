@@ -2,9 +2,30 @@
 MeteoLabx - Panel meteorológico avanzado
 Aplicación principal
 """
+import time as _time_boot
+import os as _os_boot
+import sys as _sys_boot
+_BOOT_T0 = _time_boot.perf_counter()
+_BOOT_LAST = _BOOT_T0
+_BOOT_ENABLED = _os_boot.environ.get("MLX_BOOT_PROFILE", "1") != "0"
+
+def _boot_mark(label: str) -> None:
+    global _BOOT_LAST
+    if not _BOOT_ENABLED:
+        return
+    now = _time_boot.perf_counter()
+    total_ms = (now - _BOOT_T0) * 1000.0
+    delta_ms = (now - _BOOT_LAST) * 1000.0
+    _BOOT_LAST = now
+    print(f"[BOOT] +{total_ms:7.1f}ms (Δ {delta_ms:7.1f}ms) {label}", flush=True)
+
+_boot_mark("script start")
+
 import streamlit as st
+_boot_mark("import streamlit")
 import streamlit.components.v1 as components
 from pathlib import Path as _Path
+_boot_mark("import streamlit.components / pathlib")
 
 
 def _resolve_favicon_path() -> str:
@@ -41,6 +62,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"  # Sidebar colapsada por defecto en móvil
 )
+_boot_mark("st.set_page_config")
 
 # ============================================================
 # PWA METADATA — se inyecta lo antes posible para que iOS Safari encuentre
@@ -53,16 +75,54 @@ st.set_page_config(
 # Bump esta versión cada vez que cambien los iconos / manifest para forzar
 # que el navegador (y la pantalla de inicio de iOS) recarguen los assets en
 # vez de servir el icono cacheado.
-PWA_ASSET_VERSION = "10"
+PWA_ASSET_VERSION = "11"
 PWA_STATIC_BASE = "/app/static"
 
 
 def _inject_pwa_metadata() -> None:
-    """Sincroniza manifest e iconos en el head real para web apps instalables."""
+    """
+    Inyecta en un único iframe el setup JS necesario al arrancar la página:
+
+    1. Manifest + iconos en el ``<head>`` real (PWA / iOS home screen).
+    2. ``meteolabx_boot_id`` en sessionStorage (lo usaba antes
+       ``sync_browser_context_early``).
+    3. Limpieza de query params legacy (``_tz``, ``_vw``, ``_cs``,
+       ``_mlx_boot``) que versiones anteriores usaban para pasar contexto del
+       navegador a Python por URL.
+
+    Antes esto eran dos iframes separados (``_inject_pwa_metadata`` y
+    ``sync_browser_context_early``); cada iframe es un sub-documento que el
+    navegador inicializa y al que Streamlit envía mensajes, así que reducir a
+    uno aligera la carga inicial sin cambiar el comportamiento.
+    """
     components.html(
         f"""
         <script>
         (function () {{
+          // -------- Boot id en sessionStorage + limpieza de URL --------
+          try {{
+            const hostWin = window.parent || window;
+            try {{
+              if (!hostWin.sessionStorage.getItem("meteolabx_boot_id")) {{
+                const bootId = `${{Date.now().toString(36)}}-${{Math.random().toString(36).slice(2, 10)}}`;
+                hostWin.sessionStorage.setItem("meteolabx_boot_id", bootId);
+              }}
+            }} catch (_e) {{}}
+
+            const urlForCleanup = new URL(hostWin.location.href);
+            let cleanupChanged = false;
+            ["_tz", "_vw", "_cs", "_mlx_boot"].forEach(function (key) {{
+              if (urlForCleanup.searchParams.has(key)) {{
+                urlForCleanup.searchParams.delete(key);
+                cleanupChanged = true;
+              }}
+            }});
+            if (cleanupChanged && hostWin.history && typeof hostWin.history.replaceState === 'function') {{
+              hostWin.history.replaceState(null, "", urlForCleanup.toString());
+            }}
+          }} catch (_e) {{}}
+
+          // -------- PWA / manifest / iconos en el <head> real --------
           try {{
             const doc = window.parent && window.parent.document ? window.parent.document : document;
             const head = doc.head;
@@ -148,6 +208,7 @@ def _inject_pwa_metadata() -> None:
 
 
 _inject_pwa_metadata()
+_boot_mark("_inject_pwa_metadata")
 
 import time
 import math
@@ -157,11 +218,15 @@ import os
 import hashlib
 from typing import Optional
 from datetime import datetime, timedelta
+_boot_mark("stdlib imports")
 
 # Imports locales
 from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT, RD
-from data_files import STATION_CATALOG_TOTAL
-from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t
+_boot_mark("import config")
+from data_files import METOFFICE_STATIONS_PATH, STATION_CATALOG_TOTAL
+_boot_mark("import data_files")
+from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t, t_list
+_boot_mark("import utils")
 from utils.storage import (
     flush_local_storage_writes,
     set_local_storage,
@@ -171,6 +236,7 @@ from utils.storage import (
 )
 from utils.provider_state import (
     apply_station_selection,
+    apply_weatherlink_station_state,
     build_connection_snapshot,
     disable_provider_autoconnect,
     disconnect_active_station,
@@ -189,8 +255,13 @@ from utils.browser_sync import (
 )
 from utils.historical_dispatch import fetch_historical_dataset
 from utils.series_state import (
+    clear_series_owner,
+    normalize_chart_series,
     series_from_state,
+    series_owner_matches,
+    set_series_owner,
     store_chart_series,
+    store_series_state,
     store_trend_hourly_series,
 )
 from utils.state_keys import (
@@ -236,7 +307,9 @@ from utils.units import (
     temperature_unit_label,
     wind_unit_label,
 )
+_boot_mark("import utils.* (storage/provider/series/units)")
 from api import WuError, fetch_wu_current_session_cached, fetch_daily_timeseries_session_cached, fetch_hourly_7day_session_cached
+_boot_mark("import api")
 from models.thermodynamics import (
     e_s, vapor_pressure, dewpoint_from_vapor_pressure,
     mixing_ratio, specific_humidity, absolute_humidity,
@@ -244,13 +317,16 @@ from models.thermodynamics import (
     wet_bulb_celsius, msl_to_absolute, air_density, lcl_height,
     apparent_temperature, heat_index_rothfusz,
 )
+_boot_mark("import models.thermodynamics")
 from models.radiation import (
     sky_clarity_label, uv_index_label, water_balance, water_balance_label,
 )
+_boot_mark("import models.radiation")
 from services import (
     rain_rates_from_total, rain_intensity_label, reset_rain_history,
     init_pressure_history, push_pressure, pressure_trend_3h
 )
+_boot_mark("import services")
 from services.wu_calibration import (
     apply_wu_current_calibration,
     apply_wu_series_calibration,
@@ -261,10 +337,13 @@ from components import (
     card, section_title, render_grid,
     wind_dir_text, render_sidebar
 )
+_boot_mark("import components (card/grid/sidebar)")
 from components.app_header import render_app_header, render_connection_banner
+from components.favorites import render_favorites_bar
 
 from components.browser_context import get_browser_context
 from components.browser_geolocation import get_browser_geolocation
+_boot_mark("import components.* (header/favs/browser)")
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
 # historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
@@ -290,6 +369,9 @@ _SERVICE_MODULE_REGISTRY: dict[str, str] = {
     "meteogalicia": "services.meteogalicia",
     "poem": "services.poem",
     "nws": "services.nws",
+    "metoffice": "services.metoffice",
+    "meteohub": "services.meteohub",
+    "weatherlink": "services.weatherlink",
 }
 _SERVICE_MODULE_CACHE: dict[str, object] = {}
 
@@ -327,6 +409,9 @@ _get_euskalmet_service = partial(_get_service, "euskalmet")
 _get_meteogalicia_service = partial(_get_service, "meteogalicia")
 _get_poem_service = partial(_get_service, "poem")
 _get_nws_service = partial(_get_service, "nws")
+_get_metoffice_service = partial(_get_service, "metoffice")
+_get_meteohub_service = partial(_get_service, "meteohub")
+_get_weatherlink_service = partial(_get_service, "weatherlink")
 
 
 _TAB_MODULE_CACHE: dict[str, object] = {}
@@ -365,11 +450,13 @@ def _get_provider_api_key(provider_id: str):
     provider_id = coerce_str(provider_id, upper=True)
     api_key_resolvers = {
         "WU": lambda: str(
-            st.session_state.get("active_key", "")
-            or st.session_state.get("wu_connected_api_key", "")
+            st.session_state.get("wu_connected_api_key", "")
+            or st.session_state.get("active_key", "")
         ).strip(),
         "AEMET": lambda: _get_aemet_service().AEMET_API_KEY,
         "METEOFRANCE": lambda: _get_meteofrance_service().METEOFRANCE_API_KEY,
+        "METOFFICE": lambda: _get_metoffice_service().METOFFICE_API_KEY,
+        "WEATHERLINK": lambda: str(st.session_state.get("weatherlink_api_key", "")).strip(),
     }
     feature = get_provider_feature(provider_id)
     resolver = api_key_resolvers.get(str(feature.get("api_key_source", provider_id)).strip().upper())
@@ -489,6 +576,30 @@ def _standard_provider_runtime_config() -> dict[str, dict]:
             "detail_prefix": "Detalle técnico POEM: ",
             "series_mode": "from_base",
         },
+        "METOFFICE": {
+            "loader": lambda: _get_metoffice_service().get_metoffice_data(),
+            "fallback_key": "metoffice_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de Met Office por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "metoffice_last_error",
+            "detail_prefix": "Detalle técnico Met Office: ",
+            "series_mode": "from_base",
+        },
+        "METEOHUB_IT": {
+            "loader": lambda: _get_meteohub_service().get_meteohub_data(),
+            "fallback_key": "meteohub_it_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de MeteoHub Italia por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "meteohub_last_error",
+            "detail_prefix": "Detalle técnico MeteoHub Italia: ",
+            "series_mode": "from_base",
+        },
+        "WEATHERLINK": {
+            "loader": lambda: _get_weatherlink_service().get_weatherlink_data(),
+            "fallback_key": "weatherlink_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de WeatherLink por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "weatherlink_last_error",
+            "detail_prefix": "Detalle técnico WeatherLink: ",
+            "series_mode": "none",
+        },
     }
 
 
@@ -528,9 +639,20 @@ def _process_standard_provider_connection(provider_id: str) -> tuple[dict, "Proc
 
 def _fetch_provider_synoptic_series_from_state(provider_id: str) -> tuple[dict, str]:
     provider_id = coerce_str(provider_id, upper=True)
+    provider_feature = get_provider_feature(provider_id)
+    source_key = str(provider_feature.get("synoptic_source_key", "")).strip()
+    source_label = t(source_key) if source_key else t("trends.sources.generic_synoptic", provider=provider_id)
+    station_id = _get_provider_station_id(provider_id)
+    if not series_owner_matches(st.session_state, "trend_hourly", provider_id, station_id):
+        store_trend_hourly_series(st.session_state, None)
+        _clear_trend_hourly_series_owner()
+        return _empty_synoptic_series(), source_label
+
     hourly7d = store_trend_hourly_series(st.session_state, series_from_state(st.session_state, "trend_hourly"))
     hourly7d["has_data"] = bool(hourly7d.get("has_data")) or len(hourly7d["epochs"]) > 0
-    return hourly7d, t("trends.sources.generic_synoptic", provider=provider_id)
+    if source_key:
+        return hourly7d, source_label
+    return hourly7d, source_label
 
 
 def _friendly_provider_warning(provider_id: str, generic_warning: str, detail: str = "") -> str:
@@ -570,6 +692,21 @@ def _cancel_connection_loading() -> None:
     clear_connection_loading_overlay()
 
 
+def _queue_wu_connection_error(kind: str, status_code: Optional[int] = None) -> str:
+    kind = str(kind or "").strip().lower()
+    message_key = {
+        "unauthorized": "sidebar.messages.wu_credentials_rejected",
+        "notfound": "sidebar.messages.wu_station_not_found",
+        "ratelimit": "sidebar.messages.wu_rate_limited",
+        "timeout": "sidebar.messages.wu_timeout",
+        "network": "sidebar.messages.wu_network",
+        "badjson": "sidebar.messages.wu_bad_response",
+    }.get(kind, "sidebar.messages.wu_connection_error")
+    st.session_state["_wu_connection_error_key"] = message_key
+    st.session_state["_wu_connection_error_status"] = f" (HTTP {status_code})" if status_code else ""
+    return message_key
+
+
 def _has_live_connection_payload(payload: dict) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -590,8 +727,15 @@ def _has_live_connection_payload(payload: dict) -> bool:
 
 
 def _set_chart_series_owner(provider_id: str, station_id: str) -> None:
-    st.session_state["chart_series_provider_id"] = coerce_str(provider_id, upper=True)
-    st.session_state["chart_series_station_id"] = coerce_str(station_id, upper=True)
+    set_series_owner(st.session_state, "chart", provider_id, station_id)
+
+
+def _set_trend_hourly_series_owner(provider_id: str, station_id: str) -> None:
+    set_series_owner(st.session_state, "trend_hourly", provider_id, station_id)
+
+
+def _clear_trend_hourly_series_owner() -> None:
+    clear_series_owner(st.session_state, "trend_hourly")
 
 
 def _chart_series_fresh_for_station(provider_id: str, station_id: str, *, max_age_s: Optional[int] = None) -> bool:
@@ -619,20 +763,11 @@ def _chart_series_fresh_for_station(provider_id: str, station_id: str, *, max_ag
 def _normalize_observation_chart_series(provider_id: str, payload: Optional[dict]) -> dict:
     provider_id = coerce_str(provider_id, upper=True)
     series = payload if isinstance(payload, dict) else {}
-    epochs = list(series.get("epochs", []))
-    normalized = {
-        "epochs": epochs,
-        "temps": list(series.get("temps", [])),
-        "humidities": list(series.get("humidities", [])),
-        "dewpts": list(series.get("dewpts", [])),
-        "pressures_abs": list(series.get("pressures_abs", series.get("pressures", []))),
-        "uv_indexes": list(series.get("uv_indexes", [])),
-        "solar_radiations": list(series.get("solar_radiations", [])),
-        "winds": list(series.get("winds", [])),
-        "gusts": list(series.get("gusts", [])),
-        "wind_dirs": list(series.get("wind_dirs", [])),
-        "has_data": bool(series.get("has_data", False)) or len(epochs) > 0,
-    }
+    series_for_norm = dict(series)
+    if "pressures_abs" not in series_for_norm and "pressures" in series_for_norm:
+        series_for_norm["pressures_abs"] = series_for_norm.get("pressures", [])
+    normalized = normalize_chart_series(series_for_norm)
+    normalized["has_data"] = bool(series.get("has_data", False)) or len(normalized.get("epochs", [])) > 0
     if provider_id == "AEMET" and (not normalized["humidities"]) and normalized["dewpts"]:
         normalized["humidities"] = _humidity_series_from_temp_and_dewpoint(
             normalized["temps"],
@@ -722,6 +857,14 @@ def _synoptic_provider_registry() -> dict[str, dict]:
                 step_hours=3,
             ),
         },
+        "WEATHERLINK": {
+            "spinner": "Obteniendo histórico reciente de WeatherLink...",
+            "loader": lambda station_id: _get_weatherlink_service().fetch_weatherlink_recent_synoptic_series(
+                station_id,
+                days=7,
+            ),
+            "requires_station_id": True,
+        },
         "EUSKALMET": {"empty": True},
     }
 
@@ -766,12 +909,8 @@ def _build_observation_tab_context() -> dict:
     def _ensure_observation_chart_data() -> bool:
         connection_type = str(st.session_state.get(CONNECTION_TYPE, "")).strip().upper()
         if connection_type == "WU":
-            station_id = str(st.session_state.get(ACTIVE_STATION, "")).strip()
-            api_key = str(st.session_state.get(ACTIVE_KEY, "")).strip()
-            if not station_id:
-                station_id = str(st.session_state.get("wu_connected_station", "")).strip()
-            if not api_key:
-                api_key = str(st.session_state.get("wu_connected_api_key", "")).strip()
+            station_id = str(st.session_state.get("wu_connected_station", "") or st.session_state.get(ACTIVE_STATION, "")).strip()
+            api_key = str(st.session_state.get("wu_connected_api_key", "") or st.session_state.get(ACTIVE_KEY, "")).strip()
             station_id = station_id.upper()
             if not station_id or not api_key:
                 return False
@@ -800,6 +939,7 @@ def _build_observation_tab_context() -> dict:
             chart_winds = timeseries.get("winds", [])
             chart_gusts = timeseries.get("gusts", [])
             chart_wind_dirs = timeseries.get("wind_dirs", [])
+            chart_precips = timeseries.get("precips", [])
 
             ts_lat = timeseries.get("lat", float("nan"))
             ts_lon = timeseries.get("lon", float("nan"))
@@ -828,6 +968,7 @@ def _build_observation_tab_context() -> dict:
                     "winds": chart_winds,
                     "gusts": chart_gusts,
                     "wind_dirs": chart_wind_dirs,
+                    "precips": chart_precips,
                     "has_data": timeseries.get("has_data", False),
                 }
             )
@@ -898,6 +1039,7 @@ def _build_observation_tab_context() -> dict:
             "clarity": clarity,
             "connected": connected,
             "connection_type": connection_type,
+            "convert_precip": convert_precip,
             "convert_pressure": convert_pressure,
             "convert_radiation": convert_radiation,
             "convert_temperature": convert_temperature,
@@ -918,6 +1060,7 @@ def _build_observation_tab_context() -> dict:
             "p_arrow": p_arrow,
             "p_label": p_label,
             "p_msl": p_msl,
+            "precip_unit_pref": precip_unit_pref,
             "precip_unit_txt": precip_unit_txt,
             "pressure_unit_pref": pressure_unit_pref,
             "pressure_unit_txt": pressure_unit_txt,
@@ -968,6 +1111,7 @@ def _build_trends_tab_context() -> dict:
         "wind_unit_txt": wind_unit_txt,
         "_get_aemet_service": _get_aemet_service,
         "_get_meteocat_service": _get_meteocat_service,
+        "_get_weatherlink_service": _get_weatherlink_service,
         "_get_meteofrance_service": _get_meteofrance_service,
         "_render_neutral_info_note": _render_neutral_info_note,
         "_infer_series_step_minutes": _infer_series_step_minutes,
@@ -1017,6 +1161,16 @@ def _build_historical_tab_context() -> dict:
 
 
 def _build_map_tab_context() -> dict:
+    def _map_catalog_cache_version(provider_ids: tuple[str, ...]) -> tuple[tuple[str, int], ...]:
+        versions = []
+        provider_set = {coerce_str(provider_id, upper=True) for provider_id in provider_ids}
+        if "METOFFICE" in provider_set:
+            try:
+                versions.append(("METOFFICE", int(METOFFICE_STATIONS_PATH.stat().st_mtime_ns)))
+            except Exception:
+                versions.append(("METOFFICE", 0))
+        return tuple(versions)
+
     return {
         "section_title": section_title,
         "t": t,
@@ -1033,6 +1187,7 @@ def _build_map_tab_context() -> dict:
         "disable_provider_autoconnect": disable_provider_autoconnect,
         "persist_provider_autoconnect_target": persist_provider_autoconnect_target,
         "_cached_map_search_nearby_stations": _cached_map_search_nearby_stations,
+        "_map_catalog_cache_version": _map_catalog_cache_version,
         "_pydeck_chart_stretch": _pydeck_chart_stretch,
     }
 
@@ -1606,7 +1761,7 @@ def _inject_mobile_plotly_compactor() -> None:
             host.addEventListener("pageshow", schedulePlotSync, { passive: true });
           }
 
-          if (!host.__mlbxViewportPlotObserverBound && host.MutationObserver) {
+          if (!host.__mlbxViewportPlotObserverBound && host.MutationObserver && doc.body) {
             host.__mlbxViewportPlotObserverBound = true;
             const observer = new host.MutationObserver(function () {
               schedulePlotSync();
@@ -1866,47 +2021,26 @@ def _precip_rate_from_series(series: Optional[dict]) -> float:
     precip_values = []
     for key in ("precips", "precip_accum_mm", "precip_step_mm"):
         values = series.get(key)
-        if values is not None and len(values) > 0:
-            precip_values = values
+        if values is None or len(values) <= 0:
+            continue
+        values_list = list(values)
+        if not precip_values:
+            precip_values = values_list
+        if any(not is_nan(v) for v in values_list):
+            precip_values = values_list
             break
     return _precip_rate_between_last_measurements(epochs, precip_values)
 
 
-@dataclass
-class ProcessedData:
-    """Variables derivadas del procesamiento post-fetch de un proveedor estándar."""
-    z: float
-    p_abs: float
-    p_msl: float
-    p_abs_disp: str
-    p_msl_disp: str
-    dp3: float
-    rate_h: float
-    p_label: str
-    p_arrow: str
-    inst_mm_h: float
-    r5_mm_h: float
-    r10_mm_h: float
-    inst_label: str
-    e_sat: float
-    e: float
-    Td_calc: float
-    Tw: float
-    q: float
-    q_gkg: float
-    theta: float
-    Tv: float
-    Te: float
-    rho: float
-    rho_v_gm3: float
-    lcl: float
-    solar_rad: float
-    uv: float
-    et0: float
-    clarity: float
-    balance: float
-    has_radiation: bool
-    has_chart_data: bool
+# ProcessedData se ha movido a `domain.observation_pipeline.ProcessedObservation`
+# como parte de la migración a una capa de dominio pura. Aquí mantenemos el
+# alias para que cualquier código existente que use ``ProcessedData`` siga
+# funcionando sin cambios.
+from domain.observation_pipeline import (
+    ProcessedObservation as ProcessedData,
+    ProcessingContext as _PipelineContext,
+    process_observation as _process_observation_pure,
+)
 
 
 def process_standard_provider(
@@ -1916,183 +2050,206 @@ def process_standard_provider(
     series_override: Optional[dict] = None,
     series_7d: Optional[dict] = None,
 ) -> ProcessedData:
-    """Procesamiento post-fetch común a todos los proveedores estándar.
-
-    Parámetros:
-        base: dict devuelto por get_xxx_data() con keys canónicas (Tc, RH, p_hpa…)
-        provider_name: nombre del proveedor ("EUSKALMET", "METEOCAT"…)
-        elevation_fallback_key: key de session_state para altitud de respaldo
-        series_override: si no es None, se usa como serie de charts en vez de base["_series"]
-        series_7d: si no es None, se escribe en trend_hourly_* de session_state
     """
-    NaN = float("nan")
+    Adapter del pipeline puro ``domain.observation_pipeline.process_observation``.
 
-    # 1. Session state: lat, lon, elevation, timestamp
-    st.session_state[LAST_UPDATE_TIME] = time.time()
-    st.session_state[STATION_LAT] = base.get("lat", NaN)
-    st.session_state[STATION_LON] = base.get("lon", NaN)
+    Sigue el patrón **functional core / imperative shell**: toda la lógica
+    de cálculo vive en ``domain/`` (sin streamlit); aquí solo
+    leemos contexto de ``st.session_state``, llamamos al pipeline puro y
+    aplicamos los efectos secundarios (writes de sesión, ``st.warning``,
+    historial de presión, persistencia de series).
 
-    z = base.get("elevation", st.session_state.get(elevation_fallback_key, 0))
-    st.session_state[STATION_ELEVATION] = z
-    st.session_state[ELEVATION_SOURCE] = provider_name
-
-    # 2. Warning de datos antiguos
-    data_age_minutes = (time.time() - base["epoch"]) / 60
-    if data_age_minutes > MAX_DATA_AGE_MINUTES:
-        st.warning(
-            f"⚠️ Datos de {provider_name} con {data_age_minutes:.0f} minutos "
-            "de antigüedad. La estación puede no estar reportando."
-        )
-        logger.warning(f"Datos {provider_name} antiguos: {data_age_minutes:.1f} minutos")
-
-    # 3. Lluvia: fuera de WU se calcula desde la serie, no desde historial de tips.
-    inst_mm_h = r5_mm_h = r10_mm_h = NaN
-    inst_label = rain_intensity_label(inst_mm_h)
-
-    # 4. Presión
-    p_abs = float(base.get("p_abs_hpa", NaN))
-    p_msl = float(base.get("p_hpa", NaN))
-    provider_for_pressure = st.session_state.get(CONNECTION_TYPE, provider_name)
-    p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
-    p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
-
-    if not is_nan(p_abs):
-        init_pressure_history()
-        push_pressure(p_abs, base["epoch"])
-
-    # 5. Tendencia presión 3h (desde base primero)
-    if not is_nan(p_msl):
-        dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-            p_now=p_msl,
-            epoch_now=base["epoch"],
-            p_3h_ago=base.get("pressure_3h_ago"),
-            epoch_3h_ago=base.get("epoch_3h_ago"),
-        )
-    else:
-        dp3, rate_h, p_label, p_arrow = NaN, NaN, "—", "•"
-
-    # 6. Termodinámica
-    e_sat = e_v = Td_calc = Tw = q_val = q_gkg = theta = Tv_val = Te_val = NaN
-    rho_val = rho_v_gm3 = lcl_val = NaN
-
-    if not is_nan(base.get("Tc")) and not is_nan(base.get("RH")):
-        e_sat = e_s(base["Tc"])
-        e_v = vapor_pressure(base["Tc"], base["RH"])
-        Td_calc = dewpoint_from_vapor_pressure(e_v)
-        Tw = wet_bulb_celsius(base["Tc"], base["RH"], p_abs)
-        base["Td"] = Td_calc
-
-        if not is_nan(p_abs):
-            q_val = specific_humidity(e_v, p_abs)
-            q_gkg = q_val * 1000
-            theta = potential_temperature(base["Tc"], p_abs)
-            Tv_val = virtual_temperature(base["Tc"], q_val)
-            Te_val = equivalent_temperature(base["Tc"], q_val)
-            rho_val = air_density(p_abs, Tv_val)
-            rho_v_gm3 = absolute_humidity(e_v, base["Tc"])
-            lcl_val = lcl_height(base["Tc"], Td_calc)
-    else:
-        base["Td"] = NaN
-
-    # 6.5 Sensación térmica y Heat Index (calculados, nunca del API)
-    wind_fl = base.get("wind", 0.0)
-    if is_nan(wind_fl):
-        wind_fl = 0.0
-    wind_fl_ms = float(wind_fl) / 3.6
-    base["feels_like"] = apparent_temperature(base["Tc"], e_v, wind_fl_ms)
-    base["heat_index"] = heat_index_rothfusz(base["Tc"], base.get("RH", NaN))
-
-    # 7. Radiación / UV / claridad  (ET0 se acumula desde la serie en paso 8.5)
-    solar_rad = base.get("solar_radiation", NaN)
-    uv = base.get("uv", NaN)
-    has_radiation = not is_nan(solar_rad) or not is_nan(uv)
-    et0 = clarity = balance = NaN
-
-    if has_radiation:
-        from models.radiation import sky_clarity_index
-        lat = base.get("lat", NaN)
-        lon = base.get("lon", NaN)
-        clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
-
-    # 8. Series para gráficos
-    if series_override is not None:
-        series = series_override if isinstance(series_override, dict) else {}
-    else:
-        raw = base.get("_series")
-        series = raw if isinstance(raw, dict) else {}
-    inst_mm_h = _precip_rate_from_series(series)
-    r5_mm_h = r10_mm_h = NaN
-    inst_label = rain_intensity_label(inst_mm_h)
-    chart_series = store_chart_series(st.session_state, series)
-    chart_epochs = chart_series["epochs"]
-    chart_temps = chart_series["temps"]
-    chart_humidities = chart_series["humidities"]
-    chart_pressures = chart_series["pressures_abs"]
-    chart_winds = chart_series["winds"]
-    chart_gusts = chart_series["gusts"]
-    chart_wind_dirs = chart_series["wind_dirs"]
-    chart_uv_indexes = chart_series["uv_indexes"]
-    chart_solar_radiations = chart_series["solar_radiations"]
-    has_chart_data = chart_series["has_data"]
-    owner_station_id = (
-        _get_provider_station_id(provider_name)
-        or str(base.get("station_code", "")).strip()
-        or str(base.get("idema", "")).strip()
+    El comportamiento es **idéntico** al de la versión anterior y la firma
+    se mantiene para que ningún caller cambie.
+    """
+    # ---- Construir contexto desde session_state ----
+    ctx = _PipelineContext(
+        provider_name=provider_name,
+        elevation_fallback=float(
+            st.session_state.get(elevation_fallback_key, 0) or 0
+        ),
+        provider_for_pressure=str(
+            st.session_state.get(CONNECTION_TYPE, provider_name) or provider_name
+        ),
+        sun_tz_name=str(
+            base.get("station_tz")
+            or st.session_state.get("provider_station_tz")
+            or st.session_state.get("browser_tz")
+            or ""
+        ).strip(),
+        max_data_age_minutes=MAX_DATA_AGE_MINUTES,
+        series_override=series_override,
+        series_7d=series_7d,
+        owner_station_id=str(
+            _get_provider_station_id(provider_name)
+            or base.get("station_code", "")
+            or base.get("idema", "")
+        ).strip(),
     )
-    if owner_station_id and (has_chart_data or len(chart_epochs) > 0):
-        _set_chart_series_owner(provider_name, owner_station_id)
 
-    # 8.5. ET0 acumulada desde serie — integra cada paso temporal igual que WU
-    if has_radiation and chart_solar_radiations:
-        et0, balance = _accumulate_et0_from_series(
-            chart_epochs=chart_epochs,
-            chart_temps=chart_temps,
-            chart_humidities=chart_humidities,
-            chart_solar_radiations=chart_solar_radiations,
-            chart_winds=chart_winds,
-            fallback_wind=base.get("wind", 2.0),
-            lat=base.get("lat", NaN),
-            elevation_m=z,
-            precip_total=base["precip_total"],
-        )
+    # ---- Ejecutar pipeline puro ----
+    result = _process_observation_pure(base, ctx)
 
-    # 9. Tendencia presión 3h desde serie (abs → MSL)
-    if has_chart_data and len(chart_epochs) == len(chart_pressures):
-        press_valid = [
-            (int(ep), float(p))
-            for ep, p in zip(chart_epochs, chart_pressures)
-            if not is_nan(float(p))
-        ]
-        if len(press_valid) >= 2:
-            press_valid.sort(key=lambda x: x[0])
-            ep_now, p_abs_now = press_valid[-1]
-            target_ep = ep_now - (3 * 3600)
-            ep_3h, p_abs_3h = min(press_valid, key=lambda x: abs(x[0] - target_ep))
-            msl_factor = math.exp(z / 8000.0)
-            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                p_now=p_abs_now * msl_factor,
-                epoch_now=ep_now,
-                p_3h_ago=p_abs_3h * msl_factor,
-                epoch_3h_ago=ep_3h,
-            )
+    # ---- Aplicar efectos secundarios ----
 
-    # 10. Trend hourly opcional (MeteoGalicia, NWS)
-    if series_7d is not None:
-        if isinstance(series_7d, dict) and series_7d.get("has_data"):
-            store_trend_hourly_series(st.session_state, series_7d)
-        else:
-            store_trend_hourly_series(st.session_state, chart_series)
-    else:
-        store_trend_hourly_series(st.session_state, None)
+    # 1) Provider metadata + lat/lon/elevation (con NaN/None skip ya hecho).
+    for key, value in result.session_updates.items():
+        st.session_state[key] = value
 
-    return ProcessedData(
-        z=z, p_abs=p_abs, p_msl=p_msl, p_abs_disp=p_abs_disp, p_msl_disp=p_msl_disp,
-        dp3=dp3, rate_h=rate_h, p_label=p_label, p_arrow=p_arrow,
-        inst_mm_h=inst_mm_h, r5_mm_h=r5_mm_h, r10_mm_h=r10_mm_h, inst_label=inst_label,
-        e_sat=e_sat, e=e_v, Td_calc=Td_calc, Tw=Tw, q=q_val, q_gkg=q_gkg,
-        theta=theta, Tv=Tv_val, Te=Te_val, rho=rho_val, rho_v_gm3=rho_v_gm3, lcl=lcl_val,
-        solar_rad=solar_rad, uv=uv, et0=et0, clarity=clarity, balance=balance,
-        has_radiation=has_radiation, has_chart_data=has_chart_data,
+    # 2) Warnings (datos antiguos, etc.).
+    for message in result.warnings:
+        st.warning(message)
+        logger.warning(message)
+
+    # 3) Historial de presión.
+    if result.pressure_push is not None:
+        init_pressure_history()
+        push_pressure(*result.pressure_push)
+
+    # 4) Persistir serie del chart (escribe chart_* en session_state).
+    store_series_state(st.session_state, "chart", result.chart_series)
+
+    # 5) Owner del chart.
+    if result.chart_series_owner is not None:
+        _set_chart_series_owner(*result.chart_series_owner)
+
+    # 6) Trend hourly: persistir serie y owner.
+    if result.trend_hourly_series is not None:
+        store_series_state(st.session_state, "trend_hourly", result.trend_hourly_series)
+    if result.trend_hourly_owner_action == "set" and result.trend_hourly_owner is not None:
+        _set_trend_hourly_series_owner(*result.trend_hourly_owner)
+    elif result.trend_hourly_owner_action == "clear":
+        _clear_trend_hourly_series_owner()
+
+    processed = result.processed
+
+    # ----------------------------------------------------------------
+    # F5.b-AEMET — Override opcional con backend /processed
+    # ----------------------------------------------------------------
+    # Cuando ``METEOLABX_USE_PROCESSED_API=1`` y el provider es AEMET,
+    # llamamos al endpoint procesado del backend y sobrescribimos las
+    # derivadas en ``ProcessedObservation``. El pipeline local que
+    # acabamos de ejecutar arriba se mantiene como red de seguridad:
+    # si el backend falla, los valores legacy ya están en ``processed``.
+    #
+    # Por qué override y no skip: el pipeline local ya hace efectos
+    # secundarios necesarios (session_state, chart series, pressure
+    # history, etc.). El cómputo termodinámico es microsegundos; lo
+    # importante es que los valores que termina mostrando la UI sean
+    # los del backend cuando está disponible (caché compartida,
+    # consistencia entre clientes). Si más adelante notamos overhead
+    # real, evolucionamos a skip como en F5.c para WU.
+    #
+    # Restringido a "observation" + AEMET porque:
+    # - Solo la pestaña Observación rinde estos valores.
+    # - Otros proveedores aún no tienen endpoint /processed.
+    if (
+        provider_name == "AEMET"
+        and active_tab == "observation"
+        and not st.session_state.get("demo_radiation", False)
+    ):
+        from utils.api_client import is_processed_endpoint_enabled
+        if is_processed_endpoint_enabled():
+            try:
+                from utils.api_client import fetch_aemet_current_processed_via_api
+                _proc_resp = fetch_aemet_current_processed_via_api(
+                    str(base.get("idema", "")).strip()
+                    or str(base.get("station_code", "")).strip()
+                    or ctx.owner_station_id,
+                    sun_tz_name=ctx.sun_tz_name,
+                    max_data_age_minutes=ctx.max_data_age_minutes,
+                )
+            except WuError as _exc:
+                logger.warning(
+                    "Backend AEMET /processed falló (%s); manteniendo cálculo local",
+                    _exc.kind,
+                )
+            else:
+                processed = _override_processed_with_backend(processed, _proc_resp, base)
+                for _w in _proc_resp.get("warnings", []):
+                    logger.info("Backend AEMET /processed warning: %s", _w)
+
+    return processed
+
+
+def _override_processed_with_backend(
+    legacy_processed: ProcessedData,
+    backend_response: dict,
+    base_dict: dict,
+) -> ProcessedData:
+    """
+    Construye un ``ProcessedObservation`` nuevo donde los floats vienen
+    del bloque ``derivatives`` del backend (si son numéricos válidos);
+    en caso contrario se mantiene el valor del cálculo legacy. Esto
+    evita que un NaN espurio del backend degrade un display que el
+    legacy sí pudo calcular.
+
+    Strings (``p_label``, ``p_arrow``, ``inst_label``, ``p_abs_disp``,
+    ``p_msl_disp``) se sustituyen tal cual cuando el backend los trae.
+
+    El ``base_dict`` se muta con ``Td``/``feels_like``/``heat_index`` del
+    backend (para coherencia con lo que se mostrará en cards directas
+    de ``base``).
+    """
+    deriv = backend_response.get("derivatives", {}) or {}
+    obs = backend_response.get("observation", {}) or {}
+
+    def _take_float(field_name: str, fallback: float) -> float:
+        value = deriv.get(field_name)
+        if value is None:
+            return fallback
+        try:
+            f = float(value)
+        except (TypeError, ValueError):
+            return fallback
+        return fallback if f != f else f  # NaN guard
+
+    def _take_str(field_name: str, fallback: str) -> str:
+        value = deriv.get(field_name)
+        return str(value) if value is not None else fallback
+
+    # base mutation: Td/feels_like/heat_index del backend si los trae.
+    for key in ("Td", "feels_like", "heat_index"):
+        value = obs.get(key)
+        if value is not None:
+            try:
+                base_dict[key] = float(value)
+            except (TypeError, ValueError):
+                pass
+
+    # ProcessedObservation es frozen → construimos uno nuevo por replace.
+    import dataclasses
+    return dataclasses.replace(
+        legacy_processed,
+        z=_take_float("z", legacy_processed.z),
+        p_abs=_take_float("p_abs", legacy_processed.p_abs),
+        p_msl=_take_float("p_msl", legacy_processed.p_msl),
+        p_abs_disp=_take_str("p_abs_disp", legacy_processed.p_abs_disp),
+        p_msl_disp=_take_str("p_msl_disp", legacy_processed.p_msl_disp),
+        dp3=_take_float("dp3", legacy_processed.dp3),
+        rate_h=_take_float("rate_h", legacy_processed.rate_h),
+        p_label=_take_str("p_label", legacy_processed.p_label),
+        p_arrow=_take_str("p_arrow", legacy_processed.p_arrow),
+        # Precip: mantenemos legacy (rain_rates_from_total es más preciso
+        # con historial fino de session_state que la serie del backend).
+        e_sat=_take_float("e_sat", legacy_processed.e_sat),
+        e=_take_float("e", legacy_processed.e),
+        Td_calc=_take_float("Td_calc", legacy_processed.Td_calc),
+        Tw=_take_float("Tw", legacy_processed.Tw),
+        q=_take_float("q", legacy_processed.q),
+        q_gkg=_take_float("q_gkg", legacy_processed.q_gkg),
+        theta=_take_float("theta", legacy_processed.theta),
+        Tv=_take_float("Tv", legacy_processed.Tv),
+        Te=_take_float("Te", legacy_processed.Te),
+        rho=_take_float("rho", legacy_processed.rho),
+        rho_v_gm3=_take_float("rho_v_gm3", legacy_processed.rho_v_gm3),
+        lcl=_take_float("lcl", legacy_processed.lcl),
+        solar_rad=_take_float("solar_rad", legacy_processed.solar_rad),
+        uv=_take_float("uv", legacy_processed.uv),
+        et0=_take_float("et0", legacy_processed.et0),
+        clarity=_take_float("clarity", legacy_processed.clarity),
+        balance=_take_float("balance", legacy_processed.balance),
+        has_radiation=bool(deriv.get("has_radiation", legacy_processed.has_radiation)),
     )
 
 
@@ -2137,10 +2294,15 @@ def _infer_series_step_minutes(times_like) -> int:
 # SIDEBAR Y TEMA
 # ============================================================
 
+_boot_mark("about to sync browser context")
 sync_browser_context_early()
+_boot_mark("sync_browser_context_early")
 hydrate_browser_context_live(get_browser_context)
+_boot_mark("hydrate_browser_context_live")
 theme_mode, dark = render_sidebar()
+_boot_mark("render_sidebar")
 active_tab = _sync_active_tab_state()
+_boot_mark("_sync_active_tab_state")
 unit_preferences = normalize_unit_preferences(st.session_state.get("unit_preferences"))
 temp_unit_pref = unit_preferences["temperature"]
 wind_unit_pref = unit_preferences["wind"]
@@ -2207,6 +2369,7 @@ def _cached_map_search_nearby_stations(
     lon: float,
     max_results: int,
     provider_ids: tuple[str, ...],
+    catalog_version: tuple[tuple[str, int], ...] = (),
 ):
     """Cache corto para que cambiar el tema no dispare de nuevo toda la búsqueda del mapa."""
     from providers import search_nearby_stations
@@ -2234,7 +2397,7 @@ expander_summary_bg = "rgba(255,255,255,0.85)" if not dark else "rgba(17,22,30,0
 sidebar_css_hash = hashlib.md5(f"sidebar-{theme_color_scheme}-{sidebar_bg}-{button_bg}-{button_border}".encode()).hexdigest()[:8]
 
 st.markdown(f"""
-<style data-sidebar-theme="{sidebar_css_hash}">
+<style data-sidebar-theme="{sidebar_css_hash}" data-mlbx-layout-hidden="sidebar-theme">
 /* Forzar tema de sidebar */
 [data-testid="stSidebar"] {{
     background-color: {sidebar_bg} !important;
@@ -2924,7 +3087,7 @@ components.html(f"""
 
 if not dark:
     css = html_clean("""
-    <style>
+    <style data-mlbx-layout-hidden="theme-vars">
       :root{
         --bg: #f4f6fb;
         --panel: rgba(255,255,255,0.85);
@@ -2942,7 +3105,7 @@ if not dark:
     """)
 else:
     css = html_clean("""
-    <style>
+    <style data-mlbx-layout-hidden="theme-vars">
       :root{
         --bg: #0f1115;
         --panel: rgba(22, 25, 31, 0.78);
@@ -2968,7 +3131,7 @@ main_button_border = "rgba(18, 18, 18, 0.22)" if not dark else "rgba(255, 255, 2
 main_hr_color = "rgba(18, 18, 18, 0.16)" if not dark else "rgba(255, 255, 255, 0.16)"
 
 st.markdown(f"""
-<style>
+<style data-mlbx-layout-hidden="global-theme">
 [data-testid="stDecoration"] {{
     display: none !important;
 }}
@@ -3420,9 +3583,25 @@ h1, h2, h3, h4, h5, h6 {{
 
 # CSS de componentes y responsive mobile
 st.markdown(html_clean("""
-<style>
+<style data-mlbx-layout-hidden="component-css">
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"][height="0px"],
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"].st-key-browser_context_sync,
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"].st-key-mlx_local_storage_bootstrap,
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(style[data-mlbx-layout-hidden]){
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  [data-testid="stMainBlockContainer"] {
+    padding-top: 8.5rem !important;
+  }
+
   .block-container { 
-    padding-top: 1.2rem; 
+    padding-top: 8.5rem;
     max-width: 1200px;
   }
 
@@ -3430,6 +3609,7 @@ st.markdown(html_clean("""
     display:flex; 
     align-items:center; 
     justify-content:space-between;
+    margin-top: 0;
     margin-bottom: 0.1rem;
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -3521,7 +3701,7 @@ st.markdown(html_clean("""
     .grid-4{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
     .block-container {
-      padding-top: 0.8rem;
+      padding-top: 0.35rem;
       padding-left: 0.55rem;
       padding-right: 0.55rem;
     }
@@ -4030,6 +4210,8 @@ def _provider_refresh_seconds() -> int:
         "METEOGALICIA": 600,  # MeteoGalicia ofrece estado y serie horaria reciente
         "NWS": 600,  # NWS suele actualizar en intervalo subhorario según estación
         "POEM": 300,  # POEM dispone de endpoints TR y series con mayor frecuencia
+        "METOFFICE": 3600,  # Land Observations devuelve una serie horaria de 48 h
+        "WEATHERLINK": 60,  # WeatherLink current conditions; límite por defecto holgado
         "WU": REFRESH_SECONDS,
     }
     return int(defaults.get(provider_id, REFRESH_SECONDS))
@@ -4061,12 +4243,16 @@ header_refresh_label = (
     else f"{header_refresh_seconds}s"
 )
 
+_boot_mark("before render_app_header")
 render_app_header(
     t=t,
     dark=dark,
     header_refresh_label=header_refresh_label,
     total_station_count=_total_catalog_stations(),
 )
+_boot_mark("render_app_header")
+render_favorites_bar(t=t, dark=dark)
+_boot_mark("render_favorites_bar")
 
 
 # ============================================================
@@ -4549,13 +4735,8 @@ if (connected or loading_in_progress) and not runtime_snapshot:
 
     else:
         # ========== DATOS DE WEATHER UNDERGROUND ==========
-        station_id = str(st.session_state.get(ACTIVE_STATION, "")).strip()
-        api_key = str(st.session_state.get(ACTIVE_KEY, "")).strip()
-
-        if not station_id:
-            station_id = str(st.session_state.get("wu_connected_station", "")).strip()
-        if not api_key:
-            api_key = str(st.session_state.get("wu_connected_api_key", "")).strip()
+        station_id = str(st.session_state.get("wu_connected_station", "") or st.session_state.get(ACTIVE_STATION, "")).strip()
+        api_key = str(st.session_state.get("wu_connected_api_key", "") or st.session_state.get(ACTIVE_KEY, "")).strip()
 
         # Verificar que tenemos los datos mínimos necesarios
         if not station_id or not api_key:
@@ -4585,13 +4766,25 @@ if (connected or loading_in_progress) and not runtime_snapshot:
             # Guardar latitud y longitud para cálculos de radiación
             st.session_state[STATION_LAT] = base.get("lat", float("nan"))
             st.session_state[STATION_LON] = base.get("lon", float("nan"))
+            st.session_state["wu_station_lat"] = base.get("lat", float("nan"))
+            st.session_state["wu_station_lon"] = base.get("lon", float("nan"))
+            st.session_state[PROVIDER_STATION_ID] = station_id
+            st.session_state[PROVIDER_STATION_NAME] = station_id
 
             # ========== ALTITUD ==========
             # Prioridad: 1) active_z del usuario, 2) elevation de API
             elevation_api = base.get("elevation", float("nan"))
 
             # Obtener elevation_user manejando string vacío
-            active_z_str = str(st.session_state.get(ACTIVE_Z, "0")).strip()
+            runtime_z_str = str(st.session_state.get("wu_connected_z", "")).strip()
+            visible_station_id = str(st.session_state.get(ACTIVE_STATION, "")).strip()
+            visible_z_str = str(st.session_state.get(ACTIVE_Z, "")).strip()
+            if runtime_z_str:
+                active_z_str = runtime_z_str
+            elif visible_station_id.upper() == station_id.upper():
+                active_z_str = visible_z_str
+            else:
+                active_z_str = ""
             try:
                 elevation_user = float(active_z_str) if active_z_str else 0.0
             except ValueError:
@@ -4611,107 +4804,229 @@ if (connected or loading_in_progress) and not runtime_snapshot:
                 logger.error("Sin dato de altitud (API ni usuario)")
 
             st.session_state[STATION_ELEVATION] = z
+            st.session_state["wu_station_alt"] = z
+            st.session_state[PROVIDER_STATION_ALT] = z
 
             now_ts = time.time()
 
-            # Advertir si los datos son muy antiguos
-            data_age_minutes = (now_ts - base["epoch"]) / 60
-            if data_age_minutes > MAX_DATA_AGE_MINUTES:
-                st.warning(f"⚠️ Datos con {data_age_minutes:.0f} minutos de antigüedad. La estación puede no estar reportando.")
-                logger.warning(f"Datos antiguos: {data_age_minutes:.1f} minutos")
-
-            # ========== LLUVIA ==========
+            # ========== LLUVIA (siempre desde sesión local) ==========
+            # ``rain_rates_from_total`` mantiene historial en session_state
+            # con resolución de minutos, más preciso que cualquier cálculo
+            # desde la serie /all/1day. Se ejecuta SIEMPRE, en ambos paths
+            # (backend o legacy), porque el backend no tiene este historial.
             inst_mm_h, r5_mm_h, r10_mm_h = rain_rates_from_total(base["precip_total"], base["epoch"])
             inst_label = rain_intensity_label(inst_mm_h)
 
-            # ========== PRESIÓN ==========
-            p_msl = float(base["p_hpa"])
-            p_abs = msl_to_absolute(p_msl, z, base["Tc"])
-            provider_for_pressure = st.session_state.get(CONNECTION_TYPE, "WU")
-            p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
-            p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
+            # ============================================================
+            # F5.c — Path principal: /processed del backend si disponible
+            # ============================================================
+            # Cuando el backend está activo y aplicable, llamamos a
+            # ``/v1/observations/current/processed`` y nos saltamos TODO
+            # el cálculo legacy (termodinámica, radiación, ET0, clarity,
+            # presión, tendencia 3h). El backend ya ha hecho ese trabajo
+            # con las mismas fórmulas (Magnus-Tetens, Steadman, Rothfusz,
+            # FAO-56) — duplicarlo localmente es desperdicio.
+            #
+            # Cuándo F5.c se activa:
+            # - ``METEOLABX_USE_PROCESSED_API=1`` (requiere USE_API=1)
+            # - Tab activo es ``observation`` (los demás no necesitan)
+            # - Calibración WU = identidad (los offsets per-user no
+            #   viajan al backend todavía; con calibración no-cero
+            #   delegamos al legacy que sí los aplica)
+            # - Modo demo desactivado (el demo sustituye solar/uv y el
+            #   backend ya calculó clarity con los originales)
+            # - El backend responde sin errores
+            #
+            # Fallback: si CUALQUIER condición falla, se ejecuta el
+            # bloque legacy más abajo y la app sigue funcionando con la
+            # misma calidad que en modo USE_API=0.
+            _used_backend_derivatives = False
 
-            init_pressure_history()
-            push_pressure(p_abs, base["epoch"])
-
-            dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
-                p_now=p_msl,
-                epoch_now=base["epoch"],
-                p_3h_ago=base.get("pressure_3h_ago"),
-                epoch_3h_ago=base.get("epoch_3h_ago")
+            _wu_calibration_is_identity = all(
+                abs(float(station_calibration.get(_k, 0.0) or 0.0)) < 1e-9
+                for _k in station_calibration
             )
 
-            # ========== TERMODINÁMICA ==========
-            # Todas las variables calculadas a partir de T, RH y p_abs
-            e_sat = e_s(base["Tc"])  # Presión de saturación
-            e = vapor_pressure(base["Tc"], base["RH"])  # Presión de vapor
-            Td_calc = dewpoint_from_vapor_pressure(e)  # Td calculado (para LCL)
-            q = specific_humidity(e, p_abs)  # Humedad específica
-            q_gkg = q * 1000  # g/kg
-            theta = potential_temperature(base["Tc"], p_abs)  # Temperatura potencial
-            Tv = virtual_temperature(base["Tc"], q)  # Temperatura virtual
-            Te = equivalent_temperature(base["Tc"], q)  # Temperatura equivalente
-            Tw = wet_bulb_celsius(base["Tc"], base["RH"], p_abs)  # Psicrométrica si hay p_abs
-            rho = air_density(p_abs, Tv)  # Densidad del aire
-            rho_v_gm3 = absolute_humidity(e, base["Tc"])  # Humedad absoluta
-            lcl = lcl_height(base["Tc"], Td_calc)  # Altura LCL
+            from utils.api_client import is_processed_endpoint_enabled
+            if (
+                is_processed_endpoint_enabled()
+                and active_tab == "observation"
+                and _wu_calibration_is_identity
+                and not st.session_state.get("demo_radiation", False)
+            ):
+                try:
+                    from utils.api_client import fetch_wu_current_processed_via_api
+                    _proc_resp = fetch_wu_current_processed_via_api(
+                        station_id,
+                        api_key,
+                        sun_tz_name=str(
+                            base.get("station_tz")
+                            or st.session_state.get("provider_station_tz")
+                            or st.session_state.get("browser_tz")
+                            or ""
+                        ).strip(),
+                    )
+                except WuError as _proc_exc:
+                    logger.warning(
+                        "Backend /processed falló (%s); usando cálculo local",
+                        _proc_exc.kind,
+                    )
+                else:
+                    _used_backend_derivatives = True
+                    _deriv = _proc_resp.get("derivatives", {}) or {}
+                    _obs_from_backend = _proc_resp.get("observation", {}) or {}
 
-            # Sensación térmica y Heat Index (calculados, nunca del API)
-            wind_fl = base.get("wind", 0.0)
-            if is_nan(wind_fl):
-                wind_fl = 0.0
-            wind_fl_ms = float(wind_fl) / 3.6
-            base["feels_like"] = apparent_temperature(base["Tc"], e, wind_fl_ms)
-            base["heat_index"] = heat_index_rothfusz(base["Tc"], base["RH"])
+                    def _take_float(_key, _fallback=float("nan")):
+                        _value = _deriv.get(_key)
+                        if _value is None:
+                            return _fallback
+                        try:
+                            _f = float(_value)
+                        except (TypeError, ValueError):
+                            return _fallback
+                        return _fallback if _f != _f else _f  # NaN guard
 
-            # ========== RADIACIÓN ==========
-            solar_rad = base.get("solar_radiation", float("nan"))
-            uv = base.get("uv", float("nan"))
-        
-            # MODO DEMO: Reemplazar con valores demo si está activado
-            if st.session_state.get("demo_radiation", False):
-                demo_solar = st.session_state.get("demo_solar")
-                demo_uv = st.session_state.get("demo_uv")
-                if demo_solar is not None:
-                    solar_rad = float(demo_solar)
-                if demo_uv is not None:
-                    uv = float(demo_uv)
+                    # Presión y tendencia 3h
+                    p_abs = _take_float("p_abs")
+                    p_msl = _take_float("p_msl")
+                    p_abs_disp = str(_deriv.get("p_abs_disp") or "—")
+                    p_msl_disp = str(_deriv.get("p_msl_disp") or "—")
+                    dp3 = _take_float("dp3")
+                    rate_h = _take_float("rate_h")
+                    p_label = str(_deriv.get("p_label") or "—")
+                    p_arrow = str(_deriv.get("p_arrow") or "•")
 
-            # Determinar si la estación tiene sensores de radiación
-            has_radiation = not is_nan(solar_rad) or not is_nan(uv)
+                    # Termodinámica completa
+                    e_sat = _take_float("e_sat")
+                    e = _take_float("e")
+                    Td_calc = _take_float("Td_calc")
+                    Tw = _take_float("Tw")
+                    q = _take_float("q")
+                    q_gkg = _take_float("q_gkg")
+                    theta = _take_float("theta")
+                    Tv = _take_float("Tv")
+                    Te = _take_float("Te")
+                    rho = _take_float("rho")
+                    rho_v_gm3 = _take_float("rho_v_gm3")
+                    lcl = _take_float("lcl")
 
-            if has_radiation:
-                # Obtener latitud, elevación y timestamp para FAO-56
-                lat = base.get("lat", float("nan"))
-                now_ts = time.time()
-            
-                # ET0 por FAO-56 Penman-Monteith
-                wind_speed = base.get("wind", 2.0)  # Velocidad viento (default 2 m/s si no hay)
-                if not is_nan(wind_speed) and wind_speed < 0.1:
-                    wind_speed = 0.1  # Mínimo para evitar división por cero
-            
-                from models.radiation import penman_monteith_et0
-                et0 = penman_monteith_et0(
-                    solar_rad, 
-                    base["Tc"], 
-                    base["RH"], 
-                    wind_speed, 
-                    lat, 
-                    z,  # elevación
-                    now_ts
+                    # Radiación + ET0 + balance
+                    solar_rad = _take_float("solar_rad")
+                    uv = _take_float("uv")
+                    et0 = _take_float("et0")
+                    clarity = _take_float("clarity")
+                    balance = _take_float("balance")
+                    has_radiation = bool(_deriv.get("has_radiation", False))
+
+                    # Observación mutada por el pipeline del backend.
+                    for _obs_key in ("Td", "feels_like", "heat_index"):
+                        _v = _obs_from_backend.get(_obs_key)
+                        if _v is not None:
+                            try:
+                                base[_obs_key] = float(_v)
+                            except (TypeError, ValueError):
+                                pass
+
+                    # Side effects que el backend no hace por nosotros:
+                    # historial de presión vive en session_state local.
+                    if not is_nan(p_abs):
+                        init_pressure_history()
+                        push_pressure(p_abs, base["epoch"])
+
+                    # Warnings del backend (datos antiguos, etc.) → UI.
+                    for _w in (_proc_resp.get("warnings") or []):
+                        st.warning(str(_w))
+
+            # ============================================================
+            # Path legacy: cálculo local completo
+            # ============================================================
+            # Se ejecuta SOLO cuando F5.c no se activó (backend off, demo,
+            # calibración no-identidad, tab distinto, o backend caído).
+            # Replica las mismas fórmulas que el pipeline del backend
+            # (paridad numérica confirmada en F5.b).
+            if not _used_backend_derivatives:
+                # Advertir si los datos son muy antiguos
+                data_age_minutes = (now_ts - base["epoch"]) / 60
+                if data_age_minutes > MAX_DATA_AGE_MINUTES:
+                    st.warning(f"⚠️ Datos con {data_age_minutes:.0f} minutos de antigüedad. La estación puede no estar reportando.")
+                    logger.warning(f"Datos antiguos: {data_age_minutes:.1f} minutos")
+
+                # ========== PRESIÓN ==========
+                p_msl = float(base["p_hpa"])
+                p_abs = msl_to_absolute(p_msl, z, base["Tc"])
+                provider_for_pressure = st.session_state.get(CONNECTION_TYPE, "WU")
+                p_abs_disp = _fmt_pressure_for_provider(p_abs, provider_for_pressure)
+                p_msl_disp = _fmt_pressure_for_provider(p_msl, provider_for_pressure)
+
+                init_pressure_history()
+                push_pressure(p_abs, base["epoch"])
+
+                dp3, rate_h, p_label, p_arrow = pressure_trend_3h(
+                    p_now=p_msl,
+                    epoch_now=base["epoch"],
+                    p_3h_ago=base.get("pressure_3h_ago"),
+                    epoch_3h_ago=base.get("epoch_3h_ago")
                 )
 
-                # Claridad del cielo con latitud y elevación (FAO-56)
-                # Usar epoch del dato (no time.time()) para que la referencia
-                # teórica coincida con el momento de la medición.
-                from models.radiation import sky_clarity_index
-                lon = base.get("lon", float("nan"))
-                clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon)
+                # ========== TERMODINÁMICA ==========
+                # Todas las variables calculadas a partir de T, RH y p_abs
+                e_sat = e_s(base["Tc"])  # Presión de saturación
+                e = vapor_pressure(base["Tc"], base["RH"])  # Presión de vapor
+                Td_calc = dewpoint_from_vapor_pressure(e)  # Td calculado (para LCL)
+                q = specific_humidity(e, p_abs)  # Humedad específica
+                q_gkg = q * 1000  # g/kg
+                theta = potential_temperature(base["Tc"], p_abs)  # Temperatura potencial
+                Tv = virtual_temperature(base["Tc"], q)  # Temperatura virtual
+                Te = equivalent_temperature(base["Tc"], q)  # Temperatura equivalente
+                Tw = wet_bulb_celsius(base["Tc"], base["RH"], p_abs)  # Psicrométrica si hay p_abs
+                rho = air_density(p_abs, Tv)  # Densidad del aire
+                rho_v_gm3 = absolute_humidity(e, base["Tc"])  # Humedad absoluta
+                lcl = lcl_height(base["Tc"], Td_calc)  # Altura LCL
 
-                # ET0 y balance mostrados en UI se recalculan como acumulado "hoy"
-                # usando la serie /all/1day tras cargar los puntos temporales.
-                et0 = float("nan")
-                balance = float("nan")
+                # Sensación térmica y Heat Index (calculados, nunca del API)
+                wind_fl = base.get("wind", 0.0)
+                if is_nan(wind_fl):
+                    wind_fl = 0.0
+                wind_fl_ms = float(wind_fl) / 3.6
+                base["feels_like"] = apparent_temperature(base["Tc"], e, wind_fl_ms)
+                base["heat_index"] = heat_index_rothfusz(base["Tc"], base["RH"])
+
+                # ========== RADIACIÓN ==========
+                solar_rad = base.get("solar_radiation", float("nan"))
+                uv = base.get("uv", float("nan"))
+
+                # MODO DEMO: Reemplazar con valores demo si está activado
+                if st.session_state.get("demo_radiation", False):
+                    demo_solar = st.session_state.get("demo_solar")
+                    demo_uv = st.session_state.get("demo_uv")
+                    if demo_solar is not None:
+                        solar_rad = float(demo_solar)
+                    if demo_uv is not None:
+                        uv = float(demo_uv)
+
+                # Determinar si la estación tiene sensores de radiación
+                has_radiation = not is_nan(solar_rad) or not is_nan(uv)
+
+                if has_radiation:
+                    # Obtener latitud, elevación y timestamp para FAO-56
+                    lat = base.get("lat", float("nan"))
+
+                    # Claridad del cielo con latitud y elevación (FAO-56)
+                    # Usar epoch del dato (no time.time()) para que la referencia
+                    # teórica coincida con el momento de la medición.
+                    from models.radiation import sky_clarity_index
+                    lon = base.get("lon", float("nan"))
+                    sun_tz_name = str(base.get("station_tz") or st.session_state.get("provider_station_tz") or st.session_state.get("browser_tz") or "").strip()
+                    clarity = sky_clarity_index(solar_rad, lat, z, base["epoch"], lon, tz_name=sun_tz_name)
+
+                    # ET0 y balance mostrados en UI se recalculan como acumulado "hoy"
+                    # usando la serie /all/1day tras cargar los puntos temporales.
+                    et0 = float("nan")
+                    balance = float("nan")
+                else:
+                    et0 = float("nan")
+                    clarity = float("nan")
+                    balance = float("nan")
 
 
             # ========== SERIES TEMPORALES PARA GRÁFICOS ==========
@@ -4781,9 +5096,15 @@ if (connected or loading_in_progress) and not runtime_snapshot:
                 prev_wu_sensor_station = str(st.session_state.get("wu_sensor_presence_station", "")).strip().upper()
                 st.session_state["wu_sensor_presence"] = wu_sensor_presence
                 st.session_state["wu_sensor_presence_station"] = station_id.upper()
-                if (
-                    active_tab == "observation"
-                    and (prev_wu_sensor_station != station_id.upper() or prev_wu_sensor_presence != wu_sensor_presence)
+                # Solo forzamos rerun cuando hay un cambio genuino (cambio de
+                # estación o cambio de sensores en la misma estación). En la
+                # primera detección (prev_wu_sensor_station vacío) no rerunemos:
+                # el sidebar se quedará sin la UI de calibración este ciclo,
+                # pero la mostrará en el siguiente autorefresh natural,
+                # ahorrando ~1 rerun (300-500ms en red) en la carga inicial.
+                if active_tab == "observation" and prev_wu_sensor_station and (
+                    prev_wu_sensor_station != station_id.upper()
+                    or prev_wu_sensor_presence != wu_sensor_presence
                 ):
                     st.rerun()
             
@@ -4833,19 +5154,14 @@ if (connected or loading_in_progress) and not runtime_snapshot:
             # cláusula except al salir del bloque, lo que eliminaría la variable
             # de módulo `e` (presión de vapor) y dispararía NameError al
             # construir el contexto del tab de observación.
+            had_connection_loading = isinstance(st.session_state.get(CONNECTION_LOADING), dict)
             _cancel_connection_loading()
-            if wu_error.kind == "unauthorized":
-                st.error("❌ API key inválida o sin permisos.")
-            elif wu_error.kind == "notfound":
-                st.error("❌ Station ID no encontrado.")
-            elif wu_error.kind == "ratelimit":
-                st.error("❌ Demasiadas peticiones. Aumenta el refresh.")
-            elif wu_error.kind == "timeout":
-                st.error("❌ Timeout consultando Weather Underground.")
-            elif wu_error.kind == "network":
-                st.error("❌ Error de red.")
-            else:
-                st.error("❌ Error consultando Weather Underground.")
+            error_key = _queue_wu_connection_error(wu_error.kind, wu_error.status_code)
+            if had_connection_loading:
+                st.rerun()
+            st.sidebar.error(t(error_key, status=str(wu_error.status_code or "")))
+            st.error(t(error_key, status=str(wu_error.status_code or "")))
+            st.stop()
         except Exception as err:
             _cancel_connection_loading()
             # Usar concatenación simple para evitar cualquier problema con format specifiers
@@ -4863,6 +5179,7 @@ if st.session_state.get(CONNECTION_LOADING) and _has_live_connection_payload(bas
     # tiempo aunque la respuesta venga de caché (evita el parpadeo que ocurría
     # en conexiones posteriores a la primera).
     clear_connection_loading_overlay(started_at=_loading_started_at)
+    st.rerun()
 
 if st.session_state.get("demo_radiation", False):
     demo_solar = _first_valid_float(st.session_state.get("demo_solar"), default=650.0)
@@ -4908,7 +5225,14 @@ if st.session_state.get("demo_radiation", False):
 
     from models.radiation import penman_monteith_et0, sky_clarity_index
 
-    clarity = sky_clarity_index(solar_rad, demo_lat, z, demo_epoch, demo_lon)
+    clarity = sky_clarity_index(
+        solar_rad,
+        demo_lat,
+        z,
+        demo_epoch,
+        demo_lon,
+        tz_name=str(st.session_state.get("browser_tz") or "").strip(),
+    )
 
     demo_epochs = demo_series["epochs"]
     demo_temps = demo_series["temps"]
@@ -5048,7 +5372,7 @@ import hashlib
 css_hash = hashlib.md5(f"{tabs_color}{dark}".encode()).hexdigest()[:8]
 
 st.markdown(f"""
-<style data-theme-hash="{css_hash}">
+<style data-theme-hash="{css_hash}" data-mlbx-layout-hidden="tabs-theme">
 /* Ocultar el círculo del radio */
 [data-testid="stMainBlockContainer"] div[role="radiogroup"] > label > div:first-child {{
     display: none;
@@ -5106,13 +5430,75 @@ active_tab = st.radio(
     label_visibility="collapsed"
 )
 
+
+def _weatherlink_station_label(station: dict) -> str:
+    name = str(station.get("station_name") or station.get("name") or "").strip()
+    station_id = str(station.get("station_id") or station.get("station_id_uuid") or "").strip()
+    city = str(station.get("city") or "").strip()
+    region = str(station.get("region") or "").strip()
+    locality = ", ".join(part for part in (city, region) if part)
+    label = name or station_id
+    if locality and locality not in label:
+        label = f"{label} · {locality}"
+    return label
+
+
+def _render_weatherlink_station_selector() -> None:
+    if str(st.session_state.get(CONNECTION_TYPE, "")).strip().upper() != "WEATHERLINK":
+        return
+    stations = st.session_state.get("weatherlink_stations", [])
+    if not isinstance(stations, list) or len(stations) <= 1:
+        return
+    station_options = [
+        str(station.get("station_id") or station.get("station_id_uuid") or "").strip()
+        for station in stations
+        if isinstance(station, dict) and str(station.get("station_id") or station.get("station_id_uuid") or "").strip()
+    ]
+    if len(station_options) <= 1:
+        return
+    current_station_id = str(st.session_state.get("weatherlink_station_id", "") or "").strip()
+    if current_station_id not in station_options:
+        current_station_id = station_options[0]
+    if st.session_state.get("weatherlink_station_selector") not in station_options:
+        st.session_state["weatherlink_station_selector"] = current_station_id
+
+    station_by_id = {
+        str(station.get("station_id") or station.get("station_id_uuid") or "").strip(): station
+        for station in stations
+        if isinstance(station, dict)
+    }
+    selected_station_id = st.selectbox(
+        t("weatherlink.station_selector.label"),
+        station_options,
+        format_func=lambda station_id: _weatherlink_station_label(station_by_id.get(station_id, {})),
+        key="weatherlink_station_selector",
+        width="stretch",
+    )
+    selected_station_id = str(selected_station_id or "").strip()
+    if selected_station_id and selected_station_id != current_station_id:
+        selected_station = station_by_id.get(selected_station_id, {})
+        if apply_weatherlink_station_state(
+            selected_station,
+            str(st.session_state.get("weatherlink_api_key", "") or ""),
+            str(st.session_state.get("weatherlink_api_secret", "") or ""),
+            str(st.session_state.get("weatherlink_station_alt", "") or ""),
+            stations,
+            connected=True,
+        ):
+            st.rerun()
+
+
+_render_weatherlink_station_selector()
+
 # ============================================================
 # CONSTRUCCIÓN DE UI (SIEMPRE SE MUESTRA, CON O SIN DATOS)
 # ============================================================
 
 # TAB 1: OBSERVACIÓN
+_boot_mark(f"before tab render (active_tab={active_tab})")
 if active_tab == "observation":
     _get_tab_module().render_observation_tab(_build_observation_tab_context())
+    _boot_mark("after render_observation_tab")
 
 # ============================================================
 # TAB 2: TENDENCIAS
@@ -5120,6 +5506,7 @@ if active_tab == "observation":
 
 elif active_tab == "trends":
     _get_tab_module().render_trends_tab(_build_trends_tab_context())
+    _boot_mark("after render_trends_tab")
 
 # ============================================================
 # TAB 3: HISTORICO
@@ -5127,6 +5514,7 @@ elif active_tab == "trends":
 
 elif active_tab == "historical":
     _get_tab_module().render_historical_tab(_build_historical_tab_context())
+    _boot_mark("after render_historical_tab")
 
 # ============================================================
 # TAB 4: MAPA
@@ -5134,6 +5522,7 @@ elif active_tab == "historical":
 
 elif active_tab == "map":
     _get_tab_module().render_map_tab(_build_map_tab_context())
+    _boot_mark("after render_map_tab")
 
 # ============================================================
 # AUTOREFRESH SOLO EN OBSERVACIÓN
@@ -5150,41 +5539,100 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
-footer_html = """
-        <style>
-        .mlb-footer{
-            margin-top: 1.25rem;
-            padding-top: 0.8rem;
-            border-top: 1px solid var(--line);
-            color: var(--muted);
-            font-size: 0.92rem;
-        }
-        .mlb-footer-top{
-            display: flex;
-            align-items: center;
-            gap: 0.65rem;
-            flex-wrap: wrap;
-        }
-        .mlb-footer-bottom{
-            margin-top: 0.52rem;
-            font-size: 0.86rem;
-            opacity: 0.92;
-        }
-        </style>
-        <div class="mlb-footer">
-          <div class="mlb-footer-top">
-            <span><b>MeteoLabX · %s</b></span>
-          </div>
-          <div class="mlb-footer-bottom">%s: WU · AEMET · Meteocat · Euskalmet · Frost · Meteo-France · MeteoGalicia · NWS · POEM · %s · © 2026</div>
-        </div>
-        """
-footer_html = footer_html % (
-    t("footer.version", version=APP_VERSION),
-    t("footer.sources"),
-    t("footer.unaffiliated"),
+
+@st.dialog(t("footer.whats_new"))
+def _render_whats_new_dialog():
+    """Cuadro de novedades de la versión (lee las listas desde locales).
+
+    Se renderiza como un único bloque HTML con listas compactas para evitar el
+    espaciado que Streamlit añade entre elementos markdown separados.
+    """
+    def _section(title: str, key: str) -> str:
+        items = "".join(f"<li>{item}</li>" for item in t_list(key))
+        return (
+            f"<div class='mlx-wn-title'>{title}</div>"
+            f"<ul class='mlx-wn-list'>{items}</ul>"
+        )
+
+    st.markdown(
+        "<style>"
+        ".mlx-wn-title{font-weight:700;font-size:1rem;margin:0.35rem 0 0.1rem;}"
+        ".mlx-wn-list{margin:0 0 0.3rem;padding-left:1.15rem;}"
+        ".mlx-wn-list li{margin:0.05rem 0;line-height:1.3;font-size:0.9rem;}"
+        "</style>"
+        + _section(t("footer.improvements_title"), "footer.improvements")
+        + _section(t("footer.fixes_title"), "footer.fixes"),
+        unsafe_allow_html=True,
+    )
+
+
+# Pie de página: línea superior con la versión (a la izquierda) y, justo al
+# lado, un enlace "Novedades" (azul subrayado, mismo tamaño) que abre el cuadro.
+# El botón se estiliza con el patrón de selector que ya funciona en el repo
+# (ver components/favorites.py): div[class*="st-key-..."] ... > button.
+st.markdown(
+    html_clean(
+        "<style>"
+        ".mlb-footsep{margin-top:1.25rem;padding-top:0.8rem;"
+        "border-top:1px solid var(--line);}"
+        ".mlb-version{color:var(--muted);font-size:0.92rem;font-weight:700;"
+        "white-space:nowrap;}"
+        # Columnas ajustadas al contenido para que queden pegadas a la izquierda.
+        "div[data-testid='stHorizontalBlock']:has([class*='st-key-footer_whats_new'])"
+        "{gap:0.55rem !important;align-items:baseline !important;flex-wrap:nowrap !important;}"
+        "div[data-testid='stHorizontalBlock']:has([class*='st-key-footer_whats_new'])>div"
+        "{flex:0 0 auto !important;width:auto !important;min-width:0 !important;}"
+        # Botón -> enlace: sin caja/anillo en NINGÚN estado (selector robusto que
+        # casa el <button> a cualquier profundidad bajo la clase de la key).
+        "[class*='st-key-footer_whats_new'] button,"
+        "[class*='st-key-footer_whats_new'] button:hover,"
+        "[class*='st-key-footer_whats_new'] button:focus,"
+        "[class*='st-key-footer_whats_new'] button:active,"
+        "[class*='st-key-footer_whats_new'] button:focus-visible{"
+        "border:0 !important;outline:0 !important;box-shadow:none !important;"
+        "background:transparent !important;background-color:transparent !important;"
+        "padding:0 !important;margin:0 !important;min-height:0 !important;"
+        "height:auto !important;line-height:1.2 !important;}"
+        "[class*='st-key-footer_whats_new']:focus-within{box-shadow:none !important;}"
+        # Texto del enlace: negrita, azul, subrayado, mismo tamaño que la versión.
+        "[class*='st-key-footer_whats_new'] button,"
+        "[class*='st-key-footer_whats_new'] button p,"
+        "[class*='st-key-footer_whats_new'] button div,"
+        "[class*='st-key-footer_whats_new'] button span{"
+        "color:#2384ff !important;text-decoration:underline !important;"
+        "font-weight:700 !important;font-size:0.92rem !important;margin:0 !important;}"
+        "[class*='st-key-footer_whats_new'] button:hover,"
+        "[class*='st-key-footer_whats_new'] button:hover p{color:#1366d6 !important;}"
+        ".mlb-footer-bottom{margin-top:0.4rem;font-size:0.86rem;"
+        "color:var(--muted);opacity:0.92;}"
+        "</style>"
+        "<div class='mlb-footsep'></div>"
+    ),
+    unsafe_allow_html=True,
 )
 
-st.markdown(html_clean(footer_html), unsafe_allow_html=True)
+_ver_col, _btn_col = st.columns([1, 4], gap="small", vertical_alignment="center")
+with _ver_col:
+    st.markdown(
+        f"<span class='mlb-version'>"
+        f"MeteoLabX · {t('footer.version', version=APP_VERSION)}</span>",
+        unsafe_allow_html=True,
+    )
+with _btn_col:
+    if st.button(t("footer.whats_new"), key="footer_whats_new"):
+        _render_whats_new_dialog()
+
+st.markdown(
+    html_clean(
+        "<div class='mlb-footer-bottom'>%s: WU · WeatherLink · AEMET · Meteocat · "
+        "Euskalmet · Frost · Meteo-France · MeteoGalicia · NWS · POEM · Met Office · "
+        "%s · © 2026</div>"
+        % (t("footer.sources"), t("footer.unaffiliated"))
+    ),
+    unsafe_allow_html=True,
+)
+
 flush_local_storage_writes("mlx_local_storage_app_flush")
+_boot_mark("END OF SCRIPT")

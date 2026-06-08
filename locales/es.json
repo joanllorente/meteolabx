@@ -6,6 +6,11 @@
     "info": "Divulgación",
     "map": "Mapa"
   },
+  "weatherlink": {
+    "station_selector": {
+      "label": "Estación WeatherLink"
+    }
+  },
   "common": {
     "information": "Información",
     "charts": "Gráficos",
@@ -33,18 +38,41 @@
     "longitude_short": "Lon",
     "connect_prompt": "Conecta tu estación desde el panel lateral o explora estaciones cercanas."
   },
+  "favorites": {
+    "title": "Favoritos",
+    "connect": "Conectar",
+    "save": "Guardar favorito",
+    "save_short": "Favorito",
+    "saved": "{station} añadida a favoritos.",
+    "save_error": "No se pudo guardar el favorito.",
+    "remove": "Eliminar de favoritos",
+    "remove_error": "No se pudo eliminar el favorito.",
+    "connect_error": "No se pudo conectar ese favorito."
+  },
   "footer": {
     "version": "Versión {version}",
+    "whats_new": "Novedades",
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
-    "improvements": {
-      "french_language": "Se incorpora el <b>idioma francés</b> a la interfaz.",
-      "performance": "Mejoras de <b>rendimiento</b> y <b>estabilidad</b> en toda la aplicación.",
-      "small_screens": "Mejor visualización y adaptación de la interfaz en <b>pantallas pequeñas</b>."
-    },
-    "fixes": {
-      "autoconnect_startup": "Se corrige un problema que impedía iniciar automáticamente con la estación guardada al tener activada la <b>conexión automática</b>."
-    },
+    "improvements": [
+      "Se añaden dos nuevos proveedores de datos: Met Office y MeteoHub Italia.",
+      "Se incorpora un sistema de favoritos para acceder rápidamente a cualquier estación.",
+      "Se añade un nuevo gráfico de precipitación.",
+      "Se incorpora compatibilidad con WeatherLink.",
+      "Se mejora la visualización de los gráficos semanales.",
+      "La tarjeta de Claridad del cielo ahora muestra los crepúsculos.",
+      "Se reduce el tiempo de carga inicial de la web.",
+      "Se añaden definiciones a los gráficos de la pestaña Tendencias."
+    ],
+    "fixes": [
+      "Se corrige un error que mostraba datos incorrectos en los mareógrafos de Puertos del Estado.",
+      "Se corrigen problemas de caché al cambiar entre estaciones.",
+      "Se corrige un error que impedía mostrar la serie sinóptica de la pestaña Tendencias, aunque el proveedor devolviera los datos.",
+      "Se corrige un error que impedía mostrar gráficos de tendencias de algunos proveedores.",
+      "Se corrige un error que impedía mostrar el orto y el ocaso en horario local.",
+      "Se corrige un error que mostraba máximos y mínimos incorrectos de temperatura y humedad en Meteocat.",
+      "Se corrige un error que impedía consultar el histórico del año actual en Weather Underground."
+    ],
     "sources": "Fuentes",
     "unaffiliated": "No afiliado"
   },
@@ -67,56 +95,73 @@
     },
     "connection": {
       "title": "Conectar estación",
+      "source": {
+        "label": "Fuente",
+        "options": {
+          "wu": "Weather Underground",
+          "weatherlink": "WeatherLink"
+        }
+      },
       "fields": {
         "station_id": "Station ID (WU)",
         "api_key": "API Key (WU)",
-        "altitude": "Altitud (m)"
+        "weatherlink_api_key": "API Key (WeatherLink)",
+        "weatherlink_api_secret": "API Secret (WeatherLink)",
+        "altitude": "Altitud (m)",
+        "weatherlink_favorite_name": "Nombre del favorito"
       },
       "placeholders": {
         "station_id": "Introducir ID",
         "api_key": "Pega aquí tu API key",
-        "altitude": "Opcional (se obtiene de API)"
+        "api_secret": "Pega aquí tu API secret",
+        "altitude": "Opcional (se obtiene de API)",
+        "weatherlink_favorite_name": "Ej. Mi estación"
       },
-      "caption": "Pulsa Guardar para recordar ID, API Key y altitud en este navegador.",
+      "caption": "Pulsa Guardar para recordar ID, API Key y altitud en este navegador y añadir a favoritos.",
       "loading_saved": "Cargando datos guardados del navegador...",
-      "api_key_help": "Estos datos pueden guardarse localmente en este navegador si usas Guardar. Si compartes dispositivo o perfil del navegador, otra persona podría reutilizarlos. Es más recomendable guardarlos con el gestor de contraseñas del dispositivo o del navegador."
+      "weatherlink_session_caption": "WeatherLink obtiene tus estaciones con la API Key y el API Secret. Si pulsas Guardar, se recordarán por separado de Weather Underground en este navegador.",
+      "api_key_help": "Estos datos pueden guardarse localmente en este navegador si usas Guardar. Si compartes dispositivo o perfil del navegador, otra persona podría reutilizarlos. Es más recomendable guardarlos con el gestor de contraseñas del dispositivo o del navegador.",
+      "api_secret_help": "WeatherLink exige enviar el API Secret como cabecera X-Api-Secret. Si lo guardas, queda almacenado localmente en este navegador.",
+      "weatherlink_favorite_name_help": "Si lo dejas vacío usamos el nombre que devuelve WeatherLink. Útil cuando la API solo expone un código numérico."
     },
     "autoconnect": {
       "label": "Conectar automáticamente al iniciar",
       "caption": "",
       "enabled": "Auto-conexión al iniciar activada (WU)",
+      "enabled_weatherlink": "Auto-conexión al iniciar activada (WeatherLink)",
       "disabled": "Auto-conexión al iniciar desactivada.",
-      "missing_credentials": "Para activar auto-conexión WU, completa Station ID y API Key."
+      "missing_credentials": "Para activar auto-conexión WU, completa Station ID y API Key.",
+      "missing_weatherlink_credentials": "Para activar auto-conexión WeatherLink, conecta o guarda una estación con API Key y API Secret."
     },
-        "calibration": {
-            "title": "Calibración de sensores",
-            "loading": "Cargando sensores de Weather Underground...",
-            "range_help": "Rango permitido: {min} a {max} {unit}",
-            "save": "Guardar calibración",
-            "saved": "Calibración guardada",
-            "unsaved": "Calibración pendiente de guardar.",
-            "fields": {
-                "barometer": "Barómetro (hPa)",
+    "calibration": {
+      "title": "Calibración de sensores",
+      "loading": "Cargando sensores de Weather Underground...",
+      "range_help": "Rango permitido: {min} a {max} {unit}",
+      "save": "Guardar calibración",
+      "saved": "Calibración guardada",
+      "unsaved": "Calibración pendiente de guardar.",
+      "fields": {
+        "barometer": "Barómetro (hPa)",
         "wind_vane": "Veleta (°)",
         "thermometer": "Termómetro (°C)",
         "hygrometer": "Higrómetro (%)",
         "anemometer": "Anemómetro (km/h)",
         "rain_gauge": "Pluviómetro (mm)",
-      "pyranometer": "Piranómetro (W/m²)"
-    }
-  },
-  "units": {
-    "title": "Unidades",
-    "fields": {
-      "temperature": "Temperatura",
-      "wind": "Viento",
-      "pressure": "Presión",
-      "precip": "Precipitación",
-      "radiation": "Radiación"
-    }
-  },
-  "buttons": {
-    "save": "Guardar",
+        "pyranometer": "Piranómetro (W/m²)"
+      }
+    },
+    "units": {
+      "title": "Unidades",
+      "fields": {
+        "temperature": "Temperatura",
+        "wind": "Viento",
+        "pressure": "Presión",
+        "precip": "Precipitación",
+        "radiation": "Radiación"
+      }
+    },
+    "buttons": {
+      "save": "Guardar",
       "forget": "Olvidar",
       "connect": "Conectar",
       "disconnect": "Desconectar",
@@ -126,6 +171,17 @@
       "saved_device": "Guardado en este dispositivo",
       "data_erased": "Datos borrados",
       "missing_station_or_key": "Falta Station ID o API key.",
+      "wu_credentials_rejected": "Credenciales incorrectas o caducadas",
+      "wu_station_not_found": "Weather Underground no encuentra esa Station ID. Revisa el identificador de la estación.",
+      "wu_rate_limited": "Weather Underground ha limitado las peticiones. Espera un poco antes de volver a conectar.",
+      "wu_timeout": "Weather Underground ha tardado demasiado en responder. Intenta de nuevo en unos minutos.",
+      "wu_network": "No se pudo contactar con Weather Underground. Revisa la conexión o inténtalo de nuevo.",
+      "wu_bad_response": "Weather Underground devolvió una respuesta no válida para esa estación.",
+      "wu_connection_error": "No se pudo conectar con Weather Underground{status}. Revisa las credenciales y la estación.",
+      "missing_weatherlink_credentials": "Falta API Key o API Secret de WeatherLink.",
+      "weatherlink_credentials_rejected": "WeatherLink ha rechazado la API Key o el API Secret. Usa las credenciales v2 generadas en WeatherLink.com > Account > Generate v2 Key; no sirven la clave de Weather Underground ni la contraseña de acceso.",
+      "weatherlink_stations_error": "No se pudo obtener la lista de estaciones de WeatherLink.",
+      "weatherlink_no_stations": "WeatherLink no devolvió estaciones para estas credenciales.",
       "altitude_out_of_range": "Altitud fuera de rango ({min} a {max}m)",
       "altitude_invalid": "Altitud inválida. Usa un número (ej: 12.5)"
     },
@@ -240,6 +296,15 @@
         "precip": "Precipitación (mm)"
       }
     },
+    "wind_rose": {
+      "heading": "Rosa de viento del periodo",
+      "title": "Rosa de viento del periodo (% por rumbo)",
+      "frequency": "Frecuencia",
+      "samples": "Muestras",
+      "calm": "Calma (<2.0 km/h)",
+      "dominant": "Dominante",
+      "unavailable": "Rosa de viento no disponible: no hay muestras válidas de dirección en este periodo (dirección válida: {valid_direction}, muestras en calma: {calm})."
+    },
     "table": {
       "headers": {
         "metric": "Métrica",
@@ -319,7 +384,16 @@
         },
         "dew_point": {
           "title": "Punto de rocío",
-          "wet_bulb": "Bulbo húmedo"
+          "wet_bulb": "Bulbo húmedo",
+          "wet_bulb_risk": {
+            "potential": "condiciones potencialmente peligrosas",
+            "critical": "Condiciones críticas",
+            "extreme": "condiciones extremas"
+          },
+          "wet_bulb_alert": {
+            "warning": "Evitar esfuerzos físicos y exposición prolongada.",
+            "extreme": "Valor próximo al límite fisiológico teórico de 35 °C. Una exposición sostenida puede ser peligrosa incluso en reposo y a la sombra."
+          }
         },
         "pressure": {
           "title": "Presión",
@@ -370,7 +444,11 @@
         "sky_clarity": {
           "title": "Claridad del cielo",
           "night": "Noche",
-          "sunrise_sunset": "Orto {sunrise} · Ocaso {sunset}"
+          "sunrise_sunset": "Orto {sunrise} · Ocaso {sunset}",
+          "twilight_civil": "Crepúsculo civil",
+          "twilight_nautical": "Crepúsculo náutico",
+          "twilight_astronomical": "Crepúsculo astronómico",
+          "night_closed": "Noche cerrada"
         },
         "sun_altitude": {
           "title": "Altura del Sol",
@@ -424,6 +502,9 @@
         "vapor_line": "e (Presión de vapor)",
         "vapor_saturation_line": "e_s (Presión de saturación)",
         "vapor_axis": "Presión de vapor (hPa)",
+        "precipitation_heading": "Precipitación hoy",
+        "precipitation_title": "Precipitación registrada hoy",
+        "precipitation_line": "Precipitación",
         "wind_heading": "Viento y Rachas Hoy",
         "wind_no_data_today": "No hay datos de viento en la ventana temporal mostrada (hoy).",
         "wind_no_mean": "Esta estación no está devolviendo viento medio (VV) útil; se muestran rachas y la rosa usa racha+dirección.",
@@ -436,7 +517,7 @@
         "wind_rose_title": "Rosa de viento (% por rumbo)",
         "wind_rose_frequency": "Frecuencia",
         "wind_rose_samples": "Muestras",
-        "wind_rose_calm": "Calma (<1.0 km/h)",
+        "wind_rose_calm": "Calma (<2.0 km/h)",
         "wind_rose_dominant": "Dominante",
         "irradiance_heading": "Irradiancia Solar",
         "irradiance_title": "Irradiancia medida vs teórica",
@@ -468,12 +549,19 @@
     "sources": {
       "aemet_today": "AEMET diezminutal (hoy + 3 h previas, derivadas a {minutes} min)",
       "meteocat_today": "Meteocat mesurades (hoy + 3 h previas, {minutes} min)",
+      "weatherlink_today": "WeatherLink histórico (hoy + 3 h previas, {minutes} min)",
       "local_today": "Serie local del proveedor ({minutes} min)",
       "aemet_synoptic": "AEMET horarios 7 días (muestreo 3 h)",
       "wu_synoptic": "WU hourly/7day",
+      "weatherlink_synoptic": "WeatherLink histórico Pro (7 días, muestreo 3 h)",
       "meteofrance_synoptic": "Meteo-France horaire (7 días, muestreo 3 h)",
       "meteocat_synoptic": "Meteocat mesurades (7 días)",
       "meteogalicia_synoptic": "MeteoGalicia horarios (máximo disponible ~72 h, muestreo 3 h)",
+      "poem_synoptic": "POEM serie reciente (máximo disponible del proveedor, muestreo 3 h)",
+      "metoffice_today": "Met Office Land Observations (48 h, derivadas a {minutes} min)",
+      "metoffice_synoptic": "Met Office Land Observations (48 h, muestreo 3 h)",
+      "meteohub_today": "MeteoHub Italia observaciones recientes ({minutes} min)",
+      "meteohub_synoptic": "MeteoHub Italia observaciones recientes (muestreo 3 h)",
       "euskalmet_synoptic": "Euskalmet (sin serie sinóptica semanal disponible)",
       "generic_synoptic": "{provider} (serie horaria genérica)",
       "sampling_suffix_3h": "{source} (muestreo 3 h)"
@@ -490,7 +578,9 @@
     "notes": {
       "provider_insufficient_data": "El proveedor no tiene suficientes datos.",
       "provider_coverage_title": "Cobertura del proveedor",
+      "synoptic_insufficient_coverage": "El proveedor no devuelve una serie suficientemente larga para calcular la tendencia sinóptica de una semana.",
       "meteogalicia_max_coverage": "La cobertura máxima del proveedor es de 72 horas.",
+      "metoffice_48h_coverage": "Met Office Land Observations proporciona hasta 48 horas recientes por estación.",
       "uv_insufficient": "La estación no tiene datos de viento y dirección suficientes para calcular componentes u/v en este momento.",
       "missing_sensors": "La estación no tiene {sensors} y por eso no se pueden calcular {calculations}."
     },
@@ -507,6 +597,11 @@
       "vapor_pressure": "tendencia de presión de vapor",
       "mixing_ratio": "tendencia de razón de mezcla",
       "pressure": "tendencia de presión"
+    },
+    "tooltips": {
+      "theta_e": "Magnitud que representa conjuntamente la temperatura, la humedad y la presión del aire. Se conserva aproximadamente durante ascensos y descensos adiabáticos húmedos, por lo que es útil para identificar cambios de masa de aire. Sus variaciones en superficie pueden deberse a calentamiento o enfriamiento radiativo, cambios en el contenido de humedad, mezcla vertical o advección.",
+      "mixing_ratio": "Razón de mezcla (r). Masa de vapor de agua por unidad de masa de aire seco. Sus variaciones permiten detectar cambios en el contenido de humedad del aire y pueden indicar la llegada de una masa de aire más seca o más húmeda. También pueden deberse a evaporación, precipitación o mezcla vertical.",
+      "uv": "Descomposición vectorial del viento en sus componentes zonal y meridional. La componente u (zonal) representa el movimiento en dirección oeste–este: los valores positivos indican viento procedente del oeste y los negativos, del este. La componente v (meridional) representa el movimiento en dirección sur–norte: los valores positivos indican viento procedente del sur y los negativos, del norte. Permite analizar por separado la intensidad de la advección zonal y meridional."
     },
     "charts": {
       "theta_e_title": "Tendencia de Temperatura Potencial Equivalente (θe)",

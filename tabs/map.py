@@ -10,9 +10,12 @@ from components.geolocation_state import (
 from providers.types import StationCandidate
 from utils.geo import haversine_distance
 from utils.helpers import coerce_str
+from utils.favorites import favorite_from_provider_station, upsert_favorite
+from utils.provider_state import display_provider_station_id
+from utils.storage import flush_local_storage_writes
 
 
-ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM"]
+ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT"]
 MAP_AUTOCONNECT_CHANGED_KEY = "_map_provider_autoconnect_toggle_changed"
 MAP_AUTOCONNECT_SYNC_RERUN_KEY = "_map_provider_autoconnect_sync_rerun"
 REGIONAL_CATALOG_SPECS = {
@@ -24,6 +27,8 @@ REGIONAL_CATALOG_SPECS = {
     "METEOFRANCE": {"lat": 46.6034, "lon": 1.8883, "max_results": 2600},
     "FROST": {"lat": 64.5000, "lon": 11.0000, "max_results": 4000},
     "NWS": {"lat": 39.8283, "lon": -98.5795, "max_results": 38000},
+    "METOFFICE": {"lat": 54.0000, "lon": -2.5000, "max_results": 260},
+    "METEOHUB_IT": {"lat": 42.5000, "lon": 12.5000, "max_results": 5000},
 }
 
 
@@ -97,12 +102,24 @@ def is_norway_map_center(lat: float, lon: float) -> bool:
     return 57.0 <= float(lat) <= 72.5 and 2.0 <= float(lon) <= 32.5
 
 
+def is_uk_map_center(lat: float, lon: float) -> bool:
+    return 49.0 <= float(lat) <= 61.5 and -9.8 <= float(lon) <= 2.8
+
+
+def is_italy_map_center(lat: float, lon: float) -> bool:
+    return 35.0 <= float(lat) <= 48.5 and 5.0 <= float(lon) <= 19.5
+
+
 def provider_is_near_center(provider_id: str, lat: float, lon: float) -> bool:
     pid = coerce_str(provider_id, upper=True)
     if pid == "NWS":
         return is_us_map_center(lat, lon)
     if pid == "FROST":
         return is_norway_map_center(lat, lon)
+    if pid == "METOFFICE":
+        return is_uk_map_center(lat, lon)
+    if pid == "METEOHUB_IT":
+        return is_italy_map_center(lat, lon)
     if pid == "METEOFRANCE":
         return is_iberia_map_center(lat, lon) or is_france_map_center(lat, lon)
     if pid in {"AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM"}:
@@ -130,14 +147,17 @@ PROVIDER_COLORS = {
     "METEOGALICIA": [255, 184, 64],
     "NWS": [178, 122, 255],
     "POEM": [14, 188, 212],
+    "METOFFICE": [36, 168, 142],
+    "METEOHUB_IT": [235, 112, 40],
 }
 
 
-def _map_cache_key(provider_id: str, lat: float, lon: float) -> tuple[str, float, float]:
+def _map_cache_key(provider_id: str, lat: float, lon: float, catalog_version=()) -> tuple[str, float, float, tuple]:
     return (
         coerce_str(provider_id, upper=True),
         round(float(lat), 4),
         round(float(lon), 4),
+        tuple(catalog_version or ()),
     )
 
 
@@ -157,10 +177,14 @@ def render_map_tab(ctx):
     disable_provider_autoconnect = ctx["disable_provider_autoconnect"]
     persist_provider_autoconnect_target = ctx["persist_provider_autoconnect_target"]
     _cached_map_search_nearby_stations = ctx["_cached_map_search_nearby_stations"]
+    _map_catalog_cache_version = ctx.get("_map_catalog_cache_version", lambda provider_ids: ())
     _pydeck_chart_stretch = ctx["_pydeck_chart_stretch"]
     import pydeck as pdk
 
     section_title(t("map.section_title"))
+    favorite_flash = st.session_state.pop("_map_favorite_flash", "")
+    if favorite_flash:
+        st.success(favorite_flash)
 
     def _map_default_coords():
         return default_search_coords(
@@ -222,7 +246,9 @@ def render_map_tab(ctx):
         if spec is None:
             return []
         cache_store = st.session_state.setdefault("map_regional_rows_cache", {})
-        cache_key = _map_cache_key(provider_id, search_lat, search_lon)
+        provider_ids = (provider_id,)
+        catalog_version = _map_catalog_cache_version(provider_ids)
+        cache_key = _map_cache_key(provider_id, search_lat, search_lon, catalog_version)
         cached_rows = cache_store.get(cache_key)
         if isinstance(cached_rows, list):
             return [dict(row) for row in cached_rows]
@@ -230,7 +256,8 @@ def render_map_tab(ctx):
             float(spec["lat"]),
             float(spec["lon"]),
             int(spec["max_results"]),
-            (provider_id,),
+            provider_ids,
+            catalog_version,
         )
         rows = [_candidate_to_map_row(candidate) for candidate in regional_candidates]
         rows.sort(key=lambda row: float(row["distance_km"]))
@@ -504,7 +531,9 @@ def render_map_tab(ctx):
 
             selected_name = str(selected_station.get("name", "Estación"))
             selected_provider = str(selected_station.get("provider", "Proveedor"))
+            selected_provider_id = str(selected_station.get("provider_id") or selected_provider)
             selected_station_id = str(selected_station.get("station_id", "—"))
+            selected_station_id_display = display_provider_station_id(selected_provider_id, selected_station_id)
             selected_locality = str(selected_station.get("locality", "—"))
             selected_alt = safe_float(selected_station.get("elevation_m"), default=None)
             selected_dist = safe_float(selected_station.get("distance_km"), default=None)
@@ -527,7 +556,7 @@ def render_map_tab(ctx):
                             {html.escape(selected_name)} · {html.escape(selected_provider)}
                         </div>
                         <div class="mlbx-map-meta">
-                            <span class="mlbx-map-meta-item">ID: {_meta_chip(selected_station_id)}</span>
+                            <span class="mlbx-map-meta-item">ID: {_meta_chip(selected_station_id_display)}</span>
                             <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.locality'))}: {_meta_chip(selected_locality)}</span>
                             <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.altitude').replace(' (m)', ''))}: {_meta_chip(selected_alt_txt)}</span>
                             <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.distance').replace(' (km)', ''))}: {_meta_chip(selected_dist_txt)}</span>
@@ -602,6 +631,16 @@ def render_map_tab(ctx):
                     else:
                         st.success(map_flash)
             with action_col:
+                favorite_key = f"map_favorite_btn_{selected_provider}_{selected_station_id}"
+                if str(selected_provider_id).strip().upper() != "WEATHERLINK":
+                    if st.button(t("favorites.save"), key=favorite_key, width="stretch"):
+                        favorite = favorite_from_provider_station(selected_station)
+                        if favorite and upsert_favorite(favorite):
+                            flush_local_storage_writes(f"mlx_favorite_map_{selected_provider}")
+                            st.session_state["_map_favorite_flash"] = t("favorites.saved", station=selected_name)
+                            st.rerun()
+                        else:
+                            st.error(t("favorites.save_error"))
                 connect_key = f"map_connect_btn_{selected_provider}_{selected_station_id}"
                 if st.button(t("sidebar.buttons.connect"), key=connect_key, type="primary", width="stretch"):
                     if _connect_station_from_map(selected_station):

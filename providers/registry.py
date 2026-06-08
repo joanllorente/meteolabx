@@ -10,6 +10,8 @@ from .frost_provider import FrostProvider
 from .meteocat_provider import MeteocatProvider
 from .meteofrance_provider import MeteofranceProvider
 from .meteogalicia_provider import MeteogaliciaProvider
+from .meteohub_provider import MeteoHubProvider
+from .metoffice_provider import MetOfficeProvider
 from .nws_provider import NwsProvider
 from .poem_provider import PoemProvider
 from .types import StationCandidate
@@ -31,7 +33,8 @@ def _per_provider_result_budget(max_results: int, provider_count: int) -> int:
 def get_providers() -> Dict[str, object]:
     """
     Devuelve proveedores habilitados.
-    Nota: incluye AEMET, Meteocat, Euskalmet, Frost, Meteo-France, MeteoGalicia, NWS y POEM.
+    Nota: incluye AEMET, Meteocat, Euskalmet, Frost, Meteo-France,
+    MeteoGalicia, NWS, POEM, Met Office y MeteoHub Italia.
     """
     providers = [
         AemetProvider(),
@@ -42,6 +45,8 @@ def get_providers() -> Dict[str, object]:
         MeteogaliciaProvider(),
         NwsProvider(),
         PoemProvider(),
+        MetOfficeProvider(),
+        MeteoHubProvider(),
     ]
     return {p.provider_id: p for p in providers}
 

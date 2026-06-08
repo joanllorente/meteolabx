@@ -768,7 +768,7 @@ def _pressure_3h_reference(epochs: List[int], pressures_abs: List[float]) -> Tup
 def _empty_frost_climo_df() -> pd.DataFrame:
     cols = [
         "date", "epoch", "temp_mean", "temp_max", "temp_min",
-        "wind_mean", "gust_max", "precip_total",
+        "wind_mean", "wind_dir_mean", "gust_max", "precip_total",
         "solar_hours", "rain_days", "period_label",
     ]
     return pd.DataFrame(columns=cols)
@@ -848,6 +848,7 @@ def fetch_frost_climo_monthly_for_period(
             "temp_max": float("nan"),
             "temp_min": float("nan"),
             "wind_mean": float("nan"),
+            "wind_dir_mean": float("nan"),
             "gust_max": float("nan"),
             "precip_total": float("nan"),
             "solar_hours": float("nan"),
@@ -911,6 +912,7 @@ def fetch_frost_climo_yearly_for_periods(
             "temp_max": float("nan"),
             "temp_min": float("nan"),
             "wind_mean": float("nan"),
+            "wind_dir_mean": float("nan"),
             "gust_max": float("nan"),
             "precip_total": float("nan"),
             "solar_hours": float("nan"),

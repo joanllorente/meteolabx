@@ -44,6 +44,7 @@ _CLIMO_DAILY_COLS = [
     "temp_max",
     "temp_min",
     "wind_mean",
+    "wind_dir_mean",
     "gust_max",
     "precip_total",
 ]
@@ -489,7 +490,7 @@ def _normalize_climo_rows(rows: List[Dict[str, Any]]) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = float("nan") if not col.endswith("_date") else None
     numeric_cols = [
-        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "gust_max", "precip_total",
+        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total",
         "solar_mean", "solar_hours", "precip_max_24h", "rain_days", "temp_abs_max",
         "temp_abs_min", "tropical_nights", "frost_nights",
     ]

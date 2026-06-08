@@ -71,11 +71,34 @@ def _poem_locality(meta: dict[str, Any]) -> str:
     return str(meta.get("tipo", "")).strip()
 
 
+def _metoffice_locality(meta: dict[str, Any]) -> str:
+    country = str(meta.get("country", "")).strip()
+    region = str(meta.get("region", "")).strip()
+    if region and region.lower() != "none":
+        return f"{country} · {region}" if country else region
+    return country
+
+
+def _meteohub_locality(meta: dict[str, Any]) -> str:
+    network = str(meta.get("network_name") or meta.get("network") or "").strip()
+    attribution = str(meta.get("attribution") or "").strip()
+    if network and attribution and attribution not in network:
+        return f"{network} · {attribution}"
+    return network or attribution
+
+
 PROVIDER_SPECS: dict[str, dict[str, Any]] = {
     "WU": {
         "label": "WU",
-        "station_id_keys": ("active_station", "wu_connected_station"),
-        "api_key_keys": ("active_key", "wu_connected_api_key"),
+        "station_id_keys": ("wu_connected_station", "active_station"),
+        "api_key_keys": ("wu_connected_api_key", "active_key"),
+        "station_id_upper": False,
+    },
+    "WEATHERLINK": {
+        "label": "WeatherLink",
+        "session_prefix": "weatherlink",
+        "station_id_keys": ("weatherlink_station_id", "provider_station_id"),
+        "api_key_keys": ("weatherlink_api_key",),
         "station_id_upper": False,
     },
     "AEMET": {
@@ -134,6 +157,22 @@ PROVIDER_SPECS: dict[str, dict[str, Any]] = {
         "station_id_upper": False,
         "locality_resolver": _poem_locality,
     },
+    "METOFFICE": {
+        "label": "Met Office",
+        "session_prefix": "metoffice",
+        "station_id_keys": ("metoffice_station_id", "provider_station_id"),
+        "station_id_upper": False,
+        "default_tz": "Europe/London",
+        "locality_resolver": _metoffice_locality,
+    },
+    "METEOHUB_IT": {
+        "label": "MeteoHub IT",
+        "session_prefix": "meteohub_it",
+        "station_id_keys": ("meteohub_it_station_id", "meteohub_station_id", "provider_station_id"),
+        "station_id_upper": False,
+        "default_tz": "Europe/Rome",
+        "locality_resolver": _meteohub_locality,
+    },
 }
 
 PROVIDER_RUNTIME_PREFIXES = (
@@ -146,6 +185,9 @@ PROVIDER_RUNTIME_PREFIXES = (
     "meteogalicia_",
     "nws_",
     "poem_",
+    "metoffice_",
+    "meteohub_",
+    "weatherlink_",
 )
 
 PROVIDER_AUTOCONNECT_WIDGET_PREFIXES = (
@@ -181,6 +223,20 @@ WU_CACHE_KEYS = (
     "chart_series",
     "chart_series_provider_id",
     "chart_series_station_id",
+    "trend_hourly_series_provider_id",
+    "trend_hourly_series_station_id",
+    "trend_hourly_epochs",
+    "trend_hourly_temps",
+    "trend_hourly_humidities",
+    "trend_hourly_dewpts",
+    "trend_hourly_pressures",
+    "trend_hourly_uv_indexes",
+    "trend_hourly_solar_radiations",
+    "trend_hourly_winds",
+    "trend_hourly_gusts",
+    "trend_hourly_wind_dirs",
+    "trend_hourly_precips",
+    "has_trend_hourly_data",
     "chart_series_t",
     "chart_et0",
     "chart_balance",
@@ -212,6 +268,16 @@ WIDGET_BOUND_CONNECTION_KEYS = {
     ACTIVE_STATION,
     ACTIVE_KEY,
     ACTIVE_Z,
+    "wu_input_station",
+    "wu_input_api_key",
+    "wu_input_altitude",
+    "weatherlink_input_api_key",
+    "weatherlink_input_api_secret",
+    "weatherlink_input_altitude",
+    "weatherlink_station_selector",
+    "connection_source_selector",
+    "auto_connect_wu_device",
+    "auto_connect_weatherlink_device",
 }
 
 PROVIDER_ERROR_KEYS = {
@@ -220,6 +286,9 @@ PROVIDER_ERROR_KEYS = {
     "FROST": "frost_last_error",
     "METEOFRANCE": "meteofrance_last_error",
     "POEM": "poem_last_error",
+    "METOFFICE": "metoffice_last_error",
+    "METEOHUB_IT": "meteohub_last_error",
+    "WEATHERLINK": "weatherlink_last_error",
 }
 
 
@@ -297,12 +366,14 @@ def clear_provider_runtime_cache(provider_id: str) -> None:
 def _capture_connection_state() -> dict[str, Any]:
     snapshot: dict[str, Any] = {}
     for key in CONNECTION_SNAPSHOT_BASE_KEYS:
-        if key in st.session_state:
+        if key in st.session_state and key not in WIDGET_BOUND_CONNECTION_KEYS:
             snapshot[key] = st.session_state.get(key)
     for key in WU_RUNTIME_KEYS:
-        if key in st.session_state:
+        if key in st.session_state and key not in WIDGET_BOUND_CONNECTION_KEYS:
             snapshot[key] = st.session_state.get(key)
     for state_key in list(st.session_state.keys()):
+        if state_key in WIDGET_BOUND_CONNECTION_KEYS:
+            continue
         if state_key.startswith(PROVIDER_RUNTIME_PREFIXES):
             snapshot[state_key] = st.session_state.get(state_key)
     return snapshot
@@ -353,6 +424,8 @@ def set_connection_loading(
 
 def _clear_prefixed_session_keys(prefixes: tuple[str, ...]) -> None:
     for state_key in list(st.session_state.keys()):
+        if state_key in WIDGET_BOUND_CONNECTION_KEYS:
+            continue
         if state_key.startswith(prefixes):
             del st.session_state[state_key]
 
@@ -428,9 +501,69 @@ def apply_wu_station_state(
     st.session_state["wu_connected_station"] = station_id
     st.session_state["wu_connected_api_key"] = api_key
     st.session_state["wu_connected_z"] = altitude_text
+    st.session_state["_wu_runtime_sync_visible_inputs"] = True
     st.session_state[CONNECTED] = bool(connected)
     if connected:
         set_connection_loading("WU", station_id, station_id, previous_state=previous_state)
+    return True
+
+
+def apply_weatherlink_station_state(
+    station: dict[str, Any],
+    api_key: str,
+    api_secret: str,
+    altitude_text: str = "",
+    stations: list[dict[str, Any]] | None = None,
+    *,
+    connected: bool = True,
+) -> bool:
+    """
+    Sincroniza en session_state una conexión explícita de WeatherLink.
+    """
+    station = dict(station or {})
+    station_id = str(station.get("station_id") or station.get("station_id_uuid") or "").strip()
+    station_name = str(station.get("station_name") or station.get("name") or station_id).strip() or station_id
+    api_key = str(api_key or "").strip()
+    api_secret = str(api_secret or "").strip()
+    altitude_text = str(altitude_text or "").strip()
+    if not station_id or not api_key or not api_secret:
+        return False
+
+    previous_state = _capture_connection_state() if connected else None
+    _clear_prefixed_session_keys(PROVIDER_RUNTIME_PREFIXES)
+
+    prev_provider = str(st.session_state.get(CONNECTION_TYPE, "") or "").strip().upper()
+    prev_station = str(st.session_state.get(PROVIDER_STATION_ID, "") or "").strip()
+    if prev_provider != "WEATHERLINK" or (prev_station and prev_station != station_id):
+        for cache_key in WU_CACHE_KEYS:
+            st.session_state.pop(cache_key, None)
+
+    lat = station.get("latitude", station.get("lat"))
+    lon = station.get("longitude", station.get("lon"))
+    elevation_m = altitude_text if str(altitude_text).strip() else station.get("elevation", 0)
+    station_tz = str(station.get("time_zone") or station.get("tz") or "").strip()
+
+    st.session_state[CONNECTION_TYPE] = "WEATHERLINK"
+    st.session_state[PROVIDER_STATION_ID] = station_id
+    st.session_state[PROVIDER_STATION_NAME] = station_name
+    st.session_state[PROVIDER_STATION_LAT] = lat
+    st.session_state[PROVIDER_STATION_LON] = lon
+    st.session_state[PROVIDER_STATION_ALT] = elevation_m
+    st.session_state[PROVIDER_STATION_TZ] = station_tz
+
+    st.session_state["weatherlink_station_id"] = station_id
+    st.session_state["weatherlink_station_name"] = station_name
+    st.session_state["weatherlink_station_lat"] = lat
+    st.session_state["weatherlink_station_lon"] = lon
+    st.session_state["weatherlink_station_alt"] = elevation_m
+    st.session_state["weatherlink_station_tz"] = station_tz
+    st.session_state["weatherlink_api_key"] = api_key
+    st.session_state["weatherlink_api_secret"] = api_secret
+    st.session_state["weatherlink_stations"] = list(stations or st.session_state.get("weatherlink_stations", []) or [])
+    st.session_state["weatherlink_selected_station_id"] = station_id
+    st.session_state[CONNECTED] = bool(connected)
+    if connected:
+        set_connection_loading("WEATHERLINK", station_id, station_name, previous_state=previous_state)
     return True
 
 
@@ -634,6 +767,22 @@ def get_provider_runtime_error(provider_id: str, state: Any = None) -> str:
     return str(state.get(error_key, "")).strip() if error_key else ""
 
 
+def display_provider_station_id(provider_id: str, station_id: Any) -> str:
+    """
+    Devuelve un identificador corto para UI sin cambiar el id interno.
+
+    MeteoHub IT no expone siempre un station_id único en el inventario público,
+    así que internamente usamos ``red|lat|lon|slug``. En pantalla basta con la
+    red; lat/lon ya se muestran aparte.
+    """
+    provider = coerce_str(provider_id, upper=True)
+    raw = str(station_id or "").strip()
+    if provider == "METEOHUB_IT" and "|" in raw:
+        network = raw.split("|", 1)[0].strip()
+        return network or raw
+    return raw
+
+
 def build_connection_snapshot(state: Any = None) -> ConnectionSnapshot | None:
     state = resolve_state(state)
     provider_id = current_connection_type(state)
@@ -641,8 +790,8 @@ def build_connection_snapshot(state: Any = None) -> ConnectionSnapshot | None:
         return None
 
     if provider_id == "WU":
-        station_name = state.get(PROVIDER_STATION_NAME) or state.get(ACTIVE_STATION) or "Estación WU"
-        station_id = state.get(PROVIDER_STATION_ID) or state.get(ACTIVE_STATION) or "—"
+        station_id = state.get("wu_connected_station") or state.get(PROVIDER_STATION_ID) or state.get(ACTIVE_STATION) or "—"
+        station_name = state.get(PROVIDER_STATION_NAME) or station_id or "Estación WU"
     elif provider_id == "AEMET":
         station_name = state.get("aemet_station_name") or state.get(PROVIDER_STATION_NAME) or "Estación AEMET"
         station_id = state.get("aemet_station_id") or state.get(PROVIDER_STATION_ID) or "—"
@@ -656,7 +805,7 @@ def build_connection_snapshot(state: Any = None) -> ConnectionSnapshot | None:
     return ConnectionSnapshot(
         provider_id=provider_id,
         station_name=str(station_name),
-        station_id=str(station_id),
+        station_id=display_provider_station_id(provider_id, station_id),
         lat=lat,
         lon=lon,
         elevation_m=alt,

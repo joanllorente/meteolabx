@@ -1,5 +1,7 @@
 import math
+import time
 from datetime import datetime, timedelta
+from html import escape
 
 import streamlit as st
 
@@ -19,10 +21,58 @@ def _prepare_today_dataset_from_series(*args, **kwargs):
     return prepare_today_dataset_from_series(*args, **kwargs)
 
 
-def _load_synoptic_trends_source(*, provider_id, hourly7d, infer_series_step_minutes, render_neutral_info_note, t, logger, is_nan, e_s, station_elevation):
+def _local_naive_datetime_from_epoch(epoch: float, tz_name: str = "") -> datetime:
+    tz_text = str(tz_name or "").strip()
+    if tz_text:
+        try:
+            from zoneinfo import ZoneInfo
+
+            return datetime.fromtimestamp(float(epoch), tz=ZoneInfo(tz_text)).replace(tzinfo=None)
+        except Exception:
+            pass
+    return datetime.fromtimestamp(float(epoch))
+
+
+def _prepare_wind_uv_frame(epochs, winds, dirs, *, grid_step_minutes: int, tz_name: str, is_nan):
+    import pandas as pd
+
+    uv_times = []
+    u_vals = []
+    v_vals = []
+    for i, epoch in enumerate(list(epochs or [])):
+        if i >= len(winds or []) or i >= len(dirs or []):
+            continue
+        speed = winds[i]
+        direction_deg = dirs[i]
+        if is_nan(speed) or is_nan(direction_deg):
+            continue
+
+        theta = math.radians(float(direction_deg))
+        speed = float(speed)
+        # Convención meteorológica: u = -V sin(theta), v = -V cos(theta)
+        uv_times.append(_local_naive_datetime_from_epoch(epoch, tz_name))
+        u_vals.append(-speed * math.sin(theta))
+        v_vals.append(-speed * math.cos(theta))
+
+    if len(uv_times) < 3:
+        return pd.DataFrame(columns=["dt", "u", "v"])
+
+    step_min = max(5, int(grid_step_minutes or 5))
+    df_uv = pd.DataFrame({"dt": uv_times, "u": u_vals, "v": v_vals}).sort_values("dt")
+    df_uv["dt"] = pd.to_datetime(df_uv["dt"]).dt.floor(f"{step_min}min")
+    return df_uv.groupby("dt", as_index=False).last()
+
+
+def _load_synoptic_trends_source(*, provider_id, hourly7d, infer_series_step_minutes, render_neutral_info_note, t, logger, is_nan, e_s, station_elevation, tz_name=""):
     provider_feature = get_provider_feature(provider_id)
-    coverage_note_key = str(provider_feature.get("synoptic_coverage_note_key", "")).strip()
+    coverage_note_key = str(
+        provider_feature.get("synoptic_coverage_note_key", "trends.notes.synoptic_insufficient_coverage")
+    ).strip()
     translated_note = t(coverage_note_key) if coverage_note_key else ""
+    try:
+        min_coverage_hours = float(provider_feature.get("synoptic_min_coverage_hours", 6.0 * 24.0))
+    except (TypeError, ValueError):
+        min_coverage_hours = 6.0 * 24.0
     return load_synoptic_trends_source(
         provider_id=provider_id,
         hourly7d=hourly7d,
@@ -30,10 +80,12 @@ def _load_synoptic_trends_source(*, provider_id, hourly7d, infer_series_step_min
         render_neutral_info_note=render_neutral_info_note,
         coverage_note_key=translated_note,
         coverage_title=t("trends.notes.provider_coverage_title"),
+        min_coverage_hours=min_coverage_hours,
         logger=logger,
         is_nan=is_nan,
         e_s=e_s,
         station_elevation=station_elevation,
+        tz_name=tz_name,
     )
 
 
@@ -45,12 +97,18 @@ def _load_today_trends_source(
     get_provider_station_id,
     get_aemet_service,
     get_meteocat_service,
+    get_weatherlink_service,
     t,
     logger,
     session_state,
+    now_epoch=None,
+    tz_name="",
 ):
+    provider_id = coerce_str(provider_id, upper=True)
+    provider_feature = get_provider_feature(provider_id)
     local_chart_series = series_from_state(session_state, "chart", pressure_key="pressures_abs")
     local_prepared = None
+    local_prepared_is_fresh = False
     local_epochs = list(local_chart_series.get("epochs", []) or [])
     if local_epochs:
         local_prepared = _prepare_today_dataset_from_series(
@@ -64,23 +122,26 @@ def _load_today_trends_source(
             now_local=now_local,
             infer_series_step_minutes=infer_series_step_minutes,
             min_source_step=5,
+            tz_name=tz_name,
         )
         if local_prepared is not None:
             try:
                 latest_epoch = max(int(ep) for ep in local_epochs if ep is not None)
             except Exception:
                 latest_epoch = 0
-            latest_age_minutes = ((now_local.timestamp() - latest_epoch) / 60.0) if latest_epoch > 0 else 1e9
+            reference_epoch = float(now_epoch) if now_epoch is not None else time.time()
+            latest_age_minutes = ((reference_epoch - latest_epoch) / 60.0) if latest_epoch > 0 else 1e9
             if latest_age_minutes <= 25.0:
+                local_prepared_is_fresh = True
                 local_prepared["uv_series_override"] = None
+                source_key = str(provider_feature.get("today_trends_source_key", "")).strip() or "trends.sources.local_today"
                 local_prepared["data_source_label"] = t(
-                    "trends.sources.local_today",
+                    source_key,
                     minutes=local_prepared["interval_theta_e"],
                 )
-                return local_prepared
+                if provider_id != "WEATHERLINK":
+                    return local_prepared
 
-    provider_id = coerce_str(provider_id, upper=True)
-    provider_feature = get_provider_feature(provider_id)
     provider_today_sources = {
         "AEMET": {
             "station_missing_log": "Tendencias AEMET Hoy: falta idema",
@@ -104,31 +165,43 @@ def _load_today_trends_source(
             "empty_log": "Tendencias METEOCAT Hoy: sin serie con lookback",
             "frame_empty_log": "Tendencias METEOCAT Hoy: DataFrame vacío",
         },
+        "WEATHERLINK": {
+            "station_missing_log": "Tendencias WeatherLink Hoy: falta station_id",
+            "fetcher": lambda station_id: get_weatherlink_service().fetch_weatherlink_today_series_with_lookback(
+                station_id,
+                hours_before_start=3,
+            ),
+            "pressure_key": "pressures_abs",
+            "min_source_step": 5,
+            "empty_log": "Tendencias WeatherLink Hoy: sin histórico con lookback",
+            "frame_empty_log": "Tendencias WeatherLink Hoy: DataFrame vacío",
+        },
     }
     source_config = provider_today_sources.get(provider_id)
     if source_config is not None:
         station_id = get_provider_station_id(provider_id)
         if not station_id:
             logger.warning(source_config["station_missing_log"])
-            return None
+            return local_prepared if local_prepared_is_fresh else None
         try:
             series_payload = source_config["fetcher"](station_id)
         except Exception as err:
             logger.warning(f"Tendencias {provider_id} Hoy: error obteniendo serie con lookback: {err}")
-            return None
+            return local_prepared if local_prepared_is_fresh else None
         if not series_payload.get("has_data", False):
             logger.warning(source_config["empty_log"])
-            return None
+            return local_prepared if local_prepared_is_fresh else None
         prepared = _prepare_today_dataset_from_series(
             series_payload,
             pressure_key=source_config["pressure_key"],
             now_local=now_local,
             infer_series_step_minutes=infer_series_step_minutes,
             min_source_step=source_config["min_source_step"],
+            tz_name=tz_name,
         )
         if not prepared:
             logger.warning(source_config["frame_empty_log"])
-            return None
+            return local_prepared if local_prepared_is_fresh else None
         prepared["uv_series_override"] = series_payload
         prepared["data_source_label"] = t(
             str(provider_feature.get("today_trends_source_key", "")),
@@ -141,8 +214,9 @@ def _load_today_trends_source(
         return None
 
     local_prepared["uv_series_override"] = None
+    source_key = str(provider_feature.get("today_trends_source_key", "")).strip() or "trends.sources.local_today"
     local_prepared["data_source_label"] = t(
-        "trends.sources.local_today",
+        source_key,
         minutes=local_prepared["interval_theta_e"],
     )
     return local_prepared
@@ -181,20 +255,27 @@ def _apply_trend_figure_layout(
     dtick_ms,
     text_color,
     grid_color,
+    tick0=None,
     margin_top: int = 60,
 ):
+    xaxis_config = dict(
+        title=dict(text=x_title, font=dict(color=text_color)),
+        type="date",
+        range=[day_start, day_end],
+        tickformat=tickformat,
+        dtick=dtick_ms,
+        gridcolor=grid_color,
+        showgrid=True,
+        tickangle=0,
+        automargin=True,
+        tickfont=dict(color=text_color),
+    )
+    if tick0 is not None:
+        xaxis_config["tick0"] = tick0
+
     fig.update_layout(
         title=dict(text=title_text, x=0.5, xanchor="center", font=dict(size=18, color=text_color)),
-        xaxis=dict(
-            title=dict(text=x_title, font=dict(color=text_color)),
-            type="date",
-            range=[day_start, day_end],
-            tickformat=tickformat,
-            dtick=dtick_ms,
-            gridcolor=grid_color,
-            showgrid=True,
-            tickfont=dict(color=text_color),
-        ),
+        xaxis=xaxis_config,
         yaxis=dict(
             title=dict(text=y_title, font=dict(color=text_color)),
             range=y_range,
@@ -219,6 +300,147 @@ def _apply_trend_figure_layout(
     )
 
 
+def _trend_chart_heading_html(title: str, tooltip: str) -> str:
+    title = escape(str(title or ""))
+    tooltip = escape(str(tooltip or ""))
+    return f"""
+<div class="trend-chart-heading">
+  <span class="trend-chart-heading-title">{title}</span>
+  <span class="trend-chart-help-wrap" tabindex="0" aria-label="{tooltip}">
+    <span class="trend-chart-help-btn">?</span>
+    <div class="trend-chart-help-tooltip">{tooltip}</div>
+  </span>
+</div>
+"""
+
+
+def _render_trend_chart_heading(title: str, tooltip: str) -> None:
+    st.markdown(_trend_chart_heading_html(title, tooltip), unsafe_allow_html=True)
+
+
+def _symmetric_y_range_with_min(values, minimum_abs: float):
+    try:
+        minimum = abs(float(minimum_abs))
+    except (TypeError, ValueError):
+        minimum = 0.0
+    max_abs = 0.0
+    for value in values:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric != numeric:
+            continue
+        max_abs = max(max_abs, abs(numeric))
+    half_range = minimum if max_abs <= minimum else max_abs * 1.1
+    return [-half_range, half_range]
+
+
+def _inject_trend_chart_heading_css(dark: bool) -> None:
+    tooltip_bg = "rgba(14, 18, 26, 0.96)" if not dark else "rgba(248, 251, 255, 0.96)"
+    tooltip_text = "rgba(248, 251, 255, 0.96)" if not dark else "rgba(14, 18, 26, 0.96)"
+    tooltip_border = "rgba(255, 255, 255, 0.18)" if not dark else "rgba(14, 18, 26, 0.14)"
+    st.markdown(
+        f"""
+<style data-mlbx-layout-hidden="trend-chart-heading">
+.trend-chart-heading {{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  margin: 1.45rem 0 -0.55rem 0;
+  color: var(--text);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+}}
+.trend-chart-help-wrap {{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}}
+.trend-chart-help-btn {{
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  background: rgba(31, 41, 55, 0.28) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  cursor: help;
+  user-select: none;
+}}
+.trend-chart-help-tooltip {{
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  width: min(25rem, calc(100vw - 2rem));
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid {tooltip_border} !important;
+  background: {tooltip_bg} !important;
+  color: {tooltip_text} !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  font-size: 0.74rem !important;
+  font-weight: 400 !important;
+  line-height: 1.34 !important;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9999;
+  transition: opacity .15s ease, transform .15s ease;
+}}
+.trend-chart-help-tooltip,
+.trend-chart-help-tooltip * {{
+  color: {tooltip_text} !important;
+  font-weight: 400 !important;
+}}
+[data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] .trend-chart-help-btn {{
+  color: rgba(255, 255, 255, 0.96) !important;
+}}
+[data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] .trend-chart-help-tooltip,
+[data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] .trend-chart-help-tooltip * {{
+  color: {tooltip_text} !important;
+  font-weight: 400 !important;
+}}
+[data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] .trend-chart-help-tooltip {{
+  background: {tooltip_bg} !important;
+}}
+.trend-chart-help-wrap:hover .trend-chart-help-tooltip,
+.trend-chart-help-wrap:focus-within .trend-chart-help-tooltip,
+.trend-chart-help-wrap:focus .trend-chart-help-tooltip {{
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}}
+@media (max-width: 600px) {{
+  .trend-chart-heading {{
+    font-size: 0.98rem;
+    margin-top: 1.2rem;
+  }}
+  .trend-chart-help-tooltip {{
+    left: auto;
+    right: -0.6rem;
+    transform: translateY(-2px);
+  }}
+  .trend-chart-help-wrap:hover .trend-chart-help-tooltip,
+  .trend-chart-help-wrap:focus-within .trend-chart-help-tooltip,
+  .trend-chart-help-wrap:focus .trend-chart-help-tooltip {{
+    transform: translateY(0);
+  }}
+}}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
 def render_trends_tab(ctx):
     t = ctx["t"]
     dark = ctx["dark"]
@@ -235,6 +457,7 @@ def render_trends_tab(ctx):
     wind_unit_txt = ctx["wind_unit_txt"]
     _get_aemet_service = ctx["_get_aemet_service"]
     _get_meteocat_service = ctx["_get_meteocat_service"]
+    _get_weatherlink_service = ctx["_get_weatherlink_service"]
     _get_meteofrance_service = ctx["_get_meteofrance_service"]
     _render_neutral_info_note = ctx["_render_neutral_info_note"]
     _infer_series_step_minutes = ctx["_infer_series_step_minutes"]
@@ -259,6 +482,8 @@ def render_trends_tab(ctx):
         zero_line_color = "rgba(55, 55, 55, 0.65)"
         now_line_color = "rgba(35, 42, 56, 0.55)"
 
+    _inject_trend_chart_heading_css(dark)
+
     if not connected:
         st.info(t("trends.connect_prompt"))
     else:
@@ -272,7 +497,13 @@ def render_trends_tab(ctx):
             calculate_trend
         )
 
-        now_local = datetime.now()
+        station_tz_name = str(
+            st.session_state.get("provider_station_tz")
+            or st.session_state.get("browser_tz")
+            or ""
+        ).strip()
+        now_epoch = time.time()
+        now_local = _local_naive_datetime_from_epoch(now_epoch, station_tz_name)
         provider_id = st.session_state.get("connection_type", "")
 
         st.markdown(f"### {t('trends.section_title')}")
@@ -286,6 +517,7 @@ def render_trends_tab(ctx):
 
         dataset_ready = False
         has_barometer_series = True
+        provider_coverage_limited = False
         uv_series_override = None
 
         if periodo == "today":
@@ -297,9 +529,12 @@ def render_trends_tab(ctx):
                 get_provider_station_id=_get_provider_station_id,
                 get_aemet_service=_get_aemet_service,
                 get_meteocat_service=_get_meteocat_service,
+                get_weatherlink_service=_get_weatherlink_service,
                 t=t,
                 logger=logger,
                 session_state=st.session_state,
+                now_epoch=now_epoch,
+                tz_name=station_tz_name,
             )
             if today_source is None:
                 st.warning(t("trends.warnings.series_unavailable"))
@@ -326,17 +561,17 @@ def render_trends_tab(ctx):
                     logger=logger,
                 )
             else:
-                synoptic_source = load_synoptic_trends_source(
+                synoptic_source = _load_synoptic_trends_source(
                     provider_id=provider_id,
                     hourly7d=hourly7d,
                     infer_series_step_minutes=_infer_series_step_minutes,
                     render_neutral_info_note=_render_neutral_info_note,
-                    coverage_note_key=t(str(get_provider_feature(provider_id).get("synoptic_coverage_note_key", "")).strip()) if str(get_provider_feature(provider_id).get("synoptic_coverage_note_key", "")).strip() else "",
-                    coverage_title=t("trends.notes.provider_coverage_title"),
+                    t=t,
                     logger=logger,
                     is_nan=is_nan,
                     e_s=e_s,
                     station_elevation=st.session_state.get("station_elevation", 0),
+                    tz_name=station_tz_name,
                 )
                 if synoptic_source is None:
                     st.warning("⚠️ La estación no está devolviendo serie de datos actualmente.")
@@ -349,7 +584,8 @@ def render_trends_tab(ctx):
                     interval_theta_e = synoptic_source["interval_theta_e"]
                     interval_e = synoptic_source["interval_e"]
                     interval_p = synoptic_source["interval_p"]
-                    dataset_ready = True
+                    provider_coverage_limited = bool(synoptic_source.get("coverage_limited", False))
+                    dataset_ready = not provider_coverage_limited
 
         if dataset_ready:
             barometer_values = pd.to_numeric(df_trends.get("p"), errors="coerce")
@@ -398,7 +634,7 @@ def render_trends_tab(ctx):
                 if not has_barometer_series:
                     missing_trend_calculations.append(t("trends.calculations.pressure"))
 
-                if missing_trend_calculations:
+                if missing_trend_calculations and not provider_coverage_limited:
                     unique_missing = []
                     for item in missing_trend_calculations:
                         if item not in unique_missing:
@@ -434,9 +670,11 @@ def render_trends_tab(ctx):
             if periodo == "today":
                 dtick_ms = 60 * 60 * 1000
                 tickformat = "%H:%M"
+                tick0 = None
             else:
-                dtick_ms = 12 * 60 * 60 * 1000
-                tickformat = "%d/%m %H:%M"
+                dtick_ms = 24 * 60 * 60 * 1000
+                tickformat = "%d/%m"
+                tick0 = pd.Timestamp(day_start).floor("D")
 
             trend_times = pd.to_datetime(df_trends["dt"])
 
@@ -461,8 +699,8 @@ def render_trends_tab(ctx):
                     if len(valid_trends) == 0:
                         st.warning(t("trends.warnings.no_theta_e"))
                     else:
-                        max_abs = max(abs(valid_trends.min()), abs(valid_trends.max()))
-                        y_range_theta_e = [-max_abs * 1.1, max_abs * 1.1]
+                        theta_e_min_abs = abs(convert_temperature_delta(20.0, temp_unit_pref))
+                        y_range_theta_e = _symmetric_y_range_with_min(valid_trends, theta_e_min_abs)
 
                         fig_theta_e = go.Figure()
                         fig_theta_e.add_trace(go.Scatter(
@@ -479,9 +717,13 @@ def render_trends_tab(ctx):
                         )
                         fig_theta_e.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
 
+                        _render_trend_chart_heading(
+                            t("trends.charts.theta_e_title"),
+                            t("trends.tooltips.theta_e"),
+                        )
                         _apply_trend_figure_layout(
                             fig_theta_e,
-                            title_text=t("trends.charts.theta_e_title"),
+                            title_text="",
                             x_title=t("common.hour"),
                             y_title=f"dθe/dt ({temp_unit_txt}/h)",
                             y_range=y_range_theta_e,
@@ -489,6 +731,7 @@ def render_trends_tab(ctx):
                             day_end=day_end,
                             tickformat=tickformat,
                             dtick_ms=dtick_ms,
+                            tick0=tick0,
                             text_color=text_color,
                             grid_color=grid_color,
                         )
@@ -516,11 +759,7 @@ def render_trends_tab(ctx):
                     if len(valid_trends_mixing_ratio) == 0:
                         st.warning(t("trends.warnings.no_mixing_ratio"))
                     else:
-                        max_abs_mixing_ratio = max(
-                            abs(valid_trends_mixing_ratio.min()),
-                            abs(valid_trends_mixing_ratio.max()),
-                        )
-                        y_range_mixing_ratio = [-max_abs_mixing_ratio * 1.1, max_abs_mixing_ratio * 1.1]
+                        y_range_mixing_ratio = _symmetric_y_range_with_min(valid_trends_mixing_ratio, 5.0)
 
                         fig_mixing_ratio = go.Figure()
                         fig_mixing_ratio.add_trace(go.Scatter(
@@ -537,9 +776,13 @@ def render_trends_tab(ctx):
                         )
                         fig_mixing_ratio.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
 
+                        _render_trend_chart_heading(
+                            t("trends.charts.mixing_ratio_title"),
+                            t("trends.tooltips.mixing_ratio"),
+                        )
                         _apply_trend_figure_layout(
                             fig_mixing_ratio,
-                            title_text=t("trends.charts.mixing_ratio_title"),
+                            title_text="",
                             x_title=t("common.hour"),
                             y_title=t("trends.charts.mixing_ratio_axis"),
                             y_range=y_range_mixing_ratio,
@@ -547,6 +790,7 @@ def render_trends_tab(ctx):
                             day_end=day_end,
                             tickformat=tickformat,
                             dtick_ms=dtick_ms,
+                            tick0=tick0,
                             text_color=text_color,
                             grid_color=grid_color,
                         )
@@ -568,34 +812,15 @@ def render_trends_tab(ctx):
                         chart_winds_uv = st.session_state.get("chart_winds", [])
                         chart_dirs_uv = st.session_state.get("chart_wind_dirs", [])
 
-                    uv_times = []
-                    u_vals = []
-                    v_vals = []
-
-                    for i, epoch in enumerate(chart_epochs_uv):
-                        if i >= len(chart_winds_uv) or i >= len(chart_dirs_uv):
-                            continue
-                        speed = chart_winds_uv[i]
-                        direction_deg = chart_dirs_uv[i]
-                        if is_nan(speed) or is_nan(direction_deg):
-                            continue
-
-                        theta = math.radians(float(direction_deg))
-                        speed = float(speed)
-                        # Convención meteorológica:
-                        # u = -V sin(theta), v = -V cos(theta)
-                        u_comp = -speed * math.sin(theta)
-                        v_comp = -speed * math.cos(theta)
-
-                        uv_times.append(datetime.fromtimestamp(epoch))
-                        u_vals.append(u_comp)
-                        v_vals.append(v_comp)
-
-                    if len(uv_times) >= 3:
-                        df_uv = pd.DataFrame({"dt": uv_times, "u": u_vals, "v": v_vals}).sort_values("dt")
-                        df_uv["dt"] = pd.to_datetime(df_uv["dt"]).dt.floor("5min")
-                        df_uv = df_uv.groupby("dt", as_index=False).last()
-
+                    df_uv = _prepare_wind_uv_frame(
+                        chart_epochs_uv,
+                        chart_winds_uv,
+                        chart_dirs_uv,
+                        grid_step_minutes=series_step_min,
+                        tz_name=station_tz_name,
+                        is_nan=is_nan,
+                    )
+                    if not df_uv.empty:
                         s_u = pd.Series(df_uv["u"].values, index=pd.to_datetime(df_uv["dt"]))
                         s_v = pd.Series(df_uv["v"].values, index=pd.to_datetime(df_uv["dt"]))
                         y_u = s_u.reindex(grid)
@@ -634,9 +859,13 @@ def render_trends_tab(ctx):
                             )
                             fig_uv.add_hline(y=0, line_width=1.2, line_dash="dash", opacity=0.75, line_color=zero_line_color)
 
+                            _render_trend_chart_heading(
+                                t("trends.charts.uv_title"),
+                                t("trends.tooltips.uv"),
+                            )
                             _apply_trend_figure_layout(
                                 fig_uv,
-                                title_text=t("trends.charts.uv_title"),
+                                title_text="",
                                 x_title=t("common.hour"),
                                 y_title=wind_unit_txt,
                                 y_range=y_range_uv,
@@ -644,6 +873,7 @@ def render_trends_tab(ctx):
                                 day_end=day_end,
                                 tickformat=tickformat,
                                 dtick_ms=dtick_ms,
+                                tick0=tick0,
                                 text_color=text_color,
                                 grid_color=grid_color,
                                 margin_top=90,
@@ -684,6 +914,12 @@ def render_trends_tab(ctx):
                     )
 
                     if periodo == "today":
+                        wu_hourly7d_for_pressure = None
+                        if provider_id == "WU":
+                            try:
+                                wu_hourly7d_for_pressure, _ = _fetch_trends_synoptic_series(provider_id)
+                            except Exception as err:
+                                logger.warning(f"Tendencias WU Hoy: no se pudo ampliar presión con serie 7d: {err}")
                         pressure_trend_times, pressure_trend_values = extend_today_pressure_trend(
                             provider_id=provider_id,
                             pressure_trend_times=pressure_trend_times,
@@ -693,6 +929,11 @@ def render_trends_tab(ctx):
                             get_provider_station_id=_get_provider_station_id,
                             get_meteofrance_service=_get_meteofrance_service,
                             infer_series_step_minutes=_infer_series_step_minutes,
+                            wu_hourly7d=wu_hourly7d_for_pressure,
+                            base_pressure_times=trend_times,
+                            base_pressure_values=np.asarray(df_trends["p"].values, dtype=np.float64),
+                            station_elevation=st.session_state.get("station_elevation", 0),
+                            is_nan=is_nan,
                         )
                     pressure_trend_display = np.asarray(
                         [
@@ -734,6 +975,7 @@ def render_trends_tab(ctx):
                             day_end=day_end,
                             tickformat=tickformat,
                             dtick_ms=dtick_ms,
+                            tick0=tick0,
                             text_color=text_color,
                             grid_color=grid_color,
                         )

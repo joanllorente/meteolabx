@@ -6,6 +6,10 @@ from config import (
     LS_AUTOCONNECT,
     LS_AUTOCONNECT_TARGET,
     LS_STATION,
+    LS_WEATHERLINK_APIKEY,
+    LS_WEATHERLINK_APISECRET,
+    LS_WEATHERLINK_STATION,
+    LS_WEATHERLINK_Z,
     LS_WU_CALIBRATIONS,
     LS_WU_FORGOTTEN,
     LS_Z,
@@ -58,6 +62,27 @@ def test_wu_credentials_and_autoconnect_target_roundtrip(
     assert pending[LS_APIKEY] == "secret-key"
     assert pending[LS_AUTOCONNECT] == "1"
     assert json.loads(pending[LS_AUTOCONNECT_TARGET]) == target
+
+
+def test_weatherlink_credentials_read_from_snapshot_without_legacy_component(
+    patch_streamlit,
+    fake_session_state,
+    monkeypatch,
+):
+    patch_streamlit(storage)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: None)
+    fake_session_state["_mlx_local_storage_snapshot_ready"] = True
+    fake_session_state["_mlx_local_storage_snapshot"] = {
+        LS_WEATHERLINK_APIKEY: "weatherlink-key",
+        LS_WEATHERLINK_APISECRET: "weatherlink-secret",
+        LS_WEATHERLINK_Z: "39",
+        LS_WEATHERLINK_STATION: "374964",
+    }
+
+    assert storage.get_local_storage_value(LS_WEATHERLINK_APIKEY) == "weatherlink-key"
+    assert storage.get_local_storage_value(LS_WEATHERLINK_APISECRET) == "weatherlink-secret"
+    assert storage.get_local_storage_value(LS_WEATHERLINK_Z) == "39"
+    assert storage.get_local_storage_value(LS_WEATHERLINK_STATION) == "374964"
 
 
 def test_forget_marks_all_wu_credentials_autoconnect_and_calibrations(

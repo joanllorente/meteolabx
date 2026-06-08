@@ -21,3 +21,15 @@ pandas>=2.0.0,<3.0.0
 astral>=3.2,<4.0
 pydeck>=0.8.0,<1.0.0
 pytest>=8.0.0,<9.0.0
+
+# --- Backend FastAPI (paquete `server/`) ---
+# El backend convive con la app Streamlit durante la migración. Estas
+# dependencias solo se usan si se arranca ``uvicorn server.main:app``;
+# nada en Streamlit las importa hoy, así que añadirlas no cambia el
+# comportamiento del frontend en producción. Cuando se complete la
+# migración, esto se podrá reorganizar en requirements-backend.txt aparte.
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+pydantic-settings>=2.2.0,<3.0.0
+httpx>=0.27.0,<1.0.0
+pytest-asyncio>=0.23.0,<1.0.0

@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""
+Inyecta los tags PWA (favicon, apple-touch-icon, manifest, theme-color, etc.)
+directamente en el ``index.html`` que sirve Streamlit.
+
+Por qué hace falta
+------------------
+Streamlit sirve siempre su propio ``index.html`` fijo desde el paquete
+instalado. Ese HTML solo trae el favicon de Streamlit y ``<title>Streamlit</title>``;
+no hay manifest ni apple-touch-icon. Inyectar esos tags por JavaScript en
+runtime (desde un iframe de ``components.html``) NO basta porque:
+
+  * Safari lee el favicon una sola vez al parsear el HTML inicial e ignora los
+    ``<link rel="icon">`` añadidos luego por JS.
+  * iOS/Android, al "Añadir a pantalla de inicio", leen ``apple-touch-icon`` y
+    ``manifest`` del HTML tal como llegó del servidor, no del DOM modificado.
+
+La única forma fiable en Streamlit puro es escribir los tags en el HTML real
+antes de arrancar el servidor. Este script se ejecuta en el arranque
+(ver ``Procfile`` / ``railway.toml``) y es idempotente: re-aplica el bloque en
+cada deploy sin duplicarlo.
+
+Mantener en sincronía
+---------------------
+``ASSET_VERSION`` debe coincidir con ``PWA_ASSET_VERSION`` en ``meteolabx.py``.
+Súbela cuando cambien los iconos o el manifest para forzar recarga de caché.
+"""
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+# Debe coincidir con PWA_ASSET_VERSION en meteolabx.py
+ASSET_VERSION = "11"
+
+# Streamlit sirve los archivos de ./static (enableStaticServing) bajo /app/static/.
+STATIC_BASE = "/app/static"
+
+START_MARKER = "<!-- MLX-PWA-START -->"
+END_MARKER = "<!-- MLX-PWA-END -->"
+
+
+def _build_block() -> str:
+    v = ASSET_VERSION
+    b = STATIC_BASE
+    return f"""{START_MARKER}
+    <title>MeteoLabX</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{b}/favicon-32x32.png?v={v}" />
+    <link rel="icon" type="image/png" sizes="16x16" href="{b}/favicon-16x16.png?v={v}" />
+    <link rel="shortcut icon" type="image/png" href="{b}/favicon.png?v={v}" />
+    <link rel="apple-touch-icon" href="{b}/apple-touch-icon-pwa.png?v={v}" />
+    <link rel="apple-touch-icon" sizes="180x180" href="{b}/apple-touch-icon-pwa.png?v={v}" />
+    <link rel="apple-touch-icon-precomposed" href="{b}/apple-touch-icon-pwa.png?v={v}" />
+    <link rel="manifest" href="{b}/manifest.json?v={v}" />
+    <meta name="theme-color" content="#2384ff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MeteoLabX" />
+    {END_MARKER}"""
+
+
+def _find_index_html() -> Path:
+    import streamlit
+
+    index = Path(streamlit.__file__).parent / "static" / "index.html"
+    if not index.is_file():
+        raise FileNotFoundError(f"No se encontró index.html de Streamlit en {index}")
+    return index
+
+
+def patch(index_path: Path) -> bool:
+    """Inserta/actualiza el bloque PWA. Devuelve True si escribió cambios."""
+    html = index_path.read_text(encoding="utf-8")
+    original = html
+
+    block = _build_block()
+
+    # 1) Reemplazar bloque existente (idempotencia) o insertar antes de </head>.
+    existing = re.compile(
+        re.escape(START_MARKER) + r".*?" + re.escape(END_MARKER),
+        flags=re.DOTALL,
+    )
+    if existing.search(html):
+        html = existing.sub(block, html)
+    else:
+        # Quitar el favicon por defecto de Streamlit para que no compita.
+        html = re.sub(
+            r'\s*<link\s+rel="shortcut icon"\s+href="\./favicon\.png"\s*/>',
+            "",
+            html,
+        )
+        # Quitar el <title>Streamlit</title> por defecto (lo ponemos en el bloque).
+        html = re.sub(r"\s*<title>\s*Streamlit\s*</title>", "", html)
+
+        if "</head>" not in html:
+            raise ValueError("No se encontró </head> en index.html")
+        html = html.replace("</head>", f"    {block}\n  </head>", 1)
+
+    if html == original:
+        return False
+
+    index_path.write_text(html, encoding="utf-8")
+    return True
+
+
+def main() -> int:
+    try:
+        index_path = _find_index_html()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[patch_streamlit_index] AVISO: {exc}", file=sys.stderr)
+        # No abortamos el arranque por esto; la app sigue funcionando sin PWA.
+        return 0
+
+    try:
+        changed = patch(index_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[patch_streamlit_index] AVISO al parchear: {exc}", file=sys.stderr)
+        return 0
+
+    state = "parcheado" if changed else "ya estaba al día"
+    print(f"[patch_streamlit_index] index.html {state}: {index_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

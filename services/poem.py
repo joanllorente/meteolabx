@@ -349,6 +349,19 @@ def _normalize_temp(value: float) -> float:
     return value
 
 
+def _normalize_rh(value: float) -> float:
+    if _is_nan(value):
+        return value
+    # POEM redext_tr entrega HR como centesimas de porcentaje: 9340 -> 93.40%.
+    if abs(value) > 1000.0:
+        value = value / 100.0
+    elif abs(value) > 100.0:
+        value = value / 10.0
+    if value < 0.0 or value > 100.0:
+        return float("nan")
+    return value
+
+
 def _kind_from_hint(text_norm: str, key_norm: str = "") -> str:
     txt = text_norm
     key = key_norm
@@ -413,6 +426,39 @@ def _unit_is_mps(unit_hint: str) -> bool:
     return ("m/s" in unit) or ("m s-1" in unit) or ("m.s-1" in unit)
 
 
+def _allowed_metric_key(key_norm: str, allowed_metric_keys: Optional[set[str]]) -> bool:
+    if not allowed_metric_keys:
+        return True
+    key = _normalize_key(key_norm)
+    if key in allowed_metric_keys:
+        return True
+    return any(key.endswith(f"_{allowed}") for allowed in allowed_metric_keys)
+
+
+def _poem_wind_scale(endpoint: str) -> str:
+    endpoint_norm = str(endpoint or "").strip().lower()
+    if endpoint_norm.endswith("/mareas/redmar_mir_tr") or "/mareas/redmar_mir_tr" in endpoint_norm:
+        return "tenths_mps"
+    return ""
+
+
+def _normalize_poem_wind_value(value: float, key_norm: str, wind_scale: str = "") -> float:
+    if _is_nan(value):
+        return value
+    key = _normalize_key(key_norm)
+    if str(wind_scale or "").strip().lower() == "tenths_mps":
+        return (value / 10.0) * 3.6
+
+    if key.startswith("vv_") or key in {"vvmd", "vvmx"}:
+        if abs(value) >= 100.0:
+            value = value / 100.0
+        elif abs(value) > 25.0:
+            value = value / 10.0
+        return value * 3.6
+
+    return value
+
+
 def _extract_epoch(items: Sequence[Tuple[str, Any]]) -> Optional[int]:
     time_keys = (
         "timestamp",
@@ -450,11 +496,17 @@ def _extract_lat_lon(items: Sequence[Tuple[str, Any]]) -> Tuple[float, float]:
     return lat, lon
 
 
-def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float]:
+def _extract_metric_updates(
+    items: Sequence[Tuple[str, Any]],
+    *,
+    allowed_metric_keys: Optional[set[str]] = None,
+    wind_scale: str = "",
+) -> Dict[str, float]:
     updates: Dict[str, float] = {}
     norm_keys = [_normalize_key(key) for key, _ in items]
     has_dv = any(k.startswith("dv_") or k == "dv" for k in norm_keys)
     has_vv = any(k.startswith("vv_") or k == "vv" for k in norm_keys)
+    has_dv_md = any(k == "dv_md" or k.endswith("_dv_md") for k in norm_keys)
 
     # Formato "largo": parametro + valor.
     param_hint = ""
@@ -482,6 +534,8 @@ def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float
         key_norm = _normalize_key(key)
         if _is_auxiliary_metric_key(key_norm):
             continue
+        if not _allowed_metric_key(key_norm, allowed_metric_keys):
+            continue
         val = _safe_float(value)
         if _is_nan(val):
             continue
@@ -489,6 +543,8 @@ def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float
         if not kind:
             continue
         if kind == "wind_dir" and key_norm.startswith("dmd") and has_dv:
+            continue
+        if kind == "wind_dir" and (key_norm == "dv_mx" or key_norm.endswith("_dv_mx")) and has_dv_md:
             continue
         if kind == "wind" and key_norm == "ds" and has_vv:
             continue
@@ -507,19 +563,14 @@ def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float
             elif abs(val) > 60.0:
                 val = val / 10.0
         elif key_norm in {"hr"}:
-            if abs(val) > 100.0:
-                val = val / 10.0
+            val = _normalize_rh(val)
         elif key_norm in {"pa", "ps", "pres", "presion"}:
             if abs(val) > 2000.0:
                 val = val / 10.0
             if abs(val) > 2000.0:
                 val = val / 100.0
         elif key_norm.startswith("vv_") or key_norm in {"vvmd", "vvmx"}:
-            if abs(val) >= 100.0:
-                val = val / 100.0
-            elif abs(val) > 25.0:
-                val = val / 10.0
-            val = val * 3.6
+            val = _normalize_poem_wind_value(val, key_norm, wind_scale)
 
         if kind in ("wind", "gust") and _key_implies_meters_per_second(key_norm):
             val = val * 3.6
@@ -528,6 +579,8 @@ def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float
     # Normalizaciones por variable.
     if "temp" in updates:
         updates["temp"] = _normalize_temp(updates["temp"])
+    if "rh" in updates:
+        updates["rh"] = _normalize_rh(updates["rh"])
     if "pressure_abs" in updates:
         updates["pressure_abs"] = _normalize_pressure(updates["pressure_abs"], "pa")
     if "pressure_msl" in updates:
@@ -539,6 +592,8 @@ def _extract_metric_updates(items: Sequence[Tuple[str, Any]]) -> Dict[str, float
 def _rows_to_series(
     rows: List[Dict[str, Any]],
     station_code: str,
+    allowed_metric_keys: Optional[set[str]] = None,
+    wind_scale: str = "",
 ) -> Dict[str, Any]:
     by_epoch: Dict[int, Dict[str, float]] = {}
     now_epoch = int(datetime.now(timezone.utc).timestamp())
@@ -550,7 +605,11 @@ def _rows_to_series(
         if not _row_matches_station(items, station_code):
             continue
 
-        updates = _extract_metric_updates(items)
+        updates = _extract_metric_updates(
+            items,
+            allowed_metric_keys=allowed_metric_keys,
+            wind_scale=wind_scale,
+        )
         if not updates:
             continue
 
@@ -685,7 +744,19 @@ def fetch_poem_endpoint_series(endpoint: str, station_code: str, auth_cache_key:
         return {"ok": False, "error": str(exc), "series": {}, "endpoint": endpoint}
 
     rows = _extract_rows(payload)
-    series = _rows_to_series(rows, sid)
+    station_meta = _station_meta(sid)
+    allowed_cols = station_meta.get("parametros_meteo_cols", []) if isinstance(station_meta, dict) else []
+    allowed_metric_keys = {
+        _normalize_key(col)
+        for col in allowed_cols
+        if str(col or "").strip()
+    } or None
+    series = _rows_to_series(
+        rows,
+        sid,
+        allowed_metric_keys=allowed_metric_keys,
+        wind_scale=_poem_wind_scale(endpoint),
+    )
     series = _trim_series_window(series)
     latest_epoch = _latest_epoch(series)
     if latest_epoch is not None:

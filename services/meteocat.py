@@ -43,8 +43,12 @@ V_WIND = 30
 V_WIND_DIR = 31
 V_GUST = 50
 V_GUST_DIR = 51
-V_TEMP_MAX_DAY = 12
-V_TEMP_MIN_DAY = 13
+V_GUST_6M = 53
+V_GUST_DIR_6M = 54
+V_GUST_2M = 56
+V_GUST_DIR_2M = 57
+V_TEMP_MAX_SURFACE = 12
+V_TEMP_MIN_SURFACE = 13
 V_RH_MAX_DAY = 3
 V_RH_MIN_DAY = 44
 V_RAIN_1MIN_MAX = 72
@@ -59,8 +63,8 @@ METEOCAT_LATEST_VARIABLES = {
     "uv": [V_UV],
     "wind": [V_WIND, 20],
     "wind_dir": [V_WIND_DIR, 21],
-    "gust": [V_GUST],
-    "gust_dir": [V_GUST_DIR],
+    "gust": [V_GUST, V_GUST_6M, V_GUST_2M],
+    "gust_dir": [V_GUST_DIR, V_GUST_DIR_6M, V_GUST_DIR_2M],
 }
 
 # Códigos para el endpoint /variables/estadistics/diaris/{codiVariable}
@@ -157,6 +161,7 @@ CLIMO_DAILY_SCHEMA = [
     "temp_max",
     "temp_min",
     "wind_mean",
+    "wind_dir_mean",
     "gust_max",
     "precip_total",
 ]
@@ -186,6 +191,7 @@ CLIMO_NUMERIC_COLUMNS = [
     "temp_max",
     "temp_min",
     "wind_mean",
+    "wind_dir_mean",
     "gust_max",
     "precip_total",
     "solar_mean",
@@ -204,6 +210,7 @@ def _empty_climo_row(date_label: str, epoch: float) -> Dict[str, Any]:
         "temp_max": float("nan"),
         "temp_min": float("nan"),
         "wind_mean": float("nan"),
+        "wind_dir_mean": float("nan"),
         "gust_max": float("nan"),
         "precip_total": float("nan"),
         "solar_mean": float("nan"),
@@ -573,6 +580,7 @@ def fetch_meteocat_daily_history_for_periods(
                         "temp_max": float("nan"),
                         "temp_min": float("nan"),
                         "wind_mean": float("nan"),
+                        "wind_dir_mean": float("nan"),
                         "gust_max": float("nan"),
                         "precip_total": float("nan"),
                     }
@@ -599,7 +607,7 @@ def fetch_meteocat_daily_history_for_periods(
         if col not in frame.columns:
             frame[col] = float("nan")
 
-    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "gust_max", "precip_total"]
+    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total"]
     for col in numeric_cols:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
 
@@ -1350,6 +1358,45 @@ def _precip_window_mm(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
     return _sum_series(s)
 
 
+def _temp_max_today_from_map(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
+    # Codi 40 es la extrema instrumental por intervalo; usar max(T codi 32)
+    # pierde picos entre lecturas y no coincide con la web de Meteocat.
+    value = _max_of_series(_series_from_map(var_map, V_TEMP_MAX_AIR))
+    if not _is_nan(value):
+        return value
+    return _max_of_series(_series_from_map(var_map, V_TEMP))
+
+
+def _temp_min_today_from_map(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
+    value = _min_of_series(_series_from_map(var_map, V_TEMP_MIN_AIR))
+    if not _is_nan(value):
+        return value
+    return _min_of_series(_series_from_map(var_map, V_TEMP))
+
+
+def _rh_max_today_from_map(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
+    value = _max_of_series(_series_from_map(var_map, V_RH_MAX_DAY))
+    if not _is_nan(value):
+        return value
+    return _max_of_series(_series_from_map(var_map, V_RH))
+
+
+def _rh_min_today_from_map(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
+    value = _min_of_series(_series_from_map(var_map, V_RH_MIN_DAY))
+    if not _is_nan(value):
+        return value
+    return _min_of_series(_series_from_map(var_map, V_RH))
+
+
+def _gust_max_today_from_map(var_map: Dict[int, List[Tuple[int, float]]]) -> float:
+    values = [
+        _max_of_series(_series_from_map(var_map, code))
+        for code in (V_GUST, V_GUST_6M, V_GUST_2M)
+    ]
+    values = [value for value in values if not _is_nan(value)]
+    return max(values) if values else float("nan")
+
+
 def _join_by_epoch(*series: List[Tuple[int, float]]) -> Dict[int, List[float]]:
     joined: Dict[int, List[float]] = {}
     for idx, ser in enumerate(series):
@@ -1369,8 +1416,9 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
     s_dir = _series_from_map(var_map, V_WIND_DIR)
     s_solar = _series_from_map(var_map, V_SOLAR)
     s_uv = _series_from_map(var_map, V_UV)
+    s_precip = _series_from_map(var_map, V_PRECIP)
 
-    joined = _join_by_epoch(s_temp, s_rh, s_p_abs, s_wind, s_gust, s_dir, s_solar, s_uv)
+    joined = _join_by_epoch(s_temp, s_rh, s_p_abs, s_wind, s_gust, s_dir, s_solar, s_uv, s_precip)
     epochs = sorted(joined.keys())
 
     temps = []
@@ -1381,6 +1429,7 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
     dirs = []
     solar = []
     uv_indexes = []
+    precips = []
     for ep in epochs:
         row = joined[ep]
         temps.append(row[0] if len(row) > 0 else float("nan"))
@@ -1392,6 +1441,8 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
         solar_raw = row[6] if len(row) > 6 else float("nan")
         solar.append(_non_negative(solar_raw))
         uv_indexes.append(row[7] if len(row) > 7 else float("nan"))
+        precip_raw = row[8] if len(row) > 8 else float("nan")
+        precips.append(_non_negative(precip_raw))
 
     return {
         "epochs": epochs,
@@ -1403,6 +1454,7 @@ def extract_meteocat_daily_timeseries(var_map: Dict[int, List[Tuple[int, float]]
         "wind_dirs": dirs,
         "solar_radiations": solar,
         "uv_indexes": uv_indexes,
+        "precips": precips,
         "has_data": len(epochs) > 0,
     }
 
@@ -1663,26 +1715,22 @@ def get_meteocat_data(api_key: Optional[str] = None, state=None) -> Optional[Dic
     rh_min = _safe_float(values.get("rh"))
     gust_max = gust_kmh
 
-    s_temp_local = _series_from_map(day_vars, V_TEMP)
-    s_rh_local = _series_from_map(day_vars, V_RH)
-    s_gmax = _series_from_map(day_vars, V_GUST)
-
-    tmax = _max_of_series(s_temp_local)
+    tmax = _temp_max_today_from_map(day_vars)
     if not _is_nan(tmax):
         temp_max = tmax
 
-    tmin = _min_of_series(s_temp_local)
+    tmin = _temp_min_today_from_map(day_vars)
     if not _is_nan(tmin):
         temp_min = tmin
 
-    rhmax = _max_of_series(s_rh_local)
+    rhmax = _rh_max_today_from_map(day_vars)
     if not _is_nan(rhmax):
         rh_max = rhmax
-    rhmin = _min_of_series(s_rh_local)
+    rhmin = _rh_min_today_from_map(day_vars)
     if not _is_nan(rhmin):
         rh_min = rhmin
 
-    gmax = _max_of_series(s_gmax)
+    gmax = _gust_max_today_from_map(day_vars)
     if not _is_nan(gmax):
         gust_max = _ms_to_kmh(gmax)
 

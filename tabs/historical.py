@@ -1,10 +1,17 @@
 from datetime import datetime
+import html
+import math
 
 import streamlit as st
 from utils.helpers import coerce_str
 from utils.provider_features import SUPPORTED_HISTORICAL_PROVIDERS, get_provider_feature
 LEGACY_SUMMARY_MODE_ALIASES = {"Mensual": "monthly", "Anual": "annual"}
 SUMMARY_MODE_OPTIONS = ["monthly", "annual"]
+WIND_ROSE_CALM_THRESHOLD_KMH = 2.0
+WIND_ROSE_SECTORS16 = (
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+)
 
 
 def _historical_provider_is_supported(provider_id, render_neutral_info_note, t) -> bool:
@@ -186,6 +193,8 @@ def _prepare_historical_selection(
             return False, periods, climograms_service
 
     periods = climograms_service.build_period_specs(summary_mode, selected_years, selected_months)
+    if provider_id == "WU" and hasattr(climograms_service, "clip_periods_to_today"):
+        periods = climograms_service.clip_periods_to_today(periods)
     if not periods:
         st.warning(t("historical.warnings.invalid_period"))
         return False, periods, climograms_service
@@ -228,6 +237,223 @@ def _historical_chart_scope(provider_id, chart_granularity, summary_mode, t):
 def _table_column_label(base_label: str, unit_txt: str) -> str:
     label = str(base_label or "").strip()
     return label if "(" in label and ")" in label else f"{label} ({unit_txt})"
+
+
+def _as_float(value) -> float:
+    try:
+        if value is None:
+            return float("nan")
+        return float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def _wind_rose_stats_from_daily(daily_df, *, calm_threshold: float = WIND_ROSE_CALM_THRESHOLD_KMH):
+    counts = {sector: 0 for sector in WIND_ROSE_SECTORS16}
+    calm = 0
+    total_samples = 0
+    valid_direction = 0
+
+    if daily_df is None or "wind_dir_mean" not in daily_df.columns:
+        return {
+            "sectors16": list(WIND_ROSE_SECTORS16),
+            "counts": counts,
+            "calm": calm,
+            "total_samples": total_samples,
+            "valid_direction": valid_direction,
+            "dir_total": 0,
+            "dominant_dir": None,
+            "dir_pcts": {sector: 0.0 for sector in WIND_ROSE_SECTORS16},
+        }
+
+    wind_values = daily_df["wind_mean"].tolist() if "wind_mean" in daily_df.columns else [float("nan")] * len(daily_df)
+    direction_values = daily_df["wind_dir_mean"].tolist()
+
+    for wind, direction in zip(wind_values, direction_values):
+        speed = _as_float(wind)
+        direction_deg = _as_float(direction)
+        has_speed = speed == speed
+        has_direction = direction_deg == direction_deg
+        if not has_speed and not has_direction:
+            continue
+
+        total_samples += 1
+        is_calm_sample = has_speed and speed < calm_threshold
+        if is_calm_sample:
+            calm += 1
+        if not has_direction:
+            continue
+
+        valid_direction += 1
+        if is_calm_sample:
+            continue
+
+        sector_idx = int((((direction_deg % 360.0) + 11.25) // 22.5)) % 16
+        counts[WIND_ROSE_SECTORS16[sector_idx]] += 1
+
+    dir_total = sum(counts.values())
+    dominant_dir = max(WIND_ROSE_SECTORS16, key=lambda sector: counts[sector]) if dir_total > 0 else None
+    dir_pcts = {
+        sector: (100.0 * counts[sector] / dir_total) if dir_total > 0 else 0.0
+        for sector in WIND_ROSE_SECTORS16
+    }
+    return {
+        "sectors16": list(WIND_ROSE_SECTORS16),
+        "counts": counts,
+        "calm": calm,
+        "total_samples": total_samples,
+        "valid_direction": valid_direction,
+        "dir_total": dir_total,
+        "dominant_dir": dominant_dir,
+        "dir_pcts": dir_pcts,
+    }
+
+
+def _render_historical_wu_wind_rose(
+    daily_df,
+    *,
+    dark,
+    theme_mode,
+    station_id,
+    summary_mode,
+    chart_granularity,
+    t,
+    go,
+    plotly_chart,
+):
+    stats = _wind_rose_stats_from_daily(daily_df)
+    sectors16 = stats["sectors16"]
+    counts = stats["counts"]
+    calm = int(stats["calm"])
+    total_samples = int(stats["total_samples"])
+    valid_direction = int(stats["valid_direction"])
+    dir_total = int(stats["dir_total"])
+    dominant_dir = stats["dominant_dir"]
+
+    st.markdown(f"### {t('historical.wind_rose.heading')}")
+    if dir_total <= 0:
+        st.info(
+            t(
+                "historical.wind_rose.unavailable",
+                valid_direction=valid_direction,
+                calm=calm,
+            )
+        )
+        return
+
+    if dark:
+        text_color = "rgba(255, 255, 255, 0.92)"
+        grid_color = "rgba(255, 255, 255, 0.14)"
+    else:
+        text_color = "rgba(15, 18, 25, 0.92)"
+        grid_color = "rgba(18, 18, 18, 0.12)"
+
+    dir_pcts = stats["dir_pcts"]
+    theta_deg = [i * 22.5 for i in range(16)]
+    r_pct = [dir_pcts[sector] for sector in sectors16]
+    rose_colors = [
+        "rgba(255, 170, 65, 0.90)" if sector == dominant_dir else "rgba(102, 188, 255, 0.75)"
+        for sector in sectors16
+    ]
+
+    col_rose, col_stats = st.columns([0.62, 0.38], gap="large")
+
+    with col_rose:
+        fig_rose = go.Figure()
+        fig_rose.add_trace(
+            go.Barpolar(
+                r=r_pct,
+                theta=theta_deg,
+                width=[20.0] * 16,
+                marker_color=rose_colors,
+                marker_line_color="rgba(102, 188, 255, 1)",
+                marker_line_width=1,
+                opacity=0.95,
+                customdata=sectors16,
+                hovertemplate="%{customdata}: %{r:.1f}%<extra></extra>",
+                name=t("historical.wind_rose.frequency"),
+            )
+        )
+
+        radial_max = max(10.0, math.ceil(max(r_pct) / 5.0) * 5.0)
+        fig_rose.update_layout(
+            template="meteolabx_dark" if dark else "meteolabx_light",
+            title=dict(
+                text=t("historical.wind_rose.title"),
+                x=0.5,
+                xanchor="center",
+                font=dict(size=18, color=text_color),
+            ),
+            polar=dict(
+                bgcolor="rgba(0,0,0,0)",
+                angularaxis=dict(
+                    direction="clockwise",
+                    rotation=90,
+                    tickmode="array",
+                    tickvals=theta_deg,
+                    ticktext=sectors16,
+                    tickfont=dict(color=text_color),
+                ),
+                radialaxis=dict(
+                    showgrid=True,
+                    gridcolor=grid_color,
+                    tickfont=dict(color=text_color),
+                    angle=90,
+                    ticksuffix="%",
+                    range=[0, radial_max],
+                ),
+            ),
+            showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=30, r=30, t=60, b=20),
+            height=460,
+            font=dict(color=text_color),
+            annotations=[
+                dict(
+                    text="meteolabx.com",
+                    xref="paper",
+                    yref="paper",
+                    x=0.98,
+                    y=0.02,
+                    xanchor="right",
+                    yanchor="bottom",
+                    showarrow=False,
+                    font=dict(size=10, color="rgba(128,128,128,0.5)"),
+                )
+            ],
+        )
+        station_token = "".join(ch if ch.isalnum() else "_" for ch in str(station_id or "wu"))
+        plotly_chart(
+            fig_rose,
+            key=(
+                "historical_wu_wind_rose_"
+                f"{station_token}_{theme_mode}_{summary_mode}_{chart_granularity}_{len(daily_df)}"
+            ),
+        )
+
+    with col_stats:
+        calm_pct = (100.0 * calm / total_samples) if total_samples > 0 else 0.0
+        dom_pct = (100.0 * counts[dominant_dir] / dir_total) if dominant_dir is not None else 0.0
+
+        st.markdown(f"**{t('historical.wind_rose.samples')}:** {total_samples}")
+        st.markdown(f"**{t('historical.wind_rose.calm')}:** {calm_pct:.1f}% ({calm})")
+        if dominant_dir is not None:
+            st.markdown(f"**{t('historical.wind_rose.dominant')}:** **{dominant_dir} ({dom_pct:.1f}%)**")
+        else:
+            st.markdown(f"**{t('historical.wind_rose.dominant')}:** -")
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        rose_items = []
+        for sector in sectors16:
+            txt = f"{sector}: {dir_pcts[sector]:.1f}% ({counts[sector]})"
+            item_class = "rose-stat-item is-dominant" if sector == dominant_dir else "rose-stat-item"
+            rose_items.append(f"<div class='{item_class}'>{html.escape(txt)}</div>")
+        st.markdown(
+            "<div class='rose-stats-grid'>"
+            + "".join(rose_items)
+            + "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_historical_tab(ctx):

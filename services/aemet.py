@@ -1,6 +1,7 @@
 """
 Servicio para interactuar con AEMET OpenData API
 """
+import logging
 import os
 import re
 import time
@@ -11,6 +12,8 @@ from urllib.parse import quote
 import pandas as pd
 import requests
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 from config import MAX_DATA_AGE_MINUTES
 from utils.provider_state import (
@@ -45,6 +48,7 @@ CLIMO_DAILY_SCHEMA = [
     "temp_max",
     "temp_min",
     "wind_mean",
+    "wind_dir_mean",
     "gust_max",
     "precip_total",
 ]
@@ -783,6 +787,163 @@ def is_aemet_connection() -> bool:
     return is_provider_connection("AEMET", st.session_state)
 
 
+# =====================================================================
+# Hook backend: dispatch al servicio FastAPI cuando ``METEOLABX_USE_API=1``
+# =====================================================================
+#
+# Patrón equivalente al de WU (``_fetch_current_via_active_source``).
+# La diferencia es que AEMET legacy tiene dos pasos:
+#   1. ``fetch_aemet_station_data(idema)`` → raw record de AEMET
+#   2. ``parse_aemet_data(raw)``           → dict normalizado MeteoLabX
+#
+# El backend devuelve YA normalizado, así que cuando enrutamos por él
+# nos saltamos el ``parse_aemet_data`` y traducimos el dict canónico al
+# shape que ``parse_aemet_data`` produciría. Así ``get_aemet_data`` y
+# los consumidores downstream (``process_standard_provider``, displays,
+# series) no notan diferencia.
+
+
+# Campos del output de ``parse_aemet_data`` que faltan en la respuesta
+# del backend AEMET y hay que rellenar con None/NaN al traducir.
+_LEGACY_EXTREMES_KEYS = ("temp_max", "temp_min", "rh_max", "rh_min")
+
+
+def _is_meaningful_float(value: Any) -> bool:
+    """``True`` si ``value`` es float finito (no None, no NaN)."""
+    if value is None:
+        return False
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return False
+    return not (f != f)  # NaN guard
+
+
+def _translate_backend_to_legacy_aemet_shape(backend_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convierte la respuesta del backend (canónica) al shape que
+    ``parse_aemet_data`` produce, añadiendo los campos legacy que el
+    backend no devuelve y renombrando los que cambian de nombre.
+
+    Mapeo:
+        p_abs_hpa     → p_station (mismo valor, key legacy)
+        wind          → wind + wind_speed_kmh (duplicado legacy)
+        gust          → gust + gust_max  (duplicado legacy)
+        time_local    → fint
+        station_name  → ubi
+        RH            → RH + rh (duplicado legacy "por si acaso")
+
+    Campos no disponibles desde ``/current``:
+        temp_max, temp_min, rh_max, rh_min → None (legacy usa Optional)
+    """
+    Tc = backend_dict.get("Tc", float("nan"))
+    RH = backend_dict.get("RH", float("nan"))
+    p_hpa = backend_dict.get("p_hpa", float("nan"))
+    p_station = backend_dict.get("p_abs_hpa", float("nan"))
+    wind = backend_dict.get("wind", float("nan"))
+    gust = backend_dict.get("gust", float("nan"))
+
+    result: Dict[str, Any] = {
+        # Temperatura
+        "Tc": Tc,
+        "temp_max": None,  # backend /current no expone extremos diarios
+        "temp_min": None,
+
+        # Humedad
+        "RH": RH,
+        "rh": RH,  # duplicado legacy
+        "rh_max": None,
+        "rh_min": None,
+
+        # Presión
+        "p_hpa": p_hpa,         # MSL
+        "p_station": p_station,  # absoluta
+
+        # Viento (km/h, ya convertido por backend)
+        "wind": wind,
+        "wind_speed_kmh": wind,
+        "wind_dir_deg": backend_dict.get("wind_dir_deg", float("nan")),
+        "gust": gust,
+        "gust_max": gust,
+
+        # Precipitación
+        "precip_total": backend_dict.get("precip_total", float("nan")),
+
+        # Metadatos
+        "elevation": backend_dict.get("elevation", float("nan")),
+        "epoch": backend_dict.get("epoch", 0),
+        "fint": backend_dict.get("time_local", ""),
+        "lat": backend_dict.get("lat", float("nan")),
+        "lon": backend_dict.get("lon", float("nan")),
+        "ubi": backend_dict.get("station_name", ""),
+        "idema": backend_dict.get("idema", ""),
+
+        # Derivados ya calculados por el backend (add_basic_derived).
+        # Downstream ``process_standard_provider`` los recalculará; el
+        # resultado es idéntico (mismas fórmulas) así que no hay
+        # diferencia visible para el usuario.
+        "Td": backend_dict.get("Td", float("nan")),
+        "feels_like": backend_dict.get("feels_like", float("nan")),
+        "heat_index": backend_dict.get("heat_index", float("nan")),
+
+        # Campos que AEMET no reporta (NaN igual que el legacy)
+        "solar_radiation": float("nan"),
+        "uv": float("nan"),
+    }
+    return result
+
+
+def _get_aemet_data_via_active_source(idema: str) -> Optional[Dict[str, Any]]:
+    """
+    Devuelve el dict normalizado de AEMET (shape de ``parse_aemet_data``)
+    enrutado por el backend si está activo, con fallback transparente al
+    fetch legacy si el backend está caído.
+
+    Política de errores:
+    - Backend OK → backend
+    - Backend inalcanzable (network/timeout) → fallback a legacy
+    - Backend con error REAL del proveedor (401/404/429/etc.) → propagar
+      como ``RuntimeError`` (contrato esperado por ``get_aemet_data``;
+      legacy ``fetch_aemet_station_data`` lanza ``RuntimeError``).
+    """
+    from utils.api_client import is_backend_enabled
+
+    if not is_backend_enabled():
+        return _legacy_aemet_fetch_and_parse(idema)
+
+    from utils.api_client import fetch_aemet_current_via_api_strict
+    # ``WuError`` es la excepción que lanzan los clientes del backend
+    # (api/weather_underground.py lo expone para todos los proveedores).
+    from api.weather_underground import WuError
+
+    try:
+        backend_dict = fetch_aemet_current_via_api_strict(idema)
+    except WuError as exc:
+        if exc.kind in ("network", "timeout"):
+            # Backend inalcanzable: fallback transparente a AEMET directo.
+            logger.warning(
+                "Backend AEMET inalcanzable (%s); fallback a fetch directo",
+                exc.kind,
+            )
+            return _legacy_aemet_fetch_and_parse(idema)
+        # Error real del proveedor (401/404/badjson/http): propagar
+        # como RuntimeError igual que lo haría el legacy.
+        raise RuntimeError(
+            f"AEMET backend error: {exc.kind}"
+            + (f" (HTTP {exc.status_code})" if exc.status_code else "")
+        ) from exc
+
+    return _translate_backend_to_legacy_aemet_shape(backend_dict)
+
+
+def _legacy_aemet_fetch_and_parse(idema: str) -> Optional[Dict[str, Any]]:
+    """Path legacy: fetch + parse. Devuelve None si fetch no trae datos."""
+    raw_data = fetch_aemet_station_data(idema)
+    if not raw_data:
+        return None
+    return parse_aemet_data(raw_data)
+
+
 def get_aemet_data(state=None) -> Optional[Dict]:
     """
     Obtiene y parsea datos de AEMET de la estación conectada
@@ -803,18 +964,21 @@ def get_aemet_data(state=None) -> Optional[Dict]:
 
     for attempt in range(2):
         try:
-            raw_data = fetch_aemet_station_data(idema)
+            # Dispatch: backend (si flag activo) o legacy.
+            # ``_get_aemet_data_via_active_source`` ya devuelve el dict
+            # en shape de ``parse_aemet_data``, así que no hace falta
+            # parsear de nuevo.
+            parsed = _get_aemet_data_via_active_source(idema)
         except Exception as e:
             last_error = str(e)
-            raw_data = None
-        if not raw_data:
+            parsed = None
+        if not parsed:
             if attempt == 0:
                 clear_aemet_runtime_cache()
                 continue
             set_provider_runtime_error("AEMET", last_error or "AEMET no devolvió datos.", state)
             return None
 
-        parsed = parse_aemet_data(raw_data)
         age_min = _aemet_data_age_minutes(parsed.get("epoch"))
         if age_min <= AEMET_SERIES_FRESHNESS_MINUTES:
             clear_provider_runtime_error("AEMET", state)
@@ -1333,10 +1497,31 @@ def fetch_aemet_today_series_with_lookback(
     *,
     hours_before_start: int = 0,
 ) -> Dict[str, Any]:
-    """Serie local del día para AEMET, opcionalmente con horas previas al inicio del día."""
+    """
+    Serie local del día para AEMET, opcionalmente con horas previas al
+    inicio del día.
+
+    Dispatch entre backend y legacy:
+    - Backend (``METEOLABX_USE_API=1``) + reachable → traduce la
+      respuesta canónica a este shape local. La key del servidor (no
+      del usuario) se usa.
+    - Backend inalcanzable (network/timeout) → fallback transparente al
+      path legacy de 2-step contra AEMET directo.
+    - Errores reales del proveedor (401/404/etc.) en el backend →
+      log y fallback al legacy, que aplicará sus reintentos y caché.
+      Es más amable que propagar: AEMET es notoriamente intermitente.
+    - Flag off → legacy directo.
+    """
     station = str(idema).strip().upper()
     if not station:
         return _empty_aemet_window_series()
+
+    from utils.api_client import is_backend_enabled
+
+    if is_backend_enabled():
+        backend_series = _aemet_today_series_via_backend(station, hours_before_start)
+        if backend_series is not None:
+            return backend_series
 
     data_list = fetch_aemet_daily_timeseries(station)
     series = _build_aemet_local_window_series(
@@ -1344,6 +1529,131 @@ def fetch_aemet_today_series_with_lookback(
         hours_before_start=hours_before_start,
     )
     return series
+
+
+def _aemet_today_series_via_backend(
+    idema: str, hours_before_start: int,
+) -> Optional[Dict[str, Any]]:
+    """
+    Intenta obtener la serie del día desde el backend FastAPI. Devuelve
+    ``None`` si el backend no es alcanzable o falla (el caller hará
+    fallback al path legacy). Solo propaga excepciones genuinamente
+    inesperadas.
+    """
+    from utils.api_client import fetch_aemet_today_series_via_api_strict
+    from api.weather_underground import WuError
+
+    try:
+        backend_dict = fetch_aemet_today_series_via_api_strict(idema)
+    except WuError as exc:
+        if exc.kind in ("network", "timeout"):
+            logger.warning(
+                "Backend AEMET series inalcanzable (%s); fallback a fetch directo",
+                exc.kind,
+            )
+        else:
+            # Error real del proveedor desde backend: log y dejamos que
+            # el legacy lo reintente. AEMET es intermitente, el legacy
+            # tiene reintentos propios.
+            logger.warning(
+                "Backend AEMET series devolvió %s; fallback a fetch directo",
+                exc.kind,
+            )
+        return None
+
+    return _translate_backend_series_to_aemet_window(backend_dict, hours_before_start)
+
+
+def _translate_backend_series_to_aemet_window(
+    backend_dict: Dict[str, Any], hours_before_start: int,
+) -> Dict[str, Any]:
+    """
+    Convierte la respuesta canónica del backend (TodaySeries-shape) al
+    shape que ``_build_aemet_local_window_series`` produce:
+
+    - Mantiene: epochs, temps, humidities, pressures, winds, gusts,
+      wind_dirs, has_data.
+    - Añade: ``precips`` como lista de NaN (el backend AEMET no expone
+      precip diezminutal por record todavía; el path legacy sí). Si esto
+      se vuelve un problema, se añade al backend ampliando el schema.
+    - Filtra por ventana ``[día actual - hours_before_start, día siguiente)``
+      igual que hace el legacy. La ventana se aplica AQUÍ porque el
+      backend devuelve la serie entera del endpoint diezminutal.
+    """
+    epochs_in = list(backend_dict.get("epochs", []) or [])
+    if not epochs_in:
+        return _empty_aemet_window_series()
+
+    # Ventana temporal: hoy local +/- lookback.
+    now_local = datetime.now()
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    start_epoch = int((day_start - timedelta(hours=max(0, int(hours_before_start)))).timestamp())
+    end_epoch = int(day_end.timestamp())
+
+    def _vals(key: str) -> list:
+        values = backend_dict.get(key, []) or []
+        if not isinstance(values, list):
+            return []
+        return values
+
+    temps_in = _vals("temps")
+    humidities_in = _vals("humidities")
+    pressures_in = _vals("pressures")
+    winds_in = _vals("winds")
+    gusts_in = _vals("gusts")
+    wind_dirs_in = _vals("wind_dirs")
+
+    epochs: List[int] = []
+    temps: List[float] = []
+    humidities: List[float] = []
+    pressures: List[float] = []
+    winds: List[float] = []
+    gusts: List[float] = []
+    wind_dirs: List[float] = []
+    precips: List[float] = []  # AEMET backend no expone per-record; NaN
+
+    def _at(values: list, idx: int) -> float:
+        if idx >= len(values):
+            return float("nan")
+        v = values[idx]
+        if v is None:
+            return float("nan")
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return float("nan")
+
+    for idx, ep in enumerate(epochs_in):
+        try:
+            ep_int = int(ep)
+        except (TypeError, ValueError):
+            continue
+        if not (start_epoch <= ep_int < end_epoch):
+            continue
+        epochs.append(ep_int)
+        temps.append(_at(temps_in, idx))
+        humidities.append(_at(humidities_in, idx))
+        pressures.append(_at(pressures_in, idx))
+        winds.append(_at(winds_in, idx))
+        gusts.append(_at(gusts_in, idx))
+        wind_dirs.append(_at(wind_dirs_in, idx))
+        precips.append(float("nan"))
+
+    if not epochs:
+        return _empty_aemet_window_series()
+
+    return {
+        "epochs": epochs,
+        "temps": temps,
+        "humidities": humidities,
+        "pressures": pressures,
+        "winds": winds,
+        "gusts": gusts,
+        "wind_dirs": wind_dirs,
+        "precips": precips,
+        "has_data": True,
+    }
 
 
 def _empty_climo_dataframe(include_extras: bool = True) -> pd.DataFrame:
@@ -1422,6 +1732,13 @@ def _aemet_daily_record_to_row(record: Dict[str, Any]) -> Optional[Dict[str, Any
     temp_max = _aemet_climo_num(record, ["tmax", "TMAX", "tamax", "TAMAX"], ["tmax", "tamax"])
     temp_min = _aemet_climo_num(record, ["tmin", "TMIN", "tamin", "TAMIN"], ["tmin", "tamin"])
     wind_mean = _aemet_climo_num(record, ["velmedia", "VELMEDIA", "vv", "VV"], ["velmedia", "vv", "viento"])
+    wind_dir_mean = _parse_wind_dir_deg(
+        _aemet_first_by_patterns(
+            record,
+            ["dir", "DIR", "dv", "DV", "dd", "DD", "dir_viento", "direccion_viento", "winddir"],
+            ["dir", "direccion", "dv", "dd", "winddir"],
+        )
+    )
     gust_max = _aemet_climo_num(record, ["racha", "RACHA", "vmax", "VMAX"], ["racha", "vmax", "gust"])
     precip_total = _parse_precip_aemet(_aemet_first_by_patterns(record, ["prec", "PREC", "pp", "PP"], ["prec", "pp"]))
     # 'sol': horas de sol del día (disponible en estaciones con piranómetro/heliógrafo)
@@ -1449,6 +1766,7 @@ def _aemet_daily_record_to_row(record: Dict[str, Any]) -> Optional[Dict[str, Any
         "temp_max": float(temp_max) if not pd.isna(temp_max) else float("nan"),
         "temp_min": float(temp_min) if not pd.isna(temp_min) else float("nan"),
         "wind_mean": float(wind_mean) if not pd.isna(wind_mean) else float("nan"),
+        "wind_dir_mean": float(wind_dir_mean) if not pd.isna(wind_dir_mean) else float("nan"),
         "gust_max": float(gust_max) if not pd.isna(gust_max) else float("nan"),
         "precip_total": float(precip_total) if not pd.isna(precip_total) else float("nan"),
         "solar_hours": float(solar_hours) if not pd.isna(solar_hours) else float("nan"),
@@ -1469,7 +1787,7 @@ def _normalize_climo_daily_rows(rows: List[Dict[str, Any]]) -> pd.DataFrame:
         if col not in frame.columns:
             frame[col] = float("nan")
 
-    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "gust_max", "precip_total", "solar_hours"]
+    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total", "solar_hours"]
     for col in numeric_cols:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
     frame["precip_total"] = frame["precip_total"].clip(lower=0)

@@ -555,6 +555,7 @@ def get_nws_data(state=None) -> Optional[Dict[str, Any]]:
             "winds": [float(v) for v in winds],
             "gusts": [float(v) for v in gusts],
             "wind_dirs": [float(v) for v in dirs],
+            "precips": [float(v) for v in precs],
             "solar_radiations": [float("nan")] * len(epochs),
             "has_data": bool(day_series.get("has_data", False)),
         },

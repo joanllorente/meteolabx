@@ -363,9 +363,38 @@ def fetch_daily_timeseries_session_cached(station_id: str, api_key: str, ttl_s: 
     if len(cache) >= MAX_CACHE_SIZE:
         cache.popitem(last=False)
 
-    payload = fetch_daily_timeseries(station_id, api_key)
+    payload = _fetch_today_series_via_active_source(station_id, api_key)
     cache[station_cache_key] = {"t": now, "data": payload}
     return payload
+
+
+def _fetch_today_series_via_active_source(station_id: str, api_key: str) -> Dict:
+    """
+    Mismo patrón que ``_fetch_current_via_active_source`` pero para las
+    series del día. El flag ``METEOLABX_USE_API=1`` desvía la llamada al
+    backend FastAPI; si el backend está inalcanzable, fallback transparente
+    a WU directo via ``_fetch_with_backend_fallback``.
+
+    Usa la variante **strict** del cliente (``fetch_daily_timeseries_via_api_strict``)
+    que SÍ lanza ``WuError`` cuando el backend falla, lo cual es lo que
+    necesita el helper de fallback para distinguir backend caído del
+    proveedor caído. El legacy ``fetch_daily_timeseries`` mantiene su
+    contrato de "nunca falla, devuelve dict vacío" en el path de
+    fallback final.
+    """
+    from utils.api_client import (
+        is_backend_enabled,
+        fetch_daily_timeseries_via_api_strict,
+    )
+
+    if not is_backend_enabled():
+        return fetch_daily_timeseries(station_id, api_key)
+
+    return _fetch_with_backend_fallback(
+        via_backend=lambda: fetch_daily_timeseries_via_api_strict(station_id, api_key),
+        via_direct=lambda: fetch_daily_timeseries(station_id, api_key),
+        label="series/today",
+    )
 
 
 def fetch_extremes_from_daily(station_id: str, api_key: str) -> Dict:
@@ -619,6 +648,72 @@ def fetch_wu_current(station_id: str, api_key: str) -> Dict:
     }
 
 
+# WuError ``kind`` values que indican "backend inalcanzable" (no error real
+# de WU). En estos casos hacemos fallback transparente a WU directo: el
+# backend es una capa de caché opcional, no un proxy obligatorio.
+_BACKEND_UNREACHABLE_KINDS = frozenset({"network", "timeout"})
+
+
+def _fetch_with_backend_fallback(
+    via_backend: "callable[[], Dict]",
+    via_direct: "callable[[], Dict]",
+    *,
+    label: str,
+) -> Dict:
+    """
+    Llama a ``via_backend()``; si el backend está inalcanzable
+    (``WuError("network")`` o ``"timeout"``), cae transparentemente a
+    ``via_direct()`` (ataque directo a WU desde el frontend).
+
+    Si el backend responde con un error real del proveedor (401/404/429/
+    badjson/http), lo propagamos: WU directo daría el mismo error y
+    enmascararlo sería peor (el usuario no sabría que su API key es mala).
+    """
+    try:
+        return via_backend()
+    except WuError as exc:
+        if exc.kind in _BACKEND_UNREACHABLE_KINDS:
+            logger.warning(
+                "Backend inalcanzable (%s) para %s; fallback a WU directo",
+                exc.kind, label,
+            )
+            return via_direct()
+        # Error real del proveedor: propagar tal cual.
+        raise
+
+
+def _fetch_current_via_active_source(station_id: str, api_key: str) -> Dict:
+    """
+    Devuelve la observación current vía el origen activo:
+
+    - Modo legacy (por defecto): ``fetch_wu_current`` ataca directamente
+      a la API de Weather Underground desde Streamlit.
+    - Modo backend (``METEOLABX_USE_API=1``): ``fetch_wu_current_via_api``
+      ataca al backend FastAPI, que a su vez habla con WU.
+    - Modo backend con backend caído: fallback transparente a WU directo
+      vía ``_fetch_with_backend_fallback``. Así el backend pasa a ser
+      "caché opcional preferida", no proxy obligatorio.
+
+    Ambos caminos devuelven el MISMO ``dict`` y lanzan los MISMOS
+    ``WuError``, así que el caller (``fetch_wu_current_session_cached`` y
+    el resto del frontend) no nota diferencia.
+    """
+    # Import perezoso: importar utils.api_client a nivel de módulo crearía
+    # una dependencia circular en caliente (utils.api_client importa
+    # WuError de aquí). Importar dentro de la función rompe el ciclo y
+    # paga un coste despreciable (módulo ya cacheado tras 1ª llamada).
+    from utils.api_client import is_backend_enabled, fetch_wu_current_via_api
+
+    if not is_backend_enabled():
+        return fetch_wu_current(station_id, api_key)
+
+    return _fetch_with_backend_fallback(
+        via_backend=lambda: fetch_wu_current_via_api(station_id, api_key),
+        via_direct=lambda: fetch_wu_current(station_id, api_key),
+        label="current",
+    )
+
+
 def fetch_wu_current_session_cached(station_id: str, api_key: str, ttl_s: int) -> Dict:
     """Cache híbrido con dos niveles"""
     if "wu_cache_current" not in st.session_state:
@@ -643,7 +738,7 @@ def fetch_wu_current_session_cached(station_id: str, api_key: str, ttl_s: int) -
     if need_current:
         if len(cache_current) >= MAX_CACHE_SIZE:
             cache_current.popitem(last=False)
-        base_data = fetch_wu_current(station_id, api_key)
+        base_data = _fetch_current_via_active_source(station_id, api_key)
         cache_current[station_cache_key] = {"t": now, "data": base_data}
     
     # Extremos daily (menos frecuente - 10 minutos)

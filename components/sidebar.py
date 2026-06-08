@@ -10,9 +10,14 @@ from config import (
     LS_Z,
     LS_AUTOCONNECT,
     LS_AUTOCONNECT_TARGET,
+    LS_WEATHERLINK_APIKEY,
+    LS_WEATHERLINK_APISECRET,
+    LS_WEATHERLINK_STATION,
+    LS_WEATHERLINK_Z,
     LS_WU_FORGOTTEN,
     LS_WU_CALIBRATIONS,
     LS_UNIT_PREFERENCES,
+    LS_FAVORITES,
 )
 from utils.i18n import (
     get_language_label,
@@ -25,12 +30,19 @@ from utils.storage import (
     set_local_storage,
     set_stored_autoconnect_target,
     forget_local_storage_keys,
+    forget_weatherlink_local_storage_keys,
     consume_local_storage_writes,
     flush_local_storage_writes,
     get_stored_unit_preferences,
     hydrate_local_storage_snapshot,
     local_storage_snapshot_ready,
     set_stored_unit_preferences,
+)
+from utils.favorites import (
+    favorite_from_weatherlink,
+    favorite_from_wu,
+    remove_favorites_by_provider,
+    upsert_favorite,
 )
 from utils.helpers import normalize_text_input, is_nan, coerce_str
 from utils.units import DEFAULT_UNIT_PREFERENCES, UNIT_LABELS, UNIT_OPTIONS, normalize_unit_preferences
@@ -41,6 +53,7 @@ from services.wu_calibration import (
     normalize_wu_calibration,
 )
 from utils.provider_state import (
+    apply_weatherlink_station_state,
     apply_station_selection,
     apply_wu_station_state,
     clear_provider_autoconnect_widget_state,
@@ -56,9 +69,14 @@ LOCAL_STORAGE_BOOTSTRAP_KEYS = [
     LS_Z,
     LS_AUTOCONNECT,
     LS_AUTOCONNECT_TARGET,
+    LS_WEATHERLINK_APIKEY,
+    LS_WEATHERLINK_APISECRET,
+    LS_WEATHERLINK_STATION,
+    LS_WEATHERLINK_Z,
     LS_WU_FORGOTTEN,
     LS_WU_CALIBRATIONS,
     LS_UNIT_PREFERENCES,
+    LS_FAVORITES,
 ]
 
 WU_STATION_INPUT_KEY = "wu_input_station"
@@ -69,6 +87,32 @@ WU_INPUT_KEYS = (
     WU_API_KEY_INPUT_KEY,
     WU_ALTITUDE_INPUT_KEY,
 )
+
+WEATHERLINK_API_KEY_INPUT_KEY = "weatherlink_input_api_key"
+WEATHERLINK_API_SECRET_INPUT_KEY = "weatherlink_input_api_secret"
+WEATHERLINK_ALTITUDE_INPUT_KEY = "weatherlink_input_altitude"
+WEATHERLINK_FAVORITE_NAME_INPUT_KEY = "weatherlink_input_favorite_name"
+WEATHERLINK_INPUT_KEYS = (
+    WEATHERLINK_API_KEY_INPUT_KEY,
+    WEATHERLINK_API_SECRET_INPUT_KEY,
+    WEATHERLINK_ALTITUDE_INPUT_KEY,
+    WEATHERLINK_FAVORITE_NAME_INPUT_KEY,
+)
+_LOCAL_STORAGE_READY_RERUN_KEY = "_mlx_local_storage_ready_rerun_done"
+
+
+def _wu_target_station_id(target) -> str:
+    if not isinstance(target, dict):
+        return ""
+    if coerce_str(target.get("kind", ""), upper=True) != "WU":
+        return ""
+    return coerce_str(target.get("station") or target.get("station_id"), upper=True)
+
+
+def _wu_station_matches_target(station_id, target) -> bool:
+    station = coerce_str(station_id, upper=True)
+    target_station = _wu_target_station_id(target)
+    return bool(station and target_station and station == target_station)
 
 
 def _sync_wu_input_widgets_from_active(
@@ -109,6 +153,25 @@ def _sync_active_wu_from_input_widgets() -> None:
 
 def _mark_wu_inputs_user_edited() -> None:
     st.session_state["_wu_inputs_user_edited"] = True
+
+
+def _snapshot_has_saved_connection_values(snapshot) -> bool:
+    if not isinstance(snapshot, dict):
+        return False
+    for item_key in (
+        LS_STATION,
+        LS_APIKEY,
+        LS_Z,
+        LS_AUTOCONNECT_TARGET,
+        LS_WEATHERLINK_APIKEY,
+        LS_WEATHERLINK_APISECRET,
+        LS_WEATHERLINK_STATION,
+        LS_WEATHERLINK_Z,
+    ):
+        value = coerce_str(snapshot.get(item_key, ""))
+        if value and value != "__MLX_FORGOTTEN__":
+            return True
+    return False
 
 
 def _now_local() -> datetime:
@@ -215,6 +278,7 @@ def render_sidebar(_local_storage_unused=None):
         set_stored_wu_station_calibration,
     )
 
+    storage_was_ready = local_storage_snapshot_ready()
     bootstrap_writes = consume_local_storage_writes()
     storage_payload = sync_local_storage(
         keys=LOCAL_STORAGE_BOOTSTRAP_KEYS,
@@ -223,8 +287,16 @@ def render_sidebar(_local_storage_unused=None):
     )
     if isinstance(storage_payload, dict) and storage_payload.get("ready"):
         hydrate_local_storage_snapshot(storage_payload.get("values"))
+        if (
+            not storage_was_ready
+            and not bool(st.session_state.get(_LOCAL_STORAGE_READY_RERUN_KEY, False))
+            and _snapshot_has_saved_connection_values(st.session_state.get("_mlx_local_storage_snapshot"))
+            and hasattr(st, "rerun")
+        ):
+            st.session_state[_LOCAL_STORAGE_READY_RERUN_KEY] = True
+            st.rerun()
     storage_ready = local_storage_snapshot_ready()
-    for _bad_input_key in ("active_station", "active_key", "active_z", *WU_INPUT_KEYS):
+    for _bad_input_key in ("active_station", "active_key", "active_z", *WU_INPUT_KEYS, *WEATHERLINK_INPUT_KEYS):
         if str(st.session_state.get(_bad_input_key, "")).strip() == "[object Object]":
             st.session_state[_bad_input_key] = ""
 
@@ -233,13 +305,17 @@ def render_sidebar(_local_storage_unused=None):
     if st.session_state.pop("_forget_pending", False):
         st.session_state["_skip_local_prefill_once"] = True
         st.session_state["_clear_inputs"] = True
-        st.session_state["connected"] = False
-        st.session_state["connection_type"] = None
+        if str(st.session_state.get("connection_type", "")).strip().upper() == "WU":
+            disconnect_active_station()
         st.session_state[AUTOCONNECT_ATTEMPTED] = False
-        for _k in ["wu_connected_station", "wu_connected_api_key", "wu_connected_z"]:
-            st.session_state.pop(_k, None)
-        st.session_state.pop("wu_cache_current", None)
-        st.session_state.pop("wu_cache_daily", None)
+        st.rerun()
+
+    if st.session_state.pop("_weatherlink_forget_pending", False):
+        st.session_state["_skip_local_prefill_once"] = True
+        st.session_state["_clear_weatherlink_inputs"] = True
+        if str(st.session_state.get("connection_type", "")).strip().upper() == "WEATHERLINK":
+            disconnect_active_station()
+        st.session_state[AUTOCONNECT_ATTEMPTED] = False
         st.rerun()
 
     first_sidebar_load = not bool(st.session_state.get("_sidebar_inputs_initialized", False))
@@ -255,6 +331,10 @@ def render_sidebar(_local_storage_unused=None):
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
         saved_z = get_stored_z()
+        saved_weatherlink_key = get_local_storage_value(LS_WEATHERLINK_APIKEY)
+        saved_weatherlink_secret = get_local_storage_value(LS_WEATHERLINK_APISECRET)
+        saved_weatherlink_z = get_local_storage_value(LS_WEATHERLINK_Z)
+        saved_weatherlink_station = get_local_storage_value(LS_WEATHERLINK_STATION)
         saved_autoconnect_raw = coerce_str(get_local_storage_value(LS_AUTOCONNECT), lower=True)
         saved_autoconnect = bool(get_stored_autoconnect())
         saved_target = get_stored_autoconnect_target()
@@ -284,15 +364,30 @@ def render_sidebar(_local_storage_unused=None):
         else:
             target_kind_raw = str((saved_target or {}).get("kind", "")).strip().upper()
             if target_kind_raw == "WU":
-                # El objetivo de autoconexión guarda una copia completa de WU.
-                # Si alguna escritura auxiliar llega tarde, úsala para hidratar
-                # los campos al abrir una sesión nueva en producción.
-                if not coerce_str(saved_station):
-                    saved_station = coerce_str((saved_target or {}).get("station", "")) or None
-                if not coerce_str(saved_key):
-                    saved_key = coerce_str((saved_target or {}).get("api_key", "")) or None
-                if not coerce_str(saved_z):
-                    saved_z = coerce_str((saved_target or {}).get("z", "")) or None
+                # El objetivo de autoconexión guarda una copia completa de WU y
+                # es la fuente autoritativa cuando la autoconexión está activa.
+                # LS_STATION/LS_APIKEY pueden contener la última estación que el
+                # usuario guardó como favorita, que no tiene por qué ser la de
+                # arranque automático.
+                target_autoconnect_requested = saved_autoconnect_raw not in ("0", "false", "no", "off")
+                target_station = coerce_str((saved_target or {}).get("station", ""))
+                target_key = coerce_str((saved_target or {}).get("api_key", ""))
+                target_z = normalize_text_input((saved_target or {}).get("z", ""))
+                if target_autoconnect_requested or not coerce_str(saved_station):
+                    saved_station = target_station or saved_station
+                if target_autoconnect_requested or not coerce_str(saved_key):
+                    saved_key = target_key or saved_key
+                if target_autoconnect_requested or not coerce_str(saved_z):
+                    saved_z = target_z or saved_z
+            elif target_kind_raw == "WEATHERLINK":
+                if not coerce_str(saved_weatherlink_key):
+                    saved_weatherlink_key = coerce_str((saved_target or {}).get("api_key", "")) or None
+                if not coerce_str(saved_weatherlink_secret):
+                    saved_weatherlink_secret = coerce_str((saved_target or {}).get("api_secret", "")) or None
+                if not coerce_str(saved_weatherlink_z):
+                    saved_weatherlink_z = coerce_str((saved_target or {}).get("z", "")) or None
+                if not coerce_str(saved_weatherlink_station):
+                    saved_weatherlink_station = coerce_str((saved_target or {}).get("station_id", "")) or None
 
         active_station = st.session_state.get("active_station", "")
         active_key = st.session_state.get("active_key", "")
@@ -308,6 +403,14 @@ def render_sidebar(_local_storage_unused=None):
             st.session_state["active_key"] = coerce_str(saved_key)
             st.session_state["active_z"] = normalize_text_input(saved_z or "")
             _sync_wu_input_widgets_from_active(overwrite=True)
+            st.session_state[WEATHERLINK_API_KEY_INPUT_KEY] = coerce_str(saved_weatherlink_key)
+            st.session_state[WEATHERLINK_API_SECRET_INPUT_KEY] = coerce_str(saved_weatherlink_secret)
+            st.session_state[WEATHERLINK_ALTITUDE_INPUT_KEY] = normalize_text_input(saved_weatherlink_z or "")
+            st.session_state["weatherlink_api_key"] = coerce_str(saved_weatherlink_key)
+            st.session_state["weatherlink_api_secret"] = coerce_str(saved_weatherlink_secret)
+            st.session_state["weatherlink_station_alt"] = normalize_text_input(saved_weatherlink_z or "")
+            if saved_weatherlink_station:
+                st.session_state["weatherlink_selected_station_id"] = coerce_str(saved_weatherlink_station)
         else:
             if not active_station and saved_station:
                 st.session_state["active_station"] = saved_station
@@ -316,16 +419,39 @@ def render_sidebar(_local_storage_unused=None):
             if (not str(active_z).strip() or active_z == "0") and saved_z:
                 st.session_state["active_z"] = normalize_text_input(saved_z)
             _sync_wu_input_widgets_from_active(overwrite_if_pristine=True)
+            if not coerce_str(st.session_state.get(WEATHERLINK_API_KEY_INPUT_KEY, "")) and saved_weatherlink_key:
+                st.session_state[WEATHERLINK_API_KEY_INPUT_KEY] = coerce_str(saved_weatherlink_key)
+            if not coerce_str(st.session_state.get(WEATHERLINK_API_SECRET_INPUT_KEY, "")) and saved_weatherlink_secret:
+                st.session_state[WEATHERLINK_API_SECRET_INPUT_KEY] = coerce_str(saved_weatherlink_secret)
+            if not coerce_str(st.session_state.get(WEATHERLINK_ALTITUDE_INPUT_KEY, "")) and saved_weatherlink_z:
+                st.session_state[WEATHERLINK_ALTITUDE_INPUT_KEY] = normalize_text_input(saved_weatherlink_z)
+            if not coerce_str(st.session_state.get("weatherlink_api_key", "")) and saved_weatherlink_key:
+                st.session_state["weatherlink_api_key"] = coerce_str(saved_weatherlink_key)
+            if not coerce_str(st.session_state.get("weatherlink_api_secret", "")) and saved_weatherlink_secret:
+                st.session_state["weatherlink_api_secret"] = coerce_str(saved_weatherlink_secret)
+            if not coerce_str(st.session_state.get("weatherlink_station_alt", "")) and saved_weatherlink_z:
+                st.session_state["weatherlink_station_alt"] = normalize_text_input(saved_weatherlink_z)
+            if not coerce_str(st.session_state.get("weatherlink_selected_station_id", "")) and saved_weatherlink_station:
+                st.session_state["weatherlink_selected_station_id"] = coerce_str(saved_weatherlink_station)
 
         has_saved_credentials = bool(coerce_str(saved_station) and coerce_str(saved_key))
+        has_saved_weatherlink_credentials = bool(coerce_str(saved_weatherlink_key) and coerce_str(saved_weatherlink_secret))
         target_kind = str((saved_target or {}).get("kind", "")).strip().upper()
         valid_wu_target = bool(target_kind == "WU" and has_saved_credentials)
+        valid_weatherlink_target = bool(
+            target_kind == "WEATHERLINK"
+            and has_saved_weatherlink_credentials
+            and (
+                coerce_str((saved_target or {}).get("station_id", ""))
+                or coerce_str(saved_weatherlink_station)
+            )
+        )
         valid_provider_target = bool(
             target_kind == "PROVIDER"
             and str((saved_target or {}).get("provider_id", "")).strip()
             and str((saved_target or {}).get("station_id", "")).strip()
         )
-        has_valid_target = valid_wu_target or valid_provider_target
+        has_valid_target = valid_wu_target or valid_provider_target or valid_weatherlink_target
         if has_valid_target and saved_autoconnect_raw not in ("0", "false", "no", "off"):
             saved_autoconnect = True
         if not has_valid_target:
@@ -335,6 +461,9 @@ def render_sidebar(_local_storage_unused=None):
             st.session_state["_mlx_session_autoconnect_enabled"] = True
             if valid_wu_target:
                 clear_provider_autoconnect_widget_state()
+            if valid_weatherlink_target:
+                st.session_state["connection_source_selector"] = "WEATHERLINK"
+                st.session_state["auto_connect_weatherlink_device"] = True
 
         # Estado UI del toggle de sidebar: solo representa auto-conexión WU.
         wu_toggle_default = bool(saved_autoconnect and valid_wu_target)
@@ -427,9 +556,9 @@ def render_sidebar(_local_storage_unused=None):
             wu_toggle_changed_this_run = False
         if (
             wu_toggle_changed_this_run
-            and current_target_kind == "PROVIDER"
+            and current_target_kind in ("PROVIDER", "WEATHERLINK")
             and bool(st.session_state.get("auto_connect_wu_device", False))
-            and st.session_state.get("_wu_autoconnect_ui_target_kind") != "PROVIDER"
+            and st.session_state.get("_wu_autoconnect_ui_target_kind") != current_target_kind
         ):
             # Al cambiar de WU a proveedor, el frontend puede rehidratar el
             # toggle WU con el valor anterior (True) y disparar on_change. Si
@@ -438,7 +567,7 @@ def render_sidebar(_local_storage_unused=None):
             # de Streamlit después de renderizarla.
             st.session_state.pop("_wu_autoconnect_toggle_changed", None)
             st.session_state["auto_connect_wu_device"] = False
-            st.session_state["_wu_autoconnect_ui_target_kind"] = "PROVIDER"
+            st.session_state["_wu_autoconnect_ui_target_kind"] = current_target_kind
             st.session_state["_wu_autoconnect_ui_last_value"] = False
             st.session_state["_wu_autoconnect_disable_armed"] = False
             wu_toggle_changed_this_run = False
@@ -468,7 +597,13 @@ def render_sidebar(_local_storage_unused=None):
             and not st.session_state.get("connected", False)
             and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
         )
-        if should_autoconnect_wu or should_autoconnect_provider:
+        should_autoconnect_weatherlink = (
+            saved_autoconnect
+            and valid_weatherlink_target
+            and not st.session_state.get("connected", False)
+            and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
+        )
+        if should_autoconnect_wu or should_autoconnect_provider or should_autoconnect_weatherlink:
             if should_autoconnect_wu:
                 station_clean = str(saved_station).strip()
                 key_clean = str(saved_key).strip()
@@ -529,10 +664,39 @@ def render_sidebar(_local_storage_unused=None):
                     },
                     connected=True,
                 )
+            elif should_autoconnect_weatherlink:
+                station_id = coerce_str((saved_target or {}).get("station_id", "")) or coerce_str(saved_weatherlink_station)
+                station_payload = (saved_target or {}).get("station")
+                station = dict(station_payload) if isinstance(station_payload, dict) else {}
+                station.setdefault("station_id", station_id)
+                station.setdefault("station_name", coerce_str((saved_target or {}).get("station_name", "")) or station_id)
+                station.setdefault("latitude", (saved_target or {}).get("lat"))
+                station.setdefault("longitude", (saved_target or {}).get("lon"))
+                station.setdefault("elevation", normalize_text_input(saved_weatherlink_z or (saved_target or {}).get("z", "")))
+                station.setdefault("time_zone", (saved_target or {}).get("station_tz", ""))
+
+                key_clean = coerce_str(saved_weatherlink_key or (saved_target or {}).get("api_key", ""))
+                secret_clean = coerce_str(saved_weatherlink_secret or (saved_target or {}).get("api_secret", ""))
+                z_clean = normalize_text_input(saved_weatherlink_z or (saved_target or {}).get("z", ""))
+                st.session_state["connection_source_selector"] = "WEATHERLINK"
+                st.session_state[WEATHERLINK_API_KEY_INPUT_KEY] = key_clean
+                st.session_state[WEATHERLINK_API_SECRET_INPUT_KEY] = secret_clean
+                st.session_state[WEATHERLINK_ALTITUDE_INPUT_KEY] = z_clean
+                st.session_state["auto_connect_weatherlink_device"] = True
+                st.session_state[AUTOCONNECT_ATTEMPTED] = True
+                selection_ok = apply_weatherlink_station_state(
+                    station,
+                    key_clean,
+                    secret_clean,
+                    z_clean,
+                    [station],
+                    connected=True,
+                )
             if not selection_ok:
                 # Target inválido: desactivamos auto-conexión para no
                 # reintentar el mismo error en cada arranque.
                 st.session_state["auto_connect_wu_device"] = False
+                st.session_state["auto_connect_weatherlink_device"] = False
             st.rerun()
     elif first_sidebar_load and not defer_local_prefill:
         st.session_state["active_station"] = ""
@@ -586,13 +750,20 @@ def render_sidebar(_local_storage_unused=None):
         current_connection_type == "WU"
         or (loading_provider == "WU" and has_wu_runtime_credentials)
     ):
-        if not str(st.session_state.get("active_station", "")).strip():
+        force_runtime_sync = bool(st.session_state.pop("_wu_runtime_sync_visible_inputs", False))
+        if force_runtime_sync and has_wu_runtime_credentials:
             st.session_state["active_station"] = str(st.session_state.get("wu_connected_station", "")).strip()
-        if not str(st.session_state.get("active_key", "")).strip():
             st.session_state["active_key"] = str(st.session_state.get("wu_connected_api_key", "")).strip()
-        if not str(st.session_state.get("active_z", "")).strip():
             st.session_state["active_z"] = normalize_text_input(st.session_state.get("wu_connected_z", ""))
-        _sync_wu_input_widgets_from_active(overwrite_if_pristine=True)
+            _sync_wu_input_widgets_from_active(overwrite=True)
+        else:
+            if not str(st.session_state.get("active_station", "")).strip():
+                st.session_state["active_station"] = str(st.session_state.get("wu_connected_station", "")).strip()
+            if not str(st.session_state.get("active_key", "")).strip():
+                st.session_state["active_key"] = str(st.session_state.get("wu_connected_api_key", "")).strip()
+            if not str(st.session_state.get("active_z", "")).strip():
+                st.session_state["active_z"] = normalize_text_input(st.session_state.get("wu_connected_z", ""))
+            _sync_wu_input_widgets_from_active(overwrite_if_pristine=True)
 
     # Idioma + tema
     st.sidebar.title(t("sidebar.settings_title"))
@@ -685,48 +856,264 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["_wu_autoconnect_ui_target_kind"] = ""
         del st.session_state["_clear_inputs"]
 
-    st.sidebar.text_input(
-        t("sidebar.connection.fields.station_id"),
-        key=WU_STATION_INPUT_KEY,
-        placeholder=t("sidebar.connection.placeholders.station_id"),
-        autocomplete="off",
-        on_change=_mark_wu_inputs_user_edited,
-    )
-    st.sidebar.text_input(
-        t("sidebar.connection.fields.api_key"),
-        key=WU_API_KEY_INPUT_KEY,
-        type="password",
-        placeholder=t("sidebar.connection.placeholders.api_key"),
-        help=t("sidebar.connection.api_key_help"),
-        autocomplete="new-password",
-        on_change=_mark_wu_inputs_user_edited,
-    )
-    st.sidebar.text_input(
-        t("sidebar.connection.fields.altitude"),
-        key=WU_ALTITUDE_INPUT_KEY,
-        placeholder=t("sidebar.connection.placeholders.altitude"),
-        autocomplete="off",
-        on_change=_mark_wu_inputs_user_edited,
-    )
-    _sync_active_wu_from_input_widgets()
+    if st.session_state.get("_clear_weatherlink_inputs", False):
+        for _k in WEATHERLINK_INPUT_KEYS:
+            st.session_state[_k] = ""
+        for _k in (
+            "weatherlink_api_key",
+            "weatherlink_api_secret",
+            "weatherlink_station_alt",
+            "weatherlink_selected_station_id",
+            "weatherlink_station_id",
+            "weatherlink_station_name",
+            "weatherlink_station_lat",
+            "weatherlink_station_lon",
+            "weatherlink_station_tz",
+            "weatherlink_stations",
+            "weatherlink_station_selector",
+        ):
+            st.session_state.pop(_k, None)
+        st.session_state["auto_connect_weatherlink_device"] = False
+        st.session_state.pop("_weatherlink_autoconnect_toggle_changed", None)
+        del st.session_state["_clear_weatherlink_inputs"]
 
-    connection_caption = coerce_str(t("sidebar.connection.caption"))
+    source_options = ["WU", "WEATHERLINK"]
+    connection_source = coerce_str(st.session_state.get("connection_source_selector", ""), upper=True)
+    if connection_source not in source_options:
+        session_target = st.session_state.get("_mlx_session_autoconnect_target")
+        session_target_kind = coerce_str((session_target or {}).get("kind", "") if isinstance(session_target, dict) else "", upper=True)
+        has_weatherlink_inputs = bool(
+            coerce_str(st.session_state.get(WEATHERLINK_API_KEY_INPUT_KEY, "") or st.session_state.get("weatherlink_api_key", ""))
+            and coerce_str(st.session_state.get(WEATHERLINK_API_SECRET_INPUT_KEY, "") or st.session_state.get("weatherlink_api_secret", ""))
+        )
+        has_wu_inputs = bool(coerce_str(st.session_state.get("active_station", "")) and coerce_str(st.session_state.get("active_key", "")))
+        if current_connection_type == "WEATHERLINK" or session_target_kind == "WEATHERLINK" or (has_weatherlink_inputs and not has_wu_inputs):
+            connection_source = "WEATHERLINK"
+        else:
+            connection_source = "WU"
+        st.session_state["connection_source_selector"] = connection_source
+
+    connection_source = st.sidebar.segmented_control(
+        t("sidebar.connection.source.label"),
+        source_options,
+        format_func=lambda option: t(f"sidebar.connection.source.options.{option.lower()}"),
+        key="connection_source_selector",
+        width="stretch",
+    ) or connection_source
+    connection_source = coerce_str(connection_source, upper=True)
+
+    if connection_source == "WEATHERLINK":
+        if current_connection_type == "WEATHERLINK":
+            st.session_state.setdefault(WEATHERLINK_API_KEY_INPUT_KEY, st.session_state.get("weatherlink_api_key", ""))
+            st.session_state.setdefault(WEATHERLINK_API_SECRET_INPUT_KEY, st.session_state.get("weatherlink_api_secret", ""))
+            st.session_state.setdefault(WEATHERLINK_ALTITUDE_INPUT_KEY, normalize_text_input(st.session_state.get("weatherlink_station_alt", "")))
+
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.weatherlink_api_key"),
+            key=WEATHERLINK_API_KEY_INPUT_KEY,
+            type="password",
+            placeholder=t("sidebar.connection.placeholders.api_key"),
+            help=t("sidebar.connection.api_key_help"),
+            autocomplete="new-password",
+        )
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.weatherlink_api_secret"),
+            key=WEATHERLINK_API_SECRET_INPUT_KEY,
+            type="password",
+            placeholder=t("sidebar.connection.placeholders.api_secret"),
+            help=t("sidebar.connection.api_secret_help"),
+            autocomplete="new-password",
+        )
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.altitude"),
+            key=WEATHERLINK_ALTITUDE_INPUT_KEY,
+            placeholder=t("sidebar.connection.placeholders.altitude"),
+            autocomplete="off",
+        )
+        # Nombre custom para el favorito. WeatherLink expone el alias
+        # del owner en campos inconsistentes (a veces ``station_name``,
+        # a veces ``username``, a veces nada), así que dejamos al
+        # usuario asignar un nombre legible que se persistirá en el
+        # favorito. Si lo deja vacío usamos lo que devuelva la API.
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.weatherlink_favorite_name"),
+            key=WEATHERLINK_FAVORITE_NAME_INPUT_KEY,
+            placeholder=t("sidebar.connection.placeholders.weatherlink_favorite_name"),
+            help=t("sidebar.connection.weatherlink_favorite_name_help"),
+            autocomplete="off",
+        )
+        st.session_state["weatherlink_api_key"] = coerce_str(st.session_state.get(WEATHERLINK_API_KEY_INPUT_KEY, ""))
+        st.session_state["weatherlink_api_secret"] = coerce_str(st.session_state.get(WEATHERLINK_API_SECRET_INPUT_KEY, ""))
+        st.session_state["weatherlink_station_alt"] = normalize_text_input(st.session_state.get(WEATHERLINK_ALTITUDE_INPUT_KEY, ""))
+    else:
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.station_id"),
+            key=WU_STATION_INPUT_KEY,
+            placeholder=t("sidebar.connection.placeholders.station_id"),
+            autocomplete="off",
+            on_change=_mark_wu_inputs_user_edited,
+        )
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.api_key"),
+            key=WU_API_KEY_INPUT_KEY,
+            type="password",
+            placeholder=t("sidebar.connection.placeholders.api_key"),
+            help=t("sidebar.connection.api_key_help"),
+            autocomplete="new-password",
+            on_change=_mark_wu_inputs_user_edited,
+        )
+        st.sidebar.text_input(
+            t("sidebar.connection.fields.altitude"),
+            key=WU_ALTITUDE_INPUT_KEY,
+            placeholder=t("sidebar.connection.placeholders.altitude"),
+            autocomplete="off",
+            on_change=_mark_wu_inputs_user_edited,
+        )
+        _sync_active_wu_from_input_widgets()
+
+        if (
+            saved_autoconnect
+            and valid_wu_target
+            and not _wu_station_matches_target(st.session_state.get("active_station", ""), saved_target)
+            and not bool(st.session_state.get("_wu_autoconnect_toggle_changed", False))
+        ):
+            # La autoconexión WU sigue activa para su estación guardada, pero
+            # el formulario visible apunta a otra estación que el usuario está
+            # preparando/guardando. El toggle debe representar "esta estación
+            # visible es el target", no "existe cualquier target WU".
+            st.session_state["auto_connect_wu_device"] = False
+            st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
+            st.session_state["_wu_autoconnect_ui_last_value"] = False
+
+        wu_error_key = coerce_str(st.session_state.pop("_wu_connection_error_key", ""))
+        wu_error_status = coerce_str(st.session_state.pop("_wu_connection_error_status", ""))
+        if wu_error_key:
+            st.sidebar.error(t(wu_error_key, status=wu_error_status))
+
+    connection_caption = coerce_str(
+        t("sidebar.connection.weatherlink_session_caption")
+        if connection_source == "WEATHERLINK"
+        else t("sidebar.connection.caption")
+    )
+
+    def _current_weatherlink_station() -> dict:
+        station_id = coerce_str(
+            st.session_state.get("weatherlink_selected_station_id", "")
+            or st.session_state.get("weatherlink_station_id", "")
+        )
+        stations = st.session_state.get("weatherlink_stations", [])
+        if isinstance(stations, list):
+            for station in stations:
+                if not isinstance(station, dict):
+                    continue
+                candidate_id = coerce_str(station.get("station_id") or station.get("station_id_uuid"))
+                if station_id and candidate_id == station_id:
+                    return dict(station)
+        return {
+            "station_id": station_id,
+            "station_name": st.session_state.get("weatherlink_station_name") or station_id,
+            "latitude": st.session_state.get("weatherlink_station_lat"),
+            "longitude": st.session_state.get("weatherlink_station_lon"),
+            "elevation": st.session_state.get("weatherlink_station_alt"),
+            "time_zone": st.session_state.get("weatherlink_station_tz"),
+        } if station_id else {}
+
+    def _persist_weatherlink_saved_values() -> tuple[str, str, str, dict]:
+        key = coerce_str(st.session_state.get("weatherlink_api_key", ""))
+        secret = coerce_str(st.session_state.get("weatherlink_api_secret", ""))
+        z_text = normalize_text_input(st.session_state.get("weatherlink_station_alt", ""))
+        station = _current_weatherlink_station()
+        station_id = coerce_str(station.get("station_id") or station.get("station_id_uuid"))
+        set_local_storage(LS_WEATHERLINK_APIKEY, key, "save")
+        set_local_storage(LS_WEATHERLINK_APISECRET, secret, "save")
+        set_local_storage(LS_WEATHERLINK_Z, z_text, "save")
+        if station_id:
+            set_local_storage(LS_WEATHERLINK_STATION, station_id, "save")
+        else:
+            set_local_storage(LS_WEATHERLINK_STATION, "", "save")
+        return key, secret, z_text, station
+
+    def _set_weatherlink_autoconnect_target(enabled: bool) -> bool:
+        if not enabled:
+            current_target = get_stored_autoconnect_target() or {}
+            if coerce_str(current_target.get("kind", ""), upper=True) == "WEATHERLINK":
+                set_local_storage(LS_AUTOCONNECT, "0", "save")
+                set_stored_autoconnect_target(None)
+            return True
+
+        key, secret, z_text, station = _persist_weatherlink_saved_values()
+        station_id = coerce_str(station.get("station_id") or station.get("station_id_uuid"))
+        if not key or not secret or not station_id:
+            return False
+        clear_provider_autoconnect_widget_state()
+        set_local_storage(LS_AUTOCONNECT, "1", "save")
+        st.session_state["auto_connect_wu_device"] = False
+        st.session_state["_wu_autoconnect_ui_target_kind"] = "WEATHERLINK"
+        st.session_state["_wu_autoconnect_ui_last_value"] = False
+        set_stored_autoconnect_target(
+            {
+                "kind": "WEATHERLINK",
+                "station_id": station_id,
+                "station_name": coerce_str(station.get("station_name") or station.get("name") or station_id),
+                "api_key": key,
+                "api_secret": secret,
+                "z": z_text,
+                "lat": station.get("latitude", station.get("lat")),
+                "lon": station.get("longitude", station.get("lon")),
+                "elevation_m": station.get("elevation", z_text),
+                "station_tz": station.get("time_zone", station.get("tz", "")),
+                "station": station,
+            }
+        )
+        return True
+
     def _mark_wu_autoconnect_toggle_changed() -> None:
         st.session_state["_wu_autoconnect_toggle_changed"] = True
 
+    def _mark_weatherlink_autoconnect_toggle_changed() -> None:
+        st.session_state["_weatherlink_autoconnect_toggle_changed"] = True
+
     auto_connect_default = bool(st.session_state.get("auto_connect_wu_device", False))
-    auto_connect_wu_device = st.sidebar.toggle(
-        t("sidebar.autoconnect.label"),
-        key="auto_connect_wu_device",
-        on_change=_mark_wu_autoconnect_toggle_changed,
-    )
-    autoconnect_caption = coerce_str(t("sidebar.autoconnect.caption"))
-    if autoconnect_caption and autoconnect_caption != "sidebar.autoconnect.caption":
-        st.sidebar.caption(autoconnect_caption)
+    if connection_source == "WU":
+        auto_connect_wu_device = st.sidebar.toggle(
+            t("sidebar.autoconnect.label"),
+            key="auto_connect_wu_device",
+            on_change=_mark_wu_autoconnect_toggle_changed,
+        )
+        autoconnect_caption = coerce_str(t("sidebar.autoconnect.caption"))
+        if autoconnect_caption and autoconnect_caption != "sidebar.autoconnect.caption":
+            st.sidebar.caption(autoconnect_caption)
+    else:
+        current_target = get_stored_autoconnect_target() or {}
+        weatherlink_toggle_default = bool(
+            get_stored_autoconnect()
+            and coerce_str(current_target.get("kind", ""), upper=True) == "WEATHERLINK"
+        )
+        if "_weatherlink_autoconnect_toggle_changed" not in st.session_state:
+            st.session_state["auto_connect_weatherlink_device"] = weatherlink_toggle_default
+        auto_connect_wu_device = False
+        auto_connect_weatherlink_device = st.sidebar.toggle(
+            t("sidebar.autoconnect.label"),
+            key="auto_connect_weatherlink_device",
+            on_change=_mark_weatherlink_autoconnect_toggle_changed,
+        )
+        st.session_state.pop("_wu_autoconnect_toggle_changed", None)
+        if st.session_state.pop("_weatherlink_autoconnect_toggle_changed", False):
+            st.session_state[AUTOCONNECT_ATTEMPTED] = True
+            if auto_connect_weatherlink_device:
+                if _set_weatherlink_autoconnect_target(True):
+                    st.sidebar.success(t("sidebar.autoconnect.enabled_weatherlink"))
+                else:
+                    st.session_state["auto_connect_weatherlink_device"] = False
+                    set_local_storage(LS_AUTOCONNECT, "0", "save")
+                    st.sidebar.warning(t("sidebar.autoconnect.missing_weatherlink_credentials"))
+            else:
+                _set_weatherlink_autoconnect_target(False)
+                st.sidebar.info(t("sidebar.autoconnect.disabled"))
 
     if "_wu_autoconnect_ui_last_value" not in st.session_state:
         st.session_state["_wu_autoconnect_ui_last_value"] = auto_connect_default
-    wu_toggle_changed = bool(st.session_state.pop("_wu_autoconnect_toggle_changed", False))
+    wu_toggle_changed = bool(connection_source == "WU" and st.session_state.pop("_wu_autoconnect_toggle_changed", False))
     if wu_toggle_changed:
         station_for_target = str(st.session_state.get("active_station", "")).strip()
         key_for_target = str(st.session_state.get("active_key", "")).strip()
@@ -748,17 +1135,17 @@ def render_sidebar(_local_storage_unused=None):
             # Sin esta guardia, el target de proveedor recién guardado se
             # perdía en el siguiente rerun.
             if (
-                current_kind == "PROVIDER"
+                current_kind in ("PROVIDER", "WEATHERLINK")
                 and (
                     provider_takeover_guard_late
-                    or st.session_state.get("_wu_autoconnect_ui_target_kind") != "PROVIDER"
+                    or st.session_state.get("_wu_autoconnect_ui_target_kind") != current_kind
                 )
             ):
                 # Marcamos el estado coherente con PROVIDER y saltamos el
                 # bloque que sobrescribe localStorage. NO usamos `st.rerun()`
                 # aquí porque cortaría el sidebar a medio renderizar.
                 st.session_state["auto_connect_wu_device"] = False
-                st.session_state["_wu_autoconnect_ui_target_kind"] = "PROVIDER"
+                st.session_state["_wu_autoconnect_ui_target_kind"] = current_kind
                 st.session_state["_wu_autoconnect_ui_last_value"] = False
                 st.session_state["_wu_autoconnect_disable_armed"] = False
             else:
@@ -826,6 +1213,7 @@ def render_sidebar(_local_storage_unused=None):
                 st.session_state.get("_wu_autoconnect_disable_armed", False)
                 and station_for_target
                 and key_for_target
+                and _wu_station_matches_target(station_for_target, current_target)
             )
             if (
                 current_kind == "WU"
@@ -853,7 +1241,8 @@ def render_sidebar(_local_storage_unused=None):
 
     st.session_state["_wu_autoconnect_event_armed"] = True
     st.session_state["_wu_autoconnect_disable_armed"] = bool(
-        st.session_state.get("auto_connect_wu_device", False)
+        connection_source == "WU"
+        and st.session_state.get("auto_connect_wu_device", False)
         and str(st.session_state.get("active_station", "")).strip()
         and str(st.session_state.get("active_key", "")).strip()
     )
@@ -864,13 +1253,101 @@ def render_sidebar(_local_storage_unused=None):
     with cF:
         forget_clicked = st.button(t("sidebar.buttons.forget"), width="stretch")
 
-    if save_clicked:
-        station_to_save = str(st.session_state.get("active_station", "")).strip()
-        key_to_save = str(st.session_state.get("active_key", "")).strip()
-        z_to_save = str(st.session_state.get("active_z", "")).strip()
+    if save_clicked and connection_source == "WEATHERLINK":
+        # Nota: el 4º valor que devuelve ``_persist_weatherlink_saved_values``
+        # es un **dict** con todos los datos de la estación, NO el ID.
+        # Renombramos a ``station_payload`` para evitar confusión.
+        key_to_save, secret_to_save, _z_to_save, station_payload = _persist_weatherlink_saved_values()
+        save_warning_shown = False
+        if not key_to_save or not secret_to_save:
+            st.sidebar.warning(t("sidebar.autoconnect.missing_weatherlink_credentials"))
+            save_warning_shown = True
+        if bool(st.session_state.get("auto_connect_weatherlink_device", False)):
+            if not _set_weatherlink_autoconnect_target(True):
+                st.session_state["auto_connect_weatherlink_device"] = False
+                set_local_storage(LS_AUTOCONNECT, "0", "save")
+                st.sidebar.warning(t("sidebar.autoconnect.missing_weatherlink_credentials"))
+                save_warning_shown = True
+        else:
+            _set_weatherlink_autoconnect_target(False)
+
+        # Añadir a favoritos. Extraemos campos del ``station_payload``
+        # directamente (más fiable que las claves planas de session_state,
+        # que pueden no estar pobladas si aún no se ha conectado).
+        if (
+            key_to_save
+            and secret_to_save
+            and isinstance(station_payload, dict)
+            and station_payload
+        ):
+            wl_station_id = coerce_str(
+                station_payload.get("station_id")
+                or station_payload.get("station_id_uuid")
+            )
+            wl_station_uuid = coerce_str(station_payload.get("station_id_uuid"))
+
+            # Prioridad para el nombre del favorito:
+            # 1) Si el usuario ha escrito algo en "Nombre del favorito"
+            #    en el sidebar, ese gana — es el override explícito que
+            #    soluciona el caso "WeatherLink solo devuelve numerito".
+            # 2) Si la API devuelve un station_name distinto del
+            #    station_id, lo usamos (con city/region enriqueciendo).
+            # 3) Último recurso: el station_id puro.
+            user_custom_name = coerce_str(
+                st.session_state.get(WEATHERLINK_FAVORITE_NAME_INPUT_KEY, "")
+            )
+            if user_custom_name:
+                wl_station_name = user_custom_name
+            else:
+                raw_name = coerce_str(
+                    station_payload.get("station_name")
+                    or station_payload.get("name")
+                )
+                city = coerce_str(station_payload.get("city"))
+                region = coerce_str(station_payload.get("region"))
+                locality = ", ".join(p for p in (city, region) if p)
+                base_name = raw_name or wl_station_id
+                if base_name and locality and locality not in base_name:
+                    wl_station_name = f"{base_name} · {locality}"
+                else:
+                    wl_station_name = base_name
+
+            if wl_station_id:
+                favorite = favorite_from_weatherlink(
+                    wl_station_id,
+                    key_to_save,
+                    secret_to_save,
+                    _z_to_save or "",
+                    station_name=wl_station_name,
+                    station_id_uuid=wl_station_uuid,
+                    lat=station_payload.get("latitude") or station_payload.get("lat"),
+                    lon=station_payload.get("longitude") or station_payload.get("lon"),
+                    elevation_m=station_payload.get("elevation") or _z_to_save,
+                )
+                if favorite:
+                    upsert_favorite(favorite)
+
+        if not save_warning_shown:
+            flush_local_storage_writes("mlx_local_storage_weatherlink_save_flush")
+            st.sidebar.success(t("sidebar.messages.saved_device"))
+
+    elif save_clicked:
+        station_to_save = str(
+            st.session_state.get("active_station", "")
+            or st.session_state.get(WU_STATION_INPUT_KEY, "")
+        ).strip()
+        key_to_save = str(
+            st.session_state.get("active_key", "")
+            or st.session_state.get(WU_API_KEY_INPUT_KEY, "")
+        ).strip()
+        z_to_save = str(
+            st.session_state.get("active_z", "")
+            or st.session_state.get(WU_ALTITUDE_INPUT_KEY, "")
+        ).strip()
         autoconnect_to_save = bool(st.session_state.get("auto_connect_wu_device", False))
         current_target = get_stored_autoconnect_target() or {}
         current_kind = str(current_target.get("kind", "")).strip().upper()
+        saving_current_autoconnect_station = _wu_station_matches_target(station_to_save, current_target)
         save_warning_shown = False
 
         if autoconnect_to_save:
@@ -897,10 +1374,27 @@ def render_sidebar(_local_storage_unused=None):
         set_local_storage(LS_APIKEY, key_to_save, "save")
         set_local_storage(LS_Z, z_to_save, "save")
         set_local_storage(LS_WU_FORGOTTEN, "0", "save")
+        if station_to_save and key_to_save:
+            favorite = favorite_from_wu(
+                station_to_save,
+                key_to_save,
+                z_to_save,
+                lat=st.session_state.get("station_lat"),
+                lon=st.session_state.get("station_lon"),
+                elevation_m=st.session_state.get("station_elevation", z_to_save),
+            )
+            if favorite:
+                upsert_favorite(favorite)
 
         # Guardar también la auto-conexión aquí evita que un rerun inmediato
         # relea un localStorage todavía no sincronizado y apague el toggle.
-        if autoconnect_to_save and station_to_save and key_to_save:
+        can_write_wu_autoconnect_target = bool(
+            autoconnect_to_save
+            and station_to_save
+            and key_to_save
+            and (current_kind != "WU" or saving_current_autoconnect_station)
+        )
+        if can_write_wu_autoconnect_target:
             set_local_storage(LS_AUTOCONNECT, "1", "save")
             clear_provider_autoconnect_widget_state()
             set_stored_autoconnect_target(
@@ -913,6 +1407,12 @@ def render_sidebar(_local_storage_unused=None):
             )
             st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
             st.session_state["_wu_autoconnect_ui_last_value"] = True
+        elif autoconnect_to_save and current_kind == "WU" and not saving_current_autoconnect_station:
+            # Hay un target WU guardado para otra estación. Guardar esta ficha
+            # la añade/actualiza como favorita, pero no cambia la estación de
+            # arranque automático.
+            st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
+            st.session_state["_wu_autoconnect_ui_last_value"] = False
         elif autoconnect_to_save:
             # No desactives la preferencia por una lectura tardía del formulario
             # en producción; conserva el toggle y pide completar credenciales.
@@ -920,22 +1420,42 @@ def render_sidebar(_local_storage_unused=None):
             st.sidebar.warning(t("sidebar.autoconnect.missing_credentials"))
             save_warning_shown = True
         else:
-            if current_kind == "WU":
+            if current_kind == "WU" and saving_current_autoconnect_station:
                 set_local_storage(LS_AUTOCONNECT, "0", "save")
                 set_stored_autoconnect_target(None)
-            st.session_state["_wu_autoconnect_ui_target_kind"] = ""
+                st.session_state["_wu_autoconnect_ui_target_kind"] = ""
+            elif current_kind == "WU":
+                st.session_state["_wu_autoconnect_ui_target_kind"] = "WU"
+            else:
+                st.session_state["_wu_autoconnect_ui_target_kind"] = ""
             st.session_state["_wu_autoconnect_ui_last_value"] = False
 
         if not save_warning_shown:
             st.sidebar.success(t("sidebar.messages.saved_device"))
 
     if forget_clicked:
-        # Fase 1: escribir los marcadores en localStorage y marcar pendiente.
-        # NO llamamos st.rerun() aquí para que los widgets setItem se rendericen
-        # en este ciclo y el JS del componente los procese antes del siguiente ciclo.
-        forget_local_storage_keys()
-        st.session_state["_forget_pending"] = True
-        st.sidebar.success(t("sidebar.messages.data_erased"))
+        if connection_source == "WEATHERLINK":
+            forget_weatherlink_local_storage_keys()
+            remove_favorites_by_provider("WEATHERLINK")
+            current_target = get_stored_autoconnect_target() or {}
+            if coerce_str(current_target.get("kind", ""), upper=True) == "WEATHERLINK":
+                set_local_storage(LS_AUTOCONNECT, "0", "save")
+                set_stored_autoconnect_target(None)
+            st.session_state["_weatherlink_forget_pending"] = True
+            st.sidebar.success(t("sidebar.messages.data_erased"))
+        else:
+            # Fase 1: escribir los marcadores en localStorage y marcar pendiente.
+            # NO llamamos st.rerun() aquí para que los widgets setItem se rendericen
+            # en este ciclo y el JS del componente los procese antes del siguiente ciclo.
+            previous_target = get_stored_autoconnect_target() or {}
+            previous_kind = coerce_str(previous_target.get("kind", ""), upper=True)
+            forget_local_storage_keys()
+            remove_favorites_by_provider("WU")
+            if previous_target and previous_kind != "WU":
+                set_local_storage(LS_AUTOCONNECT, "1", "save")
+                set_stored_autoconnect_target(previous_target)
+            st.session_state["_forget_pending"] = True
+            st.sidebar.success(t("sidebar.messages.data_erased"))
 
 
     # Estado conectado
@@ -983,54 +1503,128 @@ def render_sidebar(_local_storage_unused=None):
         disconnect_active_station()
 
     if connect_clicked:
-        station = str(st.session_state.get("active_station", "")).strip()
-        api_key = str(st.session_state.get("active_key", "")).strip()
-        z_raw = str(st.session_state.get("active_z", "")).strip()
+        if connection_source == "WEATHERLINK":
+            api_key = str(st.session_state.get("weatherlink_api_key", "")).strip()
+            api_secret = str(st.session_state.get("weatherlink_api_secret", "")).strip()
+            z_raw = str(st.session_state.get("weatherlink_station_alt", "")).strip()
 
-        if not station or not api_key:
-            st.sidebar.error(t("sidebar.messages.missing_station_or_key"))
-        else:
-            # Validar altitud si se proporcionó
-            if z_raw:  # Si hay altitud manual
-                try:
-                    z_float = float(z_raw)
-                    # Validar rango de altitud
-                    from config import MIN_ALTITUDE_M, MAX_ALTITUDE_M
-                    if not (MIN_ALTITUDE_M <= z_float <= MAX_ALTITUDE_M):
-                        st.sidebar.error(
-                            t(
-                                "sidebar.messages.altitude_out_of_range",
-                                min=MIN_ALTITUDE_M,
-                                max=MAX_ALTITUDE_M,
+            if not api_key or not api_secret:
+                st.sidebar.error(t("sidebar.messages.missing_weatherlink_credentials"))
+            else:
+                altitude_ok = True
+                if z_raw:
+                    try:
+                        z_float = float(z_raw)
+                        from config import MIN_ALTITUDE_M, MAX_ALTITUDE_M
+                        if not (MIN_ALTITUDE_M <= z_float <= MAX_ALTITUDE_M):
+                            altitude_ok = False
+                            st.sidebar.error(
+                                t(
+                                    "sidebar.messages.altitude_out_of_range",
+                                    min=MIN_ALTITUDE_M,
+                                    max=MAX_ALTITUDE_M,
+                                )
                             )
-                        )
-                    else:
-                        apply_wu_station_state(station, api_key, z_raw, connected=True)
-                except Exception:
-                    st.sidebar.error(t("sidebar.messages.altitude_invalid"))
-            else:  # Sin altitud manual, confiar en la API
-                apply_wu_station_state(station, api_key, "", connected=True)
+                    except Exception:
+                        altitude_ok = False
+                        st.sidebar.error(t("sidebar.messages.altitude_invalid"))
 
-            if (
-                st.session_state.get("connected")
-                and st.session_state.get("connection_type") == "WU"
-                and bool(st.session_state.get("auto_connect_wu_device", False))
-            ):
-                set_local_storage(LS_STATION, station, "save")
-                set_local_storage(LS_APIKEY, api_key, "save")
-                set_local_storage(LS_Z, z_raw, "save")
-                set_local_storage(LS_AUTOCONNECT, "1", "save")
-                set_local_storage(LS_WU_FORGOTTEN, "0", "save")
-                clear_provider_autoconnect_widget_state()
-                set_stored_autoconnect_target(
-                    {
-                        "kind": "WU",
-                        "station": station,
-                        "api_key": api_key,
-                        "z": z_raw,
-                    }
-                )
-                st.session_state[AUTOCONNECT_ATTEMPTED] = True
+                if altitude_ok:
+                    from services.weatherlink import fetch_weatherlink_stations, find_weatherlink_station
+
+                    stations_payload = fetch_weatherlink_stations(api_key, api_secret)
+                    stations = stations_payload.get("stations", []) if isinstance(stations_payload, dict) else []
+                    if not isinstance(stations_payload, dict) or not stations_payload.get("ok"):
+                        error_kind = coerce_str((stations_payload or {}).get("kind", ""), lower=True)
+                        if error_kind == "unauthorized":
+                            st.sidebar.error(t("sidebar.messages.weatherlink_credentials_rejected"))
+                        else:
+                            st.sidebar.error(t("sidebar.messages.weatherlink_stations_error"))
+                        detail = str((stations_payload or {}).get("error", "")).strip()
+                        if detail and error_kind != "unauthorized":
+                            st.sidebar.caption(detail)
+                    elif not stations:
+                        st.sidebar.error(t("sidebar.messages.weatherlink_no_stations"))
+                    else:
+                        station_ids = [
+                            str(station.get("station_id") or station.get("station_id_uuid") or "").strip()
+                            for station in stations
+                            if isinstance(station, dict)
+                        ]
+                        station_ids = [station_id for station_id in station_ids if station_id]
+                        selected_station_id = str(st.session_state.get("weatherlink_selected_station_id", "")).strip()
+                        if selected_station_id not in station_ids:
+                            selected_station_id = station_ids[0]
+                        selected_station = find_weatherlink_station(stations, selected_station_id) or stations[0]
+                        st.session_state["weatherlink_stations"] = stations
+                        st.session_state["weatherlink_station_selector"] = str(
+                            selected_station.get("station_id") or selected_station.get("station_id_uuid") or ""
+                        ).strip()
+                        if apply_weatherlink_station_state(
+                            selected_station,
+                            api_key,
+                            api_secret,
+                            z_raw,
+                            stations,
+                            connected=True,
+                        ):
+                            st.session_state["weatherlink_selected_station_id"] = str(
+                                selected_station.get("station_id") or selected_station.get("station_id_uuid") or ""
+                            ).strip()
+                            _persist_weatherlink_saved_values()
+                            if bool(st.session_state.get("auto_connect_weatherlink_device", False)):
+                                _set_weatherlink_autoconnect_target(True)
+                            else:
+                                clear_provider_autoconnect_widget_state()
+        else:
+            station = str(st.session_state.get("active_station", "")).strip()
+            api_key = str(st.session_state.get("active_key", "")).strip()
+            z_raw = str(st.session_state.get("active_z", "")).strip()
+
+            if not station or not api_key:
+                st.sidebar.error(t("sidebar.messages.missing_station_or_key"))
+            else:
+                # Validar altitud si se proporcionó
+                if z_raw:  # Si hay altitud manual
+                    try:
+                        z_float = float(z_raw)
+                        # Validar rango de altitud
+                        from config import MIN_ALTITUDE_M, MAX_ALTITUDE_M
+                        if not (MIN_ALTITUDE_M <= z_float <= MAX_ALTITUDE_M):
+                            st.sidebar.error(
+                                t(
+                                    "sidebar.messages.altitude_out_of_range",
+                                    min=MIN_ALTITUDE_M,
+                                    max=MAX_ALTITUDE_M,
+                                )
+                            )
+                        else:
+                            apply_wu_station_state(station, api_key, z_raw, connected=True)
+                    except Exception:
+                        st.sidebar.error(t("sidebar.messages.altitude_invalid"))
+                else:  # Sin altitud manual, confiar en la API
+                    apply_wu_station_state(station, api_key, "", connected=True)
+
+                if (
+                    st.session_state.get("connected")
+                    and st.session_state.get("connection_type") == "WU"
+                    and bool(st.session_state.get("auto_connect_wu_device", False))
+                ):
+                    set_local_storage(LS_STATION, station, "save")
+                    set_local_storage(LS_APIKEY, api_key, "save")
+                    set_local_storage(LS_Z, z_raw, "save")
+                    set_local_storage(LS_AUTOCONNECT, "1", "save")
+                    set_local_storage(LS_WU_FORGOTTEN, "0", "save")
+                    clear_provider_autoconnect_widget_state()
+                    set_stored_autoconnect_target(
+                        {
+                            "kind": "WU",
+                            "station": station,
+                            "api_key": api_key,
+                            "z": z_raw,
+                        }
+                    )
+                    st.session_state[AUTOCONNECT_ATTEMPTED] = True
 
     if connection_caption and connection_caption != "sidebar.connection.caption":
         st.sidebar.caption(connection_caption)

@@ -1,8 +1,18 @@
 from types import SimpleNamespace
 
 from components import sidebar
-from config import LS_APIKEY, LS_AUTOCONNECT, LS_AUTOCONNECT_TARGET, LS_STATION, LS_Z
-from utils import storage
+from config import (
+    LS_APIKEY,
+    LS_AUTOCONNECT,
+    LS_AUTOCONNECT_TARGET,
+    LS_STATION,
+    LS_WEATHERLINK_APIKEY,
+    LS_WEATHERLINK_APISECRET,
+    LS_WEATHERLINK_STATION,
+    LS_WEATHERLINK_Z,
+    LS_Z,
+)
+from utils import provider_state, storage
 from utils.state_keys import AUTOCONNECT_ATTEMPTED
 from utils.units import DEFAULT_UNIT_PREFERENCES
 
@@ -79,6 +89,14 @@ class _SidebarStaleWuToggleStub(_SidebarStub):
                 callback()
             return True
         return super().toggle(*args, **kwargs)
+
+
+class _SidebarWeatherLinkSourceStub(_SidebarStub):
+    def segmented_control(self, label, options, **kwargs):
+        self.calls.append(("segmented_control", (label, options), kwargs))
+        if kwargs.get("key") == "connection_source_selector":
+            return "WEATHERLINK"
+        return kwargs.get("key") == "theme_selector" and "auto" or options[0]
 
 
 def test_sidebar_defers_wu_controls_until_local_storage_snapshot_ready(monkeypatch):
@@ -230,6 +248,155 @@ def test_sidebar_hydrates_empty_wu_widgets_from_runtime_connection(monkeypatch):
     assert session_state["active_z"] == "39"
 
 
+def test_sidebar_prefills_weatherlink_credentials_from_snapshot_without_legacy_component(monkeypatch):
+    session_state = {
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {
+            LS_WEATHERLINK_APIKEY: "weatherlink-key",
+            LS_WEATHERLINK_APISECRET: "weatherlink-secret",
+            LS_WEATHERLINK_Z: "39",
+            LS_WEATHERLINK_STATION: "374964",
+        },
+    }
+    fake_sidebar = _SidebarStub(session_state)
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: None)
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    assert session_state["connection_source_selector"] == "WEATHERLINK"
+    assert session_state[sidebar.WEATHERLINK_API_KEY_INPUT_KEY] == "weatherlink-key"
+    assert session_state[sidebar.WEATHERLINK_API_SECRET_INPUT_KEY] == "weatherlink-secret"
+    assert session_state[sidebar.WEATHERLINK_ALTITUDE_INPUT_KEY] == "39"
+    assert session_state["weatherlink_selected_station_id"] == "374964"
+
+
+def test_sidebar_wu_forget_pending_disconnects_and_clears_runtime_caches(monkeypatch):
+    session_state = {
+        "_forget_pending": True,
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {},
+        "connected": True,
+        "connection_type": "WU",
+        "active_station": "ILHOSP26",
+        "active_key": "secret-key",
+        "active_z": "39",
+        "wu_connected_station": "ILHOSP26",
+        "wu_connected_api_key": "secret-key",
+        "wu_connected_z": "39",
+        "wu_cache_current": {"old": True},
+        "wu_cache_daily": {"old": True},
+        "wu_cache_hourly7d": {"old": True},
+        "chart_series": {"old": True},
+        "trend_hourly_epochs": [1],
+        "p_hist": [1012],
+        "rain_hist": [0.0],
+    }
+    fake_sidebar = _SidebarStub(session_state)
+
+    def _rerun():
+        raise RuntimeError("rerun_called")
+
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+        rerun=_rerun,
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(provider_state, "st", fake_st)
+
+    try:
+        sidebar.render_sidebar()
+    except RuntimeError as exc:
+        if "rerun_called" not in str(exc):
+            raise
+
+    assert session_state["connected"] is False
+    assert session_state["connection_type"] is None
+    assert session_state["_clear_inputs"] is True
+    assert session_state[AUTOCONNECT_ATTEMPTED] is False
+    for key in (
+        "wu_connected_station",
+        "wu_connected_api_key",
+        "wu_connected_z",
+        "wu_cache_current",
+        "wu_cache_daily",
+        "wu_cache_hourly7d",
+        "chart_series",
+        "trend_hourly_epochs",
+        "p_hist",
+        "rain_hist",
+    ):
+        assert key not in session_state
+
+
+def test_sidebar_reruns_once_when_local_storage_snapshot_arrives(monkeypatch):
+    session_state = {}
+    fake_sidebar = _SidebarStub(session_state)
+    rerun_called = {"count": 0}
+
+    def _rerun():
+        rerun_called["count"] += 1
+        raise RuntimeError("rerun_called")
+
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+        rerun=_rerun,
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: {
+        "ready": True,
+        "values": {
+            LS_WEATHERLINK_APIKEY: "weatherlink-key",
+            LS_WEATHERLINK_APISECRET: "weatherlink-secret",
+        },
+    })
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(
+        sidebar,
+        "local_storage_snapshot_ready",
+        lambda: bool(session_state.get("_mlx_local_storage_snapshot_ready", False)),
+    )
+    monkeypatch.setattr(sidebar, "hydrate_local_storage_snapshot", storage.hydrate_local_storage_snapshot)
+    monkeypatch.setattr(storage, "st", fake_st)
+
+    try:
+        sidebar.render_sidebar()
+    except RuntimeError as exc:
+        if "rerun_called" not in str(exc):
+            raise
+
+    assert rerun_called["count"] == 1
+    assert session_state["_mlx_local_storage_ready_rerun_done"] is True
+
+
 def test_sidebar_keeps_user_edited_wu_widgets_while_connected(monkeypatch):
     session_state = {
         "_sidebar_inputs_initialized": True,
@@ -278,6 +445,59 @@ def test_sidebar_keeps_user_edited_wu_widgets_while_connected(monkeypatch):
     assert session_state["active_station"] == "NEWSTATION"
     assert session_state["active_key"] == "new-key"
     assert session_state["active_z"] == "12"
+
+
+def test_sidebar_syncs_visible_wu_widgets_after_runtime_favorite_connect(monkeypatch):
+    session_state = {
+        "_sidebar_inputs_initialized": True,
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {},
+        "_wu_inputs_user_edited": True,
+        "_wu_runtime_sync_visible_inputs": True,
+        "active_station": "IROSES18",
+        "active_key": "old-key",
+        "active_z": "25",
+        sidebar.WU_STATION_INPUT_KEY: "IROSES18",
+        sidebar.WU_API_KEY_INPUT_KEY: "old-key",
+        sidebar.WU_ALTITUDE_INPUT_KEY: "25",
+        "connected": True,
+        "connection_type": "WU",
+        "wu_connected_station": "ILHOSP26",
+        "wu_connected_api_key": "secret-key",
+        "wu_connected_z": "39",
+    }
+    fake_sidebar = _SidebarStub(session_state)
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: object())
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    assert session_state[sidebar.WU_STATION_INPUT_KEY] == "ILHOSP26"
+    assert session_state[sidebar.WU_API_KEY_INPUT_KEY] == "secret-key"
+    assert session_state[sidebar.WU_ALTITUDE_INPUT_KEY] == "39"
+    assert session_state["active_station"] == "ILHOSP26"
+    assert session_state["active_key"] == "secret-key"
+    assert session_state["active_z"] == "39"
+    assert "_wu_runtime_sync_visible_inputs" not in session_state
+    assert session_state["_wu_inputs_user_edited"] is False
 
 
 def test_wu_autoconnect_is_not_disabled_by_implicit_widget_value_diff():
@@ -370,6 +590,68 @@ def test_sidebar_ignores_late_phantom_toggle_callback_in_grace_window(monkeypatc
     assert session_state["_wu_autoconnect_post_grace"] == 2
     # No debe haberse mostrado el mensaje de "desactivado".
     assert "sidebar.autoconnect.disabled" not in fake_sidebar.info_messages
+
+
+def test_sidebar_forget_weatherlink_removes_weatherlink_favorites(monkeypatch):
+    target_json = '{"kind":"WEATHERLINK","station_id":"374964","api_key":"key","api_secret":"secret","z":"39"}'
+    session_state = {
+        "_sidebar_inputs_initialized": True,
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {
+            LS_WEATHERLINK_APIKEY: "key",
+            LS_WEATHERLINK_APISECRET: "secret",
+            LS_WEATHERLINK_Z: "39",
+            LS_WEATHERLINK_STATION: "374964",
+            LS_AUTOCONNECT: "1",
+            LS_AUTOCONNECT_TARGET: target_json,
+        },
+        "connection_source_selector": "WEATHERLINK",
+        sidebar.WEATHERLINK_API_KEY_INPUT_KEY: "key",
+        sidebar.WEATHERLINK_API_SECRET_INPUT_KEY: "secret",
+        sidebar.WEATHERLINK_ALTITUDE_INPUT_KEY: "39",
+        "weatherlink_api_key": "key",
+        "weatherlink_api_secret": "secret",
+        "weatherlink_station_alt": "39",
+        "weatherlink_station_id": "374964",
+        "weatherlink_selected_station_id": "374964",
+        "connected": True,
+        "connection_type": "WEATHERLINK",
+        "auto_connect_weatherlink_device": True,
+    }
+    fake_sidebar = _SidebarWeatherLinkSourceStub(session_state)
+    removed = []
+
+    def _button(label, *args, **kwargs):
+        return label == "sidebar.buttons.forget"
+
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=_button,
+        rerun=lambda: (_ for _ in ()).throw(RuntimeError("unexpected_rerun")),
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "remove_favorites_by_provider", lambda provider_id: removed.append(provider_id) or True)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: object())
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    assert removed == ["WEATHERLINK"]
+    assert session_state["_weatherlink_forget_pending"] is True
+    assert fake_sidebar.success_messages == ["sidebar.messages.data_erased"]
 
 
 def test_sidebar_does_not_overwrite_provider_target_with_wu_phantom_callback(monkeypatch):
@@ -710,3 +992,116 @@ def test_sidebar_allows_real_wu_autoconnect_click_after_provider_target(monkeypa
     assert '"station":"ILHOSP26"' in snap[LS_AUTOCONNECT_TARGET]
     assert session_state["_wu_autoconnect_ui_target_kind"] == "WU"
     assert "sidebar.autoconnect.enabled" in fake_sidebar.success_messages
+
+
+def test_sidebar_save_other_wu_favorite_keeps_existing_autoconnect_target(monkeypatch):
+    target_json = '{"kind":"WU","station":"ILHOSP26","api_key":"my-key","z":"39"}'
+    session_state = {
+        "_sidebar_inputs_initialized": True,
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {
+            LS_STATION: "ILHOSP26",
+            LS_APIKEY: "my-key",
+            LS_Z: "39",
+            LS_AUTOCONNECT: "1",
+            LS_AUTOCONNECT_TARGET: target_json,
+        },
+        "active_station": "IFRIEND",
+        "active_key": "friend-key",
+        "active_z": "25",
+        sidebar.WU_STATION_INPUT_KEY: "IFRIEND",
+        sidebar.WU_API_KEY_INPUT_KEY: "friend-key",
+        sidebar.WU_ALTITUDE_INPUT_KEY: "25",
+        "connected": True,
+        "connection_type": "WU",
+        "auto_connect_wu_device": True,
+        "_wu_autoconnect_ui_last_value": True,
+        "_wu_autoconnect_ui_target_kind": "WU",
+        "_wu_autoconnect_event_armed": True,
+        "_wu_autoconnect_disable_armed": True,
+    }
+    fake_sidebar = _SidebarStub(session_state)
+
+    def _button(label, *args, **kwargs):
+        return label == "sidebar.buttons.save"
+
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=_button,
+        rerun=lambda: (_ for _ in ()).throw(RuntimeError("unexpected_rerun")),
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "upsert_favorite", lambda favorite: True)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: object())
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    snap = session_state["_mlx_local_storage_snapshot"]
+    assert snap[LS_STATION] == "IFRIEND"
+    assert snap[LS_APIKEY] == "friend-key"
+    assert snap[LS_AUTOCONNECT] == "1"
+    assert '"station":"ILHOSP26"' in snap[LS_AUTOCONNECT_TARGET]
+    assert '"station":"IFRIEND"' not in snap[LS_AUTOCONNECT_TARGET]
+    assert session_state["auto_connect_wu_device"] is False
+
+
+def test_sidebar_wu_autoconnect_uses_target_not_last_saved_station(monkeypatch):
+    target_json = '{"kind":"WU","station":"ILHOSP26","api_key":"my-key","z":"39"}'
+    session_state = {
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {
+            LS_STATION: "IFRIEND",
+            LS_APIKEY: "friend-key",
+            LS_Z: "25",
+            LS_AUTOCONNECT: "1",
+            LS_AUTOCONNECT_TARGET: target_json,
+        },
+        "connected": True,
+        "connection_type": "WU",
+    }
+    fake_sidebar = _SidebarStub(session_state)
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+        rerun=lambda: (_ for _ in ()).throw(RuntimeError("unexpected_rerun")),
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: object())
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    assert session_state["active_station"] == "ILHOSP26"
+    assert session_state["active_key"] == "my-key"
+    assert session_state["active_z"] == "39"
+    assert session_state[sidebar.WU_STATION_INPUT_KEY] == "ILHOSP26"
+    assert session_state[sidebar.WU_API_KEY_INPUT_KEY] == "my-key"
+    assert session_state[sidebar.WU_ALTITUDE_INPUT_KEY] == "39"
+    assert session_state["auto_connect_wu_device"] is True

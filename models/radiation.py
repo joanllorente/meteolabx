@@ -3,11 +3,35 @@ Cálculos relacionados con radiación solar y evapotranspiración según FAO-56
 """
 import math
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 def is_nan(x):
     """Verifica si un valor es NaN"""
     return x != x
+
+
+def _resolve_tzinfo(tz_name: str = ""):
+    tz_text = str(tz_name or "").strip()
+    if tz_text:
+        try:
+            return ZoneInfo(tz_text)
+        except Exception:
+            pass
+    try:
+        return datetime.now().astimezone().tzinfo
+    except Exception:
+        return None
+
+
+def _local_datetime(timestamp: float, tz_name: str = "") -> datetime:
+    tzinfo = _resolve_tzinfo(tz_name)
+    try:
+        if tzinfo is not None:
+            return datetime.fromtimestamp(timestamp, tz=tzinfo)
+    except Exception:
+        pass
+    return datetime.fromtimestamp(timestamp).astimezone()
 
 
 # ============================================================
@@ -418,7 +442,8 @@ def sky_clarity_index(
     latitude_deg: float,           # grados
     elevation_m: float,            # metros
     timestamp: float,              # epoch
-    longitude_deg: float = float("nan")
+    longitude_deg: float = float("nan"),
+    tz_name: str = "",
 ) -> float:
     """
     Índice de claridad del cielo (0-1)
@@ -439,7 +464,7 @@ def sky_clarity_index(
         return float("nan")
 
     # Durante la noche no tiene sentido etiquetar claridad del cielo con este índice.
-    if is_nighttime(latitude_deg, timestamp, longitude_deg):
+    if is_nighttime(latitude_deg, timestamp, longitude_deg, tz_name=tz_name):
         return float("nan")
     
     # Calcular radiación máxima teórica
@@ -458,7 +483,7 @@ def sky_clarity_index(
     return min(max(clarity, 0.0), 1.0)
 
 
-def _astral_sun_times(latitude_deg: float, longitude_deg: float, timestamp: float):
+def _astral_sun_times(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
     """Devuelve orto/ocaso usando Astral para la fecha local del timestamp."""
     if is_nan(latitude_deg) or is_nan(longitude_deg):
         return None, None
@@ -470,7 +495,7 @@ def _astral_sun_times(latitude_deg: float, longitude_deg: float, timestamp: floa
         return None, None
 
     try:
-        dt_local = datetime.fromtimestamp(timestamp).astimezone()
+        dt_local = _local_datetime(timestamp, tz_name)
         tzinfo = dt_local.tzinfo
         observer = Observer(latitude=float(latitude_deg), longitude=float(longitude_deg))
         sun_data = sun(observer, date=dt_local.date(), tzinfo=tzinfo)
@@ -479,7 +504,7 @@ def _astral_sun_times(latitude_deg: float, longitude_deg: float, timestamp: floa
         return None, None
 
 
-def _sunrise_sunset_api_times(latitude_deg: float, longitude_deg: float, timestamp: float):
+def _sunrise_sunset_api_times(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
     """Fallback online opcional vía sunrise-sunset.org en hora local del sistema."""
     if is_nan(latitude_deg) or is_nan(longitude_deg):
         return None, None
@@ -489,7 +514,7 @@ def _sunrise_sunset_api_times(latitude_deg: float, longitude_deg: float, timesta
         return None, None
 
     try:
-        dt_local = datetime.fromtimestamp(timestamp).astimezone()
+        dt_local = _local_datetime(timestamp, tz_name)
         date_str = dt_local.strftime("%Y-%m-%d")
         resp = requests.get(
             "https://api.sunrise-sunset.org/json",
@@ -521,12 +546,12 @@ def _sunrise_sunset_api_times(latitude_deg: float, longitude_deg: float, timesta
         return None, None
 
 
-def _fallback_sunrise_sunset_minutes(latitude_deg: float, longitude_deg: float, timestamp: float):
+def _fallback_sunrise_sunset_minutes(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
     """Fallback NOAA (aprox.) de orto/ocaso en minutos locales desde medianoche."""
     if is_nan(latitude_deg) or is_nan(longitude_deg):
         return None, None
 
-    dt_local = datetime.fromtimestamp(timestamp).astimezone()
+    dt_local = _local_datetime(timestamp, tz_name)
     n = dt_local.timetuple().tm_yday
 
     gamma = 2.0 * math.pi / 365.0 * (n - 1)
@@ -577,41 +602,46 @@ def _fmt_local_minutes(minutes_val):
     return f"{hh:02d}:{mm:02d}"
 
 
-def sunrise_sunset_label(latitude_deg: float, longitude_deg: float, timestamp: float) -> str:
-    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp)
+def sunrise_sunset_label(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = "") -> str:
+    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is None or sunset is None:
-        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp)
+        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is None or sunset is None:
-        sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp)
+        sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
         return f"Orto {_fmt_local_minutes(sunrise_min)} · Ocaso {_fmt_local_minutes(sunset_min)}"
 
     return f"Orto {sunrise.strftime('%H:%M')} · Ocaso {sunset.strftime('%H:%M')}"
 
 
-def sunrise_sunset_datetimes(latitude_deg: float, longitude_deg: float, timestamp: float):
-    """Devuelve orto y ocaso en hora local del sistema para la fecha del timestamp."""
-    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp)
+def sunrise_sunset_datetimes(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
+    """Devuelve orto y ocaso en hora local para la fecha del timestamp."""
+    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is None or sunset is None:
-        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp)
+        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is not None and sunset is not None:
         return sunrise, sunset
 
-    sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp)
+    sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise_min is None or sunset_min is None:
         return None, None
 
-    dt_local = datetime.fromtimestamp(timestamp).astimezone()
+    dt_local = _local_datetime(timestamp, tz_name)
     base_day = dt_local.replace(hour=0, minute=0, second=0, microsecond=0)
     sunrise_dt = base_day + timedelta(minutes=float(sunrise_min))
     sunset_dt = base_day + timedelta(minutes=float(sunset_min))
     return sunrise_dt, sunset_dt
 
 
-def is_nighttime(latitude_deg: float, timestamp: float, longitude_deg: float = float("nan")) -> bool:
+def is_nighttime(
+    latitude_deg: float,
+    timestamp: float,
+    longitude_deg: float = float("nan"),
+    tz_name: str = "",
+) -> bool:
     """Determina noche usando Astral cuando hay coordenadas completas."""
-    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp)
+    sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is None or sunset is None:
-        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp)
+        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is not None and sunset is not None:
         try:
             now_local = datetime.fromtimestamp(timestamp, tz=sunrise.tzinfo)
@@ -619,11 +649,11 @@ def is_nighttime(latitude_deg: float, timestamp: float, longitude_deg: float = f
             now_local = datetime.fromtimestamp(timestamp)
         return now_local < sunrise or now_local > sunset
 
-    sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp)
+    sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise_min is None or sunset_min is None:
         return False
 
-    dt_local = datetime.fromtimestamp(timestamp).astimezone()
+    dt_local = _local_datetime(timestamp, tz_name)
     now_min = dt_local.hour * 60.0 + dt_local.minute + dt_local.second / 60.0
     sunrise_min = sunrise_min % (24 * 60)
     sunset_min = sunset_min % (24 * 60)

@@ -68,6 +68,28 @@ PROVIDER_FEATURES: dict[str, dict[str, Any]] = {
     },
     "POEM": {
         "historical_supported": False,
+        "synoptic_source_key": "trends.sources.poem_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
+    "METOFFICE": {
+        "historical_supported": False,
+        "today_trends_source_key": "trends.sources.metoffice_today",
+        "synoptic_source_key": "trends.sources.metoffice_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
+    "METEOHUB_IT": {
+        "historical_supported": False,
+        "today_trends_source_key": "trends.sources.meteohub_today",
+        "synoptic_source_key": "trends.sources.meteohub_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
+    "WEATHERLINK": {
+        "historical_supported": False,
+        "requires_api_key": True,
+        "api_key_source": "weatherlink",
+        "today_trends_source_key": "trends.sources.weatherlink_today",
+        "synoptic_source_key": "trends.sources.weatherlink_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
     },
 }
 

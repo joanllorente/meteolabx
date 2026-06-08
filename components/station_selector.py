@@ -26,7 +26,9 @@ from providers import search_nearby_stations
 from utils.storage import (
     get_stored_autoconnect,
     get_stored_autoconnect_target,
+    flush_local_storage_writes,
 )
+from utils.favorites import favorite_from_provider_station, upsert_favorite
 from .browser_geolocation import get_browser_geolocation
 
 PROVIDER_AUTOCONNECT_CHANGED_KEY = "_provider_autoconnect_toggle_changed"
@@ -404,7 +406,7 @@ def render_station_selector():
 
         for station in nearest:
             with st.container():
-                col1, col2, col3 = st.columns([3, 2, 1])
+                col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
                 is_target_station = bool(
                     saved_autoconnect
                     and saved_target_kind == "PROVIDER"
@@ -482,6 +484,24 @@ def render_station_selector():
                         )
                         st.success(t("station_selector.connect_success", station=station.name, provider=station.provider_name))
                         st.rerun()
+
+                with col4:
+                    if st.button(
+                        t("favorites.save_short"),
+                        key=f"favorite_{station.provider_id}_{station.station_id}",
+                        width="stretch",
+                    ):
+                        favorite = favorite_from_provider_station(station)
+                        if favorite and upsert_favorite(favorite):
+                            flush_local_storage_writes(f"mlx_favorite_station_selector_{station.provider_id}")
+                            st.session_state["_provider_autoconnect_flash"] = t(
+                                "favorites.saved",
+                                station=station.name,
+                            )
+                            st.session_state["_provider_autoconnect_flash_kind"] = "success"
+                            st.rerun()
+                        else:
+                            st.error(t("favorites.save_error"))
 
                 st.markdown("---")
 

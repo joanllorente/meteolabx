@@ -5,6 +5,76 @@ from typing import Any, Mapping, Sequence, Union
 
 import streamlit as st
 
+WIND_ROSE_CALM_THRESHOLD_KMH = 2.0
+WET_BULB_POTENTIAL_KEY = "observation.cards.basic.dew_point.wet_bulb_risk.potential"
+WET_BULB_CRITICAL_KEY = "observation.cards.basic.dew_point.wet_bulb_risk.critical"
+WET_BULB_EXTREME_KEY = "observation.cards.basic.dew_point.wet_bulb_risk.extreme"
+WET_BULB_WARNING_KEY = "observation.cards.basic.dew_point.wet_bulb_alert.warning"
+WET_BULB_EXTREME_ALERT_KEY = "observation.cards.basic.dew_point.wet_bulb_alert.extreme"
+
+
+@dataclass(frozen=True)
+class WetBulbRisk:
+    label_key: str = ""
+    alert_level: str = ""
+    alert_key: str = ""
+
+
+def _wet_bulb_risk(wet_bulb_c: Any) -> WetBulbRisk:
+    try:
+        value = float(wet_bulb_c)
+    except (TypeError, ValueError):
+        return WetBulbRisk()
+    if value != value:
+        return WetBulbRisk()
+    if value >= 34.0:
+        return WetBulbRisk(
+            label_key=WET_BULB_EXTREME_KEY,
+            alert_level="danger",
+            alert_key=WET_BULB_EXTREME_ALERT_KEY,
+        )
+    if value >= 30.5:
+        return WetBulbRisk(
+            label_key=WET_BULB_CRITICAL_KEY,
+            alert_level="warning",
+            alert_key=WET_BULB_WARNING_KEY,
+        )
+    if value >= 28.0:
+        return WetBulbRisk(label_key=WET_BULB_POTENTIAL_KEY)
+    return WetBulbRisk()
+
+
+def _wet_bulb_risk_subtitle_html(risk: WetBulbRisk, translate) -> str:
+    if not risk.label_key:
+        return ""
+    label = translate(risk.label_key)
+    return (
+        "<div class='wet-bulb-risk-label' "
+        "style='margin-top:4px; font-size:0.86rem; font-weight:700; color:rgba(177, 98, 0, 0.96);'>"
+        f"{label}</div>"
+    )
+
+
+def _wet_bulb_alert_html(risk: WetBulbRisk, translate, *, dark: bool = False) -> str:
+    if not risk.alert_key:
+        return ""
+    alert_text = translate(risk.alert_key)
+    if risk.alert_level == "danger":
+        bg = "rgba(185, 28, 28, 0.12)" if not dark else "rgba(248, 113, 113, 0.16)"
+        border = "rgba(185, 28, 28, 0.42)" if not dark else "rgba(248, 113, 113, 0.52)"
+        text = "rgb(127, 29, 29)" if not dark else "rgb(254, 226, 226)"
+    else:
+        bg = "rgba(245, 158, 11, 0.13)" if not dark else "rgba(251, 191, 36, 0.16)"
+        border = "rgba(217, 119, 6, 0.36)" if not dark else "rgba(251, 191, 36, 0.48)"
+        text = "rgb(120, 70, 0)" if not dark else "rgb(254, 243, 199)"
+    return (
+        "<div class='wet-bulb-risk-alert' "
+        f"style='margin:0.15rem 0 0.85rem 0; padding:0.68rem 0.82rem; border-radius:8px; "
+        f"border:1px solid {border}; border-left-width:4px; background:{bg}; color:{text}; "
+        "font-size:0.92rem; font-weight:700; line-height:1.35;'>"
+        f"{alert_text}</div>"
+    )
+
 
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -18,6 +88,35 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return float("nan")
+
+
+def _local_naive_datetime_from_epoch(epoch: float, tz_name: str = "") -> datetime:
+    tz_text = str(tz_name or "").strip()
+    if tz_text:
+        try:
+            from zoneinfo import ZoneInfo
+
+            return datetime.fromtimestamp(float(epoch), tz=ZoneInfo(tz_text)).replace(tzinfo=None)
+        except Exception:
+            pass
+    return datetime.fromtimestamp(float(epoch))
+
+
+def _local_day_start_epoch(tz_name: str = "", now_epoch: Any = None) -> int:
+    tz_text = str(tz_name or "").strip()
+    try:
+        epoch_f = float(now_epoch) if now_epoch is not None else datetime.now().timestamp()
+    except (TypeError, ValueError):
+        epoch_f = datetime.now().timestamp()
+    if tz_text:
+        try:
+            from zoneinfo import ZoneInfo
+
+            now_dt = datetime.fromtimestamp(epoch_f, tz=ZoneInfo(tz_text))
+            return int(now_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        except Exception:
+            pass
+    return int(datetime.fromtimestamp(epoch_f).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
 
 
 @st.cache_data(show_spinner=False)
@@ -49,6 +148,127 @@ def _solar_energy_today_wh_m2_cached(
         prev_ep, prev_solar = ep_i, solar_f
 
     return float(energy_wh_m2) if energy_wh_m2 > 0 else 0.0
+
+
+def _running_daily_precip_mm(values: Sequence[float]) -> list[float]:
+    """Devuelve el acumulado del día (serie monótona no decreciente) en mm.
+
+    La serie de origen (``values``) puede venir en dos formatos según el
+    proveedor:
+
+    * **Acumulada** (p. ej. ``precipTotal`` de WU): ya es el acumulado del día,
+      sube de forma monótona y se resetea a medianoche.
+    * **Incremental por paso** (p. ej. AEMET diezminutal): cada muestra es la
+      lluvia caída en ese intervalo, así que sube y baja.
+
+    Esta función normaliza ambos casos a un acumulado del día creciente. La
+    lógica es idéntica a la del cálculo de ``precip_total`` (la card
+    "Precipitación hoy" en ``meteolabx.py``) para que el último punto del
+    gráfico coincida exactamente con esa card.
+    """
+    vals = [float(v) for v in values]
+    if not vals:
+        return []
+
+    diffs = [vals[i] - vals[i - 1] for i in range(1, len(vals))]
+    non_negative_ratio = (
+        sum(1 for d in diffs if d >= -0.05) / len(diffs) if diffs else 1.0
+    )
+
+    running: list[float] = []
+    acc = 0.0
+    if non_negative_ratio >= 0.8:
+        # Serie acumulada: re-acumular incrementos positivos tolerando reseteos
+        # del contador. El primer punto queda en 0 (baseline) y se filtra luego.
+        running.append(acc)
+        for i in range(1, len(vals)):
+            d = vals[i] - vals[i - 1]
+            acc += d if d >= 0 else max(0.0, vals[i])
+            running.append(acc)
+    else:
+        # Serie incremental por paso: suma acumulada directa.
+        for v in vals:
+            acc += max(0.0, v)
+            running.append(acc)
+    return running
+
+
+def _prepare_observation_precip_frame(
+    epochs: Sequence[Any],
+    precip_values: Sequence[Any],
+    *,
+    day_start: datetime,
+    day_end: datetime,
+    step_minutes: int,
+    convert_precip: Any,
+    precip_unit_pref: str,
+    precip_total_today: Any = None,
+    fallback_epoch: Any = None,
+    tz_name: str = "",
+):
+    precip_total_value = _safe_float(precip_total_today)
+    if precip_total_value == precip_total_value and precip_total_value <= 0.0:
+        return None
+
+    import pandas as pd
+
+    def fallback_frame():
+        if not (precip_total_value == precip_total_value and precip_total_value > 0.0):
+            return None
+        ep_i = _safe_int(fallback_epoch)
+        now_dt = _local_naive_datetime_from_epoch(datetime.now().timestamp(), tz_name)
+        dt = _local_naive_datetime_from_epoch(ep_i, tz_name) if ep_i > 0 else now_dt
+        if dt < day_start or dt >= day_end:
+            dt = min(max(now_dt, day_start), day_end - timedelta(minutes=1))
+        display_value = convert_precip(precip_total_value, precip_unit_pref)
+        display_float = _safe_float(display_value)
+        if display_float != display_float or display_float <= 0.0:
+            return None
+        return pd.DataFrame(
+            {
+                "dt": [dt],
+                "precip_mm": [precip_total_value],
+                "precip_display": [display_float],
+            }
+        )
+
+    epoch_list = list(epochs or [])
+    precip_list = list(precip_values or [])
+    row_count = min(len(epoch_list), len(precip_list))
+    if row_count <= 0:
+        return fallback_frame()
+
+    rows: list[tuple[datetime, float]] = []
+    for epoch, precip in zip(epoch_list[:row_count], precip_list[:row_count]):
+        ep_i = _safe_int(epoch)
+        value = _safe_float(precip)
+        if ep_i <= 0 or value != value:
+            continue
+        dt = _local_naive_datetime_from_epoch(ep_i, tz_name)
+        if dt < day_start or dt >= day_end:
+            continue
+        rows.append((dt, max(0.0, value)))
+
+    if not rows:
+        return fallback_frame()
+
+    frame = pd.DataFrame(rows, columns=["dt", "precip_mm"]).sort_values("dt")
+    frame["dt"] = pd.to_datetime(frame["dt"], errors="coerce").dt.floor(f"{int(step_minutes)}min")
+    frame = frame.dropna(subset=["dt"]).groupby("dt", as_index=False).last()
+    frame["precip_mm"] = pd.to_numeric(frame["precip_mm"], errors="coerce").clip(lower=0)
+    if frame.empty:
+        return fallback_frame()
+
+    # Acumulado del día (monótono creciente), independientemente de si el
+    # proveedor entrega la serie acumulada o incremental por paso.
+    running_mm = _running_daily_precip_mm(frame["precip_mm"].tolist())
+    chart_values_mm = pd.Series(running_mm, index=frame.index)
+
+    frame["precip_display"] = chart_values_mm.apply(lambda value: convert_precip(value, precip_unit_pref))
+    frame = frame[pd.to_numeric(frame["precip_display"], errors="coerce") > 0.0]
+    if frame.empty:
+        return fallback_frame()
+    return frame
 
 
 @st.cache_data(show_spinner=False)
@@ -115,7 +335,7 @@ def _wind_rose_stats_cached(
         else:
             speed_ref = g
 
-        is_calm_sample = speed_ref < 1.0
+        is_calm_sample = speed_ref < WIND_ROSE_CALM_THRESHOLD_KMH
         if is_calm_sample:
             calm += 1
         if d != d or is_calm_sample:
@@ -168,6 +388,7 @@ class ObservationContext:
     clarity: Any
     connected: Any
     connection_type: Any
+    convert_precip: Any
     convert_pressure: Any
     convert_radiation: Any
     convert_temperature: Any
@@ -188,6 +409,7 @@ class ObservationContext:
     p_arrow: Any
     p_label: Any
     p_msl: Any
+    precip_unit_pref: Any
     precip_unit_txt: Any
     pressure_unit_pref: Any
     pressure_unit_txt: Any
@@ -264,6 +486,7 @@ def render_observation_tab(ctx):
     clarity = ctx.clarity
     connected = ctx.connected
     connection_type = ctx.connection_type
+    convert_precip = ctx.convert_precip
     convert_pressure = ctx.convert_pressure
     convert_radiation = ctx.convert_radiation
     convert_temperature = ctx.convert_temperature
@@ -284,6 +507,7 @@ def render_observation_tab(ctx):
     p_arrow = ctx.p_arrow
     p_label = ctx.p_label
     p_msl = ctx.p_msl
+    precip_unit_pref = ctx.precip_unit_pref
     precip_unit_txt = ctx.precip_unit_txt
     pressure_unit_pref = ctx.pressure_unit_pref
     pressure_unit_txt = ctx.pressure_unit_txt
@@ -312,6 +536,12 @@ def render_observation_tab(ctx):
     wind_unit_pref = ctx.wind_unit_pref
     wind_unit_txt = ctx.wind_unit_txt
     z = ctx.z
+    station_tz_name = str(
+        base.get("station_tz")
+        or st.session_state.get("provider_station_tz")
+        or st.session_state.get("browser_tz")
+        or ""
+    ).strip()
 
     def _mobile_observation_plot() -> bool:
         viewport = st.session_state.get("browser_viewport_width", 0)
@@ -378,6 +608,14 @@ def render_observation_tab(ctx):
         e_vapor_val = float("nan")
     e_vapor_str = _fmt_pressure_display(e_vapor_val, decimals=1)
     tw_sub_str = "—" if is_nan(Tw) else f"{_fmt_temp_display(Tw, decimals=1)} {temp_unit_txt}"
+    wet_bulb_risk = _wet_bulb_risk(Tw)
+    wet_bulb_alert = _wet_bulb_alert_html(wet_bulb_risk, t, dark=dark)
+    if wet_bulb_alert:
+        st.markdown(wet_bulb_alert, unsafe_allow_html=True)
+    dew_point_subtitle = (
+        f"<div>{t('observation.cards.basic.dew_point.wet_bulb')}: <b>{tw_sub_str}</b></div>"
+        f"{_wet_bulb_risk_subtitle_html(wet_bulb_risk, t)}"
+    )
     p_label_card = _translate_pressure_trend_label(p_label)
     inst_label_card = _translate_rain_intensity_label(inst_label)
     is_wu_connection = str(connection_type).strip().upper() == "WU"
@@ -434,7 +672,7 @@ def render_observation_tab(ctx):
              uid="b2", dark=dark, tooltip_key="humedad relativa"),
         card(t("observation.cards.basic.dew_point.title"), td_val, temp_unit_txt, 
              icon_kind="dew", 
-             subtitle_html=f"<div>{t('observation.cards.basic.dew_point.wet_bulb')}: <b>{tw_sub_str}</b></div>", 
+             subtitle_html=dew_point_subtitle, 
              uid="b3", dark=dark, tooltip_key="punto de rocío"),
         card(t("observation.cards.basic.pressure.title"), p_abs_str, pressure_unit_txt, 
              icon_kind="press", 
@@ -479,7 +717,7 @@ def render_observation_tab(ctx):
     if not connected or (has_barometer_now and has_humidity_now):
         section_title(t("observation.sections.thermodynamics"))
 
-        q_val = "—" if is_nan(q_gkg) else f"{q_gkg:.2f}"
+        q_val = "—" if is_nan(q_gkg) else f"{q_gkg:.1f}"
         rho_v_val = "—" if is_nan(rho_v_gm3) else f"{rho_v_gm3:.1f}"
         tv_val = _fmt_temp_display(Tv, decimals=1)
         te_val = _fmt_temp_display(Te, decimals=1)
@@ -537,7 +775,7 @@ def render_observation_tab(ctx):
                 now_ep = int(time.time())
             else:
                 now_ep = int(base.get("epoch", 0) or time.time())
-            day_start_ep = int(datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            day_start_ep = _local_day_start_epoch(station_tz_name, now_ep)
 
             energy_wh_m2 = _solar_energy_today_wh_m2_cached(
                 tuple(_safe_int(ep) for ep in epochs),
@@ -587,29 +825,12 @@ def render_observation_tab(ctx):
             max_solar_altitude_day_deg,
         )
 
-        clarity_label = sky_clarity_label(clarity)
-        try:
-            lat_for_clarity = base.get("lat", float("nan"))
-            lon_for_clarity = base.get("lon", float("nan"))
-            epoch_for_clarity = base.get("epoch", 0) if connected else int(time.time())
-            if epoch_for_clarity and not is_nan(lat_for_clarity) and is_nighttime(float(lat_for_clarity), float(epoch_for_clarity), float(lon_for_clarity)):
-                clarity_label = t("observation.cards.radiation.sky_clarity.night")
-        except Exception:
-            pass
-        clarity_label = _translate_clarity_label(clarity_label)
-        try:
-            epoch_for_clarity = base.get("epoch", 0) if connected else int(time.time())
-            lat_for_clarity = base.get("lat", float("nan"))
-            lon_for_clarity = base.get("lon", float("nan"))
-            orto_ocaso_txt = sunrise_sunset_label(float(lat_for_clarity), float(lon_for_clarity), float(epoch_for_clarity))
-        except Exception:
-            orto_ocaso_txt = t("observation.cards.radiation.sky_clarity.sunrise_sunset", sunrise="—", sunset="—")
-        else:
-            orto_ocaso_txt = _translate_sunrise_sunset_label(orto_ocaso_txt)
-        clarity_sub = (
-            f"<div style='font-size:0.85rem; opacity:0.75;'>{clarity_label}</div>"
-            f"<div>{orto_ocaso_txt}</div>"
-        )
+        sun_tz_name = str(
+            base.get("station_tz")
+            or st.session_state.get("provider_station_tz")
+            or st.session_state.get("browser_tz")
+            or ""
+        ).strip()
 
         try:
             lat_for_sun = base.get("lat", float("nan"))
@@ -620,6 +841,41 @@ def render_observation_tab(ctx):
         except Exception:
             sun_altitude = float("nan")
             sun_altitude_max = float("nan")
+
+        clarity_label = sky_clarity_label(clarity)
+        clarity_unit = "%"
+        if not is_nan(sun_altitude) and sun_altitude < 5.0:
+            clarity_val = "—"
+            clarity_unit = ""
+            if sun_altitude <= -18.0:
+                clarity_label = t("observation.cards.radiation.sky_clarity.night_closed")
+            elif sun_altitude <= -12.0:
+                clarity_label = t("observation.cards.radiation.sky_clarity.twilight_astronomical")
+            elif sun_altitude <= -6.0:
+                clarity_label = t("observation.cards.radiation.sky_clarity.twilight_nautical")
+            elif sun_altitude <= 0.0:
+                clarity_label = t("observation.cards.radiation.sky_clarity.twilight_civil")
+            else:
+                clarity_label = ""
+        clarity_label = _translate_clarity_label(clarity_label)
+        try:
+            epoch_for_clarity = base.get("epoch", 0) if connected else int(time.time())
+            lat_for_clarity = base.get("lat", float("nan"))
+            lon_for_clarity = base.get("lon", float("nan"))
+            orto_ocaso_txt = sunrise_sunset_label(
+                float(lat_for_clarity),
+                float(lon_for_clarity),
+                float(epoch_for_clarity),
+                tz_name=sun_tz_name,
+            )
+        except Exception:
+            orto_ocaso_txt = t("observation.cards.radiation.sky_clarity.sunrise_sunset", sunrise="—", sunset="—")
+        else:
+            orto_ocaso_txt = _translate_sunrise_sunset_label(orto_ocaso_txt)
+        clarity_sub = (
+            f"<div style='font-size:0.85rem; opacity:0.75;'>{clarity_label}</div>"
+            f"<div>{orto_ocaso_txt}</div>"
+        )
 
         sun_altitude_val = "—" if is_nan(sun_altitude) else f"{sun_altitude:.1f}"
         sun_altitude_max_txt = "—" if is_nan(sun_altitude_max) else f"{sun_altitude_max:.1f}°"
@@ -640,7 +896,7 @@ def render_observation_tab(ctx):
 
         # Segunda fila: claridad, geometría solar y balance
         cards_radiation_row2 = [
-            card(t("observation.cards.radiation.sky_clarity.title"), clarity_val, "%", icon_kind="clarity", subtitle_html=clarity_sub, uid="r5", dark=dark, tooltip_key="claridad del cielo"),
+            card(t("observation.cards.radiation.sky_clarity.title"), clarity_val, clarity_unit, icon_kind="clarity", subtitle_html=clarity_sub, uid="r5", dark=dark, tooltip_key="claridad del cielo"),
             card(t("observation.cards.radiation.sun_altitude.title"), sun_altitude_val, "°", icon_kind="sunalt", subtitle_html=sun_altitude_sub, uid="r6", dark=dark, tooltip_key="altura del sol"),
             card(t("observation.cards.radiation.water_balance_today.title"), balance_val, precip_unit_txt, icon_kind="balance", subtitle_html=balance_sub, uid="r7", dark=dark, tooltip_key="balance hídrico hoy"),
         ]
@@ -675,6 +931,7 @@ def render_observation_tab(ctx):
         chart_pressures = st.session_state.get("chart_pressures", [])
         chart_solar_radiations = st.session_state.get("chart_solar_radiations", [])
         chart_winds = st.session_state.get("chart_winds", [])
+        chart_precips = st.session_state.get("chart_precips", [])
         
         logger.info(f"📊 [Gráficos] Datos disponibles: {len(chart_epochs)} epochs, {len(chart_temps)} temps, {len(chart_humidities)} humidities")
 
@@ -682,7 +939,7 @@ def render_observation_tab(ctx):
         dt_list = []
         temp_list = []
         for epoch, temp in zip(chart_epochs, chart_temps):
-            dt = datetime.fromtimestamp(epoch)  # si fuera UTC: datetime.utcfromtimestamp(epoch)
+            dt = _local_naive_datetime_from_epoch(epoch, station_tz_name)
             dt_list.append(dt)
             temp_list.append(temp)
 
@@ -704,7 +961,7 @@ def render_observation_tab(ctx):
         df_obs = df_obs.groupby("dt", as_index=False)["temp"].last().sort_values("dt")
 
         # --- 2) Crear malla completa con rango específico por proveedor
-        now_local = datetime.now()
+        now_local = _local_naive_datetime_from_epoch(time.time(), station_tz_name)
 
         grid_inclusive = "both"
 
@@ -751,13 +1008,15 @@ def render_observation_tab(ctx):
             st.markdown(f"### {t('observation.cards.charts.temperature_heading')}")
 
             fig = go.Figure()
+            temp_mode = "lines+markers" if int(y_display.notna().sum()) < 8 else "lines"
 
             fig.add_trace(go.Scatter(
                 x=grid,
                 y=y_display.values,              # <- pasar valores explícitos evita rarezas
-                mode="lines",
+                mode=temp_mode,
                 name=t("observation.cards.charts.temperature_name"),
                 line=dict(color="rgb(255, 107, 107)", width=3),
+                marker=dict(size=5, color="rgb(255, 107, 107)"),
                 connectgaps=connect_series_gaps,
                 fill="tozeroy",
                 fillcolor="rgba(255, 107, 107, 0.1)"
@@ -828,7 +1087,7 @@ def render_observation_tab(ctx):
                     if is_nan(temp) or is_nan(rh):
                         continue
 
-                    vapor_times.append(datetime.fromtimestamp(epoch))
+                    vapor_times.append(_local_naive_datetime_from_epoch(epoch, station_tz_name))
                     e_values.append(vapor_pressure(temp, rh))
                     e_sat_values.append(calc_e_s(temp))
 
@@ -916,6 +1175,78 @@ def render_observation_tab(ctx):
                         key=f"vapor_graph_{theme_mode}",
                         config={"displayModeBar": False},
                     )
+            # --- Gráfico de precipitación (solo si hay lluvia registrada hoy) ---
+            df_precip = _prepare_observation_precip_frame(
+                chart_epochs,
+                chart_precips,
+                day_start=day_start,
+                day_end=day_end,
+                step_minutes=step_minutes,
+                convert_precip=convert_precip,
+                precip_unit_pref=str(precip_unit_pref),
+                precip_total_today=base.get("precip_total"),
+                fallback_epoch=base.get("epoch"),
+                tz_name=station_tz_name,
+            )
+            if df_precip is not None and not df_precip.empty:
+                st.markdown(f"### {t('observation.cards.charts.precipitation_heading')}")
+                y_precip = pd.to_numeric(df_precip["precip_display"], errors="coerce")
+                y_max_precip = max(0.01, float(y_precip.max()))
+                fig_precip = go.Figure()
+                fig_precip.add_trace(go.Scatter(
+                    x=pd.to_datetime(df_precip["dt"]),
+                    y=y_precip.values,
+                    mode="lines+markers" if len(df_precip) < 8 else "lines",
+                    name=t("observation.cards.charts.precipitation_line"),
+                    # El acumulado es una función escalón: cuando no hay nueva
+                    # lluvia (o falta el dato) se mantiene el valor anterior
+                    # (tramo horizontal) y solo sube al llegar una medida mayor
+                    # (salto vertical). Así un hueco no se dibuja como lluvia
+                    # continua, sino como acumulado constante.
+                    line=dict(color="rgb(80, 162, 255)", width=2.8, shape="hv"),
+                    marker=dict(size=5, color="rgb(80, 162, 255)"),
+                    fill="tozeroy",
+                    fillcolor="rgba(80, 162, 255, 0.16)",
+                    connectgaps=False,
+                ))
+                fig_precip.add_vline(x=now_local, line_width=1, line_dash="dot", opacity=0.6)
+                fig_precip.update_layout(
+                    title=dict(text=t("observation.cards.charts.precipitation_title"), x=0.5, xanchor="center", font=dict(size=18, color=text_color)),
+                    xaxis=dict(
+                        title=dict(text=t("common.hour"), font=dict(color=text_color)),
+                        type="date",
+                        range=[day_start, day_end],
+                        tickformat="%H:%M",
+                        dtick=60 * 60 * 1000,
+                        showgrid=True,
+                        gridcolor=grid_color,
+                        tickfont=dict(color=text_color, size=x_tick_size),
+                    ),
+                    yaxis=dict(
+                        title=dict(text=precip_unit_txt, font=dict(color=text_color)),
+                        range=[0, y_max_precip * 1.15],
+                        showgrid=True,
+                        gridcolor=grid_color,
+                        tickfont=dict(color=text_color, size=y_tick_size),
+                    ),
+                    hovermode="x unified",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color=text_color),
+                    showlegend=False,
+                    margin=dict(l=60, r=40, t=60, b=60),
+                    height=400,
+                    annotations=[dict(
+                        text="meteolabx.com",
+                        xref="paper", yref="paper",
+                        x=0.98, y=0.02,
+                        xanchor="right", yanchor="bottom",
+                        showarrow=False,
+                        font=dict(size=10, color="rgba(128,128,128,0.5)"),
+                    )],
+                )
+                _plotly_chart_stretch(fig_precip, key=f"precip_graph_{theme_mode}")
+
             # --- Gráfico de viento y rosa de viento (WU/AEMET) ---
             wind_times = []
             wind_vals = []
@@ -934,7 +1265,7 @@ def render_observation_tab(ctx):
                 if is_nan(w) and is_nan(g):
                     continue
 
-                wind_times.append(datetime.fromtimestamp(epoch))
+                wind_times.append(_local_naive_datetime_from_epoch(epoch, station_tz_name))
                 wind_vals.append(float(w) if not is_nan(w) else float("nan"))
                 gust_vals.append(float(g) if not is_nan(g) else float("nan"))
                 dir_vals.append(float(d) if not is_nan(d) else float("nan"))
@@ -976,7 +1307,7 @@ def render_observation_tab(ctx):
                 # mejor referencia disponible (viento medio o racha).
                 df_wind_view["dir_plot"] = df_wind_view["dir"]
                 speed_ref = df_wind_view[["wind", "gust"]].max(axis=1, skipna=True)
-                calm_mask = speed_ref.notna() & (speed_ref < 1.0)
+                calm_mask = speed_ref.notna() & (speed_ref < WIND_ROSE_CALM_THRESHOLD_KMH)
                 df_wind_view.loc[calm_mask, "dir_plot"] = float("nan")
                 s_dir = pd.Series(df_wind_view["dir_plot"].values, index=pd.to_datetime(df_wind_view["dt"]))
                 y_wind = s_wind.reindex(grid)
@@ -1217,6 +1548,12 @@ def render_observation_tab(ctx):
             if len(solar_valid) >= 2 and not is_nan(lat_clarity) and not is_nan(lon_clarity):
                 from models.radiation import solar_radiation_max_wm2, sunrise_sunset_datetimes
 
+                sun_tz_name = str(
+                    base.get("station_tz")
+                    or st.session_state.get("provider_station_tz")
+                    or st.session_state.get("browser_tz")
+                    or ""
+                ).strip()
                 irradiance_times = []
                 measured_vals = []
                 theoretical_vals = []
@@ -1235,7 +1572,7 @@ def render_observation_tab(ctx):
                     if is_nan(theoretical_i):
                         continue
 
-                    irradiance_times.append(datetime.fromtimestamp(float(epoch)))
+                    irradiance_times.append(_local_naive_datetime_from_epoch(float(epoch), sun_tz_name))
                     measured_vals.append(float(solar_i))
                     theoretical_vals.append(float(theoretical_i))
                     irradiance_epochs.append(int(epoch))
@@ -1256,7 +1593,7 @@ def render_observation_tab(ctx):
 
                     ref_epoch = float(irradiance_epochs[-1]) if irradiance_epochs else float(base.get("epoch", time.time()))
                     sunrise_dt, sunset_dt = sunrise_sunset_datetimes(
-                        float(lat_clarity), float(lon_clarity), ref_epoch
+                        float(lat_clarity), float(lon_clarity), ref_epoch, tz_name=sun_tz_name
                     )
                     if sunrise_dt is None or sunset_dt is None:
                         sunrise_dt = day_start

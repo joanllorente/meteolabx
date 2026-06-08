@@ -16,40 +16,16 @@ from utils.state_keys import BROWSER_COLOR_SCHEME, BROWSER_TZ, BROWSER_VIEWPORT_
 
 
 def sync_browser_context_early() -> None:
-    components.html(
-        """
-        <script>
-        (function () {
-          const hostWin = window.parent || window;
-          try {
-            try {
-              if (!hostWin.sessionStorage.getItem("meteolabx_boot_id")) {
-                const bootId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-                hostWin.sessionStorage.setItem("meteolabx_boot_id", bootId);
-              }
-            } catch (_e) {}
+    """
+    No-op. La inicialización JS de arranque (sessionStorage boot id + limpieza
+    de query params legacy) está consolidada en ``_inject_pwa_metadata`` en
+    ``meteolabx.py`` para no crear un iframe extra por iteración del script.
 
-            // Versiones anteriores usaban query params (_tz, _vw, _cs,
-            // _mlx_boot) para pasar contexto del navegador a Python. Ahora lo
-            // hace el componente browser_context sin ensuciar la URL.
-            const url = new URL(hostWin.location.href);
-            let changed = false;
-            ["_tz", "_vw", "_cs", "_mlx_boot"].forEach(function (key) {
-              if (url.searchParams.has(key)) {
-                url.searchParams.delete(key);
-                changed = true;
-              }
-            });
-            if (changed && hostWin.history && typeof hostWin.history.replaceState === 'function') {
-              hostWin.history.replaceState(null, "", url.toString());
-            }
-          } catch (_e) {}
-        })();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
+    Se mantiene la función para no romper llamadas externas; queda como punto
+    de extensión si en el futuro hace falta inyectar más JS de arranque
+    independiente del bloque PWA.
+    """
+    return None
 
 
 def hydrate_browser_context_live(get_browser_context) -> None:

@@ -15,6 +15,8 @@ METEOFRANCE_STATIONS_PATH = DATA_DIR / "data_estaciones_meteofrance.json"
 METEOGALICIA_STATIONS_PATH = DATA_DIR / "data_estaciones_meteogalicia.json"
 NWS_STATIONS_PATH = DATA_DIR / "data_estaciones_nws.json"
 POEM_STATIONS_PATH = DATA_DIR / "data_estaciones_poem.json"
+METOFFICE_STATIONS_PATH = DATA_DIR / "data_estaciones_metoffice.json"
+METEOHUB_IT_STATIONS_PATH = DATA_DIR / "data_estaciones_meteohub_it.json"
 
 EUSKALMET_SENSORS_PATH = DATA_DIR / "data_sensors_euskalmet.json"
 EUSKALMET_SENSOR_MAP_PATH = DATA_DIR / "data_station_sensor_map_euskalmet.json"
@@ -28,8 +30,10 @@ STATION_CATALOG_PATHS = [
     METEOGALICIA_STATIONS_PATH,
     NWS_STATIONS_PATH,
     POEM_STATIONS_PATH,
+    METOFFICE_STATIONS_PATH,
+    METEOHUB_IT_STATIONS_PATH,
 ]
 
 # Conteo precomputado para evitar leer ~12 MB de catalogos JSON en cada
 # arranque frío solo para pintar el total del encabezado.
-STATION_CATALOG_TOTAL = 42666
+STATION_CATALOG_TOTAL = 46936

@@ -25,7 +25,12 @@ LS_AUTOCONNECT = "meteolabx_auto_connect"
 LS_AUTOCONNECT_TARGET = "meteolabx_auto_connect_target"
 LS_WU_FORGOTTEN = "meteolabx_wu_forgotten"
 LS_WU_CALIBRATIONS = "meteolabx_wu_calibrations"
+LS_WEATHERLINK_APIKEY = "meteolabx_weatherlink_api_key"
+LS_WEATHERLINK_APISECRET = "meteolabx_weatherlink_api_secret"
+LS_WEATHERLINK_Z = "meteolabx_weatherlink_z"
+LS_WEATHERLINK_STATION = "meteolabx_weatherlink_station"
 LS_UNIT_PREFERENCES = "meteolabx_unit_preferences"
+LS_FAVORITES = "meteolabx_favorites"
 
 # ============================================================
 # CACHE

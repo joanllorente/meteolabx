@@ -119,6 +119,27 @@ def t(key: str, default: Optional[str] = None, **kwargs: Any) -> str:
         return str(text)
 
 
+def t_list(key: str) -> list[str]:
+    """Devuelve una lista de cadenas para claves cuyo valor es un array JSON
+    (p. ej. las listas de novedades del footer). Cae al idioma por defecto si
+    falta en el idioma actual y a lista vacía si no existe."""
+    def _lookup_list(payload: dict[str, Any]) -> Optional[list[str]]:
+        current: Any = payload
+        for part in str(key).split("."):
+            if not isinstance(current, dict) or part not in current:
+                return None
+            current = current[part]
+        if isinstance(current, list):
+            return [str(item) for item in current]
+        return None
+
+    return (
+        _lookup_list(load_catalog(get_language()))
+        or _lookup_list(load_catalog(DEFAULT_LANG))
+        or []
+    )
+
+
 def month_name(month: int, short: bool = False, lang: Optional[str] = None) -> str:
     month_int = int(month)
     key = f"months.{'short' if short else 'long'}.{month_int}"

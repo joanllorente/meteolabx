@@ -9,6 +9,8 @@ def test_split_map_provider_options_for_iberia_keeps_regional_providers_near():
     assert "METEOFRANCE" in near
     assert "NWS" in far
     assert "FROST" in far
+    assert "METOFFICE" in far
+    assert "METEOHUB_IT" in far
 
 
 def test_split_map_provider_options_for_us_makes_nws_near():
@@ -29,4 +31,6 @@ def test_regional_catalog_spec_exposes_full_nws_catalog():
 def test_provider_is_near_center_matches_country_regions():
     assert map_tab.provider_is_near_center("METEOFRANCE", 43.6045, 1.4440) is True
     assert map_tab.provider_is_near_center("FROST", 60.3913, 5.3221) is True
+    assert map_tab.provider_is_near_center("METOFFICE", 51.5072, -0.1276) is True
+    assert map_tab.provider_is_near_center("METEOHUB_IT", 41.9028, 12.4964) is True
     assert map_tab.provider_is_near_center("NWS", 41.3710, 2.1280) is False

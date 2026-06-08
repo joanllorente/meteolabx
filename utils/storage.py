@@ -14,6 +14,10 @@ from config import (
     LS_Z,
     LS_AUTOCONNECT,
     LS_AUTOCONNECT_TARGET,
+    LS_WEATHERLINK_APIKEY,
+    LS_WEATHERLINK_APISECRET,
+    LS_WEATHERLINK_STATION,
+    LS_WEATHERLINK_Z,
     LS_WU_CALIBRATIONS,
     LS_UNIT_PREFERENCES,
 )
@@ -299,6 +303,17 @@ def forget_local_storage_keys() -> None:
     queue_local_storage_writes(updates)
 
 
+def forget_weatherlink_local_storage_keys() -> None:
+    """Marca las credenciales WeatherLink como olvidadas sin tocar WU."""
+    updates = {
+        LS_WEATHERLINK_APIKEY: _FORGET_MARKER,
+        LS_WEATHERLINK_APISECRET: _FORGET_MARKER,
+        LS_WEATHERLINK_Z: _FORGET_MARKER,
+        LS_WEATHERLINK_STATION: _FORGET_MARKER,
+    }
+    queue_local_storage_writes(updates)
+
+
 def set_local_storage(item_key: str, value, key_suffix: str) -> None:
     """Guarda un valor en LocalStorage (o lo marca como olvidado si value es None/'')"""
     try:
@@ -314,14 +329,21 @@ def set_local_storage(item_key: str, value, key_suffix: str) -> None:
         pass
 
 
-def _read_ls_item(storage: LocalStorage, item_key: str, getter_key: str) -> str:
-    """Lee una key del localStorage y desenvuelve el formato wrapper si es necesario."""
+def _read_cached_or_snapshot_item(item_key: str) -> tuple[bool, str]:
     has_cached, cached_value = _session_cached_item(item_key)
     if has_cached:
-        return cached_value
+        return True, cached_value
     has_snapshot, snapshot_value = _snapshot_item(item_key)
     if has_snapshot:
-        return snapshot_value
+        return True, snapshot_value
+    return False, ""
+
+
+def _read_ls_item(storage: LocalStorage, item_key: str, getter_key: str) -> str:
+    """Lee una key del localStorage y desenvuelve el formato wrapper si es necesario."""
+    has_value, value = _read_cached_or_snapshot_item(item_key)
+    if has_value:
+        return value
     try:
         raw = storage.getItem(item_key, key=getter_key)
     except TypeError:
@@ -329,13 +351,20 @@ def _read_ls_item(storage: LocalStorage, item_key: str, getter_key: str) -> str:
     return _unwrap_ls_value(raw, item_key)
 
 
+def _read_stored_text(item_key: str, getter_key: str) -> str:
+    has_value, value = _read_cached_or_snapshot_item(item_key)
+    if has_value:
+        return value
+    storage = _get_local_storage()
+    if storage is None:
+        return ""
+    return _read_ls_item(storage, item_key, getter_key)
+
+
 def get_stored_station():
     """Obtiene Station ID guardada"""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return None
-        txt = _read_ls_item(storage, LS_STATION, "mlx_get_station")
+        txt = _read_stored_text(LS_STATION, "mlx_get_station")
     except Exception:
         return None
     if not txt or txt == _FORGET_MARKER:
@@ -346,10 +375,7 @@ def get_stored_station():
 def get_stored_apikey():
     """Obtiene API Key guardada"""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return None
-        txt = _read_ls_item(storage, LS_APIKEY, "mlx_get_apikey")
+        txt = _read_stored_text(LS_APIKEY, "mlx_get_apikey")
     except Exception:
         return None
     if not txt or txt == _FORGET_MARKER:
@@ -360,10 +386,7 @@ def get_stored_apikey():
 def get_stored_z():
     """Obtiene altitud guardada"""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return None
-        txt = _read_ls_item(storage, LS_Z, "mlx_get_z")
+        txt = _read_stored_text(LS_Z, "mlx_get_z")
     except Exception:
         return None
     if not txt or txt == _FORGET_MARKER:
@@ -374,10 +397,7 @@ def get_stored_z():
 def get_stored_autoconnect():
     """Obtiene la preferencia de autoconexion guardada (bool)."""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return False
-        txt = _read_ls_item(storage, LS_AUTOCONNECT, "mlx_get_autoconnect")
+        txt = _read_stored_text(LS_AUTOCONNECT, "mlx_get_autoconnect")
     except Exception:
         return False
 
@@ -414,10 +434,7 @@ def set_stored_autoconnect_target(target: Optional[dict]):
 def get_stored_autoconnect_target():
     """Obtiene el objetivo de autoconexión guardado."""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return None
-        txt = _read_ls_item(storage, LS_AUTOCONNECT_TARGET, "mlx_get_autoconnect_target")
+        txt = _read_stored_text(LS_AUTOCONNECT_TARGET, "mlx_get_autoconnect_target")
     except Exception:
         return None
 
@@ -435,10 +452,7 @@ def get_stored_autoconnect_target():
 def get_local_storage_value(item_key: str):
     """Lee una clave arbitraria de localStorage con saneado básico."""
     try:
-        storage = _get_local_storage()
-        if storage is None:
-            return None
-        txt = _read_ls_item(storage, item_key, f"mlx_get_raw_{item_key}")
+        txt = _read_stored_text(item_key, f"mlx_get_raw_{item_key}")
     except Exception:
         return None
 

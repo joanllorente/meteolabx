@@ -676,6 +676,7 @@ def get_meteogalicia_data(state=None) -> Optional[Dict[str, Any]]:
             "winds": [float(v) for v in winds],
             "gusts": [float(v) for v in gusts],
             "wind_dirs": [float(v) for v in dirs],
+            "precips": [float(v) for v in precips],
             "solar_radiations": [float(v) for v in solars],
             "has_data": bool(hourly_series.get("has_data", False)),
         },
@@ -689,7 +690,7 @@ def get_meteogalicia_data(state=None) -> Optional[Dict[str, Any]]:
 # Esquema de columnas del DataFrame devuelto (compatible con climograms.py).
 _CLIMO_DAILY_COLS = [
     "date", "epoch", "temp_mean", "temp_max", "temp_min",
-    "wind_mean", "gust_max", "precip_total",
+    "wind_mean", "wind_dir_mean", "gust_max", "precip_total",
 ]
 _CLIMO_EXTRA_COLS = [
     "solar_hours", "precip_max_24h", "rain_days",
