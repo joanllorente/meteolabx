@@ -75,8 +75,8 @@ _boot_mark("st.set_page_config")
 # Bump esta versión cada vez que cambien los iconos / manifest para forzar
 # que el navegador (y la pantalla de inicio de iOS) recarguen los assets en
 # vez de servir el icono cacheado.
-PWA_ASSET_VERSION = "11"
-PWA_STATIC_BASE = "/app/static"
+PWA_ASSET_VERSION = "12"
+PWA_STATIC_BASE = "."
 
 
 def _inject_pwa_metadata() -> None:

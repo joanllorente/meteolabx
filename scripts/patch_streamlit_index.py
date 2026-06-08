@@ -28,14 +28,27 @@ Súbela cuando cambien los iconos o el manifest para forzar recarga de caché.
 from __future__ import annotations
 
 import re
+import shutil
 import sys
 from pathlib import Path
 
 # Debe coincidir con PWA_ASSET_VERSION en meteolabx.py
-ASSET_VERSION = "11"
+ASSET_VERSION = "12"
 
-# Streamlit sirve los archivos de ./static (enableStaticServing) bajo /app/static/.
-STATIC_BASE = "/app/static"
+# En el HTML inicial apuntamos al propio directorio static de Streamlit.
+# El script copia ahí los assets PWA antes de arrancar el servidor, así el
+# favicon no depende de que /app/static esté activo en producción.
+STATIC_BASE = "."
+PWA_ASSET_FILENAMES = (
+    "favicon.png",
+    "favicon-16x16.png",
+    "favicon-32x32.png",
+    "favicon.ico",
+    "apple-touch-icon-pwa.png",
+    "icon-192-pwa.png",
+    "icon-512-pwa.png",
+    "manifest.json",
+)
 
 START_MARKER = "<!-- MLX-PWA-START -->"
 END_MARKER = "<!-- MLX-PWA-END -->"
@@ -68,6 +81,18 @@ def _find_index_html() -> Path:
     if not index.is_file():
         raise FileNotFoundError(f"No se encontró index.html de Streamlit en {index}")
     return index
+
+
+def _copy_pwa_assets(streamlit_static_dir: Path) -> int:
+    repo_static = Path(__file__).resolve().parents[1] / "static"
+    copied = 0
+    for filename in PWA_ASSET_FILENAMES:
+        source = repo_static / filename
+        if not source.is_file():
+            continue
+        shutil.copy2(source, streamlit_static_dir / filename)
+        copied += 1
+    return copied
 
 
 def patch(index_path: Path) -> bool:
@@ -114,13 +139,14 @@ def main() -> int:
         return 0
 
     try:
+        copied = _copy_pwa_assets(index_path.parent)
         changed = patch(index_path)
     except Exception as exc:  # noqa: BLE001
         print(f"[patch_streamlit_index] AVISO al parchear: {exc}", file=sys.stderr)
         return 0
 
     state = "parcheado" if changed else "ya estaba al día"
-    print(f"[patch_streamlit_index] index.html {state}: {index_path}")
+    print(f"[patch_streamlit_index] index.html {state}: {index_path} ({copied} assets PWA copiados)")
     return 0
 
 

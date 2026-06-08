@@ -1,11 +1,11 @@
 // Service Worker para MeteoLabX PWA
-const CACHE_NAME = 'meteolabx-v8';
+const CACHE_NAME = 'meteolabx-v12';
 const urlsToCache = [
   '/',
-  '/app/static/apple-touch-icon-pwa.png?v=8',
-  '/app/static/icon-192-pwa.png?v=8',
-  '/app/static/icon-512-pwa.png?v=8',
-  '/app/static/manifest.json?v=8'
+  '/apple-touch-icon-pwa.png?v=12',
+  '/icon-192-pwa.png?v=12',
+  '/icon-512-pwa.png?v=12',
+  '/manifest.json?v=12'
 ];
 
 // Instalación del Service Worker
