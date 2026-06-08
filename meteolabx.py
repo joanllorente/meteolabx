@@ -5542,87 +5542,62 @@ if st.session_state.get(CONNECTED, False):
 APP_VERSION = "1.1.0"
 
 
-@st.dialog(t("footer.whats_new"))
-def _render_whats_new_dialog():
-    """Cuadro de novedades de la versión (lee las listas desde locales).
-
-    Se renderiza como un único bloque HTML con listas compactas para evitar el
-    espaciado que Streamlit añade entre elementos markdown separados.
-    """
+def _whats_new_footer_html() -> str:
+    """HTML desplegable de novedades en el propio footer."""
     def _section(title: str, key: str) -> str:
-        items = "".join(f"<li>{item}</li>" for item in t_list(key))
+        items = "".join(f"<li>{html.escape(str(item))}</li>" for item in t_list(key))
         return (
-            f"<div class='mlx-wn-title'>{title}</div>"
+            f"<div class='mlx-wn-title'>{html.escape(str(title))}</div>"
             f"<ul class='mlx-wn-list'>{items}</ul>"
         )
 
-    st.markdown(
-        "<style>"
-        ".mlx-wn-title{font-weight:700;font-size:1rem;margin:0.35rem 0 0.1rem;}"
-        ".mlx-wn-list{margin:0 0 0.3rem;padding-left:1.15rem;}"
-        ".mlx-wn-list li{margin:0.05rem 0;line-height:1.3;font-size:0.9rem;}"
-        "</style>"
-        + _section(t("footer.improvements_title"), "footer.improvements")
-        + _section(t("footer.fixes_title"), "footer.fixes"),
-        unsafe_allow_html=True,
+    return (
+        _section(t("footer.improvements_title"), "footer.improvements")
+        + _section(t("footer.fixes_title"), "footer.fixes")
     )
 
 
 # Pie de página: línea superior con la versión (a la izquierda) y, justo al
-# lado, un enlace "Novedades" (azul subrayado, mismo tamaño) que abre el cuadro.
-# El botón se estiliza con el patrón de selector que ya funciona en el repo
-# (ver components/favorites.py): div[class*="st-key-..."] ... > button.
+# lado, un desplegable "Novedades" que se abre en la propia página.
 st.markdown(
     html_clean(
-        "<style>"
+        f"<style>"
         ".mlb-footsep{margin-top:1.25rem;padding-top:0.8rem;"
         "border-top:1px solid var(--line);}"
+        ".mlb-footer-head{display:flex;align-items:baseline;gap:0.45rem;"
+        "flex-wrap:wrap;margin:0;}"
         ".mlb-version{color:var(--muted);font-size:0.92rem;font-weight:700;"
         "white-space:nowrap;}"
-        # Columnas ajustadas al contenido para que queden pegadas a la izquierda.
-        "div[data-testid='stHorizontalBlock']:has([class*='st-key-footer_whats_new'])"
-        "{gap:0.55rem !important;align-items:baseline !important;flex-wrap:nowrap !important;}"
-        "div[data-testid='stHorizontalBlock']:has([class*='st-key-footer_whats_new'])>div"
-        "{flex:0 0 auto !important;width:auto !important;min-width:0 !important;}"
-        # Botón -> enlace: sin caja/anillo en NINGÚN estado (selector robusto que
-        # casa el <button> a cualquier profundidad bajo la clase de la key).
-        "[class*='st-key-footer_whats_new'] button,"
-        "[class*='st-key-footer_whats_new'] button:hover,"
-        "[class*='st-key-footer_whats_new'] button:focus,"
-        "[class*='st-key-footer_whats_new'] button:active,"
-        "[class*='st-key-footer_whats_new'] button:focus-visible{"
-        "border:0 !important;outline:0 !important;box-shadow:none !important;"
-        "background:transparent !important;background-color:transparent !important;"
-        "padding:0 !important;margin:0 !important;min-height:0 !important;"
-        "height:auto !important;line-height:1.2 !important;}"
-        "[class*='st-key-footer_whats_new']:focus-within{box-shadow:none !important;}"
-        # Texto del enlace: negrita, azul, subrayado, mismo tamaño que la versión.
-        "[class*='st-key-footer_whats_new'] button,"
-        "[class*='st-key-footer_whats_new'] button p,"
-        "[class*='st-key-footer_whats_new'] button div,"
-        "[class*='st-key-footer_whats_new'] button span{"
+        ".mlb-whats-new{display:inline;position:relative;margin:0;padding:0;}"
+        ".mlb-whats-new summary{display:inline;cursor:pointer;list-style:none;"
         "color:#2384ff !important;text-decoration:underline !important;"
-        "font-weight:700 !important;font-size:0.92rem !important;margin:0 !important;}"
-        "[class*='st-key-footer_whats_new'] button:hover,"
-        "[class*='st-key-footer_whats_new'] button:hover p{color:#1366d6 !important;}"
+        "text-decoration-thickness:1.5px !important;text-underline-offset:2px !important;"
+        "font-weight:700 !important;font-size:0.92rem !important;line-height:1.25;"
+        "border:0 !important;outline:0 !important;box-shadow:none !important;}"
+        ".mlb-whats-new summary::-webkit-details-marker{display:none;}"
+        ".mlb-whats-new summary:hover{color:#1366d6 !important;}"
+        ".mlb-whats-new-panel{margin-top:0.85rem;width:min(820px, calc(100vw - 3rem));"
+        "padding:1rem 1.15rem 1.05rem;border-radius:10px;"
+        "background:rgba(219, 235, 255, 0.96);border:1px solid rgba(51, 126, 215, 0.22);"
+        "color:rgba(24, 35, 56, 0.96);box-shadow:0 12px 28px rgba(41, 83, 145, 0.12);}"
+        ".mlx-wn-title{font-weight:800;font-size:1rem;margin:0.15rem 0 0.28rem;}"
+        ".mlx-wn-title:not(:first-child){margin-top:0.75rem;}"
+        ".mlx-wn-list{margin:0;padding-left:1.25rem;}"
+        ".mlx-wn-list li{margin:0.18rem 0;line-height:1.45;font-size:0.9rem;}"
         ".mlb-footer-bottom{margin-top:0.4rem;font-size:0.86rem;"
         "color:var(--muted);opacity:0.92;}"
         "</style>"
         "<div class='mlb-footsep'></div>"
+        "<div class='mlb-footer-head'>"
+        f"<span class='mlb-version'>MeteoLabX · {t('footer.version', version=APP_VERSION)}</span>"
+        "<details class='mlb-whats-new'>"
+        f"<summary>{html.escape(str(t('footer.whats_new')))}</summary>"
+        f"<div class='mlb-whats-new-panel'>{_whats_new_footer_html()}</div>"
+        "</details>"
+        "</div>"
     ),
     unsafe_allow_html=True,
 )
-
-_ver_col, _btn_col = st.columns([1, 4], gap="small", vertical_alignment="center")
-with _ver_col:
-    st.markdown(
-        f"<span class='mlb-version'>"
-        f"MeteoLabX · {t('footer.version', version=APP_VERSION)}</span>",
-        unsafe_allow_html=True,
-    )
-with _btn_col:
-    if st.button(t("footer.whats_new"), key="footer_whats_new"):
-        _render_whats_new_dialog()
 
 st.markdown(
     html_clean(
