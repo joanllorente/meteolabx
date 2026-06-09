@@ -22,6 +22,16 @@
       "Altitude": "534",
       "Date_ouverture": "2003-10-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -47,6 +57,16 @@
       "Altitude": "196",
       "Date_ouverture": "2014-05-26",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -72,6 +92,16 @@
       "Altitude": "330",
       "Date_ouverture": "2001-09-13",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -97,6 +127,16 @@
       "Altitude": "281",
       "Date_ouverture": "2015-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -122,6 +162,16 @@
       "Altitude": "507",
       "Date_ouverture": "2002-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -147,6 +197,16 @@
       "Altitude": "260",
       "Date_ouverture": "1994-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -172,6 +232,16 @@
       "Altitude": "250",
       "Date_ouverture": "1934-03-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -197,6 +267,16 @@
       "Altitude": "467",
       "Date_ouverture": "2003-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -222,6 +302,16 @@
       "Altitude": "596",
       "Date_ouverture": "2004-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -247,6 +337,16 @@
       "Altitude": "280",
       "Date_ouverture": "1956-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -272,6 +372,16 @@
       "Altitude": "1002",
       "Date_ouverture": "1929-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -297,6 +407,16 @@
       "Altitude": "483",
       "Date_ouverture": "1852-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -322,6 +442,16 @@
       "Altitude": "189",
       "Date_ouverture": "1990-02-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -347,6 +477,16 @@
       "Altitude": "296",
       "Date_ouverture": "2001-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -372,6 +512,16 @@
       "Altitude": "878",
       "Date_ouverture": "2002-09-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -397,6 +547,16 @@
       "Altitude": "78",
       "Date_ouverture": "1988-10-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -422,6 +582,16 @@
       "Altitude": "56",
       "Date_ouverture": "1949-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -447,6 +617,16 @@
       "Altitude": "147",
       "Date_ouverture": "2023-04-03",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -472,6 +652,16 @@
       "Altitude": "222",
       "Date_ouverture": "1985-12-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -497,6 +687,16 @@
       "Altitude": "61",
       "Date_ouverture": "1988-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -522,6 +722,16 @@
       "Altitude": "83",
       "Date_ouverture": "1988-07-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -547,6 +757,16 @@
       "Altitude": "98",
       "Date_ouverture": "1933-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -572,6 +792,16 @@
       "Altitude": "186",
       "Date_ouverture": "1987-07-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -597,6 +827,16 @@
       "Altitude": "75",
       "Date_ouverture": "1945-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -622,6 +862,16 @@
       "Altitude": "165",
       "Date_ouverture": "1859-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -647,6 +897,16 @@
       "Altitude": "95",
       "Date_ouverture": "1955-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -672,6 +932,16 @@
       "Altitude": "148",
       "Date_ouverture": "1954-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -697,6 +967,16 @@
       "Altitude": "90",
       "Date_ouverture": "1986-07-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -722,6 +1002,16 @@
       "Altitude": "59",
       "Date_ouverture": "1956-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -747,6 +1037,16 @@
       "Altitude": "270",
       "Date_ouverture": "1993-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -772,6 +1072,16 @@
       "Altitude": "286",
       "Date_ouverture": "1950-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -797,6 +1107,16 @@
       "Altitude": "249",
       "Date_ouverture": "1941-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -822,6 +1142,16 @@
       "Altitude": "330",
       "Date_ouverture": "1995-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -847,6 +1177,16 @@
       "Altitude": "228",
       "Date_ouverture": "1946-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -872,6 +1212,16 @@
       "Altitude": "220",
       "Date_ouverture": "1883-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -897,6 +1247,16 @@
       "Altitude": "500",
       "Date_ouverture": "1962-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -922,6 +1282,16 @@
       "Altitude": "650",
       "Date_ouverture": "1966-11-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -947,6 +1317,16 @@
       "Altitude": "226",
       "Date_ouverture": "1957-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -972,6 +1352,16 @@
       "Altitude": "722",
       "Date_ouverture": "1935-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -997,6 +1387,16 @@
       "Altitude": "262",
       "Date_ouverture": "1953-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1022,6 +1422,16 @@
       "Altitude": "225",
       "Date_ouverture": "1991-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -1047,6 +1457,16 @@
       "Altitude": "249",
       "Date_ouverture": "1927-09-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1072,6 +1492,16 @@
       "Altitude": "275",
       "Date_ouverture": "1984-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1097,6 +1527,16 @@
       "Altitude": "229",
       "Date_ouverture": "2002-04-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1122,6 +1562,16 @@
       "Altitude": "250",
       "Date_ouverture": "1937-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1147,6 +1597,16 @@
       "Altitude": "293",
       "Date_ouverture": "1997-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1172,6 +1632,16 @@
       "Altitude": "378",
       "Date_ouverture": "1962-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1197,6 +1667,16 @@
       "Altitude": "1022",
       "Date_ouverture": "1991-03-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -1222,6 +1702,16 @@
       "Altitude": "256",
       "Date_ouverture": "1991-04-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1247,6 +1737,16 @@
       "Altitude": "255",
       "Date_ouverture": "1858-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1272,6 +1772,16 @@
       "Altitude": "242",
       "Date_ouverture": "1867-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1297,6 +1807,16 @@
       "Altitude": "1400",
       "Date_ouverture": "2010-05-26",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1322,6 +1842,16 @@
       "Altitude": "1155",
       "Date_ouverture": "1923-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1347,6 +1877,16 @@
       "Altitude": "743",
       "Date_ouverture": "1966-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1372,6 +1912,16 @@
       "Altitude": "886",
       "Date_ouverture": "1997-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1397,6 +1947,16 @@
       "Altitude": "960",
       "Date_ouverture": "2023-08-24",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1422,6 +1982,16 @@
       "Altitude": "729",
       "Date_ouverture": "1968-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1447,6 +2017,16 @@
       "Altitude": "473",
       "Date_ouverture": "1957-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1472,6 +2052,16 @@
       "Altitude": "458",
       "Date_ouverture": "1954-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -1497,6 +2087,16 @@
       "Altitude": "427",
       "Date_ouverture": "2003-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1522,6 +2122,16 @@
       "Altitude": "554",
       "Date_ouverture": "2003-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1547,6 +2157,16 @@
       "Altitude": "1240",
       "Date_ouverture": "1985-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1572,6 +2192,16 @@
       "Altitude": "2550",
       "Date_ouverture": "1995-09-27",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1597,6 +2227,16 @@
       "Altitude": "1090",
       "Date_ouverture": "2007-05-10",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1622,6 +2262,16 @@
       "Altitude": "1197",
       "Date_ouverture": "2007-06-26",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1647,6 +2297,16 @@
       "Altitude": "665",
       "Date_ouverture": "1933-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1672,6 +2332,16 @@
       "Altitude": "920",
       "Date_ouverture": "2005-06-29",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1697,6 +2367,16 @@
       "Altitude": "867",
       "Date_ouverture": "1962-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1722,6 +2402,16 @@
       "Altitude": "500",
       "Date_ouverture": "1998-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1747,6 +2437,16 @@
       "Altitude": "1020",
       "Date_ouverture": "2000-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1772,6 +2472,16 @@
       "Altitude": "600",
       "Date_ouverture": "1995-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1797,6 +2507,16 @@
       "Altitude": "1354",
       "Date_ouverture": "1895-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1822,6 +2542,16 @@
       "Altitude": "1825",
       "Date_ouverture": "2007-07-05",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1847,6 +2577,16 @@
       "Altitude": "1614",
       "Date_ouverture": "1931-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1872,6 +2612,16 @@
       "Altitude": "1355",
       "Date_ouverture": "1928-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1897,6 +2647,16 @@
       "Altitude": "2545",
       "Date_ouverture": "2010-08-11",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1922,6 +2682,16 @@
       "Altitude": "873",
       "Date_ouverture": "1806-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -1947,6 +2717,16 @@
       "Altitude": "825",
       "Date_ouverture": "1997-06-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1972,6 +2752,16 @@
       "Altitude": "885",
       "Date_ouverture": "2003-12-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -1997,6 +2787,16 @@
       "Altitude": "3093",
       "Date_ouverture": "1990-03-22",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2022,6 +2822,16 @@
       "Altitude": "565",
       "Date_ouverture": "1992-12-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2047,6 +2857,16 @@
       "Altitude": "2627",
       "Date_ouverture": "1994-08-30",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2072,6 +2892,16 @@
       "Altitude": "2559",
       "Date_ouverture": "2015-09-07",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2097,6 +2927,16 @@
       "Altitude": "1250",
       "Date_ouverture": "1940-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2122,6 +2962,16 @@
       "Altitude": "2280",
       "Date_ouverture": "2006-12-21",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2147,6 +2997,16 @@
       "Altitude": "1457",
       "Date_ouverture": "1931-02-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2172,6 +3032,16 @@
       "Altitude": "1270",
       "Date_ouverture": "1936-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2197,6 +3067,16 @@
       "Altitude": "1388",
       "Date_ouverture": "1952-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2222,6 +3102,16 @@
       "Altitude": "1670",
       "Date_ouverture": "2004-10-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2247,6 +3137,16 @@
       "Altitude": "625",
       "Date_ouverture": "1971-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2272,6 +3172,16 @@
       "Altitude": "906",
       "Date_ouverture": "2006-09-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2297,6 +3207,16 @@
       "Altitude": "1244",
       "Date_ouverture": "1928-11-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2322,6 +3242,16 @@
       "Altitude": "935",
       "Date_ouverture": "1927-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2347,6 +3277,16 @@
       "Altitude": "1210",
       "Date_ouverture": "2003-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2372,6 +3312,16 @@
       "Altitude": "801",
       "Date_ouverture": "2003-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2397,6 +3347,16 @@
       "Altitude": "593",
       "Date_ouverture": "1964-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2422,6 +3382,16 @@
       "Altitude": "823",
       "Date_ouverture": "1964-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2447,6 +3417,16 @@
       "Altitude": "1665",
       "Date_ouverture": "2002-01-10",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2472,6 +3452,16 @@
       "Altitude": "1072",
       "Date_ouverture": "1864-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2497,6 +3487,16 @@
       "Altitude": "1310",
       "Date_ouverture": "2003-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2522,6 +3522,16 @@
       "Altitude": "75",
       "Date_ouverture": "1920-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2547,6 +3557,16 @@
       "Altitude": "13",
       "Date_ouverture": "1964-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2572,6 +3592,16 @@
       "Altitude": "32",
       "Date_ouverture": "1988-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2597,6 +3627,16 @@
       "Altitude": "1173",
       "Date_ouverture": "1987-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2622,6 +3662,16 @@
       "Altitude": "1464",
       "Date_ouverture": "1917-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2647,6 +3697,16 @@
       "Altitude": "305",
       "Date_ouverture": "1987-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2672,6 +3732,16 @@
       "Altitude": "2",
       "Date_ouverture": "1949-03-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2697,6 +3767,16 @@
       "Altitude": "78",
       "Date_ouverture": "1991-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2722,6 +3802,16 @@
       "Altitude": "1268",
       "Date_ouverture": "1987-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2747,6 +3837,16 @@
       "Altitude": "379",
       "Date_ouverture": "2012-09-17",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2772,6 +3872,16 @@
       "Altitude": "985",
       "Date_ouverture": "1989-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2797,6 +3907,16 @@
       "Altitude": "704",
       "Date_ouverture": "1991-06-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2822,6 +3942,16 @@
       "Altitude": "788",
       "Date_ouverture": "1907-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2847,6 +3977,16 @@
       "Altitude": "1912",
       "Date_ouverture": "1972-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2872,6 +4012,16 @@
       "Altitude": "550",
       "Date_ouverture": "2006-10-25",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2897,6 +4047,16 @@
       "Altitude": "691",
       "Date_ouverture": "2008-05-16",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2922,6 +4082,16 @@
       "Altitude": "1443",
       "Date_ouverture": "1989-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2947,6 +4117,16 @@
       "Altitude": "104",
       "Date_ouverture": "1988-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2972,6 +4152,16 @@
       "Altitude": "1525",
       "Date_ouverture": "2006-04-02",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -2997,6 +4187,16 @@
       "Altitude": "216",
       "Date_ouverture": "1988-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3022,6 +4222,16 @@
       "Altitude": "817",
       "Date_ouverture": "1950-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3047,6 +4257,16 @@
       "Altitude": "2",
       "Date_ouverture": "1942-07-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -3072,6 +4292,16 @@
       "Altitude": "238",
       "Date_ouverture": "1949-12-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3097,6 +4327,16 @@
       "Altitude": "109",
       "Date_ouverture": "2010-03-15",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3122,6 +4362,16 @@
       "Altitude": "1106",
       "Date_ouverture": "1987-08-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3147,6 +4397,16 @@
       "Altitude": "1784",
       "Date_ouverture": "2002-11-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -3172,6 +4432,16 @@
       "Altitude": "449",
       "Date_ouverture": "1991-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3197,6 +4467,16 @@
       "Altitude": "1130",
       "Date_ouverture": "2006-10-25",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3222,6 +4502,16 @@
       "Altitude": "938",
       "Date_ouverture": "2023-01-24",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3247,6 +4537,16 @@
       "Altitude": "694",
       "Date_ouverture": "2005-11-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3272,6 +4572,16 @@
       "Altitude": "1150",
       "Date_ouverture": "2006-11-27",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3297,6 +4607,16 @@
       "Altitude": "1642",
       "Date_ouverture": "2007-05-07",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3322,6 +4642,16 @@
       "Altitude": "843",
       "Date_ouverture": "2004-11-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3347,6 +4677,16 @@
       "Altitude": "238",
       "Date_ouverture": "1987-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3372,6 +4712,16 @@
       "Altitude": "2430",
       "Date_ouverture": "2007-09-26",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3397,6 +4747,16 @@
       "Altitude": "792",
       "Date_ouverture": "1952-09-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3422,6 +4782,16 @@
       "Altitude": "636",
       "Date_ouverture": "1989-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3447,6 +4817,16 @@
       "Altitude": "223",
       "Date_ouverture": "1948-09-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3472,6 +4852,16 @@
       "Altitude": "336",
       "Date_ouverture": "1973-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3497,6 +4887,16 @@
       "Altitude": "428",
       "Date_ouverture": "1953-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3522,6 +4922,16 @@
       "Altitude": "176",
       "Date_ouverture": "1969-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3547,6 +4957,16 @@
       "Altitude": "480",
       "Date_ouverture": "1990-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3572,6 +4992,16 @@
       "Altitude": "650",
       "Date_ouverture": "1988-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3597,6 +5027,16 @@
       "Altitude": "251",
       "Date_ouverture": "1933-11-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3622,6 +5062,16 @@
       "Altitude": "418",
       "Date_ouverture": "1900-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3647,6 +5097,16 @@
       "Altitude": "216",
       "Date_ouverture": "1970-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3672,6 +5132,16 @@
       "Altitude": "566",
       "Date_ouverture": "1972-10-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -3697,6 +5167,16 @@
       "Altitude": "1021",
       "Date_ouverture": "1952-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3722,6 +5202,16 @@
       "Altitude": "760",
       "Date_ouverture": "2004-12-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3747,6 +5237,16 @@
       "Altitude": "341",
       "Date_ouverture": "1984-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3772,6 +5272,16 @@
       "Altitude": "127",
       "Date_ouverture": "1978-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3797,6 +5307,16 @@
       "Altitude": "1215",
       "Date_ouverture": "1950-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3822,6 +5342,16 @@
       "Altitude": "1264",
       "Date_ouverture": "2004-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3847,6 +5377,16 @@
       "Altitude": "295",
       "Date_ouverture": "1958-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3872,6 +5412,16 @@
       "Altitude": "1090",
       "Date_ouverture": "1956-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3897,6 +5447,16 @@
       "Altitude": "265",
       "Date_ouverture": "1990-11-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3922,6 +5482,16 @@
       "Altitude": "579",
       "Date_ouverture": "1900-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3947,6 +5517,16 @@
       "Altitude": "1240",
       "Date_ouverture": "2003-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -3972,6 +5552,16 @@
       "Altitude": "275",
       "Date_ouverture": "1929-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -3997,6 +5587,16 @@
       "Altitude": "602",
       "Date_ouverture": "1900-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4022,6 +5622,16 @@
       "Altitude": "230",
       "Date_ouverture": "1970-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4047,6 +5657,16 @@
       "Altitude": "480",
       "Date_ouverture": "2003-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4072,6 +5692,16 @@
       "Altitude": "779",
       "Date_ouverture": "2009-07-10",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4097,6 +5727,16 @@
       "Altitude": "540",
       "Date_ouverture": "1991-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4122,6 +5762,16 @@
       "Altitude": "1014",
       "Date_ouverture": "2005-09-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4147,6 +5797,16 @@
       "Altitude": "1022",
       "Date_ouverture": "1950-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4172,6 +5832,16 @@
       "Altitude": "112",
       "Date_ouverture": "1950-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4197,6 +5867,16 @@
       "Altitude": "112",
       "Date_ouverture": "1950-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4222,6 +5902,16 @@
       "Altitude": "494",
       "Date_ouverture": "1919-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4247,6 +5937,16 @@
       "Altitude": "130",
       "Date_ouverture": "1944-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4272,6 +5972,16 @@
       "Altitude": "560",
       "Date_ouverture": "1900-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4297,6 +6007,16 @@
       "Altitude": "557",
       "Date_ouverture": "1989-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4322,6 +6042,16 @@
       "Altitude": "924",
       "Date_ouverture": "1997-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4347,6 +6077,16 @@
       "Altitude": "283",
       "Date_ouverture": "1867-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4372,6 +6112,16 @@
       "Altitude": "140",
       "Date_ouverture": "2010-09-09",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4397,6 +6147,16 @@
       "Altitude": "561",
       "Date_ouverture": "1892-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4422,6 +6182,16 @@
       "Altitude": "529",
       "Date_ouverture": "1918-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4447,6 +6217,16 @@
       "Altitude": "130",
       "Date_ouverture": "1970-07-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4472,6 +6252,16 @@
       "Altitude": "199",
       "Date_ouverture": "2007-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4497,6 +6287,16 @@
       "Altitude": "145",
       "Date_ouverture": "1990-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -4522,6 +6322,16 @@
       "Altitude": "168",
       "Date_ouverture": "1873-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4547,6 +6357,16 @@
       "Altitude": "153",
       "Date_ouverture": "2002-05-29",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4572,6 +6392,16 @@
       "Altitude": "109",
       "Date_ouverture": "1939-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4597,6 +6427,16 @@
       "Altitude": "90",
       "Date_ouverture": "1900-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4622,6 +6462,16 @@
       "Altitude": "165",
       "Date_ouverture": "2017-08-16",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4647,6 +6497,16 @@
       "Altitude": "218",
       "Date_ouverture": "2009-03-04",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4672,6 +6532,16 @@
       "Altitude": "240",
       "Date_ouverture": "2016-09-08",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4697,6 +6567,16 @@
       "Altitude": "177",
       "Date_ouverture": "1983-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4722,6 +6602,16 @@
       "Altitude": "142",
       "Date_ouverture": "2007-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4747,6 +6637,16 @@
       "Altitude": "162",
       "Date_ouverture": "2014-09-18",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4772,6 +6672,16 @@
       "Altitude": "382",
       "Date_ouverture": "1999-04-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4797,6 +6707,16 @@
       "Altitude": "147",
       "Date_ouverture": "2004-03-18",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4822,6 +6742,16 @@
       "Altitude": "180",
       "Date_ouverture": "1951-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4847,6 +6777,16 @@
       "Altitude": "309",
       "Date_ouverture": "2007-07-25",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4872,6 +6812,16 @@
       "Altitude": "1090",
       "Date_ouverture": "1954-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4897,6 +6847,16 @@
       "Altitude": "1781",
       "Date_ouverture": "2002-06-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -4922,6 +6882,16 @@
       "Altitude": "655",
       "Date_ouverture": "1989-08-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4947,6 +6917,16 @@
       "Altitude": "490",
       "Date_ouverture": "1928-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4972,6 +6952,16 @@
       "Altitude": "374",
       "Date_ouverture": "1980-04-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -4997,6 +6987,16 @@
       "Altitude": "519",
       "Date_ouverture": "2003-10-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5022,6 +7022,16 @@
       "Altitude": "391",
       "Date_ouverture": "2002-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5047,6 +7057,16 @@
       "Altitude": "293",
       "Date_ouverture": "1971-05-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5072,6 +7092,16 @@
       "Altitude": "295",
       "Date_ouverture": "2002-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -5097,6 +7127,16 @@
       "Altitude": "2140",
       "Date_ouverture": "1995-10-17",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5122,6 +7162,16 @@
       "Altitude": "414",
       "Date_ouverture": "1949-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -5147,6 +7197,16 @@
       "Altitude": "638",
       "Date_ouverture": "1975-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5172,6 +7232,16 @@
       "Altitude": "546",
       "Date_ouverture": "1928-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5197,6 +7267,16 @@
       "Altitude": "195",
       "Date_ouverture": "1991-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5222,6 +7302,16 @@
       "Altitude": "118",
       "Date_ouverture": "1959-03-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5247,6 +7337,16 @@
       "Altitude": "112",
       "Date_ouverture": "1975-05-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -5272,6 +7372,16 @@
       "Altitude": "146",
       "Date_ouverture": "1913-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5297,6 +7407,16 @@
       "Altitude": "102",
       "Date_ouverture": "1926-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5322,6 +7442,16 @@
       "Altitude": "275",
       "Date_ouverture": "2004-03-25",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5347,6 +7477,16 @@
       "Altitude": "119",
       "Date_ouverture": "1971-11-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5372,6 +7512,16 @@
       "Altitude": "315",
       "Date_ouverture": "1980-04-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5397,6 +7547,16 @@
       "Altitude": "115",
       "Date_ouverture": "1949-11-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5422,6 +7582,16 @@
       "Altitude": "111",
       "Date_ouverture": "1971-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5447,6 +7617,16 @@
       "Altitude": "145",
       "Date_ouverture": "1981-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": true,
+      "uv": false
     }
   },
   {
@@ -5472,6 +7652,16 @@
       "Altitude": "142",
       "Date_ouverture": "1972-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5497,6 +7687,16 @@
       "Altitude": "140",
       "Date_ouverture": "2015-10-28",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5522,6 +7722,16 @@
       "Altitude": "193",
       "Date_ouverture": "1971-10-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5547,6 +7757,16 @@
       "Altitude": "77",
       "Date_ouverture": "1881-11-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5572,6 +7792,16 @@
       "Altitude": "227",
       "Date_ouverture": "1958-01-01",
       "Pack": "RADOME"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5597,6 +7827,16 @@
       "Altitude": "138",
       "Date_ouverture": "1991-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {
@@ -5622,6 +7862,16 @@
       "Altitude": "180",
       "Date_ouverture": "1891-01-01",
       "Pack": "ETENDU"
+    },
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": true,
+      "pyranometer": false,
+      "uv": false
     }
   },
   {

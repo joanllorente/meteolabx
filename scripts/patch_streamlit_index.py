@@ -48,6 +48,17 @@ PWA_ASSET_FILENAMES = (
     "icon-192-pwa.png",
     "icon-512-pwa.png",
     "manifest.json",
+    "og-image.png",  # imagen para tarjetas sociales (Open Graph / Twitter)
+)
+
+# SEO / redes sociales. La descripción es lo que se lee bajo el título en
+# Google y en la tarjeta al compartir el enlace; edítala aquí.
+SITE_URL = "https://meteolabx.com"
+SITE_TITLE = "MeteoLabX — Panel meteorológico avanzado"
+SITE_DESCRIPTION = (
+    "Observa y analiza en tiempo real datos de estaciones de múltiples redes "
+    "(Weather Underground, AEMET, Meteocat, Met Office y más): gráficos, "
+    "tendencias y diagramas termodinámicos."
 )
 
 START_MARKER = "<!-- MLX-PWA-START -->"
@@ -71,6 +82,22 @@ def _build_block() -> str:
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MeteoLabX" />
+    <meta name="description" content="{SITE_DESCRIPTION}" />
+    <link rel="canonical" href="{SITE_URL}/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MeteoLabX" />
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:url" content="{SITE_URL}/" />
+    <meta property="og:title" content="{SITE_TITLE}" />
+    <meta property="og:description" content="{SITE_DESCRIPTION}" />
+    <meta property="og:image" content="{SITE_URL}/og-image.png?v={v}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="MeteoLabX" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{SITE_TITLE}" />
+    <meta name="twitter:description" content="{SITE_DESCRIPTION}" />
+    <meta name="twitter:image" content="{SITE_URL}/og-image.png?v={v}" />
     {END_MARKER}"""
 
 

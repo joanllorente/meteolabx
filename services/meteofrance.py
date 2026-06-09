@@ -835,12 +835,31 @@ def _filter_today_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_meteofrance_latest_6m(station_id: str, api_key: str) -> List[Dict[str, Any]]:
-    payload = _request_json(
-        "/station/infrahoraire-6m",
-        {"id_station": str(station_id).strip(), "format": "json"},
-        api_key=api_key,
-    )
-    return payload if isinstance(payload, list) else []
+    station = str(station_id).strip()
+    now_utc = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    current_hour = now_utc.replace(minute=0)
+    candidates = [current_hour - timedelta(hours=offset) for offset in range(0, 4)]
+
+    last_error: Optional[Exception] = None
+    for candidate in candidates:
+        try:
+            payload = _request_json(
+                "/station/infrahoraire-6m",
+                {
+                    "id_station": station,
+                    "date": _utc_iso(candidate),
+                    "format": "json",
+                },
+                api_key=api_key,
+            )
+        except Exception as exc:
+            last_error = exc
+            continue
+        if isinstance(payload, list) and payload:
+            return payload
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 @st.cache_data(ttl=300, show_spinner=False)
