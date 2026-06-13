@@ -12,7 +12,6 @@ from utils.geo import haversine_distance
 from utils.helpers import coerce_str
 from utils.favorites import favorite_from_provider_station, upsert_favorite
 from utils.provider_state import display_provider_station_id
-from utils.storage import flush_local_storage_writes
 
 
 ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT"]
@@ -636,7 +635,13 @@ def render_map_tab(ctx):
                     if st.button(t("favorites.save"), key=favorite_key, width="stretch"):
                         favorite = favorite_from_provider_station(selected_station)
                         if favorite and upsert_favorite(favorite):
-                            flush_local_storage_writes(f"mlx_favorite_map_{selected_provider}")
+                            # NO flusheamos aquí: un flush efímero seguido de
+                            # st.rerun() inmediato desmonta el iframe del bridge
+                            # antes de que escriba en el navegador y vacía la cola,
+                            # así que el favorito no se persistía (desaparecía al
+                            # recargar). Dejamos la escritura encolada; el bootstrap
+                            # estable del sidebar (key fija) la entrega en el rerun
+                            # siguiente, igual que las credenciales WU.
                             st.session_state["_map_favorite_flash"] = t("favorites.saved", station=selected_name)
                             st.rerun()
                         else:

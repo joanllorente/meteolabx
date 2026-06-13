@@ -26,7 +26,6 @@ from providers import search_nearby_stations
 from utils.storage import (
     get_stored_autoconnect,
     get_stored_autoconnect_target,
-    flush_local_storage_writes,
 )
 from utils.favorites import favorite_from_provider_station, upsert_favorite
 from .browser_geolocation import get_browser_geolocation
@@ -493,7 +492,13 @@ def render_station_selector():
                     ):
                         favorite = favorite_from_provider_station(station)
                         if favorite and upsert_favorite(favorite):
-                            flush_local_storage_writes(f"mlx_favorite_station_selector_{station.provider_id}")
+                            # NO flusheamos aquí: un flush efímero seguido de
+                            # st.rerun() inmediato desmonta el iframe del bridge
+                            # antes de que escriba en el navegador y vacía la cola,
+                            # así que el favorito no se persistía (desaparecía al
+                            # recargar). Dejamos la escritura encolada; el bootstrap
+                            # estable del sidebar (key fija) la entrega en el rerun
+                            # siguiente, igual que las credenciales WU.
                             st.session_state["_provider_autoconnect_flash"] = t(
                                 "favorites.saved",
                                 station=station.name,
