@@ -348,7 +348,7 @@ def _normalize_current_observation(obs: Dict[str, Any], metric: Dict[str, Any]) 
 # (manteniendo el contrato del frontend que espera listas vacías).
 _EMPTY_SERIES_KEYS = (
     "epochs", "temps", "humidities", "dewpts", "pressures",
-    "uv_indexes", "solar_radiations", "winds", "gusts", "wind_dirs",
+    "uv_indexes", "solar_radiations", "precips", "winds", "gusts", "wind_dirs",
 )
 
 
@@ -452,9 +452,15 @@ def _normalize_today_series(observations: list) -> Dict[str, Any]:
     pressures: list = []
     uv_indexes: list = []
     solar_radiations: list = []
+    precips: list = []
     winds: list = []
     gusts: list = []
     wind_dirs: list = []
+    temp_highs: list = []
+    temp_lows: list = []
+    humidity_highs: list = []
+    humidity_lows: list = []
+    gust_highs: list = []
 
     lat_series = float("nan")
     lon_series = float("nan")
@@ -469,6 +475,20 @@ def _normalize_today_series(observations: list) -> Dict[str, Any]:
         metric = obs.get("metric", {})
         if not isinstance(metric, dict):
             metric = {}
+
+        # Conservamos los extremos nativos de cada intervalo para las
+        # cards. La curva usa promedios y no debe emplearse para sustituir
+        # tempHigh/tempLow cuando WU sí los publica.
+        for value, bucket in (
+            (metric.get("tempHigh"), temp_highs),
+            (metric.get("tempLow"), temp_lows),
+            (obs.get("humidityHigh"), humidity_highs),
+            (obs.get("humidityLow"), humidity_lows),
+            (metric.get("windgustHigh"), gust_highs),
+        ):
+            parsed = _safe_float(value)
+            if not _is_nan(parsed):
+                bucket.append(parsed)
 
         # Coordenadas: tomar la primera observación que las traiga.
         if _is_nan(lat_series):
@@ -508,6 +528,10 @@ def _normalize_today_series(observations: list) -> Dict[str, Any]:
         solar_radiation = _first_valid_number(
             obs.get("solarRadiation"), obs.get("solarRadiationHigh"),
             metric.get("solarRadiation"), metric.get("solarRadiationHigh"),
+        )
+
+        precip = _first_valid_number(
+            metric.get("precipTotal"), obs.get("precipTotal"),
         )
 
         wind = _first_valid_number(
@@ -551,6 +575,7 @@ def _normalize_today_series(observations: list) -> Dict[str, Any]:
         pressures.append(float(pressure) if not _is_nan(pressure) else float("nan"))
         uv_indexes.append(float(uv_index) if not _is_nan(uv_index) else float("nan"))
         solar_radiations.append(float(solar_radiation) if not _is_nan(solar_radiation) else float("nan"))
+        precips.append(_quantize_rain_mm_wu(precip) if not _is_nan(precip) else float("nan"))
         winds.append(float(wind) if not _is_nan(wind) else float("nan"))
         gusts.append(float(gust) if not _is_nan(gust) else float("nan"))
         wind_dirs.append(float(wind_dir) if not _is_nan(wind_dir) else float("nan"))
@@ -563,10 +588,148 @@ def _normalize_today_series(observations: list) -> Dict[str, Any]:
         "pressures": pressures,
         "uv_indexes": uv_indexes,
         "solar_radiations": solar_radiations,
+        "precips": precips,
         "winds": winds,
         "gusts": gusts,
         "wind_dirs": wind_dirs,
         "lat": lat_series,
         "lon": lon_series,
         "has_data": len(epochs) > 0,
+        # Campo interno: TodaySeries no lo expone, pero /processed lo usa
+        # antes de serializar la serie canónica.
+        "daily_extremes": {
+            "temp_max": max(temp_highs) if temp_highs else float("nan"),
+            "temp_min": min(temp_lows) if temp_lows else float("nan"),
+            "rh_max": max(humidity_highs) if humidity_highs else float("nan"),
+            "rh_min": min(humidity_lows) if humidity_lows else float("nan"),
+            "gust_max": max(gust_highs) if gust_highs else float("nan"),
+        },
+    }
+
+
+WU_URL_HOURLY_7DAY = "https://api.weather.com/v2/pws/observations/hourly/7day"
+
+
+async def fetch_recent_series(
+    station_id: str,
+    api_key: str,
+    *,
+    days_back: int = 7,
+    client: Optional[httpx.AsyncClient] = None,
+    timeout_s: float = WU_TIMEOUT_SECONDS,
+) -> Dict[str, Any]:
+    """
+    Serie horaria de los últimos 7 días (endpoint ``hourly/7day``) para
+    la pestaña Tendencias: T/HR/dewpoint/presión MSL por hora.
+
+    ``days_back`` se acepta por uniformidad con el resto de proveedores,
+    pero WU siempre devuelve la ventana fija de 7 días; si se pide menos
+    se recorta en el cliente.
+
+    Mismo mapeo de campos que el legacy
+    ``api.weather_underground.fetch_hourly_7day_session_cached``:
+    ``tempAvg``/``humidityAvg``/``dewptAvg`` y ``pressureMax`` con
+    fallback ``pressureMin`` (WU reporta presión MSL).
+    """
+    if not api_key:
+        raise ProviderError(
+            "missing_api_key",
+            provider=PROVIDER,
+            detail="WU requires per-user api_key",
+            status_code=400,
+        )
+
+    params = {
+        "stationId": station_id,
+        "format": "json",
+        "units": "m",
+        "apiKey": api_key,
+        "numericPrecision": "decimal",
+    }
+
+    owns_client = client is None
+    if owns_client:
+        client = httpx.AsyncClient(timeout=timeout_s)
+    try:
+        try:
+            response = await client.get(WU_URL_HOURLY_7DAY, params=params)
+        except httpx.TimeoutException as exc:
+            raise ProviderError(
+                "provider_timeout",
+                provider=PROVIDER,
+                detail=str(exc) or "Request timed out",
+                status_code=504,
+            ) from exc
+        except httpx.RequestError as exc:
+            raise ProviderError(
+                "provider_network_error",
+                provider=PROVIDER,
+                detail=str(exc) or "Network error",
+                status_code=502,
+            ) from exc
+
+        _raise_for_http_status(response.status_code)
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ProviderError(
+                "provider_bad_response",
+                provider=PROVIDER,
+                detail=f"Invalid JSON: {exc!r}",
+                status_code=502,
+            ) from exc
+    finally:
+        if owns_client:
+            await client.aclose()
+
+    observations = data.get("observations", []) if isinstance(data, dict) else []
+    cutoff = int(time.time()) - max(1, int(days_back)) * 86400
+
+    epochs: list[int] = []
+    temps: list[float] = []
+    humidities: list[float] = []
+    dewpts: list[float] = []
+    pressures: list[float] = []
+    lat = lon = float("nan")
+
+    for obs in observations if isinstance(observations, list) else []:
+        if not isinstance(obs, dict):
+            continue
+        try:
+            epoch = int(obs.get("epoch", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if epoch <= 0 or epoch < cutoff:
+            continue
+        metric = obs.get("metric", {}) if isinstance(obs.get("metric"), dict) else {}
+
+        pressure = _safe_float(metric.get("pressureMax"))
+        if _is_nan(pressure):
+            pressure = _safe_float(metric.get("pressureMin"))
+
+        if _is_nan(lat):
+            lat = _safe_float(obs.get("lat"))
+            lon = _safe_float(obs.get("lon"))
+
+        epochs.append(epoch)
+        temps.append(_safe_float(metric.get("tempAvg")))
+        humidities.append(_safe_float(obs.get("humidityAvg")))
+        dewpts.append(_safe_float(metric.get("dewptAvg")))
+        pressures.append(pressure)
+
+    if not epochs:
+        return {
+            "epochs": [], "temps": [], "humidities": [], "dewpts": [],
+            "pressures": [], "lat": lat, "lon": lon, "has_data": False,
+        }
+    return {
+        "epochs": epochs,
+        "temps": temps,
+        "humidities": humidities,
+        "dewpts": dewpts,
+        "pressures": pressures,
+        "lat": lat,
+        "lon": lon,
+        "has_data": True,
     }

@@ -1,0 +1,638 @@
+{
+  "method": {
+    "near_distance_m": 150.0,
+    "strong_identifier_distance_m": 1000.0,
+    "warning": "Candidates are unreviewed; no stations were merged or deleted.",
+    "short_station_ids_are_evidence": false,
+    "observation_comparison": "pending for probable and ambiguous candidates"
+  },
+  "candidates": 13631,
+  "classifications": {
+    "ambiguous": 1887,
+    "probable": 3321,
+    "secure": 8423
+  },
+  "providers": {
+    "AEMET": 201,
+    "FROST": 277,
+    "METEOFRANCE": 169,
+    "METEOHUB_IT": 2,
+    "METOFFICE": 8,
+    "NWS": 12974
+  },
+  "geographically_incompatible_pairs_rejected": 3,
+  "geographic_rejections_by_provider_country": {
+    "METEOFRANCE:ES": 1,
+    "METEOFRANCE:GY": 1,
+    "METEOFRANCE:WS": 1
+  },
+  "iem_stations_with_multiple_original_candidates": 154,
+  "examples": {
+    "secure": [
+      {
+        "classification": "secure",
+        "distance_m": 19.2,
+        "name_similarity": 0.64,
+        "elevation_delta_m": 5.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "1387E",
+          "name": "A CORUÑA/ALVEDRO"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "LECO",
+          "name": "La Coruna",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 1.3,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "6302A",
+          "name": "ABLA"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-427",
+          "name": "ABLA",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 3.0,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "6277B",
+          "name": "ADRA CLUB NAÚTICO"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-486",
+          "name": "ADRA CLUB NAUTICO",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 1.7,
+        "name_similarity": 0.95,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "4560Y",
+          "name": "ALAJAR  CABEZO MOLINOS"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-380",
+          "name": "ALAJAR  CABEZO MOLIN",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 4.0,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "8178D",
+          "name": "ALBACETE OBS."
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-279",
+          "name": "ALBACETE OBS.",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 4.2,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "9573X",
+          "name": "ALCAÑIZ"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-164",
+          "name": "ALCANIZ",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 16.1,
+        "name_similarity": 0.571,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "8025",
+          "name": "ALICANTE"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-359",
+          "name": "ALICANTE/OBSERVATORI",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 4.9,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "3266A",
+          "name": "ALTO DE LOS LEONES"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-217",
+          "name": "ALTO DE LOS LEONES",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 6.7,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "5298X",
+          "name": "ANDÚJAR"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-347",
+          "name": "ANDUJAR",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 6.2,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "6106X",
+          "name": "ANTEQUERA-BOBADILLA"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-413",
+          "name": "ANTEQUERA-BOBADILLA",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      }
+    ],
+    "probable": [
+      {
+        "classification": "probable",
+        "distance_m": 4.6,
+        "name_similarity": 0.511,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "6332Y",
+          "name": "CARBONERAS - FARO MESA ROLDÁN"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-488",
+          "name": "CARBONERAS C.TERMICA",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 0.9,
+        "name_similarity": 0.385,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "9574B",
+          "name": "CASPE  PLANA DEL PILÓN"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-165",
+          "name": "CASPE",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 4.2,
+        "name_similarity": 0.5,
+        "elevation_delta_m": 2.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "5000C",
+          "name": "CEUTA"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-320",
+          "name": "CEUTA/OBSERVATORIO",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 143.7,
+        "name_similarity": 0.743,
+        "elevation_delta_m": 1.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "1014A",
+          "name": "DONOSTIA/SAN SEBASTIÁN AEROPUERTO"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-29",
+          "name": "SAN SEBASTIAN",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 73.8,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 1.1,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "5530E",
+          "name": "GRANADA/AEROPUERTO"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "LEGR",
+          "name": "Granada",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 1.4,
+        "name_similarity": 0.5,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "4642E",
+          "name": "HUELVA  RONDA ESTE"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-383",
+          "name": "HUELVA/OBSERVATORIO",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 4.3,
+        "name_similarity": 0.5,
+        "elevation_delta_m": 6.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "B954",
+          "name": "IBIZA/ES CODOLÁ"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "LEIB",
+          "name": "Ibiza",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 12.7,
+        "name_similarity": 0.4,
+        "elevation_delta_m": 3.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "5960",
+          "name": "JEREZ DE LA FRONTERA/AEROPUERTO"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "LEJR",
+          "name": "Jerez",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 4.9,
+        "name_similarity": 0.533,
+        "elevation_delta_m": 2.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "C139E",
+          "name": "LA PALMA/AEROPUERTO"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "GCLA",
+          "name": "Santa Cruz De La Palma",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 3.6,
+        "name_similarity": 0.5,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "9771C",
+          "name": "LLEIDA"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-724-0-171",
+          "name": "LLEIDA/OBSERVATORIO",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      }
+    ],
+    "ambiguous": [
+      {
+        "classification": "ambiguous",
+        "distance_m": 131.6,
+        "name_similarity": 0.545,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "2331",
+          "name": "BURGOS/VILLAFRÍA"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "LEBG",
+          "name": "Burgos",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 5.2,
+        "name_similarity": 0.353,
+        "elevation_delta_m": 26.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "C029O",
+          "name": "LANZAROTE/AEROPUERTO"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "GCRR",
+          "name": "Arrecife",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 87.9,
+        "name_similarity": 0.5,
+        "elevation_delta_m": 1.4,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "AEMET",
+          "network": "",
+          "station_id": "1495",
+          "name": "VIGO/PEINADOR"
+        },
+        "iem": {
+          "network": "ES__ASOS",
+          "station_id": "LEVX",
+          "name": "Vigo",
+          "country": "ES"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 5.8,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 67.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN20929",
+          "name": "JOHAN SVERDRUP"
+        },
+        "iem": {
+          "network": "NO__ASOS",
+          "station_id": "ENJS",
+          "name": "Johan Sverdrup",
+          "country": "NO"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 12.2,
+        "name_similarity": 0.296,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN46930",
+          "name": "VATS I VINDAFJORD"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-578-0-417",
+          "name": "NEDRE VATS",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 147.3,
+        "name_similarity": 0.167,
+        "elevation_delta_m": 147.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN57400",
+          "name": "HAFSTAD I FØRDE"
+        },
+        "iem": {
+          "network": "NO__ASOS",
+          "station_id": "ENBL",
+          "name": "BRINGELAND",
+          "country": "NO"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 49.2,
+        "name_similarity": 0.308,
+        "elevation_delta_m": 1.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN76914",
+          "name": "ITASMOBAWS1"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-578-0-463",
+          "name": "AS",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 110.1,
+        "name_similarity": 0.875,
+        "elevation_delta_m": 78.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN76927",
+          "name": "OSEBERG A"
+        },
+        "iem": {
+          "network": "NO__ASOS",
+          "station_id": "ENOA",
+          "name": "OSEBERG",
+          "country": "NO"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 30.9,
+        "name_similarity": 0.267,
+        "elevation_delta_m": 83.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN76934",
+          "name": "STATFJORD B"
+        },
+        "iem": {
+          "network": "NO__ASOS",
+          "station_id": "ENFB",
+          "name": "Oslo",
+          "country": "NO"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "ambiguous",
+        "distance_m": 0.0,
+        "name_similarity": 0.519,
+        "elevation_delta_m": 97.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "FROST",
+          "network": "",
+          "station_id": "SN76937",
+          "name": "TROLL C"
+        },
+        "iem": {
+          "network": "NO__ASOS",
+          "station_id": "ENQC",
+          "name": "TROLL C OIL PLATFORM",
+          "country": "NO"
+        },
+        "observation_comparison": null
+      }
+    ]
+  }
+}

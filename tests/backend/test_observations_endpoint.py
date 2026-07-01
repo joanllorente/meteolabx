@@ -8,6 +8,8 @@ queda mockeada vía ``dependency_overrides`` del ``http_client``.
 
 from __future__ import annotations
 
+import math
+
 import httpx
 import pytest
 
@@ -172,7 +174,7 @@ def test_post_current_rejects_unknown_provider(app_factory) -> None:
     with app_factory(status=200, json_body=WU_OK_OBSERVATION) as client:
         response = client.post(
             "/v1/observations/current",
-            json={"provider": "METEOCAT", "station_id": "X", "api_key": "Y"},
+            json={"provider": "NO_SUCH_PROVIDER", "station_id": "X", "api_key": "Y"},
         )
     assert response.status_code == 422
 
@@ -224,6 +226,7 @@ WU_TODAY_SERIES_BODY = {
                 "windSpeed": 5.0,
                 "windgustHigh": 10.0,
                 "solarRadiation": 200.0,
+                "precipTotal": 0.0,
             },
         },
         {
@@ -237,6 +240,7 @@ WU_TODAY_SERIES_BODY = {
                 "windSpeed": 6.0,
                 "windgustHigh": 11.0,
                 "solarRadiation": 250.0,
+                "precipTotal": 0.4,
             },
         },
     ]
@@ -254,6 +258,7 @@ def test_post_today_series_returns_200_and_arrays(app_factory) -> None:
     body = response.json()
     assert body["epochs"] == [1717254000, 1717254300]
     assert body["temps"] == [19.0, 19.5]
+    assert body["precips"] == [0.0, 0.4]
     assert body["has_data"] is True
     assert body["lat"] == 41.387
 
@@ -278,6 +283,28 @@ def test_post_today_series_response_has_no_nan_literals(app_factory) -> None:
     body = response.json()
     assert body["dewpts"] == [None]
     assert body["solar_radiations"] == [None]
+
+
+def test_series_schemas_keep_arrays_aligned_when_epoch_is_invalid() -> None:
+    from server.schemas.observation import RecentSeries, TodaySeries
+
+    payload = {
+        "epochs": [100, "invalid", 300],
+        "temps": [10.0, 99.0, 30.0],
+        "humidities": [50.0, 99.0, 70.0],
+        "pressures": [1010.0, 999.0, 1030.0],
+        "has_data": True,
+    }
+
+    today = TodaySeries.from_provider_dict(payload)
+    recent = RecentSeries.from_provider_dict(payload)
+
+    assert today.epochs == [100, 300]
+    assert today.temps == [10.0, 30.0]
+    assert today.humidities == [50.0, 70.0]
+    assert recent.epochs == [100, 300]
+    assert recent.temps == [10.0, 30.0]
+    assert recent.pressures == [1010.0, 1030.0]
 
 
 def test_post_today_series_propagates_provider_errors(app_factory) -> None:
@@ -305,7 +332,7 @@ def test_post_today_series_unknown_provider_returns_422(app_factory) -> None:
     with app_factory(status=200, json_body=WU_TODAY_SERIES_BODY) as client:
         response = client.post(
             "/v1/observations/series/today",
-            json={"provider": "METEOCAT", "station_id": "X", "api_key": "Y"},
+            json={"provider": "NO_SUCH_PROVIDER", "station_id": "X", "api_key": "Y"},
         )
     assert response.status_code == 422
 
@@ -315,9 +342,22 @@ def test_post_today_series_unknown_provider_returns_422(app_factory) -> None:
 # =====================================================================
 
 # Fixture: payload AEMET realista (record final del array que devuelve OpenData).
+def _aemet_series_fint(hour: int, minute: int) -> str:
+    """fint de HOY (la serie del backend recorta al día local de Madrid)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    local = datetime.now(ZoneInfo("Europe/Madrid")).replace(
+        hour=hour, minute=minute, second=0, microsecond=0,
+    )
+    return local.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%S+0000")
+
+
 AEMET_RECORD_OK = {
     "idema": "0201X",
-    "fint": "2026-06-01T15:00:00+0000",
+    # fint dinámico: el pipeline degrada observaciones obsoletas (y con
+    # una serie fresca promocionaría su último punto como current).
+    "fint": None,  # se rellena más abajo con _aemet_series_fint(13, 0)
     "ubi": "BARCELONA AEROPUERTO",
     "lat": 41.297, "lon": 2.07, "alt": 4,
     "ta": "22.4", "hr": "65",
@@ -325,6 +365,8 @@ AEMET_RECORD_OK = {
     "vv": "5.0", "vmax": "8.2", "dv": "180",
     "prec": "0.4",
 }
+
+AEMET_RECORD_OK["fint"] = _aemet_series_fint(13, 0)
 
 AEMET_STEP1_OK = {"estado": 200, "datos": "https://opendata.aemet.es/datos/abc"}
 
@@ -348,7 +390,14 @@ def _make_aemet_app(*, aemet_api_key: str = "TEST_KEY_FROM_SERVER"):
     mock_client = _httpx.AsyncClient(transport=_httpx.MockTransport(handler))
     app = create_app()
     app.dependency_overrides[get_http_client] = lambda: mock_client
-    app.dependency_overrides[get_settings] = lambda: Settings(aemet_api_key=aemet_api_key)
+    def _settings() -> Settings:
+        settings = Settings(aemet_api_key=aemet_api_key)
+        # Reasignación post-init: permite simular "sin key" en tests
+        # saltándose la cadena de fallbacks legacy del model_validator.
+        settings.aemet_api_key = aemet_api_key
+        return settings
+
+    app.dependency_overrides[get_settings] = _settings
     return app
 
 
@@ -397,7 +446,7 @@ def test_post_current_with_aemet_ignores_api_key_in_body() -> None:
 AEMET_SERIES_BODY = [
     {
         "idema": "0201X",
-        "fint": "2026-06-01T14:00:00+0000",
+        "fint": _aemet_series_fint(12, 0),
         "lat": 41.297, "lon": 2.07, "alt": 4,
         "ta": "20.0", "hr": "70",
         "pres_nmar": "1015.0", "pres": "1014.6",
@@ -405,7 +454,7 @@ AEMET_SERIES_BODY = [
     },
     {
         "idema": "0201X",
-        "fint": "2026-06-01T14:10:00+0000",
+        "fint": _aemet_series_fint(12, 10),
         "lat": 41.297, "lon": 2.07, "alt": 4,
         "ta": "20.4", "hr": "68",
         "pres_nmar": "1015.1", "pres": "1014.7",
@@ -453,7 +502,14 @@ def _make_aemet_app_with_series(
     mock_client = _httpx.AsyncClient(transport=_httpx.MockTransport(handler))
     app = create_app()
     app.dependency_overrides[get_http_client] = lambda: mock_client
-    app.dependency_overrides[get_settings] = lambda: Settings(aemet_api_key=aemet_api_key)
+    def _settings() -> Settings:
+        settings = Settings(aemet_api_key=aemet_api_key)
+        # Reasignación post-init: permite simular "sin key" en tests
+        # saltándose la cadena de fallbacks legacy del model_validator.
+        settings.aemet_api_key = aemet_api_key
+        return settings
+
+    app.dependency_overrides[get_settings] = _settings
     return app
 
 
@@ -504,7 +560,9 @@ def test_post_current_processed_aemet_combines_current_and_series() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body.keys()) == {"observation", "derivatives", "warnings"}
+    # El contrato puede crecer (station/daily_extremes/series añadidos
+    # después); los bloques núcleo deben estar siempre.
+    assert {"observation", "derivatives", "warnings"} <= set(body.keys())
 
     # Observación con derivados ya calculados (Td/feels_like/heat_index)
     obs = body["observation"]
@@ -551,16 +609,19 @@ def test_post_current_with_aemet_no_server_key_returns_unauthorized() -> None:
     assert body["provider"] == "AEMET"
 
 
-def test_post_today_series_aemet_requires_server_api_key(app_factory) -> None:
+def test_post_today_series_aemet_requires_server_api_key() -> None:
     """
     AEMET en ``/series/today`` ya está implementado: usa la API key del
     servidor (``METEOLABX_AEMET_API_KEY``). Si esa env var está vacía,
     el servicio AEMET lanza ``provider_unauthorized``. El test verifica
     que la cadena dispatch → fetch → error se propaga correctamente.
     """
-    # ``app_factory`` no setea ``aemet_api_key``; el default es ""
-    # (provider_unauthorized).
-    with app_factory(status=200, json_body=WU_TODAY_SERIES_BODY) as client:
+    # Con la cadena de fallbacks, Settings() ya no queda sin key de
+    # AEMET; forzamos el vacío con el factory que la bypasea.
+    from fastapi.testclient import TestClient
+
+    app = _make_aemet_app_with_series(aemet_api_key="")
+    with TestClient(app) as client:
         response = client.post(
             "/v1/observations/series/today",
             json={"provider": "AEMET", "station_id": "0201X", "api_key": ""},
@@ -641,6 +702,106 @@ WU_CURRENT_BODY_OK = {
 }
 
 
+def test_iem_observation_endpoints_are_connectable() -> None:
+    import httpx
+    from server.dependencies.http import get_http_client
+    from server.main import create_app
+
+    payload = {
+        "data": [
+            {
+                "utc_valid": "2026-06-10T08:00:00Z",
+                "tmpf": 68.0,
+                "dwpf": 50.0,
+                "relh": 52.0,
+                "alti": 29.92,
+                "sknt": 10.0,
+                "gust": 20.0,
+                "drct": 180.0,
+                "p01i": 0.01,
+            },
+            {
+                "utc_valid": "2026-06-10T09:00:00Z",
+                "tmpf": 70.0,
+                "dwpf": 51.0,
+                "relh": 55.0,
+                "alti": 29.94,
+                "sknt": 12.0,
+                "gust": 22.0,
+                "drct": 190.0,
+                "p01i": 0.02,
+            },
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    app = create_app()
+    app.dependency_overrides[get_http_client] = lambda: mock_client
+
+    request_body = {
+        "provider": "IEM",
+        "station_id": "ES__ASOS|LEBL",
+        "sun_tz_name": "Europe/Madrid",
+        "days_back": 1,
+    }
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as client:
+        current = client.post("/v1/observations/current", json=request_body)
+        today = client.post("/v1/observations/series/today", json=request_body)
+        processed = client.post("/v1/observations/current/processed", json=request_body)
+        recent = client.post("/v1/observations/series/recent", json=request_body)
+
+    assert current.status_code == 200
+    assert current.json()["Tc"] == pytest.approx((70.0 - 32.0) * 5.0 / 9.0)
+    assert today.status_code == 200
+    assert today.json()["has_data"] is True
+    assert processed.status_code == 200
+    assert processed.json()["station"]["network"] == "ES__ASOS"
+    assert processed.json()["station"]["connectable"] is True
+    assert recent.status_code == 200
+    assert recent.json()["has_data"] is True
+
+
+def test_aemet_processed_overlays_newer_series_point_before_pipeline() -> None:
+    from server.routers.observations import _overlay_aemet_current_from_newer_series
+
+    current = {
+        "epoch": 1000,
+        "Tc": 18.0,
+        "RH": 70.0,
+        "p_hpa": 1012.0,
+        "p_abs_hpa": 900.0,
+        "wind": 4.0,
+        "gust": 8.0,
+        "wind_dir_deg": 90.0,
+    }
+    series = {
+        "epochs": [900, 1600],
+        "temps": [17.0, 22.5],
+        "humidities": [72.0, 55.0],
+        "pressures": [1011.0, 1014.5],
+        "winds": [5.0, 12.0],
+        "gusts": [9.0, 20.0],
+        "wind_dirs": [100.0, 270.0],
+        "has_data": True,
+    }
+
+    merged = _overlay_aemet_current_from_newer_series(current, series)
+
+    assert merged["epoch"] == 1600
+    assert merged["Tc"] == 22.5
+    assert merged["RH"] == 55.0
+    assert merged["wind"] == 12.0
+    assert merged["gust"] == 20.0
+    assert merged["wind_dir_deg"] == 270.0
+    assert merged["p_hpa"] == 1014.5
+    assert math.isnan(merged["p_abs_hpa"])
+
+
 def test_post_current_processed_returns_observation_derivatives_and_warnings() -> None:
     from fastapi.testclient import TestClient
 
@@ -657,7 +818,9 @@ def test_post_current_processed_returns_observation_derivatives_and_warnings() -
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body.keys()) == {"observation", "derivatives", "warnings"}
+    # El contrato puede crecer (station/daily_extremes/series añadidos
+    # después); los bloques núcleo deben estar siempre.
+    assert {"observation", "derivatives", "warnings"} <= set(body.keys())
 
     # observation viene mutada con Td/feels_like/heat_index calculados
     # por el pipeline (no los del payload WU). El pipeline calcula
@@ -683,6 +846,7 @@ def test_post_current_processed_returns_observation_derivatives_and_warnings() -
     # ``msl_to_absolute`` usando z+Tc. Para z=12m la diferencia es de
     # ~1 hPa, así que p_abs ≈ 1012 mientras MSL = 1013.
     assert deriv["p_msl_disp"] == "1013"
+    assert body["series"]["precips"] == [0.0, 0.4]
     # WU usa 0 decimales: el display NO debe llevar punto.
     assert "." not in deriv["p_abs_disp"]
     # Y debe ser un entero razonablemente cercano a 1013 (no más de 5 hPa abajo).

@@ -1,0 +1,6452 @@
+{
+  "summary": {
+    "provider": "METEOFRANCE",
+    "generated_at": "2026-06-23T21:23:31.711599+00:00",
+    "total_aliases": 169,
+    "counts": {
+      "observation_confirmed": 0,
+      "observation_conflict": 0,
+      "observation_error": 169,
+      "observation_inconclusive": 0,
+      "inventory_secure_unsampled": 0,
+      "unchecked": 0
+    },
+    "actionable": {
+      "safe_to_group": 0,
+      "block_grouping": 0,
+      "needs_more_evidence": 169,
+      "inventory_secure_candidates": 0
+    }
+  },
+  "buckets": {
+    "observation_confirmed": [],
+    "observation_conflict": [],
+    "observation_error": [
+      {
+        "alias_pk": 485,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-684",
+          "name": "CANNES",
+          "latitude": 43.5565,
+          "longitude": 6.9505,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "06029001",
+          "name": "CANNES",
+          "latitude": 43.5565,
+          "longitude": 6.9505,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:10.896731+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 493,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-558",
+          "name": "MILLAU",
+          "latitude": 44.1185,
+          "longitude": 3.0195,
+          "elevation_m": 712.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "12145001",
+          "name": "MILLAU",
+          "latitude": 44.1185,
+          "longitude": 3.0195,
+          "elevation_m": 712.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:57.329017+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 496,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-31",
+          "name": "ST GATIEN DES B",
+          "latitude": 49.3645,
+          "longitude": 0.167,
+          "elevation_m": 139.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "14578001",
+          "name": "ST GATIEN DES B",
+          "latitude": 49.3645,
+          "longitude": 0.167,
+          "elevation_m": 139.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:16.225231+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 503,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-754",
+          "name": "CALVI",
+          "latitude": 42.5295,
+          "longitude": 8.7915,
+          "elevation_m": 57.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20050001",
+          "name": "CALVI",
+          "latitude": 42.5295,
+          "longitude": 8.7915,
+          "elevation_m": 57.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:46.618716+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 541,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-471",
+          "name": "LE PUY-LOUDES",
+          "latitude": 45.0745,
+          "longitude": 3.764,
+          "elevation_m": 833.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "43062001",
+          "name": "LE PUY-LOUDES",
+          "latitude": 45.0745,
+          "longitude": 3.764,
+          "elevation_m": 833.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:47.679458+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 563,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-15",
+          "name": "LILLE-LESQUIN",
+          "latitude": 50.57,
+          "longitude": 3.0975,
+          "elevation_m": 47.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "59343001",
+          "name": "LILLE-LESQUIN",
+          "latitude": 50.57,
+          "longitude": 3.0975,
+          "elevation_m": 47.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:50.678970+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 570,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-600",
+          "name": "SOCOA",
+          "latitude": 43.3945,
+          "longitude": -1.6865,
+          "elevation_m": 21.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "64189001",
+          "name": "SOCOA",
+          "latitude": 43.3945,
+          "longitude": -1.6865,
+          "elevation_m": 21.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:53.255230+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 595,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-5",
+          "name": "ABBEVILLE",
+          "latitude": 50.136,
+          "longitude": 1.834,
+          "elevation_m": 69.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "80001001",
+          "name": "ABBEVILLE",
+          "latitude": 50.136,
+          "longitude": 1.834,
+          "elevation_m": 69.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:54.468502+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 608,
+        "method": "inventory_secure",
+        "confidence": 0.97,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-149",
+          "name": "ORLY",
+          "latitude": 48.718,
+          "longitude": 2.397,
+          "elevation_m": 86.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "91027002",
+          "name": "ORLY",
+          "latitude": 48.718,
+          "longitude": 2.397,
+          "elevation_m": 86.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:55.309130+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 566,
+        "method": "inventory_secure",
+        "confidence": 0.9686064775905371,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-2",
+          "name": "BOULOGNE-SEM",
+          "latitude": 50.7325,
+          "longitude": 1.5997,
+          "elevation_m": 73.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "62160001",
+          "name": "BOULOGNE-SEM",
+          "latitude": 50.7325,
+          "longitude": 1.599667,
+          "elevation_m": 73.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:58.117604+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 567,
+        "method": "inventory_secure",
+        "confidence": 0.9686000022919713,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-3",
+          "name": "LE-TOUQUET",
+          "latitude": 50.5145,
+          "longitude": 1.6228,
+          "elevation_m": 5.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "62826001",
+          "name": "LE-TOUQUET",
+          "latitude": 50.5145,
+          "longitude": 1.622833,
+          "elevation_m": 5.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:59.490928+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 590,
+        "method": "inventory_secure",
+        "confidence": 0.9685711009849479,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-46",
+          "name": "OCTEVILLE",
+          "latitude": 49.533,
+          "longitude": 0.0917,
+          "elevation_m": 90.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "76481001",
+          "name": "OCTEVILLE",
+          "latitude": 49.533,
+          "longitude": 0.091667,
+          "elevation_m": 90.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:08.111048+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 564,
+        "method": "inventory_secure",
+        "confidence": 0.9685685738831037,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-55",
+          "name": "BEAUVAIS-TILLE",
+          "latitude": 49.4465,
+          "longitude": 2.1272,
+          "elevation_m": 89.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "60639001",
+          "name": "BEAUVAIS-TILLE",
+          "latitude": 49.4465,
+          "longitude": 2.127167,
+          "elevation_m": 89.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:09.764992+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 588,
+        "method": "inventory_secure",
+        "confidence": 0.9685669104081716,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-37",
+          "name": "ROUEN-BOOS",
+          "latitude": 49.3895,
+          "longitude": 1.1783,
+          "elevation_m": 156.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "76116001",
+          "name": "ROUEN-BOOS",
+          "latitude": 49.3895,
+          "longitude": 1.178333,
+          "elevation_m": 156.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:11.558353+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 495,
+        "method": "inventory_secure",
+        "confidence": 0.968560808607317,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-27",
+          "name": "CAEN-CARPIQUET",
+          "latitude": 49.18,
+          "longitude": -0.4562,
+          "elevation_m": 67.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "14137001",
+          "name": "CAEN-CARPIQUET",
+          "latitude": 49.18,
+          "longitude": -0.456167,
+          "elevation_m": 67.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:12.620246+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 574,
+        "method": "inventory_secure",
+        "confidence": 0.9685425613753501,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-190",
+          "name": "STRASBOURG-ENTZHEIM",
+          "latitude": 48.5495,
+          "longitude": 7.6403,
+          "elevation_m": 150.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "67124001",
+          "name": "STRASBOURG-ENTZHEIM",
+          "latitude": 48.5495,
+          "longitude": 7.640333,
+          "elevation_m": 150.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:12.862545+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 520,
+        "method": "inventory_secure",
+        "confidence": 0.9685425181735767,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-101",
+          "name": "PLOUDALMEZEAU",
+          "latitude": 48.548,
+          "longitude": -4.6642,
+          "elevation_m": 40.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "29178001",
+          "name": "PLOUDALMEZEAU",
+          "latitude": 48.548,
+          "longitude": -4.664167,
+          "elevation_m": 40.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:14.010151+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 522,
+        "method": "inventory_secure",
+        "confidence": 0.9685420574168232,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-106",
+          "name": "LANDIVISIAU",
+          "latitude": 48.532,
+          "longitude": -4.1518,
+          "elevation_m": 109.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "29264001",
+          "name": "LANDIVISIAU",
+          "latitude": 48.532,
+          "longitude": -4.151833,
+          "elevation_m": 109.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:56.324158+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 516,
+        "method": "inventory_secure",
+        "confidence": 0.9685399997998344,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-143",
+          "name": "CHARTRES",
+          "latitude": 48.4605,
+          "longitude": 1.5012,
+          "elevation_m": 155.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "28070001",
+          "name": "CHARTRES",
+          "latitude": 48.4605,
+          "longitude": 1.501167,
+          "elevation_m": 155.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:14.873034+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 565,
+        "method": "inventory_secure",
+        "confidence": 0.9685395684203609,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-139",
+          "name": "ALENCON",
+          "latitude": 48.4455,
+          "longitude": 0.1102,
+          "elevation_m": 143.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "61001001",
+          "name": "ALENCON",
+          "latitude": 48.4455,
+          "longitude": 0.110167,
+          "elevation_m": 143.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:17.310574+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 521,
+        "method": "inventory_secure",
+        "confidence": 0.9685260313571199,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-201",
+          "name": "QUIMPER",
+          "latitude": 47.973,
+          "longitude": -4.1607,
+          "elevation_m": 82.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "29216001",
+          "name": "QUIMPER",
+          "latitude": 47.973,
+          "longitude": -4.160667,
+          "elevation_m": 82.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:18.013369+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 539,
+        "method": "inventory_secure",
+        "confidence": 0.9685176446221354,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-245",
+          "name": "BLOIS",
+          "latitude": 47.6785,
+          "longitude": 1.2123,
+          "elevation_m": 119.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "41281001",
+          "name": "BLOIS",
+          "latitude": 47.6785,
+          "longitude": 1.212333,
+          "elevation_m": 119.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:42.876252+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 547,
+        "method": "inventory_secure",
+        "confidence": 0.9685119855228611,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-230",
+          "name": "BEAUCOUZE",
+          "latitude": 47.479,
+          "longitude": -0.6143,
+          "elevation_m": 50.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "49020001",
+          "name": "BEAUCOUZE",
+          "latitude": 47.479,
+          "longitude": -0.614333,
+          "elevation_m": 50.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:42.877371+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 534,
+        "method": "inventory_secure",
+        "confidence": 0.9685110087093606,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-240",
+          "name": "TOURS",
+          "latitude": 47.4445,
+          "longitude": 0.7273,
+          "elevation_m": 108.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "37179001",
+          "name": "TOURS",
+          "latitude": 47.4445,
+          "longitude": 0.727333,
+          "elevation_m": 108.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:43.847374+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 513,
+        "method": "inventory_secure",
+        "confidence": 0.9685054836407355,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-288",
+          "name": "BESANCON",
+          "latitude": 47.249,
+          "longitude": 5.9888,
+          "elevation_m": 307.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "25056001",
+          "name": "BESANCON",
+          "latitude": 47.249,
+          "longitude": 5.988833,
+          "elevation_m": 307.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:44.046844+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 542,
+        "method": "inventory_secure",
+        "confidence": 0.9685026924124179,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-222",
+          "name": "NANTES-BOUGUENAIS",
+          "latitude": 47.15,
+          "longitude": -1.6088,
+          "elevation_m": 26.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "44020001",
+          "name": "NANTES-BOUGUENAIS",
+          "latitude": 47.15,
+          "longitude": -1.608833,
+          "elevation_m": 26.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.287535+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 603,
+        "method": "inventory_secure",
+        "confidence": 0.9684902013088625,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-306",
+          "name": "LA ROCHE SUR YON",
+          "latitude": 46.705,
+          "longitude": -1.3818,
+          "elevation_m": 88.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "85191003",
+          "name": "LA ROCHE SUR YON",
+          "latitude": 46.705,
+          "longitude": -1.381833,
+          "elevation_m": 88.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.488004+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 623,
+        "method": "inventory_secure",
+        "confidence": 0.9684825971751031,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-997",
+          "name": "CROZET",
+          "latitude": -46.4325,
+          "longitude": 51.8567,
+          "elevation_m": 146.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98404004",
+          "name": "CROZET",
+          "latitude": -46.4325,
+          "longitude": 51.856667,
+          "elevation_m": 146.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.778192+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 580,
+        "method": "inventory_secure",
+        "confidence": 0.9684787593555372,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-385",
+          "name": "MACON",
+          "latitude": 46.2945,
+          "longitude": 4.7943,
+          "elevation_m": 219.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "71105001",
+          "name": "MACON",
+          "latitude": 46.2945,
+          "longitude": 4.794333,
+          "elevation_m": 219.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:46.196999+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 479,
+        "method": "inventory_secure",
+        "confidence": 0.9684699493197664,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-482",
+          "name": "AMBERIEU",
+          "latitude": 45.9765,
+          "longitude": 5.3293,
+          "elevation_m": 250.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "01089001",
+          "name": "AMBERIEU",
+          "latitude": 45.9765,
+          "longitude": 5.329333,
+          "elevation_m": 250.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:46.947107+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 578,
+        "method": "inventory_secure",
+        "confidence": 0.9684630562690861,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-481",
+          "name": "LYON-ST EXUPERY",
+          "latitude": 45.7265,
+          "longitude": 5.0778,
+          "elevation_m": 235.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "69299001",
+          "name": "LYON-ST EXUPERY",
+          "latitude": 45.7265,
+          "longitude": 5.077833,
+          "elevation_m": 235.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:48.101499+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 535,
+        "method": "inventory_secure",
+        "confidence": 0.9684531133556318,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-486",
+          "name": "GRENOBLE-ST GEOIRS",
+          "latitude": 45.364,
+          "longitude": 5.3133,
+          "elevation_m": 384.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "38384001",
+          "name": "GRENOBLE-ST GEOIRS",
+          "latitude": 45.364,
+          "longitude": 5.313333,
+          "elevation_m": 384.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:48.754710+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 497,
+        "method": "inventory_secure",
+        "confidence": 0.9684402462967823,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-549",
+          "name": "AURILLAC",
+          "latitude": 44.8915,
+          "longitude": 2.4192,
+          "elevation_m": 632.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "15014004",
+          "name": "AURILLAC",
+          "latitude": 44.8915,
+          "longitude": 2.419167,
+          "elevation_m": 632.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:49.871109+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 544,
+        "method": "inventory_secure",
+        "confidence": 0.9684362783300945,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-535",
+          "name": "GOURDON",
+          "latitude": 44.745,
+          "longitude": 1.3967,
+          "elevation_m": 260.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "46127001",
+          "name": "GOURDON",
+          "latitude": 44.745,
+          "longitude": 1.396667,
+          "elevation_m": 260.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:51.118437+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 526,
+        "method": "inventory_secure",
+        "confidence": 0.968406176703018,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-630",
+          "name": "TOULOUSE-BLAGNAC",
+          "latitude": 43.621,
+          "longitude": 1.3788,
+          "elevation_m": 151.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "31069001",
+          "name": "TOULOUSE-BLAGNAC",
+          "latitude": 43.621,
+          "longitude": 1.378833,
+          "elevation_m": 151.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:51.455893+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 529,
+        "method": "inventory_secure",
+        "confidence": 0.9683982720525163,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-638",
+          "name": "BEZIERS-VIAS",
+          "latitude": 43.322,
+          "longitude": 3.3527,
+          "elevation_m": 15.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "34209002",
+          "name": "BEZIERS-VIAS",
+          "latitude": 43.322,
+          "longitude": 3.352667,
+          "elevation_m": 15.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:52.299056+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 501,
+        "method": "inventory_secure",
+        "confidence": 0.9683617413796405,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-761",
+          "name": "AJACCIO",
+          "latitude": 41.918,
+          "longitude": 8.7927,
+          "elevation_m": 5.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20004002",
+          "name": "AJACCIO",
+          "latitude": 41.918,
+          "longitude": 8.792667,
+          "elevation_m": 5.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:52.858823+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 642,
+        "method": "inventory_secure",
+        "confidence": 0.9679626534231413,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-592",
+          "name": "NOUMEA",
+          "latitude": -22.276,
+          "longitude": 166.4528,
+          "elevation_m": 69.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98818001",
+          "name": "NOUMEA",
+          "latitude": -22.276,
+          "longitude": 166.452833,
+          "elevation_m": 69.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:53.724806+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 641,
+        "method": "inventory_secure",
+        "confidence": 0.9679512768447281,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-587",
+          "name": "LA ROCHE",
+          "latitude": -21.4815,
+          "longitude": 168.0357,
+          "elevation_m": 41.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98815001",
+          "name": "LA ROCHE",
+          "latitude": -21.4815,
+          "longitude": 168.035667,
+          "elevation_m": 41.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:54.639900+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 643,
+        "method": "inventory_secure",
+        "confidence": 0.9679118704411238,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-570",
+          "name": "SURPRISE",
+          "latitude": -18.48,
+          "longitude": 163.0863,
+          "elevation_m": 4.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98818201",
+          "name": "SURPRISE",
+          "latitude": -18.48,
+          "longitude": 163.086333,
+          "elevation_m": 4.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:55.668615+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 630,
+        "method": "inventory_secure",
+        "confidence": 0.9679068466902792,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-944",
+          "name": "HAO AERO",
+          "latitude": -18.063,
+          "longitude": -140.9612,
+          "elevation_m": 5.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98720002",
+          "name": "HAO AERO",
+          "latitude": -18.063,
+          "longitude": -140.961167,
+          "elevation_m": 5.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:56.822265+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 626,
+        "method": "inventory_secure",
+        "confidence": 0.967898594148472,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-933",
+          "name": "ANAA1",
+          "latitude": -17.357,
+          "longitude": -145.5083,
+          "elevation_m": 3.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98711002",
+          "name": "ANAA1",
+          "latitude": -17.357,
+          "longitude": -145.508333,
+          "elevation_m": 3.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:58.163883+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 631,
+        "method": "inventory_secure",
+        "confidence": 0.967830506546862,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-925",
+          "name": "HIVA-OA",
+          "latitude": -9.806,
+          "longitude": -139.0357,
+          "elevation_m": 51.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98723001",
+          "name": "HIVA-OA",
+          "latitude": -9.806,
+          "longitude": -139.035667,
+          "elevation_m": 51.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:08.261648+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 615,
+        "method": "inventory_secure",
+        "confidence": 0.9678084231229698,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-74-0-401",
+          "name": "SAINT LAURENT",
+          "latitude": 5.4855,
+          "longitude": -54.0317,
+          "elevation_m": 5.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "97311001",
+          "name": "SAINT LAURENT",
+          "latitude": 5.4855,
+          "longitude": -54.031667,
+          "elevation_m": 5.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:09.412297+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 519,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-100",
+          "name": "OUESSANT-STIFF",
+          "latitude": 48.4733,
+          "longitude": -5.057,
+          "elevation_m": 64.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "29155005",
+          "name": "OUESSANT-STIFF",
+          "latitude": 48.473333,
+          "longitude": -5.057,
+          "elevation_m": 64.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:10.981108+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 532,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-130",
+          "name": "RENNES-ST JACQUES",
+          "latitude": 48.0688,
+          "longitude": -1.734,
+          "elevation_m": 36.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "35281001",
+          "name": "RENNES-ST JACQUES",
+          "latitude": 48.068833,
+          "longitude": -1.734,
+          "elevation_m": 36.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:11.927690+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 553,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-283",
+          "name": "LANGRES",
+          "latitude": 47.8437,
+          "longitude": 5.3375,
+          "elevation_m": 466.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "52269001",
+          "name": "LANGRES",
+          "latitude": 47.843667,
+          "longitude": 5.3375,
+          "elevation_m": 466.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:12.785387+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 557,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-180",
+          "name": "NANCY-ESSEY",
+          "latitude": 48.6878,
+          "longitude": 6.2215,
+          "elevation_m": 212.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "54526001",
+          "name": "NANCY-ESSEY",
+          "latitude": 48.687833,
+          "longitude": 6.2215,
+          "elevation_m": 212.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:13.725958+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 585,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-490",
+          "name": "MEYTHET",
+          "latitude": 45.9282,
+          "longitude": 6.094,
+          "elevation_m": 455.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "74182001",
+          "name": "MEYTHET",
+          "latitude": 45.928167,
+          "longitude": 6.094,
+          "elevation_m": 455.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:14.776409+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 592,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-153",
+          "name": "MELUN",
+          "latitude": 48.6103,
+          "longitude": 2.6795,
+          "elevation_m": 91.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "77306001",
+          "name": "MELUN",
+          "latitude": 48.610333,
+          "longitude": 2.6795,
+          "elevation_m": 91.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:15.423710+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 605,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404527818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-434",
+          "name": "LIMOGES-BELLEGARDE",
+          "latitude": 45.8612,
+          "longitude": 1.175,
+          "elevation_m": 402.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "87085006",
+          "name": "LIMOGES-BELLEGARDE",
+          "latitude": 45.861167,
+          "longitude": 1.175,
+          "elevation_m": 402.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:17.380849+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 627,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404525448,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-929",
+          "name": "BORA-BORA-MOTU-AERO",
+          "latitude": -16.4452,
+          "longitude": -151.752,
+          "elevation_m": 3.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98714002",
+          "name": "BORA-BORA-MOTU-AERO",
+          "latitude": -16.445167,
+          "longitude": -151.752,
+          "elevation_m": 3.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:18.115399+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 638,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404525448,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-578",
+          "name": "KONE",
+          "latitude": -21.0513,
+          "longitude": 164.8335,
+          "elevation_m": 9.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98811001",
+          "name": "KONE",
+          "latitude": -21.051333,
+          "longitude": 164.8335,
+          "elevation_m": 9.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:19.463567+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 645,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404525448,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-579",
+          "name": "OULOUP",
+          "latitude": -20.6392,
+          "longitude": 166.571,
+          "elevation_m": 7.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98820001",
+          "name": "OULOUP",
+          "latitude": -20.639167,
+          "longitude": 166.571,
+          "elevation_m": 7.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:19.601343+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 647,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404525448,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-586",
+          "name": "TOUHO AEROD.",
+          "latitude": -20.7893,
+          "longitude": 165.2545,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98830002",
+          "name": "TOUHO AEROD",
+          "latitude": -20.789333,
+          "longitude": 165.2545,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:20.461001+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 480,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-61",
+          "name": "ST QUENTIN",
+          "latitude": 49.8183,
+          "longitude": 3.206,
+          "elevation_m": 98.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "02320001",
+          "name": "ST QUENTIN",
+          "latitude": 49.818333,
+          "longitude": 3.206,
+          "elevation_m": 98.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:21.795096+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 486,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-690",
+          "name": "NICE",
+          "latitude": 43.6488,
+          "longitude": 7.209,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "06088001",
+          "name": "NICE",
+          "latitude": 43.648833,
+          "longitude": 7.209,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:21.928343+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 490,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-168",
+          "name": "TROYES-BARBEREY",
+          "latitude": 48.3247,
+          "longitude": 4.02,
+          "elevation_m": 112.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "10030001",
+          "name": "TROYES-BARBEREY",
+          "latitude": 48.324667,
+          "longitude": 4.02,
+          "elevation_m": 112.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:22.179029+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 491,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-635",
+          "name": "CARCASSONNE",
+          "latitude": 43.2153,
+          "longitude": 2.2955,
+          "elevation_m": 128.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "11069001",
+          "name": "CARCASSONNE",
+          "latitude": 43.215333,
+          "longitude": 2.2955,
+          "elevation_m": 128.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:23.625970+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 505,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-785",
+          "name": "CAP CORSE",
+          "latitude": 43.0038,
+          "longitude": 9.3595,
+          "elevation_m": 72.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20107001",
+          "name": "CAP CORSE",
+          "latitude": 43.003833,
+          "longitude": 9.3595,
+          "elevation_m": 72.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:23.843841+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 508,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-775",
+          "name": "ALISTRO",
+          "latitude": 42.2597,
+          "longitude": 9.5415,
+          "elevation_m": 65.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20303002",
+          "name": "ALISTRO",
+          "latitude": 42.259667,
+          "longitude": 9.5415,
+          "elevation_m": 65.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:24.057616+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 514,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-577",
+          "name": "MONTELIMAR",
+          "latitude": 44.5812,
+          "longitude": 4.733,
+          "elevation_m": 73.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "26198001",
+          "name": "MONTELIMAR",
+          "latitude": 44.581167,
+          "longitude": 4.733,
+          "elevation_m": 73.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:25.616308+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 525,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-560",
+          "name": "MONT AIGOUAL",
+          "latitude": 44.1213,
+          "longitude": 3.5815,
+          "elevation_m": 1567.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "30339001",
+          "name": "MONT AIGOUAL",
+          "latitude": 44.121333,
+          "longitude": 3.5815,
+          "elevation_m": 1567.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:25.930623+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 533,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-354",
+          "name": "CHATEAUROUX  DEOLS",
+          "latitude": 46.8698,
+          "longitude": 1.741,
+          "elevation_m": 158.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "36063001",
+          "name": "CHATEAUROUX  DEOLS",
+          "latitude": 46.869833,
+          "longitude": 1.741,
+          "elevation_m": 158.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:26.477375+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 543,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-217",
+          "name": "ST NAZAIRE-MONTOIR",
+          "latitude": 47.3138,
+          "longitude": -2.1545,
+          "elevation_m": 3.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "44103001",
+          "name": "ST NAZAIRE-MONTOIR",
+          "latitude": 47.313833,
+          "longitude": -2.1545,
+          "elevation_m": 3.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:27.578987+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 546,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-554",
+          "name": "MENDE",
+          "latitude": 44.5337,
+          "longitude": 3.4545,
+          "elevation_m": 932.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "48095005",
+          "name": "MENDE",
+          "latitude": 44.533667,
+          "longitude": 3.4545,
+          "elevation_m": 932.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:28.149733+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 548,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-228",
+          "name": "MARCE",
+          "latitude": 47.5618,
+          "longitude": -0.317,
+          "elevation_m": 53.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "49188001",
+          "name": "MARCE",
+          "latitude": 47.561833,
+          "longitude": -0.317,
+          "elevation_m": 53.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:28.733855+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 550,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-24",
+          "name": "GONNEVILLE",
+          "latitude": 49.6527,
+          "longitude": -1.4635,
+          "elevation_m": 134.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "50209001",
+          "name": "GONNEVILLE",
+          "latitude": 49.652667,
+          "longitude": -1.4635,
+          "elevation_m": 134.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:29.729142+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 555,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-134",
+          "name": "LAVAL-ETRONNIER",
+          "latitude": 48.0307,
+          "longitude": -0.7465,
+          "elevation_m": 100.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "53130008",
+          "name": "LAVAL-ETRONNIER",
+          "latitude": 48.030667,
+          "longitude": -0.7465,
+          "elevation_m": 100.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:30.148944+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 562,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-10",
+          "name": "DUNKERQUE",
+          "latitude": 51.0558,
+          "longitude": 2.3395,
+          "elevation_m": 11.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "59183001",
+          "name": "DUNKERQUE",
+          "latitude": 51.055833,
+          "longitude": 2.3395,
+          "elevation_m": 11.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:30.956109+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 576,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-299",
+          "name": "BALE-MULHOUSE",
+          "latitude": 47.6143,
+          "longitude": 7.51,
+          "elevation_m": 263.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "68297001",
+          "name": "BALE-MULHOUSE",
+          "latitude": 47.614333,
+          "longitude": 7.51,
+          "elevation_m": 263.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:31.480610+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 581,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-379",
+          "name": "ST YAN",
+          "latitude": 46.4083,
+          "longitude": 4.0165,
+          "elevation_m": 242.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "71491001",
+          "name": "ST YAN",
+          "latitude": 46.408333,
+          "longitude": 4.0165,
+          "elevation_m": 242.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:32.766141+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 584,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-491",
+          "name": "CHAMBERY-AIX",
+          "latitude": 45.6413,
+          "longitude": 5.878,
+          "elevation_m": 235.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "73329001",
+          "name": "CHAMBERY-AIX",
+          "latitude": 45.641333,
+          "longitude": 5.878,
+          "elevation_m": 235.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:33.738661+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 589,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-40",
+          "name": "DIEPPE",
+          "latitude": 49.9328,
+          "longitude": 1.09,
+          "elevation_m": 40.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "76217001",
+          "name": "DIEPPE",
+          "latitude": 49.932833,
+          "longitude": 1.09,
+          "elevation_m": 40.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:34.440292+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 593,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-146",
+          "name": "TOUSSUS LE NOBLE",
+          "latitude": 48.7507,
+          "longitude": 2.1135,
+          "elevation_m": 154.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "78620001",
+          "name": "TOUSSUS LE NOBLE",
+          "latitude": 48.750667,
+          "longitude": 2.1135,
+          "elevation_m": 154.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:34.972262+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 599,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-563",
+          "name": "AVIGNON",
+          "latitude": 43.9113,
+          "longitude": 4.9025,
+          "elevation_m": 34.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "84007005",
+          "name": "AVIGNON",
+          "latitude": 43.911333,
+          "longitude": 4.9025,
+          "elevation_m": 34.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:35.804595+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 607,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-296",
+          "name": "DORANS",
+          "latitude": 47.5917,
+          "longitude": 6.837,
+          "elevation_m": 401.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "90035001",
+          "name": "DORANS",
+          "latitude": 47.591667,
+          "longitude": 6.837,
+          "elevation_m": 401.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:36.599404+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 619,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-970",
+          "name": "JUAN DE NOVA",
+          "latitude": -17.0547,
+          "longitude": 42.712,
+          "elevation_m": 9.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98403002",
+          "name": "JUAN DE NOVA",
+          "latitude": -17.054667,
+          "longitude": 42.712,
+          "elevation_m": 9.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:37.130316+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 636,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-573",
+          "name": "BELEP AEROD.",
+          "latitude": -19.7198,
+          "longitude": 163.661,
+          "elevation_m": 88.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98801001",
+          "name": "BELEP AEROD",
+          "latitude": -19.719833,
+          "longitude": 163.661,
+          "elevation_m": 88.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:38.920859+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 644,
+        "method": "inventory_secure",
+        "confidence": 0.9677983404523077,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-574",
+          "name": "CHESTERFIELD",
+          "latitude": -19.9683,
+          "longitude": 158.4755,
+          "elevation_m": 4.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98818202",
+          "name": "CHESTERFIELD",
+          "latitude": -19.968333,
+          "longitude": 158.4755,
+          "elevation_m": 4.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:38.354064+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 596,
+        "method": "inventory_secure",
+        "confidence": 0.9673822829282157,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-59",
+          "name": "MEAULTE",
+          "latitude": 49.9718,
+          "longitude": 2.7038,
+          "elevation_m": 107.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "80523001",
+          "name": "MEAULTE",
+          "latitude": 49.971833,
+          "longitude": 2.703833,
+          "elevation_m": 107.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:39.751400+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 488,
+        "method": "inventory_secure",
+        "confidence": 0.9673792746926826,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-75",
+          "name": "CHARLEVILLE-MEZ",
+          "latitude": 49.7828,
+          "longitude": 4.6432,
+          "elevation_m": 145.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "08105005",
+          "name": "CHARLEVILLE-MEZ",
+          "latitude": 49.782833,
+          "longitude": 4.643167,
+          "elevation_m": 145.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:40.282182+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 549,
+        "method": "inventory_secure",
+        "confidence": 0.9673783573870149,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-20",
+          "name": "PTE DE LA HAGUE",
+          "latitude": 49.7252,
+          "longitude": -1.9398,
+          "elevation_m": 6.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "50020001",
+          "name": "PTE DE LA HAGUE",
+          "latitude": 49.725167,
+          "longitude": -1.939833,
+          "elevation_m": 6.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:40.868089+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 551,
+        "method": "inventory_secure",
+        "confidence": 0.9673701556879646,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-72",
+          "name": "REIMS-PRUNAY",
+          "latitude": 49.2098,
+          "longitude": 4.1553,
+          "elevation_m": 95.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "51449002",
+          "name": "REIMS-PRUNAY",
+          "latitude": 49.209833,
+          "longitude": 4.155333,
+          "elevation_m": 95.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:42.843593+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 611,
+        "method": "inventory_secure",
+        "confidence": 0.9673670590719106,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-157",
+          "name": "ROISSY",
+          "latitude": 49.0152,
+          "longitude": 2.5343,
+          "elevation_m": 108.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "95527001",
+          "name": "ROISSY",
+          "latitude": 49.015167,
+          "longitude": 2.534333,
+          "elevation_m": 108.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:43.032598+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 610,
+        "method": "inventory_secure",
+        "confidence": 0.9673662976044628,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-150",
+          "name": "LE BOURGET",
+          "latitude": 48.9673,
+          "longitude": 2.4277,
+          "elevation_m": 49.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "95088001",
+          "name": "LE BOURGET",
+          "latitude": 48.967333,
+          "longitude": 2.427667,
+          "elevation_m": 49.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:44.003779+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 511,
+        "method": "inventory_secure",
+        "confidence": 0.9673640468831386,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-117",
+          "name": "PLOUMANAC'H",
+          "latitude": 48.8258,
+          "longitude": -3.4732,
+          "elevation_m": 55.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "22168001",
+          "name": "PLOUMANAC'H",
+          "latitude": 48.825833,
+          "longitude": -3.473167,
+          "elevation_m": 55.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:44.036812+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 586,
+        "method": "inventory_secure",
+        "confidence": 0.9673639811491604,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-156",
+          "name": "PARIS-MONTSOURIS",
+          "latitude": 48.8217,
+          "longitude": 2.3378,
+          "elevation_m": 75.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "75114001",
+          "name": "PARIS-MONTSOURIS",
+          "latitude": 48.821667,
+          "longitude": 2.337833,
+          "elevation_m": 75.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.360464+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 552,
+        "method": "inventory_secure",
+        "confidence": 0.9673632734150772,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-166",
+          "name": "VATRY-AERO",
+          "latitude": 48.7772,
+          "longitude": 4.1647,
+          "elevation_m": 179.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "51595002",
+          "name": "VATRY-AERO",
+          "latitude": 48.777167,
+          "longitude": 4.164667,
+          "elevation_m": 179.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.497327+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 594,
+        "method": "inventory_secure",
+        "confidence": 0.9673632278194144,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-145",
+          "name": "TRAPPES",
+          "latitude": 48.7743,
+          "longitude": 2.0098,
+          "elevation_m": 167.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "78621001",
+          "name": "TRAPPES",
+          "latitude": 48.774333,
+          "longitude": 2.009833,
+          "elevation_m": 167.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.964376+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 510,
+        "method": "inventory_secure",
+        "confidence": 0.9673629256554044,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-118",
+          "name": "LANNION_AERO",
+          "latitude": 48.7553,
+          "longitude": -3.4687,
+          "elevation_m": 85.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "22113006",
+          "name": "LANNION_AERO",
+          "latitude": 48.755333,
+          "longitude": -3.468667,
+          "elevation_m": 85.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:46.198364+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 531,
+        "method": "inventory_secure",
+        "confidence": 0.967360214513454,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-125",
+          "name": "DINARD",
+          "latitude": 48.5848,
+          "longitude": -2.0763,
+          "elevation_m": 65.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "35228001",
+          "name": "DINARD",
+          "latitude": 48.584833,
+          "longitude": -2.076333,
+          "elevation_m": 65.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:46.948490+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 518,
+        "method": "inventory_secure",
+        "confidence": 0.967355358667699,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-109",
+          "name": "LANVEOC",
+          "latitude": 48.2793,
+          "longitude": -4.4393,
+          "elevation_m": 81.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "29120001",
+          "name": "LANVEOC",
+          "latitude": 48.279333,
+          "longitude": -4.439333,
+          "elevation_m": 81.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:48.167456+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 517,
+        "method": "inventory_secure",
+        "confidence": 0.9673518953905065,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-140",
+          "name": "CHATEAUDUN",
+          "latitude": 48.0613,
+          "longitude": 1.3763,
+          "elevation_m": 126.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "28198001",
+          "name": "CHATEAUDUN",
+          "latitude": 48.061333,
+          "longitude": 1.376333,
+          "elevation_m": 126.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:49.524820+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 582,
+        "method": "inventory_secure",
+        "confidence": 0.9673500611654372,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-235",
+          "name": "LE MANS",
+          "latitude": 47.9458,
+          "longitude": 0.1942,
+          "elevation_m": 51.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "72181001",
+          "name": "LE MANS",
+          "latitude": 47.945833,
+          "longitude": 0.194167,
+          "elevation_m": 51.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:50.237456+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 575,
+        "method": "inventory_secure",
+        "confidence": 0.967349789123255,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-197",
+          "name": "COLMAR-MEYENHEIM",
+          "latitude": 47.9287,
+          "longitude": 7.4077,
+          "elevation_m": 207.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "68205001",
+          "name": "COLMAR-MEYENHEIM",
+          "latitude": 47.928667,
+          "longitude": 7.407667,
+          "elevation_m": 207.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:51.162025+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 606,
+        "method": "inventory_secure",
+        "confidence": 0.9673481380289755,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-266",
+          "name": "AUXERRE-PERRIGNY",
+          "latitude": 47.8247,
+          "longitude": 3.5497,
+          "elevation_m": 152.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "89295001",
+          "name": "AUXERRE-PERRIGNY",
+          "latitude": 47.824667,
+          "longitude": 3.549667,
+          "elevation_m": 152.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:51.755128+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 560,
+        "method": "inventory_secure",
+        "confidence": 0.9673471560392213,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-205",
+          "name": "LORIENT-LANN BIHOUE",
+          "latitude": 47.7628,
+          "longitude": -3.4357,
+          "elevation_m": 45.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "56185001",
+          "name": "LORIENT-LANN BIHOUE",
+          "latitude": 47.762833,
+          "longitude": -3.435667,
+          "elevation_m": 45.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:52.429153+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 559,
+        "method": "inventory_secure",
+        "confidence": 0.9673454025143564,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-203",
+          "name": "ILE DE GROIX",
+          "latitude": 47.6523,
+          "longitude": -3.5023,
+          "elevation_m": 41.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "56069001",
+          "name": "ILE DE GROIX",
+          "latitude": 47.652333,
+          "longitude": -3.502333,
+          "elevation_m": 41.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:53.433250+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 558,
+        "method": "inventory_secure",
+        "confidence": 0.9673397251798256,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-207",
+          "name": "BELLE ILE-LE TALUT",
+          "latitude": 47.2943,
+          "longitude": -3.2183,
+          "elevation_m": 34.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "56009001",
+          "name": "BELLE ILE-LE TALUT",
+          "latitude": 47.294333,
+          "longitude": -3.218333,
+          "elevation_m": 37.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:54.007398+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 509,
+        "method": "inventory_secure",
+        "confidence": 0.9673393051746838,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-280",
+          "name": "DIJON-LONGVIC",
+          "latitude": 47.2678,
+          "longitude": 5.0883,
+          "elevation_m": 219.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "21473001",
+          "name": "DIJON-LONGVIC",
+          "latitude": 47.267833,
+          "longitude": 5.088333,
+          "elevation_m": 219.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:54.975199+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 500,
+        "method": "inventory_secure",
+        "confidence": 0.9673359997649439,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-255",
+          "name": "BOURGES",
+          "latitude": 47.0592,
+          "longitude": 2.3598,
+          "elevation_m": 161.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "18033001",
+          "name": "BOURGES",
+          "latitude": 47.059167,
+          "longitude": 2.359833,
+          "elevation_m": 161.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:55.892152+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 536,
+        "method": "inventory_secure",
+        "confidence": 0.9673357563939151,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-386",
+          "name": "TAVAUX SA",
+          "latitude": 47.0438,
+          "longitude": 5.4273,
+          "elevation_m": 195.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "39526003",
+          "name": "TAVAUX SA",
+          "latitude": 47.043833,
+          "longitude": 5.427333,
+          "elevation_m": 195.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:56.992257+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 602,
+        "method": "inventory_secure",
+        "confidence": 0.9673302148850726,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-300",
+          "name": "L ILE D YEU",
+          "latitude": 46.6937,
+          "longitude": -2.3302,
+          "elevation_m": 32.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "85113001",
+          "name": "L ILE D YEU",
+          "latitude": 46.693667,
+          "longitude": -2.330167,
+          "elevation_m": 32.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:59.378339+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 604,
+        "method": "inventory_secure",
+        "confidence": 0.9673286356406511,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-335",
+          "name": "POITIERS-BIARD",
+          "latitude": 46.5938,
+          "longitude": 0.3143,
+          "elevation_m": 125.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "86027001",
+          "name": "POITIERS-BIARD",
+          "latitude": 46.593833,
+          "longitude": 0.314333,
+          "elevation_m": 125.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:09.323267+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 481,
+        "method": "inventory_secure",
+        "confidence": 0.9673218884756682,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-374",
+          "name": "VICHY-CHARMEIL",
+          "latitude": 46.1667,
+          "longitude": 3.3987,
+          "elevation_m": 249.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "03060001",
+          "name": "VICHY-CHARMEIL",
+          "latitude": 46.166667,
+          "longitude": 3.398667,
+          "elevation_m": 249.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:09.167096+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 568,
+        "method": "inventory_secure",
+        "confidence": 0.9673158987137973,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-460",
+          "name": "CLERMONT-FD",
+          "latitude": 45.7868,
+          "longitude": 3.1493,
+          "elevation_m": 331.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "63113001",
+          "name": "CLERMONT-FD",
+          "latitude": 45.786833,
+          "longitude": 3.149333,
+          "elevation_m": 331.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:11.331025+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 577,
+        "method": "inventory_secure",
+        "confidence": 0.9673148670074947,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-480",
+          "name": "LYON-BRON",
+          "latitude": 45.7213,
+          "longitude": 4.9492,
+          "elevation_m": 202.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "69029001",
+          "name": "LYON-BRON",
+          "latitude": 45.721333,
+          "longitude": 4.949167,
+          "elevation_m": 202.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:12.160201+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 583,
+        "method": "inventory_secure",
+        "confidence": 0.9673131566484305,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-497",
+          "name": "BOURG ST MAURICE",
+          "latitude": 45.6127,
+          "longitude": 6.7633,
+          "elevation_m": 865.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "73054001",
+          "name": "BOURG ST MAURICE",
+          "latitude": 45.612667,
+          "longitude": 6.763333,
+          "elevation_m": 865.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:12.786649+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 540,
+        "method": "inventory_secure",
+        "confidence": 0.9673121022467613,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-475",
+          "name": "ST ETIENNE-BOUTHEON",
+          "latitude": 45.5457,
+          "longitude": 4.2938,
+          "elevation_m": 395.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "42005001",
+          "name": "ST ETIENNE-BOUTHEON",
+          "latitude": 45.545667,
+          "longitude": 4.293833,
+          "elevation_m": 395.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:13.726878+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 484,
+        "method": "inventory_secure",
+        "confidence": 0.9673016518921373,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-593",
+          "name": "VILLAR ST PANCRACE",
+          "latitude": 44.8803,
+          "longitude": 6.6403,
+          "elevation_m": 1310.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "05183001",
+          "name": "VILLAR ST PANCRACE",
+          "latitude": 44.880333,
+          "longitude": 6.640333,
+          "elevation_m": 1310.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:14.777772+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 527,
+        "method": "inventory_secure",
+        "confidence": 0.9673008739414568,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-510",
+          "name": "BORDEAUX-MERIGNAC",
+          "latitude": 44.8307,
+          "longitude": -0.6913,
+          "elevation_m": 47.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "33281001",
+          "name": "BORDEAUX-MERIGNAC",
+          "latitude": 44.830667,
+          "longitude": -0.691333,
+          "elevation_m": 47.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:15.381080+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 483,
+        "method": "inventory_secure",
+        "confidence": 0.9672968103512551,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-591",
+          "name": "EMBRUN",
+          "latitude": 44.5712,
+          "longitude": 6.5087,
+          "elevation_m": 873.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "05046001",
+          "name": "EMBRUN",
+          "latitude": 44.571167,
+          "longitude": 6.508667,
+          "elevation_m": 873.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:17.534427+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 487,
+        "method": "inventory_secure",
+        "confidence": 0.9672962784205363,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-570",
+          "name": "LANAS SYN",
+          "latitude": 44.5372,
+          "longitude": 4.3682,
+          "elevation_m": 265.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "07131001",
+          "name": "LANAS SYN",
+          "latitude": 44.537167,
+          "longitude": 4.368167,
+          "elevation_m": 265.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:19.110691+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 600,
+        "method": "inventory_secure",
+        "confidence": 0.9672891946561326,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-586",
+          "name": "CARPENTRAS",
+          "latitude": 44.0837,
+          "longitude": 5.0583,
+          "elevation_m": 98.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "84031001",
+          "name": "CARPENTRAS",
+          "latitude": 44.083667,
+          "longitude": 5.058333,
+          "elevation_m": 98.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:19.537608+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 482,
+        "method": "inventory_secure",
+        "confidence": 0.9672888593565462,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-588",
+          "name": "ST AUBAN",
+          "latitude": 44.0622,
+          "longitude": 5.9897,
+          "elevation_m": 458.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "04049001",
+          "name": "ST AUBAN",
+          "latitude": 44.062167,
+          "longitude": 5.989667,
+          "elevation_m": 458.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:20.382673+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 523,
+        "method": "inventory_secure",
+        "confidence": 0.9672856591156583,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-645",
+          "name": "NIMES-COURBESSAC",
+          "latitude": 43.8568,
+          "longitude": 4.4063,
+          "elevation_m": 59.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "30189001",
+          "name": "NIMES-COURBESSAC",
+          "latitude": 43.856833,
+          "longitude": 4.406333,
+          "elevation_m": 59.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:21.012216+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 524,
+        "method": "inventory_secure",
+        "confidence": 0.9672843514820303,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-646",
+          "name": "NIMES-GARONS",
+          "latitude": 43.7728,
+          "longitude": 4.4128,
+          "elevation_m": 94.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "30258001",
+          "name": "NIMES-GARONS",
+          "latitude": 43.772833,
+          "longitude": 4.412833,
+          "elevation_m": 94.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:21.865500+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 528,
+        "method": "inventory_secure",
+        "confidence": 0.967281293603604,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-643",
+          "name": "MONTPELLIER-AEROPORT",
+          "latitude": 43.5762,
+          "longitude": 3.9647,
+          "elevation_m": 1.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "34154001",
+          "name": "MONTPELLIER-AEROPORT",
+          "latitude": 43.576167,
+          "longitude": 3.964667,
+          "elevation_m": 1.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:22.017440+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 530,
+        "method": "inventory_secure",
+        "confidence": 0.96727851589339,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-641",
+          "name": "SETE",
+          "latitude": 43.3973,
+          "longitude": 3.6922,
+          "elevation_m": 75.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "34301002",
+          "name": "SETE",
+          "latitude": 43.397333,
+          "longitude": 3.692167,
+          "elevation_m": 75.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:22.933559+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 598,
+        "method": "inventory_secure",
+        "confidence": 0.9672782965761783,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-675",
+          "name": "LE LUC",
+          "latitude": 43.3832,
+          "longitude": 6.3862,
+          "elevation_m": 80.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "83031001",
+          "name": "LE LUC",
+          "latitude": 43.383167,
+          "longitude": 6.386167,
+          "elevation_m": 80.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:23.696732+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 489,
+        "method": "inventory_secure",
+        "confidence": 0.9672724417698975,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-627",
+          "name": "ST GIRONS",
+          "latitude": 43.0053,
+          "longitude": 1.1068,
+          "elevation_m": 414.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "09289001",
+          "name": "ST GIRONS",
+          "latitude": 43.005333,
+          "longitude": 1.106833,
+          "elevation_m": 414.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:23.956055+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 492,
+        "method": "inventory_secure",
+        "confidence": 0.9672710808040887,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-666",
+          "name": "LEUCATE",
+          "latitude": 42.9173,
+          "longitude": 3.0597,
+          "elevation_m": 42.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "11202001",
+          "name": "LEUCATE",
+          "latitude": 42.917333,
+          "longitude": 3.059667,
+          "elevation_m": 42.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:25.094938+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 572,
+        "method": "inventory_secure",
+        "confidence": 0.9672682980300732,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFMP",
+          "name": "Perpignan",
+          "latitude": 42.7372,
+          "longitude": 2.8728,
+          "elevation_m": 48.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "66136001",
+          "name": "PERPIGNAN",
+          "latitude": 42.737167,
+          "longitude": 2.872833,
+          "elevation_m": 42.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:25.737855+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 507,
+        "method": "inventory_secure",
+        "confidence": 0.9672652672210067,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-790",
+          "name": "BASTIA",
+          "latitude": 42.5407,
+          "longitude": 9.4852,
+          "elevation_m": 10.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20148001",
+          "name": "BASTIA",
+          "latitude": 42.540667,
+          "longitude": 9.485167,
+          "elevation_m": 10.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:26.392979+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 506,
+        "method": "inventory_secure",
+        "confidence": 0.9672493835595507,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-780",
+          "name": "FIGARI",
+          "latitude": 41.5052,
+          "longitude": 9.1037,
+          "elevation_m": 20.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20114002",
+          "name": "FIGARI",
+          "latitude": 41.505167,
+          "longitude": 9.103667,
+          "elevation_m": 20.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:26.957699+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 502,
+        "method": "inventory_secure",
+        "confidence": 0.9672473948743038,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-770",
+          "name": "CAP PERTUSATO",
+          "latitude": 41.3748,
+          "longitude": 9.1783,
+          "elevation_m": 107.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20041001",
+          "name": "CAP PERTUSATO",
+          "latitude": 41.374833,
+          "longitude": 9.178333,
+          "elevation_m": 107.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:27.951227+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 622,
+        "method": "inventory_secure",
+        "confidence": 0.9671939191644301,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-996",
+          "name": "NOUVELLE AMSTERDAM",
+          "latitude": -37.7952,
+          "longitude": 77.5692,
+          "elevation_m": 27.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98404002",
+          "name": "NOUVELLE AMSTERDAM",
+          "latitude": -37.795167,
+          "longitude": 77.569167,
+          "elevation_m": 27.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:28.308398+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 632,
+        "method": "inventory_secure",
+        "confidence": 0.9670584195225223,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-958",
+          "name": "RAPA",
+          "latitude": -27.6183,
+          "longitude": -144.3348,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98741001",
+          "name": "RAPA",
+          "latitude": -27.618333,
+          "longitude": -144.334833,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:29.138352+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 635,
+        "method": "inventory_secure",
+        "confidence": 0.9670113768219083,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-954",
+          "name": "TUBUAI AERO",
+          "latitude": -23.3707,
+          "longitude": -149.5293,
+          "elevation_m": 3.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98753002",
+          "name": "TUBUAI AERO",
+          "latitude": -23.370667,
+          "longitude": -149.529333,
+          "elevation_m": 3.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:29.997398+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 629,
+        "method": "inventory_secure",
+        "confidence": 0.9670089086279692,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-948",
+          "name": "MANGAREVA",
+          "latitude": -23.1302,
+          "longitude": -134.9653,
+          "elevation_m": 91.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98719005",
+          "name": "MANGAREVA",
+          "latitude": -23.130167,
+          "longitude": -134.965333,
+          "elevation_m": 91.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:30.150248+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 637,
+        "method": "inventory_secure",
+        "confidence": 0.9670034425183274,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-596",
+          "name": "MOUE",
+          "latitude": -22.5898,
+          "longitude": 167.4522,
+          "elevation_m": 95.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98809001",
+          "name": "MOUE",
+          "latitude": -22.589833,
+          "longitude": 167.452167,
+          "elevation_m": 95.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:31.479225+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 620,
+        "method": "inventory_secure",
+        "confidence": 0.9670009944855,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-972",
+          "name": "EUROPA",
+          "latitude": -22.3442,
+          "longitude": 40.3407,
+          "elevation_m": 6.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98403003",
+          "name": "EUROPA",
+          "latitude": -22.344167,
+          "longitude": 40.340667,
+          "elevation_m": 6.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:31.909044+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 646,
+        "method": "inventory_secure",
+        "confidence": 0.9669977726979677,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-590",
+          "name": "LA TONTOUTA",
+          "latitude": -22.0173,
+          "longitude": 166.2223,
+          "elevation_m": 37.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98821001",
+          "name": "LA TONTOUTA",
+          "latitude": -22.017333,
+          "longitude": 166.222333,
+          "elevation_m": 37.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:33.265603+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 617,
+        "method": "inventory_secure",
+        "confidence": 0.9669869994143301,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-980",
+          "name": "GILLOT-AEROPORT",
+          "latitude": -20.8922,
+          "longitude": 55.5287,
+          "elevation_m": 8.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "97418110",
+          "name": "GILLOT-AEROPORT",
+          "latitude": -20.892167,
+          "longitude": 55.528667,
+          "elevation_m": 8.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:34.094818+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 640,
+        "method": "inventory_secure",
+        "confidence": 0.9669859308707407,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-582",
+          "name": "OUANAHAM",
+          "latitude": -20.7777,
+          "longitude": 167.2412,
+          "elevation_m": 30.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98814001",
+          "name": "OUANAHAM",
+          "latitude": -20.777667,
+          "longitude": 167.241167,
+          "elevation_m": 30.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:34.833834+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 639,
+        "method": "inventory_secure",
+        "confidence": 0.9669839015531828,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-577",
+          "name": "KOUMAC",
+          "latitude": -20.5587,
+          "longitude": 164.2842,
+          "elevation_m": 25.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98812001",
+          "name": "KOUMAC",
+          "latitude": -20.558667,
+          "longitude": 164.284167,
+          "elevation_m": 25.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:34.973585+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 633,
+        "method": "inventory_secure",
+        "confidence": 0.9669595555929323,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-936",
+          "name": "TAIARAPU-EST",
+          "latitude": -17.7457,
+          "longitude": -149.1588,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98747011",
+          "name": "TAIARAPU-EST",
+          "latitude": -17.745667,
+          "longitude": -149.158833,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:36.361485+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 628,
+        "method": "inventory_secure",
+        "confidence": 0.9669580244139794,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-938",
+          "name": "FAAA",
+          "latitude": -17.5552,
+          "longitude": -149.6143,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98715002",
+          "name": "FAAA",
+          "latitude": -17.555167,
+          "longitude": -149.614333,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:37.071979+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 621,
+        "method": "inventory_secure",
+        "confidence": 0.9669452740732818,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-976",
+          "name": "TROMELIN",
+          "latitude": -15.8877,
+          "longitude": 54.5207,
+          "elevation_m": 7.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98403004",
+          "name": "TROMELIN",
+          "latitude": -15.887667,
+          "longitude": 54.520667,
+          "elevation_m": 7.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:37.257570+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 634,
+        "method": "inventory_secure",
+        "confidence": 0.9669352814045133,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-258-0-943",
+          "name": "TAKAROA",
+          "latitude": -14.4568,
+          "longitude": -145.0252,
+          "elevation_m": 2.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98749001",
+          "name": "TAKAROA",
+          "latitude": -14.456833,
+          "longitude": -145.025167,
+          "elevation_m": 2.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:39.077656+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 625,
+        "method": "inventory_secure",
+        "confidence": 0.9669274845448375,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-548-0-753",
+          "name": "HIHIFO",
+          "latitude": -13.2398,
+          "longitude": -176.1942,
+          "elevation_m": 30.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98613001",
+          "name": "HIHIFO",
+          "latitude": -13.239833,
+          "longitude": -176.194167,
+          "elevation_m": 30.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:39.628708+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 618,
+        "method": "inventory_secure",
+        "confidence": 0.9669179230350489,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-262-0-968",
+          "name": "GLORIEUSES",
+          "latitude": -11.5827,
+          "longitude": 47.2897,
+          "elevation_m": 3.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98403001",
+          "name": "GLORIEUSES",
+          "latitude": -11.582667,
+          "longitude": 47.289667,
+          "elevation_m": 3.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:39.913484+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 613,
+        "method": "inventory_secure",
+        "confidence": 0.9668918891262498,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-74-0-405",
+          "name": "CAYENNE-MATOURY",
+          "latitude": 4.8223,
+          "longitude": -52.3653,
+          "elevation_m": 4.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "97307001",
+          "name": "CAYENNE-MATOURY",
+          "latitude": 4.822333,
+          "longitude": -52.365333,
+          "elevation_m": 4.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:40.751426+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 614,
+        "method": "inventory_secure",
+        "confidence": 0.9668899690758371,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-74-0-408",
+          "name": "SAINT GEORGES",
+          "latitude": 3.8907,
+          "longitude": -51.8047,
+          "elevation_m": 6.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "97308001",
+          "name": "SAINT GEORGES",
+          "latitude": 3.890667,
+          "longitude": -51.804667,
+          "elevation_m": 6.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:41.022212+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 616,
+        "method": "inventory_secure",
+        "confidence": 0.9668895225674211,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-74-0-415",
+          "name": "MARIPASOULA",
+          "latitude": 3.6402,
+          "longitude": -54.0283,
+          "elevation_m": 106.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "97353001",
+          "name": "MARIPASOULA",
+          "latitude": 3.640167,
+          "longitude": -54.028333,
+          "elevation_m": 106.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:42.875236+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 554,
+        "method": "inventory_secure",
+        "confidence": 0.9646419382085402,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFSI",
+          "name": "St.-dizier",
+          "latitude": 48.6314,
+          "longitude": 4.9036,
+          "elevation_m": 140.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "52448001",
+          "name": "ST-DIZIER",
+          "latitude": 48.631333,
+          "longitude": 4.903667,
+          "elevation_m": 139.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:42.876819+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 571,
+        "method": "inventory_secure",
+        "confidence": 0.9644186046511628,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-621",
+          "name": "TARBES-LOURDES-PYREN",
+          "latitude": 43.188,
+          "longitude": 0.0,
+          "elevation_m": 360.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "65344001",
+          "name": "TARBES-LOURDES-PYRENEES",
+          "latitude": 43.188,
+          "longitude": 0.0,
+          "elevation_m": 360.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:44.006815+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 597,
+        "method": "inventory_secure",
+        "confidence": 0.9631430774300942,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFDB",
+          "name": "Montauban",
+          "latitude": 44.0281,
+          "longitude": 1.3767,
+          "elevation_m": 107.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "82121002",
+          "name": "MONTAUBAN",
+          "latitude": 44.028,
+          "longitude": 1.376667,
+          "elevation_m": 106.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:44.079598+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 579,
+        "method": "inventory_secure",
+        "confidence": 0.9626834605233004,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFSX",
+          "name": "Luxeuil",
+          "latitude": 47.7869,
+          "longitude": 6.3639,
+          "elevation_m": 273.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "70473001",
+          "name": "LUXEUIL",
+          "latitude": 47.787,
+          "longitude": 6.363833,
+          "elevation_m": 271.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.366733+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 504,
+        "method": "inventory_secure",
+        "confidence": 0.9567672484172944,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-753",
+          "name": "ILE ROUSSE",
+          "latitude": 42.6332,
+          "longitude": 8.9227,
+          "elevation_m": 142.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "20093002",
+          "name": "ILE ROUSSE",
+          "latitude": 42.633333,
+          "longitude": 8.9225,
+          "elevation_m": 140.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.542257+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 601,
+        "method": "inventory_secure",
+        "confidence": 0.9558237421080188,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFMO",
+          "name": "Orange",
+          "latitude": 44.1447,
+          "longitude": 4.8611,
+          "elevation_m": 55.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "84087001",
+          "name": "ORANGE",
+          "latitude": 44.1445,
+          "longitude": 4.861,
+          "elevation_m": 57.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:45.938499+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 587,
+        "method": "inventory_secure",
+        "confidence": 0.9530050067901862,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-156",
+          "name": "PARIS-MONTSOURIS",
+          "latitude": 48.8217,
+          "longitude": 2.3378,
+          "elevation_m": 75.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "75114007",
+          "name": "PARIS-MONTSOURIS-DOUBLE",
+          "latitude": 48.821667,
+          "longitude": 2.337833,
+          "elevation_m": 75.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:46.386271+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 538,
+        "method": "inventory_secure",
+        "confidence": 0.9429707542458853,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFYR",
+          "name": "ROMORANTIN/PRUNIERS",
+          "latitude": 47.3197,
+          "longitude": 1.6875,
+          "elevation_m": 86.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "41097001",
+          "name": "ROMORANTIN",
+          "latitude": 47.319667,
+          "longitude": 1.6875,
+          "elevation_m": 83.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:47.561176+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 512,
+        "method": "inventory_secure",
+        "confidence": 0.9427012351510471,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFRT",
+          "name": "St.-brieuc Armor",
+          "latitude": 48.5364,
+          "longitude": -2.8531,
+          "elevation_m": 136.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "22372001",
+          "name": "ST BRIEUC",
+          "latitude": 48.5365,
+          "longitude": -2.853167,
+          "elevation_m": 135.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:48.585986+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 561,
+        "method": "inventory_secure",
+        "confidence": 0.9425389022898251,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-93",
+          "name": "AEROPORT METZ-NANCY-",
+          "latitude": 48.9793,
+          "longitude": 6.2432,
+          "elevation_m": 260.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "57251001",
+          "name": "AEROPORT METZ-NANCY-LORRAINE",
+          "latitude": 48.979333,
+          "longitude": 6.243167,
+          "elevation_m": 260.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:49.601343+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 515,
+        "method": "inventory_secure",
+        "confidence": 0.9418896398615545,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFOE",
+          "name": "Evreux",
+          "latitude": 49.025,
+          "longitude": 1.2217,
+          "elevation_m": 146.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "27347001",
+          "name": "EVREUX-HUEST",
+          "latitude": 49.025,
+          "longitude": 1.221667,
+          "elevation_m": 138.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:50.501582+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 569,
+        "method": "inventory_secure",
+        "confidence": 0.9378101666905905,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFBZ",
+          "name": "Biarritz-bayonne",
+          "latitude": 43.4694,
+          "longitude": -1.5344,
+          "elevation_m": 71.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "64024001",
+          "name": "BIARRITZ-PAYS-BASQUE",
+          "latitude": 43.469333,
+          "longitude": -1.534333,
+          "elevation_m": 71.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:51.338846+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 499,
+        "method": "inventory_secure",
+        "confidence": 0.9376453131848063,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFBH",
+          "name": "La Rochelle",
+          "latitude": 46.1781,
+          "longitude": -1.1931,
+          "elevation_m": 10.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "17300009",
+          "name": "LA ROCHELLE-ILE DE RE",
+          "latitude": 46.178,
+          "longitude": -1.193167,
+          "elevation_m": 20.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:52.040682+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 494,
+        "method": "inventory_secure",
+        "confidence": 0.9322427848967522,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFCR",
+          "name": "Rodez",
+          "latitude": 44.4103,
+          "longitude": 2.4825,
+          "elevation_m": 580.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "12254001",
+          "name": "RODEZ-AVEYRON",
+          "latitude": 44.410333,
+          "longitude": 2.4825,
+          "elevation_m": 578.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:52.737369+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 556,
+        "method": "inventory_secure",
+        "confidence": 0.9311134129631221,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFSO",
+          "name": "Nancy",
+          "latitude": 48.5811,
+          "longitude": 5.9597,
+          "elevation_m": 350.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "54405001",
+          "name": "NANCY-OCHEY",
+          "latitude": 48.581,
+          "longitude": 5.959833,
+          "elevation_m": 336.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:53.726235+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 609,
+        "method": "inventory_probable",
+        "confidence": 0.828464794598806,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-53",
+          "name": "PONTOISE - AERO",
+          "latitude": 49.0903,
+          "longitude": 2.0285,
+          "elevation_m": 87.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "95078001",
+          "name": "PONTOISE - AERO",
+          "latitude": 49.0905,
+          "longitude": 2.027667,
+          "elevation_m": 87.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:55.467401+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 573,
+        "method": "inventory_probable",
+        "confidence": 0.8085690690628499,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-250-0-749",
+          "name": "CAP BEAR",
+          "latitude": 42.5167,
+          "longitude": 3.135,
+          "elevation_m": 82.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "66148001",
+          "name": "CAP BEAR",
+          "latitude": 42.516167,
+          "longitude": 3.133667,
+          "elevation_m": 72.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:55.115826+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 537,
+        "method": "inventory_probable",
+        "confidence": 0.72,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFBY",
+          "name": "DAX SEYRESSE",
+          "latitude": 43.6897,
+          "longitude": -1.07,
+          "elevation_m": 32.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "40088001",
+          "name": "DAX",
+          "latitude": 43.689833,
+          "longitude": -1.07,
+          "elevation_m": 31.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:56.128256+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 624,
+        "method": "inventory_probable",
+        "confidence": 0.72,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "KM__ASOS",
+          "id": "FMCZ",
+          "name": "Dzaoudzi",
+          "latitude": -12.8056,
+          "longitude": 45.2828,
+          "elevation_m": 7.0,
+          "country": "KM",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "98508001",
+          "name": "PAMANDZI",
+          "latitude": -12.8055,
+          "longitude": 45.282833,
+          "elevation_m": 7.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:57.183004+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 545,
+        "method": "inventory_probable",
+        "confidence": 0.7042105263157895,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFBA",
+          "name": "Agen",
+          "latitude": 44.1722,
+          "longitude": 0.5947,
+          "elevation_m": 60.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "47091001",
+          "name": "AGEN-LA GARENNE",
+          "latitude": 44.172167,
+          "longitude": 0.594667,
+          "elevation_m": 58.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:21:59.438258+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 591,
+        "method": "inventory_probable",
+        "confidence": 0.6927272727272727,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFOH",
+          "name": "Le Havre",
+          "latitude": 49.5089,
+          "longitude": 0.0711,
+          "elevation_m": 103.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "76552001",
+          "name": "CAP-DE-LA-HEVE",
+          "latitude": 49.509,
+          "longitude": 0.071167,
+          "elevation_m": 100.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:09.069741+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 612,
+        "method": "inventory_ambiguous",
+        "confidence": 0.5796362088694249,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "DM__ASOS",
+          "id": "TFFR",
+          "name": "Pointe-a-pitre",
+          "latitude": 16.2639,
+          "longitude": -61.5164,
+          "elevation_m": 11.410766,
+          "country": "DM",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "97101015",
+          "name": "LE RAIZET AERO",
+          "latitude": 16.264,
+          "longitude": -61.516333,
+          "elevation_m": 11.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:09.509045+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      },
+      {
+        "alias_pk": 498,
+        "method": "inventory_ambiguous",
+        "confidence": 0.48113752508709984,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "FR__ASOS",
+          "id": "LFBU",
+          "name": "Angouleme",
+          "latitude": 45.7292,
+          "longitude": 0.2215,
+          "elevation_m": 133.0,
+          "country": "FR",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOFRANCE",
+          "network": "",
+          "id": "16078001",
+          "name": "ANGOULEME - BRIE - CHAMPNIERS",
+          "latitude": 45.728,
+          "longitude": 0.220667,
+          "elevation_m": 124.0,
+          "country": null,
+          "region": null
+        },
+        "latest_check": {
+          "status": "error",
+          "checked_at": "2026-06-23T21:22:11.504810+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": null,
+          "temperature_agreement_ratio": null,
+          "error": "ProviderError: Météo-France rate limit (HTTP 429)"
+        }
+      }
+    ],
+    "observation_inconclusive": [],
+    "inventory_secure_unsampled": [],
+    "unchecked": []
+  }
+}

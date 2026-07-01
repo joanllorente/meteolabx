@@ -70,6 +70,61 @@ def test_normalize_basic_shape() -> None:
     assert set(result.keys()) == expected_keys
 
 
+def test_daily_extremes_use_native_high_low_not_chart_averages() -> None:
+    """Las cards conservan los High/Low de WU aunque la curva use Avg."""
+    observations = [
+        {
+            "epoch": 1_700_000_000,
+            "humidityAvg": 55,
+            "humidityHigh": 78,
+            "humidityLow": 42,
+            "metric": {
+                "tempAvg": 18.0,
+                "tempHigh": 23.5,
+                "tempLow": 11.2,
+                "windgustHigh": 31.0,
+                "pressureMin": 1009.0,
+            },
+        },
+        {
+            "epoch": 1_700_000_300,
+            "humidityAvg": 58,
+            "humidityHigh": 82,
+            "humidityLow": 45,
+            "metric": {
+                "tempAvg": 19.0,
+                "tempHigh": 25.4,
+                "tempLow": 12.0,
+                "windgustHigh": 36.5,
+                "pressureMin": 1008.5,
+            },
+        },
+    ]
+
+    series = wu._normalize_today_series(observations)
+
+    assert series["temps"] == [18.0, 19.0]
+    assert series["daily_extremes"] == {
+        "temp_max": pytest.approx(25.4),
+        "temp_min": pytest.approx(11.2),
+        "rh_max": pytest.approx(82.0),
+        "rh_min": pytest.approx(42.0),
+        "gust_max": pytest.approx(36.5),
+    }
+
+    from server.routers.observations import _build_daily_extremes
+
+    extremes = _build_daily_extremes(
+        {"Tc": 20.0, "RH": 60.0, "gust": 20.0, "precip_total": 1.2},
+        series,
+    )
+    assert extremes.temp_max == pytest.approx(25.4)
+    assert extremes.temp_min == pytest.approx(11.2)
+    assert extremes.rh_max == pytest.approx(82.0)
+    assert extremes.rh_min == pytest.approx(42.0)
+    assert extremes.gust_max == pytest.approx(36.5)
+
+
 def test_normalize_heat_index_filter_low_temp() -> None:
     """
     Si Tc < HEAT_INDEX_MIN_TEMP (25 °C), el heat_index reportado por WU

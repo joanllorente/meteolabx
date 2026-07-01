@@ -2,6 +2,7 @@ from .observation import build_observation_context, render_observation_tab
 from .trends import render_trends_tab
 from .historical import render_historical_tab
 from .map import render_map_tab
+from .ranking import handle_rank_connect_query, render_ranking_tab
 
 __all__ = [
     "build_observation_context",
@@ -9,4 +10,6 @@ __all__ = [
     "render_trends_tab",
     "render_historical_tab",
     "render_map_tab",
+    "handle_rank_connect_query",
+    "render_ranking_tab",
 ]

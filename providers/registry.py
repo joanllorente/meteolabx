@@ -4,51 +4,36 @@ Registro y orquestación de proveedores de estaciones.
 import logging
 from functools import lru_cache
 from typing import Dict, List, Optional, Sequence
-from .aemet_provider import AemetProvider
-from .euskalmet_provider import EuskalmetProvider
-from .frost_provider import FrostProvider
-from .meteocat_provider import MeteocatProvider
-from .meteofrance_provider import MeteofranceProvider
-from .meteogalicia_provider import MeteogaliciaProvider
-from .meteohub_provider import MeteoHubProvider
-from .metoffice_provider import MetOfficeProvider
-from .nws_provider import NwsProvider
-from .poem_provider import PoemProvider
 from .types import StationCandidate
+from utils.api_errors import BackendApiError
 
 logger = logging.getLogger(__name__)
 
 
-def _per_provider_result_budget(max_results: int, provider_count: int) -> int:
-    """
-    Limita el número de candidatos pedidos a cada proveedor.
-    Pedimos algo más que el reparto exacto para no empeorar la calidad
-    del top-N global, pero evitamos sobrecargar cada backend.
-    """
-    max_results = max(1, int(max_results))
-    provider_count = max(1, int(provider_count))
-    return min(max_results, max(2, ((max_results + provider_count - 1) // provider_count) + 1))
+PROVIDER_NAMES = {
+    "AEMET": "AEMET",
+    "METEOCAT": "Meteocat",
+    "EUSKALMET": "Euskalmet",
+    "FROST": "Frost",
+    "METEOFRANCE": "Meteo-France",
+    "METEOGALICIA": "MeteoGalicia",
+    "NWS": "NWS",
+    "POEM": "POEM",
+    "METOFFICE": "Met Office",
+    "METEOHUB_IT": "MeteoHub IT",
+    "IEM": "IEM",
+}
+
 
 @lru_cache(maxsize=1)
 def get_providers() -> Dict[str, object]:
     """
-    Devuelve proveedores habilitados.
-    Nota: incluye AEMET, Meteocat, Euskalmet, Frost, Meteo-France,
-    MeteoGalicia, NWS, POEM, Met Office y MeteoHub Italia.
+    Devuelve proveedores locales habilitados.
+
+    La búsqueda de estaciones es 100% FastAPI/SQLite; este registry ya no
+    instancia adaptadores locales de inventario.
     """
-    providers = [
-        AemetProvider(),
-        MeteocatProvider(),
-        EuskalmetProvider(),
-        FrostProvider(),
-        MeteofranceProvider(),
-        MeteogaliciaProvider(),
-        NwsProvider(),
-        PoemProvider(),
-        MetOfficeProvider(),
-        MeteoHubProvider(),
-    ]
-    return {p.provider_id: p for p in providers}
+    return {}
 
 
 def get_provider(provider_id: str) -> Optional[object]:
@@ -60,33 +45,83 @@ def search_nearby_stations(
     lon: float,
     max_results: int = 5,
     provider_ids: Optional[Sequence[str]] = None,
+    countries: Optional[Sequence[str]] = None,
+    has_historical: bool = False,
+    hide_historical_only: bool = False,
 ) -> List[StationCandidate]:
     """
-    Busca estaciones cercanas en todos los proveedores habilitados.
+    Busca estaciones cercanas en el catálogo canónico de FastAPI.
     """
     allowed = {
         str(provider_id).strip().upper()
         for provider_id in (provider_ids or [])
         if str(provider_id).strip()
     }
-    results: List[StationCandidate] = []
-    providers = [
-        provider
-        for provider in get_providers().values()
-        if not allowed or str(getattr(provider, "provider_id", "")).strip().upper() in allowed
-    ]
-    per_provider_max = _per_provider_result_budget(max_results=max_results, provider_count=len(providers))
+    try:
+        from utils.api_client import fetch_station_catalog_via_api, fetch_stations_near_via_api
 
-    for provider in providers:
-        try:
-            results.extend(provider.search_nearby_stations(lat, lon, max_results=per_provider_max))
-        except Exception as exc:
-            logger.warning(
-                "Búsqueda de estaciones falló para proveedor %s: %s",
-                getattr(provider, "provider_id", "UNKNOWN"),
-                exc,
+        country_filter = [
+            str(country).strip().upper()
+            for country in (countries or [])
+            if str(country).strip()
+        ]
+        if country_filter:
+            payload = fetch_station_catalog_via_api(
+                lat=lat,
+                lon=lon,
+                max_results=max_results,
+                provider_ids=sorted(allowed),
+                countries=country_filter,
+                has_historical=has_historical,
+                hide_historical_only=hide_historical_only,
             )
-            continue
+        else:
+            payload = fetch_stations_near_via_api(
+                lat,
+                lon,
+                max_results=max_results,
+                provider_ids=sorted(allowed),
+                has_historical=has_historical,
+                hide_historical_only=hide_historical_only,
+            )
 
-    results.sort(key=lambda s: s.distance_km)
-    return results[:max_results]
+        rows = payload.get("stations", []) if isinstance(payload, dict) else []
+        results = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict):
+                continue
+            provider_id = str(row.get("provider") or row.get("provider_id") or "").strip().upper()
+            station_id = str(row.get("station_id") or "").strip()
+            network = str(row.get("network") or "").strip()
+            if provider_id == "IEM" and network and "|" not in station_id:
+                station_id = f"{network}|{station_id}"
+            if not provider_id or not station_id:
+                continue
+            results.append(
+                StationCandidate(
+                    provider_id=provider_id,
+                    provider_name=_provider_name(provider_id),
+                    station_id=station_id,
+                    name=str(row.get("name") or station_id).strip(),
+                    lat=float(row.get("lat") or 0.0),
+                    lon=float(row.get("lon") or 0.0),
+                    elevation_m=float(row.get("elevation") or 0.0),
+                    distance_km=float(row.get("distance_km") or 0.0),
+                    connectable=bool(row.get("connectable", True)),
+                    metadata={
+                        **row,
+                        "network": network,
+                        "sensors": row.get("sensors"),
+                        "tz": row.get("tz"),
+                    },
+                )
+            )
+        return results[:max_results]
+    except (BackendApiError, OSError, ValueError, TypeError) as exc:
+        logger.warning("Búsqueda FastAPI de estaciones no disponible: %s", exc)
+        return []
+
+
+def _provider_name(provider_id: str) -> str:
+    provider_id = str(provider_id or "").strip().upper()
+    return PROVIDER_NAMES.get(provider_id, provider_id)

@@ -13,14 +13,13 @@ Diseño:
 - Los request bodies viven en este mismo módulo por cohesión: una
   observación = un request + una response. Si crecen, se separan.
 
-Convención de campos: mismos nombres que el dict legacy del cliente WU
-para que el frontend Streamlit pueda consumir esto sin refactorizar tabs.
+Convención de campos: contrato canónico independiente del proveedor.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -52,6 +51,10 @@ class _ProviderStationRequest(BaseModel):
     - ``WU``: la ``api_key`` viaja en cada petición (per-user).
     - ``AEMET``: la API key vive en el backend (env var
       ``METEOLABX_AEMET_API_KEY``); ``api_key`` en el body se ignora.
+    - ``METEOCAT``: igual que AEMET, key del servidor (env var
+      ``METEOLABX_METEOCAT_API_KEY``).
+    - ``EUSKALMET``: credenciales del servidor (JWT manual o
+      autogenerado desde PEM + api key opcional).
 
     Por eso ``api_key`` es **opcional** (string vacío permitido). El
     router valida lo que necesita cada proveedor.
@@ -60,14 +63,24 @@ class _ProviderStationRequest(BaseModel):
     en logs, métricas ni respuestas.
     """
 
-    provider: Literal["WU", "AEMET"] = Field(
+    provider: Literal[
+        "WU", "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS",
+        "METEOFRANCE", "METOFFICE", "FROST", "POEM", "METEOHUB_IT",
+        "IEM", "WEATHERLINK",
+    ] = Field(
         default="WU",
-        description="Identificador del proveedor. ``WU`` (Weather Underground) o ``AEMET`` (OpenData España).",
+        description=(
+            "Identificador del proveedor. ``WU`` (Weather Underground), "
+            "``AEMET`` (OpenData España), ``METEOCAT`` (XEMA Catalunya), "
+            "``EUSKALMET`` (Euskadi), ``METEOGALICIA`` (Galicia, API "
+            "pública), ``NWS`` (EE. UU., API pública), ``METEOFRANCE`` "
+            "(DPObs) o ``METOFFICE`` (DataHub, geohash como station_id)."
+        ),
     )
     station_id: str = Field(
-        description="ID de estación. WU: ``IBARCE12345``; AEMET: IDEMA tipo ``0201X``.",
+        description="ID de estación. WU: ``IBARCE12345``; AEMET: IDEMA tipo ``0201X``; Meteocat: codi tipo ``C6``.",
         min_length=1,
-        max_length=64,
+        max_length=128,
     )
     api_key: str = Field(
         default="",
@@ -75,7 +88,16 @@ class _ProviderStationRequest(BaseModel):
             "API key del proveedor cuando aplica. WU la requiere; AEMET "
             "la ignora (usa la del backend). **No se loguea**."
         ),
-        max_length=256,
+        max_length=4096,  # algunos proveedores (AEMET) usan JWT largos (>256)
+    )
+    api_secret: str = Field(
+        default="",
+        description=(
+            "Secreto adicional para proveedores con doble credencial "
+            "per-user (WeatherLink: ``X-Api-Secret``). Vacío para el "
+            "resto. **No se loguea**."
+        ),
+        max_length=4096,
     )
 
     @field_validator("station_id", mode="before")
@@ -83,10 +105,54 @@ class _ProviderStationRequest(BaseModel):
     def _normalize_station(cls, value: Any) -> str:
         return str(value or "").strip().upper()
 
-    @field_validator("api_key", mode="before")
+    @field_validator("api_key", "api_secret", mode="before")
     @classmethod
     def _normalize_api_key(cls, value: Any) -> str:
         return str(value or "").strip()
+
+
+class _CalibrationRequestMixin(BaseModel):
+    """
+    Mixin: offsets de calibración por sensor (solo WU). Compartido por
+    ``/current/processed`` y ``/series/recent`` para que la serie del día
+    y la serie sinóptica se calibren de forma idéntica en el backend.
+    La **configuración** vive en el frontend (localStorage) y viaja en cada
+    petición; el backend nunca la persiste.
+    """
+
+    calibration: Optional[Dict[str, float]] = Field(
+        default=None,
+        description=(
+            "Offsets de calibración por sensor para WU. Se aplican a la "
+            "observación y a la serie antes de calcular las derivadas. "
+            "Se ignoran para otros proveedores."
+        ),
+    )
+
+    @field_validator("calibration", mode="before")
+    @classmethod
+    def validate_calibration(cls, value):
+        if value in (None, {}):
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("calibration must be an object")
+        allowed = {
+            "barometer", "wind_vane", "thermometer", "hygrometer",
+            "anemometer", "rain_gauge", "pyranometer",
+        }
+        unknown = set(value) - allowed
+        if unknown:
+            raise ValueError(f"unknown calibration sensors: {sorted(unknown)}")
+        normalized = {}
+        for key, raw in value.items():
+            try:
+                number = float(raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"invalid calibration value for {key}") from exc
+            if not math.isfinite(number):
+                raise ValueError(f"invalid calibration value for {key}")
+            normalized[key] = number
+        return normalized
 
 
 class CurrentObservationRequest(_ProviderStationRequest):
@@ -95,6 +161,46 @@ class CurrentObservationRequest(_ProviderStationRequest):
 
 class TodaySeriesRequest(_ProviderStationRequest):
     """Petición de series del día para ``POST /v1/observations/series/today``."""
+
+    station_elevation: Optional[float] = Field(
+        default=None,
+        ge=-500.0,
+        le=9000.0,
+        description="Altitud de usuario (m) para derivar presión absoluta en series.",
+    )
+    lookback_hours: int = Field(
+        default=0,
+        ge=0,
+        le=12,
+        description=(
+            "Horas previas al inicio del día local que se anteponen a la "
+            "serie para calcular derivadas al arrancar el día. Por defecto "
+            "0 para mantener limpios los gráficos de Observación."
+        ),
+    )
+
+
+class RecentSeriesRequest(_ProviderStationRequest, _CalibrationRequestMixin):
+    """
+    Petición de serie reciente (ventana de días) para
+    ``POST /v1/observations/series/recent``. Alimenta la pestaña
+    Tendencias: temperatura/humedad/presión a resolución sinóptica.
+    Acepta ``calibration`` (WU) para calibrar la serie sinóptica igual
+    que ``/current/processed`` calibra la del día.
+    """
+
+    days_back: int = Field(
+        default=7,
+        ge=1,
+        le=14,
+        description="Días hacia atrás de la ventana (1-14; por defecto 7).",
+    )
+    station_elevation: Optional[float] = Field(
+        default=None,
+        ge=-500.0,
+        le=9000.0,
+        description="Altitud de usuario (m) para derivar presión absoluta en series.",
+    )
 
 
 # =====================================================================
@@ -200,6 +306,27 @@ def _array_nan_to_none(values: Any) -> List[Optional[float]]:
     return [_nan_to_none(v) for v in values]
 
 
+def _valid_epoch_indices(values: Any) -> tuple[List[int], List[int]]:
+    """Devuelve epochs válidos y sus índices para filtrar arrays paralelos."""
+    epochs: List[int] = []
+    indices: List[int] = []
+    for index, value in enumerate(values or []):
+        try:
+            epoch = int(value)
+        except (TypeError, ValueError):
+            continue
+        if epoch > 0:
+            epochs.append(epoch)
+            indices.append(index)
+    return epochs, indices
+
+
+def _aligned_array_nan_to_none(values: Any, indices: List[int]) -> List[Optional[float]]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    return [_nan_to_none(values[index]) for index in indices if index < len(values)]
+
+
 class TodaySeries(BaseModel):
     """
     Series temporales del día (típicamente ~288 puntos a 5 min) para una
@@ -222,11 +349,39 @@ class TodaySeries(BaseModel):
         default_factory=list,
         description="Presión (hPa) tal como la reporta el proveedor (en WU es MSL para series).",
     )
+    pressures_abs: List[Optional[float]] = Field(
+        default_factory=list,
+        description=(
+            "Presión ABSOLUTA (a nivel de estación, hPa). El frontend consume "
+            "la serie de presión por esta clave (tendencia 3h, θe, razón de "
+            "mezcla); si el proveedor solo da MSL, se reconstruye con la "
+            "altitud. Vacío solo si no hay forma de derivarla."
+        ),
+    )
     uv_indexes: List[Optional[float]] = Field(default_factory=list, description="Índice UV.")
     solar_radiations: List[Optional[float]] = Field(default_factory=list, description="Irradiancia global (W/m²).")
+    precips: List[Optional[float]] = Field(default_factory=list, description="Precipitación acumulada del día (mm).")
     winds: List[Optional[float]] = Field(default_factory=list, description="Velocidad de viento (km/h).")
     gusts: List[Optional[float]] = Field(default_factory=list, description="Velocidad de ráfaga (km/h).")
     wind_dirs: List[Optional[float]] = Field(default_factory=list, description="Dirección del viento (°).")
+    theta_e: List[Optional[float]] = Field(default_factory=list, description="Temperatura potencial equivalente (K).")
+    mixing_ratios: List[Optional[float]] = Field(default_factory=list, description="Razón de mezcla (g/kg).")
+    theta_e_trends: List[Optional[float]] = Field(default_factory=list, description="Derivada temporal de θe (K/h).")
+    mixing_ratio_trends: List[Optional[float]] = Field(default_factory=list, description="Derivada temporal de razón de mezcla ((g/kg)/h).")
+    pressure_trends: List[Optional[float]] = Field(default_factory=list, description="Derivada temporal de presión absoluta (hPa/h).")
+    vapor_pressures: List[Optional[float]] = Field(default_factory=list, description="Presión de vapor (hPa).")
+    saturation_pressures: List[Optional[float]] = Field(default_factory=list, description="Presión de vapor de saturación (hPa).")
+    theoretical_solar_radiations: List[Optional[float]] = Field(default_factory=list, description="Irradiancia teórica de cielo despejado (W/m²).")
+    wind_u: List[Optional[float]] = Field(default_factory=list, description="Componente zonal del viento (km/h).")
+    wind_v: List[Optional[float]] = Field(default_factory=list, description="Componente meridional del viento (km/h).")
+    sunrise_epoch: Optional[int] = None
+    sunset_epoch: Optional[int] = None
+    solar_altitude: Optional[float] = None
+    solar_altitude_max: Optional[float] = None
+    is_nighttime: Optional[bool] = None
+    theta_e_interval_minutes: int = 0
+    mixing_ratio_interval_minutes: int = 0
+    pressure_interval_minutes: int = 180
 
     lat: Optional[float] = Field(default=None, description="Latitud detectada del payload (fallback si current no la trajo).")
     lon: Optional[float] = Field(default=None, description="Longitud detectada del payload.")
@@ -238,29 +393,84 @@ class TodaySeries(BaseModel):
 
     @classmethod
     def from_provider_dict(cls, data: Dict[str, Any]) -> "TodaySeries":
-        """Construye el modelo desde el ``dict`` del servicio (mismo shape legacy)."""
-        epochs_raw = data.get("epochs", []) or []
-        # Aseguramos enteros; ignoramos puntos con epoch inválido.
-        epochs: List[int] = []
-        for value in epochs_raw:
-            try:
-                epoch_int = int(value)
-            except (TypeError, ValueError):
-                continue
-            if epoch_int > 0:
-                epochs.append(epoch_int)
+        """Construye el modelo desde el dict canónico del servicio."""
+        epochs, valid_indices = _valid_epoch_indices(data.get("epochs", []))
+
+        def aligned(field: str) -> List[Optional[float]]:
+            return _aligned_array_nan_to_none(data.get(field), valid_indices)
 
         return cls(
             epochs=epochs,
-            temps=_array_nan_to_none(data.get("temps")),
-            humidities=_array_nan_to_none(data.get("humidities")),
-            dewpts=_array_nan_to_none(data.get("dewpts")),
-            pressures=_array_nan_to_none(data.get("pressures")),
-            uv_indexes=_array_nan_to_none(data.get("uv_indexes")),
-            solar_radiations=_array_nan_to_none(data.get("solar_radiations")),
-            winds=_array_nan_to_none(data.get("winds")),
-            gusts=_array_nan_to_none(data.get("gusts")),
-            wind_dirs=_array_nan_to_none(data.get("wind_dirs")),
+            temps=aligned("temps"), humidities=aligned("humidities"),
+            dewpts=aligned("dewpts"), pressures=aligned("pressures"),
+            pressures_abs=aligned("pressures_abs"), uv_indexes=aligned("uv_indexes"),
+            solar_radiations=aligned("solar_radiations"), precips=aligned("precips"),
+            winds=aligned("winds"), gusts=aligned("gusts"), wind_dirs=aligned("wind_dirs"),
+            theta_e=aligned("theta_e"), mixing_ratios=aligned("mixing_ratios"),
+            theta_e_trends=aligned("theta_e_trends"), mixing_ratio_trends=aligned("mixing_ratio_trends"),
+            pressure_trends=aligned("pressure_trends"), vapor_pressures=aligned("vapor_pressures"),
+            saturation_pressures=aligned("saturation_pressures"),
+            theoretical_solar_radiations=aligned("theoretical_solar_radiations"),
+            wind_u=aligned("wind_u"), wind_v=aligned("wind_v"),
+            sunrise_epoch=data.get("sunrise_epoch"),
+            sunset_epoch=data.get("sunset_epoch"),
+            solar_altitude=_nan_to_none(data.get("solar_altitude")),
+            solar_altitude_max=_nan_to_none(data.get("solar_altitude_max")),
+            is_nighttime=data.get("is_nighttime"),
+            theta_e_interval_minutes=int(data.get("theta_e_interval_minutes", 0) or 0),
+            mixing_ratio_interval_minutes=int(data.get("mixing_ratio_interval_minutes", 0) or 0),
+            pressure_interval_minutes=int(data.get("pressure_interval_minutes", 180) or 180),
+            lat=_nan_to_none(data.get("lat")),
+            lon=_nan_to_none(data.get("lon")),
+            has_data=bool(data.get("has_data", False)),
+        )
+
+
+class RecentSeries(BaseModel):
+    """
+    Serie reciente (~días) a resolución sinóptica para tendencias.
+    Solo las magnitudes que usa la pestaña Tendencias: temperatura,
+    humedad y presión MSL. Arrays paralelas a ``epochs`` con ``null``
+    en huecos.
+    """
+
+    epochs: List[int] = Field(default_factory=list, description="Timestamps Unix UTC (s).")
+    temps: List[Optional[float]] = Field(default_factory=list, description="Temperatura (°C).")
+    humidities: List[Optional[float]] = Field(default_factory=list, description="Humedad relativa (%).")
+    dewpts: List[Optional[float]] = Field(
+        default_factory=list,
+        description="Punto de rocío (°C). Solo WU lo reporta nativo; el resto lista vacía.",
+    )
+    pressures: List[Optional[float]] = Field(default_factory=list, description="Presión MSL (hPa).")
+    pressures_abs: List[Optional[float]] = Field(default_factory=list, description="Presión absoluta (hPa).")
+    theta_e: List[Optional[float]] = Field(default_factory=list, description="Temperatura potencial equivalente (K).")
+    mixing_ratios: List[Optional[float]] = Field(default_factory=list, description="Razón de mezcla (g/kg).")
+    theta_e_trends: List[Optional[float]] = Field(default_factory=list, description="Derivada temporal de θe (K/h).")
+    mixing_ratio_trends: List[Optional[float]] = Field(default_factory=list, description="Derivada temporal de razón de mezcla ((g/kg)/h).")
+    pressure_trends: List[Optional[float]] = Field(default_factory=list, description="Derivada temporal de presión absoluta (hPa/h).")
+    theta_e_interval_minutes: int = 0
+    mixing_ratio_interval_minutes: int = 0
+    pressure_interval_minutes: int = 180
+    lat: Optional[float] = Field(default=None, description="Latitud de la estación.")
+    lon: Optional[float] = Field(default=None, description="Longitud de la estación.")
+    has_data: bool = Field(default=False, description="``True`` si hay al menos un punto.")
+
+    @classmethod
+    def from_provider_dict(cls, data: Dict[str, Any]) -> "RecentSeries":
+        epochs, valid_indices = _valid_epoch_indices(data.get("epochs", []))
+
+        def aligned(field: str) -> List[Optional[float]]:
+            return _aligned_array_nan_to_none(data.get(field), valid_indices)
+        return cls(
+            epochs=epochs,
+            temps=aligned("temps"), humidities=aligned("humidities"),
+            dewpts=aligned("dewpts"), pressures=aligned("pressures"),
+            pressures_abs=aligned("pressures_abs"), theta_e=aligned("theta_e"),
+            mixing_ratios=aligned("mixing_ratios"), theta_e_trends=aligned("theta_e_trends"),
+            mixing_ratio_trends=aligned("mixing_ratio_trends"), pressure_trends=aligned("pressure_trends"),
+            theta_e_interval_minutes=int(data.get("theta_e_interval_minutes", 0) or 0),
+            mixing_ratio_interval_minutes=int(data.get("mixing_ratio_interval_minutes", 0) or 0),
+            pressure_interval_minutes=int(data.get("pressure_interval_minutes", 180) or 180),
             lat=_nan_to_none(data.get("lat")),
             lon=_nan_to_none(data.get("lon")),
             has_data=bool(data.get("has_data", False)),
@@ -274,9 +484,7 @@ class TodaySeries(BaseModel):
 class ObservationDerivatives(BaseModel):
     """
     Magnitudes derivadas de una observación: termodinámica, presión,
-    radiación, ET0, tendencias. Espejo del dataclass
-    ``domain.observation_pipeline.ProcessedObservation`` pero como modelo
-    Pydantic (con ``Optional[float]`` en vez de NaN).
+    radiación, ET0 y tendencias en el contrato público de FastAPI.
 
     Unidades:
         - Altitud (``z``): m
@@ -322,6 +530,9 @@ class ObservationDerivatives(BaseModel):
     rho: Optional[float] = Field(default=None, description="Densidad del aire (kg/m³).")
     rho_v_gm3: Optional[float] = Field(default=None, description="Densidad de vapor (g/m³).")
     lcl: Optional[float] = Field(default=None, description="Altura del LCL (m).")
+    sound_speed_ms: Optional[float] = Field(default=None, description="Velocidad del sonido en aire húmedo (m/s).")
+    wet_bulb_risk: str = Field(default="", description="Categoría estable: potential, critical o extreme.")
+    wet_bulb_alert_level: str = Field(default="", description="Nivel de alerta estable: warning o danger.")
 
     # Radiación + ET0
     solar_rad: Optional[float] = Field(default=None, description="Irradiancia solar (W/m²).")
@@ -329,49 +540,115 @@ class ObservationDerivatives(BaseModel):
     et0: Optional[float] = Field(default=None, description="ET0 acumulada hoy (mm).")
     clarity: Optional[float] = Field(default=None, description="Índice de claridad del cielo (0..1).")
     balance: Optional[float] = Field(default=None, description="Balance hídrico hoy (mm).")
+    solar_energy_today_wh_m2: Optional[float] = Field(default=None, description="Energía solar integrada hoy (Wh/m²).")
+    erythemal_irradiance_mw_m2: Optional[float] = Field(default=None, description="Irradiancia eritemática efectiva (mW/m²).")
+    erythemal_dose_today_j_m2: Optional[float] = Field(default=None, description="Dosis eritemática acumulada hoy (J/m²).")
+    erythemal_dose_today_sed: Optional[float] = Field(default=None, description="Dosis eritemática acumulada hoy (SED).")
     has_radiation: bool = Field(description="True si solar_rad o uv tienen valor.")
     has_chart_data: bool = Field(description="True si la serie del día tiene datos.")
 
     @classmethod
-    def from_processed_obs(cls, processed: Any) -> "ObservationDerivatives":
-        """
-        Construye desde un ``ProcessedObservation`` (dataclass del dominio).
-        Convierte NaN a None en floats; el resto pasa tal cual.
-        """
+    def from_mapping(cls, processed: Mapping[str, Any]) -> "ObservationDerivatives":
+        """Construye el schema canónico desde el mapping del dominio."""
+        value = processed.get
         return cls(
-            z=float(processed.z),
-            p_abs=_nan_to_none(processed.p_abs),
-            p_msl=_nan_to_none(processed.p_msl),
-            p_abs_disp=str(processed.p_abs_disp),
-            p_msl_disp=str(processed.p_msl_disp),
-            dp3=_nan_to_none(processed.dp3),
-            rate_h=_nan_to_none(processed.rate_h),
-            p_label=str(processed.p_label),
-            p_arrow=str(processed.p_arrow),
-            inst_mm_h=_nan_to_none(processed.inst_mm_h),
-            r5_mm_h=_nan_to_none(processed.r5_mm_h),
-            r10_mm_h=_nan_to_none(processed.r10_mm_h),
-            inst_label=str(processed.inst_label),
-            e_sat=_nan_to_none(processed.e_sat),
-            e=_nan_to_none(processed.e),
-            Td_calc=_nan_to_none(processed.Td_calc),
-            Tw=_nan_to_none(processed.Tw),
-            q=_nan_to_none(processed.q),
-            q_gkg=_nan_to_none(processed.q_gkg),
-            theta=_nan_to_none(processed.theta),
-            Tv=_nan_to_none(processed.Tv),
-            Te=_nan_to_none(processed.Te),
-            rho=_nan_to_none(processed.rho),
-            rho_v_gm3=_nan_to_none(processed.rho_v_gm3),
-            lcl=_nan_to_none(processed.lcl),
-            solar_rad=_nan_to_none(processed.solar_rad),
-            uv=_nan_to_none(processed.uv),
-            et0=_nan_to_none(processed.et0),
-            clarity=_nan_to_none(processed.clarity),
-            balance=_nan_to_none(processed.balance),
-            has_radiation=bool(processed.has_radiation),
-            has_chart_data=bool(processed.has_chart_data),
+            z=float(value("z", 0.0)),
+            p_abs=_nan_to_none(value("p_abs")), p_msl=_nan_to_none(value("p_msl")),
+            p_abs_disp=str(value("p_abs_disp", "—")), p_msl_disp=str(value("p_msl_disp", "—")),
+            dp3=_nan_to_none(value("dp3")), rate_h=_nan_to_none(value("rate_h")),
+            p_label=str(value("p_label", "—")), p_arrow=str(value("p_arrow", "•")),
+            inst_mm_h=_nan_to_none(value("inst_mm_h")), r5_mm_h=_nan_to_none(value("r5_mm_h")),
+            r10_mm_h=_nan_to_none(value("r10_mm_h")), inst_label=str(value("inst_label", "Sin precipitación")),
+            e_sat=_nan_to_none(value("e_sat")), e=_nan_to_none(value("e")),
+            Td_calc=_nan_to_none(value("Td_calc")), Tw=_nan_to_none(value("Tw")),
+            q=_nan_to_none(value("q")), q_gkg=_nan_to_none(value("q_gkg")),
+            theta=_nan_to_none(value("theta")), Tv=_nan_to_none(value("Tv")),
+            Te=_nan_to_none(value("Te")), rho=_nan_to_none(value("rho")),
+            rho_v_gm3=_nan_to_none(value("rho_v_gm3")), lcl=_nan_to_none(value("lcl")),
+            sound_speed_ms=_nan_to_none(value("sound_speed_ms")),
+            wet_bulb_risk=str(value("wet_bulb_risk", "")),
+            wet_bulb_alert_level=str(value("wet_bulb_alert_level", "")),
+            solar_rad=_nan_to_none(value("solar_rad")), uv=_nan_to_none(value("uv")),
+            et0=_nan_to_none(value("et0")), clarity=_nan_to_none(value("clarity")),
+            balance=_nan_to_none(value("balance")),
+            solar_energy_today_wh_m2=_nan_to_none(value("solar_energy_today_wh_m2")),
+            erythemal_irradiance_mw_m2=_nan_to_none(value("erythemal_irradiance_mw_m2")),
+            erythemal_dose_today_j_m2=_nan_to_none(value("erythemal_dose_today_j_m2")),
+            erythemal_dose_today_sed=_nan_to_none(value("erythemal_dose_today_sed")),
+            has_radiation=bool(value("has_radiation", False)),
+            has_chart_data=bool(value("has_chart_data", False)),
         )
+
+
+class StationInfo(BaseModel):
+    """
+    Metadata de la estación desde el catálogo del backend (o desde la
+    propia observación para proveedores per-user sin catálogo, como WU
+    y WeatherLink).
+    """
+
+    provider: str = Field(description="Identificador del proveedor.")
+    network: str = Field(default="", description="Red interna del proveedor/agregador, si aplica.")
+    station_id: str = Field(description="ID de la estación.")
+    name: str = Field(default="", description="Nombre legible de la estación.")
+    lat: Optional[float] = Field(default=None)
+    lon: Optional[float] = Field(default=None)
+    elevation: Optional[float] = Field(default=None, description="Altitud (m).")
+    tz: Optional[str] = Field(default=None, description="Timezone IANA de la estación.")
+    country: Optional[str] = Field(default=None, description="Código de país del catálogo, si existe.")
+    region: Optional[str] = Field(default=None, description="Región administrativa del catálogo, si existe.")
+    locality: Optional[str] = Field(default=None, description="Localidad del catálogo, si existe.")
+    connectable: bool = Field(
+        default=True,
+        description="Indica si MeteoLabX puede conectar esta estación al backend de observaciones.",
+    )
+    has_historical: bool = Field(
+        default=False,
+        description="Indica si la estación tiene histórico disponible en la pestaña Histórico.",
+    )
+    is_historical_only: bool = Field(
+        default=False,
+        description="Indica si la estación está archivada: tiene histórico, pero no observación actual.",
+    )
+    sensors: Optional[Dict[str, bool]] = Field(
+        default=None,
+        description=(
+            "Sensores declarados en el catálogo (thermometer, hygrometer, "
+            "barometer, anemometer, wind_vane, rain_gauge, pyranometer, uv). "
+            "``null`` si el proveedor no publica inventario de sensores."
+        ),
+    )
+
+
+class DailyExtremes(BaseModel):
+    """
+    Extremos del día local calculados en el backend a partir de la
+    serie del día + la observación actual (mismo criterio que usaba el
+    frontend). ``precip_total`` es el acumulado diario del proveedor.
+    """
+
+    temp_max: Optional[float] = Field(default=None, description="Máxima del día (°C).")
+    temp_min: Optional[float] = Field(default=None, description="Mínima del día (°C).")
+    rh_max: Optional[float] = Field(default=None, description="HR máxima del día (%).")
+    rh_min: Optional[float] = Field(default=None, description="HR mínima del día (%).")
+    gust_max: Optional[float] = Field(default=None, description="Racha máxima del día (km/h).")
+    precip_total: Optional[float] = Field(default=None, description="Precipitación del día (mm).")
+
+
+class WarningItem(BaseModel):
+    """
+    Aviso estructurado del pipeline con código estable.
+
+    El backend emite ``{"code", "params"}`` (códigos en
+    ``domain.observation_warnings``) en vez de texto libre; el frontend
+    traduce vía i18n (clave ``warnings.<code>``) usando ``params`` como
+    argumentos de ``str.format``.
+    """
+    code: str = Field(description="Código estable del aviso (p. ej. ``data_age``).")
+    params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parámetros para interpolar en el mensaje traducido.",
+    )
 
 
 class ProcessedCurrentObservationResponse(BaseModel):
@@ -389,17 +666,33 @@ class ProcessedCurrentObservationResponse(BaseModel):
     derivatives: ObservationDerivatives = Field(
         description="Magnitudes derivadas: presión, termodinámica, radiación, ET0, tendencias."
     )
-    warnings: List[str] = Field(
+    warnings: List[WarningItem] = Field(
         default_factory=list,
         description=(
-            "Avisos generados por el pipeline (p. ej. ``data_age`` cuando la "
-            "observación es demasiado antigua). Pensados como hint para "
-            "logs/UI; los códigos estables aún no están unificados."
+            "Avisos estructurados con código estable (``data_age``, "
+            "``missing_elevation``…). El frontend los traduce vía i18n."
+        ),
+    )
+    station: Optional[StationInfo] = Field(
+        default=None,
+        description="Metadata de la estación (catálogo backend + sensors).",
+    )
+    daily_extremes: Optional[DailyExtremes] = Field(
+        default=None,
+        description="Extremos del día calculados en el backend.",
+    )
+    series: Optional[TodaySeries] = Field(
+        default=None,
+        description=(
+            "Serie del día ya descargada por el pipeline. Incluirla aquí "
+            "hace de ``/processed`` el payload completo de dashboard: "
+            "observación + derivadas + extremos + serie + estación en "
+            "UNA petición."
         ),
     )
 
 
-class ProcessedCurrentObservationRequest(_ProviderStationRequest):
+class ProcessedCurrentObservationRequest(_ProviderStationRequest, _CalibrationRequestMixin):
     """
     Petición para ``POST /v1/observations/current/processed``.
 
@@ -423,5 +716,16 @@ class ProcessedCurrentObservationRequest(_ProviderStationRequest):
         description=(
             "Si la observación es más antigua, el pipeline incluye un "
             "warning. No bloquea la respuesta."
+        ),
+    )
+    station_elevation: Optional[float] = Field(
+        default=None,
+        ge=-500.0,
+        le=9000.0,
+        description=(
+            "Altitud introducida por el usuario (m). Si es > 0 SUSTITUYE "
+            "a la elevación que reporte el proveedor — misma prioridad "
+            "usuario > API que el frontend legacy. Crítica para la "
+            "presión absoluta y la termodinámica (θ, ρ, q…)."
         ),
     )

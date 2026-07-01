@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse
 from server import __version__
 from server.config import Settings, get_settings
 from server.dependencies.http import http_client_lifespan
-from server.routers import health, observations
+from server.routers import climo, health, observations, ranking, stations
 from server.schemas.errors import ProviderError
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,9 @@ def create_app() -> FastAPI:
             "ProviderError: code=%s provider=%s status=%s detail=%s",
             exc.error_code, exc.provider, exc.status_code, exc.detail,
         )
+        from server.services import metrics
+
+        metrics.record_error(exc.provider, exc.error_code, exc.detail)
         return JSONResponse(
             status_code=exc.status_code,
             content=exc.to_response().model_dump(),
@@ -99,6 +102,9 @@ def create_app() -> FastAPI:
     api_prefix = f"/{settings.api_version}"
     app.include_router(health.router, prefix=api_prefix)
     app.include_router(observations.router, prefix=api_prefix)
+    app.include_router(climo.router, prefix=api_prefix)
+    app.include_router(stations.router, prefix=api_prefix)
+    app.include_router(ranking.router, prefix=api_prefix)
 
     return app
 

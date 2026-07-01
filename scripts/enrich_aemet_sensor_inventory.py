@@ -26,14 +26,10 @@ if str(ROOT_DIR) not in sys.path:
 from data_files import AEMET_STATIONS_PATH
 
 BASE_URL = "https://opendata.aemet.es/opendata/api"
-DEFAULT_API_KEY = os.getenv(
-    "AEMET_API_KEY",
-    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZXRlb2xhYnhAZ21haWwuY29tIiwianRpIjoi"
-    "NTdkMzE1MjYtMTk4My00YzNiLTgzNjAtYTdkZWJmMmIxMDFhIiwiaXNzIjoiQUVNRVQi"
-    "LCJpYXQiOjE3NzAyNDQ1OTEsInVzZXJJZCI6IjU3ZDMxNTI2LTE5ODMtNGMzYi04MzYw"
-    "LWE3ZGViZjJiMTAxYSIsInJvbGUiOiIifQ"
-    ".GvliQHY3f94N691sU0ExhMHZxbTiGn2BCe-bIA22K8c",
-)
+DEFAULT_API_KEY = (
+    os.getenv("METEOLABX_AEMET_API_KEY", "")
+    or os.getenv("AEMET_API_KEY", "")
+).strip()
 TIMEOUT_SECONDS = 90
 
 SENSOR_FIELDS = {
@@ -43,7 +39,12 @@ SENSOR_FIELDS = {
     "anemometer": ("vv", "vmax", "vvu", "vmaxu"),
     "wind_vane": ("dv", "dmax", "dvu", "dmaxu"),
     "rain_gauge": ("prec",),
-    "pyranometer": ("inso",),
+    # AEMET no expone irradiancia (W/m²) en la red convencional. El único
+    # campo solar es ``inso`` (insolación = HORAS de sol), que no es un
+    # piranómetro y no alimenta la sección de radiación de la app. Por eso
+    # NO se mapea a "pyranometer": marcaría falsos positivos en el filtro
+    # del mapa (estaciones que al conectarse no muestran radiación).
+    "pyranometer": (),
     "uv": (),
 }
 

@@ -1,10 +1,11 @@
 import math
 
-from services import aemet, climograms
+from domain.parsing.aemet_climo import _aemet_daily_record_to_row
+from domain.parsing.wu_climo import normalize_wu_daily_payload
 
 
 def test_wu_daily_history_keeps_mean_wind_direction():
-    frame = climograms._normalize_wu_daily_payload(
+    frame = normalize_wu_daily_payload(
         {
             "observations": [
                 {
@@ -29,7 +30,7 @@ def test_wu_daily_history_keeps_mean_wind_direction():
 
 
 def test_aemet_daily_history_keeps_wind_direction_if_present():
-    row = aemet._aemet_daily_record_to_row(
+    row = _aemet_daily_record_to_row(
         {
             "fecha": "2026-05-20",
             "tmed": "20,0",

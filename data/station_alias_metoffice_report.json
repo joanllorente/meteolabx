@@ -1,0 +1,335 @@
+{
+  "summary": {
+    "provider": "METOFFICE",
+    "generated_at": "2026-06-23T21:23:31.709955+00:00",
+    "total_aliases": 8,
+    "counts": {
+      "observation_confirmed": 0,
+      "observation_conflict": 3,
+      "observation_error": 0,
+      "observation_inconclusive": 5,
+      "inventory_secure_unsampled": 0,
+      "unchecked": 0
+    },
+    "actionable": {
+      "safe_to_group": 0,
+      "block_grouping": 3,
+      "needs_more_evidence": 5,
+      "inventory_secure_candidates": 0
+    }
+  },
+  "buckets": {
+    "observation_confirmed": [],
+    "observation_conflict": [
+      {
+        "alias_pk": 655,
+        "method": "observation_conflict",
+        "confidence": 0.2,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGXE",
+          "name": "Leeming",
+          "latitude": 54.2969,
+          "longitude": -1.5331,
+          "elevation_m": 40.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "gcwuvh",
+          "name": "Leeming",
+          "latitude": 54.29718017578125,
+          "longitude": -1.5325927734375,
+          "elevation_m": 32.0,
+          "country": "GB",
+          "region": "yh"
+        },
+        "latest_check": {
+          "status": "conflict",
+          "checked_at": "2026-06-23T21:23:01.746807+00:00",
+          "matched_hours": 22,
+          "compared_values": 88,
+          "agreeing_values": 14,
+          "agreement_ratio": 0.159,
+          "temperature_agreement_ratio": 0.136,
+          "error": null
+        }
+      },
+      {
+        "alias_pk": 656,
+        "method": "observation_conflict",
+        "confidence": 0.2,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGPI",
+          "name": "Islay",
+          "latitude": 55.6819,
+          "longitude": -6.2567,
+          "elevation_m": 18.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "gcgsc8",
+          "name": "Islay: Port Ellen",
+          "latitude": 55.68145751953125,
+          "longitude": -6.2567138671875,
+          "elevation_m": 10.0,
+          "country": "GB",
+          "region": "st"
+        },
+        "latest_check": {
+          "status": "conflict",
+          "checked_at": "2026-06-23T21:23:01.879386+00:00",
+          "matched_hours": 22,
+          "compared_values": 88,
+          "agreeing_values": 11,
+          "agreement_ratio": 0.125,
+          "temperature_agreement_ratio": 0.091,
+          "error": null
+        }
+      },
+      {
+        "alias_pk": 657,
+        "method": "observation_conflict",
+        "confidence": 0.2,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGOP",
+          "name": "PEMBRY SANDS",
+          "latitude": 51.7167,
+          "longitude": -4.3667,
+          "elevation_m": 6.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "gchyhw",
+          "name": "Pembrey Sands",
+          "latitude": 51.71539306640625,
+          "longitude": -4.3670654296875,
+          "elevation_m": 5.0,
+          "country": "GB",
+          "region": "wl"
+        },
+        "latest_check": {
+          "status": "conflict",
+          "checked_at": "2026-06-23T21:23:01.486406+00:00",
+          "matched_hours": 22,
+          "compared_values": 88,
+          "agreeing_values": 8,
+          "agreement_ratio": 0.091,
+          "temperature_agreement_ratio": 0.136,
+          "error": null
+        }
+      }
+    ],
+    "observation_error": [],
+    "observation_inconclusive": [
+      {
+        "alias_pk": 651,
+        "method": "inventory_secure",
+        "confidence": 0.94446444892167,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGMH",
+          "name": "Manston",
+          "latitude": 51.3422,
+          "longitude": 1.3461,
+          "elevation_m": 55.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "u10und",
+          "name": "Manston",
+          "latitude": 51.34185791015625,
+          "longitude": 1.3458251953125,
+          "elevation_m": 52.0,
+          "country": "GB",
+          "region": "se"
+        },
+        "latest_check": {
+          "status": "inconclusive",
+          "checked_at": "2026-06-23T21:23:01.967916+00:00",
+          "matched_hours": 0,
+          "compared_values": 0,
+          "agreeing_values": 0,
+          "agreement_ratio": 0.0,
+          "temperature_agreement_ratio": 0.0,
+          "error": null
+        }
+      },
+      {
+        "alias_pk": 653,
+        "method": "inventory_secure",
+        "confidence": 0.9441456433971668,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGDR",
+          "name": "Culdrose",
+          "latitude": 50.0843,
+          "longitude": -5.2571,
+          "elevation_m": 82.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "gbukbm",
+          "name": "Culdrose",
+          "latitude": 50.08392333984375,
+          "longitude": -5.2569580078125,
+          "elevation_m": 76.0,
+          "country": "GB",
+          "region": "sw"
+        },
+        "latest_check": {
+          "status": "inconclusive",
+          "checked_at": "2026-06-23T21:23:01.494309+00:00",
+          "matched_hours": 22,
+          "compared_values": 88,
+          "agreeing_values": 27,
+          "agreement_ratio": 0.307,
+          "temperature_agreement_ratio": 0.455,
+          "error": null
+        }
+      },
+      {
+        "alias_pk": 654,
+        "method": "inventory_probable",
+        "confidence": 0.8276850513496046,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGDY",
+          "name": "Yeovilton",
+          "latitude": 51.0063,
+          "longitude": -2.6428,
+          "elevation_m": 23.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "gcn45v",
+          "name": "Yeovilton",
+          "latitude": 51.00677490234375,
+          "longitude": -2.6422119140625,
+          "elevation_m": 18.0,
+          "country": "GB",
+          "region": "sw"
+        },
+        "latest_check": {
+          "status": "inconclusive",
+          "checked_at": "2026-06-23T21:23:01.874714+00:00",
+          "matched_hours": 21,
+          "compared_values": 84,
+          "agreeing_values": 23,
+          "agreement_ratio": 0.274,
+          "temperature_agreement_ratio": 0.286,
+          "error": null
+        }
+      },
+      {
+        "alias_pk": 650,
+        "method": "inventory_probable",
+        "confidence": 0.8061386189326045,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGYM",
+          "name": "Marham",
+          "latitude": 52.6483,
+          "longitude": 0.567,
+          "elevation_m": 23.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "u127sb",
+          "name": "Marham",
+          "latitude": 52.64923095703125,
+          "longitude": 0.5657958984375,
+          "elevation_m": 22.0,
+          "country": "GB",
+          "region": "ee"
+        },
+        "latest_check": {
+          "status": "inconclusive",
+          "checked_at": "2026-06-23T21:23:01.725167+00:00",
+          "matched_hours": 22,
+          "compared_values": 88,
+          "agreeing_values": 31,
+          "agreement_ratio": 0.352,
+          "temperature_agreement_ratio": 0.455,
+          "error": null
+        }
+      },
+      {
+        "alias_pk": 652,
+        "method": "inventory_probable",
+        "confidence": 0.8042777843880042,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "GB__ASOS",
+          "id": "EGVN",
+          "name": "Brize Norton",
+          "latitude": 51.7585,
+          "longitude": -1.578,
+          "elevation_m": 88.0,
+          "country": "GB",
+          "region": null
+        },
+        "source": {
+          "provider": "METOFFICE",
+          "network": "",
+          "id": "gcnykn",
+          "name": "Brize Norton",
+          "latitude": 51.75933837890625,
+          "longitude": -1.5765380859375,
+          "elevation_m": 79.0,
+          "country": "GB",
+          "region": "se"
+        },
+        "latest_check": {
+          "status": "inconclusive",
+          "checked_at": "2026-06-23T21:23:01.620844+00:00",
+          "matched_hours": 22,
+          "compared_values": 88,
+          "agreeing_values": 25,
+          "agreement_ratio": 0.284,
+          "temperature_agreement_ratio": 0.318,
+          "error": null
+        }
+      }
+    ],
+    "inventory_secure_unsampled": [],
+    "unchecked": []
+  }
+}

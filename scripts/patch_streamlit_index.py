@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 import shutil
 import sys
+import json
 from pathlib import Path
 
 # Debe coincidir con PWA_ASSET_VERSION en meteolabx.py
@@ -48,17 +49,24 @@ PWA_ASSET_FILENAMES = (
     "icon-192-pwa.png",
     "icon-512-pwa.png",
     "manifest.json",
+    "robots.txt",
+    "sitemap.xml",
     "og-image.png",  # imagen para tarjetas sociales (Open Graph / Twitter)
 )
 
 # SEO / redes sociales. La descripción es lo que se lee bajo el título en
 # Google y en la tarjeta al compartir el enlace; edítala aquí.
-SITE_URL = "https://meteolabx.com"
+SITE_URL = "https://www.meteolabx.com"
 SITE_TITLE = "MeteoLabX — Panel meteorológico avanzado"
 SITE_DESCRIPTION = (
     "Observa y analiza en tiempo real datos de estaciones de múltiples redes "
     "(Weather Underground, AEMET, Meteocat, Met Office y más): gráficos, "
     "tendencias y diagramas termodinámicos."
+)
+SITE_NOSCRIPT = (
+    "MeteoLabX es un panel meteorológico avanzado para observar y analizar "
+    "en tiempo real datos de estaciones de AEMET, Meteocat, Met Office, "
+    "Weather Underground y más."
 )
 
 START_MARKER = "<!-- MLX-PWA-START -->"
@@ -68,8 +76,27 @@ END_MARKER = "<!-- MLX-PWA-END -->"
 def _build_block() -> str:
     v = ASSET_VERSION
     b = STATIC_BASE
+    json_ld = json.dumps(
+        {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "MeteoLabX",
+            "url": SITE_URL,
+            "description": SITE_DESCRIPTION,
+            "applicationCategory": "WeatherApplication",
+            "operatingSystem": "Web",
+            "inLanguage": "es-ES",
+            "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "EUR",
+            },
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     return f"""{START_MARKER}
-    <title>MeteoLabX</title>
+    <title>{SITE_TITLE}</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{b}/favicon-32x32.png?v={v}" />
     <link rel="icon" type="image/png" sizes="16x16" href="{b}/favicon-16x16.png?v={v}" />
     <link rel="shortcut icon" type="image/png" href="{b}/favicon.png?v={v}" />
@@ -82,7 +109,9 @@ def _build_block() -> str:
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MeteoLabX" />
+    <meta name="application-name" content="MeteoLabX" />
     <meta name="description" content="{SITE_DESCRIPTION}" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <link rel="canonical" href="{SITE_URL}/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="MeteoLabX" />
@@ -98,6 +127,7 @@ def _build_block() -> str:
     <meta name="twitter:title" content="{SITE_TITLE}" />
     <meta name="twitter:description" content="{SITE_DESCRIPTION}" />
     <meta name="twitter:image" content="{SITE_URL}/og-image.png?v={v}" />
+    <script type="application/ld+json">{json_ld}</script>
     {END_MARKER}"""
 
 
@@ -128,6 +158,14 @@ def patch(index_path: Path) -> bool:
     original = html
 
     block = _build_block()
+    html = re.sub(r'<html\s+lang="[^"]*"', '<html lang="es"', html, count=1)
+    html = re.sub(
+        r"<noscript>.*?</noscript>",
+        f"<noscript>{SITE_NOSCRIPT}</noscript>",
+        html,
+        count=1,
+        flags=re.DOTALL,
+    )
 
     # 1) Reemplazar bloque existente (idempotencia) o insertar antes de </head>.
     existing = re.compile(

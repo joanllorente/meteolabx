@@ -20,7 +20,6 @@ from domain.observation_pipeline import (
     LAST_UPDATE_TIME,
     PROVIDER_STATION_ALT,
     PROVIDER_STATION_ID,
-    ProcessedObservation,
     ProcessingContext,
     ProcessingResult,
     STATION_ELEVATION,
@@ -48,11 +47,11 @@ def test_pipeline_module_does_not_import_streamlit_or_fastapi() -> None:
     assert "from fastapi" not in source
 
 
-def test_normalize_chart_series_preserves_positive_precip_variant() -> None:
+def test_normalize_chart_series_accepts_only_canonical_precips() -> None:
     normalized = normalize_chart_series(
         {
             "epochs": [1, 2],
-            "precips": [0.0, 0.0],
+            "precips": [0.0, 0.4],
             "precip_accum_mm": [0.0, 0.0],
             "precip_step_mm": [0.0, 0.4],
             "has_data": True,
@@ -60,6 +59,27 @@ def test_normalize_chart_series_preserves_positive_precip_variant() -> None:
     )
 
     assert normalized["precips"] == [0.0, 0.4]
+
+
+def test_process_observation_fills_missing_wind_from_series() -> None:
+    series = {
+        "epochs": [1, 2, 3],
+        "winds": [float("nan"), 9.0, 11.0],
+        "gusts": [15.0, float("nan"), 21.0],
+        "wind_dirs": [float("nan"), 240.0, 260.0],
+        "has_data": True,
+    }
+    base = _fresh_base(
+        wind=float("nan"),
+        gust=float("nan"),
+        wind_dir_deg=float("nan"),
+    )
+
+    process_observation(base, ProcessingContext(provider_name="METEOCAT", series_override=series))
+
+    assert base["wind"] == pytest.approx(11.0)
+    assert base["gust"] == pytest.approx(21.0)
+    assert base["wind_dir_deg"] == pytest.approx(260.0)
 
 
 # =====================================================================
@@ -114,9 +134,6 @@ def _fresh_base(**overrides) -> dict:
         "solar_radiation": 800.0,
         "uv": 6.0,
         "precip_total": 0.4,
-        "station_code": "0076",
-        "station_name": "Barcelona",
-        "station_tz": "Europe/Madrid",
     }
     base.update(overrides)
     return base
@@ -128,7 +145,13 @@ def _fresh_base(**overrides) -> dict:
 
 def test_session_updates_include_lat_lon_elevation_and_provider_metadata() -> None:
     base = _fresh_base()
-    ctx = ProcessingContext(provider_name="AEMET", elevation_fallback=0.0)
+    ctx = ProcessingContext(
+        provider_name="AEMET",
+        elevation_fallback=0.0,
+        owner_station_id="0076",
+        station_name="Barcelona",
+        station_tz="Europe/Madrid",
+    )
 
     result = process_observation(base, ctx)
 
@@ -145,7 +168,7 @@ def test_session_updates_include_lat_lon_elevation_and_provider_metadata() -> No
 
 def test_session_updates_skip_nan_and_none_fields() -> None:
     """No queremos persistir NaN/None en session_state."""
-    base = _fresh_base(lat=float("nan"), lon=None, station_name="")
+    base = _fresh_base(lat=float("nan"), lon=None)
     ctx = ProcessingContext(provider_name="AEMET")
 
     su = process_observation(base, ctx).session_updates
@@ -165,7 +188,7 @@ def test_elevation_fallback_used_when_base_missing() -> None:
 
     result = process_observation(base, ctx)
 
-    assert result.processed.z == 345.0
+    assert result.derivatives["z"] == 345.0
     assert result.session_updates[STATION_ELEVATION] == 345.0
 
 
@@ -180,7 +203,8 @@ def test_old_data_produces_warning() -> None:
     result = process_observation(base, ctx)
 
     assert len(result.warnings) == 1
-    assert "AEMET" in result.warnings[0]
+    assert result.warnings[0]["code"] == "data_age"
+    assert result.warnings[0]["params"]["provider"] == "AEMET"
 
 
 def test_fresh_data_emits_no_warning() -> None:
@@ -190,38 +214,21 @@ def test_fresh_data_emits_no_warning() -> None:
     assert process_observation(base, ctx).warnings == []
 
 
-# =====================================================================
-# Pressure handling
-# =====================================================================
-
-def test_pressure_push_includes_p_abs_and_epoch_when_valid() -> None:
-    base = _fresh_base(p_abs_hpa=1010.0, epoch=12345678)
-    result = process_observation(base, ProcessingContext(provider_name="X"))
-
-    assert result.pressure_push == (1010.0, 12345678)
-
-
-def test_pressure_push_none_when_p_abs_missing() -> None:
-    base = _fresh_base(p_abs_hpa=float("nan"))
-    result = process_observation(base, ProcessingContext(provider_name="X"))
-    assert result.pressure_push is None
-
-
 def test_pressure_display_uses_wu_decimals_for_wu_provider() -> None:
     base = _fresh_base(p_abs_hpa=1010.7, p_hpa=1015.4)
     # provider_for_pressure="WU" → 0 decimales
     ctx = ProcessingContext(provider_name="WU", provider_for_pressure="WU")
     result = process_observation(base, ctx)
-    assert result.processed.p_abs_disp == "1011"
-    assert result.processed.p_msl_disp == "1015"
+    assert result.derivatives["p_abs_disp"] == "1011"
+    assert result.derivatives["p_msl_disp"] == "1015"
 
 
 def test_pressure_display_uses_one_decimal_for_non_wu() -> None:
     base = _fresh_base(p_abs_hpa=1010.7, p_hpa=1015.4)
     ctx = ProcessingContext(provider_name="AEMET", provider_for_pressure="AEMET")
     result = process_observation(base, ctx)
-    assert result.processed.p_abs_disp == "1010.7"
-    assert result.processed.p_msl_disp == "1015.4"
+    assert result.derivatives["p_abs_disp"] == "1010.7"
+    assert result.derivatives["p_msl_disp"] == "1015.4"
 
 
 # =====================================================================
@@ -239,8 +246,8 @@ def test_pressure_trend_from_base_pressure_3h_ago_when_no_series() -> None:
     ctx = ProcessingContext(provider_name="X")
     result = process_observation(base, ctx)
 
-    assert result.processed.dp3 == pytest.approx(5.0)
-    assert result.processed.p_arrow != "•"  # no es "indefinido"
+    assert result.derivatives["dp3"] == pytest.approx(5.0)
+    assert result.derivatives["p_arrow"] != "•"  # no es "indefinido"
 
 
 def test_pressure_trend_marks_stable_when_dp3_small() -> None:
@@ -252,8 +259,8 @@ def test_pressure_trend_marks_stable_when_dp3_small() -> None:
     )
     ctx = ProcessingContext(provider_name="X")
     result = process_observation(base, ctx)
-    assert result.processed.p_label == "Estable"
-    assert result.processed.p_arrow == "→"
+    assert result.derivatives["p_label"] == "Estable"
+    assert result.derivatives["p_arrow"] == "→"
 
 
 def test_pressure_trend_tolerates_nan_epoch_3h_ago() -> None:
@@ -267,8 +274,8 @@ def test_pressure_trend_tolerates_nan_epoch_3h_ago() -> None:
 
     result = process_observation(base, ctx)
 
-    assert math.isnan(result.processed.dp3)
-    assert result.processed.p_arrow == "•"
+    assert math.isnan(result.derivatives["dp3"])
+    assert result.derivatives["p_arrow"] == "•"
 
 
 # =====================================================================
@@ -281,19 +288,19 @@ def test_thermodynamics_computed_when_temp_and_humidity_present() -> None:
     result = process_observation(base, ctx)
 
     # Punto de rocío para 22°C, 65% RH ≈ 14.9°C
-    assert result.processed.Td_calc == pytest.approx(15.0, abs=0.5)
-    assert result.processed.e_sat > 0
-    assert result.processed.e > 0
+    assert result.derivatives["Td_calc"] == pytest.approx(15.0, abs=0.5)
+    assert result.derivatives["e_sat"] > 0
+    assert result.derivatives["e"] > 0
     # base mutado con Td calculado
-    assert base["Td"] == pytest.approx(result.processed.Td_calc)
+    assert base["Td"] == pytest.approx(result.derivatives["Td_calc"])
 
 
 def test_thermodynamics_all_nan_when_temp_missing() -> None:
     base = _fresh_base(Tc=float("nan"))
     ctx = ProcessingContext(provider_name="X")
     result = process_observation(base, ctx)
-    assert math.isnan(result.processed.Td_calc)
-    assert math.isnan(result.processed.e_sat)
+    assert math.isnan(result.derivatives["Td_calc"])
+    assert math.isnan(result.derivatives["e_sat"])
 
 
 def test_base_gets_feels_like_and_heat_index_calculated() -> None:
@@ -313,36 +320,63 @@ def test_base_gets_feels_like_and_heat_index_calculated() -> None:
 def test_has_radiation_true_when_solar_or_uv_present() -> None:
     base = _fresh_base(solar_radiation=500.0, uv=float("nan"))
     result = process_observation(base, ProcessingContext(provider_name="X"))
-    assert result.processed.has_radiation is True
+    assert result.derivatives["has_radiation"] is True
 
 
 def test_has_radiation_false_when_both_missing() -> None:
     base = _fresh_base(solar_radiation=float("nan"), uv=float("nan"))
     result = process_observation(base, ProcessingContext(provider_name="X"))
-    assert result.processed.has_radiation is False
-    assert math.isnan(result.processed.clarity)
+    assert result.derivatives["has_radiation"] is False
+    assert math.isnan(result.derivatives["clarity"])
 
 
 # =====================================================================
 # Series del chart
 # =====================================================================
 
-def test_chart_series_uses_base_underscore_series_by_default() -> None:
-    base = _fresh_base(_series={
+def test_chart_series_uses_explicit_canonical_series() -> None:
+    base = _fresh_base()
+    series = {
         "epochs": [100, 200, 300],
         "temps": [20.0, 21.0, 22.0],
         "has_data": True,
-    })
-    ctx = ProcessingContext(provider_name="X", owner_station_id="STATION_ABC")
+    }
+    ctx = ProcessingContext(provider_name="X", series_override=series, owner_station_id="STATION_ABC")
     result = process_observation(base, ctx)
 
-    assert result.processed.has_chart_data is True
+    assert result.derivatives["has_chart_data"] is True
     assert result.chart_series["epochs"] == [100, 200, 300]
     assert result.chart_series_owner == ("X", "STATION_ABC")
 
 
+def test_radiation_and_ui_derivatives_are_computed_in_pipeline() -> None:
+    epoch = 1_718_016_600
+    base = _fresh_base(epoch=epoch, Tc=36.0, RH=80.0, uv=4.0, solar_radiation=300.0)
+    series = {
+        "epochs": [epoch - 600, epoch],
+        "temps": [35.0, 36.0],
+        "humidities": [80.0, 80.0],
+        "pressures_abs": [1010.0, 1010.0],
+        "solar_radiations": [100.0, 300.0],
+        "uv_indexes": [2.0, 4.0],
+        "has_data": True,
+    }
+    result = process_observation(
+        base,
+        ProcessingContext(provider_name="X", series_override=series, sun_tz_name="UTC"),
+    )
+    derivatives = result.derivatives
+
+    assert derivatives["sound_speed_ms"] > 340.0
+    assert derivatives["wet_bulb_risk"] in {"potential", "critical", "extreme"}
+    assert derivatives["solar_energy_today_wh_m2"] == pytest.approx(33.333333, rel=1e-5)
+    assert derivatives["erythemal_irradiance_mw_m2"] == pytest.approx(100.0)
+    assert derivatives["erythemal_dose_today_j_m2"] == pytest.approx(90.0)
+    assert derivatives["erythemal_dose_today_sed"] == pytest.approx(0.9)
+
+
 def test_chart_series_override_takes_precedence() -> None:
-    base = _fresh_base(_series={"epochs": [1], "temps": [10.0], "has_data": True})
+    base = _fresh_base()
     override = {"epochs": [99], "temps": [42.0], "has_data": True}
     ctx = ProcessingContext(provider_name="X", series_override=override,
                             owner_station_id="STATION_OWNER")
@@ -353,8 +387,12 @@ def test_chart_series_override_takes_precedence() -> None:
 
 
 def test_chart_series_owner_none_when_no_owner_station_id() -> None:
-    base = _fresh_base(_series={"epochs": [100], "temps": [20.0], "has_data": True})
-    ctx = ProcessingContext(provider_name="X", owner_station_id="")
+    base = _fresh_base()
+    ctx = ProcessingContext(
+        provider_name="X",
+        series_override={"epochs": [100], "temps": [20.0], "has_data": True},
+        owner_station_id="",
+    )
     result = process_observation(base, ctx)
     assert result.chart_series_owner is None
 
@@ -386,19 +424,20 @@ def test_trend_hourly_action_set_when_series_7d_has_data() -> None:
 # Smoke test: shape completo
 # =====================================================================
 
-def test_processed_observation_has_all_legacy_fields() -> None:
-    """
-    Confirma que el dataclass tiene los mismos 32 campos que la antigua
-    ProcessedData, para que el ``_unpack_processed`` legacy no rompa.
-    """
+def test_pipeline_returns_complete_canonical_derivatives_block() -> None:
     expected_fields = {
         "z", "p_abs", "p_msl", "p_abs_disp", "p_msl_disp",
         "dp3", "rate_h", "p_label", "p_arrow",
         "inst_mm_h", "r5_mm_h", "r10_mm_h", "inst_label",
         "e_sat", "e", "Td_calc", "Tw", "q", "q_gkg",
         "theta", "Tv", "Te", "rho", "rho_v_gm3", "lcl",
+        "sound_speed_ms", "wet_bulb_risk", "wet_bulb_alert_level",
         "solar_rad", "uv", "et0", "clarity", "balance",
+        "solar_energy_today_wh_m2", "erythemal_irradiance_mw_m2",
+        "erythemal_dose_today_j_m2", "erythemal_dose_today_sed",
         "has_radiation", "has_chart_data",
     }
-    actual_fields = set(ProcessedObservation.__dataclass_fields__.keys())
+    actual_fields = set(
+        process_observation(_fresh_base(), ProcessingContext(provider_name="X")).derivatives
+    )
     assert actual_fields == expected_fields

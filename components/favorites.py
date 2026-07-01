@@ -292,7 +292,7 @@ def render_favorites_bar(*, t, dark: bool) -> None:
     )
     active_key = _current_favorite_key()
 
-    with st.expander(t("favorites.title"), expanded=True):
+    with st.expander(t("favorites.title"), expanded=False):
         st.markdown("<span class='mlbx-favorites-title'></span>", unsafe_allow_html=True)
         columns = st.columns(max(len(favorites), 1), gap="small")
         for idx, favorite in enumerate(favorites):

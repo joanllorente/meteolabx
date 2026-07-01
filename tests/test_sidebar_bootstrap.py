@@ -199,6 +199,56 @@ def test_sidebar_ignores_stale_wu_toggle_callback_during_bootstrap(monkeypatch):
     assert "sidebar.autoconnect.disabled" not in fake_sidebar.info_messages
 
 
+def test_sidebar_defers_saved_autoconnect_when_ranking_click_is_pending(monkeypatch):
+    session_state = {
+        "_sidebar_inputs_initialized": True,
+        "_mlx_local_storage_snapshot_ready": True,
+        "_mlx_local_storage_snapshot": {
+            LS_STATION: "ILHOSP26",
+            LS_APIKEY: "secret-key",
+            LS_Z: "39",
+            LS_AUTOCONNECT: "1",
+            LS_AUTOCONNECT_TARGET: (
+                '{"kind":"WU","station":"ILHOSP26","api_key":"secret-key","z":"39"}'
+            ),
+        },
+        "active_station": "",
+        "active_key": "",
+        "active_z": "",
+        "connected": False,
+        AUTOCONNECT_ATTEMPTED: False,
+    }
+    fake_sidebar = _SidebarStub(session_state)
+    fake_st = SimpleNamespace(
+        session_state=session_state,
+        query_params={"rank_connect": "AEMET~9434"},
+        sidebar=fake_sidebar,
+        button=lambda *args, **kwargs: False,
+        rerun=lambda: (_ for _ in ()).throw(RuntimeError("unexpected_rerun")),
+    )
+    monkeypatch.setattr(sidebar, "st", fake_st)
+    monkeypatch.setattr(sidebar, "sync_local_storage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sidebar, "consume_local_storage_writes", lambda: {})
+    monkeypatch.setattr(sidebar, "local_storage_snapshot_ready", lambda: True)
+    monkeypatch.setattr(sidebar, "flush_local_storage_writes", lambda *args, **kwargs: None)
+    monkeypatch.setattr(storage, "st", fake_st)
+    monkeypatch.setattr(storage, "_get_local_storage", lambda: object())
+    monkeypatch.setattr(storage, "get_stored_wu_station_calibration", lambda station_id: {})
+    monkeypatch.setattr(sidebar, "get_stored_unit_preferences", lambda: dict(DEFAULT_UNIT_PREFERENCES))
+    monkeypatch.setattr(sidebar, "init_language", lambda: "es")
+    monkeypatch.setattr(sidebar, "get_supported_languages", lambda: ["es"])
+    monkeypatch.setattr(sidebar, "get_language_label", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "set_language", lambda lang: lang)
+    monkeypatch.setattr(sidebar, "t", lambda key, **kwargs: key)
+
+    sidebar.render_sidebar()
+
+    assert session_state["connected"] is False
+    assert session_state[AUTOCONNECT_ATTEMPTED] is False
+    assert "connection_type" not in session_state
+    assert session_state["auto_connect_wu_device"] is True
+
+
 def test_sidebar_hydrates_empty_wu_widgets_from_runtime_connection(monkeypatch):
     session_state = {
         "_sidebar_inputs_initialized": True,
@@ -307,8 +357,6 @@ def test_sidebar_wu_forget_pending_disconnects_and_clears_runtime_caches(monkeyp
         "wu_cache_hourly7d": {"old": True},
         "chart_series": {"old": True},
         "trend_hourly_epochs": [1],
-        "p_hist": [1012],
-        "rain_hist": [0.0],
     }
     fake_sidebar = _SidebarStub(session_state)
 
@@ -348,8 +396,6 @@ def test_sidebar_wu_forget_pending_disconnects_and_clears_runtime_caches(monkeyp
         "wu_cache_hourly7d",
         "chart_series",
         "trend_hourly_epochs",
-        "p_hist",
-        "rain_hist",
     ):
         assert key not in session_state
 

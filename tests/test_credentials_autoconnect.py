@@ -274,6 +274,32 @@ def test_wu_calibrations_are_scoped_by_station_and_zero_removes_only_that_statio
     assert storage.get_stored_wu_station_calibration("IWU456") == {"barometer": -2}
 
 
+def test_wu_min_bound_calibration_artifact_is_cleared(
+    patch_streamlit,
+    fake_session_state,
+    monkeypatch,
+):
+    _patch_storage(monkeypatch, patch_streamlit)
+
+    artifact = {
+        "barometer": -20,
+        "wind_vane": -180,
+        "thermometer": -5,
+        "hygrometer": -20,
+        "anemometer": -20,
+        "rain_gauge": -20,
+    }
+    fake_session_state["_mlx_local_storage_snapshot_ready"] = True
+    fake_session_state["_mlx_local_storage_snapshot"] = {
+        LS_WU_CALIBRATIONS: json.dumps({"IWU123": artifact, "IWU456": {"barometer": -2}})
+    }
+
+    assert storage.get_stored_wu_station_calibration("IWU123") == {}
+    assert storage.get_stored_wu_station_calibration("IWU456") == {"barometer": -2}
+    pending = _pending_writes(fake_session_state)
+    assert json.loads(pending[LS_WU_CALIBRATIONS]) == {"IWU456": {"barometer": -2}}
+
+
 def test_provider_autoconnect_replaces_wu_target_without_deleting_saved_wu_credentials(
     patch_streamlit,
     fake_session_state,

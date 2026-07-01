@@ -1,10 +1,41 @@
 {
+  "warnings": {
+    "data_age": "⚠️ Datos de {provider} con {minutes} minutos de antigüedad. La estación puede no estar reportando.",
+    "missing_elevation": "⚠️ Falta el dato de altitud. La presión absoluta y la termodinámica se han calculado con altitud 0; introduce la altitud en el panel lateral para mayor precisión."
+  },
   "tabs": {
     "observation": "Observación",
     "trends": "Tendencias",
     "historical": "Histórico",
     "info": "Divulgación",
-    "map": "Mapa"
+    "map": "Mapa",
+    "ranking": "Ranking"
+  },
+  "ranking": {
+    "section_title": "Ranking de estaciones",
+    "intro": "Top 10 del día por temperatura máxima, mínima, racha de viento y lluvia.",
+    "updated": "Última actualización: {time} (hace {mins} min)",
+    "country_title": "Tu país: {country}",
+    "country_section": "Ranking por país",
+    "country_label": "País",
+    "exclude_antarctica": "Excluir la Antártida",
+    "global_title": "Global",
+    "no_country": "No se ha podido determinar tu país desde la ubicación. Usa el mapa para fijar tu posición.",
+    "country_empty": "Aún no hay datos de ranking para {provider} hoy.",
+    "global_empty": "Aún no hay datos de ranking disponibles.",
+    "providers_note": "Proveedores incluidos: {providers}.",
+    "countries": {
+      "ES": "España",
+      "FR": "Francia",
+      "IT": "Italia",
+      "NO": "Noruega"
+    },
+    "metrics": {
+      "tmax": "Temperatura máxima",
+      "tmin": "Temperatura mínima",
+      "gust": "Racha de viento",
+      "rain": "Lluvia"
+    }
   },
   "weatherlink": {
     "station_selector": {
@@ -36,7 +67,8 @@
     "altitude_short": "Alt",
     "latitude_short": "Lat",
     "longitude_short": "Lon",
-    "connect_prompt": "Conecta tu estación desde el panel lateral o explora estaciones cercanas."
+    "connect_prompt": "Conecta tu estación desde el panel lateral o explora estaciones cercanas.",
+    "manual_station": "ℹ️ Estación manual del NWS: reporta máximas y mínimas diarias una vez al día. No ofrece datos en tiempo real."
   },
   "favorites": {
     "title": "Favoritos",
@@ -55,6 +87,24 @@
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
     "improvements": [
+      "Migración completa y funcional al modo FastAPI.",
+      "Nueva pestaña Ranking, con rankings de temperatura, viento y precipitación por país y a escala global.",
+      "Nuevo proveedor IEM, que añade más de 100.000 estaciones de todo el mundo.",
+      "Rediseño completo de la pestaña Mapa.",
+      "Nuevo filtro por país en el mapa.",
+      "Nuevo filtro por sensores disponibles en el mapa.",
+      "Ahora se muestran como metadatos los sensores disponibles en cada estación.",
+      "Nuevo filtro para mostrar estaciones con histórico disponible en el mapa.",
+      "Histórico disponible para la red WeatherLink."
+    ],
+    "fixes": [
+      "Corregido un error que impedía mostrar el valor del viento aunque el proveedor lo midiera.",
+      "Corregido un error en el conteo de noches tropicales y tórridas en la pestaña Histórico.",
+      "Corregido un problema que impedía calcular correctamente la tendencia completa de presión.",
+      "Corregido un error que hacía que los máximos y mínimos de temperatura de AEMET y MeteoGalicia no mostraran el valor correcto.",
+      "Corregido un error que hacía que la racha máxima de MeteoGalicia no mostrara el valor correcto."
+    ],
+    "previous_improvements": [
       "Se añaden dos nuevos proveedores de datos: Met Office y MeteoHub Italia.",
       "Se incorpora un sistema de favoritos para acceder rápidamente a cualquier estación.",
       "Se añade un nuevo gráfico de precipitación.",
@@ -64,7 +114,7 @@
       "Se reduce el tiempo de carga inicial de la web.",
       "Se añaden definiciones a los gráficos de la pestaña Tendencias."
     ],
-    "fixes": [
+    "previous_fixes": [
       "Se corrige un error que mostraba datos incorrectos en los mareógrafos de Puertos del Estado.",
       "Se corrigen problemas de caché al cambiar entre estaciones.",
       "Se corrige un error que impedía mostrar la serie sinóptica de la pestaña Tendencias, aunque el proveedor devolviera los datos.",
@@ -200,20 +250,6 @@
       "station_id": "ID: {station_id}",
       "altitude": "Alt: {altitude}m",
       "refresh_help": "Forzar actualización de datos (bypass caché)"
-    },
-    "demo": {
-      "title": "Modo Demo (Interno)",
-      "enable": "Activar datos de radiación demo",
-      "enable_help": "Muestra controles para simular datos de radiación solar y UV cuando tu estación no tiene estos sensores",
-      "intro": "**Simula datos de radiación**",
-      "solar_label": "Radiación solar (W/m²)",
-      "solar_help": "Valores típicos: Nublado 100-300, Parcialmente nublado 400-700, Despejado 800-1200",
-      "uv_label": "Índice UV",
-      "uv_help": "Valores típicos: Bajo 0-2, Moderado 3-5, Alto 6-7, Muy alto 8-10, Extremo 11+",
-      "quick_ref": "**Referencia rápida:**",
-      "cloudy": "• Nublado: Solar ~200, UV ~2",
-      "partial": "• Parcial: Solar ~500, UV ~5",
-      "clear": "• Despejado: Solar ~900, UV ~8"
     }
   },
   "historical": {
@@ -222,16 +258,18 @@
     "notes": {
       "nws_unavailable": "NWS no proporciona en este servicio los datos históricos y climatológicos necesarios para esta sección.",
       "euskalmet_unavailable": "Euskalmet no proporciona en este servicio los datos históricos y climatológicos necesarios para esta sección.",
-      "implemented_providers": "Por ahora Histórico está implementado con WU, Meteocat, AEMET, Meteo-France y MeteoGalicia. La capa de cálculo ya es común para extenderla al resto de proveedores.",
+      "implemented_providers": "Por ahora Histórico está implementado con WU, WeatherLink, IEM, Meteocat, AEMET, Meteo-France, MeteoGalicia y Frost. La capa de cálculo ya es común para extenderla al resto de proveedores.",
       "series_start": "Inicio de serie {provider} (inventario): {value}",
       "series_start_unavailable": "Inicio de serie {provider} (inventario): no disponible."
     },
     "errors": {
       "missing_wu_credentials": "⚠️ Faltan credenciales WU (Station ID/API Key) para consultar histórico.",
+      "missing_weatherlink_credentials": "⚠️ Faltan credenciales WeatherLink (Station ID/API Key/API Secret) para consultar histórico.",
       "missing_meteocat_station": "⚠️ Falta código de estación Meteocat para consultar histórico.",
       "missing_aemet_station": "⚠️ Falta código de estación AEMET para consultar histórico.",
       "missing_meteofrance_station": "⚠️ Falta código de estación Meteo-France para consultar histórico.",
       "missing_meteogalicia_station": "⚠️ Falta código de estación MeteoGalicia para consultar histórico.",
+      "missing_iem_station": "⚠️ Falta estación IEM con formato red|estación para consultar histórico.",
       "wu_unauthorized": "❌ API key inválida o sin permisos para histórico.",
       "wu_notfound": "❌ Station ID no encontrado en WU histórico.",
       "wu_ratelimit": "❌ Límite de peticiones alcanzado en WU histórico.",
@@ -263,7 +301,8 @@
     },
     "caption": {
       "period_summary": "Periodo: {period_range} · Bloques seleccionados: {blocks} · Días solicitados: {days}",
-      "records_received": "Registros válidos recibidos: {count} · {start} → {end}"
+      "records_received": "Registros válidos recibidos: {count} · {start} → {end}",
+      "weatherlink_monthly_only": "WeatherLink v2 sólo permite histórico en ventanas de 24 h; para evitar rate limits, consulta meses concretos."
     },
     "spinner": {
       "loading": "Consultando histórico de {provider}..."
@@ -642,9 +681,19 @@
     "coords_swapped": " Se corrigieron coordenadas invertidas.",
     "center_current": "Centro actual: {lat:.4f}, {lon:.4f}",
     "filters_title": "Filtros",
+    "providers_menu_title": "Proveedores",
+    "providers_menu_caption": "Activa proveedores para ver sus estaciones en el mapa.",
     "nearby_providers": "Proveedores cercanos",
-    "far_providers": "Añadir proveedores lejanos",
+    "far_providers": "Proveedores lejanos",
+        "sensor_filter": "Sensores",
+        "historical_only": "Mostrar solo estaciones con histórico disponible",
+        "hide_historical_only": "Ocultar estaciones históricas",
+        "hide_historical_only_help": "Las estaciones históricas ya no registran datos pero puede consultarse el histórico.",
+        "country_search": "Buscar país…",
+    "country_clear": "Limpiar filtro",
+    "sensor_filter_clear": "Limpiar",
     "filters_caption": "El mapa muestra primero los proveedores cercanos al centro actual. Los lejanos se añaden manualmente.",
+    "sensor_filter_caption": "El filtro de sensores no se aplica a NWS de momento.",
     "visible_stations": "Estaciones visibles",
     "providers": "Proveedores",
     "no_stations": "No hay estaciones disponibles para los filtros actuales.",
@@ -666,6 +715,16 @@
       "distance": "Distancia (km)",
       "lat": "Lat",
       "lon": "Lon"
+    },
+    "sensors": {
+      "thermometer": "Termómetro",
+      "hygrometer": "Higrómetro",
+      "barometer": "Barómetro",
+      "anemometer": "Anemómetro",
+      "wind_vane": "Veleta",
+      "rain_gauge": "Pluviómetro",
+      "pyranometer": "Piranómetro",
+      "uv": "UV"
     }
   },
   "station_selector": {

@@ -1,0 +1,951 @@
+{
+  "method": {
+    "maximum_distance_m": 150.0,
+    "secure": "shared identifier within 1 km, or <=50 m with compatible name/elevation",
+    "probable": "<=150 m with compatible name or elevation",
+    "ambiguous": "<=150 m without sufficient supporting metadata",
+    "warning": "No records are deleted automatically."
+  },
+  "iem_records_with_coordinates": 198441,
+  "matched_iem_records_any_provider": 15883,
+  "providers": {
+    "aemet": {
+      "inventory_rows": 821,
+      "stations_with_coordinates": 821,
+      "matched_source_stations": 201,
+      "secure": 182,
+      "probable": 19,
+      "ambiguous": 0,
+      "matched_iem_records": 201,
+      "matches_with_different_normalized_names": 71,
+      "source_stations_matching_multiple_iem_networks": 1,
+      "examples": [
+        {
+          "classification": "secure",
+          "distance_m": 19.2,
+          "name_similarity": 0.64,
+          "source": {
+            "id": "1387E",
+            "name": "A CORUÑA/ALVEDRO"
+          },
+          "iem": {
+            "id": "LECO",
+            "name": "La Coruna",
+            "network": "ES__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 1.7,
+          "name_similarity": 0.95,
+          "source": {
+            "id": "4560Y",
+            "name": "ALAJAR  CABEZO MOLINOS"
+          },
+          "iem": {
+            "id": "0-724-0-380",
+            "name": "ALAJAR  CABEZO MOLIN",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 16.1,
+          "name_similarity": 0.571,
+          "source": {
+            "id": "8025",
+            "name": "ALICANTE"
+          },
+          "iem": {
+            "id": "0-724-0-359",
+            "name": "ALICANTE/OBSERVATORI",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 2.2,
+          "name_similarity": 0.8,
+          "source": {
+            "id": "9208E",
+            "name": "ARAGÜÉS DEL PUERTO  DEPÓSITO"
+          },
+          "iem": {
+            "id": "0-724-0-95",
+            "name": "ARAGUES DEL PUERTO",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 1.1,
+          "name_similarity": 0.615,
+          "source": {
+            "id": "9263X",
+            "name": "ARANGUREN  ILUNDAIN"
+          },
+          "iem": {
+            "id": "0-724-0-89",
+            "name": "ILUNDAIN",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 5.1,
+          "name_similarity": 0.571,
+          "source": {
+            "id": "1212E",
+            "name": "ASTURIAS/AVILÉS"
+          },
+          "iem": {
+            "id": "LEAS",
+            "name": "Aviles",
+            "network": "ES__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 2.7,
+          "name_similarity": 0.974,
+          "source": {
+            "id": "4549Y",
+            "name": "AYAMONTE  ISLA CANELA"
+          },
+          "iem": {
+            "id": "0-724-0-381",
+            "name": "AYAMONTE  ISLA CANEL",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 5.0,
+          "name_similarity": 0.629,
+          "source": {
+            "id": "0201D",
+            "name": "BARCELONA  PORT OLÍMPIC"
+          },
+          "iem": {
+            "id": "0-724-0-180",
+            "name": "BARCELONA CMT",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 5.4,
+          "name_similarity": 0.732,
+          "source": {
+            "id": "9294E",
+            "name": "BARDENAS REALES  BASE AÉREA"
+          },
+          "iem": {
+            "id": "0-724-0-87",
+            "name": "BARDENAS REALES",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 4.0,
+          "name_similarity": 0.667,
+          "source": {
+            "id": "1002Y",
+            "name": "BAZTÁN  IRURITA"
+          },
+          "iem": {
+            "id": "0-724-0-30",
+            "name": "IRURITA",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 131.6,
+          "name_similarity": 0.545,
+          "source": {
+            "id": "2331",
+            "name": "BURGOS/VILLAFRÍA"
+          },
+          "iem": {
+            "id": "LEBG",
+            "name": "Burgos",
+            "network": "ES__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 4.6,
+          "name_similarity": 0.667,
+          "source": {
+            "id": "9394X",
+            "name": "CALATAYUD  DEPÓSITO"
+          },
+          "iem": {
+            "id": "0-724-0-156",
+            "name": "CALATAYUD",
+            "network": "WMO_BUFR_SRF"
+          }
+        }
+      ]
+    },
+    "euskalmet": {
+      "inventory_rows": 103,
+      "stations_with_coordinates": 103,
+      "matched_source_stations": 0,
+      "secure": 0,
+      "probable": 0,
+      "ambiguous": 0,
+      "matched_iem_records": 0,
+      "matches_with_different_normalized_names": 0,
+      "source_stations_matching_multiple_iem_networks": 0,
+      "examples": []
+    },
+    "frost": {
+      "inventory_rows": 3462,
+      "stations_with_coordinates": 3412,
+      "matched_source_stations": 276,
+      "secure": 228,
+      "probable": 47,
+      "ambiguous": 1,
+      "matched_iem_records": 264,
+      "matches_with_different_normalized_names": 169,
+      "source_stations_matching_multiple_iem_networks": 16,
+      "examples": [
+        {
+          "classification": "secure",
+          "distance_m": 0.0,
+          "name_similarity": 0.933,
+          "source": {
+            "id": "SN10800",
+            "name": "SØLENDET"
+          },
+          "iem": {
+            "id": "0-578-0-287",
+            "name": "SOLENDET",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 0.0,
+          "name_similarity": 0.621,
+          "source": {
+            "id": "SN11500",
+            "name": "ØSTRE TOTEN - APELSVOLL"
+          },
+          "iem": {
+            "id": "0-578-0-381",
+            "name": "APELSVOLL",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 0.0,
+          "name_similarity": 0.5,
+          "source": {
+            "id": "SN12320",
+            "name": "HAMAR - STAVSBERG"
+          },
+          "iem": {
+            "id": "0-578-0-385",
+            "name": "HAMAR",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 0.0,
+          "name_similarity": 0.421,
+          "source": {
+            "id": "SN12550",
+            "name": "KISE PÅ HEDMARK"
+          },
+          "iem": {
+            "id": "0-578-0-382",
+            "name": "KISE",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 0.0,
+          "name_similarity": 0.857,
+          "source": {
+            "id": "SN12680",
+            "name": "LILLEHAMMER - SÆTHERENGEN"
+          },
+          "iem": {
+            "id": "0-578-0-378",
+            "name": "LILLEHAMMER-SAETHERE",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 57.7,
+          "name_similarity": 1.0,
+          "source": {
+            "id": "SN13160",
+            "name": "KVITFJELL"
+          },
+          "iem": {
+            "id": "0-578-0-375",
+            "name": "KVITFJELL",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 0.0,
+          "name_similarity": 0.947,
+          "source": {
+            "id": "SN15270",
+            "name": "JUVVASSHØE"
+          },
+          "iem": {
+            "id": "0-578-0-362",
+            "name": "JUVVASSHOE",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 5.6,
+          "name_similarity": 0.522,
+          "source": {
+            "id": "SN16560",
+            "name": "DOMBÅS - NORDIGARD"
+          },
+          "iem": {
+            "id": "0-578-0-233",
+            "name": "DOMBAAS",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 39.5,
+          "name_similarity": 0.786,
+          "source": {
+            "id": "SN17000",
+            "name": "STRØMTANGEN FYR"
+          },
+          "iem": {
+            "id": "0-578-0-495",
+            "name": "STROMTANGEN LH",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 12.1,
+          "name_similarity": 0.5,
+          "source": {
+            "id": "SN17853",
+            "name": "ÅS NIBIO"
+          },
+          "iem": {
+            "id": "0-578-0-463",
+            "name": "AS",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 15.9,
+          "name_similarity": 0.5,
+          "source": {
+            "id": "SN17854",
+            "name": "ÅS METEOBOT"
+          },
+          "iem": {
+            "id": "0-578-0-463",
+            "name": "AS",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 14.3,
+          "name_similarity": 0.941,
+          "source": {
+            "id": "SN18500",
+            "name": "BJØRNHOLT"
+          },
+          "iem": {
+            "id": "0-578-0-489",
+            "name": "BJORNHOLT",
+            "network": "WMO_BUFR_SRF"
+          }
+        }
+      ]
+    },
+    "meteocat": {
+      "inventory_rows": 189,
+      "stations_with_coordinates": 189,
+      "matched_source_stations": 0,
+      "secure": 0,
+      "probable": 0,
+      "ambiguous": 0,
+      "matched_iem_records": 0,
+      "matches_with_different_normalized_names": 0,
+      "source_stations_matching_multiple_iem_networks": 0,
+      "examples": []
+    },
+    "meteofrance": {
+      "inventory_rows": 2148,
+      "stations_with_coordinates": 2148,
+      "matched_source_stations": 169,
+      "secure": 161,
+      "probable": 8,
+      "ambiguous": 0,
+      "matched_iem_records": 214,
+      "matches_with_different_normalized_names": 16,
+      "source_stations_matching_multiple_iem_networks": 46,
+      "examples": [
+        {
+          "classification": "secure",
+          "distance_m": 3.7,
+          "name_similarity": 0.556,
+          "source": {
+            "id": "12254001",
+            "name": "RODEZ-AVEYRON"
+          },
+          "iem": {
+            "id": "LFCR",
+            "name": "Rodez",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 148.3,
+          "name_similarity": 0.529,
+          "source": {
+            "id": "16078001",
+            "name": "ANGOULEME - BRIE - CHAMPNIERS"
+          },
+          "iem": {
+            "id": "LFBU",
+            "name": "Angouleme",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 12.3,
+          "name_similarity": 0.688,
+          "source": {
+            "id": "17300009",
+            "name": "LA ROCHELLE-ILE DE RE"
+          },
+          "iem": {
+            "id": "LFBH",
+            "name": "La Rochelle",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 12.2,
+          "name_similarity": 0.75,
+          "source": {
+            "id": "22372001",
+            "name": "ST BRIEUC"
+          },
+          "iem": {
+            "id": "LFRT",
+            "name": "St.-brieuc Armor",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 2.4,
+          "name_similarity": 0.667,
+          "source": {
+            "id": "27347001",
+            "name": "EVREUX-HUEST"
+          },
+          "iem": {
+            "id": "LFOE",
+            "name": "Evreux",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 14.8,
+          "name_similarity": 0.5,
+          "source": {
+            "id": "40088001",
+            "name": "DAX"
+          },
+          "iem": {
+            "id": "LFBY",
+            "name": "DAX SEYRESSE",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 3.7,
+          "name_similarity": 0.69,
+          "source": {
+            "id": "41097001",
+            "name": "ROMORANTIN"
+          },
+          "iem": {
+            "id": "LFYR",
+            "name": "ROMORANTIN/PRUNIERS",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 4.5,
+          "name_similarity": 0.421,
+          "source": {
+            "id": "47091001",
+            "name": "AGEN-LA GARENNE"
+          },
+          "iem": {
+            "id": "LFBA",
+            "name": "Agen",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 14.8,
+          "name_similarity": 0.625,
+          "source": {
+            "id": "54405001",
+            "name": "NANCY-OCHEY"
+          },
+          "iem": {
+            "id": "LFSO",
+            "name": "Nancy",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 4.4,
+          "name_similarity": 0.69,
+          "source": {
+            "id": "57251001",
+            "name": "AEROPORT METZ-NANCY-LORRAINE"
+          },
+          "iem": {
+            "id": "0-250-0-93",
+            "name": "AEROPORT METZ-NANCY-",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 9.2,
+          "name_similarity": 0.667,
+          "source": {
+            "id": "64024001",
+            "name": "BIARRITZ-PAYS-BASQUE"
+          },
+          "iem": {
+            "id": "LFBZ",
+            "name": "Biarritz-bayonne",
+            "network": "FR__ASOS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 0.0,
+          "name_similarity": 0.93,
+          "source": {
+            "id": "65344001",
+            "name": "TARBES-LOURDES-PYRENEES"
+          },
+          "iem": {
+            "id": "0-250-0-621",
+            "name": "TARBES-LOURDES-PYREN",
+            "network": "WMO_BUFR_SRF"
+          }
+        }
+      ]
+    },
+    "meteogalicia": {
+      "inventory_rows": 166,
+      "stations_with_coordinates": 166,
+      "matched_source_stations": 0,
+      "secure": 0,
+      "probable": 0,
+      "ambiguous": 0,
+      "matched_iem_records": 0,
+      "matches_with_different_normalized_names": 0,
+      "source_stations_matching_multiple_iem_networks": 0,
+      "examples": []
+    },
+    "meteohub_it": {
+      "inventory_rows": 4213,
+      "stations_with_coordinates": 4213,
+      "matched_source_stations": 2,
+      "secure": 1,
+      "probable": 1,
+      "ambiguous": 0,
+      "matched_iem_records": 4,
+      "matches_with_different_normalized_names": 2,
+      "source_stations_matching_multiple_iem_networks": 2,
+      "examples": [
+        {
+          "classification": "secure",
+          "distance_m": 34.9,
+          "name_similarity": 0.71,
+          "source": {
+            "id": "OPEN-TRENTINO|46.29792|11.78712|T0103-SM-PASSO-ROLLE",
+            "name": "T0103 - SM Passo Rolle"
+          },
+          "iem": {
+            "id": "0-380-0-21",
+            "name": "PASSO ROLLE",
+            "network": "WMO_BUFR_SRF"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 110.5,
+          "name_similarity": 0.769,
+          "source": {
+            "id": "SIR-TOSCANA|42.38739|11.16853|ARGENTARIO",
+            "name": "Argentario"
+          },
+          "iem": {
+            "id": "LIQO",
+            "name": "MOUNT ARGENTARIO",
+            "network": "IT__ASOS"
+          }
+        }
+      ]
+    },
+    "metoffice": {
+      "inventory_rows": 136,
+      "stations_with_coordinates": 136,
+      "matched_source_stations": 8,
+      "secure": 0,
+      "probable": 8,
+      "ambiguous": 0,
+      "matched_iem_records": 9,
+      "matches_with_different_normalized_names": 8,
+      "source_stations_matching_multiple_iem_networks": 1,
+      "examples": [
+        {
+          "classification": "probable",
+          "distance_m": 131.6,
+          "name_similarity": 0.154,
+          "source": {
+            "id": "U127SB",
+            "name": "Norfolk"
+          },
+          "iem": {
+            "id": "EGYM",
+            "name": "Marham",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 42.6,
+          "name_similarity": 0.364,
+          "source": {
+            "id": "U10UND",
+            "name": "Kent"
+          },
+          "iem": {
+            "id": "EGMH",
+            "name": "Manston",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 137.2,
+          "name_similarity": 0.174,
+          "source": {
+            "id": "GCNYKN",
+            "name": "Oxfordshire"
+          },
+          "iem": {
+            "id": "EGVN",
+            "name": "Brize Norton",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 43.1,
+          "name_similarity": 0.25,
+          "source": {
+            "id": "GBUKBM",
+            "name": "Cornwall"
+          },
+          "iem": {
+            "id": "EGDR",
+            "name": "Culdrose",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 66.9,
+          "name_similarity": 0.235,
+          "source": {
+            "id": "GCN45V",
+            "name": "Somerset"
+          },
+          "iem": {
+            "id": "EGDY",
+            "name": "Yeovilton",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 45.3,
+          "name_similarity": 0.091,
+          "source": {
+            "id": "GCWUVH",
+            "name": "North Yorkshire"
+          },
+          "iem": {
+            "id": "EGXE",
+            "name": "Leeming",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 49.2,
+          "name_similarity": 0.2,
+          "source": {
+            "id": "GCGSC8",
+            "name": "Argyll and Bute"
+          },
+          "iem": {
+            "id": "EGPI",
+            "name": "Islay",
+            "network": "GB__ASOS"
+          }
+        },
+        {
+          "classification": "probable",
+          "distance_m": 147.5,
+          "name_similarity": 0.222,
+          "source": {
+            "id": "GCHYHW",
+            "name": "Carmarthenshire"
+          },
+          "iem": {
+            "id": "EGOP",
+            "name": "PEMBRY SANDS",
+            "network": "GB__ASOS"
+          }
+        }
+      ]
+    },
+    "nws": {
+      "inventory_rows": 35732,
+      "stations_with_coordinates": 35732,
+      "matched_source_stations": 12973,
+      "secure": 10498,
+      "probable": 2410,
+      "ambiguous": 65,
+      "matched_iem_records": 15191,
+      "matches_with_different_normalized_names": 10658,
+      "source_stations_matching_multiple_iem_networks": 1408,
+      "examples": [
+        {
+          "classification": "secure",
+          "distance_m": 17.4,
+          "name_similarity": 0.818,
+          "source": {
+            "id": "HPN29",
+            "name": "Rosemount"
+          },
+          "iem": {
+            "id": "ROMM5",
+            "name": "Rosemount 4SE",
+            "network": "MN_DCP"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 6.2,
+          "name_similarity": 0.571,
+          "source": {
+            "id": "MN052",
+            "name": "T.H.1 - Effie - MP 194"
+          },
+          "iem": {
+            "id": "MN052",
+            "name": "Effie MN-1 Mile Post 194",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 5.2,
+          "name_similarity": 0.526,
+          "source": {
+            "id": "MN019",
+            "name": "T.H.1 - Ely - MP 275"
+          },
+          "iem": {
+            "id": "MN019",
+            "name": "Ely MN-1 Mile Post 275",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 18.4,
+          "name_similarity": 0.524,
+          "source": {
+            "id": "MN064",
+            "name": "T.H.10 - Rice - MP 162"
+          },
+          "iem": {
+            "id": "MN064",
+            "name": "Rice US-10 Mile Post 162",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 4.1,
+          "name_similarity": 0.583,
+          "source": {
+            "id": "MN063",
+            "name": "T.H.10 - Verndale - MP 94"
+          },
+          "iem": {
+            "id": "MN063",
+            "name": "Verndale US-10 Mile Post 94",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 6.8,
+          "name_similarity": 0.577,
+          "source": {
+            "id": "MN026",
+            "name": "T.H.11 - Birchdale - MP 157"
+          },
+          "iem": {
+            "id": "MN026",
+            "name": "Brichdale MN-11 Mile Post 157",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 6.0,
+          "name_similarity": 0.205,
+          "source": {
+            "id": "MN024",
+            "name": "T.H.11 - Donaldson - MP 11"
+          },
+          "iem": {
+            "id": "MN024",
+            "name": "MN-7 Mile Post 11",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 11.8,
+          "name_similarity": 0.318,
+          "source": {
+            "id": "MN027",
+            "name": "T.H.11 - Int'l Falls - MP 200"
+          },
+          "iem": {
+            "id": "MN027",
+            "name": "MN-11 Mile Post 199",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 3.9,
+          "name_similarity": 0.419,
+          "source": {
+            "id": "MN090",
+            "name": "T.H.110 - Inver Grove Hts - MP 5"
+          },
+          "iem": {
+            "id": "MN090",
+            "name": "MN-110 and I-494 MN-10 Mile Post 5",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 2.7,
+          "name_similarity": 0.577,
+          "source": {
+            "id": "MN057",
+            "name": "T.H.171 - St. Vincent - MP 2"
+          },
+          "iem": {
+            "id": "MN057",
+            "name": "St. Vincent MN-171 Mile Post 2",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 4.5,
+          "name_similarity": 0.583,
+          "source": {
+            "id": "MN030",
+            "name": "T.H.19 - Hendricks - MP 2"
+          },
+          "iem": {
+            "id": "MN030",
+            "name": "Hendricks MN-19 Mile Post 2",
+            "network": "MN_RWIS"
+          }
+        },
+        {
+          "classification": "secure",
+          "distance_m": 3.4,
+          "name_similarity": 0.545,
+          "source": {
+            "id": "MN031",
+            "name": "T.H.19 - Morton - MP 78"
+          },
+          "iem": {
+            "id": "MN031",
+            "name": "Morton MN-19 Mile Post 78",
+            "network": "MN_RWIS"
+          }
+        }
+      ]
+    },
+    "poem": {
+      "inventory_rows": 56,
+      "stations_with_coordinates": 56,
+      "matched_source_stations": 0,
+      "secure": 0,
+      "probable": 0,
+      "ambiguous": 0,
+      "matched_iem_records": 0,
+      "matches_with_different_normalized_names": 0,
+      "source_stations_matching_multiple_iem_networks": 0,
+      "examples": []
+    }
+  }
+}

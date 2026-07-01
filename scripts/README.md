@@ -10,6 +10,67 @@ Incluye generadores manuales de inventarios y mapas locales:
 
 No se ejecutan al arrancar la app ni forman parte del runtime normal.
 
+## Catálogo SQLite unificado
+
+`build_stations_sqlite.py` importa los inventarios JSON de los proveedores y
+el inventario de IEM en `data/stations.sqlite`. Conserva cada registro original,
+crea una representación normalizada, separa las capacidades de sensores y
+construye un índice espacial RTree:
+
+```bash
+python3 scripts/build_stations_sqlite.py
+```
+
+FastAPI consulta esta base directamente. Las estaciones IEM se almacenan e
+indexan, pero quedan fuera de `connectable_stations` hasta disponer de su
+servicio de observaciones. La tabla `station_aliases` queda preparada para la
+depuración posterior de duplicados con evidencia, sin fusionarlos por ID o
+nombre solamente.
+
+`build_station_aliases.py` busca solapamientos entre IEM y los proveedores
+originales y guarda candidatos sin revisar en `station_aliases`. Las IDs cortas
+o numéricas no cuentan como evidencia de identidad; los identificadores WMO,
+ICAO, GHCN y NCEI sí conservan su namespace:
+
+```bash
+python3 scripts/build_station_aliases.py
+```
+
+El barrido también aplica la cobertura geográfica de cada proveedor. Para NWS
+manda la pertenencia a su inventario, ya que incluye estaciones fuera de EE.
+UU. continental. Las redes globales WMO/BUFR (`UN`) solo se aceptan junto a los
+catálogos territoriales originales.
+
+`validate_station_alias_observations.py` procesa de forma reanudable los alias
+probables y ambiguos. Compara por hora varias variables del proveedor original
+con `obhistory` de IEM y persiste cada intento en
+`station_alias_observation_checks`:
+
+```bash
+python3 scripts/validate_station_alias_observations.py --limit 10
+```
+
+Una coincidencia fuerte pasa a `observation_confirmed` y un desacuerdo fuerte
+a `observation_conflict`; ambos permanecen sin revisar y no fusionan registros.
+Por defecto no procesa `inventory_secure`; para muestrearlos o validarlos
+también, usa `--include-secure`.
+
+`export_station_alias_report.py` genera un informe JSON por proveedor con los
+alias confirmados, conflictos, inconclusos, errores y candidatos seguros de
+inventario aun sin muestreo observacional:
+
+```bash
+python3 scripts/export_station_alias_report.py --provider NWS
+```
+
+`apply_station_visibility_overrides.py` aplica decisiones de visibilidad sin
+borrar registros. Por ejemplo, oculta las copias IEM confirmadas como duplicado
+de FROST y apunta a la estación FROST preferida:
+
+```bash
+python3 scripts/apply_station_visibility_overrides.py --provider FROST
+```
+
 Met Office Weather DataHub Land Observations no publica un endpoint de catalogo
 de estaciones. `build_metoffice_inventory.py` reconstruye un inventario local
 barriendo una malla UK contra `/observation-land/1/nearest`, deduplicando

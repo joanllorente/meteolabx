@@ -34,3 +34,50 @@ def test_provider_is_near_center_matches_country_regions():
     assert map_tab.provider_is_near_center("METOFFICE", 51.5072, -0.1276) is True
     assert map_tab.provider_is_near_center("METEOHUB_IT", 41.9028, 12.4964) is True
     assert map_tab.provider_is_near_center("NWS", 41.3710, 2.1280) is False
+
+
+def test_iem_map_fallback_policy_excludes_official_countries_and_us():
+    for country in ("ES", "FR", "IT", "NO", "US"):
+        assert map_tab.country_uses_iem_map_fallback(country) is False
+
+    assert map_tab.country_uses_iem_map_fallback("GB") is True
+    assert map_tab.country_uses_iem_map_fallback("PT") is True
+
+
+def test_provider_country_filter_keeps_official_country_scope():
+    assert map_tab.provider_country_filter("AEMET", ["ES", "PT"]) == ["ES"]
+    assert map_tab.provider_country_filter("METEOFRANCE", ["ES", "FR"]) == ["FR"]
+    assert map_tab.provider_country_filter("IEM", ["ES", "PT"]) == ["ES", "PT"]
+
+
+def test_map_country_default_only_applies_before_filter_is_initialized():
+    assert map_tab.map_country_default_enabled("ES", ("ES",), False) is True
+    assert map_tab.map_country_default_enabled("ES", ("ES",), True) is False
+    assert map_tab.map_country_default_enabled("GB", ("ES",), False) is False
+
+
+def test_legacy_country_codes_have_human_display_names():
+    assert map_tab.country_display_name("AN") == "Antillas Neerlandesas"
+    assert map_tab.country_display_name("KA") == "Islas Carolinas (Palau/Micronesia)"
+    assert map_tab.country_display_name("RQ") == "Puerto Rico"
+    assert map_tab.country_display_name("TU") == "Turquía"
+    assert map_tab.country_display_name("TN") == "Túnez"
+
+
+def test_country_colors_are_distinct_and_rgba():
+    es_color = map_tab.country_color("ES")
+    fr_color = map_tab.country_color("FR")
+    tn_color = map_tab.country_color("TN")
+
+    assert es_color != fr_color
+    assert tn_color != [180, 180, 180, 190]
+    assert len(tn_color) == 4
+    assert all(0 <= channel <= 255 for channel in tn_color)
+
+
+def test_map_country_counts_fallback_uses_local_inventory():
+    counts = map_tab._fallback_map_country_counts(())
+
+    assert counts["ES"] > 0
+    assert counts["US"] > 0
+    assert len(counts) > 100

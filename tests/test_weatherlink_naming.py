@@ -1,5 +1,5 @@
 """
-Tests del helper ``_station_name`` de ``services.weatherlink``.
+Tests del helper ``_station_name`` de ``domain.parsing.weatherlink``.
 
 Cubre la cadena de fallbacks que MeteoLabX usa para mostrar un nombre
 amistoso de una estación WeatherLink. WeatherLink no es consistente:
@@ -9,8 +9,7 @@ algunas estaciones tienen ``station_name`` poblado, otras usan
 
 from __future__ import annotations
 
-from services import weatherlink
-from services.weatherlink import _station_name, normalize_weatherlink_stations
+from domain.parsing.weatherlink import _station_name, normalize_weatherlink_stations
 
 
 def test_station_name_uses_station_name_when_present() -> None:
@@ -80,20 +79,3 @@ def test_normalize_stations_picks_username_when_station_name_missing() -> None:
     stations = normalize_weatherlink_stations(payload)
     assert len(stations) == 1
     assert stations[0]["station_name"] == "meteo_roses"
-
-
-def test_fetch_weatherlink_stations_reports_unauthorized_credentials(monkeypatch) -> None:
-    def _raise_unauthorized(*args, **kwargs):
-        raise weatherlink.WeatherLinkError(
-            "unauthorized",
-            status_code=401,
-            message="invalid credentials",
-        )
-
-    monkeypatch.setattr(weatherlink, "_fetch_weatherlink_stations_payload", _raise_unauthorized)
-
-    result = weatherlink.fetch_weatherlink_stations("bad-key", "bad-secret")
-
-    assert result["ok"] is False
-    assert result["kind"] == "unauthorized"
-    assert result["stations"] == []

@@ -1,0 +1,8 @@
+[ui]
+hideTopBar = false
+
+[client]
+toolbarMode = "minimal"
+
+[server]
+enableStaticServing = true

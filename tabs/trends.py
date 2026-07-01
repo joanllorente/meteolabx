@@ -1,4 +1,3 @@
-import math
 import time
 from datetime import datetime, timedelta
 from html import escape
@@ -9,9 +8,6 @@ from utils.helpers import coerce_str
 from utils.provider_features import get_provider_feature
 from utils.series_state import series_from_state
 from utils.trends_pipeline import (
-    derive_mixing_ratio_series,
-    derive_theta_e_series,
-    extend_today_pressure_trend,
     load_synoptic_trends_source,
     prepare_today_dataset_from_series,
 )
@@ -33,26 +29,22 @@ def _local_naive_datetime_from_epoch(epoch: float, tz_name: str = "") -> datetim
     return datetime.fromtimestamp(float(epoch))
 
 
-def _prepare_wind_uv_frame(epochs, winds, dirs, *, grid_step_minutes: int, tz_name: str, is_nan):
+def _prepare_wind_uv_frame(epochs, u_components, v_components, *, grid_step_minutes: int, tz_name: str, is_nan):
     import pandas as pd
 
     uv_times = []
     u_vals = []
     v_vals = []
     for i, epoch in enumerate(list(epochs or [])):
-        if i >= len(winds or []) or i >= len(dirs or []):
+        if i >= len(u_components or []) or i >= len(v_components or []):
             continue
-        speed = winds[i]
-        direction_deg = dirs[i]
-        if is_nan(speed) or is_nan(direction_deg):
+        u_value = u_components[i]
+        v_value = v_components[i]
+        if is_nan(u_value) or is_nan(v_value):
             continue
-
-        theta = math.radians(float(direction_deg))
-        speed = float(speed)
-        # Convención meteorológica: u = -V sin(theta), v = -V cos(theta)
         uv_times.append(_local_naive_datetime_from_epoch(epoch, tz_name))
-        u_vals.append(-speed * math.sin(theta))
-        v_vals.append(-speed * math.cos(theta))
+        u_vals.append(float(u_value))
+        v_vals.append(float(v_value))
 
     if len(uv_times) < 3:
         return pd.DataFrame(columns=["dt", "u", "v"])
@@ -63,7 +55,7 @@ def _prepare_wind_uv_frame(epochs, winds, dirs, *, grid_step_minutes: int, tz_na
     return df_uv.groupby("dt", as_index=False).last()
 
 
-def _load_synoptic_trends_source(*, provider_id, hourly7d, infer_series_step_minutes, render_neutral_info_note, t, logger, is_nan, e_s, station_elevation, tz_name=""):
+def _load_synoptic_trends_source(*, provider_id, hourly7d, infer_series_step_minutes, render_neutral_info_note, t, logger, tz_name=""):
     provider_feature = get_provider_feature(provider_id)
     coverage_note_key = str(
         provider_feature.get("synoptic_coverage_note_key", "trends.notes.synoptic_insufficient_coverage")
@@ -82,9 +74,6 @@ def _load_synoptic_trends_source(*, provider_id, hourly7d, infer_series_step_min
         coverage_title=t("trends.notes.provider_coverage_title"),
         min_coverage_hours=min_coverage_hours,
         logger=logger,
-        is_nan=is_nan,
-        e_s=e_s,
-        station_elevation=station_elevation,
         tz_name=tz_name,
     )
 
@@ -95,9 +84,6 @@ def _load_today_trends_source(
     now_local,
     infer_series_step_minutes,
     get_provider_station_id,
-    get_aemet_service,
-    get_meteocat_service,
-    get_weatherlink_service,
     t,
     logger,
     session_state,
@@ -106,6 +92,29 @@ def _load_today_trends_source(
 ):
     provider_id = coerce_str(provider_id, upper=True)
     provider_feature = get_provider_feature(provider_id)
+    backend_today_lookback_providers = {
+        "WU",
+        "AEMET",
+        "METEOCAT",
+        "METEOGALICIA",
+        "METEOFRANCE",
+        "EUSKALMET",
+        "METOFFICE",
+        "NWS",
+        "FROST",
+        "POEM",
+        "METEOHUB_IT",
+        "IEM",
+        "WEATHERLINK",
+    }
+    try:
+        station_elevation = float(
+            session_state.get("station_elevation")
+            or session_state.get("active_z")
+            or 0.0
+        )
+    except (TypeError, ValueError):
+        station_elevation = 0.0
     local_chart_series = series_from_state(session_state, "chart", pressure_key="pressures_abs")
     local_prepared = None
     local_prepared_is_fresh = False
@@ -117,6 +126,13 @@ def _load_today_trends_source(
                 "temps": local_chart_series.get("temps", []),
                 "humidities": local_chart_series.get("humidities", []),
                 "chart_pressures": local_chart_series.get("pressures_abs", []),
+                "theta_e": local_chart_series.get("theta_e", []),
+                "mixing_ratios": local_chart_series.get("mixing_ratios", []),
+                "theta_e_trends": local_chart_series.get("theta_e_trends", []),
+                "mixing_ratio_trends": local_chart_series.get("mixing_ratio_trends", []),
+                "pressure_trends": local_chart_series.get("pressure_trends", []),
+                "wind_u": local_chart_series.get("wind_u", []),
+                "wind_v": local_chart_series.get("wind_v", []),
             },
             pressure_key="chart_pressures",
             now_local=now_local,
@@ -139,68 +155,54 @@ def _load_today_trends_source(
                     source_key,
                     minutes=local_prepared["interval_theta_e"],
                 )
-                if provider_id != "WEATHERLINK":
+                if provider_id not in backend_today_lookback_providers:
                     return local_prepared
 
-    provider_today_sources = {
-        "AEMET": {
-            "station_missing_log": "Tendencias AEMET Hoy: falta idema",
-            "fetcher": lambda station_id: get_aemet_service().fetch_aemet_today_series_with_lookback(
-                station_id,
-                hours_before_start=3,
-            ),
-            "pressure_key": "pressures",
-            "min_source_step": 10,
-            "empty_log": "Tendencias AEMET Hoy: sin serie con lookback",
-            "frame_empty_log": "Tendencias AEMET Hoy: DataFrame con lookback vacío",
-        },
-        "METEOCAT": {
-            "station_missing_log": "Tendencias METEOCAT Hoy: falta station_code",
-            "fetcher": lambda station_id: get_meteocat_service().fetch_meteocat_today_series_with_lookback(
-                station_id,
-                hours_before_start=3,
-            ),
-            "pressure_key": "pressures_abs",
-            "min_source_step": 5,
-            "empty_log": "Tendencias METEOCAT Hoy: sin serie con lookback",
-            "frame_empty_log": "Tendencias METEOCAT Hoy: DataFrame vacío",
-        },
-        "WEATHERLINK": {
-            "station_missing_log": "Tendencias WeatherLink Hoy: falta station_id",
-            "fetcher": lambda station_id: get_weatherlink_service().fetch_weatherlink_today_series_with_lookback(
-                station_id,
-                hours_before_start=3,
-            ),
-            "pressure_key": "pressures_abs",
-            "min_source_step": 5,
-            "empty_log": "Tendencias WeatherLink Hoy: sin histórico con lookback",
-            "frame_empty_log": "Tendencias WeatherLink Hoy: DataFrame vacío",
-        },
-    }
-    source_config = provider_today_sources.get(provider_id)
-    if source_config is not None:
+    if provider_id in backend_today_lookback_providers:
+        from utils.api_client import fetch_provider_today_series_via_api_strict
+
         station_id = get_provider_station_id(provider_id)
         if not station_id:
-            logger.warning(source_config["station_missing_log"])
+            logger.warning("Tendencias %s Hoy: falta station_id", provider_id)
             return local_prepared if local_prepared_is_fresh else None
+        credentials = {}
+        if provider_id == "WEATHERLINK":
+            credentials = {
+                "api_key": str(session_state.get("weatherlink_api_key", "") or ""),
+                "api_secret": str(session_state.get("weatherlink_api_secret", "") or ""),
+            }
+        elif provider_id == "WU":
+            credentials = {
+                "api_key": str(
+                    session_state.get("wu_connected_api_key", "")
+                    or session_state.get("active_key", "")
+                    or ""
+                ),
+            }
         try:
-            series_payload = source_config["fetcher"](station_id)
+            series_payload = fetch_provider_today_series_via_api_strict(
+                provider_id,
+                station_id,
+                lookback_hours=4,
+                station_elevation=station_elevation if station_elevation > 0 else None,
+                **credentials,
+            )
         except Exception as err:
             logger.warning(f"Tendencias {provider_id} Hoy: error obteniendo serie con lookback: {err}")
             return local_prepared if local_prepared_is_fresh else None
         if not series_payload.get("has_data", False):
-            logger.warning(source_config["empty_log"])
+            logger.warning("Tendencias %s Hoy: serie vacía", provider_id)
             return local_prepared if local_prepared_is_fresh else None
         prepared = _prepare_today_dataset_from_series(
             series_payload,
-            pressure_key=source_config["pressure_key"],
+            pressure_key="pressures_abs",
             now_local=now_local,
             infer_series_step_minutes=infer_series_step_minutes,
-            min_source_step=source_config["min_source_step"],
+            min_source_step=10 if provider_id == "AEMET" else 5,
             tz_name=tz_name,
         )
         if not prepared:
-            logger.warning(source_config["frame_empty_log"])
+            logger.warning("Tendencias %s Hoy: DataFrame vacío", provider_id)
             return local_prepared if local_prepared_is_fresh else None
         prepared["uv_series_override"] = series_payload
         prepared["data_source_label"] = t(
@@ -455,10 +457,6 @@ def render_trends_tab(ctx):
     pressure_unit_txt = ctx["pressure_unit_txt"]
     wind_unit_pref = ctx["wind_unit_pref"]
     wind_unit_txt = ctx["wind_unit_txt"]
-    _get_aemet_service = ctx["_get_aemet_service"]
-    _get_meteocat_service = ctx["_get_meteocat_service"]
-    _get_weatherlink_service = ctx["_get_weatherlink_service"]
-    _get_meteofrance_service = ctx["_get_meteofrance_service"]
     _render_neutral_info_note = ctx["_render_neutral_info_note"]
     _infer_series_step_minutes = ctx["_infer_series_step_minutes"]
     _fetch_trends_synoptic_series = ctx["_fetch_trends_synoptic_series"]
@@ -468,7 +466,6 @@ def render_trends_tab(ctx):
     convert_pressure = ctx["convert_pressure"]
     convert_wind = ctx["convert_wind"]
     is_nan = ctx["is_nan"]
-    e_s = ctx["e_s"]
     components = ctx["components"]
     # Definir colores según tema
     if dark:
@@ -487,15 +484,11 @@ def render_trends_tab(ctx):
     if not connected:
         st.info(t("trends.connect_prompt"))
     else:
-        # Las librerías pesadas (pandas/plotly/numpy y models.trends) se mantienen
+        # Las librerías pesadas (pandas/plotly/numpy) se mantienen
         # bajo demanda para aligerar el arranque cuando no se entra a esta tab.
         import pandas as pd
         import plotly.graph_objects as go
         import numpy as np
-        from models.trends import (
-            specific_humidity, equivalent_potential_temperature,
-            calculate_trend
-        )
 
         station_tz_name = str(
             st.session_state.get("provider_station_tz")
@@ -527,9 +520,6 @@ def render_trends_tab(ctx):
                 now_local=now_local,
                 infer_series_step_minutes=_infer_series_step_minutes,
                 get_provider_station_id=_get_provider_station_id,
-                get_aemet_service=_get_aemet_service,
-                get_meteocat_service=_get_meteocat_service,
-                get_weatherlink_service=_get_weatherlink_service,
                 t=t,
                 logger=logger,
                 session_state=st.session_state,
@@ -568,9 +558,6 @@ def render_trends_tab(ctx):
                     render_neutral_info_note=_render_neutral_info_note,
                     t=t,
                     logger=logger,
-                    is_nan=is_nan,
-                    e_s=e_s,
-                    station_elevation=st.session_state.get("station_elevation", 0),
                     tz_name=station_tz_name,
                 )
                 if synoptic_source is None:
@@ -661,11 +648,8 @@ def render_trends_tab(ctx):
                     )
 
             if has_humidity_series and has_pressure_for_theta_e:
-                theta_e_pressure_series = pd.to_numeric(df_trends.get("p"), errors="coerce").copy()
-                if not is_nan(theta_e_pressure_fallback):
-                    theta_e_pressure_series = theta_e_pressure_series.fillna(theta_e_pressure_fallback)
-                df_trends["theta_e_pressure"] = theta_e_pressure_series
-                df_trends["mixing_ratio_pressure"] = theta_e_pressure_series.copy()
+                # Las magnitudes y sus derivadas ya llegan calculadas por FastAPI.
+                pass
 
             if periodo == "today":
                 dtick_ms = 60 * 60 * 1000
@@ -681,11 +665,9 @@ def render_trends_tab(ctx):
             # --- GRÁFICO 1: Tendencia de θe ---
             if has_humidity_series and has_pressure_for_theta_e:
                 try:
-                    df_trends["theta_e"] = derive_theta_e_series(df_trends, equivalent_potential_temperature)
-                    trend_theta_e = calculate_trend(
-                        np.asarray(df_trends["theta_e"].values, dtype=np.float64),
-                        trend_times,
-                        interval_minutes=interval_theta_e,
+                    trend_theta_e = np.asarray(
+                        pd.to_numeric(df_trends.get("trend_theta_e"), errors="coerce"),
+                        dtype=np.float64,
                     )
                     trend_theta_e_display = np.asarray(
                         [
@@ -744,14 +726,9 @@ def render_trends_tab(ctx):
             # --- GRÁFICO 2: Tendencia de razón de mezcla ---
             if has_humidity_series and has_pressure_for_mixing_ratio:
                 try:
-                    from models.trends import vapor_pressure
-                    from models.thermodynamics import mixing_ratio
-
-                    df_trends["mixing_ratio"] = derive_mixing_ratio_series(df_trends, vapor_pressure, mixing_ratio)
-                    trend_mixing_ratio = calculate_trend(
-                        np.asarray(df_trends["mixing_ratio"].values, dtype=np.float64),
-                        trend_times,
-                        interval_minutes=interval_e,
+                    trend_mixing_ratio = np.asarray(
+                        pd.to_numeric(df_trends.get("trend_mixing_ratio"), errors="coerce"),
+                        dtype=np.float64,
                     )
                     trend_mixing_ratio_display = np.asarray(trend_mixing_ratio, dtype=np.float64)
 
@@ -805,12 +782,12 @@ def render_trends_tab(ctx):
                 try:
                     if isinstance(uv_series_override, dict) and uv_series_override.get("has_data"):
                         chart_epochs_uv = uv_series_override.get("epochs", [])
-                        chart_winds_uv = uv_series_override.get("winds", [])
-                        chart_dirs_uv = uv_series_override.get("wind_dirs", [])
+                        chart_winds_uv = uv_series_override.get("wind_u", [])
+                        chart_dirs_uv = uv_series_override.get("wind_v", [])
                     else:
                         chart_epochs_uv = st.session_state.get("chart_epochs", [])
-                        chart_winds_uv = st.session_state.get("chart_winds", [])
-                        chart_dirs_uv = st.session_state.get("chart_wind_dirs", [])
+                        chart_winds_uv = st.session_state.get("chart_wind_u", [])
+                        chart_dirs_uv = st.session_state.get("chart_wind_v", [])
 
                     df_uv = _prepare_wind_uv_frame(
                         chart_epochs_uv,
@@ -907,34 +884,10 @@ def render_trends_tab(ctx):
             if has_barometer_series:
                 try:
                     pressure_trend_times = trend_times
-                    pressure_trend_values = calculate_trend(
-                        np.asarray(df_trends["p"].values, dtype=np.float64),
-                        trend_times,
-                        interval_minutes=interval_p,
+                    pressure_trend_values = np.asarray(
+                        pd.to_numeric(df_trends.get("trend_pressure"), errors="coerce"),
+                        dtype=np.float64,
                     )
-
-                    if periodo == "today":
-                        wu_hourly7d_for_pressure = None
-                        if provider_id == "WU":
-                            try:
-                                wu_hourly7d_for_pressure, _ = _fetch_trends_synoptic_series(provider_id)
-                            except Exception as err:
-                                logger.warning(f"Tendencias WU Hoy: no se pudo ampliar presión con serie 7d: {err}")
-                        pressure_trend_times, pressure_trend_values = extend_today_pressure_trend(
-                            provider_id=provider_id,
-                            pressure_trend_times=pressure_trend_times,
-                            pressure_trend_values=pressure_trend_values,
-                            day_start=day_start,
-                            day_end=day_end,
-                            get_provider_station_id=_get_provider_station_id,
-                            get_meteofrance_service=_get_meteofrance_service,
-                            infer_series_step_minutes=_infer_series_step_minutes,
-                            wu_hourly7d=wu_hourly7d_for_pressure,
-                            base_pressure_times=trend_times,
-                            base_pressure_values=np.asarray(df_trends["p"].values, dtype=np.float64),
-                            station_elevation=st.session_state.get("station_elevation", 0),
-                            is_nan=is_nan,
-                        )
                     pressure_trend_display = np.asarray(
                         [
                             convert_pressure(value, pressure_unit_pref) if not np.isnan(value) else np.nan

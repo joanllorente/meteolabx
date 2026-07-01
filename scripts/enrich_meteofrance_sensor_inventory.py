@@ -26,7 +26,9 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from data_files import METEOFRANCE_STATIONS_PATH
-from services.meteofrance import METEOFRANCE_API_KEY
+METEOFRANCE_API_KEY = str(
+    os.getenv("METEOLABX_METEOFRANCE_API_KEY") or os.getenv("METEOFRANCE_API_KEY") or ""
+).strip()
 
 BASE_URL = os.getenv(
     "METEOFRANCE_BASE_URL",

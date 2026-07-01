@@ -22,6 +22,9 @@ Patrón:
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -31,23 +34,30 @@ from fastapi import FastAPI, Request
 from server.config import get_settings
 from server.services.cache import AsyncTTLCache
 
+logger = logging.getLogger(__name__)
+
 
 # Límites conservadores para empezar. Se ajustan cuando haya métricas
 # reales de carga. ``max_connections`` es el techo global del pool;
 # ``max_keepalive_connections`` cuántas se mantienen idle entre requests.
+# El ranking corre todos los proveedores EN PARALELO y el más pesado es IEM
+# (Semaphore 24); junto a MeteoHub (8), Frost (6), el resto y las peticiones de
+# usuario se superan fácil las 40 → ``PoolTimeout``. El pool debe cubrir la suma
+# de concurrencias internas + margen de usuario.
 _DEFAULT_LIMITS = httpx.Limits(
-    max_connections=20,
-    max_keepalive_connections=10,
+    max_connections=80,
+    max_keepalive_connections=40,
     keepalive_expiry=30.0,
 )
 
 # Timeout por defecto generoso (los proveedores meteo a veces tardan).
-# Cada llamada puede sobrescribirlo si necesita más/menos.
+# Cada llamada puede sobrescribirlo si necesita más/menos. ``pool`` (espera por
+# una conexión libre) holgado para no reventar en los picos del ranking.
 _DEFAULT_TIMEOUT = httpx.Timeout(
     connect=5.0,
     read=20.0,
     write=10.0,
-    pool=2.0,
+    pool=10.0,
 )
 
 
@@ -64,8 +74,36 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
     inicializa todos los recursos compartidos (cliente HTTP + cachés).
     """
     settings = get_settings()
+
+    # Euskalmet en plataformas sin FS persistente (Railway): si la clave
+    # privada llega como PEM por env (``METEOLABX_EUSKALMET_PRIVATE_KEY_PEM``)
+    # y la ruta configurada no apunta a un fichero existente, la materializamos
+    # a disco y apuntamos ahí, para que la autogeneración del JWT (firma con
+    # ``openssl``) funcione sin exponer la clave en el repo.
+    pem = getattr(settings, "euskalmet_private_key_pem", "")
+    key_path = str(getattr(settings, "euskalmet_private_key_path", "") or "").strip()
+    if pem and not (key_path and os.path.exists(key_path)):
+        from server.services import euskalmet
+
+        materialized = euskalmet.materialize_private_key(pem)
+        if materialized:
+            settings.euskalmet_private_key_path = materialized
+            logger.info("Euskalmet: clave privada materializada desde env en %s", materialized)
+
+    # Silencia el log INFO por-petición de httpx/httpcore (una línea por cada
+    # GET) — con el ranking (MeteoHub 25 + Frost 4 + Meteo-France ~15 + …) era
+    # una "biblia" que tapaba lo importante. Los errores (WARNING+) sí salen.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+    # Transport con reintentos a nivel de CONEXIÓN: httpx reintenta los
+    # ``ConnectError`` (handshake/conexión fallida) hasta N veces antes de
+    # propagar. Mitiga la conectividad intermitente (p.ej. fallback IPv6 que
+    # tumba el TLS) hacia las APIs de proveedores. ``limits`` van en el
+    # transport cuando se pasa uno propio.
+    transport = httpx.AsyncHTTPTransport(limits=_DEFAULT_LIMITS, retries=2)
     client = httpx.AsyncClient(
-        limits=_DEFAULT_LIMITS,
+        transport=transport,
         timeout=_DEFAULT_TIMEOUT,
         # Pasar un User-Agent honesto ayuda a algunos proveedores a
         # distinguirnos de scrapers anónimos.
@@ -83,9 +121,30 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
         max_entries=settings.cache_max_entries,
     )
 
+    # Ranking diario: store en memoria + job horario que rellena los
+    # agregados por proveedor. No persiste entre reinicios (los directos
+    # se rehacen en 1 llamada; AEMET backfillea 12 h).
+    from server.services.ranking import RankingStore, refresh_loop
+
+    app.state.ranking_store = RankingStore()
+    ranking_task = asyncio.create_task(
+        refresh_loop(
+            app.state.ranking_store,
+            client=client,
+            settings=settings,
+            interval_s=float(getattr(settings, "ranking_refresh_interval_s", 1800.0)),
+            retry_interval_s=float(getattr(settings, "ranking_retry_interval_s", 60.0)),
+        )
+    )
+
     try:
         yield
     finally:
+        ranking_task.cancel()
+        try:
+            await ranking_task
+        except asyncio.CancelledError:
+            pass
         await client.aclose()
 
 

@@ -16,5 +16,5 @@ class StationCandidate:
     lon: float
     elevation_m: float
     distance_km: float
+    connectable: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
-

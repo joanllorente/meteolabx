@@ -7,8 +7,8 @@ from zoneinfo import ZoneInfo
 
 
 def is_nan(x):
-    """Verifica si un valor es NaN"""
-    return x != x
+    """Verifica si un valor es NaN o ausente (None)."""
+    return x is None or x != x
 
 
 def _resolve_tzinfo(tz_name: str = ""):
@@ -504,48 +504,6 @@ def _astral_sun_times(latitude_deg: float, longitude_deg: float, timestamp: floa
         return None, None
 
 
-def _sunrise_sunset_api_times(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
-    """Fallback online opcional vía sunrise-sunset.org en hora local del sistema."""
-    if is_nan(latitude_deg) or is_nan(longitude_deg):
-        return None, None
-    try:
-        import requests
-    except Exception:
-        return None, None
-
-    try:
-        dt_local = _local_datetime(timestamp, tz_name)
-        date_str = dt_local.strftime("%Y-%m-%d")
-        resp = requests.get(
-            "https://api.sunrise-sunset.org/json",
-            params={
-                "lat": f"{float(latitude_deg):.6f}",
-                "lng": f"{float(longitude_deg):.6f}",
-                "date": date_str,
-                "formatted": 0,
-            },
-            timeout=5,
-        )
-        if resp.status_code != 200:
-            return None, None
-        payload = resp.json()
-        if payload.get("status") != "OK":
-            return None, None
-
-        sr = payload.get("results", {}).get("sunrise")
-        ss = payload.get("results", {}).get("sunset")
-        if not sr or not ss:
-            return None, None
-
-        sunrise_utc = datetime.fromisoformat(str(sr).replace("Z", "+00:00"))
-        sunset_utc = datetime.fromisoformat(str(ss).replace("Z", "+00:00"))
-        sunrise_local = sunrise_utc.astimezone(dt_local.tzinfo)
-        sunset_local = sunset_utc.astimezone(dt_local.tzinfo)
-        return sunrise_local, sunset_local
-    except Exception:
-        return None, None
-
-
 def _fallback_sunrise_sunset_minutes(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
     """Fallback NOAA (aprox.) de orto/ocaso en minutos locales desde medianoche."""
     if is_nan(latitude_deg) or is_nan(longitude_deg):
@@ -605,8 +563,6 @@ def _fmt_local_minutes(minutes_val):
 def sunrise_sunset_label(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = "") -> str:
     sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is None or sunset is None:
-        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
-    if sunrise is None or sunset is None:
         sunrise_min, sunset_min = _fallback_sunrise_sunset_minutes(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
         return f"Orto {_fmt_local_minutes(sunrise_min)} · Ocaso {_fmt_local_minutes(sunset_min)}"
 
@@ -616,8 +572,6 @@ def sunrise_sunset_label(latitude_deg: float, longitude_deg: float, timestamp: f
 def sunrise_sunset_datetimes(latitude_deg: float, longitude_deg: float, timestamp: float, tz_name: str = ""):
     """Devuelve orto y ocaso en hora local para la fecha del timestamp."""
     sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
-    if sunrise is None or sunset is None:
-        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is not None and sunset is not None:
         return sunrise, sunset
 
@@ -640,8 +594,6 @@ def is_nighttime(
 ) -> bool:
     """Determina noche usando Astral cuando hay coordenadas completas."""
     sunrise, sunset = _astral_sun_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
-    if sunrise is None or sunset is None:
-        sunrise, sunset = _sunrise_sunset_api_times(latitude_deg, longitude_deg, timestamp, tz_name=tz_name)
     if sunrise is not None and sunset is not None:
         try:
             now_local = datetime.fromtimestamp(timestamp, tz=sunrise.tzinfo)

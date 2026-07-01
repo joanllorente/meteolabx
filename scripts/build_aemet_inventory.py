@@ -4,6 +4,7 @@ Script para construir inventario de estaciones AEMET
 Versión simple: usa solo /todas con timeout muy largo
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,8 +18,10 @@ if str(ROOT_DIR) not in sys.path:
 
 from data_files import AEMET_STATIONS_PATH
 
-# API Key de AEMET
-API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtZXRlb2xhYnhAZ21haWwuY29tIiwianRpIjoiNTdkMzE1MjYtMTk4My00YzNiLTgzNjAtYTdkZWJmMmIxMDFhIiwiaXNzIjoiQUVNRVQiLCJpYXQiOjE3NzAyNDQ1OTEsInVzZXJJZCI6IjU3ZDMxNTI2LTE5ODMtNGMzYi04MzYwLWE3ZGViZjJiMTAxYSIsInJvbGUiOiIifQ.GvliQHY3f94N691sU0ExhMHZxbTiGn2BCe-bIA22K8c"
+API_KEY = (
+    os.getenv("METEOLABX_AEMET_API_KEY", "")
+    or os.getenv("AEMET_API_KEY", "")
+).strip()
 
 BASE_URL = "https://opendata.aemet.es/opendata/api"
 
@@ -28,6 +31,9 @@ def fetch_stations_slow():
     Obtiene estaciones usando /todas con descarga incremental
     Usa read() en chunks para evitar timeout completo
     """
+    if not API_KEY:
+        raise RuntimeError("Falta AEMET_API_KEY en el entorno.")
+
     print("=" * 60)
     print("🏗️  CONSTRUCCIÓN DE INVENTARIO AEMET")
     print("=" * 60)

@@ -83,7 +83,7 @@ def test_observation_precip_frame_falls_back_to_today_total_without_series():
     assert frame["precip_display"].tolist() == [10.0]
 
 
-def test_observation_precip_frame_accumulates_interval_records():
+def test_observation_precip_frame_renders_backend_accumulation():
     day_start = datetime(2026, 6, 1)
     epochs = [
         int((day_start + timedelta(hours=1)).timestamp()),
@@ -93,7 +93,7 @@ def test_observation_precip_frame_accumulates_interval_records():
 
     frame = observation._prepare_observation_precip_frame(
         epochs,
-        [0.2, 0.3, 0.0],
+        [0.2, 0.5, 0.5],
         day_start=day_start,
         day_end=day_start + timedelta(days=1),
         step_minutes=5,
@@ -106,11 +106,9 @@ def test_observation_precip_frame_accumulates_interval_records():
     assert frame["precip_display"].tolist() == [0.2, 0.5, 0.5]
 
 
-def test_observation_precip_frame_is_monotonic_daily_accumulation():
-    """El gráfico debe mostrar el acumulado del día siempre creciente, aunque la
-    serie de origen suba y baje (intervalos) o tenga reseteos espurios."""
+def test_observation_precip_frame_preserves_canonical_daily_accumulation():
     day_start = datetime(2026, 6, 1)
-    raw = [2.5, 0.5, 0.8, 2.3, 7.4]
+    raw = [0.0, 0.5, 0.8, 2.3, 7.4]
     epochs = [
         int((day_start + timedelta(hours=h)).timestamp())
         for h in range(1, len(raw) + 1)
@@ -124,7 +122,7 @@ def test_observation_precip_frame_is_monotonic_daily_accumulation():
         step_minutes=5,
         convert_precip=lambda value, _unit: value,
         precip_unit_pref="mm",
-        precip_total_today=sum(raw),
+        precip_total_today=raw[-1],
     )
 
     assert frame is not None
@@ -132,27 +130,19 @@ def test_observation_precip_frame_is_monotonic_daily_accumulation():
     assert display == sorted(display), "el acumulado del día no es monótono"
 
 
-def test_running_daily_precip_handles_spurious_reset():
-    # Serie acumulada con un bajón espurio en medio: debe quedar monótona.
-    out = observation._running_daily_precip_mm([2.5, 2.5, 0.5, 2.6, 2.6, 7.4])
-    assert out == sorted(out)
-    assert out[-1] == max(out)
-
-
 def test_wet_bulb_risk_thresholds():
-    assert observation._wet_bulb_risk(27.9) == observation.WetBulbRisk()
-    assert observation._wet_bulb_risk(float("nan")) == observation.WetBulbRisk()
+    assert observation._wet_bulb_risk("") == observation.WetBulbRisk()
 
-    potential = observation._wet_bulb_risk(28.0)
+    potential = observation._wet_bulb_risk("potential")
     assert potential.label_key == observation.WET_BULB_POTENTIAL_KEY
     assert potential.alert_key == ""
 
-    critical = observation._wet_bulb_risk(30.5)
+    critical = observation._wet_bulb_risk("critical", "warning")
     assert critical.label_key == observation.WET_BULB_CRITICAL_KEY
     assert critical.alert_level == "warning"
     assert critical.alert_key == observation.WET_BULB_WARNING_KEY
 
-    extreme = observation._wet_bulb_risk(34.0)
+    extreme = observation._wet_bulb_risk("extreme", "danger")
     assert extreme.label_key == observation.WET_BULB_EXTREME_KEY
     assert extreme.alert_level == "danger"
     assert extreme.alert_key == observation.WET_BULB_EXTREME_ALERT_KEY
@@ -164,7 +154,7 @@ def test_wet_bulb_risk_render_uses_translator():
         observation.WET_BULB_WARNING_KEY: "Translated warning",
     }
     translate = lambda key, **kwargs: translations[key]
-    risk = observation._wet_bulb_risk(30.5)
+    risk = observation._wet_bulb_risk("critical", "warning")
 
     assert "Translated critical" in observation._wet_bulb_risk_subtitle_html(risk, translate)
     assert "Translated warning" in observation._wet_bulb_alert_html(risk, translate, dark=False)
@@ -250,7 +240,7 @@ def test_wet_bulb_alert_renders_before_basic_cards():
         "_translate_rain_intensity_label": lambda label: label,
         "_translate_sunrise_sunset_label": lambda label: label,
         "balance": float("nan"),
-        "base": {
+            "observation": {
             "Tc": 32.0,
             "RH": 65.0,
             "Td": 24.0,
@@ -259,8 +249,24 @@ def test_wet_bulb_alert_renders_before_basic_cards():
             "gust": float("nan"),
             "precip_total": 0.0,
             "feels_like": 34.0,
-            "heat_index": 35.0,
-        },
+                "heat_index": 35.0,
+            },
+            "derivatives": {
+                "Te": float("nan"),
+                "Tv": float("nan"),
+                    "Tw": 30.5,
+                    "wet_bulb_risk": "critical",
+                    "wet_bulb_alert_level": "warning",
+                    "e": 30.0,
+                "inst_label": "test",
+                "inst_mm_h": 0.0,
+                "r5_mm_h": 0.0,
+                "r10_mm_h": 0.0,
+                "p_label": "stable",
+                "has_radiation": False,
+            },
+            "daily_extremes": {},
+            "station": {},
         "card": _card,
         "clarity": float("nan"),
         "connected": True,

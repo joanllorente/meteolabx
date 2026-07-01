@@ -38,7 +38,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1572,
     "name_match_distance_km": 1.026,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbwryn",
@@ -79,7 +89,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1575,
     "name_match_distance_km": 0.415,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcr9j7",
@@ -120,7 +140,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 461,
     "name_match_distance_km": 0.217,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u10r4r",
@@ -161,7 +191,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 19188,
     "name_match_distance_km": 0.276,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u10t6c",
@@ -202,7 +242,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 498,
     "name_match_distance_km": 0.213,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpwxz",
@@ -243,7 +293,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 471,
     "name_match_distance_km": 0.301,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u127sb",
@@ -284,7 +344,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 409,
     "name_match_distance_km": 0.232,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u12f6m",
@@ -325,7 +395,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 61986,
     "name_match_distance_km": 0.345,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u12v1x",
@@ -366,7 +446,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 421,
     "name_match_distance_km": 0.293,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcrem9",
@@ -407,7 +497,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 583,
     "name_match_distance_km": 0.705,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u128tb",
@@ -448,7 +548,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 440,
     "name_match_distance_km": 0.227,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcrtst",
@@ -489,7 +599,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 386,
     "name_match_distance_km": 0.322,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcrws0",
@@ -530,7 +650,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 384,
     "name_match_distance_km": 0.165,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcryh1",
@@ -571,7 +701,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 393,
     "name_match_distance_km": 0.095,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u12hg1",
@@ -612,7 +752,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 395,
     "name_match_distance_km": 0.259,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u12nn0",
@@ -653,7 +803,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 16725,
     "name_match_distance_km": 0.244,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u1805w",
@@ -694,7 +854,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 405,
     "name_match_distance_km": 0.345,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcrje9",
@@ -735,7 +905,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 556,
     "name_match_distance_km": 0.215,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcy6s0",
@@ -776,7 +956,17 @@
     "metoffice_station_type": "wind",
     "metoffice_station_id": 16589,
     "name_match_distance_km": 0.153,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcy9j0",
@@ -817,7 +1007,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 30523,
     "name_match_distance_km": 0.383,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcyg79",
@@ -858,7 +1058,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 315,
     "name_match_distance_km": 0.282,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcxqkk",
@@ -899,7 +1109,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 17344,
     "name_match_distance_km": 0.208,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcqr9c",
@@ -940,7 +1160,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 57199,
     "name_match_distance_km": 0.254,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gctevv",
@@ -981,7 +1211,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1078,
     "name_match_distance_km": 0.246,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gctqjs",
@@ -1022,7 +1262,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1055,
     "name_match_distance_km": 0.43,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcty8n",
@@ -1063,7 +1313,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1060,
     "name_match_distance_km": 0.302,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcvbs8",
@@ -1104,7 +1364,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1070,
     "name_match_distance_km": 0.092,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcwn4c",
@@ -1145,7 +1415,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1083,
     "name_match_distance_km": 0.243,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcwq3n",
@@ -1186,7 +1466,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1074,
     "name_match_distance_km": 0.055,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcwr04",
@@ -1227,7 +1517,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1085,
     "name_match_distance_km": 0.42,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcy1jv",
@@ -1268,7 +1568,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1076,
     "name_match_distance_km": 0.096,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gctcfv",
@@ -1309,7 +1619,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1090,
     "name_match_distance_km": 0.102,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gctb66",
@@ -1350,7 +1670,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 17309,
     "name_match_distance_km": 0.303,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u101x2",
@@ -1391,7 +1721,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 811,
     "name_match_distance_km": 0.431,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpsvg",
@@ -1430,7 +1770,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 708,
     "name_match_distance_km": 0.46,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcptq8",
@@ -1469,7 +1819,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 709,
     "name_match_distance_km": 0.358,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpvj0",
@@ -1510,7 +1870,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 723,
     "name_match_distance_km": 11.86,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcnfur",
@@ -1551,7 +1921,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 847,
     "name_match_distance_km": 0.208,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcp76x",
@@ -1592,7 +1972,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 862,
     "name_match_distance_km": 0.309,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcp7wr",
@@ -1633,7 +2023,18 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 62224,
     "name_match_distance_km": 0.316,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    },
+    "sensor_probe_error": "404 Client Error: Not Found for url: https://data.hub.api.metoffice.gov.uk/observation-land/1/gcp7wr"
   },
   {
     "id": "gbzpdr",
@@ -1674,7 +2075,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 876,
     "name_match_distance_km": 0.578,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u107dp",
@@ -1715,7 +2126,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 744,
     "name_match_distance_km": 0.716,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u10fys",
@@ -1756,7 +2177,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 743,
     "name_match_distance_km": 0.057,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "u10und",
@@ -1797,7 +2228,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 775,
     "name_match_distance_km": 0.756,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcnykn",
@@ -1838,7 +2279,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 605,
     "name_match_distance_km": 0.146,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpjxj",
@@ -1879,7 +2330,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 613,
     "name_match_distance_km": 0.361,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpffx",
@@ -1920,7 +2381,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 30620,
     "name_match_distance_km": 0.892,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpgvg",
@@ -1959,7 +2430,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 726,
     "name_match_distance_km": 0.239,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcp34f",
@@ -2000,7 +2481,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 779,
     "name_match_distance_km": 0.518,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcpc1q",
@@ -2041,7 +2532,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 795,
     "name_match_distance_km": 0.113,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcn8yh",
@@ -2082,7 +2583,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 842,
     "name_match_distance_km": 0.48,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbujwt",
@@ -2123,7 +2634,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1395,
     "name_match_distance_km": 0.568,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbukbm",
@@ -2164,7 +2685,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1393,
     "name_match_distance_km": 0.063,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbuxmc",
@@ -2205,7 +2736,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1415,
     "name_match_distance_km": 0.15,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcj0z3",
@@ -2246,7 +2787,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1352,
     "name_match_distance_km": 0.668,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcj49s",
@@ -2287,7 +2838,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1346,
     "name_match_distance_km": 0.058,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcj8ds",
@@ -2328,7 +2889,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 62041,
     "name_match_distance_km": 0.323,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcj9q6",
@@ -2369,7 +2940,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1383,
     "name_match_distance_km": 0.277,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbyr2j",
@@ -2410,7 +2991,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1319,
     "name_match_distance_km": 0.217,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcnz12",
@@ -2451,7 +3042,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 692,
     "name_match_distance_km": 0.465,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbgebw",
@@ -2492,7 +3093,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1386,
     "name_match_distance_km": 0.416,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gbvn6n",
@@ -2533,7 +3144,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1336,
     "name_match_distance_km": 0.415,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcj6tu",
@@ -2574,7 +3195,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1285,
     "name_match_distance_km": 0.325,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcn45v",
@@ -2615,7 +3246,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1302,
     "name_match_distance_km": 0.114,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcnjmb",
@@ -2656,7 +3297,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 62122,
     "name_match_distance_km": 0.257,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcneqb",
@@ -2697,7 +3348,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 888,
     "name_match_distance_km": 0.315,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcng01",
@@ -2738,7 +3399,17 @@
     "official_probe_lat": 51.16,
     "official_probe_lon": -1.75,
     "display_name": "Boscombe Down",
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcnsfx",
@@ -2779,7 +3450,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 886,
     "name_match_distance_km": 0.277,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcmcnq",
@@ -2820,7 +3501,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 669,
     "name_match_distance_km": 0.043,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcq023",
@@ -2861,7 +3552,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 24996,
     "name_match_distance_km": 0.543,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcqh76",
@@ -2902,7 +3603,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 643,
     "name_match_distance_km": 0.26,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcqw4z",
@@ -2943,7 +3654,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 30690,
     "name_match_distance_km": 0.212,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcqf99",
@@ -2984,7 +3705,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 19187,
     "name_match_distance_km": 0.213,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcr1ce",
@@ -3025,7 +3756,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 595,
     "name_match_distance_km": 0.34,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcq89t",
@@ -3066,7 +3807,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 657,
     "name_match_distance_km": 0.193,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcxdqn",
@@ -3107,7 +3858,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 370,
     "name_match_distance_km": 0.746,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcxgsp",
@@ -3148,7 +3909,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 373,
     "name_match_distance_km": 0.251,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcwuvh",
@@ -3189,7 +3960,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 17314,
     "name_match_distance_km": 0.084,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcxh27",
@@ -3230,7 +4011,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 16596,
     "name_match_distance_km": 0.114,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcxt28",
@@ -3271,7 +4062,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 358,
     "name_match_distance_km": 0.623,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcwc40",
@@ -3312,7 +4113,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 56958,
     "name_match_distance_km": 0.497,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcwdje",
@@ -3353,7 +4164,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 513,
     "name_match_distance_km": 0.364,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcsewt",
@@ -3394,7 +4215,17 @@
     "official_probe_lat": 54.09,
     "official_probe_lon": -4.63,
     "display_name": "Ronaldsway",
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcewfr",
@@ -3435,7 +4266,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1450,
     "name_match_distance_km": 0.188,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcg9gv",
@@ -3476,7 +4317,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1467,
     "name_match_distance_km": 0.304,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gceks1",
@@ -3517,7 +4368,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1534,
     "name_match_distance_km": 0.272,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcdt54",
@@ -3558,7 +4419,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 57063,
     "name_match_distance_km": 0.202,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcg1cc",
@@ -3599,7 +4470,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 56963,
     "name_match_distance_km": 0.092,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcdx5x",
@@ -3640,7 +4521,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1543,
     "name_match_distance_km": 0.259,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gctpub",
@@ -3681,7 +4572,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1033,
     "name_match_distance_km": 0.157,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcu2pd",
@@ -3722,7 +4623,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1039,
     "name_match_distance_km": 0.319,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcvdxj",
@@ -3763,7 +4674,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1023,
     "name_match_distance_km": 0.255,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcvw5v",
@@ -3804,7 +4725,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 19260,
     "name_match_distance_km": 0.152,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcykcv",
@@ -3845,7 +4776,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 268,
     "name_match_distance_km": 0.283,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfnmmy",
@@ -3886,7 +4827,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 161,
     "name_match_distance_km": 0.393,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfjuxq",
@@ -3927,7 +4878,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 150,
     "name_match_distance_km": 0.091,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfnxps",
@@ -3968,7 +4929,18 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 62209,
     "name_match_distance_km": 5.523,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    },
+    "sensor_probe_error": "404 Client Error: Not Found for url: https://data.hub.api.metoffice.gov.uk/observation-land/1/gfnxps"
   },
   {
     "id": "gfjryy",
@@ -4009,7 +4981,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 132,
     "name_match_distance_km": 0.311,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfm8k6",
@@ -4050,7 +5032,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 137,
     "name_match_distance_km": 0.281,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gf5yws",
@@ -4091,7 +5083,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 30270,
     "name_match_distance_km": 0.152,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gf7cps",
@@ -4132,7 +5134,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 52,
     "name_match_distance_km": 0.644,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfh7qb",
@@ -4173,7 +5185,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 103,
     "name_match_distance_km": 0.286,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfhesb",
@@ -4214,7 +5236,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 105,
     "name_match_distance_km": 0.148,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfjm2y",
@@ -4255,7 +5287,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 113,
     "name_match_distance_km": 0.254,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfk82s",
@@ -4296,7 +5338,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 67,
     "name_match_distance_km": 0.024,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfkgdg",
@@ -4337,7 +5389,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 44,
     "name_match_distance_km": 0.341,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfmu99",
@@ -4378,7 +5440,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 32,
     "name_match_distance_km": 0.295,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfjkvj",
@@ -4419,7 +5491,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 117,
     "name_match_distance_km": 0.133,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gf4wr9",
@@ -4460,7 +5542,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 18903,
     "name_match_distance_km": 0.932,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gf7e0j",
@@ -4501,7 +5593,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 54,
     "name_match_distance_km": 0.288,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfmzqh",
@@ -4542,7 +5644,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 23,
     "name_match_distance_km": 0.332,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfwfdu",
@@ -4583,7 +5695,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 3,
     "name_match_distance_km": 0.209,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfxnj5",
@@ -4624,7 +5746,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 9,
     "name_match_distance_km": 0.356,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfz3se",
@@ -4665,7 +5797,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 12,
     "name_match_distance_km": 0.327,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcggqk",
@@ -4706,7 +5848,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 908,
     "name_match_distance_km": 0.125,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcgsc8",
@@ -4747,7 +5899,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 23417,
     "name_match_distance_km": 0.505,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gf517k",
@@ -4788,7 +5950,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 18974,
     "name_match_distance_km": 0.65,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcuy0c",
@@ -4829,7 +6001,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 24125,
     "name_match_distance_km": 0.042,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcuezd",
@@ -4870,7 +6052,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1007,
     "name_match_distance_km": 0.258,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcvk7n",
@@ -4911,7 +6103,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 987,
     "name_match_distance_km": 0.318,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfjbwz",
@@ -4952,7 +6154,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 235,
     "name_match_distance_km": 0.202,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfj27j",
@@ -4993,7 +6205,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 212,
     "name_match_distance_km": 0.298,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gfjed4",
@@ -5034,7 +6256,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 145,
     "name_match_distance_km": 0.167,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": false,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gchyhw",
@@ -5075,7 +6307,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1226,
     "name_match_distance_km": 0.161,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gck8xg",
@@ -5116,7 +6358,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1198,
     "name_match_distance_km": 0.406,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcm1y0",
@@ -5157,7 +6409,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1209,
     "name_match_distance_km": 0.32,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcmnn3",
@@ -5198,7 +6460,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1171,
     "name_match_distance_km": 0.109,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcmwbp",
@@ -5239,7 +6511,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1137,
     "name_match_distance_km": 0.173,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcmys0",
@@ -5280,7 +6562,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1144,
     "name_match_distance_km": 0.215,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcksk1",
@@ -5321,7 +6613,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1161,
     "name_match_distance_km": 0.226,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gckyby",
@@ -5362,7 +6664,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1145,
     "name_match_distance_km": 0.256,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gckyur",
@@ -5403,7 +6715,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 56486,
     "name_match_distance_km": 0.259,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gchqhv",
@@ -5444,7 +6766,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1215,
     "name_match_distance_km": 0.504,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcm2jv",
@@ -5485,7 +6817,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 16611,
     "name_match_distance_km": 0.341,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcms1h",
@@ -5526,7 +6868,17 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 1190,
     "name_match_distance_km": 0.271,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "id": "gcjs3t",
@@ -5567,6 +6919,16 @@
     "metoffice_station_type": "auto",
     "metoffice_station_id": 19206,
     "name_match_distance_km": 0.442,
-    "elevation_source": "open-meteo"
+    "elevation_source": "open-meteo",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   }
 ]

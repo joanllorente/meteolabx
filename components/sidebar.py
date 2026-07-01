@@ -46,10 +46,12 @@ from utils.favorites import (
 )
 from utils.helpers import normalize_text_input, is_nan, coerce_str
 from utils.units import DEFAULT_UNIT_PREFERENCES, UNIT_LABELS, UNIT_OPTIONS, normalize_unit_preferences
-from services.wu_calibration import (
+from domain.wu_calibration import (
     WU_CALIBRATION_ORDER,
     WU_CALIBRATION_SPECS,
     default_wu_calibration,
+    has_effective_wu_calibration,
+    looks_like_min_bound_calibration_artifact,
     normalize_wu_calibration,
 )
 from utils.provider_state import (
@@ -174,6 +176,14 @@ def _snapshot_has_saved_connection_values(snapshot) -> bool:
     return False
 
 
+def _has_pending_rank_connect(query_params=None) -> bool:
+    params = st.query_params if query_params is None else query_params
+    try:
+        return bool(params.get("rank_connect"))
+    except AttributeError:
+        return False
+
+
 def _now_local() -> datetime:
     """Hora actual en la timezone del navegador del usuario."""
     from zoneinfo import ZoneInfo
@@ -287,10 +297,15 @@ def render_sidebar(_local_storage_unused=None):
     )
     if isinstance(storage_payload, dict) and storage_payload.get("ready"):
         hydrate_local_storage_snapshot(storage_payload.get("values"))
+        # Cuando el snapshot de localStorage acaba de quedar listo, forzamos UN
+        # rerun (guardado por _LOCAL_STORAGE_READY_RERUN_KEY) para que los widgets
+        # de la sidebar (tema, fuente, credenciales) reflejen los valores
+        # guardados sin esperar al primer click del usuario. Antes esto solo se
+        # hacía si había conexión guardada, así que sin ella la sidebar salía sin
+        # marcar hasta el primer click (que se "comía" el rerun de hidratación).
         if (
             not storage_was_ready
             and not bool(st.session_state.get(_LOCAL_STORAGE_READY_RERUN_KEY, False))
-            and _snapshot_has_saved_connection_values(st.session_state.get("_mlx_local_storage_snapshot"))
             and hasattr(st, "rerun")
         ):
             st.session_state[_LOCAL_STORAGE_READY_RERUN_KEY] = True
@@ -319,6 +334,7 @@ def render_sidebar(_local_storage_unused=None):
         st.rerun()
 
     first_sidebar_load = not bool(st.session_state.get("_sidebar_inputs_initialized", False))
+    pending_rank_connect = _has_pending_rank_connect()
 
     # Prefill desde localStorage activado por defecto para persistir credenciales
     # entre recargas locales; puede desactivarse con MLX_ENABLE_LOCAL_PREFILL=0.
@@ -588,18 +604,21 @@ def render_sidebar(_local_storage_unused=None):
         should_autoconnect_wu = (
             saved_autoconnect
             and valid_wu_target
+            and not pending_rank_connect
             and not st.session_state.get("connected", False)
             and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
         )
         should_autoconnect_provider = (
             saved_autoconnect
             and valid_provider_target
+            and not pending_rank_connect
             and not st.session_state.get("connected", False)
             and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
         )
         should_autoconnect_weatherlink = (
             saved_autoconnect
             and valid_weatherlink_target
+            and not pending_rank_connect
             and not st.session_state.get("connected", False)
             and not st.session_state.get(AUTOCONNECT_ATTEMPTED, False)
         )
@@ -1530,9 +1549,18 @@ def render_sidebar(_local_storage_unused=None):
                         st.sidebar.error(t("sidebar.messages.altitude_invalid"))
 
                 if altitude_ok:
-                    from services.weatherlink import fetch_weatherlink_stations, find_weatherlink_station
+                    from domain.parsing.weatherlink import find_weatherlink_station
+                    from utils.api_client import fetch_weatherlink_stations_via_api
 
-                    stations_payload = fetch_weatherlink_stations(api_key, api_secret)
+                    try:
+                        stations_payload = fetch_weatherlink_stations_via_api(api_key, api_secret)
+                    except Exception as exc:
+                        stations_payload = {
+                            "ok": False,
+                            "kind": getattr(exc, "kind", "network"),
+                            "error": str(exc),
+                            "stations": [],
+                        }
                     stations = stations_payload.get("stations", []) if isinstance(stations_payload, dict) else []
                     if not isinstance(stations_payload, dict) or not stations_payload.get("ok"):
                         error_kind = coerce_str((stations_payload or {}).get("kind", ""), lower=True)
@@ -1647,7 +1675,20 @@ def render_sidebar(_local_storage_unused=None):
     )
 
     if is_connected_wu and wu_station_id:
-        stored_calibration = normalize_wu_calibration(get_stored_wu_station_calibration(wu_station_id))
+        stored_raw_calibration = get_stored_wu_station_calibration(wu_station_id)
+        if looks_like_min_bound_calibration_artifact(stored_raw_calibration):
+            stored_raw_calibration = {}
+            set_stored_wu_station_calibration(wu_station_id, {})
+        stored_calibration = normalize_wu_calibration(stored_raw_calibration)
+        live_calibration = st.session_state.get("wu_station_calibration")
+        live_calibration_station = str(st.session_state.get("wu_station_calibration_station", "")).strip().upper()
+        if (
+            live_calibration_station == wu_station_id
+            and isinstance(live_calibration, dict)
+            and has_effective_wu_calibration(live_calibration)
+            and not looks_like_min_bound_calibration_artifact(live_calibration)
+        ):
+            stored_calibration = normalize_wu_calibration(live_calibration)
         current_calibration = dict(stored_calibration)
         st.session_state["wu_station_calibration"] = current_calibration
         st.session_state["wu_station_calibration_station"] = wu_station_id
@@ -1664,6 +1705,19 @@ def render_sidebar(_local_storage_unused=None):
                     )
                 st.session_state[widget_station_key] = wu_station_id
 
+            def _persist_calibration(station_id: str = wu_station_id) -> None:
+                # Guarda en localStorage SOLO cuando el usuario cambia un valor
+                # (on_change), nunca en un render espurio → no se persisten
+                # mínimos fantasma (causa del bug de los -20/-180/-5 al recargar).
+                cal = normalize_wu_calibration({
+                    sensor: st.session_state.get(f"wu_calibration_{station_id}_{sensor}", 0.0)
+                    for sensor in WU_CALIBRATION_ORDER
+                })
+                st.session_state["wu_station_calibration"] = cal
+                st.session_state["wu_station_calibration_station"] = station_id
+                set_stored_wu_station_calibration(station_id, cal)
+                st.session_state["_wu_calibration_changed"] = True
+
             for sensor in WU_CALIBRATION_ORDER:
                 if not bool(sensor_presence.get(sensor)):
                     continue
@@ -1676,6 +1730,13 @@ def render_sidebar(_local_storage_unused=None):
                 widget_key = f"wu_calibration_{wu_station_id}_{sensor}"
                 if widget_key not in st.session_state:
                     st.session_state[widget_key] = float(stored_calibration.get(sensor, 0.0))
+                elif not has_effective_wu_calibration(stored_raw_calibration):
+                    try:
+                        current_widget_value = float(st.session_state.get(widget_key, 0.0))
+                    except (TypeError, ValueError):
+                        current_widget_value = 0.0
+                    if abs(current_widget_value - float(spec["min"])) <= 1e-9:
+                        st.session_state[widget_key] = 0.0
 
                 value = st.sidebar.number_input(
                     t(f"sidebar.calibration.fields.{sensor}"),
@@ -1684,6 +1745,7 @@ def render_sidebar(_local_storage_unused=None):
                     step=step,
                     format=fmt,
                     key=widget_key,
+                    on_change=_persist_calibration,
                     help=t(
                         "sidebar.calibration.range_help",
                         min=range_fmt.format(value=float(spec["min"])),
@@ -1693,13 +1755,12 @@ def render_sidebar(_local_storage_unused=None):
                 )
                 current_calibration[sensor] = round(float(value), decimals)
 
+            # Calibración viva para aplicar a la observación. NO se persiste
+            # aquí: el guardado en localStorage va por on_change (arriba), para
+            # no escribir mínimos fantasma en renders espurios.
             current_calibration = normalize_wu_calibration(current_calibration)
             st.session_state["wu_station_calibration"] = current_calibration
             st.session_state["wu_station_calibration_station"] = wu_station_id
-
-            if current_calibration != stored_calibration:
-                set_stored_wu_station_calibration(wu_station_id, current_calibration)
-                st.session_state["_wu_calibration_changed"] = True
         else:
             st.sidebar.caption(t("sidebar.calibration.loading"))
 
@@ -1736,53 +1797,6 @@ def render_sidebar(_local_storage_unused=None):
         set_stored_unit_preferences(selected_unit_preferences)
 
     st.sidebar.markdown("---")
-    
-    # ============================================================
-    # MODO DEMO RADIACIÓN (SOLO DESARROLLO/INTERNO)
-    # ============================================================
-    # Solo visible si se ejecuta con: DEMO_MODE=1 streamlit run meteolabx.py
-    
-    demo_radiation = False
-    demo_solar = None
-    demo_uv = None
-    
-    if os.getenv("DEMO_MODE") == "1" or os.getenv("METEOLABX_DEMO") == "1":
-        st.sidebar.markdown("---")
-        st.sidebar.markdown(f"### {t('sidebar.demo.title')}")
-        
-        demo_radiation = st.sidebar.toggle(
-            t("sidebar.demo.enable"),
-            value=False,
-            help=t("sidebar.demo.enable_help"),
-        )
-        
-        if demo_radiation:
-            st.sidebar.caption(t("sidebar.demo.intro"))
-            demo_solar = st.sidebar.slider(
-                t("sidebar.demo.solar_label"),
-                min_value=0,
-                max_value=1200,
-                value=650,
-                step=50,
-                help=t("sidebar.demo.solar_help"),
-            )
-            demo_uv = st.sidebar.slider(
-                t("sidebar.demo.uv_label"),
-                min_value=0.0,
-                max_value=15.0,
-                value=6.0,
-                step=0.5,
-                help=t("sidebar.demo.uv_help"),
-            )
-            st.sidebar.caption(t("sidebar.demo.quick_ref"))
-            st.sidebar.caption(t("sidebar.demo.cloudy"))
-            st.sidebar.caption(t("sidebar.demo.partial"))
-            st.sidebar.caption(t("sidebar.demo.clear"))
-    
-    # Guardar en session_state para acceso desde main
-    st.session_state["demo_radiation"] = demo_radiation
-    st.session_state["demo_solar"] = demo_solar
-    st.session_state["demo_uv"] = demo_uv
 
     # Determinar tema
     auto_dark = _browser_prefers_dark()

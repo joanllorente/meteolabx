@@ -44,7 +44,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1712,
@@ -90,7 +100,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1504,
@@ -148,7 +168,17 @@
     "tr_endpoint": "/doris/boyas/redcosm_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcosm_tr"
+    "endpoint_reason": "boyas.redcosm_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1731,
@@ -194,7 +224,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2136,
@@ -302,7 +342,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2798,
@@ -410,7 +460,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2248,
@@ -518,7 +578,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2548,
@@ -626,7 +696,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2610,
@@ -734,7 +814,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2242,
@@ -842,7 +932,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1512,
@@ -888,7 +988,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2820,
@@ -996,7 +1106,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2244,
@@ -1104,7 +1224,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1117,
@@ -1150,7 +1280,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2342,
@@ -1258,7 +1398,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2442,
@@ -1366,7 +1516,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1239,
@@ -1422,7 +1582,17 @@
     "tr_endpoint": "/doris/boyas/redcosm_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcosm_tr"
+    "endpoint_reason": "boyas.redcosm_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1414,
@@ -1468,7 +1638,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2838,
@@ -1576,7 +1756,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1514,
@@ -1622,7 +1812,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1560,
@@ -1668,7 +1868,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1101,
@@ -1714,7 +1924,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1421,
@@ -1760,7 +1980,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 1500,
@@ -1806,7 +2036,17 @@
     "tr_endpoint": "/doris/boyas/redcos_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redcos_tr"
+    "endpoint_reason": "boyas.redcos_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2720,
@@ -1914,7 +2154,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2446,
@@ -2022,7 +2272,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2630,
@@ -2130,7 +2390,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 2246,
@@ -2238,7 +2508,17 @@
     "tr_endpoint": "/doris/boyas/redext_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "boyas.redext_tr"
+    "endpoint_reason": "boyas.redext_tr",
+    "sensors": {
+      "thermometer": true,
+      "hygrometer": true,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3853,
@@ -2289,7 +2569,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3541,
@@ -2340,7 +2630,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3545,
@@ -2391,7 +2691,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3333,
@@ -2442,7 +2752,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3547,
@@ -2493,7 +2813,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3215,
@@ -2544,7 +2874,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3855,
@@ -2595,7 +2935,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3469,
@@ -2646,7 +2996,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3108,
@@ -2697,7 +3057,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3335,
@@ -2734,7 +3104,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3334,
@@ -2771,7 +3151,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3329,
@@ -2822,7 +3212,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3330,
@@ -2855,7 +3255,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3856,
@@ -2906,7 +3316,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3470,
@@ -2957,7 +3377,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3450,
@@ -3008,7 +3438,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3860,
@@ -3059,7 +3499,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3546,
@@ -3110,7 +3560,18 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": false,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    },
+    "sensor_probe_error": "/doris/mareas/redmar_mir_tr: NO (Serie vacia (rows=1000))"
   },
   {
     "codigo": 3223,
@@ -3161,7 +3622,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3543,
@@ -3212,7 +3683,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3851,
@@ -3263,7 +3744,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3115,
@@ -3314,7 +3805,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3210,
@@ -3365,7 +3866,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3337,
@@ -3406,7 +3917,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3540,
@@ -3449,7 +3970,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": false,
+      "wind_vane": false,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3756,
@@ -3504,7 +4035,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3221,
@@ -3555,7 +4096,17 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   },
   {
     "codigo": 3220,
@@ -3606,6 +4157,16 @@
     "tr_endpoint": "/doris/mareas/redmar_mir_tr",
     "hourly_endpoint": "",
     "endpoint_source": "db_table",
-    "endpoint_reason": "mareas.redmar_mir_tr"
+    "endpoint_reason": "mareas.redmar_mir_tr",
+    "sensors": {
+      "thermometer": false,
+      "hygrometer": false,
+      "barometer": true,
+      "anemometer": true,
+      "wind_vane": true,
+      "rain_gauge": false,
+      "pyranometer": false,
+      "uv": false
+    }
   }
 ]

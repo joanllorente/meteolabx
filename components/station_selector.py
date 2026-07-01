@@ -4,11 +4,11 @@ Independiente del proveedor (AEMET/WU/futuros).
 """
 
 import unicodedata
-import time
 from typing import Optional, Tuple
 
-import requests
 import streamlit as st
+from utils.api_errors import BackendApiError
+from utils.api_client import fetch_geocode_via_api
 from utils.i18n import t
 from utils.provider_state import (
     apply_station_selection,
@@ -83,9 +83,6 @@ def _handle_provider_autoconnect_toggle_change(toggle_key: str, station, is_targ
         }
         _clear_provider_autoconnect_toggle_changed(toggle_key)
 
-NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
-NOMINATIM_USER_AGENT = "MeteoLabX/1.0 (contact: meteolabx@gmail.com)"
-
 CITY_COORDS_ES = {
     "madrid": (40.4168, -3.7038),
     "barcelona": (41.3851, 2.1734),
@@ -159,61 +156,30 @@ def _coords_from_city(city_name: str):
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
 def _nominatim_geocode_cached(query: str, accept_language: str = "es,en") -> dict:
-    """Geocodifica texto con Nominatim y cachea resultados para reducir tráfico."""
-    params = {
-        "q": query,
-        "format": "jsonv2",
-        "limit": 1,
-        "addressdetails": 1,
-    }
-    if accept_language:
-        params["accept-language"] = accept_language
-
-    headers = {
-        "User-Agent": NOMINATIM_USER_AGENT,
-        "Accept": "application/json",
-    }
-
-    response = requests.get(
-        NOMINATIM_SEARCH_URL,
-        params=params,
-        headers=headers,
-        timeout=12,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, list) or len(payload) == 0:
+    """Geocodifica texto exclusivamente mediante FastAPI."""
+    payload = fetch_geocode_via_api(query, accept_language=accept_language)
+    if not payload.get("found", False):
         return {}
-    first = payload[0]
-    return first if isinstance(first, dict) else {}
+    return payload
 
 
 def _geocode_with_nominatim(query: str) -> Tuple[Optional[Tuple[float, float]], str]:
     """
     Devuelve (lat, lon) desde Nominatim para una consulta textual.
-    Incluye limitación de 1 req/s según policy pública.
+    FastAPI aplica caché y la limitación global exigida por Nominatim.
     """
     clean_query = str(query or "").strip()
     if not clean_query:
         return None, "Consulta vacía"
 
-    last_ts = float(st.session_state.get("nominatim_last_request_ts", 0.0))
-    now_ts = time.monotonic()
-    wait_s = 1.05 - (now_ts - last_ts)
-    if wait_s > 0:
-        time.sleep(wait_s)
-
-    st.session_state["nominatim_last_request_ts"] = time.monotonic()
-
     try:
         result = _nominatim_geocode_cached(clean_query, accept_language="es,en")
-    except requests.HTTPError as err:
-        status = getattr(err.response, "status_code", None)
-        if status == 429:
+    except BackendApiError as err:
+        if err.kind == "ratelimit" or err.status_code == 429:
             return None, "Nominatim ha limitado temporalmente las peticiones (429)."
-        return None, f"Error HTTP de Nominatim ({status})."
-    except requests.RequestException:
-        return None, "No se pudo conectar con Nominatim."
+        if err.kind in {"network", "timeout"}:
+            return None, "No se pudo conectar con el servicio de geocodificación."
+        return None, f"Error del servicio de geocodificación ({err.status_code or err.kind})."
     except Exception:
         return None, "Error inesperado consultando Nominatim."
 
@@ -406,6 +372,7 @@ def render_station_selector():
         for station in nearest:
             with st.container():
                 col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                station_connectable = bool(getattr(station, "connectable", True))
                 is_target_station = bool(
                     saved_autoconnect
                     and saved_target_kind == "PROVIDER"
@@ -418,52 +385,55 @@ def render_station_selector():
                     st.caption(
                         f"{station.provider_name} | ID: {station.station_id} | Alt: {station.elevation_m:.0f}m"
                     )
-                    toggle_key = f"autoconnect_toggle_{station.provider_id}_{station.station_id}"
-                    toggle_changed = _sync_provider_autoconnect_toggle(
-                        toggle_key,
-                        is_target_station,
-                    )
-                    toggle_enabled = st.toggle(
-                        t("station_selector.autoconnect"),
-                        key=toggle_key,
-                        on_change=_handle_provider_autoconnect_toggle_change,
-                        args=(toggle_key, station, is_target_station),
-                    )
-                    sync_payload = st.session_state.get(PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY)
-                    if (
-                        isinstance(sync_payload, dict)
-                        and sync_payload.get("key") == toggle_key
-                    ):
-                        st.session_state.pop(PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY, None)
-                        _clear_provider_autoconnect_toggle_changed(toggle_key)
-                        if sync_payload.get("action") == "enable":
-                            persist_provider_autoconnect_target(station)
-                        elif sync_payload.get("action") == "disable":
+                    if station_connectable:
+                        toggle_key = f"autoconnect_toggle_{station.provider_id}_{station.station_id}"
+                        toggle_changed = _sync_provider_autoconnect_toggle(
+                            toggle_key,
+                            is_target_station,
+                        )
+                        toggle_enabled = st.toggle(
+                            t("station_selector.autoconnect"),
+                            key=toggle_key,
+                            on_change=_handle_provider_autoconnect_toggle_change,
+                            args=(toggle_key, station, is_target_station),
+                        )
+                        sync_payload = st.session_state.get(PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY)
+                        if (
+                            isinstance(sync_payload, dict)
+                            and sync_payload.get("key") == toggle_key
+                        ):
+                            st.session_state.pop(PROVIDER_AUTOCONNECT_SYNC_RERUN_KEY, None)
+                            _clear_provider_autoconnect_toggle_changed(toggle_key)
+                            if sync_payload.get("action") == "enable":
+                                persist_provider_autoconnect_target(station)
+                            elif sync_payload.get("action") == "disable":
+                                disable_provider_autoconnect("autoconnect_toggle_")
+                            st.rerun()
+                        if toggle_changed and toggle_enabled and not is_target_station:
+                            st.session_state["auto_connect_wu_device"] = False
+                            if persist_provider_autoconnect_target(station):
+                                st.session_state["_provider_autoconnect_flash"] = t(
+                                    "station_selector.autoconnect_saved",
+                                    station=station.name,
+                                )
+                                st.session_state["_provider_autoconnect_flash_kind"] = "success"
+                                _clear_provider_autoconnect_toggle_changed(toggle_key)
+                                st.rerun()
+                            else:
+                                _clear_provider_autoconnect_toggle_changed(toggle_key)
+                                st.error(t("station_selector.autoconnect_save_error"))
+                        elif toggle_changed and (not toggle_enabled) and is_target_station:
                             disable_provider_autoconnect("autoconnect_toggle_")
-                        st.rerun()
-                    if toggle_changed and toggle_enabled and not is_target_station:
-                        st.session_state["auto_connect_wu_device"] = False
-                        if persist_provider_autoconnect_target(station):
                             st.session_state["_provider_autoconnect_flash"] = t(
-                                "station_selector.autoconnect_saved",
-                                station=station.name,
+                                "station_selector.autoconnect_disabled"
                             )
-                            st.session_state["_provider_autoconnect_flash_kind"] = "success"
+                            st.session_state["_provider_autoconnect_flash_kind"] = "info"
                             _clear_provider_autoconnect_toggle_changed(toggle_key)
                             st.rerun()
-                        else:
+                        elif toggle_changed:
                             _clear_provider_autoconnect_toggle_changed(toggle_key)
-                            st.error(t("station_selector.autoconnect_save_error"))
-                    elif toggle_changed and (not toggle_enabled) and is_target_station:
-                        disable_provider_autoconnect("autoconnect_toggle_")
-                        st.session_state["_provider_autoconnect_flash"] = t(
-                            "station_selector.autoconnect_disabled"
-                        )
-                        st.session_state["_provider_autoconnect_flash_kind"] = "info"
-                        _clear_provider_autoconnect_toggle_changed(toggle_key)
-                        st.rerun()
-                    elif toggle_changed:
-                        _clear_provider_autoconnect_toggle_changed(toggle_key)
+                    else:
+                        st.caption("Inventario: sin conexión directa todavía.")
 
                 with col2:
                     st.metric(t("station_selector.distance"), f"{station.distance_km:.1f} km")
@@ -473,6 +443,7 @@ def render_station_selector():
                         t("sidebar.buttons.connect"),
                         key=f"connect_{station.provider_id}_{station.station_id}",
                         width="stretch",
+                        disabled=not station_connectable,
                     ):
                         apply_station_selection(
                             station,
@@ -495,7 +466,7 @@ def render_station_selector():
                             # NO flusheamos aquí: un flush efímero seguido de
                             # st.rerun() inmediato desmonta el iframe del bridge
                             # antes de que escriba en el navegador y vacía la cola,
-                            # así que el favorito no se persistía (desaparecía al
+                            # así que el favorito no se persiste (se perdía al
                             # recargar). Dejamos la escritura encolada; el bootstrap
                             # estable del sidebar (key fija) la entrega en el rerun
                             # siguiente, igual que las credenciales WU.

@@ -129,80 +129,30 @@ def _compact_series(series: Any, keep: int = 48) -> Any:
 
 
 def _canonical_payload(data: dict[str, Any]) -> dict[str, Any]:
-    payload = {key: data.get(key) for key in CORE_KEYS if key in data}
-    for series_key in ("_series", "_series_7d"):
-        if series_key in data:
-            payload[series_key] = _compact_series(data.get(series_key))
+    payload = dict(data)
+    for series_key in ("series", "recent_series"):
+        if series_key in payload:
+            payload[series_key] = _compact_series(payload.get(series_key))
     return _sanitize(payload)
 
 
-def _call_wu(station_id: str) -> dict[str, Any]:
-    from api.weather_underground import fetch_wu_current
+def _call_provider(provider: str, station_id: str) -> dict[str, Any]:
+    from utils.api_client import fetch_provider_current_processed_via_api
 
-    api_key = _env("MLX_CAPTURE_WU_API_KEY", "MLX_WU_API_KEY", "WU_API_KEY", "WEATHER_UNDERGROUND_API_KEY")
-    if not station_id or not api_key:
-        raise RuntimeError("WU omitido: faltan MLX_CAPTURE_WU_STATION_ID y/o MLX_CAPTURE_WU_API_KEY en entorno.")
-    return fetch_wu_current(station_id, api_key)
-
-
-def _call_aemet(station_id: str) -> dict[str, Any]:
-    from services.aemet import get_aemet_data
-
-    return get_aemet_data(_state("AEMET", station_id)) or {}
-
-
-def _call_meteocat(station_id: str) -> dict[str, Any]:
-    from services.meteocat import get_meteocat_data
-
-    return get_meteocat_data(state=_state("METEOCAT", station_id)) or {}
-
-
-def _call_euskalmet(station_id: str) -> dict[str, Any]:
-    from services.euskalmet import get_euskalmet_data
-
-    return get_euskalmet_data(state=_state("EUSKALMET", station_id)) or {}
-
-
-def _call_frost(station_id: str) -> dict[str, Any]:
-    from services.frost import get_frost_data
-
-    return get_frost_data(_state("FROST", station_id)) or {}
-
-
-def _call_meteofrance(station_id: str) -> dict[str, Any]:
-    from services.meteofrance import get_meteofrance_data
-
-    return get_meteofrance_data(_state("METEOFRANCE", station_id)) or {}
-
-
-def _call_meteogalicia(station_id: str) -> dict[str, Any]:
-    from services.meteogalicia import get_meteogalicia_data
-
-    return get_meteogalicia_data(_state("METEOGALICIA", station_id)) or {}
-
-
-def _call_nws(station_id: str) -> dict[str, Any]:
-    from services.nws import get_nws_data
-
-    return get_nws_data(_state("NWS", station_id)) or {}
-
-
-def _call_poem(station_id: str) -> dict[str, Any]:
-    from services.poem import get_poem_data
-
-    return get_poem_data(_state("POEM", station_id)) or {}
+    credentials = {}
+    if provider == "WU":
+        credentials["api_key"] = _env(
+            "MLX_CAPTURE_WU_API_KEY", "MLX_WU_API_KEY", "WU_API_KEY",
+            "WEATHER_UNDERGROUND_API_KEY",
+        )
+    return fetch_provider_current_processed_via_api(
+        provider, station_id, **credentials,
+    )
 
 
 CALLERS: dict[str, Callable[[str], dict[str, Any]]] = {
-    "WU": _call_wu,
-    "AEMET": _call_aemet,
-    "METEOCAT": _call_meteocat,
-    "EUSKALMET": _call_euskalmet,
-    "FROST": _call_frost,
-    "METEOFRANCE": _call_meteofrance,
-    "METEOGALICIA": _call_meteogalicia,
-    "NWS": _call_nws,
-    "POEM": _call_poem,
+    provider: (lambda station_id, provider=provider: _call_provider(provider, station_id))
+    for provider in DEFAULT_STATIONS
 }
 
 

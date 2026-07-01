@@ -18,11 +18,15 @@ endpoints vía ``Depends(get_settings)``.
 
 from __future__ import annotations
 
+import logging
+import os
 from functools import lru_cache
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -75,6 +79,33 @@ class Settings(BaseSettings):
     usuarios concurrentes en distintas estaciones.
     """
 
+    ranking_refresh_interval_s: float = 3600.0
+    """
+    Cadencia del job que refresca el ranking de estaciones (segundos). Por
+    defecto 60 min: el ranking es de agregados DIARIOS (máx/mín/racha/lluvia del
+    día), que cambian despacio, así que refrescar más a menudo no aporta y solo
+    machaca las APIs. Importa sobre todo por IEM (~433 llamadas/ciclo): a 60 min
+    son ~10k/día en vez de ~21k. NOTA: el ciclo va ALINEADO a la hora (ver
+    ``ranking_refresh_offset_min``); este intervalo solo se usa como referencia.
+    Configurar vía ``METEOLABX_RANKING_REFRESH_INTERVAL_S``.
+    """
+
+    ranking_refresh_offset_min: int = 5
+    """
+    Minuto de cada hora en que se lanza el ciclo COMPLETO del ranking (por
+    defecto :05). Se alinea justo DESPUÉS de la publicación horaria de los
+    proveedores (METAR/synop salen ~en punto) para pillar el dato fresco, en vez
+    de a minutos arbitrarios. Al arrancar se hace un ciclo inmediato igualmente.
+    Configurar vía ``METEOLABX_RANKING_REFRESH_OFFSET_MIN``.
+    """
+
+    ranking_retry_interval_s: float = 60.0
+    """
+    Si un proveedor falla en un ciclo del ranking, se reintenta (solo ese)
+    tras este intervalo (segundos, por defecto 1 min) en vez de esperar el
+    ciclo completo. Configurar vía ``METEOLABX_RANKING_RETRY_INTERVAL_S``.
+    """
+
     # --- Provider API keys ---
     aemet_api_key: str = ""
     """
@@ -83,6 +114,88 @@ class Settings(BaseSettings):
     servidor. Si está vacía, los endpoints AEMET responden con
     ``provider_unauthorized``. Configurar vía ``METEOLABX_AEMET_API_KEY``.
     """
+
+    meteocat_api_key: str = ""
+    """
+    API key de Meteocat XEMA (server-side, mismo modelo que AEMET: key
+    compartida del servidor, no per-user). Si está vacía, los endpoints
+    METEOCAT responden con ``provider_unauthorized``. Configurar vía
+    ``METEOLABX_METEOCAT_API_KEY``.
+    """
+
+    euskalmet_jwt: str = ""
+    """
+    JWT manual de Euskalmet (``METEOLABX_EUSKALMET_JWT``). Si está
+    vacío, el servicio intenta autogenerarlo firmando con la clave
+    privada PEM (``euskalmet_private_key_path`` o
+    ``keys/euskalmet/privateKey.pem`` del repo).
+    """
+
+    euskalmet_api_key: str = ""
+    """API key opcional de Euskalmet (headers ``apikey``/``x-api-key``)."""
+
+    euskalmet_private_key_path: str = ""
+    """Ruta a la clave privada PEM para autogenerar el JWT de Euskalmet."""
+
+    euskalmet_private_key_pem: str = ""
+    """
+    Contenido PEM de la clave privada de Euskalmet, como alternativa a
+    ``euskalmet_private_key_path`` en plataformas SIN sistema de ficheros
+    persistente ni acceso al repo (p. ej. Railway, donde ``keys/`` está en
+    ``.gitignore`` y no se despliega). Si está y la ruta configurada no
+    apunta a un fichero existente, el lifespan del backend lo materializa a
+    un fichero temporal (0600) y ajusta ``euskalmet_private_key_path`` para
+    que la firma del JWT con ``openssl`` funcione. Configurar vía
+    ``METEOLABX_EUSKALMET_PRIVATE_KEY_PEM`` (pega el contenido del ``.pem``).
+    """
+
+    euskalmet_jwt_iss: str = "meteolabx"
+    """Claim ``iss`` del JWT autogenerado."""
+
+    euskalmet_jwt_email: str = "meteolabx@gmail.com"
+    """Claim ``email`` del JWT autogenerado. DEBE ser la cuenta registrada en
+    api.euskadi.eus; si va vacío/incorrecto, Euskalmet rechaza CADA lectura con
+    HTTP 500. Mismo default que el legacy (``EUSKALMET_JWT_EMAIL``)."""
+
+    meteofrance_api_key: str = ""
+    """
+    API key de Météo-France DPObs (server-side, header ``apikey``).
+    Configurar vía ``METEOLABX_METEOFRANCE_API_KEY``. Cuota 50 req/min.
+    """
+
+    metoffice_api_key: str = ""
+    """
+    API key de Met Office Weather DataHub (server-side, header
+    ``apikey``). Configurar vía ``METEOLABX_METOFFICE_API_KEY``.
+    """
+
+    frost_client_id: str = ""
+    """
+    Client ID de Frost (frost.met.no, HTTP Basic). Configurar vía
+    ``METEOLABX_FROST_CLIENT_ID``.
+    """
+
+    frost_client_secret: str = ""
+    """
+    Client secret de Frost (frost.met.no, HTTP Basic). Configurar vía
+    ``METEOLABX_FROST_CLIENT_SECRET``.
+    """
+
+    # --- POEM (Puertos del Estado) — auth opcional ---
+    poem_bearer_token: str = ""
+    """Token Bearer opcional para POEM (``METEOLABX_POEM_BEARER_TOKEN``)."""
+
+    poem_api_key: str = ""
+    """API key opcional para POEM (``METEOLABX_POEM_API_KEY``)."""
+
+    poem_api_key_header: str = "X-API-Key"
+    """Header donde viaja la API key de POEM."""
+
+    poem_basic_user: str = ""
+    """Usuario HTTP Basic opcional para POEM."""
+
+    poem_basic_password: str = ""
+    """Password HTTP Basic opcional para POEM."""
 
     # --- Logging ---
     log_level: str = "INFO"
@@ -94,6 +207,37 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+    @model_validator(mode="after")
+    def _resolve_environment_aliases(self) -> "Settings":
+        """
+        Admite temporalmente los nombres de entorno antiguos, pero nunca
+        lee credenciales de archivos ni de constantes del código.
+        """
+        def _fallback(current: str, legacy_env: str) -> str:
+            if str(current or "").strip():
+                return current
+            return os.getenv(legacy_env, "").strip()
+
+        self.aemet_api_key = _fallback(self.aemet_api_key, "AEMET_API_KEY")
+        self.meteocat_api_key = _fallback(self.meteocat_api_key, "METEOCAT_API_KEY")
+        self.meteofrance_api_key = _fallback(self.meteofrance_api_key, "METEOFRANCE_API_KEY")
+        self.metoffice_api_key = _fallback(self.metoffice_api_key, "METOFFICE_API_KEY")
+        self.frost_client_id = _fallback(self.frost_client_id, "FROST_CLIENT_ID")
+        self.frost_client_secret = _fallback(self.frost_client_secret, "FROST_CLIENT_SECRET")
+        self.euskalmet_jwt = _fallback(self.euskalmet_jwt, "EUSKALMET_JWT")
+        self.euskalmet_api_key = _fallback(self.euskalmet_api_key, "EUSKALMET_API_KEY")
+        self.euskalmet_private_key_path = _fallback(
+            self.euskalmet_private_key_path, "EUSKALMET_PRIVATE_KEY_PATH",
+        )
+        self.euskalmet_private_key_pem = _fallback(
+            self.euskalmet_private_key_pem, "EUSKALMET_PRIVATE_KEY_PEM",
+        )
+        self.poem_bearer_token = _fallback(self.poem_bearer_token, "POEM_BEARER_TOKEN")
+        self.poem_api_key = _fallback(self.poem_api_key, "POEM_API_KEY")
+        self.poem_basic_user = _fallback(self.poem_basic_user, "POEM_BASIC_USER")
+        self.poem_basic_password = _fallback(self.poem_basic_password, "POEM_BASIC_PASSWORD")
+        return self
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -146,6 +146,12 @@ class AsyncTTLCache(Generic[T]):
         if not is_leader:
             return await future_to_await
 
+        # Métricas: las keys empiezan por "{provider}:"; un miss que
+        # fetchea es una llamada real al upstream. Import diferido para
+        # no acoplar el módulo de caché en imports tempranos.
+        from server.services import metrics
+
+        metrics.record_call(key.split(":", 1)[0])
         try:
             result = await fetcher()
         except BaseException as exc:
@@ -159,6 +165,8 @@ class AsyncTTLCache(Generic[T]):
             # future_to_await`` igualmente re-eleva la excepción.
             future_to_await.exception()
             raise
+
+        metrics.record_success(key.split(":", 1)[0])
 
         # ----- Fase 3: cachear, notificar followers, evict si toca -----
         async with self._lock:

@@ -1,4 +1,9 @@
+import json
+from types import SimpleNamespace
+
+from config import LS_FAVORITES
 from utils import favorites
+from utils import storage
 from components import favorites as favorites_component
 
 
@@ -174,7 +179,7 @@ def test_render_favorites_bar_escapes_css_braces(monkeypatch):
     favorites_component.render_favorites_bar(t=lambda key, **kwargs: key, dark=False)
 
     assert fake_st.markdown_calls
-    assert fake_st.expander_args[1]["expanded"] is True
+    assert fake_st.expander_args[1]["expanded"] is False
     assert any(
         'div[data-testid="stExpander"]:has(.mlbx-favorites-title)' in str(args[0])
         for args, _kwargs in fake_st.markdown_calls
@@ -355,3 +360,70 @@ def test_normalize_favorite_accepts_numeric_station_id() -> None:
     favorite = favorites.normalize_favorite(raw_numeric)
     assert favorite is not None
     assert favorite["station_id"] == "12345"
+
+
+# =====================================================================
+# Persistencia: el favorito debe quedar ENCOLADO para localStorage
+# =====================================================================
+
+def _patch_storage(monkeypatch, patch_streamlit):
+    """Aísla utils.storage del componente real de localStorage."""
+    patch_streamlit(storage)
+    monkeypatch.setattr(
+        storage,
+        "_get_local_storage",
+        lambda: SimpleNamespace(getItem=lambda *args, **kwargs: None),
+    )
+
+
+def test_upsert_favorite_queues_write_for_browser_persistence(
+    patch_streamlit, fake_session_state, monkeypatch
+):
+    """
+    Regresión del bug de producción: al guardar un favorito desde el mapa o
+    el selector de estaciones, el favorito aparecía en la sesión pero
+    desaparecía al recargar.
+
+    Causa: esos flujos hacían un ``flush_local_storage_writes`` efímero
+    seguido de ``st.rerun()`` inmediato, que desmontaba el iframe del bridge
+    antes de escribir en el navegador y vaciaba la cola. La corrección deja
+    la escritura ENCOLADA para que el bootstrap estable del sidebar la
+    entregue en el rerun siguiente (igual que las credenciales WU).
+
+    Este test fija ese contrato: tras ``upsert_favorite`` la escritura de
+    ``LS_FAVORITES`` queda en la cola pendiente (no se pierde) y es legible
+    dentro de la sesión.
+    """
+    _patch_storage(monkeypatch, patch_streamlit)
+
+    favorite = favorites.favorite_from_provider_station(
+        {
+            "provider_id": "METEOGALICIA",
+            "provider": "MeteoGalicia",
+            "station_id": "10045",
+            "name": "Mabegondo",
+            "lat": 43.24,
+            "lon": -8.26,
+            "elevation_m": 94,
+        }
+    )
+    assert favorite is not None
+    assert favorites.upsert_favorite(favorite) is True
+
+    # 1) La escritura de LS_FAVORITES quedó ENCOLADA para el bridge.
+    pending = fake_session_state.get("_mlx_local_storage_pending_writes", {})
+    assert LS_FAVORITES in pending, "el favorito debe encolarse para localStorage"
+    queued = json.loads(pending[LS_FAVORITES])
+    assert len(queued) == 1
+    assert queued[0]["station_id"] == "10045"
+    assert queued[0]["provider_id"] == "METEOGALICIA"
+
+    # 2) Dentro de la sesión el favorito es legible (write-cache/snapshot),
+    #    sin haber hablado todavía con el navegador.
+    stored = favorites.get_stored_favorites()
+    assert [f["station_id"] for f in stored] == ["10045"]
+
+    # 3) El bootstrap consume la cola UNA vez para entregarla al navegador.
+    consumed = storage.consume_local_storage_writes()
+    assert LS_FAVORITES in consumed
+    assert storage.consume_local_storage_writes() == {}

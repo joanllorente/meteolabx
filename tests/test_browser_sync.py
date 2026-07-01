@@ -21,12 +21,12 @@ def test_browser_sync_does_not_pollute_public_url_with_context_params():
 def test_legacy_query_param_cleanup_still_present_in_pwa_iframe():
     """
     La limpieza de los query params legacy (_tz, _vw, _cs, _mlx_boot) se
-    consolidó en ``_inject_pwa_metadata`` (meteolabx.py) tras unir las
-    inyecciones JS de arranque. Verificamos que sigue ahí para que
-    sesiones antiguas con esos parámetros en la URL los pierdan tras
-    cargar.
+    consolidó en ``inject_pwa_metadata`` (components/web_injectors.py, antes
+    inline en meteolabx.py) tras unir las inyecciones JS de arranque.
+    Verificamos que sigue ahí para que sesiones antiguas con esos
+    parámetros en la URL los pierdan tras cargar.
     """
-    source = Path("meteolabx.py").read_text(encoding="utf-8")
+    source = Path("components/web_injectors.py").read_text(encoding="utf-8")
 
     assert 'searchParams.delete' in source
     assert '"_tz"' in source

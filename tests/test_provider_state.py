@@ -69,6 +69,32 @@ def test_wu_connection_snapshot_uses_runtime_station_over_visible_input():
     assert snapshot.station_name == "ILHOSP26"
 
 
+def test_provider_snapshot_prefers_catalog_altitude_over_runtime_altitude(patch_streamlit, fake_session_state):
+    patch_streamlit(provider_state)
+
+    ok = provider_state.apply_provider_station_state(
+        "AEMET",
+        "9434",
+        "ZARAGOZA AEROPUERTO",
+        41.660556,
+        -1.004167,
+        249.0,
+        connected=True,
+    )
+    assert ok is True
+
+    # Observation effects may later update runtime altitude keys; the header
+    # should still show the selected catalog altitude.
+    fake_session_state["aemet_station_alt"] = 39.0
+    fake_session_state["provider_station_alt"] = 39.0
+    fake_session_state["station_elevation"] = 39.0
+
+    snapshot = provider_state.build_connection_snapshot(fake_session_state)
+
+    assert snapshot is not None
+    assert snapshot.elevation_m == 249.0
+
+
 def test_weatherlink_widget_keys_are_not_restored_as_runtime(patch_streamlit, fake_session_state):
     fake_session_state.update(
         {

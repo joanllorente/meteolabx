@@ -1,0 +1,107 @@
+{
+  "summary": {
+    "provider": "METEOHUB_IT",
+    "generated_at": "2026-06-23T21:23:48.525762+00:00",
+    "total_aliases": 2,
+    "counts": {
+      "observation_confirmed": 0,
+      "observation_conflict": 1,
+      "observation_error": 0,
+      "observation_inconclusive": 1,
+      "inventory_secure_unsampled": 0,
+      "unchecked": 0
+    },
+    "actionable": {
+      "safe_to_group": 0,
+      "block_grouping": 1,
+      "needs_more_evidence": 1,
+      "inventory_secure_candidates": 0
+    }
+  },
+  "buckets": {
+    "observation_confirmed": [],
+    "observation_conflict": [
+      {
+        "alias_pk": 649,
+        "method": "observation_conflict",
+        "confidence": 0.2,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-380-0-168",
+          "name": "MONTE ARGENTARIO",
+          "latitude": 42.3869,
+          "longitude": 11.1697,
+          "elevation_m": 630.7,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOHUB_IT",
+          "network": "sir-toscana",
+          "id": "sir-toscana|42.38739|11.16853|argentario",
+          "name": "Argentario",
+          "latitude": 42.38739,
+          "longitude": 11.16853,
+          "elevation_m": null,
+          "country": "IT",
+          "region": null
+        },
+        "latest_check": {
+          "status": "conflict",
+          "checked_at": "2026-06-23T21:23:14.949481+00:00",
+          "matched_hours": 24,
+          "compared_values": 47,
+          "agreeing_values": 8,
+          "agreement_ratio": 0.17,
+          "temperature_agreement_ratio": 0.217,
+          "error": null
+        }
+      }
+    ],
+    "observation_error": [],
+    "observation_inconclusive": [
+      {
+        "alias_pk": 648,
+        "method": "inventory_secure",
+        "confidence": 0.9258240531046017,
+        "reviewed": false,
+        "iem": {
+          "provider": "IEM",
+          "network": "WMO_BUFR_SRF",
+          "id": "0-380-0-21",
+          "name": "PASSO ROLLE",
+          "latitude": 46.2978,
+          "longitude": 11.7867,
+          "elevation_m": 2004.0,
+          "country": "UN",
+          "region": null
+        },
+        "source": {
+          "provider": "METEOHUB_IT",
+          "network": "open-trentino",
+          "id": "open-trentino|46.29792|11.78712|t0103-sm-passo-rolle",
+          "name": "T0103 - SM Passo Rolle",
+          "latitude": 46.29792,
+          "longitude": 11.78712,
+          "elevation_m": null,
+          "country": "IT",
+          "region": null
+        },
+        "latest_check": {
+          "status": "inconclusive",
+          "checked_at": "2026-06-23T21:23:15.491893+00:00",
+          "matched_hours": 24,
+          "compared_values": 48,
+          "agreeing_values": 9,
+          "agreement_ratio": 0.188,
+          "temperature_agreement_ratio": 0.292,
+          "error": null
+        }
+      }
+    ],
+    "inventory_secure_unsampled": [],
+    "unchecked": []
+  }
+}

@@ -14,7 +14,7 @@ Por qué importa:
 - El "imperative shell" del frontend Streamlit (en ``meteolabx.py``)
   aplica los efectos secundarios sobre ``st.session_state`` y emite
   ``st.warning`` a partir de lo que esta función produce
-  (``ProcessingResult.session_updates``, ``warnings``, ``pressure_push``,
+  (``ProcessingResult.session_updates``, ``warnings``,
   ``chart_series``, ``trend_hourly_series``, ``chart_series_owner``,
   ``trend_hourly_owner_action`` + ``trend_hourly_owner``).
 
@@ -28,11 +28,14 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 # Constantes meteo del config legacy (módulo Python puro).
 from config import (
     MAX_DATA_AGE_MINUTES,
+    RD,
     RAIN_TRACE, RAIN_VERY_LIGHT, RAIN_LIGHT, RAIN_MODERATE_LIGHT,
     RAIN_MODERATE, RAIN_HEAVY, RAIN_VERY_HEAVY,
 )
@@ -58,6 +61,8 @@ from models.radiation import (
     sky_clarity_index,
     water_balance,
 )
+
+from domain import observation_warnings
 
 # NOTA: NO importamos de ``utils.series_state`` ni ``utils.state_keys``
 # porque ``utils/__init__.py`` carga eagerly ``utils.storage`` →
@@ -102,47 +107,120 @@ def _empty_chart_series() -> Dict[str, Any]:
         "gusts": [],
         "wind_dirs": [],
         "precips": [],
+        "theta_e": [],
+        "mixing_ratios": [],
+        "theta_e_trends": [],
+        "mixing_ratio_trends": [],
+        "pressure_trends": [],
+        "vapor_pressures": [],
+        "saturation_pressures": [],
+        "theoretical_solar_radiations": [],
+        "wind_u": [],
+        "wind_v": [],
+        "sunrise_epoch": None,
+        "sunset_epoch": None,
+        "solar_altitude": None,
+        "solar_altitude_max": None,
+        "is_nighttime": None,
         "has_data": False,
     }
 
 
-def _has_real_number(values: List[Any]) -> bool:
-    for value in values:
+def _last_valid_float(values: Any) -> float:
+    if not isinstance(values, list):
+        return float("nan")
+    for value in reversed(values):
         try:
-            number = float(value)
+            candidate = float(value)
         except (TypeError, ValueError):
             continue
-        if number == number:
-            return True
-    return False
+        if not _is_nan(candidate):
+            return candidate
+    return float("nan")
 
 
-def _has_positive_number(values: List[Any]) -> bool:
-    for value in values:
+def _apply_wind_fallback_from_series(base: Dict[str, Any], chart_series: Mapping[str, Any]) -> None:
+    for base_key, series_key in (
+        ("wind", "winds"),
+        ("gust", "gusts"),
+        ("wind_dir_deg", "wind_dirs"),
+    ):
         try:
-            number = float(value)
+            current = float(base.get(base_key, float("nan")))
+        except (TypeError, ValueError):
+            current = float("nan")
+        if not _is_nan(current):
+            continue
+        fallback = _last_valid_float(chart_series.get(series_key, []))
+        if not _is_nan(fallback):
+            base[base_key] = fallback
+
+
+def _local_day_start_epoch(epoch: int, tz_name: str) -> int:
+    try:
+        tz = ZoneInfo(str(tz_name).strip()) if str(tz_name).strip() else None
+        local = datetime.fromtimestamp(epoch, tz=tz)
+    except Exception:
+        local = datetime.fromtimestamp(epoch)
+    return int(local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+
+
+def _solar_energy_today_wh_m2(
+    epochs: List[Any], solar_values: List[Any], *, now_epoch: int, tz_name: str,
+) -> float:
+    day_start = _local_day_start_epoch(now_epoch, tz_name)
+    points: List[Tuple[int, float]] = []
+    for epoch, value in zip(epochs, solar_values):
+        try:
+            ep, solar = int(epoch), max(0.0, float(value))
         except (TypeError, ValueError):
             continue
-        if number == number and number > 0.0:
-            return True
-    return False
+        if solar == solar and day_start <= ep <= now_epoch:
+            points.append((ep, solar))
+    points.sort()
+    if len(points) < 2:
+        return float("nan")
+    energy = 0.0
+    previous_epoch, previous_value = points[0]
+    for epoch, value in points[1:]:
+        elapsed = epoch - previous_epoch
+        if 0 < elapsed <= 7200:
+            energy += (previous_value + value) * 0.5 * elapsed / 3600.0
+        previous_epoch, previous_value = epoch, value
+    return max(0.0, energy)
 
 
-def _select_precip_series(series: Mapping[str, Any]) -> List[Any]:
-    fallback: List[Any] = []
-    first_real: List[Any] = []
-    for key in ("precips", "precip_accum_mm", "precip_step_mm"):
-        values = series.get(key)
-        if values is None:
+def _erythemal_metrics(epochs: List[Any], uv_values: List[Any], *, now_epoch: int) -> Tuple[float, float]:
+    points: List[Tuple[int, float]] = []
+    for epoch, value in zip(epochs, uv_values):
+        try:
+            ep, uv_index = int(epoch), max(0.0, float(value))
+        except (TypeError, ValueError):
             continue
-        values_list = list(values)
-        if not fallback and values_list:
-            fallback = values_list
-        if not first_real and _has_real_number(values_list):
-            first_real = values_list
-        if _has_positive_number(values_list):
-            return values_list
-    return first_real or fallback
+        if uv_index == uv_index and 0 < ep <= now_epoch:
+            points.append((ep, uv_index))
+    points.sort()
+    if not points:
+        return float("nan"), float("nan")
+    dose = 0.0
+    for index, (epoch, uv_index) in enumerate(points):
+        next_epoch = points[index + 1][0] if index + 1 < len(points) else now_epoch
+        elapsed = next_epoch - epoch
+        if elapsed <= 0 and index:
+            elapsed = epoch - points[index - 1][0]
+        elapsed = max(60, min(1800, elapsed if elapsed > 0 else 300))
+        dose += 0.025 * uv_index * elapsed
+    return dose / 100.0, dose
+
+
+def _wet_bulb_risk(value: float) -> Tuple[str, str]:
+    if _is_nan(value) or value < 28.0:
+        return "", ""
+    if value >= 34.0:
+        return "extreme", "danger"
+    if value >= 30.5:
+        return "critical", "warning"
+    return "potential", ""
 
 
 def normalize_chart_series(
@@ -167,7 +245,18 @@ def normalize_chart_series(
     normalized["winds"] = list(series.get("winds", []))
     normalized["gusts"] = list(series.get("gusts", []))
     normalized["wind_dirs"] = list(series.get("wind_dirs", []))
-    normalized["precips"] = _select_precip_series(series)
+    normalized["precips"] = list(series.get("precips", []))
+    for field in (
+        "theta_e", "mixing_ratios", "theta_e_trends", "mixing_ratio_trends",
+        "pressure_trends", "vapor_pressures", "saturation_pressures",
+        "theoretical_solar_radiations", "wind_u", "wind_v",
+    ):
+        normalized[field] = list(series.get(field, []))
+    for field in (
+        "sunrise_epoch", "sunset_epoch", "solar_altitude",
+        "solar_altitude_max", "is_nighttime",
+    ):
+        normalized[field] = series.get(field)
     normalized["has_data"] = bool(series.get("has_data", False))
     return normalized
 
@@ -235,47 +324,6 @@ def add_basic_derived(base: Dict[str, Any]) -> Dict[str, Any]:
 # =====================================================================
 
 @dataclass(frozen=True)
-class ProcessedObservation:
-    """
-    Resultado de procesar una observación. Estructura idéntica a la antigua
-    ``meteolabx.ProcessedData`` para que el resto del frontend siga
-    consumiéndola sin cambios (``meteolabx.py`` re-exporta como alias).
-    """
-    z: float
-    p_abs: float
-    p_msl: float
-    p_abs_disp: str
-    p_msl_disp: str
-    dp3: float
-    rate_h: float
-    p_label: str
-    p_arrow: str
-    inst_mm_h: float
-    r5_mm_h: float
-    r10_mm_h: float
-    inst_label: str
-    e_sat: float
-    e: float
-    Td_calc: float
-    Tw: float
-    q: float
-    q_gkg: float
-    theta: float
-    Tv: float
-    Te: float
-    rho: float
-    rho_v_gm3: float
-    lcl: float
-    solar_rad: float
-    uv: float
-    et0: float
-    clarity: float
-    balance: float
-    has_radiation: bool
-    has_chart_data: bool
-
-
-@dataclass(frozen=True)
 class ProcessingContext:
     """
     Entradas a ``process_observation`` que NO viven en el dict ``base``
@@ -303,7 +351,7 @@ class ProcessingContext:
     """Si la observación es más antigua que esto, se emite un warning."""
 
     series_override: Optional[dict] = None
-    """Serie temporal explícita; si es ``None`` se usa ``base["_series"]``."""
+    """Serie temporal canónica explícita; ``None`` representa serie vacía."""
 
     series_7d: Optional[dict] = None
     """Serie horaria de 7 días (para tendencia hourly). ``None`` = limpia owner."""
@@ -312,6 +360,9 @@ class ProcessingContext:
     """Identificador de estación para etiquetar quién es dueño de las
     series almacenadas. Útil para detectar staleness al cambiar de
     estación. Si vacío, no se setea owner."""
+
+    station_name: str = ""
+    station_tz: str = ""
 
 
 @dataclass(frozen=True)
@@ -330,21 +381,34 @@ class ProcessingResult:
     - ``session_updates`` → diccionario de claves de sesión a aplicar
       (lat, lon, elevation, station_id…). El caller hace
       ``state.update(session_updates)`` o equivalente con NaN-skip.
-    - ``warnings`` → mensajes a emitir vía ``st.warning(...)``.
-    - ``pressure_push`` → ``(p_abs, epoch)`` a meter en el historial de
-      presión, o ``None`` si no hay dato válido.
+    - ``warnings`` → avisos estructurados ``{"code", "params"}`` (códigos
+      estables en ``domain.observation_warnings``); el frontend los
+      traduce vía i18n y los emite con ``st.warning(...)``.
     - ``chart_series_owner`` → ``(provider_id, station_id)`` si se debe
       etiquetar a alguien como dueño; ``None`` si no.
     - ``trend_hourly_owner_action`` → ``"set"``, ``"clear"`` o ``"none"``.
     - ``trend_hourly_owner`` → usado solo si la acción es ``"set"``.
     """
-    processed: ProcessedObservation
+    derivatives: Dict[str, Any]
     base: Dict[str, Any]
     chart_series: Dict[str, Any]
     trend_hourly_series: Optional[Dict[str, Any]]
     session_updates: Dict[str, Any] = field(default_factory=dict)
-    warnings: List[str] = field(default_factory=list)
-    pressure_push: Optional[Tuple[float, int]] = None
+    warnings: List[Dict[str, Any]] = field(default_factory=list)
+    chart_series_owner: Optional[Tuple[str, str]] = None
+    trend_hourly_owner_action: str = "none"
+    trend_hourly_owner: Optional[Tuple[str, str]] = None
+
+
+@dataclass(frozen=True)
+class ObservationEffectPlan:
+    """Client-owned effects prepared without calculating meteorological derivatives."""
+
+    base: Dict[str, Any]
+    chart_series: Dict[str, Any]
+    trend_hourly_series: Optional[Dict[str, Any]]
+    session_updates: Dict[str, Any] = field(default_factory=dict)
+    warnings: List[Dict[str, Any]] = field(default_factory=list)
     chart_series_owner: Optional[Tuple[str, str]] = None
     trend_hourly_owner_action: str = "none"
     trend_hourly_owner: Optional[Tuple[str, str]] = None
@@ -390,9 +454,7 @@ def rain_intensity_label(rate_mm_h: float) -> str:
     """
     Clasifica una intensidad de lluvia (mm/h) en una etiqueta humana.
 
-    Duplica la lógica de ``services.rain.rain_intensity_label`` (que vive
-    en un módulo que importa streamlit). Las constantes vienen de
-    ``config.py``, que es Python puro.
+    Las constantes vienen de ``config.py`` y no dependen del estado de UI.
     """
     if _is_nan(rate_mm_h) or rate_mm_h <= 0:
         return "Sin precipitación"
@@ -417,9 +479,8 @@ def _pressure_trend_from_endpoints(
     p_now: float, epoch_now: int, p_3h_ago: float, epoch_3h_ago: int,
 ) -> Tuple[float, float, str, str]:
     """
-    Tendencia 3h dada presión en dos puntos. Réplica de
-    ``services.pressure_trend_3h`` pero local y pura para no arrastrar el
-    módulo legacy aquí. Devuelve ``(dp3, rate_h, label, arrow)``.
+    Tendencia 3h dada presión en dos puntos explícitos del proveedor.
+    Devuelve ``(dp3, rate_h, label, arrow)``.
     """
     if _is_nan(p_now) or _is_nan(p_3h_ago):
         return float("nan"), float("nan"), "—", "•"
@@ -430,7 +491,7 @@ def _pressure_trend_from_endpoints(
         return float("nan"), float("nan"), "—", "•"
     dp3 = p_now - p_3h_ago
     rate_h = dp3 / dt_h
-    # Clasificación tomada del legacy services.pressure (criterios estándar).
+    # Umbrales meteorológicos compartidos por todos los proveedores.
     abs_dp = abs(dp3)
     if abs_dp < 1.0:
         label, arrow = "Estable", "→"
@@ -506,7 +567,7 @@ def _precip_rate_from_series(series: Optional[Mapping[str, Any]]) -> float:
     if not isinstance(series, Mapping):
         return float("nan")
     epochs = series.get("epochs", [])
-    precip_values = _select_precip_series(series)
+    precip_values = list(series.get("precips", []))
     return _precip_rate_between_last_measurements(epochs, precip_values)
 
 
@@ -621,17 +682,17 @@ def _is_meaningful_value(value: Any) -> bool:
 
 
 def _build_provider_metadata_updates(
-    base: Mapping[str, Any], provider_name: str, z: float,
+    base: Mapping[str, Any], ctx: ProcessingContext, z: float,
 ) -> Dict[str, Any]:
     """
     Construye el dict de claves de sesión que el caller debe aplicar.
     No incluye lat/lon/elevation (se añaden aparte); solo metadata
     estación + prefijada por proveedor.
     """
-    prefix = str(provider_name or "").strip().lower()
-    station_id = str(base.get("station_code") or base.get("idema") or "").strip()
-    station_name = str(base.get("station_name") or "").strip()
-    station_tz = str(base.get("station_tz") or "").strip()
+    prefix = str(ctx.provider_name or "").strip().lower()
+    station_id = str(ctx.owner_station_id or "").strip()
+    station_name = str(ctx.station_name or "").strip()
+    station_tz = str(ctx.station_tz or "").strip()
 
     candidates: Dict[str, Any] = {
         PROVIDER_STATION_LAT: base.get("lat"),
@@ -658,6 +719,90 @@ def _build_provider_metadata_updates(
 # =====================================================================
 # Orquestador principal
 # =====================================================================
+
+def prepare_observation_effects(
+    base: Dict[str, Any],
+    ctx: ProcessingContext,
+    *,
+    now_epoch: Optional[float] = None,
+) -> ObservationEffectPlan:
+    """Prepare session/UI effects without running the derivative pipeline."""
+    NaN = float("nan")
+    current_epoch = time.time() if now_epoch is None else float(now_epoch)
+
+    z_from_base = base.get("elevation")
+    if z_from_base is None or (
+        isinstance(z_from_base, float) and _is_nan(z_from_base)
+    ):
+        z = float(ctx.elevation_fallback or 0)
+    else:
+        z = float(z_from_base)
+
+    session_updates: Dict[str, Any] = {
+        LAST_UPDATE_TIME: current_epoch,
+        STATION_LAT: base.get("lat", NaN),
+        STATION_LON: base.get("lon", NaN),
+        STATION_ELEVATION: z,
+        ELEVATION_SOURCE: ctx.provider_name,
+    }
+    session_updates.update(_build_provider_metadata_updates(base, ctx, z))
+
+    warnings: List[Dict[str, Any]] = []
+    try:
+        data_age_minutes = (current_epoch - float(base.get("epoch", 0))) / 60.0
+    except (TypeError, ValueError):
+        data_age_minutes = 0.0
+    if data_age_minutes > ctx.max_data_age_minutes:
+        warnings.append(
+            observation_warnings.data_age(ctx.provider_name, data_age_minutes)
+        )
+
+    raw_series = ctx.series_override or {}
+    chart_series = normalize_chart_series(
+        raw_series if isinstance(raw_series, Mapping) else {}
+    )
+    _apply_wind_fallback_from_series(base, chart_series)
+
+    chart_series_owner: Optional[Tuple[str, str]] = None
+    if ctx.owner_station_id and (
+        bool(chart_series.get("has_data")) or len(chart_series.get("epochs", [])) > 0
+    ):
+        chart_series_owner = (ctx.provider_name, ctx.owner_station_id)
+
+    if ctx.series_7d is not None:
+        if isinstance(ctx.series_7d, Mapping) and ctx.series_7d.get("has_data"):
+            trend_hourly_series = normalize_chart_series(ctx.series_7d)
+        else:
+            trend_hourly_series = chart_series
+    else:
+        trend_hourly_series = normalize_chart_series({})
+
+    if (
+        ctx.owner_station_id
+        and (
+            bool(trend_hourly_series.get("has_data", False))
+            or len(trend_hourly_series.get("epochs", [])) > 0
+        )
+    ):
+        trend_hourly_owner_action = "set"
+        trend_hourly_owner: Optional[Tuple[str, str]] = (
+            ctx.provider_name,
+            ctx.owner_station_id,
+        )
+    else:
+        trend_hourly_owner_action = "clear"
+        trend_hourly_owner = None
+
+    return ObservationEffectPlan(
+        base=base,
+        chart_series=chart_series,
+        trend_hourly_series=trend_hourly_series,
+        session_updates=session_updates,
+        warnings=warnings,
+        chart_series_owner=chart_series_owner,
+        trend_hourly_owner_action=trend_hourly_owner_action,
+        trend_hourly_owner=trend_hourly_owner,
+    )
 
 def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> ProcessingResult:
     """
@@ -701,18 +846,19 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
         STATION_ELEVATION: z,
         ELEVATION_SOURCE: ctx.provider_name,
     }
-    session_updates.update(_build_provider_metadata_updates(base, ctx.provider_name, z))
+    session_updates.update(_build_provider_metadata_updates(base, ctx, z))
 
     # ---- 2. Warning si datos antiguos --------------------------------
-    warnings: List[str] = []
+    # Warnings estructurados {code, params}: el cálculo (backend) emite el
+    # código estable; la presentación (idioma/emoji) vive en el frontend.
+    warnings: List[Dict[str, Any]] = []
     try:
         data_age_minutes = (now_epoch - float(base.get("epoch", 0))) / 60.0
     except (TypeError, ValueError):
         data_age_minutes = 0.0
     if data_age_minutes > ctx.max_data_age_minutes:
         warnings.append(
-            f"⚠️ Datos de {ctx.provider_name} con {data_age_minutes:.0f} minutos "
-            "de antigüedad. La estación puede no estar reportando."
+            observation_warnings.data_age(ctx.provider_name, data_age_minutes)
         )
 
     # ---- 3. Inicialización de variables ------------------------------
@@ -725,13 +871,6 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
     p_abs_disp = _fmt_pressure(p_abs, provider_for_pressure)
     p_msl_disp = _fmt_pressure(p_msl, provider_for_pressure)
 
-    pressure_push: Optional[Tuple[float, int]] = None
-    if not _is_nan(p_abs):
-        try:
-            pressure_push = (p_abs, int(base["epoch"]))
-        except (KeyError, TypeError, ValueError):
-            pressure_push = None
-
     # ---- 5. Tendencia presión 3h desde base["pressure_3h_ago"] ------
     if not _is_nan(p_msl):
         dp3, rate_h, p_label, p_arrow = _pressure_trend_from_endpoints(
@@ -743,7 +882,20 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
     else:
         dp3, rate_h, p_label, p_arrow = NaN, NaN, "—", "•"
 
-    # ---- 6. Termodinámica básica + extendida -------------------------
+    # ---- 6. Serie temporal del chart + fallback de viento -------------
+    raw_series = ctx.series_override or {}
+    chart_series = normalize_chart_series(raw_series if isinstance(raw_series, Mapping) else {})
+    chart_epochs = chart_series["epochs"]
+    chart_temps = chart_series["temps"]
+    chart_humidities = chart_series["humidities"]
+    chart_pressures = chart_series["pressures_abs"]
+    chart_winds = chart_series["winds"]
+    chart_solar_radiations = chart_series["solar_radiations"]
+    has_chart_data = bool(chart_series.get("has_data"))
+
+    _apply_wind_fallback_from_series(base, chart_series)
+
+    # ---- 7. Termodinámica básica + extendida -------------------------
     # ``add_basic_derived`` calcula y escribe ``Td``, ``feels_like`` y
     # ``heat_index`` en ``base`` con las fórmulas estándar (Magnus-Tetens,
     # Steadman 1984, Rothfusz). Se reutiliza también desde
@@ -754,7 +906,8 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
     # Magnitudes extendidas que solo aplican aquí (necesitan ``p_abs`` u
     # otras combinaciones que el helper básico no incluye).
     e_sat = e_v = Td_calc = Tw = q_val = q_gkg = theta = Tv_val = Te_val = NaN
-    rho_val = rho_v_gm3 = lcl_val = NaN
+    rho_val = rho_v_gm3 = lcl_val = sound_speed_ms = NaN
+    wet_bulb_risk = wet_bulb_alert_level = ""
 
     Tc = base.get("Tc")
     RH = base.get("RH")
@@ -773,12 +926,18 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
             rho_val = air_density(p_abs, Tv_val)
             rho_v_gm3 = absolute_humidity(e_v, Tc)
             lcl_val = lcl_height(Tc, Td_calc)
+            if not _is_nan(Tv_val):
+                sound_speed_ms = math.sqrt(1.4 * RD * (Tv_val + 273.15))
 
-    # ---- 7. Radiación / UV / claridad --------------------------------
+        wet_bulb_risk, wet_bulb_alert_level = _wet_bulb_risk(Tw)
+
+    # ---- 8. Radiación / UV / claridad --------------------------------
     solar_rad = base.get("solar_radiation", NaN) if base.get("solar_radiation") is not None else NaN
     uv = base.get("uv", NaN) if base.get("uv") is not None else NaN
     has_radiation = (not _is_nan(solar_rad)) or (not _is_nan(uv))
     et0 = clarity = balance = NaN
+    solar_energy_today_wh_m2 = erythemal_dose_today_sed = NaN
+    erythemal_dose_today_j_m2 = erythemal_irradiance_mw_m2 = NaN
 
     if has_radiation:
         lat = base.get("lat", NaN)
@@ -787,16 +946,18 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
             solar_rad, lat, z, base.get("epoch", 0), lon, tz_name=ctx.sun_tz_name,
         )
 
-    # ---- 8. Serie temporal del chart --------------------------------
-    raw_series = ctx.series_override if ctx.series_override is not None else base.get("_series")
-    chart_series = normalize_chart_series(raw_series if isinstance(raw_series, Mapping) else {})
-    chart_epochs = chart_series["epochs"]
-    chart_temps = chart_series["temps"]
-    chart_humidities = chart_series["humidities"]
-    chart_pressures = chart_series["pressures_abs"]
-    chart_winds = chart_series["winds"]
-    chart_solar_radiations = chart_series["solar_radiations"]
-    has_chart_data = bool(chart_series.get("has_data"))
+    observation_epoch = _safe_int(base.get("epoch", 0), int(now_epoch))
+    if observation_epoch <= 0:
+        observation_epoch = int(now_epoch)
+    solar_energy_today_wh_m2 = _solar_energy_today_wh_m2(
+        chart_epochs, chart_solar_radiations,
+        now_epoch=observation_epoch, tz_name=ctx.sun_tz_name,
+    )
+    erythemal_dose_today_sed, erythemal_dose_today_j_m2 = _erythemal_metrics(
+        chart_epochs, chart_series["uv_indexes"], now_epoch=observation_epoch,
+    )
+    if not _is_nan(uv):
+        erythemal_irradiance_mw_m2 = 25.0 * float(uv)
 
     # Intensidad instantánea desde la serie (no-WU típicamente).
     inst_mm_h = _precip_rate_from_series(raw_series if isinstance(raw_series, Mapping) else {})
@@ -856,25 +1017,34 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
         trend_hourly_owner_action = "clear"
 
     # ---- Resultado final --------------------------------------------
-    processed = ProcessedObservation(
-        z=z,
-        p_abs=p_abs, p_msl=p_msl, p_abs_disp=p_abs_disp, p_msl_disp=p_msl_disp,
-        dp3=dp3, rate_h=rate_h, p_label=p_label, p_arrow=p_arrow,
-        inst_mm_h=inst_mm_h, r5_mm_h=r5_mm_h, r10_mm_h=r10_mm_h, inst_label=inst_label,
-        e_sat=e_sat, e=e_v, Td_calc=Td_calc, Tw=Tw, q=q_val, q_gkg=q_gkg,
-        theta=theta, Tv=Tv_val, Te=Te_val, rho=rho_val, rho_v_gm3=rho_v_gm3, lcl=lcl_val,
-        solar_rad=solar_rad, uv=uv, et0=et0, clarity=clarity, balance=balance,
-        has_radiation=has_radiation, has_chart_data=has_chart_data,
-    )
+    derivatives = {
+        "z": z,
+        "p_abs": p_abs, "p_msl": p_msl,
+        "p_abs_disp": p_abs_disp, "p_msl_disp": p_msl_disp,
+        "dp3": dp3, "rate_h": rate_h, "p_label": p_label, "p_arrow": p_arrow,
+        "inst_mm_h": inst_mm_h, "r5_mm_h": r5_mm_h,
+        "r10_mm_h": r10_mm_h, "inst_label": inst_label,
+        "e_sat": e_sat, "e": e_v, "Td_calc": Td_calc, "Tw": Tw,
+        "q": q_val, "q_gkg": q_gkg, "theta": theta, "Tv": Tv_val,
+        "Te": Te_val, "rho": rho_val, "rho_v_gm3": rho_v_gm3, "lcl": lcl_val,
+        "sound_speed_ms": sound_speed_ms,
+        "wet_bulb_risk": wet_bulb_risk, "wet_bulb_alert_level": wet_bulb_alert_level,
+        "solar_rad": solar_rad, "uv": uv, "et0": et0,
+        "clarity": clarity, "balance": balance,
+        "solar_energy_today_wh_m2": solar_energy_today_wh_m2,
+        "erythemal_irradiance_mw_m2": erythemal_irradiance_mw_m2,
+        "erythemal_dose_today_j_m2": erythemal_dose_today_j_m2,
+        "erythemal_dose_today_sed": erythemal_dose_today_sed,
+        "has_radiation": has_radiation, "has_chart_data": has_chart_data,
+    }
 
     return ProcessingResult(
-        processed=processed,
+        derivatives=derivatives,
         base=base,
         chart_series=chart_series,
         trend_hourly_series=trend_hourly_series,
         session_updates=session_updates,
         warnings=warnings,
-        pressure_push=pressure_push,
         chart_series_owner=chart_series_owner,
         trend_hourly_owner_action=trend_hourly_owner_action,
         trend_hourly_owner=trend_hourly_owner,

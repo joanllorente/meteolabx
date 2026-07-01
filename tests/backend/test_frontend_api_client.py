@@ -16,31 +16,20 @@ from unittest.mock import patch, MagicMock
 import pytest
 import requests
 
-from api.weather_underground import WuError
+from utils.api_errors import BackendApiError
 
 
 # =====================================================================
 # Configuración por env
 # =====================================================================
 
-def test_is_backend_enabled_default_off(monkeypatch) -> None:
-    monkeypatch.delenv("METEOLABX_USE_API", raising=False)
-    from utils.api_client import is_backend_enabled
-    assert is_backend_enabled() is False
-
-
-@pytest.mark.parametrize("value", ["1", "true", "True", "yes", "ON"])
-def test_is_backend_enabled_truthy_values(monkeypatch, value: str) -> None:
-    monkeypatch.setenv("METEOLABX_USE_API", value)
-    from utils.api_client import is_backend_enabled
-    assert is_backend_enabled() is True
-
-
-@pytest.mark.parametrize("value", ["0", "false", "no", "off", ""])
-def test_is_backend_enabled_falsy_values(monkeypatch, value: str) -> None:
-    monkeypatch.setenv("METEOLABX_USE_API", value)
-    from utils.api_client import is_backend_enabled
-    assert is_backend_enabled() is False
+def test_backend_is_unconditional_no_enable_flag() -> None:
+    """
+    Backend-first: ya no existe ``is_backend_enabled()`` ni el flag
+    legacy ``METEOLABX_USE_API``; el frontend consume FastAPI siempre.
+    """
+    import utils.api_client as api_client
+    assert not hasattr(api_client, "is_backend_enabled")
 
 
 def test_backend_url_default(monkeypatch) -> None:
@@ -55,6 +44,89 @@ def test_backend_url_custom_strips_trailing_slash(monkeypatch) -> None:
     assert backend_url() == "https://api.example.com"
 
 
+def test_geocode_client_calls_fastapi_and_preserves_contract() -> None:
+    from utils.api_client import fetch_geocode_via_api
+
+    body = {"found": True, "lat": 41.38, "lon": 2.17, "display_name": "Barcelona"}
+    with patch("utils.api_client.requests.get", return_value=_mock_response(200, body)) as request:
+        result = fetch_geocode_via_api("Barcelona", accept_language="es,en")
+
+    assert request.call_args.args[0].endswith("/v1/stations/geocode")
+    assert request.call_args.kwargs["params"] == {"q": "Barcelona", "lang": "es,en"}
+    assert result == body
+
+
+def test_station_near_client_passes_provider_and_country_filters() -> None:
+    from utils.api_client import fetch_stations_near_via_api
+
+    body = {"count": 1, "stations": [{"provider": "IEM", "station_id": "X", "connectable": False}]}
+    with patch("utils.api_client.requests.get", return_value=_mock_response(200, body)) as request:
+        result = fetch_stations_near_via_api(
+            40.4, -3.7, max_results=50, provider_ids=["IEM"], countries=["ES"],
+            has_historical=True, hide_historical_only=True,
+        )
+
+    assert request.call_args.args[0].endswith("/v1/stations/near")
+    assert request.call_args.kwargs["params"] == {
+        "lat": 40.4,
+        "lon": -3.7,
+        "radius_km": 2000.0,
+        "limit": 50,
+        "providers": "IEM",
+        "countries": "ES",
+        "has_historical": "true",
+        "hide_historical_only": "true",
+    }
+    assert result == body
+
+
+def test_station_countries_client_calls_fastapi() -> None:
+    from utils.api_client import fetch_station_countries_via_api
+
+    with patch("utils.api_client.requests.get", return_value=_mock_response(200, {"US": 10, "ES": 2})) as request:
+        result = fetch_station_countries_via_api(["IEM"])
+
+    assert request.call_args.args[0].endswith("/v1/stations/countries")
+    assert request.call_args.kwargs["params"] == {"providers": "IEM"}
+    assert result == {"US": 10, "ES": 2}
+
+
+def test_station_catalog_client_passes_country_filters() -> None:
+    from utils.api_client import fetch_station_catalog_via_api
+
+    body = {"count": 1, "stations": [{"provider": "AEMET", "station_id": "X"}]}
+    with patch("utils.api_client.requests.get", return_value=_mock_response(200, body)) as request:
+        result = fetch_station_catalog_via_api(
+            lat=41.0,
+            lon=2.0,
+            max_results=5000,
+            provider_ids=["AEMET", "IEM"],
+            countries=["ES"],
+            has_historical=True,
+            hide_historical_only=True,
+        )
+
+    assert request.call_args.args[0].endswith("/v1/stations/catalog")
+    assert request.call_args.kwargs["params"] == {
+        "limit": 5000,
+        "lat": 41.0,
+        "lon": 2.0,
+        "providers": "AEMET,IEM",
+        "countries": "ES",
+        "has_historical": "true",
+        "hide_historical_only": "true",
+    }
+    assert result == body
+
+
+def test_solar_model_has_no_external_http_fallback() -> None:
+    from pathlib import Path
+
+    source = Path("models/radiation.py").read_text(encoding="utf-8")
+    assert "sunrise-sunset.org" not in source
+    assert "_sunrise_sunset_api_times" not in source
+
+
 # =====================================================================
 # Helpers para mockear requests.post
 # =====================================================================
@@ -67,11 +139,11 @@ def _mock_response(status: int, json_body: dict | None = None) -> MagicMock:
 
 
 # =====================================================================
-# Camino feliz: shape correcto + null → NaN
+# Camino feliz: contrato canónico sin reinterpretación
 # =====================================================================
 
-def test_via_api_returns_dict_with_legacy_shape() -> None:
-    from utils.api_client import fetch_wu_current_via_api
+def test_via_api_preserves_canonical_shape() -> None:
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     api_body = {
         "epoch": 1717255200,
@@ -86,7 +158,7 @@ def test_via_api_returns_dict_with_legacy_shape() -> None:
     }
 
     with patch("utils.api_client.requests.post", return_value=_mock_response(200, api_body)) as mock_post:
-        result = fetch_wu_current_via_api("ITEST", "fake_key")
+        result = fetch_provider_current_via_api_strict("WU", "ITEST", api_key="fake_key")
 
     # Llamada al endpoint correcto con body correcto
     args, kwargs = mock_post.call_args
@@ -99,26 +171,24 @@ def test_via_api_returns_dict_with_legacy_shape() -> None:
     assert result["epoch"] == 1717255200
     assert result["time_local"] == "2026-06-01 12:00:00"
 
-    # null en JSON → NaN en el dict (lo que espera el resto del frontend)
-    assert math.isnan(result["heat_index"])
-    assert math.isnan(result["wind_chill"])
+    assert result["heat_index"] is None
+    assert result["wind_chill"] is None
 
 
-def test_via_api_missing_numeric_fields_become_nan() -> None:
-    """Si el backend omite un campo numérico, el frontend lo recibe como NaN."""
-    from utils.api_client import fetch_wu_current_via_api
+def test_via_api_does_not_invent_missing_numeric_fields() -> None:
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     api_body = {"epoch": 1717255200}  # solo lo mínimo
 
     with patch("utils.api_client.requests.post", return_value=_mock_response(200, api_body)):
-        result = fetch_wu_current_via_api("X", "Y")
+        result = fetch_provider_current_via_api_strict("WU", "X", api_key="Y")
 
     for field in ("Tc", "RH", "p_hpa", "wind", "uv", "solar_radiation"):
-        assert math.isnan(result[field]), f"campo {field} debería ser NaN"
+        assert field not in result
 
 
 # =====================================================================
-# Mapeo HTTP error → WuError (kind + status_code históricos)
+# Mapeo HTTP error → BackendApiError (kind + status_code históricos)
 # =====================================================================
 
 @pytest.mark.parametrize(
@@ -131,50 +201,52 @@ def test_via_api_missing_numeric_fields_become_nan() -> None:
         (502, "provider_network_error", "network"),
         (502, "provider_http_error", "http"),
         (502, "provider_bad_response", "badjson"),
+        (502, "provider_no_current_data", "nodata"),
     ],
 )
-def test_via_api_translates_backend_errors_to_wuerror(
+def test_via_api_translates_backend_errors_to_client_error(
     http_status: int, error_code: str, expected_wuerror_kind: str
 ) -> None:
-    from utils.api_client import fetch_wu_current_via_api
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     err_body = {"ok": False, "error_code": error_code, "provider": "WU", "detail": "..."}
     with patch("utils.api_client.requests.post", return_value=_mock_response(http_status, err_body)):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_via_api_strict("WU", "X", api_key="Y")
 
     assert excinfo.value.kind == expected_wuerror_kind
-    # WuError preserva el status_code del proveedor para el manejo legacy
+    # El cliente conserva el status HTTP para que la UI decida cómo presentarlo.
     assert excinfo.value.status_code == http_status
+    assert excinfo.value.detail == "..."
 
 
 def test_via_api_unknown_error_code_falls_back_to_http() -> None:
     """
     Si el backend devuelve un ``error_code`` que no conocemos, el cliente
-    lo trata como ``WuError("http", status)`` para no romper la app.
+    lo trata como ``BackendApiError("http", status)`` para no romper la app.
     """
-    from utils.api_client import fetch_wu_current_via_api
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     err_body = {"ok": False, "error_code": "some_new_error_code_we_dont_know"}
     with patch("utils.api_client.requests.post", return_value=_mock_response(500, err_body)):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_via_api_strict("WU", "X", api_key="Y")
 
     assert excinfo.value.kind == "http"
     assert excinfo.value.status_code == 500
 
 
 def test_via_api_non_json_error_response_falls_back_to_http() -> None:
-    """Backend roto (proxy 502 con HTML, p.ej.) → WuError('http', status)."""
-    from utils.api_client import fetch_wu_current_via_api
+    """Backend roto (proxy 502 con HTML, p.ej.) → BackendApiError('http', status)."""
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     bad_response = MagicMock(spec=requests.Response)
     bad_response.status_code = 502
     bad_response.json.side_effect = ValueError("not JSON")
 
     with patch("utils.api_client.requests.post", return_value=bad_response):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_via_api_strict("WU", "X", api_key="Y")
 
     assert excinfo.value.kind == "http"
 
@@ -183,27 +255,27 @@ def test_via_api_non_json_error_response_falls_back_to_http() -> None:
 # Errores de red al hablar con el BACKEND (no con WU)
 # =====================================================================
 
-def test_via_api_backend_timeout_becomes_wuerror_timeout() -> None:
-    from utils.api_client import fetch_wu_current_via_api
+def test_via_api_backend_timeout_becomes_client_timeout() -> None:
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     with patch("utils.api_client.requests.post", side_effect=requests.Timeout("read timeout")):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_via_api_strict("WU", "X", api_key="Y")
 
     assert excinfo.value.kind == "timeout"
 
 
-def test_via_api_backend_unreachable_becomes_wuerror_network() -> None:
+def test_via_api_backend_unreachable_becomes_client_network_error() -> None:
     """
     Si el backend está caído / DNS falla, lo reportamos como ``network``
     aunque técnicamente es un fallo del backend, no de WU. Es el código
     que ya entiende todo el manejo de errores en meteolabx.py.
     """
-    from utils.api_client import fetch_wu_current_via_api
+    from utils.api_client import fetch_provider_current_via_api_strict
 
     with patch("utils.api_client.requests.post", side_effect=requests.ConnectionError("refused")):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_via_api_strict("WU", "X", api_key="Y")
 
     assert excinfo.value.kind == "network"
 
@@ -222,102 +294,34 @@ def test_api_client_does_not_import_streamlit() -> None:
     assert "from streamlit" not in source
 
 
-# =====================================================================
-# fetch_daily_timeseries_via_api: shape legacy + tolerancia a errores
-# =====================================================================
+def test_api_client_has_no_legacy_payload_adapters() -> None:
+    from pathlib import Path
 
-def test_series_via_api_returns_dict_with_legacy_shape() -> None:
-    from utils.api_client import fetch_daily_timeseries_via_api
-
-    api_body = {
-        "epochs": [1000, 2000],
-        "temps": [20.0, 21.0],
-        "humidities": [60.0, None],
-        "dewpts": [12.0, 13.0],
-        "pressures": [1013.0, None],
-        "uv_indexes": [None, None],
-        "solar_radiations": [200.0, 250.0],
-        "winds": [5.0, 6.0],
-        "gusts": [10.0, 11.0],
-        "wind_dirs": [90.0, 95.0],
-        "lat": 41.387,
-        "lon": 2.169,
-        "has_data": True,
-    }
-
-    with patch("utils.api_client.requests.post", return_value=_mock_response(200, api_body)) as mock_post:
-        result = fetch_daily_timeseries_via_api("ITEST", "fake")
-
-    # Endpoint correcto
-    args, _ = mock_post.call_args
-    assert args[0].endswith("/v1/observations/series/today")
-
-    # Shape: epochs intactos, floats normales, null → NaN
-    assert result["epochs"] == [1000, 2000]
-    assert result["temps"] == [20.0, 21.0]
-    assert math.isnan(result["humidities"][1])  # null → NaN
-    assert math.isnan(result["pressures"][1])
-    assert math.isnan(result["uv_indexes"][0])
-    assert result["lat"] == 41.387
-    assert result["has_data"] is True
+    source = Path("utils/api_client.py").read_text(encoding="utf-8")
+    assert "_denormalize_for_legacy" not in source
+    assert "_denormalize_series_for_legacy" not in source
+    assert "_denormalize_derivatives_for_legacy" not in source
+    assert "_null_to_nan" not in source
+    for wrapper in (
+        "fetch_wu_current_via_api",
+        "fetch_daily_timeseries_via_api",
+        "fetch_aemet_current_via_api_strict",
+        "fetch_aemet_current_processed_via_api",
+        "fetch_aemet_today_series_via_api_strict",
+        "fetch_wu_current_processed_via_api",
+    ):
+        assert f"def {wrapper}(" not in source
 
 
-def test_series_via_api_swallows_provider_error_and_returns_empty() -> None:
-    """
-    El legacy nunca propaga errores en series del día. El cliente del
-    frontend mantiene esa semántica: backend error → dict vacío.
-    """
-    from utils.api_client import fetch_daily_timeseries_via_api
+def test_wu_frontend_module_has_no_direct_provider_transport() -> None:
+    from pathlib import Path
 
-    err_body = {"ok": False, "error_code": "provider_timeout"}
-    with patch("utils.api_client.requests.post", return_value=_mock_response(504, err_body)):
-        result = fetch_daily_timeseries_via_api("X", "Y")
+    source = Path("api/weather_underground.py").read_text(encoding="utf-8")
+    assert "import requests" not in source
+    assert "api.weather.com" not in source
+    assert "WU_URL_" not in source
+    assert "class WuError" not in source
 
-    assert result["has_data"] is False
-    assert result["epochs"] == []
-    assert math.isnan(result["lat"])
-
-
-def test_series_via_api_swallows_network_error_and_returns_empty() -> None:
-    """Backend caído / DNS roto → dict vacío, igual que el legacy."""
-    from utils.api_client import fetch_daily_timeseries_via_api
-
-    with patch("utils.api_client.requests.post", side_effect=requests.ConnectionError("refused")):
-        result = fetch_daily_timeseries_via_api("X", "Y")
-
-    assert result["has_data"] is False
-    assert result["epochs"] == []
-
-
-# =====================================================================
-# Feature flag de /processed
-# =====================================================================
-
-def test_is_processed_endpoint_enabled_requires_backend_flag(monkeypatch) -> None:
-    """Sin ``METEOLABX_USE_API=1`` el flag de processed es falsy."""
-    from utils.api_client import is_processed_endpoint_enabled
-    monkeypatch.delenv("METEOLABX_USE_API", raising=False)
-    monkeypatch.setenv("METEOLABX_USE_PROCESSED_API", "1")
-    assert is_processed_endpoint_enabled() is False
-
-
-def test_is_processed_endpoint_enabled_when_both_flags_on(monkeypatch) -> None:
-    from utils.api_client import is_processed_endpoint_enabled
-    monkeypatch.setenv("METEOLABX_USE_API", "1")
-    monkeypatch.setenv("METEOLABX_USE_PROCESSED_API", "1")
-    assert is_processed_endpoint_enabled() is True
-
-
-def test_is_processed_endpoint_disabled_when_processed_flag_off(monkeypatch) -> None:
-    from utils.api_client import is_processed_endpoint_enabled
-    monkeypatch.setenv("METEOLABX_USE_API", "1")
-    monkeypatch.setenv("METEOLABX_USE_PROCESSED_API", "0")
-    assert is_processed_endpoint_enabled() is False
-
-
-# =====================================================================
-# fetch_wu_current_processed_via_api
-# =====================================================================
 
 # Body realista que el endpoint ``/current/processed`` devuelve.
 PROCESSED_OK_BODY = {
@@ -354,11 +358,11 @@ PROCESSED_OK_BODY = {
 
 
 def test_processed_via_api_returns_observation_derivatives_warnings() -> None:
-    from utils.api_client import fetch_wu_current_processed_via_api
+    from utils.api_client import fetch_provider_current_processed_via_api
 
     with patch("utils.api_client.requests.post", return_value=_mock_response(200, PROCESSED_OK_BODY)) as mock_post:
-        result = fetch_wu_current_processed_via_api(
-            "ITEST", "fake", sun_tz_name="Europe/Madrid",
+        result = fetch_provider_current_processed_via_api("WU", 
+            "ITEST", api_key="fake", sun_tz_name="Europe/Madrid",
         )
 
     # Endpoint y body correctos
@@ -367,14 +371,15 @@ def test_processed_via_api_returns_observation_derivatives_warnings() -> None:
     assert kwargs["json"]["provider"] == "WU"
     assert kwargs["json"]["sun_tz_name"] == "Europe/Madrid"
 
-    # Shape: tres bloques
+    # Payload completo de dashboard: observación, derivadas y los bloques
+    # diarios opcionales (None si el backend probado no los incluyó).
     assert set(result.keys()) == {"observation", "derivatives", "warnings"}
 
-    # Observation: floats normales preservados, null → NaN
+    # Observation: valores y null canónicos preservados.
     obs = result["observation"]
     assert obs["Tc"] == 22.0
     assert obs["epoch"] == 1717255200
-    assert math.isnan(obs["wind_chill"])  # null → NaN
+    assert obs["wind_chill"] is None
 
     # Derivatives: 32 campos del shape ProcessedData-like
     deriv = result["derivatives"]
@@ -382,50 +387,80 @@ def test_processed_via_api_returns_observation_derivatives_warnings() -> None:
     assert deriv["clarity"] == pytest.approx(0.78)
     assert deriv["has_chart_data"] is True
     assert deriv["p_abs_disp"] == "1012"
-    # Floats null → NaN en derivadas
-    assert math.isnan(deriv["r5_mm_h"])
-    assert math.isnan(deriv["r10_mm_h"])
+    assert deriv["r5_mm_h"] is None
+    assert deriv["r10_mm_h"] is None
 
     # Warnings
     assert result["warnings"] == []
 
 
 def test_processed_via_api_passes_max_data_age_minutes() -> None:
-    from utils.api_client import fetch_wu_current_processed_via_api
+    from utils.api_client import fetch_provider_current_processed_via_api
 
     with patch("utils.api_client.requests.post", return_value=_mock_response(200, PROCESSED_OK_BODY)) as mock_post:
-        fetch_wu_current_processed_via_api("X", "Y", max_data_age_minutes=120.0)
+        fetch_provider_current_processed_via_api("WU", "X", api_key="Y", max_data_age_minutes=120.0)
 
     _, kwargs = mock_post.call_args
     assert kwargs["json"]["max_data_age_minutes"] == 120.0
 
 
+def test_processed_via_api_passes_wu_calibration() -> None:
+    from utils.api_client import fetch_provider_current_processed_via_api
+
+    with patch("utils.api_client.requests.post", return_value=_mock_response(200, PROCESSED_OK_BODY)) as mock_post:
+        fetch_provider_current_processed_via_api("WU", 
+            "X",
+            api_key="Y",
+            calibration={"thermometer": 1.5, "barometer": -2.0},
+        )
+
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["calibration"] == {
+        "thermometer": 1.5,
+        "barometer": -2.0,
+    }
+
+
+def test_weatherlink_station_list_uses_backend() -> None:
+    from utils.api_client import fetch_weatherlink_stations_via_api
+
+    body = {"stations": [{"station_id": "123", "station_name": "Casa"}]}
+    with patch("utils.api_client.requests.post", return_value=_mock_response(200, body)) as mock_post:
+        result = fetch_weatherlink_stations_via_api("key", "secret")
+
+    args, kwargs = mock_post.call_args
+    assert args[0].endswith("/v1/stations/weatherlink")
+    assert kwargs["json"] == {"api_key": "key", "api_secret": "secret"}
+    assert result["ok"] is True
+    assert result["stations"][0]["station_name"] == "Casa"
+
+
 def test_processed_via_api_translates_401_to_wuerror_unauthorized() -> None:
-    from utils.api_client import fetch_wu_current_processed_via_api
+    from utils.api_client import fetch_provider_current_processed_via_api
 
     err_body = {"ok": False, "error_code": "provider_unauthorized"}
     with patch("utils.api_client.requests.post", return_value=_mock_response(401, err_body)):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_processed_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_processed_via_api("WU", "X", api_key="Y")
 
     assert excinfo.value.kind == "unauthorized"
     assert excinfo.value.status_code == 401
 
 
 def test_processed_via_api_backend_timeout_becomes_wuerror_timeout() -> None:
-    from utils.api_client import fetch_wu_current_processed_via_api
+    from utils.api_client import fetch_provider_current_processed_via_api
 
     with patch("utils.api_client.requests.post", side_effect=requests.Timeout("slow")):
-        with pytest.raises(WuError) as excinfo:
-            fetch_wu_current_processed_via_api("X", "Y")
+        with pytest.raises(BackendApiError) as excinfo:
+            fetch_provider_current_processed_via_api("WU", "X", api_key="Y")
     assert excinfo.value.kind == "timeout"
 
 
 def test_processed_via_api_propagates_warnings() -> None:
-    from utils.api_client import fetch_wu_current_processed_via_api
+    from utils.api_client import fetch_provider_current_processed_via_api
 
     body = dict(PROCESSED_OK_BODY)
-    body["warnings"] = ["⚠️ Datos de WU con 120 minutos de antigüedad."]
+    body["warnings"] = [{"code": "data_age", "params": {"provider": "WU", "minutes": 120}}]
     with patch("utils.api_client.requests.post", return_value=_mock_response(200, body)):
-        result = fetch_wu_current_processed_via_api("X", "Y")
-    assert result["warnings"] == ["⚠️ Datos de WU con 120 minutos de antigüedad."]
+        result = fetch_provider_current_processed_via_api("WU", "X", api_key="Y")
+    assert result["warnings"] == [{"code": "data_age", "params": {"provider": "WU", "minutes": 120}}]

@@ -19,7 +19,30 @@ SERIES_STATE_FIELD_MAP = {
     "gusts": "gusts",
     "wind_dirs": "wind_dirs",
     "precips": "precips",
+    "theta_e": "theta_e",
+    "mixing_ratios": "mixing_ratios",
+    "theta_e_trends": "theta_e_trends",
+    "mixing_ratio_trends": "mixing_ratio_trends",
+    "pressure_trends": "pressure_trends",
+    "vapor_pressures": "vapor_pressures",
+    "saturation_pressures": "saturation_pressures",
+    "theoretical_solar_radiations": "theoretical_solar_radiations",
+    "wind_u": "wind_u",
+    "wind_v": "wind_v",
 }
+
+BACKEND_DERIVED_SERIES_FIELDS = (
+    "theta_e",
+    "mixing_ratios",
+    "theta_e_trends",
+    "mixing_ratio_trends",
+    "pressure_trends",
+    "vapor_pressures",
+    "saturation_pressures",
+    "theoretical_solar_radiations",
+    "wind_u",
+    "wind_v",
+)
 
 
 def empty_chart_series() -> dict[str, list[Any] | bool]:
@@ -35,47 +58,23 @@ def empty_chart_series() -> dict[str, list[Any] | bool]:
         "gusts": [],
         "wind_dirs": [],
         "precips": [],
+        "theta_e": [],
+        "mixing_ratios": [],
+        "theta_e_trends": [],
+        "mixing_ratio_trends": [],
+        "pressure_trends": [],
+        "vapor_pressures": [],
+        "saturation_pressures": [],
+        "theoretical_solar_radiations": [],
+        "wind_u": [],
+        "wind_v": [],
+        "sunrise_epoch": None,
+        "sunset_epoch": None,
+        "solar_altitude": None,
+        "solar_altitude_max": None,
+        "is_nighttime": None,
         "has_data": False,
     }
-
-
-def _has_real_number(values: list[Any]) -> bool:
-    for value in values:
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            continue
-        if number == number:
-            return True
-    return False
-
-
-def _has_positive_number(values: list[Any]) -> bool:
-    for value in values:
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            continue
-        if number == number and number > 0.0:
-            return True
-    return False
-
-
-def _select_precip_series(series: dict) -> list[Any]:
-    fallback: list[Any] = []
-    first_real: list[Any] = []
-    for key in ("precips", "precip_accum_mm", "precip_step_mm"):
-        values = series.get(key)
-        if values is None:
-            continue
-        values_list = list(values)
-        if not fallback and values_list:
-            fallback = values_list
-        if not first_real and _has_real_number(values_list):
-            first_real = values_list
-        if _has_positive_number(values_list):
-            return values_list
-    return first_real or fallback
 
 
 def normalize_chart_series(payload: Optional[dict], *, pressure_key: str = "pressures_abs") -> dict:
@@ -91,7 +90,14 @@ def normalize_chart_series(payload: Optional[dict], *, pressure_key: str = "pres
     normalized["winds"] = list(series.get("winds", []))
     normalized["gusts"] = list(series.get("gusts", []))
     normalized["wind_dirs"] = list(series.get("wind_dirs", []))
-    normalized["precips"] = _select_precip_series(series)
+    normalized["precips"] = list(series.get("precips", []))
+    for field in BACKEND_DERIVED_SERIES_FIELDS:
+        normalized[field] = list(series.get(field, []))
+    for field in (
+        "sunrise_epoch", "sunset_epoch", "solar_altitude",
+        "solar_altitude_max", "is_nighttime",
+    ):
+        normalized[field] = series.get(field)
     normalized["has_data"] = bool(series.get("has_data", False))
     return normalized
 
@@ -100,6 +106,11 @@ def store_series_state(state: Any, prefix: str, normalized: dict) -> dict:
     for state_suffix, normalized_key in SERIES_STATE_FIELD_MAP.items():
         state[f"{prefix}_{state_suffix}"] = normalized[normalized_key]
     state[f"has_{prefix}_data"] = normalized["has_data"]
+    for field in (
+        "sunrise_epoch", "sunset_epoch", "solar_altitude",
+        "solar_altitude_max", "is_nighttime",
+    ):
+        state[f"{prefix}_{field}"] = normalized.get(field)
     return normalized
 
 
@@ -113,6 +124,17 @@ def store_trend_hourly_series(state: Any, payload: Optional[dict], *, pressure_k
     return store_series_state(state, "trend_hourly", normalized)
 
 
+def chart_series_has_backend_derivatives(series: Optional[dict]) -> bool:
+    normalized = normalize_chart_series(series)
+    epochs_count = len(normalized.get("epochs", []))
+    if epochs_count <= 0:
+        return False
+    return all(
+        len(normalized.get(field, [])) >= epochs_count
+        for field in BACKEND_DERIVED_SERIES_FIELDS
+    )
+
+
 def series_from_state(state: Any, prefix: str = "chart", *, pressure_key: str = "pressures_abs") -> dict:
     payload = {
         normalized_key if state_suffix != "pressures" else pressure_key: state.get(f"{prefix}_{state_suffix}", [])
@@ -121,6 +143,13 @@ def series_from_state(state: Any, prefix: str = "chart", *, pressure_key: str = 
     return normalize_chart_series(
         {
             **payload,
+            **{
+                field: state.get(f"{prefix}_{field}")
+                for field in (
+                    "sunrise_epoch", "sunset_epoch", "solar_altitude",
+                    "solar_altitude_max", "is_nighttime",
+                )
+            },
             "has_data": state.get(f"has_{prefix}_data", prefix == "chart" and state.get("has_chart_data", False)),
         },
         pressure_key=pressure_key,

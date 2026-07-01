@@ -1,21 +1,15 @@
 """
 Servicios de climogramas (capa común para todos los proveedores).
 
-Actualmente el fetch de histórico diario está implementado para WU.
+La obtención de datos vive en FastAPI; este módulo solo prepara tablas para UI.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-import time
-from typing import Any, Dict, Iterable, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import pandas as pd
-import streamlit as st
-
-from api import fetch_wu_history_daily
-from api.weather_underground import first_valid_wind_dir, quantize_rain_mm_wu
-from services.wu_calibration import apply_wu_daily_history_calibration, default_wu_calibration
 from utils.i18n import month_name, t
 from utils.units import (
     convert_precip,
@@ -57,18 +51,6 @@ MONTH_SHORT_ES: Dict[int, str] = {
     11: "Nov",
     12: "Dic",
 }
-
-DAILY_SCHEMA = [
-    "date",
-    "epoch",
-    "temp_mean",
-    "temp_max",
-    "temp_min",
-    "wind_mean",
-    "wind_dir_mean",
-    "gust_max",
-    "precip_total",
-]
 
 METRIC_LABEL_KEYS = {
     "Máxima absoluta": "historical.metrics.absolute_max",
@@ -156,119 +138,6 @@ def _last_day_of_month(year: int, month: int) -> date:
     return date(year, month + 1, 1) - timedelta(days=1)
 
 
-def _parse_obs_date(observation: Dict[str, Any]) -> Optional[pd.Timestamp]:
-    local_time = observation.get("obsTimeLocal")
-    if isinstance(local_time, str) and len(local_time) >= 10:
-        try:
-            return pd.to_datetime(local_time[:10], format="%Y-%m-%d", errors="raise")
-        except Exception:
-            pass
-
-    epoch = observation.get("epoch")
-    try:
-        epoch_i = int(epoch)
-    except Exception:
-        epoch_i = 0
-    if epoch_i > 0:
-        return pd.to_datetime(epoch_i, unit="s")
-    return None
-
-
-def _empty_daily_dataframe() -> pd.DataFrame:
-    return pd.DataFrame(columns=DAILY_SCHEMA)
-
-
-def _normalize_wu_daily_payload(payload: Dict[str, Any]) -> pd.DataFrame:
-    observations = payload.get("observations", [])
-    if not isinstance(observations, list) or not observations:
-        return _empty_daily_dataframe()
-
-    rows: List[Dict[str, Any]] = []
-    for observation in observations:
-        if not isinstance(observation, dict):
-            continue
-        timestamp = _parse_obs_date(observation)
-        if timestamp is None:
-            continue
-
-        metric = observation.get("metric", {})
-        if not isinstance(metric, dict):
-            metric = {}
-
-        rows.append(
-            {
-                "date": pd.to_datetime(timestamp).normalize(),
-                "epoch": _safe_float(observation.get("epoch")),
-                "temp_mean": _first_valid_float(metric.get("tempAvg"), metric.get("temp")),
-                "temp_max": _first_valid_float(metric.get("tempHigh"), metric.get("tempMax")),
-                "temp_min": _first_valid_float(metric.get("tempLow"), metric.get("tempMin")),
-                "wind_mean": _first_valid_float(
-                    metric.get("windspeedAvg"),
-                    metric.get("windSpeedAvg"),
-                    metric.get("windspeed"),
-                    metric.get("windSpeed"),
-                ),
-                "wind_dir_mean": first_valid_wind_dir(
-                    metric.get("winddirAvg"),
-                    metric.get("windDirAvg"),
-                    metric.get("winddir"),
-                    metric.get("windDir"),
-                    metric.get("windDirection"),
-                    observation.get("winddirAvg"),
-                    observation.get("windDirAvg"),
-                    observation.get("winddir"),
-                    observation.get("windDir"),
-                    observation.get("windDirection"),
-                ),
-                "gust_max": _first_valid_float(
-                    metric.get("windgustHigh"),
-                    metric.get("windGust"),
-                    metric.get("windgust"),
-                ),
-                "precip_total": quantize_rain_mm_wu(
-                    _first_valid_float(metric.get("precipTotal"), observation.get("precipTotal"))
-                ),
-            }
-        )
-
-    if not rows:
-        return _empty_daily_dataframe()
-
-    frame = pd.DataFrame(rows)
-    for column in DAILY_SCHEMA:
-        if column not in frame.columns:
-            frame[column] = pd.NA
-
-    numeric_columns = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total"]
-    for column in numeric_columns:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
-
-    missing_mean = frame["temp_mean"].isna() & frame["temp_max"].notna() & frame["temp_min"].notna()
-    if missing_mean.any():
-        frame.loc[missing_mean, "temp_mean"] = (frame.loc[missing_mean, "temp_max"] + frame.loc[missing_mean, "temp_min"]) / 2.0
-
-    frame["precip_total"] = frame["precip_total"].clip(lower=0)
-
-    frame["quality"] = frame[numeric_columns[1:]].notna().sum(axis=1)
-    frame = (
-        frame.sort_values(["date", "quality", "epoch"], ascending=[True, True, True])
-        .drop_duplicates(subset=["date"], keep="last")
-        .drop(columns=["quality"])
-        .sort_values("date")
-        .reset_index(drop=True)
-    )
-    return frame[DAILY_SCHEMA]
-
-
-def _iter_chunks(start_date: date, end_date: date, max_days: int = 31) -> Iterable[Tuple[date, date]]:
-    cursor = start_date
-    delta_days = int(max_days) - 1
-    while cursor <= end_date:
-        chunk_end = min(cursor + timedelta(days=delta_days), end_date)
-        yield cursor, chunk_end
-        cursor = chunk_end + timedelta(days=1)
-
-
 def clip_periods_to_today(
     periods: Sequence[ClimogramPeriod],
     *,
@@ -326,63 +195,6 @@ def describe_period_range(periods: Sequence[ClimogramPeriod]) -> str:
     start = min(period.start for period in periods)
     end = max(period.end for period in periods)
     return f"{start.strftime('%d/%m/%Y')} → {end.strftime('%d/%m/%Y')}"
-
-
-def fetch_wu_daily_history_for_periods(
-    station_id: str,
-    api_key: str,
-    periods: Sequence[ClimogramPeriod],
-    ttl_seconds: int = 3 * 3600,
-    today_date: Optional[date] = None,
-) -> pd.DataFrame:
-    if not periods:
-        return _empty_daily_dataframe()
-
-    cache = st.session_state.setdefault("wu_cache_history_daily", {})
-    now = time.time()
-    chunks_data: List[pd.DataFrame] = []
-    available_periods = clip_periods_to_today(periods, today_date=today_date)
-
-    for period in available_periods:
-        for chunk_start, chunk_end in _iter_chunks(period.start, period.end, max_days=31):
-            start_txt = chunk_start.strftime("%Y%m%d")
-            end_txt = chunk_end.strftime("%Y%m%d")
-            cache_key = (str(station_id or "").strip().upper(), start_txt, end_txt)
-
-            payload: Dict[str, Any]
-            cached = cache.get(cache_key)
-            if isinstance(cached, dict) and (now - float(cached.get("t", 0.0)) < float(ttl_seconds)):
-                payload = cached.get("payload", {"observations": []})
-            else:
-                payload = fetch_wu_history_daily(
-                    station_id=station_id,
-                    api_key=api_key,
-                    start_date=start_txt,
-                    end_date=end_txt,
-                )
-                cache[cache_key] = {"t": now, "payload": payload}
-
-            chunk_df = _normalize_wu_daily_payload(payload)
-            if not chunk_df.empty:
-                chunks_data.append(chunk_df)
-
-    if not chunks_data:
-        return _empty_daily_dataframe()
-
-    all_days = pd.concat(chunks_data, ignore_index=True)
-    all_days["date"] = pd.to_datetime(all_days["date"]).dt.normalize()
-    all_days = (
-        all_days.sort_values(["date", "epoch"])
-        .drop_duplicates(subset=["date"], keep="last")
-        .sort_values("date")
-        .reset_index(drop=True)
-    )
-    active_station = str(st.session_state.get("active_station", "")).strip().upper()
-    calibration_station = str(st.session_state.get("wu_station_calibration_station", "")).strip().upper()
-    if active_station and active_station == station_id.upper() and calibration_station == station_id.upper():
-        station_calibration = st.session_state.get("wu_station_calibration", default_wu_calibration())
-        all_days = apply_wu_daily_history_calibration(all_days, station_calibration)
-    return all_days[DAILY_SCHEMA]
 
 
 def _format_date(value: Any) -> str:
@@ -569,7 +381,7 @@ def build_extremes_table(
         else:
             # ── Datos diarios (modo Mensual: una fila por día real) ───────────
             # Para AEMET, temp_max/temp_min son los máx/mín diarios (= absolutos del día).
-            # temp_abs_max/min solo existe si los datos fueron enriquecidos (WU o cálculo previo).
+            # temp_abs_max/min solo existe si el dataset fue enriquecido previamente.
             abs_max_col = (
                 "temp_abs_max"
                 if "temp_abs_max" in frame.columns
@@ -732,8 +544,10 @@ def build_general_metrics_table(
     elif not _looks_yearly:
         # Datos diarios: calcular directamente desde temp_min.
         if temp_min_series.notna().any():
-            n_tropical = int((temp_min_series > 20.0).sum())
-            n_torrid = int((temp_min_series > 25.0).sum())
+            # Noche tropical = la mínima NO baja de 20 °C (≥ 20); tórrida ≥ 25 °C.
+            # Inclusivo en el umbral (definición AEMET/OMM): 20,0 cuenta.
+            n_tropical = int((temp_min_series >= 20.0).sum())
+            n_torrid = int((temp_min_series >= 25.0).sum())
             rows.append(_table_row("Noches tropicales (mín > 20 °C)", f"{n_tropical} {t('historical.units.nights')}", None))
             rows.append(_table_row("Noches tórridas (mín > 25 °C)", f"{n_torrid} {t('historical.units.nights')}", None))
 

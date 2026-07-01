@@ -19,7 +19,6 @@ For a more exhaustive scan, reduce the step and increase passes:
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import math
 import os
@@ -55,7 +54,6 @@ DEFAULT_STATION_NAMES_URL = (
 DEFAULT_STEP_DEG = 0.35
 DEFAULT_PASSES = 2
 DEFAULT_MAX_REQUESTS = 320
-DEFAULT_SECRETS_PATH = str(ROOT_DIR / ".streamlit" / "secrets.toml")
 DEFAULT_ALLOWED_COUNTRIES = (
     "England",
     "Scotland",
@@ -100,51 +98,11 @@ def _save_json_file(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _load_toml_file(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        return {}
-    for module_name in ("tomllib", "tomli", "toml"):
-        try:
-            module = importlib.import_module(module_name)
-        except Exception:
-            continue
-        try:
-            if module_name in ("tomllib", "tomli"):
-                with path.open("rb") as handle:
-                    payload = module.load(handle)
-            else:
-                payload = module.load(str(path))
-            return payload if isinstance(payload, dict) else {}
-        except Exception:
-            return {}
-    return {}
-
-
-def _secret_value(payload: Dict[str, Any], key: str) -> str:
-    value = payload.get(key)
-    if value not in (None, ""):
-        return str(value).strip()
-    metoffice_section = payload.get("metoffice")
-    if isinstance(metoffice_section, dict):
-        for section_key in (key, "api_key", "apikey"):
-            value = metoffice_section.get(section_key)
-            if value not in (None, ""):
-                return str(value).strip()
-    return ""
-
-
 def _resolve_api_key(args: argparse.Namespace) -> str:
-    for candidate in (
-        args.api_key,
-        os.getenv("METOFFICE_API_KEY", ""),
-        _secret_value(_load_toml_file(Path(args.secrets_path)), "METOFFICE_API_KEY")
-        if not args.no_secrets
-        else "",
-    ):
-        value = str(candidate or "").strip()
-        if value:
-            return value
-    return ""
+    return str(
+        os.getenv("METEOLABX_METOFFICE_API_KEY", "")
+        or os.getenv("METOFFICE_API_KEY", "")
+    ).strip()
 
 
 def _coord_decimal(value: float) -> Decimal:
@@ -964,7 +922,7 @@ def _probe_official_missing_coordinates(
 def build_inventory(args: argparse.Namespace) -> List[Dict[str, Any]]:
     api_key = _resolve_api_key(args)
     if not api_key:
-        raise RuntimeError("Falta METOFFICE_API_KEY en env/secrets o --api-key.")
+        raise RuntimeError("Falta METEOLABX_METOFFICE_API_KEY en el entorno.")
 
     bbox = tuple(float(value) for value in args.bbox)
     if len(bbox) != 4:
@@ -1152,13 +1110,6 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build a reconstructed Met Office Land Observations station inventory."
     )
-    parser.add_argument("--api-key", default="", help="Met Office Weather DataHub API key.")
-    parser.add_argument(
-        "--secrets-path",
-        default=DEFAULT_SECRETS_PATH,
-        help=f"Streamlit secrets.toml path. Default: {DEFAULT_SECRETS_PATH}",
-    )
-    parser.add_argument("--no-secrets", action="store_true", help="Do not read Streamlit secrets.toml.")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help=f"API base URL. Default: {DEFAULT_BASE_URL}")
     parser.add_argument("--nearest-path", default=DEFAULT_NEAREST_PATH, help="Nearest endpoint path.")
     parser.add_argument(

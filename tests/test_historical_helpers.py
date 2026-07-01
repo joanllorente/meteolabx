@@ -18,6 +18,14 @@ def test_normalize_historical_summary_mode_maps_legacy_and_invalid():
     assert session_state["climo_summary_mode"] == "monthly"
 
 
+def test_weatherlink_historical_summary_mode_is_monthly_only():
+    session_state = {"climo_summary_mode": "annual"}
+
+    assert historical._summary_mode_options("WEATHERLINK") == ["monthly"]
+    assert historical._normalize_historical_summary_mode(session_state, "WEATHERLINK") == "monthly"
+    assert session_state["climo_summary_mode"] == "monthly"
+
+
 def test_historical_provider_support_uses_manual_notes_for_unavailable(note_recorder, translation_stub):
     supported = historical._historical_provider_is_supported("NWS", note_recorder, translation_stub)
 

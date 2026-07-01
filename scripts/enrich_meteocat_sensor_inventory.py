@@ -26,10 +26,10 @@ if str(ROOT_DIR) not in sys.path:
 from data_files import METEOCAT_STATIONS_PATH
 
 BASE_URL = "https://api.meteo.cat/xema/v1"
-DEFAULT_API_KEY = os.getenv(
-    "METEOCAT_API_KEY",
-    "rZwBPl5kv05CS7NEgk9wcaqd0FFimA2f9y6ISDa2",
-)
+DEFAULT_API_KEY = (
+    os.getenv("METEOLABX_METEOCAT_API_KEY", "")
+    or os.getenv("METEOCAT_API_KEY", "")
+).strip()
 TIMEOUT_SECONDS = 20
 
 SENSOR_VARIABLES = {

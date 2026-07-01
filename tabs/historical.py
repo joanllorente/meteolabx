@@ -7,6 +7,7 @@ from utils.helpers import coerce_str
 from utils.provider_features import SUPPORTED_HISTORICAL_PROVIDERS, get_provider_feature
 LEGACY_SUMMARY_MODE_ALIASES = {"Mensual": "monthly", "Anual": "annual"}
 SUMMARY_MODE_OPTIONS = ["monthly", "annual"]
+WEATHERLINK_SUMMARY_MODE_OPTIONS = ["monthly"]
 WIND_ROSE_CALM_THRESHOLD_KMH = 2.0
 WIND_ROSE_SECTORS16 = (
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -28,13 +29,20 @@ def _historical_provider_is_supported(provider_id, render_neutral_info_note, t) 
     return True
 
 
-def _normalize_historical_summary_mode(session_state) -> str:
+def _summary_mode_options(provider_id: str) -> list[str]:
+    if coerce_str(provider_id, upper=True) == "WEATHERLINK":
+        return list(WEATHERLINK_SUMMARY_MODE_OPTIONS)
+    return list(SUMMARY_MODE_OPTIONS)
+
+
+def _normalize_historical_summary_mode(session_state, provider_id: str = "") -> str:
+    options = _summary_mode_options(provider_id)
     current_summary_mode = LEGACY_SUMMARY_MODE_ALIASES.get(
         str(session_state.get("climo_summary_mode", "")).strip(),
         str(session_state.get("climo_summary_mode", "")).strip(),
     )
-    if current_summary_mode not in SUMMARY_MODE_OPTIONS:
-        current_summary_mode = SUMMARY_MODE_OPTIONS[0]
+    if current_summary_mode not in options:
+        current_summary_mode = options[0]
     session_state["climo_summary_mode"] = current_summary_mode
     return current_summary_mode
 
@@ -44,15 +52,15 @@ def _year_options(now_local: datetime, *, min_year: int = 1990, lookback_years: 
     return list(range(now_local.year, year_floor - 1, -1))
 
 
-def _load_frost_period_options(provider_id, station_id, get_frost_service):
+def _load_frost_period_options(provider_id, station_id):
     if coerce_str(provider_id, upper=True) != "FROST":
         return {"monthly": [], "annual": []}
-    frost_service = get_frost_service()
-    return frost_service.get_frost_climo_period_options(
-        station_id=station_id,
-        client_id=frost_service.FROST_CLIENT_ID,
-        client_secret=frost_service.FROST_CLIENT_SECRET,
-    )
+    # Backend-only: los periodos de normales disponibles los resuelve el
+    # backend (POST /v1/climo/frost/period-options), no una llamada
+    # directa a frost.met.no desde Streamlit.
+    from utils.api_client import fetch_frost_period_options_via_api
+
+    return fetch_frost_period_options_via_api(station_id)
 
 
 def _render_historical_inputs(
@@ -193,7 +201,10 @@ def _prepare_historical_selection(
             return False, periods, climograms_service
 
     periods = climograms_service.build_period_specs(summary_mode, selected_years, selected_months)
-    if provider_id == "WU" and hasattr(climograms_service, "clip_periods_to_today"):
+    # Recortar el mes/año en curso a "hoy" para TODOS los proveedores: no
+    # tiene sentido pedir días futuros, y así el mes actual devuelve los
+    # días ya publicados en vez de salir vacío (antes solo se hacía en WU).
+    if hasattr(climograms_service, "clip_periods_to_today"):
         periods = climograms_service.clip_periods_to_today(periods)
     if not periods:
         st.warning(t("historical.warnings.invalid_period"))
@@ -466,14 +477,14 @@ def render_historical_tab(ctx):
     temp_unit_txt = ctx["temp_unit_txt"]
     precip_unit_txt = ctx["precip_unit_txt"]
     month_name = ctx["month_name"]
-    WuError = ctx["WuError"]
+    BackendApiError = ctx["BackendApiError"]
     _render_neutral_info_note = ctx["_render_neutral_info_note"]
     _get_provider_station_id = ctx["_get_provider_station_id"]
     _get_provider_api_key = ctx["_get_provider_api_key"]
+    _get_provider_api_secret = ctx.get("_get_provider_api_secret", lambda _provider_id: "")
     _render_historical_provider_series_start = ctx["_render_historical_provider_series_start"]
     _get_historical_missing_message = ctx["_get_historical_missing_message"]
     _get_climograms_service = ctx["_get_climograms_service"]
-    _get_frost_service = ctx["_get_frost_service"]
     _get_provider_label = ctx["_get_provider_label"]
     _fetch_historical_dataset = ctx["_fetch_historical_dataset"]
     _render_theme_table = ctx["_render_theme_table"]
@@ -487,9 +498,10 @@ def render_historical_tab(ctx):
         if _historical_provider_is_supported(provider_id, _render_neutral_info_note, t):
             station_id = _get_provider_station_id(provider_id)
             api_key = _get_provider_api_key(provider_id)
+            api_secret = _get_provider_api_secret(provider_id)
             _render_historical_provider_series_start(provider_id, station_id)
 
-            missing_msg = _get_historical_missing_message(provider_id, station_id, api_key)
+            missing_msg = _get_historical_missing_message(provider_id, station_id, api_key, api_secret)
             if missing_msg:
                 st.warning(missing_msg)
             else:
@@ -499,17 +511,20 @@ def render_historical_tab(ctx):
 
                 now_local = datetime.now()
                 year_options = _year_options(now_local)
-                _normalize_historical_summary_mode(st.session_state)
+                summary_mode_options = _summary_mode_options(provider_id)
+                _normalize_historical_summary_mode(st.session_state, provider_id)
 
                 summary_mode = st.radio(
                     t("historical.summary.label"),
-                    SUMMARY_MODE_OPTIONS,
+                    summary_mode_options,
                     horizontal=True,
                     format_func=lambda mode: t(f"historical.summary.options.{mode}"),
                     key="climo_summary_mode",
                 )
+                if provider_id == "WEATHERLINK":
+                    st.caption(t("historical.caption.weatherlink_monthly_only"))
 
-                frost_period_options = _load_frost_period_options(provider_id, station_id, _get_frost_service)
+                frost_period_options = _load_frost_period_options(provider_id, station_id)
                 selection = _render_historical_inputs(
                     provider_id=provider_id,
                     summary_mode=summary_mode,
@@ -545,9 +560,9 @@ def render_historical_tab(ctx):
                             try:
                                 daily_df, extremes_overrides = _fetch_historical_dataset(
                                     provider_id=provider_id,
-                                    climograms_service=climograms_service,
                                     station_id=station_id,
                                     api_key=api_key,
+                                    api_secret=api_secret,
                                     summary_mode=summary_mode,
                                     periods=periods,
                                     selected_years=selected_years,
@@ -555,7 +570,7 @@ def render_historical_tab(ctx):
                                     frost_selected_period=frost_selected_period,
                                     frost_selected_periods=frost_selected_periods,
                                 )
-                            except WuError as e:
+                            except BackendApiError as e:
                                 if provider_id == "WU":
                                     if e.kind == "unauthorized":
                                         st.error(t("historical.errors.wu_unauthorized"))
@@ -571,7 +586,15 @@ def render_historical_tab(ctx):
                                         status_msg = f" (HTTP {e.status_code})" if e.status_code else ""
                                         st.error(t("historical.errors.wu_http", status_msg=status_msg))
                                 else:
-                                    st.error(t("historical.errors.meteocat_generic"))
+                                    status_msg = f" (HTTP {e.status_code})" if e.status_code else ""
+                                    st.error(
+                                        t(
+                                            "historical.errors.provider_generic",
+                                            provider=provider_label,
+                                            error_type=e.kind or "error",
+                                            error=status_msg.strip() or e.kind or "error",
+                                        )
+                                    )
                             except Exception as exc:
                                 st.error(
                                     t(

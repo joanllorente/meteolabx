@@ -39,21 +39,30 @@ Mapeo de errores ``RuntimeError`` → ``ProviderError``:
 
 from __future__ import annotations
 
+import asyncio
 import json as _json
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from server.schemas.errors import ProviderError
+from server.services.cache import AsyncTTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
 
 PROVIDER = "AEMET"
 BASE_URL = "https://opendata.aemet.es/opendata/api"
+LOCAL_TZ = ZoneInfo("Europe/Madrid")
+_DAILY_EXTREMES_CACHE = AsyncTTLCache[Dict[str, float]](
+    default_ttl_s=10 * 60,
+    max_entries=1000,
+)
 
 
 # =====================================================================
@@ -99,6 +108,15 @@ def _parse_epoch_any(fint_str: Any) -> Optional[int]:
     """Parsea timestamps en varios formatos habituales de AEMET."""
     if not fint_str:
         return None
+
+    if isinstance(fint_str, (int, float)):
+        try:
+            epoch = int(fint_str)
+        except (TypeError, ValueError):
+            return None
+        if epoch > 10**12:
+            epoch = int(epoch / 1000)
+        return epoch if epoch > 0 else None
 
     raw = str(fint_str).strip()
     clean = raw.replace("UTC", "").replace("Z", "").strip()
@@ -325,6 +343,7 @@ async def fetch_current(
     client: Optional[httpx.AsyncClient] = None,
     step1_timeout_s: float = 15.0,
     step2_timeout_s: float = 60.0,
+    include_daily_extremes: bool = True,
 ) -> Dict[str, Any]:
     """
     Obtiene la observación actual de una estación AEMET (IDEMA).
@@ -362,13 +381,41 @@ async def fetch_current(
 
     try:
         endpoint_path = f"/observacion/convencional/datos/estacion/{station_id}"
-        data = await _fetch_aemet_two_step(
+        today_local = datetime.now(tz=LOCAL_TZ).date()
+        current_task = _fetch_aemet_two_step(
             endpoint_path,
             api_key,
             client=client,
             step1_timeout_s=step1_timeout_s,
             step2_timeout_s=step2_timeout_s,
         )
+        if include_daily_extremes:
+            daily_task = _cached_aemet_daily_extremes(
+                station_id,
+                api_key,
+                client=client,
+                day=today_local,
+            )
+            data, daily_result = await asyncio.gather(
+                current_task, daily_task, return_exceptions=True,
+            )
+        else:
+            data = await current_task
+            daily_result = {}
+        if isinstance(data, BaseException):
+            raise data
+        fallback_daily_extremes = (
+            _daily_extremes_from_aemet_records(data)
+            if isinstance(data, list)
+            else _daily_extremes_from_aemet_records([data])
+            if isinstance(data, dict)
+            else {}
+        )
+        if isinstance(daily_result, BaseException):
+            logger.warning("AEMET extremos diarios no disponibles para %s: %s", station_id, daily_result)
+            official_daily_extremes = fallback_daily_extremes
+        else:
+            official_daily_extremes = _merge_daily_extremes(daily_result, fallback_daily_extremes)
 
         # AEMET devuelve lista ordenada cronológicamente; el último es el más reciente.
         if isinstance(data, list) and data:
@@ -394,7 +441,7 @@ async def fetch_current(
         if owns_client:
             await client.aclose()
 
-    return _normalize_aemet_record(record)
+    return _normalize_aemet_record(record, daily_extremes=official_daily_extremes)
 
 
 # =====================================================================
@@ -408,6 +455,7 @@ async def fetch_today_series(
     client: Optional[httpx.AsyncClient] = None,
     step1_timeout_s: float = 15.0,
     step2_timeout_s: float = 60.0,
+    now: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Serie temporal del día de una estación AEMET, a partir del endpoint
@@ -439,23 +487,52 @@ async def fetch_today_series(
         client = httpx.AsyncClient(timeout=step1_timeout_s)
 
     try:
-        endpoint_path = f"/observacion/convencional/diezminutal/datos/estacion/{station_id}"
-        data = await _fetch_aemet_two_step(
-            endpoint_path,
-            api_key,
-            client=client,
-            step1_timeout_s=step1_timeout_s,
-            step2_timeout_s=step2_timeout_s,
+        # El endpoint diezminutal por estación devuelve el día UTC. Para
+        # que el gráfico del día LOCAL no empiece a las 01:00/02:00 (CET/
+        # CEST), pedimos también la fecha UTC anterior (endpoint datado)
+        # y luego recortamos al día local. El fetch de ayer es
+        # best-effort: si falla, el día UTC sigue siendo útil.
+        import asyncio as _asyncio
+        from urllib.parse import quote as _quote
+
+        endpoint_today = f"/observacion/convencional/diezminutal/datos/estacion/{station_id}"
+
+        now_local = (now or datetime.now(tz=LOCAL_TZ)).astimezone(LOCAL_TZ)
+        yesterday_utc = (now_local.astimezone(timezone.utc) - timedelta(days=1)).date()
+        fecha = _quote(f"{yesterday_utc.isoformat()}T00:00:00UTC", safe="")
+        endpoint_yesterday = (
+            f"/observacion/convencional/diezminutal/datos/fecha/{fecha}/estacion/{station_id}"
+        )
+
+        async def _fetch(path: str) -> list:
+            payload = await _fetch_aemet_two_step(
+                path, api_key, client=client,
+                step1_timeout_s=step1_timeout_s, step2_timeout_s=step2_timeout_s,
+            )
+            return payload if isinstance(payload, list) else []
+
+        today_result, yesterday_result = await _asyncio.gather(
+            _fetch(endpoint_today), _fetch(endpoint_yesterday), return_exceptions=True,
         )
     finally:
         if owns_client:
             await client.aclose()
 
-    observations = data if isinstance(data, list) else []
+    if isinstance(today_result, BaseException):
+        raise today_result
+    observations = list(today_result)
+    if not isinstance(yesterday_result, BaseException):
+        observations.extend(yesterday_result)
+
     if not observations:
         return _empty_today_series()
 
-    return _normalize_today_series(observations)
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return _normalize_today_series(
+        observations,
+        start_epoch=int(day_start.timestamp()),
+        end_epoch=int((day_start + timedelta(days=1)).timestamp()),
+    )
 
 
 def _empty_today_series() -> Dict[str, Any]:
@@ -477,7 +554,12 @@ def _empty_today_series() -> Dict[str, Any]:
     }
 
 
-def _normalize_today_series(observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _normalize_today_series(
+    observations: List[Dict[str, Any]],
+    *,
+    start_epoch: Optional[int] = None,
+    end_epoch: Optional[int] = None,
+) -> Dict[str, Any]:
     """
     Convierte la lista de records diezminutales AEMET en arrays
     paralelas alineadas por epoch.
@@ -497,6 +579,12 @@ def _normalize_today_series(observations: List[Dict[str, Any]]) -> Dict[str, Any
         ts = _field(record, "fint", "FINT", "Fecha", "fecha", "fhora")
         epoch = _parse_epoch_any(ts) if ts else None
         if epoch is None or epoch <= 0:
+            continue
+        # Recorte al día local cuando el caller lo pide (la serie del
+        # día mezcla el día UTC actual + la fecha UTC anterior).
+        if start_epoch is not None and epoch < start_epoch:
+            continue
+        if end_epoch is not None and epoch >= end_epoch:
             continue
 
         # Primary measurements
@@ -619,7 +707,119 @@ def _raise_for_http_status(status_code: int) -> None:
 # Normalización: record AEMET → shape canónico
 # =====================================================================
 
-def _normalize_aemet_record(record: Dict[str, Any]) -> Dict[str, Any]:
+
+def _daily_extremes_from_aemet_records(records: List[Dict[str, Any]]) -> Dict[str, float]:
+    temp_max_values: list[float] = []
+    temp_min_values: list[float] = []
+    rh_max_values: list[float] = []
+    rh_min_values: list[float] = []
+    gust_max_values: list[float] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        temp_max = _parse_num(_field(record, "tamax", "TAMAX", "ta_max", "TA_MAX", "tmax", "TMAX"))
+        temp_min = _parse_num(_field(record, "tamin", "TAMIN", "ta_min", "TA_MIN", "tmin", "TMIN"))
+        rh_max = _parse_num(_field(record, "hrmax", "HRMAX", "hr_max", "HR_MAX", "hmax", "HMAX"))
+        rh_min = _parse_num(_field(record, "hrmin", "HRMIN", "hr_min", "HR_MIN", "hmin", "HMIN"))
+        rh = _parse_num(_field(record, "hr", "HR", "hrel", "HREL"))
+        gust = _ms_to_kmh(
+            _field(record, "VMAX10m", "vmax10m", "vmax", "VMAX", "fx", "FX", "racha", "RACHA")
+        )
+        if not _is_nan(temp_max):
+            temp_max_values.append(temp_max)
+        if not _is_nan(temp_min):
+            temp_min_values.append(temp_min)
+        if not _is_nan(rh_max):
+            rh_max_values.append(rh_max)
+        if not _is_nan(rh_min):
+            rh_min_values.append(rh_min)
+        if _is_nan(rh_max) and not _is_nan(rh):
+            rh_max_values.append(rh)
+        if _is_nan(rh_min) and not _is_nan(rh):
+            rh_min_values.append(rh)
+        if not _is_nan(gust):
+            gust_max_values.append(gust)
+    return {
+        "temp_max": max(temp_max_values) if temp_max_values else float("nan"),
+        "temp_min": min(temp_min_values) if temp_min_values else float("nan"),
+        "rh_max": max(rh_max_values) if rh_max_values else float("nan"),
+        "rh_min": min(rh_min_values) if rh_min_values else float("nan"),
+        "gust_max": max(gust_max_values) if gust_max_values else float("nan"),
+    }
+
+
+def _merge_daily_extremes(primary: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[str, float]:
+    out: Dict[str, float] = {}
+    for key in ("temp_max", "temp_min", "rh_max", "rh_min", "gust_max"):
+        value = _parse_num(primary.get(key)) if isinstance(primary, dict) else float("nan")
+        if _is_nan(value):
+            value = _parse_num(fallback.get(key)) if isinstance(fallback, dict) else float("nan")
+        out[key] = value
+    return out
+
+
+async def _cached_aemet_daily_extremes(
+    station_id: str,
+    api_key: str,
+    *,
+    client: httpx.AsyncClient,
+    day,
+) -> Dict[str, float]:
+    station = str(station_id).strip().upper()
+    day_key = day.isoformat()
+    cache_key = make_cache_key("AEMET", f"daily-extremes:{day_key}", station, api_key)
+    return await _DAILY_EXTREMES_CACHE.get_or_fetch(
+        cache_key,
+        lambda: _fetch_aemet_daily_extremes(station, api_key, client=client, day=day),
+    )
+
+
+async def _fetch_aemet_daily_extremes(
+    station_id: str,
+    api_key: str,
+    *,
+    client: httpx.AsyncClient,
+    day,
+) -> Dict[str, float]:
+    fecha_ini = quote(f"{day.strftime('%Y-%m-%d')}T00:00:00UTC", safe="")
+    fecha_fin = quote(f"{day.strftime('%Y-%m-%d')}T23:59:59UTC", safe="")
+    endpoint = (
+        f"/valores/climatologicos/diarios/datos/"
+        f"fechaini/{fecha_ini}/fechafin/{fecha_fin}/estacion/{station_id}"
+    )
+    payload = await _fetch_aemet_two_step(
+        endpoint,
+        api_key,
+        client=client,
+        step1_timeout_s=10.0,
+        step2_timeout_s=20.0,
+    )
+    records = payload if isinstance(payload, list) else [payload] if isinstance(payload, dict) else []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        temp_max = _parse_num(_field(record, "tmax", "TMAX", "tamax", "TAMAX"))
+        temp_min = _parse_num(_field(record, "tmin", "TMIN", "tamin", "TAMIN"))
+        rh_max = _parse_num(_field(record, "hrmax", "HRMAX", "hr_max", "HR_MAX", "hmax", "HMAX"))
+        rh_min = _parse_num(_field(record, "hrmin", "HRMIN", "hr_min", "HR_MIN", "hmin", "HMIN"))
+        gust_max = _ms_to_kmh(
+            _field(record, "racha", "RACHA", "vmax", "VMAX", "fx", "FX", "VMAX10m", "vmax10m")
+        )
+        return {
+            "temp_max": temp_max,
+            "temp_min": temp_min,
+            "rh_max": rh_max,
+            "rh_min": rh_min,
+            "gust_max": gust_max,
+        }
+    return {}
+
+
+def _normalize_aemet_record(
+    record: Dict[str, Any],
+    *,
+    daily_extremes: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Convierte un record AEMET (último observación de la lista que
     devuelve OpenData) al ``dict`` canónico que comparte con WU.
@@ -636,6 +836,11 @@ def _normalize_aemet_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
     # Temperatura
     Tc = _parse_num(_field(record, "ta", "TA", "t", "T", "temp", "TEMP", "tpre", "TPRE"))
+    official_extremes = (
+        dict(daily_extremes)
+        if isinstance(daily_extremes, dict)
+        else _daily_extremes_from_aemet_records([record])
+    )
 
     # Humedad relativa
     RH = _parse_num(_field(record, "hr", "HR", "hrel", "HREL"))
@@ -693,9 +898,14 @@ def _normalize_aemet_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "lat": lat,
         "lon": lon,
         "elevation": elevation,
-        # Metadatos AEMET-específicos por si el caller los necesita
-        "idema": str(_field(record, "idema", "IDEMA") or "").strip(),
         "station_name": str(_field(record, "ubi", "UBI") or "").strip(),
+        "daily_extremes": {
+            "temp_max": _parse_num(official_extremes.get("temp_max")),
+            "temp_min": _parse_num(official_extremes.get("temp_min")),
+            "rh_max": _parse_num(official_extremes.get("rh_max")),
+            "rh_min": _parse_num(official_extremes.get("rh_min")),
+            "gust_max": _parse_num(official_extremes.get("gust_max")),
+        },
     }
 
     # Aplicar derivadas básicas (Td Magnus-Tetens, feels_like Steadman,
@@ -703,3 +913,100 @@ def _normalize_aemet_record(record: Dict[str, Any]) -> Dict[str, Any]:
     # streamlit si el módulo se importa sin haber arrancado domain todavía.
     from domain.observation_pipeline import add_basic_derived
     return add_basic_derived(observation)
+
+
+async def fetch_recent_series(
+    station_id: str,
+    api_key: str,
+    *,
+    days_back: int = 7,
+    client: Optional[httpx.AsyncClient] = None,
+    step1_timeout_s: float = 15.0,
+    step2_timeout_s: float = 60.0,
+    fine: bool = False,
+) -> Dict[str, Any]:
+    """
+    Serie reciente (T/HR/presión MSL) para tendencias, desde el endpoint
+    de climatologías horarias (una sola llamada two-step para toda la
+    ventana). Remuestreo a buckets de 3 h (última lectura por bucket).
+
+    ``fine=True`` usa buckets de 1 h (lo pide el lookback de
+    ``/series/today`` para que la tendencia de presión 3h arranque a las
+    00:00 local; ver nota en el lookback del router).
+    """
+    if not api_key:
+        raise ProviderError(
+            "provider_unauthorized",
+            provider=PROVIDER,
+            detail="Missing AEMET_API_KEY",
+            status_code=401,
+        )
+
+    from urllib.parse import quote as _quote
+
+    now_utc = datetime.now(timezone.utc)
+    ini_utc = now_utc - timedelta(days=max(1, int(days_back)))
+    fecha_ini = _quote(ini_utc.strftime("%Y-%m-%dT%H:%M:%SUTC"), safe="")
+    fecha_fin = _quote(now_utc.strftime("%Y-%m-%dT%H:%M:%SUTC"), safe="")
+    endpoint_path = (
+        f"/valores/climatologicos/horarios/datos/"
+        f"fechaini/{fecha_ini}/fechafin/{fecha_fin}/estacion/{station_id}"
+    )
+
+    owns_client = client is None
+    if owns_client:
+        client = httpx.AsyncClient(timeout=step1_timeout_s)
+    try:
+        data = await _fetch_aemet_two_step(
+            endpoint_path, api_key, client=client,
+            step1_timeout_s=step1_timeout_s, step2_timeout_s=step2_timeout_s,
+        )
+    finally:
+        if owns_client:
+            await client.aclose()
+
+    rows = data if isinstance(data, list) else []
+    bucket_s = 3600 if fine else 3 * 3600
+    buckets: Dict[int, tuple] = {}
+    lat = lon = float("nan")
+    for record in rows:
+        if not isinstance(record, dict):
+            continue
+        ts = _field(record, "fint", "FINT", "Fecha", "fecha", "fhora")
+        epoch = _parse_epoch_any(ts) if ts else None
+        if epoch is None:
+            continue
+        temp = _parse_num(_field(record, "ta", "TA", "t", "T", "temp", "TEMP", "tpre", "TPRE"))
+        rh = _parse_num(_field(record, "hr", "HR", "hrel", "HREL"))
+        p_msl = _parse_num(_field(record, "pres_nmar", "PRES_NMAR", "pnm", "PNM"))
+        if _is_nan(p_msl):
+            p_abs = _parse_num(_field(record, "pres", "PRES"))
+            alt = _parse_num(_field(record, "alt", "ALT"))
+            if not _is_nan(p_abs) and not _is_nan(alt):
+                import math as _math
+                p_msl = p_abs * _math.exp(alt / 8000.0)
+        if _is_nan(temp) and _is_nan(rh) and _is_nan(p_msl):
+            continue
+        if _is_nan(lat):
+            lat = _parse_num(_field(record, "lat", "LAT"))
+            lon = _parse_num(_field(record, "lon", "LON"))
+        bucket = (int(epoch) // bucket_s) * bucket_s
+        current = buckets.get(bucket)
+        if current is None or int(epoch) >= current[0]:
+            buckets[bucket] = (int(epoch), temp, rh, p_msl)
+
+    epochs = sorted(buckets)
+    if not epochs:
+        return {
+            "epochs": [], "temps": [], "humidities": [], "pressures": [],
+            "lat": lat, "lon": lon, "has_data": False,
+        }
+    return {
+        "epochs": epochs,
+        "temps": [buckets[b][1] for b in epochs],
+        "humidities": [buckets[b][2] for b in epochs],
+        "pressures": [buckets[b][3] for b in epochs],
+        "lat": lat,
+        "lon": lon,
+        "has_data": True,
+    }

@@ -37,7 +37,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -55,7 +55,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -397,7 +397,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -433,7 +433,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -793,7 +793,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -811,7 +811,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -1297,7 +1297,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -1333,7 +1333,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -1675,7 +1675,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": false,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -1837,7 +1837,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -2035,7 +2035,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -2107,7 +2107,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -2449,7 +2449,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -2575,7 +2575,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -2845,7 +2845,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -2953,7 +2953,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3061,7 +3061,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3079,7 +3079,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3115,7 +3115,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3421,7 +3421,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3457,7 +3457,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3565,7 +3565,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3673,7 +3673,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -3781,7 +3781,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4195,7 +4195,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4411,7 +4411,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4501,7 +4501,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4537,7 +4537,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4609,7 +4609,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4663,7 +4663,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -4933,7 +4933,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -5257,7 +5257,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -5275,7 +5275,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -5455,7 +5455,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -5869,7 +5869,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -5977,7 +5977,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6067,7 +6067,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6103,7 +6103,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6283,7 +6283,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6373,7 +6373,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6427,7 +6427,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6445,7 +6445,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6481,7 +6481,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6571,7 +6571,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6661,7 +6661,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6679,7 +6679,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6697,7 +6697,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6751,7 +6751,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6787,7 +6787,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6823,7 +6823,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6841,7 +6841,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -6895,7 +6895,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": false,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7093,7 +7093,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7201,7 +7201,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7363,7 +7363,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7417,7 +7417,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7453,7 +7453,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7471,7 +7471,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7597,7 +7597,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7633,7 +7633,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7741,7 +7741,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7813,7 +7813,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7831,7 +7831,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -7921,7 +7921,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8101,7 +8101,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8155,7 +8155,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8173,7 +8173,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8371,7 +8371,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8821,7 +8821,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8839,7 +8839,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -8965,7 +8965,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9019,7 +9019,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9055,7 +9055,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9631,7 +9631,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9667,7 +9667,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9721,7 +9721,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9775,7 +9775,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -9847,7 +9847,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10135,7 +10135,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10207,7 +10207,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10243,7 +10243,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10351,7 +10351,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10531,7 +10531,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10783,7 +10783,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10909,7 +10909,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -10999,7 +10999,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11017,7 +11017,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11107,7 +11107,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11161,7 +11161,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11233,7 +11233,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11413,7 +11413,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11719,7 +11719,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11827,7 +11827,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11845,7 +11845,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -11899,7 +11899,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12025,7 +12025,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12097,7 +12097,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12151,7 +12151,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12331,7 +12331,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12493,7 +12493,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12511,7 +12511,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12565,7 +12565,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12637,7 +12637,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12763,7 +12763,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12781,7 +12781,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12817,7 +12817,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12925,7 +12925,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -12943,7 +12943,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13159,7 +13159,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13375,7 +13375,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13429,7 +13429,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13483,7 +13483,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13537,7 +13537,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13573,7 +13573,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -13879,7 +13879,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14041,7 +14041,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14149,7 +14149,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14257,7 +14257,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14347,7 +14347,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14437,7 +14437,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14455,7 +14455,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14509,7 +14509,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14545,7 +14545,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14581,7 +14581,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14617,7 +14617,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14635,7 +14635,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14743,7 +14743,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     },
@@ -14779,7 +14779,7 @@
         "anemometer": true,
         "wind_vane": true,
         "rain_gauge": true,
-        "pyranometer": true,
+        "pyranometer": false,
         "uv": false
       }
     }

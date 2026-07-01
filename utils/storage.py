@@ -22,6 +22,7 @@ from config import (
     LS_UNIT_PREFERENCES,
 )
 from utils.units import DEFAULT_UNIT_PREFERENCES, normalize_unit_preferences
+from domain.wu_calibration import looks_like_min_bound_calibration_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -480,6 +481,14 @@ def get_stored_wu_station_calibration(station_id: str):
         return {}
     payload = get_stored_wu_calibrations()
     station_payload = payload.get(sid, {})
+    if isinstance(station_payload, dict) and looks_like_min_bound_calibration_artifact(station_payload):
+        payload.pop(sid, None)
+        try:
+            raw = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+        except Exception:
+            raw = "{}"
+        set_local_storage(LS_WU_CALIBRATIONS, raw, "save")
+        return {}
     return station_payload if isinstance(station_payload, dict) else {}
 
 

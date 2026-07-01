@@ -4,9 +4,7 @@ import json
 import math
 from pathlib import Path
 
-from models.thermodynamics import e_s
 from tabs import trends
-from utils.trends_pipeline import extend_today_pressure_trend
 
 
 def test_prepare_today_dataset_from_series_groups_and_sets_intervals():
@@ -41,8 +39,8 @@ def test_wind_uv_frame_aligns_to_today_trend_grid():
     ]
     frame = trends._prepare_wind_uv_frame(
         [int(dt.timestamp()) for dt in times],
-        [10.0, 12.0, 14.0],
-        [180.0, 190.0, 200.0],
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0],
         grid_step_minutes=20,
         tz_name="",
         is_nan=math.isnan,
@@ -58,8 +56,8 @@ def test_wind_uv_frame_uses_station_timezone():
 
     frame = trends._prepare_wind_uv_frame(
         [epoch, epoch + 1200, epoch + 2400],
-        [10.0, 10.0, 10.0],
-        [180.0, 180.0, 180.0],
+        [1.0, 1.0, 1.0],
+        [2.0, 2.0, 2.0],
         grid_step_minutes=20,
         tz_name="America/Denver",
         is_nan=math.isnan,
@@ -73,7 +71,7 @@ def test_symmetric_y_range_uses_minimum_until_data_exceeds_it():
     assert trends._symmetric_y_range_with_min([30.0, -12.0], 20.0) == [-33.0, 33.0]
 
 
-def test_load_synoptic_trends_source_recovers_humidity_from_dewpoint(fake_logger):
+def test_load_synoptic_trends_source_does_not_rederive_missing_humidity(fake_logger):
     hourly7d = {
         "has_data": True,
         "epochs": [1713686400, 1713697200, 1713708000],
@@ -90,16 +88,13 @@ def test_load_synoptic_trends_source_recovers_humidity_from_dewpoint(fake_logger
         render_neutral_info_note=lambda *args, **kwargs: None,
         t=lambda key, **kwargs: key,
         logger=fake_logger,
-        is_nan=math.isnan,
-        e_s=e_s,
-        station_elevation=0,
     )
 
     assert prepared is not None
     assert prepared["interval_theta_e"] == 180
     assert prepared["interval_e"] == 180
     assert prepared["interval_p"] == 180
-    assert prepared["df_trends"]["rh"].notna().all()
+    assert prepared["df_trends"]["rh"].isna().all()
 
 
 def test_load_synoptic_trends_source_flags_short_provider_coverage_and_reads_abs_pressure(fake_logger):
@@ -123,9 +118,6 @@ def test_load_synoptic_trends_source_flags_short_provider_coverage_and_reads_abs
         render_neutral_info_note=render_note,
         t=lambda key, **kwargs: key,
         logger=fake_logger,
-        is_nan=math.isnan,
-        e_s=e_s,
-        station_elevation=0,
     )
 
     assert prepared is not None
@@ -158,49 +150,12 @@ def test_load_synoptic_trends_source_limits_synoptic_window_to_latest_week(fake_
         render_neutral_info_note=lambda *args, **kwargs: None,
         t=lambda key, **kwargs: key,
         logger=fake_logger,
-        is_nan=math.isnan,
-        e_s=e_s,
-        station_elevation=0,
     )
 
     assert prepared is not None
     span_hours = (prepared["day_end"] - prepared["day_start"]).total_seconds() / 3600.0
     assert span_hours <= 7 * 24
     assert prepared["day_start"] >= prepared["day_end"] - timedelta(days=7)
-
-
-def test_extend_today_pressure_trend_uses_only_wu_hourly_lookback():
-    day_start = datetime(2026, 5, 29, 0, 0, 0)
-    hourly_times = [day_start - timedelta(hours=3) + timedelta(hours=idx) for idx in range(8)]
-    hourly_epochs = [int(dt.timestamp()) for dt in hourly_times]
-    hourly_pressures = [1000.0 + idx for idx in range(len(hourly_times))]
-    base_times = [day_start + timedelta(minutes=20 * idx) for idx in range(10)]
-    base_pressures = [1003.0 + (idx / 3.0) for idx in range(len(base_times))]
-
-    trend_times, trend_values = extend_today_pressure_trend(
-        provider_id="WU",
-        pressure_trend_times=[],
-        pressure_trend_values=[],
-        day_start=day_start,
-        day_end=day_start + timedelta(days=1),
-        get_provider_station_id=lambda provider_id: "",
-        get_meteofrance_service=lambda: None,
-        infer_series_step_minutes=lambda dt: 60,
-        wu_hourly7d={
-            "has_data": True,
-            "epochs": hourly_epochs,
-            "pressures": hourly_pressures,
-        },
-        base_pressure_times=base_times,
-        base_pressure_values=base_pressures,
-        station_elevation=0,
-        is_nan=math.isnan,
-    )
-
-    assert trend_times.iloc[0].to_pydatetime().hour == 0
-    assert trend_times.iloc[1].to_pydatetime().minute == 20
-    assert not math.isnan(float(trend_values[0]))
-    assert float(trend_values[0]) == 1.0
 
 
 def test_trend_chart_heading_tooltip_escapes_html():

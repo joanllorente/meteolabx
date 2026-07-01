@@ -173,6 +173,12 @@ PROVIDER_SPECS: dict[str, dict[str, Any]] = {
         "default_tz": "Europe/Rome",
         "locality_resolver": _meteohub_locality,
     },
+    "IEM": {
+        "label": "IEM",
+        "session_prefix": "iem",
+        "station_id_keys": ("iem_station_id", "provider_station_id"),
+        "station_id_upper": False,
+    },
 }
 
 PROVIDER_RUNTIME_PREFIXES = (
@@ -240,11 +246,6 @@ WU_CACHE_KEYS = (
     "chart_series_t",
     "chart_et0",
     "chart_balance",
-    "p_hist",
-    "rain_hist",
-    "last_tip",
-    "prev_tip",
-    "last_precip_change_time",
     "last_update_time",
 )
 
@@ -350,17 +351,7 @@ def is_provider_connection(provider_id: str, state: Any = None) -> bool:
 
 
 def clear_provider_runtime_cache(provider_id: str) -> None:
-    """
-    Limpia cachés runtime del proveedor cuando existe soporte específico.
-    """
-    provider_id = coerce_str(provider_id, upper=True)
-    if provider_id == "AEMET":
-        try:
-            from services.aemet import clear_aemet_runtime_cache
-
-            clear_aemet_runtime_cache()
-        except Exception:
-            pass
+    """Compatibility no-op: provider caches are owned by FastAPI."""
 
 
 def _capture_connection_state() -> dict[str, Any]:
@@ -392,7 +383,13 @@ def restore_connection_state(snapshot: dict[str, Any] | None) -> None:
     for key, value in snapshot.items():
         if key in WIDGET_BOUND_CONNECTION_KEYS:
             continue
-        st.session_state[key] = value
+        try:
+            st.session_state[key] = value
+        except Exception:
+            # Si `key` es de un widget ya instanciado este run, Streamlit
+            # prohíbe modificarlo (StreamlitAPIException). Se omite: conserva
+            # el valor actual del widget en vez de petar la conexión.
+            pass
 
 
 def restore_connection_state_from_loading_payload(payload: dict[str, Any] | None = None) -> None:
@@ -621,6 +618,7 @@ def apply_provider_station_state(
     st.session_state[PROVIDER_STATION_LAT] = lat
     st.session_state[PROVIDER_STATION_LON] = lon
     st.session_state[PROVIDER_STATION_ALT] = elevation_m
+    st.session_state["provider_station_catalog_alt"] = elevation_m
 
     resolved_tz = str(station_tz or spec.get("default_tz", "")).strip()
     st.session_state[PROVIDER_STATION_TZ] = resolved_tz
@@ -630,6 +628,7 @@ def apply_provider_station_state(
     st.session_state[f"{prefix}_station_lat"] = lat
     st.session_state[f"{prefix}_station_lon"] = lon
     st.session_state[f"{prefix}_station_alt"] = elevation_m
+    st.session_state[f"{prefix}_station_catalog_alt"] = elevation_m
 
     if connected is not None:
         st.session_state[CONNECTED] = connected
@@ -724,6 +723,19 @@ def disable_provider_autoconnect(_toggle_prefix: str) -> None:
     # visible ya es False y el siguiente rerun se hidrata desde localStorage.
 
 
+def is_manual_iem_station(state: Any) -> bool:
+    """¿La estación conectada es MANUAL (observador cooperativo del NWS vía IEM)?
+
+    Las redes ``*_COOP`` (p.ej. ``NV_COOP|MOMN2``) solo publican máx/mín una vez
+    al día, sin datos en tiempo real ni serie horaria. Sirve para ocultar avisos
+    de "datos antiguos / serie no disponible" que no aplican a estas estaciones.
+    """
+    if coerce_str(state.get(CONNECTION_TYPE, ""), upper=True) != "IEM":
+        return False
+    network = str(state.get(PROVIDER_STATION_ID, "") or "").split("|", 1)[0]
+    return network.strip().upper().endswith("_COOP")
+
+
 def resolve_provider_locality(provider_id: str, metadata: Any, fallback: str = "") -> str:
     """
     Devuelve la mejor localidad legible para una estación según su proveedor.
@@ -780,6 +792,9 @@ def display_provider_station_id(provider_id: str, station_id: Any) -> str:
     if provider == "METEOHUB_IT" and "|" in raw:
         network = raw.split("|", 1)[0].strip()
         return network or raw
+    if provider == "IEM" and "|" in raw:
+        network, station = (part.strip() for part in raw.split("|", 1))
+        return f"{network} · {station}" if network and station else station or network or raw
     return raw
 
 
@@ -801,7 +816,17 @@ def build_connection_snapshot(state: Any = None) -> ConnectionSnapshot | None:
 
     lat = state.get(f"{provider_id.lower()}_station_lat", state.get(PROVIDER_STATION_LAT, state.get("station_lat")))
     lon = state.get(f"{provider_id.lower()}_station_lon", state.get(PROVIDER_STATION_LON, state.get("station_lon")))
-    alt = state.get(f"{provider_id.lower()}_station_alt", state.get(PROVIDER_STATION_ALT, state.get("station_elevation")))
+    prefix = provider_id.lower()
+    alt = state.get(
+        f"{prefix}_station_catalog_alt",
+        state.get(
+            "provider_station_catalog_alt",
+            state.get(
+                f"{prefix}_station_alt",
+                state.get(PROVIDER_STATION_ALT, state.get("station_elevation")),
+            ),
+        ),
+    )
     return ConnectionSnapshot(
         provider_id=provider_id,
         station_name=str(station_name),
