@@ -392,6 +392,11 @@ def handle_rank_connect_query(ctx) -> None:
     _handle_rank_connect(cdata, gdata, apply_station_selection=apply_station_selection)
 
 
+def _mark_ranking_country_chosen() -> None:
+    """El usuario eligió país a mano → dejar de re-sincronizar con el detectado."""
+    st.session_state["_ranking_country_user_set"] = True
+
+
 def render_ranking_tab(ctx) -> None:
     section_title = ctx["section_title"]
     t = ctx["t"]
@@ -411,13 +416,24 @@ def render_ranking_tab(ctx) -> None:
     gdata = _cached_ranking(None, 10, st.session_state.get("ranking_global_day"), g_exclude)
     lat = _safe_float(st.session_state.get("map_search_lat"), 40.4168)
     lon = _safe_float(st.session_state.get("map_search_lon"), -3.7038)
+    detected = _resolve_user_country(lat, lon)
     available = _cached_ranking_countries()
-    options = _country_options(available, _resolve_user_country(lat, lon))
-    # Default del selector de país = país detectado (lo fija antes de instanciar
-    # el widget; si el usuario ya eligió otro, se respeta).
-    if options and st.session_state.get("ranking_country") not in options:
-        detected = _resolve_user_country(lat, lon)
-        st.session_state["ranking_country"] = detected if detected in options else options[0]
+    options = _country_options(available, detected)
+    # Default del selector = país detectado, MIENTRAS el usuario no elija a mano.
+    # Nos re-sincronizamos con el detectado en cada render hasta que toque el
+    # selector (``on_change`` marca la elección): así, si la detección aún no
+    # había resuelto en el primer render (coords/tz sin poblar) y cayó a un
+    # default alfabético (Albania), se corrige a su país en cuanto resuelve, en
+    # vez de quedarse pegado. Sin detección, ``options[0]`` como último recurso.
+    if options:
+        current = st.session_state.get("ranking_country")
+        if not st.session_state.get("_ranking_country_user_set"):
+            st.session_state["ranking_country"] = (
+                detected if detected in options
+                else (current if current in options else options[0])
+            )
+        elif current not in options:
+            st.session_state["ranking_country"] = detected if detected in options else options[0]
     selected = st.session_state.get("ranking_country")
     cdata = _cached_country_ranking(selected, 10, st.session_state.get("ranking_country_day"))
 
@@ -437,6 +453,7 @@ def render_ranking_tab(ctx) -> None:
             options,
             format_func=_country_name,
             key="ranking_country",
+            on_change=_mark_ranking_country_chosen,
         )
         # Refetch por si cambió el país (las fechas disponibles dependen de él).
         cdata = _cached_country_ranking(selected, 10, st.session_state.get("ranking_country_day"))
