@@ -292,16 +292,20 @@ def _render_section(
 
 _RANKING_CSS = """
 <style>
-.mlbx-rank-list { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+.mlbx-rank-list { list-style: none; margin: 0.2rem 0 0; padding: 0; max-width: 100%; }
 .mlbx-rank-list li {
     display: flex; align-items: center; gap: 8px;
     padding: 5px 2px; border-bottom: 1px solid var(--mlbx-rank-border);
+    /* Recorta cualquier contenido que se salga para que un nombre largo no
+       empuje el valor a la columna vecina (el bleed que se veía en el ranking
+       por país con nombres tipo "PARQUE NACIONAL PICOS DE EUROPA"). */
+    max-width: 100%; overflow: hidden; box-sizing: border-box;
 }
 .mlbx-rank-pos {
     flex: 0 0 22px; text-align: center; font-weight: 700; font-size: 0.8rem;
     color: var(--text); opacity: 0.55;
 }
-.mlbx-rank-body { flex: 1 1 auto; min-width: 0; }
+.mlbx-rank-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
 .mlbx-rank-name {
     display: block; font-weight: 600; font-size: 0.9rem; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -310,7 +314,7 @@ _RANKING_CSS = """
 .mlbx-rank-link:hover { text-decoration: underline; color: #ff5a54; }
 .mlbx-rank-sub { font-size: 0.72rem; opacity: 0.6; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mlbx-rank-val { flex: 0 0 auto; font-weight: 700; font-size: 0.95rem; color: var(--text); }
+.mlbx-rank-val { flex: 0 0 auto; font-weight: 700; font-size: 0.95rem; color: var(--text); white-space: nowrap; }
 .mlbx-rank-unit { font-size: 0.68rem; opacity: 0.6; margin-left: 2px; font-weight: 500; }
 </style>
 """
