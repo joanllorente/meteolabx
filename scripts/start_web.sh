@@ -16,6 +16,24 @@ BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8000"
 export METEOLABX_API_URL="${METEOLABX_API_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}}"
 
+# 0) Catálogo de estaciones: en el repo viaja SOLO comprimido
+# (data/stations.sqlite.gz; el .sqlite supera el límite de 100 MB de GitHub
+# y está en .gitignore). Descomprimir aquí hace el deploy autosuficiente:
+# sin este paso, el backend arranca sin catálogo y el mapa/ranking/deep
+# links quedan vacíos en producción.
+python3 - <<'PY'
+import gzip, os, shutil
+src, dst = "data/stations.sqlite.gz", "data/stations.sqlite"
+if os.path.isfile(src) and (
+    not os.path.isfile(dst) or os.path.getmtime(src) > os.path.getmtime(dst)
+):
+    with gzip.open(src, "rb") as fin, open(dst, "wb") as fout:
+        shutil.copyfileobj(fin, fout)
+    print(f"[start_web] Catálogo descomprimido: {dst} ({os.path.getsize(dst)} bytes)")
+else:
+    print("[start_web] Catálogo de estaciones ya presente")
+PY
+
 # 1) Backend FastAPI en segundo plano (interno).
 python3 -m uvicorn server.main:app \
   --host "${BACKEND_HOST}" \
