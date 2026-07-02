@@ -9,10 +9,7 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 
-# Datos grandes que NO van a git (superan el límite de 100 MB de GitHub).
-# stations.sqlite viaja comprimido (data/stations.sqlite.gz) y start_web.sh lo
-# descomprime al arrancar. Los otros dos son intermedios de build (no runtime);
-# data_estaciones_iem.json se conserva comprimido (.gz) como fuente del build.
+# Catálogos grandes: al repo solo va el .gz (límite 100 MB de GitHub)
 data/stations.sqlite
 data/iem_stations.sqlite
 data/data_estaciones_iem.json
