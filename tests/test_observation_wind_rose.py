@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tabs import observation
+from utils import i18n
 
 
 def test_observation_wind_rose_treats_under_two_kmh_as_calm():
@@ -170,7 +171,7 @@ def test_wet_bulb_risk_locale_keys_exist_in_supported_languages():
         ("wet_bulb_alert", "extreme"),
     )
 
-    for lang in ("es", "en", "fr"):
+    for lang in i18n.get_supported_languages():
         payload = json.loads((locales_dir / f"{lang}.json").read_text(encoding="utf-8"))
         dew_point = payload["observation"]["cards"]["basic"]["dew_point"]
         for group, key in required_keys:

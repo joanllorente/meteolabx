@@ -16,8 +16,6 @@ import pandas as pd
 from domain.parsing.wu_climo import DAILY_SCHEMA, clip_period_tuples_to_today
 from server.schemas.errors import ProviderError
 from server.services.iem import (
-    ASOS_DATA_COLUMNS,
-    ASOS_HISTORY_URL,
     PROVIDER,
     USER_AGENT,
     _f_to_c,
@@ -30,6 +28,12 @@ from server.services.iem import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Servicio de descarga masiva de IEM. Es el endpoint adecuado para los rangos
+# largos del histórico (una petición puntual por dataset); para observación
+# actual y series diarias se usa ``obhistory`` (ver server/services/iem.py).
+ASOS_HISTORY_URL = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
+ASOS_DATA_COLUMNS = ("tmpf", "dwpf", "relh", "drct", "sknt", "gust", "p01i", "alti", "mslp")
 
 _REQUEST_SPACING_S = 1.05
 _RETRYABLE_STATUS_CODES = {429, 503}

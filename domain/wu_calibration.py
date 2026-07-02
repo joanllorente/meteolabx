@@ -257,25 +257,3 @@ def apply_wu_series_calibration(series: Mapping[str, Any] | None, calibration: M
     return payload
 
 
-def apply_wu_daily_history_calibration(frame: pd.DataFrame, calibration: Mapping[str, Any] | None) -> pd.DataFrame:
-    import pandas as pd
-
-    if not isinstance(frame, pd.DataFrame) or frame.empty:
-        return frame
-
-    cal = normalize_wu_calibration(calibration)
-    out = frame.copy()
-
-    for column in ("temp_mean", "temp_max", "temp_min", "temp_abs_max", "temp_abs_min"):
-        if column in out.columns:
-            out[column] = pd.to_numeric(out[column], errors="coerce") + cal["thermometer"]
-
-    if "wind_mean" in out.columns:
-        out["wind_mean"] = (pd.to_numeric(out["wind_mean"], errors="coerce") + cal["anemometer"]).clip(lower=0.0)
-    if "gust_max" in out.columns:
-        out["gust_max"] = (pd.to_numeric(out["gust_max"], errors="coerce") + cal["anemometer"]).clip(lower=0.0)
-    if "wind_dir_mean" in out.columns:
-        out["wind_dir_mean"] = (pd.to_numeric(out["wind_dir_mean"], errors="coerce") + cal["wind_vane"]) % 360.0
-    if "precip_total" in out.columns:
-        out["precip_total"] = (pd.to_numeric(out["precip_total"], errors="coerce") + cal["rain_gauge"]).clip(lower=0.0)
-    return out

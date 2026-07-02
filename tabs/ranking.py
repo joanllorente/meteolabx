@@ -292,20 +292,16 @@ def _render_section(
 
 _RANKING_CSS = """
 <style>
-.mlbx-rank-list { list-style: none; margin: 0.2rem 0 0; padding: 0; max-width: 100%; }
+.mlbx-rank-list { list-style: none; margin: 0.2rem 0 0; padding: 0; }
 .mlbx-rank-list li {
     display: flex; align-items: center; gap: 8px;
     padding: 5px 2px; border-bottom: 1px solid var(--mlbx-rank-border);
-    /* Recorta cualquier contenido que se salga para que un nombre largo no
-       empuje el valor a la columna vecina (el bleed que se veía en el ranking
-       por país con nombres tipo "PARQUE NACIONAL PICOS DE EUROPA"). */
-    max-width: 100%; overflow: hidden; box-sizing: border-box;
 }
 .mlbx-rank-pos {
     flex: 0 0 22px; text-align: center; font-weight: 700; font-size: 0.8rem;
     color: var(--text); opacity: 0.55;
 }
-.mlbx-rank-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.mlbx-rank-body { flex: 1 1 auto; min-width: 0; }
 .mlbx-rank-name {
     display: block; font-weight: 600; font-size: 0.9rem; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -314,7 +310,7 @@ _RANKING_CSS = """
 .mlbx-rank-link:hover { text-decoration: underline; color: #ff5a54; }
 .mlbx-rank-sub { font-size: 0.72rem; opacity: 0.6; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mlbx-rank-val { flex: 0 0 auto; font-weight: 700; font-size: 0.95rem; color: var(--text); white-space: nowrap; }
+.mlbx-rank-val { flex: 0 0 auto; font-weight: 700; font-size: 0.95rem; color: var(--text); }
 .mlbx-rank-unit { font-size: 0.68rem; opacity: 0.6; margin-left: 2px; font-weight: 500; }
 </style>
 """
@@ -392,11 +388,6 @@ def handle_rank_connect_query(ctx) -> None:
     _handle_rank_connect(cdata, gdata, apply_station_selection=apply_station_selection)
 
 
-def _mark_ranking_country_chosen() -> None:
-    """El usuario eligió país a mano → dejar de re-sincronizar con el detectado."""
-    st.session_state["_ranking_country_user_set"] = True
-
-
 def render_ranking_tab(ctx) -> None:
     section_title = ctx["section_title"]
     t = ctx["t"]
@@ -416,24 +407,13 @@ def render_ranking_tab(ctx) -> None:
     gdata = _cached_ranking(None, 10, st.session_state.get("ranking_global_day"), g_exclude)
     lat = _safe_float(st.session_state.get("map_search_lat"), 40.4168)
     lon = _safe_float(st.session_state.get("map_search_lon"), -3.7038)
-    detected = _resolve_user_country(lat, lon)
     available = _cached_ranking_countries()
-    options = _country_options(available, detected)
-    # Default del selector = país detectado, MIENTRAS el usuario no elija a mano.
-    # Nos re-sincronizamos con el detectado en cada render hasta que toque el
-    # selector (``on_change`` marca la elección): así, si la detección aún no
-    # había resuelto en el primer render (coords/tz sin poblar) y cayó a un
-    # default alfabético (Albania), se corrige a su país en cuanto resuelve, en
-    # vez de quedarse pegado. Sin detección, ``options[0]`` como último recurso.
-    if options:
-        current = st.session_state.get("ranking_country")
-        if not st.session_state.get("_ranking_country_user_set"):
-            st.session_state["ranking_country"] = (
-                detected if detected in options
-                else (current if current in options else options[0])
-            )
-        elif current not in options:
-            st.session_state["ranking_country"] = detected if detected in options else options[0]
+    options = _country_options(available, _resolve_user_country(lat, lon))
+    # Default del selector de país = país detectado (lo fija antes de instanciar
+    # el widget; si el usuario ya eligió otro, se respeta).
+    if options and st.session_state.get("ranking_country") not in options:
+        detected = _resolve_user_country(lat, lon)
+        st.session_state["ranking_country"] = detected if detected in options else options[0]
     selected = st.session_state.get("ranking_country")
     cdata = _cached_country_ranking(selected, 10, st.session_state.get("ranking_country_day"))
 
@@ -453,7 +433,6 @@ def render_ranking_tab(ctx) -> None:
             options,
             format_func=_country_name,
             key="ranking_country",
-            on_change=_mark_ranking_country_chosen,
         )
         # Refetch por si cambió el país (las fechas disponibles dependen de él).
         cdata = _cached_country_ranking(selected, 10, st.session_state.get("ranking_country_day"))

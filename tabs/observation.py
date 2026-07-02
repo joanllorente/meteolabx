@@ -309,7 +309,6 @@ def _coerce_observation_context(ctx: Union[ObservationContext, Mapping[str, Any]
 
 def render_observation_tab(ctx):
     ctx = _coerce_observation_context(ctx)
-    RD = ctx.RD
     ensure_chart_data = ctx.ensure_chart_data
     _fmt_precip_display = ctx._fmt_precip_display
     _fmt_pressure_display = ctx._fmt_pressure_display
@@ -386,7 +385,6 @@ def render_observation_tab(ctx):
     solar_rad = derivatives.get("solar_rad")
     theta = derivatives.get("theta")
     uv = derivatives.get("uv")
-    z = derivatives.get("z")
     sound_speed = derivatives.get("sound_speed_ms")
     wet_bulb_risk_category = derivatives.get("wet_bulb_risk")
     wet_bulb_alert_level = derivatives.get("wet_bulb_alert_level")
@@ -512,8 +510,6 @@ def render_observation_tab(ctx):
         wind_side = f"<div class='max'>▲ {_fmt_wind_display(gmax, decimals=1)}</div>"
 
     # Usar la función card() pero asegurarnos de que se renderice correctamente
-    from components.icons import icon_img
-
     cards_basic = [
         card(t("observation.cards.basic.temperature.title"), temp_val, temp_unit_txt, 
              icon_kind="temp", 
@@ -701,13 +697,9 @@ def render_observation_tab(ctx):
     if dark:
         text_color = "rgba(255, 255, 255, 0.92)"
         grid_color = "rgba(255, 255, 255, 0.15)"
-        zero_line_color = "rgba(230, 230, 230, 0.65)"
-        now_line_color = "rgba(230, 236, 245, 0.7)"
     else:
         text_color = "rgba(15, 18, 25, 0.92)"
         grid_color = "rgba(18, 18, 18, 0.12)"
-        zero_line_color = "rgba(55, 55, 55, 0.65)"
-        now_line_color = "rgba(35, 42, 56, 0.55)"
 
     if connected and has_chart_data:
         section_title(t("common.charts"))
@@ -719,7 +711,6 @@ def render_observation_tab(ctx):
         chart_epochs = st.session_state.get("chart_epochs", [])
         chart_temps = st.session_state.get("chart_temps", [])
         chart_humidities = st.session_state.get("chart_humidities", [])
-        chart_pressures = st.session_state.get("chart_pressures", [])
         chart_solar_radiations = st.session_state.get("chart_solar_radiations", [])
         chart_theoretical_solar_radiations = st.session_state.get("chart_theoretical_solar_radiations", [])
         chart_vapor_pressures = st.session_state.get("chart_vapor_pressures", [])

@@ -6,10 +6,9 @@ IEM agrega redes globales y regionales. Para evitar colisiones de IDs, el
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
-import csv
-import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -23,11 +22,16 @@ from server.services import stations
 logger = logging.getLogger(__name__)
 
 PROVIDER = "IEM"
+# obhistory es el endpoint por-estación/por-día de IEM y vale para TODAS las
+# redes, ASOS/METAR incluidas. El servicio de descarga masiva
+# ``cgi-bin/request/asos.py`` que se usaba antes para redes ASOS aplica
+# rate-limit agresivo (429 frecuentes) porque está pensado para exports, no
+# para tráfico interactivo; con él la observación actual y los gráficos
+# fallaban de forma intermitente.
 BASE_URL = "https://mesonet.agron.iastate.edu/api/1/obhistory.json"
-ASOS_HISTORY_URL = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
-ASOS_DATA_COLUMNS = ("tmpf", "dwpf", "relh", "drct", "sknt", "gust", "p01i", "alti", "mslp")
-ASOS_NETWORK_MARKERS = ("ASOS", "AWOS", "METAR")
+CURRENTS_URL = "https://mesonet.agron.iastate.edu/api/1/currents.json"
 USER_AGENT = "MeteoLabX/1.0 (contact: meteolabx@gmail.com)"
+_IEM_TRACE_PRECIP_IN = 0.0001
 
 
 def _is_nan(value: float) -> bool:
@@ -56,7 +60,13 @@ def _knots_to_kmh(value: Any) -> float:
 
 def _inch_to_mm(value: Any) -> float:
     raw = _safe_float(value)
-    return max(0.0, raw * 25.4) if not _is_nan(raw) else float("nan")
+    if _is_nan(raw):
+        return float("nan")
+    # IEM codifica los METAR ``P0000``/traza como 0.0001". Convertirlo
+    # literalmente genera 0.00254 mm, que no es lluvia medible.
+    if 0.0 <= raw <= _IEM_TRACE_PRECIP_IN:
+        return 0.0
+    return max(0.0, raw * 25.4)
 
 
 def _inhg_to_hpa(value: Any) -> float:
@@ -124,92 +134,75 @@ def _local_date(meta: Dict[str, Any], now: Optional[datetime]) -> date:
     return (now or datetime.now(tz=timezone.utc)).astimezone(tz).date()
 
 
-def _is_asos_network(network: str) -> bool:
-    network_code = str(network or "").upper()
-    return any(marker in network_code for marker in ASOS_NETWORK_MARKERS)
-
-
-def _csv_rows(text: str) -> List[Dict[str, str]]:
-    lines = [line for line in str(text or "").splitlines() if line.strip()]
-    header_idx = 0
-    for idx, line in enumerate(lines):
-        lower = line.lower()
-        if "valid" in lower and ("station" in lower or "tmpf" in lower):
-            header_idx = idx
-            break
-    csv_text = "\n".join(lines[header_idx:])
-    reader = csv.DictReader(io.StringIO(csv_text))
-    return [dict(row) for row in reader if isinstance(row, dict) and row.get("valid")]
-
-
-async def _fetch_asos_rows(
+async def _fetch_current_summary(
     network: str,
     station: str,
-    start: date,
-    end: date,
-    meta: Dict[str, Any],
     client: httpx.AsyncClient,
     *,
     timeout_s: float,
-) -> List[Dict[str, Any]]:
-    tz = _station_tz(meta)
-    start_dt = datetime.combine(start, datetime.min.time(), tzinfo=tz)
-    end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time(), tzinfo=tz)
-    params: List[Tuple[str, str]] = [
-        ("station", station),
-        ("network", network),
-        ("sts", start_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
-        ("ets", end_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
-        ("tz", "UTC"),
-        ("format", "onlycomma"),
-        ("missing", "empty"),
-        ("trace", "0.0001"),
-    ]
-    params.extend(("data", column) for column in ASOS_DATA_COLUMNS)
+) -> Dict[str, Any]:
     try:
         response = await client.get(
-            ASOS_HISTORY_URL,
-            params=params,
-            headers={"Accept": "text/csv,*/*", "User-Agent": USER_AGENT},
+            CURRENTS_URL,
+            params={"network": network},
+            headers={"Accept": "application/json", "User-Agent": USER_AGENT},
             timeout=timeout_s,
         )
-    except httpx.TimeoutException as exc:
-        raise ProviderError(
-            "provider_timeout",
-            provider=PROVIDER,
-            detail=f"IEM ASOS timeout: {exc}",
-            status_code=504,
-        ) from exc
-    except httpx.RequestError as exc:
-        raise ProviderError(
-            "provider_network_error",
-            provider=PROVIDER,
-            detail=str(exc) or "Network error",
-            status_code=502,
-        ) from exc
+    except (httpx.TimeoutException, httpx.RequestError) as exc:
+        logger.info("IEM currents falló para %s|%s: %s", network, station, exc)
+        return {}
 
-    if response.status_code == 404:
-        raise ProviderError(
-            "station_not_found",
-            provider=PROVIDER,
-            detail=f"IEM no encontró {network}|{station}",
-            status_code=404,
-        )
-    if response.status_code == 429:
-        raise ProviderError(
-            "provider_ratelimit",
-            provider=PROVIDER,
-            detail="IEM ASOS rate limit (HTTP 429)",
-            status_code=429,
-        )
     if response.status_code >= 400:
-        raise ProviderError(
-            "provider_http_error",
-            provider=PROVIDER,
-            detail=f"IEM ASOS HTTP {response.status_code}",
-            status_code=502,
+        logger.info(
+            "IEM currents falló para %s|%s: HTTP %s",
+            network, station, response.status_code,
         )
-    return _csv_rows(response.text)
+        return {}
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        logger.info("IEM currents devolvió JSON inválido para %s|%s: %s", network, station, exc)
+        return {}
+
+    rows = payload.get("data") if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        return {}
+    station_key = str(station or "").strip().upper()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("station") or "").strip().upper() == station_key:
+            return row
+    return {}
+
+
+def _daily_summary_from_current(row: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
+    daily_extremes: Dict[str, float] = {}
+    for source, target, converter in (
+        ("max_tmpf", "temp_max", _f_to_c),
+        ("min_tmpf", "temp_min", _f_to_c),
+        ("max_gust", "gust_max", _knots_to_kmh),
+    ):
+        value = converter(row.get(source))
+        if _valid(value):
+            daily_extremes[target] = float(value)
+
+    precip_total = _inch_to_mm(row.get("pday"))
+    if not _valid(precip_total):
+        precip_total = _inch_to_mm(row.get("ob_pday"))
+    return daily_extremes, precip_total
+
+
+def _rows_have_temperature(rows: Iterable[Dict[str, Any]]) -> bool:
+    for row in rows:
+        if _valid(_f_to_c(row.get("tmpf"))):
+            return True
+    return False
+
+
+def _summary_has_current_temperature(row: Dict[str, Any]) -> bool:
+    return _valid(_f_to_c(row.get("tmpf")))
 
 
 async def _fetch_date(
@@ -295,22 +288,24 @@ async def _fetch_rows(
     if include_previous_for_current and days[0] == today:
         days.insert(0, today - timedelta(days=1))
 
+    # Un request por día, en paralelo. Si algún día falla (red/rate-limit)
+    # seguimos con los que sí llegaron: una serie parcial es mejor que un
+    # gráfico vacío. Solo propagamos error si TODOS los días fallaron.
+    results = await asyncio.gather(
+        *(_fetch_date(network, station, day, client, timeout_s=timeout_s) for day in days),
+        return_exceptions=True,
+    )
     rows: List[Dict[str, Any]] = []
-    if _is_asos_network(network):
-        rows.extend(
-            await _fetch_asos_rows(
-                network,
-                station,
-                days[0],
-                days[-1],
-                meta,
-                client,
-                timeout_s=timeout_s,
-            )
-        )
-    else:
-        for day in days:
-            rows.extend(await _fetch_date(network, station, day, client, timeout_s=timeout_s))
+    first_error: Optional[BaseException] = None
+    for day, result in zip(days, results):
+        if isinstance(result, BaseException):
+            if first_error is None:
+                first_error = result
+            logger.info("IEM obhistory falló para %s|%s date=%s: %s", network, station, day, result)
+            continue
+        rows.extend(result)
+    if not rows and first_error is not None:
+        raise first_error
     rows.sort(key=lambda row: _parse_epoch(row) or 0)
     return rows, meta
 
@@ -360,7 +355,13 @@ def _series_from_rows(rows: List[Dict[str, Any]], meta: Dict[str, Any]) -> Dict[
         "temps": [], "humidities": [], "dewpts": [], "pressures": [],
         "winds": [], "gusts": [], "wind_dirs": [], "precips": [],
     }
+    # ``p01i`` es la precipitación ACUMULADA dentro de la hora en curso: los
+    # partes especiales intra-horarios repiten (y van incrementando) el mismo
+    # acumulado, así que sumar cada fila contaría la misma lluvia varias
+    # veces. El acumulado correcto es el máximo de cada hora sumado entre
+    # horas; lo mantenemos incremental para poder emitir la serie punto a punto.
     precip_total = 0.0
+    hourly_max: Dict[int, float] = {}
     for row in rows:
         epoch = _parse_epoch(row)
         if epoch is None:
@@ -368,7 +369,11 @@ def _series_from_rows(rows: List[Dict[str, Any]], meta: Dict[str, Any]) -> Dict[
         parsed = _row_to_values(row)
         precip = parsed["precip"]
         if _valid(precip):
-            precip_total += float(precip)
+            bucket = int(epoch) // 3600
+            previous_max = hourly_max.get(bucket, 0.0)
+            if float(precip) > previous_max:
+                precip_total += float(precip) - previous_max
+                hourly_max[bucket] = float(precip)
         epochs.append(epoch)
         values["temps"].append(parsed["temp"])
         values["humidities"].append(parsed["rh"])
@@ -406,6 +411,7 @@ async def fetch_current(
     timeout_s: float = 18.0,
     now: Optional[datetime] = None,
 ) -> Dict[str, Any]:
+    network, station = _station_parts(station_id)
     meta = _station_meta(station_id)
     if bool(meta.get("is_historical_only", False)):
         raise ProviderError(
@@ -422,6 +428,9 @@ async def fetch_current(
         rows, meta = await _fetch_rows(
             station_id, client, timeout_s=timeout_s, now=now,
             include_previous_for_current=True,
+        )
+        current_summary = await _fetch_current_summary(
+            network, station, client, timeout_s=timeout_s,
         )
     finally:
         if owns_client:
@@ -440,11 +449,34 @@ async def fetch_current(
     epoch = int(_parse_epoch(latest) or 0)
     dt_utc = datetime.fromtimestamp(epoch, tz=timezone.utc)
     tz = _station_tz(meta)
-    series = _series_from_rows(rows, meta)
+    # El acumulado diario solo puede salir de las filas de HOY (fecha local de
+    # la estación). ``rows`` incluye también ayer —solo para tener una última
+    # observación válida justo pasada la medianoche— y sin este filtro la
+    # lluvia de ayer se colaba en el total de hoy.
+    today = _local_date(meta, now)
+    today_rows = [
+        row for row in rows
+        if (row_epoch := _parse_epoch(row)) is not None
+        and datetime.fromtimestamp(row_epoch, tz=timezone.utc).astimezone(tz).date() == today
+    ]
+    series = _series_from_rows(today_rows, meta)
     precip_total = next(
         (float(value) for value in reversed(series["precips"]) if _valid(value)),
         float("nan"),
     )
+    daily_extremes: Dict[str, float] = {}
+    if current_summary:
+        summary_extremes, summary_precip_total = _daily_summary_from_current(current_summary)
+        if (
+            ("temp_max" in summary_extremes or "temp_min" in summary_extremes)
+            and not _summary_has_current_temperature(current_summary)
+            and not _rows_have_temperature(today_rows)
+        ):
+            summary_extremes.pop("temp_max", None)
+            summary_extremes.pop("temp_min", None)
+        daily_extremes.update(summary_extremes)
+        if _valid(summary_precip_total):
+            precip_total = summary_precip_total
 
     observation: Dict[str, Any] = {
         "Tc": parsed["temp"],
@@ -467,6 +499,8 @@ async def fetch_current(
         "elevation": meta.get("elevation"),
         "station_name": meta.get("name") or station_id,
     }
+    if daily_extremes:
+        observation["daily_extremes"] = daily_extremes
     return add_basic_derived(observation)
 
 
@@ -482,6 +516,19 @@ async def fetch_today_series(
         client = httpx.AsyncClient(timeout=timeout_s)
     try:
         rows, meta = await _fetch_rows(station_id, client, timeout_s=timeout_s, now=now)
+        if not rows:
+            network, station = _station_parts(station_id)
+            fallback_day = _local_date(meta, now) - timedelta(days=1)
+            try:
+                rows = await _fetch_date(
+                    network, station, fallback_day, client, timeout_s=timeout_s,
+                )
+            except ProviderError as exc:
+                logger.info(
+                    "IEM fallback serie día anterior no disponible para %s date=%s: %s",
+                    station_id, fallback_day, exc.detail or exc.error_code,
+                )
+                rows = []
     finally:
         if owns_client:
             await client.aclose()

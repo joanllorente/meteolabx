@@ -246,17 +246,17 @@ def normalize_chart_series(
     normalized["gusts"] = list(series.get("gusts", []))
     normalized["wind_dirs"] = list(series.get("wind_dirs", []))
     normalized["precips"] = list(series.get("precips", []))
-    for field in (
+    for series_key in (
         "theta_e", "mixing_ratios", "theta_e_trends", "mixing_ratio_trends",
         "pressure_trends", "vapor_pressures", "saturation_pressures",
         "theoretical_solar_radiations", "wind_u", "wind_v",
     ):
-        normalized[field] = list(series.get(field, []))
-    for field in (
+        normalized[series_key] = list(series.get(series_key, []))
+    for series_key in (
         "sunrise_epoch", "sunset_epoch", "solar_altitude",
         "solar_altitude_max", "is_nighttime",
     ):
-        normalized[field] = series.get(field)
+        normalized[series_key] = series.get(series_key)
     normalized["has_data"] = bool(series.get("has_data", False))
     return normalized
 

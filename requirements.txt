@@ -5,16 +5,12 @@
 # manualmente tras probar la nueva major en entorno staging.
 #
 # Notas:
-#   - streamlit-local-storage usa version scheme 0.0.X; lo dejamos con
-#     upper-bound en <1.0 para tolerar parches/minors hasta el primer release
-#     estable.
 #   - pytest es dependencia de tests; idealmente debería vivir en un
 #     requirements-dev.txt aparte. Se deja aquí por compatibilidad con la
 #     configuración actual de CI.
 
 streamlit>=1.31.0,<2.0.0
 requests>=2.31.0,<3.0.0
-streamlit-local-storage>=0.0.25,<1.0.0
 streamlit-autorefresh>=0.0.1,<1.0.0
 plotly>=5.18.0,<7.0.0
 pandas>=2.0.0,<3.0.0

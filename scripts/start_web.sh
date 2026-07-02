@@ -16,17 +16,6 @@ BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8000"
 export METEOLABX_API_URL="${METEOLABX_API_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}}"
 
-# 0) Descomprimir el catálogo de estaciones. `data/stations.sqlite` (~232 MB)
-# viaja comprimido en git (`data/stations.sqlite.gz`, ~48 MB) para no chocar
-# con el límite de 100 MB/fichero de GitHub. El FS de Railway es efímero, así
-# que lo descomprimimos en cada arranque en frío si el crudo no está. El
-# backend lo necesita para el catálogo (mapa, ranking, deep-links).
-if [ ! -f data/stations.sqlite ] && [ -f data/stations.sqlite.gz ]; then
-  echo "🗜  Descomprimiendo data/stations.sqlite.gz ..."
-  gunzip -kc data/stations.sqlite.gz > data/stations.sqlite
-  echo "✓ data/stations.sqlite listo"
-fi
-
 # 1) Backend FastAPI en segundo plano (interno).
 python3 -m uvicorn server.main:app \
   --host "${BACKEND_HOST}" \
@@ -36,27 +25,37 @@ UVICORN_PID=$!
 # Tumbar el backend si el script sale por cualquier motivo.
 trap 'kill -TERM "${UVICORN_PID}" 2>/dev/null || true' EXIT
 
-# 2) Esperar a que el backend responda /v1/health antes de exponer el frontend.
-echo "⏳ Esperando al backend FastAPI en ${METEOLABX_API_URL} ..."
-for _ in $(seq 1 30); do
-  if python3 -c "import urllib.request; urllib.request.urlopen('${METEOLABX_API_URL}/v1/health', timeout=2)" 2>/dev/null; then
-    echo "✓ Backend FastAPI listo"
-    break
-  fi
-  if ! kill -0 "${UVICORN_PID}" 2>/dev/null; then
-    echo "✗ El backend FastAPI murió durante el arranque" >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-# 3) Frontend Streamlit en el puerto público.
+# 2) Frontend Streamlit en el puerto público.
+# No bloqueamos la exposición del frontend esperando al health del backend:
+# en cold starts de producción eso deja al navegador sin respuesta mientras
+# arrancan dos procesos Python. La UI puede pintar su estado inicial aunque la
+# API tarde unos segundos más; si el backend muere, el wait final reinicia todo.
 python3 scripts/patch_streamlit_index.py
+export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
 streamlit run meteolabx.py \
   --server.port="${STREAMLIT_PORT}" \
   --server.address=0.0.0.0 \
   --server.headless=true &
 STREAMLIT_PID=$!
+
+echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."
+(
+  for _ in $(seq 1 30); do
+    if python3 -c "import urllib.request; urllib.request.urlopen('${METEOLABX_API_URL}/v1/health', timeout=2)" 2>/dev/null; then
+      echo "✓ Backend FastAPI listo"
+      exit 0
+    fi
+    if ! kill -0 "${UVICORN_PID}" 2>/dev/null; then
+      echo "✗ El backend FastAPI murió durante el arranque" >&2
+      exit 1
+    fi
+    sleep 1
+  done
+  echo "✗ El backend FastAPI no respondió al healthcheck inicial" >&2
+  kill -TERM "${UVICORN_PID}" 2>/dev/null || true
+  exit 1
+) &
+BACKEND_READY_PID=$!
 
 # Si cualquiera de los dos cae, salimos → Railway reinicia ambos.
 wait -n "${UVICORN_PID}" "${STREAMLIT_PID}"

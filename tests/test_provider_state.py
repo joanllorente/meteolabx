@@ -95,6 +95,45 @@ def test_provider_snapshot_prefers_catalog_altitude_over_runtime_altitude(patch_
     assert snapshot.elevation_m == 249.0
 
 
+def test_provider_snapshot_skips_empty_catalog_altitude():
+    state = {
+        "connection_type": "IEM",
+        "connected": True,
+        "provider_station_id": "KW__ASOS|OKAS",
+        "provider_station_name": "Kuwait",
+        "iem_station_catalog_alt": "",
+        "provider_station_catalog_alt": None,
+        "iem_station_alt": 138.94615,
+        "provider_station_alt": 138.94615,
+    }
+
+    snapshot = provider_state.build_connection_snapshot(state)
+
+    assert snapshot is not None
+    assert snapshot.elevation_m == 138.94615
+
+
+def test_provider_snapshot_ignores_catalog_altitude_from_previous_station():
+    state = {
+        "connection_type": "IEM",
+        "connected": True,
+        "provider_station_id": "AU__ASOS|YSCB",
+        "provider_station_name": "Canberra",
+        "iem_station_catalog_alt": 39.0,
+        "iem_station_catalog_station_id": "WMO_BUFR_SRF|0-208-0-55",
+        "provider_station_catalog_alt": 39.0,
+        "provider_station_catalog_station_id": "WMO_BUFR_SRF|0-208-0-55",
+        "iem_station_alt": 577.0,
+        "provider_station_alt": 577.0,
+        "station_elevation": 39.0,
+    }
+
+    snapshot = provider_state.build_connection_snapshot(state)
+
+    assert snapshot is not None
+    assert snapshot.elevation_m == 577.0
+
+
 def test_weatherlink_widget_keys_are_not_restored_as_runtime(patch_streamlit, fake_session_state):
     fake_session_state.update(
         {

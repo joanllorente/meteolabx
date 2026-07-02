@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 
 from tabs import trends
+from utils import i18n
 
 
 def test_prepare_today_dataset_from_series_groups_and_sets_intervals():
@@ -178,7 +179,7 @@ def test_trend_chart_tooltip_typography_matches_observation_cards():
 
 def test_trend_chart_tooltip_locale_keys_exist_in_supported_languages():
     locales_dir = Path(__file__).resolve().parent.parent / "locales"
-    for lang in ("es", "en", "fr"):
+    for lang in i18n.get_supported_languages():
         payload = json.loads((locales_dir / f"{lang}.json").read_text(encoding="utf-8"))
         tooltips = payload["trends"]["tooltips"]
         assert tooltips["theta_e"].strip()

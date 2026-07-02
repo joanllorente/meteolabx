@@ -11,7 +11,6 @@ METEOGALICIA, FROST). El antiguo dispatcher legacy en threadpool
 from __future__ import annotations
 
 import logging
-from datetime import date
 from typing import Any, Dict, Optional, Tuple
 
 import httpx

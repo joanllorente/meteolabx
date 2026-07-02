@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import heapq
 import math
-from typing import Any, Callable, Iterable, List, Sequence, Tuple, TypeVar
+from typing import Callable, Iterable, List, Sequence, Tuple, TypeVar
 
 from utils.geo import haversine_distance
 

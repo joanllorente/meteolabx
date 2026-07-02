@@ -49,7 +49,6 @@ from utils.units import DEFAULT_UNIT_PREFERENCES, UNIT_LABELS, UNIT_OPTIONS, nor
 from domain.wu_calibration import (
     WU_CALIBRATION_ORDER,
     WU_CALIBRATION_SPECS,
-    default_wu_calibration,
     has_effective_wu_calibration,
     looks_like_min_bound_calibration_artifact,
     normalize_wu_calibration,
@@ -155,25 +154,6 @@ def _sync_active_wu_from_input_widgets() -> None:
 
 def _mark_wu_inputs_user_edited() -> None:
     st.session_state["_wu_inputs_user_edited"] = True
-
-
-def _snapshot_has_saved_connection_values(snapshot) -> bool:
-    if not isinstance(snapshot, dict):
-        return False
-    for item_key in (
-        LS_STATION,
-        LS_APIKEY,
-        LS_Z,
-        LS_AUTOCONNECT_TARGET,
-        LS_WEATHERLINK_APIKEY,
-        LS_WEATHERLINK_APISECRET,
-        LS_WEATHERLINK_STATION,
-        LS_WEATHERLINK_Z,
-    ):
-        value = coerce_str(snapshot.get(item_key, ""))
-        if value and value != "__MLX_FORGOTTEN__":
-            return True
-    return False
 
 
 def _has_pending_rank_connect(query_params=None) -> bool:
@@ -343,6 +323,13 @@ def render_sidebar(_local_storage_unused=None):
     skip_prefill_once = bool(st.session_state.pop("_skip_local_prefill_once", False))
     defer_local_prefill = bool(allow_local_prefill and not skip_prefill_once and not storage_ready)
     provider_takeover_guard_this_run = False
+    # Defaults para los runs en los que el bloque de prefill no se ejecuta
+    # (storage aún no hidratado o prefill saltado, p. ej. el rerun de conectar
+    # desde Ranking): el formulario WU los referencia más abajo y sin esto
+    # saltaba un UnboundLocalError fugaz hasta el siguiente rerun.
+    saved_target = None
+    saved_autoconnect = False
+    valid_wu_target = False
     if allow_local_prefill and not skip_prefill_once and storage_ready:
         saved_station = get_stored_station()
         saved_key = get_stored_apikey()
@@ -841,7 +828,7 @@ def render_sidebar(_local_storage_unused=None):
     if defer_local_prefill:
         defer_count = int(st.session_state.get("_local_prefill_defer_count", 0) or 0) + 1
         st.session_state["_local_prefill_defer_count"] = defer_count
-        if defer_count <= 6:
+        if defer_count <= int(os.getenv("MLX_LOCAL_PREFILL_MAX_DEFER", "1")):
             st.sidebar.caption(t("sidebar.connection.loading_saved"))
             auto_dark = _browser_prefers_dark()
             if theme_mode == "auto":

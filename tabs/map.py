@@ -1,9 +1,8 @@
 import streamlit as st
-import json
 import colorsys
-import streamlit.components.v1 as components
 from babel import Locale
 from typing import Optional
+from components.map_viewport import get_map_viewport
 from components.geolocation_state import (
     consume_browser_geolocation,
     default_search_coords,
@@ -139,10 +138,6 @@ def map_country_default_enabled(
     return bool(code) and not filter_initialized and code in defaults
 
 
-def _mark_map_country_filter_initialized() -> None:
-    st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
-
-
 def _handle_map_country_toggle_change(country: str, toggle_key: str) -> None:
     st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
     selected = {
@@ -156,10 +151,6 @@ def _handle_map_country_toggle_change(country: str, toggle_key: str) -> None:
     else:
         selected.discard(country_code)
     st.session_state["map_country_filter"] = sorted(selected, key=country_sort_key)
-
-
-def _mark_map_autoconnect_toggle_changed(toggle_key: str) -> None:
-    st.session_state[MAP_AUTOCONNECT_CHANGED_KEY] = toggle_key
 
 
 def _sync_map_autoconnect_toggle(toggle_key: str, is_target_station: bool) -> bool:
@@ -374,12 +365,115 @@ def _map_cache_key(provider_id: str, lat: float, lon: float, catalog_version=())
     )
 
 
+def _map_view_anchor_changed(lat: float, lon: float, state: dict) -> bool:
+    try:
+        anchor_lat = float(state.get("anchor_lat"))
+        anchor_lon = float(state.get("anchor_lon"))
+    except (TypeError, ValueError):
+        return True
+    return abs(float(lat) - anchor_lat) > 0.0001 or abs(float(lon) - anchor_lon) > 0.0001
+
+
+def _map_session_view_state(lat: float, lon: float, default_zoom: float) -> dict:
+    """
+    Mantiene estable la cámara inicial del mapa entre cambios de filtros.
+
+    ``st.pydeck_chart`` no expone el pan/zoom actual del usuario en Python; si
+    enviamos un ``initial_view_state`` distinto en cada rerun, DeckGL vuelve al
+    centro base. Congelamos la cámara inicial mientras el centro lógico
+    (buscar/usar ubicación) no cambie, de modo que los filtros actualizan capas
+    sin forzar un reset de viewport.
+    """
+    state = st.session_state.get("map_view_state")
+    if not isinstance(state, dict) or _map_view_anchor_changed(lat, lon, state):
+        state = {
+            "anchor_lat": float(lat),
+            "anchor_lon": float(lon),
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "zoom": float(default_zoom),
+        }
+        st.session_state["map_view_state"] = state
+    return state
+
+
+def _deck_frozen_view_state(map_view_state: dict, signature: tuple) -> dict:
+    """
+    ``initial_view_state`` estable entre reruns solo-viewport.
+
+    Cada emisión del componente de viewport (pan/zoom del usuario) provoca un
+    rerun del fragmento. Si ese rerun reenvía el deck con la cámara recién
+    capturada como ``initial_view_state``, las props del componente DeckGL
+    cambian y el mapa se reinicializa: es el parpadeo visible en cada gesto.
+
+    La cámara renderizada solo debe saltar a la capturada cuando el CONTENIDO
+    del deck cambia de verdad (filtros, tema, centro de búsqueda) — en ese
+    momento el repintado es inevitable y queremos preservar el pan/zoom del
+    usuario. Mientras la firma no cambie, se reenvía exactamente el mismo
+    ``initial_view_state`` (deck byte-idéntico → React no toca el mapa y la
+    cámara del navegador persiste sola).
+    """
+    frozen = st.session_state.get("map_render_view_state")
+    if not isinstance(frozen, dict) or frozen.get("signature") != signature:
+        frozen = {
+            "signature": signature,
+            "latitude": float(map_view_state["latitude"]),
+            "longitude": float(map_view_state["longitude"]),
+            "zoom": float(map_view_state["zoom"]),
+        }
+        st.session_state["map_render_view_state"] = frozen
+    return frozen
+
+
+def _coerce_map_viewport_state(value) -> Optional[dict]:
+    if not isinstance(value, dict):
+        return None
+    latitude = safe_float(value.get("latitude"), None)
+    longitude = safe_float(value.get("longitude"), None)
+    zoom = safe_float(value.get("zoom"), None)
+    if latitude is None or longitude is None or zoom is None:
+        return None
+    if latitude < -90 or latitude > 90 or longitude < -180 or longitude > 180:
+        return None
+    if zoom < 0 or zoom > 24:
+        return None
+    return {
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "zoom": float(zoom),
+    }
+
+
+def _sync_map_view_state_from_browser(lat: float, lon: float, theme_mode: str) -> None:
+    """
+    Captura el pan/zoom real del navegador.
+
+    Streamlit reconstruye el DeckGL al cambiar widgets dentro del fragmento; si
+    solo conocemos el centro lógico, un filtro puede devolver el mapa al zoom
+    inicial. El componente lee la cámara montada en el DOM y la guardamos como
+    nuevo initial_view_state para el siguiente rerun del mismo centro.
+    """
+    viewport = _coerce_map_viewport_state(
+        get_map_viewport(key=f"map_viewport_sync_{theme_mode}")
+    )
+    if viewport is None:
+        return
+    state = st.session_state.get("map_view_state")
+    if not isinstance(state, dict) or _map_view_anchor_changed(lat, lon, state):
+        return
+    st.session_state["map_view_state"] = {
+        **state,
+        **viewport,
+        "anchor_lat": float(lat),
+        "anchor_lon": float(lon),
+    }
+
+
 def render_map_tab(ctx):
     section_title = ctx["section_title"]
     t = ctx["t"]
     dark = ctx["dark"]
     theme_mode = ctx["theme_mode"]
-    math = ctx["math"]
     html = ctx["html"]
     html_clean = ctx["html_clean"]
     get_browser_geolocation = ctx["get_browser_geolocation"]
@@ -583,7 +677,6 @@ def render_map_tab(ctx):
 
     search_lat = float(st.session_state.get("map_search_lat"))
     search_lon = float(st.session_state.get("map_search_lon"))
-    all_provider_options = list(ALL_MAP_PROVIDER_OPTIONS)
 
     @st.fragment
     def _map_results_area() -> None:
@@ -594,6 +687,8 @@ def render_map_tab(ctx):
         _render_map_results()
 
     def _render_map_results() -> None:
+        _sync_map_view_state_from_browser(search_lat, search_lon, theme_mode)
+
         # Barra superior: métricas (estaciones visibles / proveedores) a la
         # izquierda y el botón de ubicación a la derecha. Los valores de las
         # métricas se rellenan más abajo, cuando ya está calculado `nearest`.
@@ -816,7 +911,6 @@ def render_map_tab(ctx):
         with st.container(key="map_sensor_overlay"):
             with st.popover(
                 str(t("map.sensor_filter")),
-                icon=":material/filter_alt:",
             ):
                 st.caption(t("map.sensor_filter_caption"))
                 historical_only = st.toggle(
@@ -869,6 +963,7 @@ def render_map_tab(ctx):
         overlay_border = "rgba(255,255,255,0.14)" if dark else "rgba(15,18,25,0.14)"
         overlay_hover_border = "rgba(255,255,255,0.28)" if dark else "rgba(15,18,25,0.26)"
         overlay_shadow = "0 10px 24px rgba(0,0,0,0.28)" if dark else "0 10px 24px rgba(0,0,0,0.12)"
+        overlay_icon_stroke = "%23f4f7fb" if dark else "%23242933"
         active_count = (
             len(selected_sensor_list)
             + (1 if st.session_state.get("map_historical_only") else 0)
@@ -934,16 +1029,21 @@ def render_map_tab(ctx):
                 background: {overlay_hover_bg} !important;
                 border-color: {overlay_hover_border} !important;
             }}
-            /* Oculta el texto del label y el chevron; deja solo el embudo */
+            /* Oculta el texto del label y el chevron; el embudo se dibuja
+               localmente para no depender del font Material en producción. */
             .st-key-map_sensor_overlay [data-testid="stPopoverButton"] p,
             .st-key-map_sensor_overlay [data-testid="stPopoverButton"] svg {{
                 display: none;
             }}
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"] [data-testid="stIconMaterial"] {{
-                font-size: 20px;
-                color: var(--text);
-                margin: 0;
-		transform: translate(2px, 1px);
+            .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::before {{
+                content: "";
+                display: block;
+                width: 23px;
+                height: 23px;
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: 23px 23px;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{overlay_icon_stroke}' stroke-width='2.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16l-6.4 7.2v5.3l-3.2 1.7v-7L4 5z'/%3E%3C/svg%3E");
             }}
             {badge_css}
             </style>
@@ -1012,17 +1112,22 @@ def render_map_tab(ctx):
         if not nearest:
             if selected_countries:
                 st.warning(t("map.no_stations"))
+            map_view_state = _map_session_view_state(search_lat, search_lon, 7.0)
             map_style = (
                 "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
                 if dark else
                 "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
             )
+            frozen_view = _deck_frozen_view_state(
+                map_view_state,
+                ("empty", map_style, round(search_lat, 6), round(search_lon, 6)),
+            )
             deck = pdk.Deck(
                 map_style=map_style,
                 initial_view_state=pdk.ViewState(
-                    latitude=search_lat,
-                    longitude=search_lon,
-                    zoom=7.0,
+                    latitude=float(frozen_view["latitude"]),
+                    longitude=float(frozen_view["longitude"]),
+                    zoom=float(frozen_view["zoom"]),
                     pitch=0,
                 ),
                 layers=[
@@ -1045,7 +1150,7 @@ def render_map_tab(ctx):
             try:
                 _pydeck_chart_stretch(
                     deck,
-                    key=f"map_empty_chart_{theme_mode}",
+                    key=f"map_chart_{theme_mode}",
                     height=900,
                 )
             except Exception as map_err:
@@ -1079,8 +1184,32 @@ def render_map_tab(ctx):
 
             zoom_reference = points[: min(len(points), 2000)]
             max_distance = max((p["distance_km"] for p in zoom_reference), default=250.0)
+            map_view_state = _map_session_view_state(
+                search_lat,
+                search_lon,
+                _zoom_for_max_distance(max_distance),
+            )
 
-            points_for_layer = list(points)
+            # Al deck solo van los campos que usan el render y el tooltip: el
+            # dict completo (sensors, tz, locality, flags…) multiplica por ~4
+            # el JSON serializado hacia el navegador, y con decenas de miles
+            # de estaciones (p. ej. NWS) son varios MB por render. El clic
+            # devuelve ``idx`` y la fila completa se resuelve en Python.
+            points_for_layer = [
+                {
+                    "idx": index,
+                    "lat": point["lat"],
+                    "lon": point["lon"],
+                    "color": point["color"],
+                    "radius": point["radius"],
+                    "name": point["name"],
+                    "provider": point["provider"],
+                    "station_id": point["station_id"],
+                    "distance_txt": point["distance_txt"],
+                    "alt_txt": point["alt_txt"],
+                }
+                for index, point in enumerate(points)
+            ]
 
             map_style = (
                 "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
@@ -1127,12 +1256,24 @@ def render_map_tab(ctx):
                 )
             )
 
+            # Identidad del contenido del deck: si nada de esto cambia, el JSON
+            # reenviado es idéntico y no hay repintado. El hash de las ids es
+            # estable dentro del proceso (vive solo en session_state).
+            stations_signature = (
+                "stations",
+                map_style,
+                round(search_lat, 6),
+                round(search_lon, 6),
+                point_radius,
+                hash(tuple((p["provider_id"], p.get("network", ""), p["station_id"]) for p in nearest)),
+            )
+            frozen_view = _deck_frozen_view_state(map_view_state, stations_signature)
             deck = pdk.Deck(
                 map_style=map_style,
                 initial_view_state=pdk.ViewState(
-                    latitude=search_lat,
-                    longitude=search_lon,
-                    zoom=_zoom_for_max_distance(max_distance),
+                    latitude=float(frozen_view["latitude"]),
+                    longitude=float(frozen_view["longitude"]),
+                    zoom=float(frozen_view["zoom"]),
                     pitch=0,
                 ),
                 layers=map_layers,
@@ -1154,7 +1295,7 @@ def render_map_tab(ctx):
             try:
                 deck_event = _pydeck_chart_stretch(
                     deck,
-                    key=f"map_stations_chart_{theme_mode}",
+                    key=f"map_chart_{theme_mode}",
                     height=900,
                 )
             except Exception as map_err:
@@ -1178,6 +1319,12 @@ def render_map_tab(ctx):
                 selected_in_layer = selected_objects.get("stations-layer", [])
                 if isinstance(selected_in_layer, list) and selected_in_layer:
                     selected_station = selected_in_layer[0]
+                    # El objeto del deck es la versión recortada; recupera la
+                    # fila completa (sensors, tz, connectable…) por índice.
+                    if isinstance(selected_station, dict):
+                        selected_idx = selected_station.get("idx")
+                        if isinstance(selected_idx, int) and 0 <= selected_idx < len(points):
+                            selected_station = points[selected_idx]
                     st.session_state["map_selected_station"] = dict(selected_station)
 
             st.markdown(f"#### {t('map.selected_station')}")

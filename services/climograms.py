@@ -14,7 +14,6 @@ from utils.i18n import month_name, t
 from utils.units import (
     convert_precip,
     convert_temperature,
-    convert_wind,
     format_precip,
     format_temperature,
     format_wind,

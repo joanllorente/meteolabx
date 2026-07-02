@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 from config import LS_FAVORITES
 from utils import favorites
@@ -367,13 +366,8 @@ def test_normalize_favorite_accepts_numeric_station_id() -> None:
 # =====================================================================
 
 def _patch_storage(monkeypatch, patch_streamlit):
-    """Aísla utils.storage del componente real de localStorage."""
+    """Aísla utils.storage del session_state real de Streamlit."""
     patch_streamlit(storage)
-    monkeypatch.setattr(
-        storage,
-        "_get_local_storage",
-        lambda: SimpleNamespace(getItem=lambda *args, **kwargs: None),
-    )
 
 
 def test_upsert_favorite_queues_write_for_browser_persistence(

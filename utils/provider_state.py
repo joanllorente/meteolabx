@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+import math
 from typing import Any, Callable
 
 import streamlit as st
@@ -333,11 +334,6 @@ def get_provider_station_id(state: Any, provider_id: str) -> str:
     return ""
 
 
-def get_connected_provider_station_id(provider_id: str, state: Any = None) -> str:
-    state = resolve_state(state)
-    return get_provider_station_id(state, provider_id) if is_provider_connection(provider_id, state) else ""
-
-
 def current_connection_type(state: Any = None) -> str:
     state = resolve_state(state)
     try:
@@ -619,6 +615,7 @@ def apply_provider_station_state(
     st.session_state[PROVIDER_STATION_LON] = lon
     st.session_state[PROVIDER_STATION_ALT] = elevation_m
     st.session_state["provider_station_catalog_alt"] = elevation_m
+    st.session_state["provider_station_catalog_station_id"] = station_id
 
     resolved_tz = str(station_tz or spec.get("default_tz", "")).strip()
     st.session_state[PROVIDER_STATION_TZ] = resolved_tz
@@ -629,6 +626,7 @@ def apply_provider_station_state(
     st.session_state[f"{prefix}_station_lon"] = lon
     st.session_state[f"{prefix}_station_alt"] = elevation_m
     st.session_state[f"{prefix}_station_catalog_alt"] = elevation_m
+    st.session_state[f"{prefix}_station_catalog_station_id"] = station_id
 
     if connected is not None:
         st.session_state[CONNECTED] = connected
@@ -769,16 +767,6 @@ def set_provider_runtime_error(provider_id: str, message: str, state: Any = None
         state[error_key] = str(message or "")
 
 
-def clear_provider_runtime_error(provider_id: str, state: Any = None) -> None:
-    set_provider_runtime_error(provider_id, "", state=state)
-
-
-def get_provider_runtime_error(provider_id: str, state: Any = None) -> str:
-    state = resolve_state(state)
-    error_key = PROVIDER_ERROR_KEYS.get(coerce_str(provider_id, upper=True))
-    return str(state.get(error_key, "")).strip() if error_key else ""
-
-
 def display_provider_station_id(provider_id: str, station_id: Any) -> str:
     """
     Devuelve un identificador corto para UI sin cambiar el id interno.
@@ -798,6 +786,38 @@ def display_provider_station_id(provider_id: str, station_id: Any) -> str:
     return raw
 
 
+def _meaningful_state_value(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if isinstance(value, float) and math.isnan(value):
+            continue
+        return value
+    return None
+
+
+def _catalog_alt_for_station(
+    state: Any,
+    *,
+    prefix: str,
+    current_station_id: Any,
+) -> Any:
+    current = str(current_station_id or "").strip()
+    for alt_key, station_key in (
+        (f"{prefix}_station_catalog_alt", f"{prefix}_station_catalog_station_id"),
+        ("provider_station_catalog_alt", "provider_station_catalog_station_id"),
+    ):
+        alt = state.get(alt_key)
+        if _meaningful_state_value(alt) is None:
+            continue
+        catalog_station_id = str(state.get(station_key, "") or "").strip()
+        if catalog_station_id and catalog_station_id == current:
+            return alt
+    return None
+
+
 def build_connection_snapshot(state: Any = None) -> ConnectionSnapshot | None:
     state = resolve_state(state)
     provider_id = current_connection_type(state)
@@ -806,26 +826,25 @@ def build_connection_snapshot(state: Any = None) -> ConnectionSnapshot | None:
 
     if provider_id == "WU":
         station_id = state.get("wu_connected_station") or state.get(PROVIDER_STATION_ID) or state.get(ACTIVE_STATION) or "—"
+        raw_station_id = station_id
         station_name = state.get(PROVIDER_STATION_NAME) or station_id or "Estación WU"
     elif provider_id == "AEMET":
         station_name = state.get("aemet_station_name") or state.get(PROVIDER_STATION_NAME) or "Estación AEMET"
         station_id = state.get("aemet_station_id") or state.get(PROVIDER_STATION_ID) or "—"
+        raw_station_id = station_id
     else:
         station_name = state.get(PROVIDER_STATION_NAME) or "Estación"
         station_id = state.get(PROVIDER_STATION_ID) or "—"
+        raw_station_id = station_id
 
     lat = state.get(f"{provider_id.lower()}_station_lat", state.get(PROVIDER_STATION_LAT, state.get("station_lat")))
     lon = state.get(f"{provider_id.lower()}_station_lon", state.get(PROVIDER_STATION_LON, state.get("station_lon")))
     prefix = provider_id.lower()
-    alt = state.get(
-        f"{prefix}_station_catalog_alt",
-        state.get(
-            "provider_station_catalog_alt",
-            state.get(
-                f"{prefix}_station_alt",
-                state.get(PROVIDER_STATION_ALT, state.get("station_elevation")),
-            ),
-        ),
+    alt = _meaningful_state_value(
+        _catalog_alt_for_station(state, prefix=prefix, current_station_id=raw_station_id),
+        state.get(f"{prefix}_station_alt"),
+        state.get(PROVIDER_STATION_ALT),
+        state.get("station_elevation"),
     )
     return ConnectionSnapshot(
         provider_id=provider_id,

@@ -1,0 +1,791 @@
+{
+  "warnings": {
+    "data_age": "⚠️ Les dades de {provider} tenen {minutes} minuts d’antiguitat. Pot ser que l’estació no estigui transmetent.",
+    "missing_elevation": "⚠️ Falta l’altitud. La pressió absoluta i la termodinàmica s’han calculat amb altitud 0; introdueix l’altitud a la barra lateral per obtenir més precisió."
+  },
+  "tabs": {
+    "observation": "Observació",
+    "trends": "Tendències",
+    "historical": "Històric",
+    "info": "Aprèn",
+    "map": "Mapa",
+    "ranking": "Rànquing"
+  },
+  "ranking": {
+    "section_title": "Rànquing d’estacions",
+    "intro": "Top 10 d’avui per temperatura màxima, temperatura mínima, ratxa de vent i pluja.",
+    "updated": "Última actualització: {time} (fa {mins} min)",
+    "country_title": "El teu país: {country}",
+    "country_section": "Rànquing per país",
+    "country_label": "País",
+    "exclude_antarctica": "Exclou l’Antàrtida",
+    "global_title": "Global",
+    "no_country": "No s’ha pogut determinar el país a partir de la ubicació. Fes servir el mapa per establir la teva posició.",
+    "country_empty": "Encara no hi ha dades de rànquing per a {provider} avui.",
+    "global_empty": "Encara no hi ha dades de rànquing disponibles.",
+    "providers_note": "Proveïdors inclosos: {providers}.",
+    "countries": {
+      "ES": "Espanya",
+      "FR": "França",
+      "IT": "Itàlia",
+      "NO": "Noruega"
+    },
+    "metrics": {
+      "tmax": "Temperatura màxima",
+      "tmin": "Temperatura mínima",
+      "gust": "Ratxa de vent",
+      "rain": "Precipitació"
+    }
+  },
+  "weatherlink": {
+    "station_selector": {
+      "label": "Estació WeatherLink"
+    }
+  },
+  "common": {
+    "information": "Informació",
+    "charts": "Gràfics",
+    "hour": "Hora",
+    "and": "i",
+    "off": "Desactivat",
+    "on": "Activat"
+  },
+  "meta": {
+    "last_data": "Última dada",
+    "user_time": "Hora de l’usuari",
+    "station_time": "Fus horari de l’estació",
+    "age": "Edat"
+  },
+  "connection": {
+    "loading_title": "Connectant amb l’estació..."
+  },
+  "header": {
+    "theme_label": "Tema",
+    "refresh_label": "Actualitza",
+    "available_stations": "{count} estacions disponibles",
+    "station_id_short": "ID",
+    "altitude_short": "Alt",
+    "latitude_short": "Lat",
+    "longitude_short": "Lon",
+    "connect_prompt": "Connecta la teva estació des del panell lateral o explora estacions properes.",
+    "manual_station": "ℹ️ Estació NWS manual: informa de màximes/mínimes diàries un cop al dia. Sense dades en temps real."
+  },
+  "favorites": {
+    "title": "Preferits",
+    "connect": "Connecta",
+    "save": "Desa preferit",
+    "save_short": "Preferit",
+    "saved": "{station} afegida als preferits.",
+    "save_error": "No s’ha pogut desar el preferit.",
+    "remove": "Elimina dels preferits",
+    "remove_error": "No s’ha pogut eliminar el preferit.",
+    "connect_error": "No s’ha pogut connectar aquest preferit."
+  },
+  "footer": {
+    "version": "Versió {version}",
+    "whats_new": "Novetats",
+    "improvements_title": "Millores",
+    "fixes_title": "Correccions",
+    "improvements": [
+      "Migració completa i funcional al mode FastAPI.",
+      "Nova pestanya Rànquing, amb classificacions de temperatura, vent i precipitació per país i globals.",
+      "Nou proveïdor IEM, amb més de 100.000 estacions arreu del món.",
+      "Redisseny complet de la pestanya Mapa.",
+      "Nou filtre de país al mapa.",
+      "Nou filtre per als sensors disponibles al mapa.",
+      "Els sensors disponibles ara es mostren com a metadades de cada estació.",
+      "Nou filtre per mostrar al mapa les estacions amb dades històriques disponibles.",
+      "Les dades històriques ara estan disponibles per a la xarxa WeatherLink."
+    ],
+    "fixes": [
+      "Corregit un error que impedia mostrar valors de vent encara que el proveïdor els mesurés.",
+      "Corregit un error en el recompte de nits tropicals i tòrrides a la pestanya Històric.",
+      "Corregit un problema que impedia calcular correctament la tendència completa de la pressió.",
+      "Corregit un error que feia que AEMET i MeteoGalicia mostressin màximes i mínimes de temperatura incorrectes.",
+      "Corregit un error que feia que MeteoGalicia mostrés incorrectament els valors de ratxa màxima."
+    ],
+    "previous_improvements": [
+      "S’han afegit dos nous proveïdors de dades: Met Office i MeteoHub Italy.",
+      "S’ha afegit un sistema de preferits per accedir ràpidament a qualsevol estació.",
+      "S’ha afegit un nou gràfic de precipitació.",
+      "S’ha afegit suport per a WeatherLink.",
+      "S’ha millorat la visualització dels gràfics setmanals.",
+      "La targeta Claredat del cel ara mostra els crepuscles.",
+      "S’ha reduït el temps de càrrega inicial de la web app.",
+      "S’han afegit definicions als gràfics de la pestanya Tendències."
+    ],
+    "previous_fixes": [
+      "Corregit un error que mostrava dades incorrectes als mareògrafs de Puertos del Estado.",
+      "Corregits problemes de cache en canviar d’estació.",
+      "Corregit un error que impedia mostrar la sèrie sinòptica a la pestanya Tendències encara que el proveïdor retornés dades.",
+      "Corregit un error que impedia visualitzar gràfics de tendència d’alguns proveïdors.",
+      "Corregit un error que impedia mostrar la sortida i la posta de sol en hora local.",
+      "Corregit un error que mostrava màximes i mínimes incorrectes de temperatura i humitat a Meteocat.",
+      "Corregit un error que impedia consultar l’històric de l’any actual a Weather Underground."
+    ],
+    "sources": "Fonts",
+    "unaffiliated": "No afiliat"
+  },
+  "cards": {
+    "help_aria": "Ajuda per a {title}",
+    "tooltip_unavailable": "Definició encara no disponible per a aquesta variable."
+  },
+  "sidebar": {
+    "settings_title": "Configuració",
+    "language": {
+      "label": "Idioma"
+    },
+    "theme": {
+      "label": "Tema",
+      "options": {
+        "auto": "Auto",
+        "light": "Clar",
+        "dark": "Fosc"
+      }
+    },
+    "connection": {
+      "title": "Connecta estació",
+      "source": {
+        "label": "Font",
+        "options": {
+          "wu": "Weather Underground",
+          "weatherlink": "WeatherLink"
+        }
+      },
+      "fields": {
+        "station_id": "ID d’estació (WU)",
+        "api_key": "API Key (WU)",
+        "weatherlink_api_key": "API Key (WeatherLink)",
+        "weatherlink_api_secret": "API Secret (WeatherLink)",
+        "altitude": "Altitud (m)",
+        "weatherlink_favorite_name": "Nom del preferit"
+      },
+      "placeholders": {
+        "station_id": "Introdueix l’ID",
+        "api_key": "Enganxa aquí la teva API key",
+        "api_secret": "Enganxa aquí el teu API secret",
+        "altitude": "Opcional (s’obté de l’API)",
+        "weatherlink_favorite_name": "p. ex. La meva estació"
+      },
+      "caption": "Fes clic a Desa per recordar ID, API key i altitud en aquest navegador i afegir-los als preferits.",
+      "loading_saved": "Carregant dades desades al navegador...",
+      "weatherlink_session_caption": "WeatherLink carrega les teves estacions amb API Key i API Secret. Si fas clic a Desa, es recorden separadament de Weather Underground en aquest navegador.",
+      "api_key_help": "Aquestes dades es poden desar localment en aquest navegador si fas servir Desa. Si comparteixes aquest dispositiu o perfil de navegador, una altra persona podria reutilitzar-les. És més segur desar l’API key al gestor de contrasenyes del dispositiu o del navegador.",
+      "api_secret_help": "WeatherLink requereix enviar l’API Secret a la capçalera X-Api-Secret. Si el deses, queda emmagatzemat localment en aquest navegador.",
+      "weatherlink_favorite_name_help": "Deixa-ho buit per fer servir el nom informat per WeatherLink. Útil quan l’API només exposa un codi numèric."
+    },
+    "autoconnect": {
+      "label": "Connecta automàticament en iniciar",
+      "caption": "",
+      "enabled": "Connexió automàtica en iniciar activada (WU)",
+      "enabled_weatherlink": "Connexió automàtica en iniciar activada (WeatherLink)",
+      "disabled": "Connexió automàtica en iniciar desactivada.",
+      "missing_credentials": "Per activar la connexió automàtica WU, emplena ID d’estació i API Key.",
+      "missing_weatherlink_credentials": "Per activar la connexió automàtica WeatherLink, connecta o desa una estació amb API Key i API Secret."
+    },
+    "calibration": {
+      "title": "Calibratge de sensors",
+      "loading": "Carregant sensors Weather Underground...",
+      "range_help": "Interval permès: de {min} a {max} {unit}",
+      "save": "Desa calibratge",
+      "saved": "Calibratge desat",
+      "unsaved": "Els canvis de calibratge encara no s’han desat.",
+      "fields": {
+        "barometer": "Baròmetre (hPa)",
+        "wind_vane": "Penell (°)",
+        "thermometer": "Termòmetre (°C)",
+        "hygrometer": "Higròmetre (%)",
+        "anemometer": "Anemòmetre (km/h)",
+        "rain_gauge": "Pluviòmetre (mm)",
+        "pyranometer": "Piranòmetre (W/m²)"
+      }
+    },
+    "units": {
+      "title": "Unitats",
+      "fields": {
+        "temperature": "Temperatura",
+        "wind": "Vent",
+        "pressure": "Pressió",
+        "precip": "Precipitació",
+        "radiation": "Radiació"
+      }
+    },
+    "buttons": {
+      "save": "Desa",
+      "forget": "Oblida",
+      "connect": "Connecta",
+      "disconnect": "Desconnecta",
+      "refresh": "Actualitza"
+    },
+    "messages": {
+      "saved_device": "Desat en aquest dispositiu",
+      "data_erased": "Dades eliminades",
+      "missing_station_or_key": "Falta l’ID d’estació o l’API key.",
+      "wu_credentials_rejected": "Weather Underground ha rebutjat l’API key. Comprova que sigui correcta i tingui permisos PWS.",
+      "wu_station_not_found": "Weather Underground no ha trobat aquest ID d’estació. Comprova l’identificador.",
+      "wu_rate_limited": "Weather Underground ha limitat les sol·licituds. Espera una mica abans de tornar a connectar.",
+      "wu_timeout": "Weather Underground ha trigat massa a respondre. Torna-ho a provar d’aquí uns minuts.",
+      "wu_network": "No s’ha pogut contactar amb Weather Underground. Comprova la connexió o torna-ho a provar.",
+      "wu_bad_response": "Weather Underground ha retornat una resposta no vàlida per a aquesta estació.",
+      "wu_connection_error": "No s’ha pogut connectar amb Weather Underground{status}. Comprova les credencials i l’estació.",
+      "missing_weatherlink_credentials": "Falta API Key o API Secret de WeatherLink.",
+      "weatherlink_credentials_rejected": "WeatherLink ha rebutjat l’API Key o l’API Secret. Fes servir les credencials v2 generades a WeatherLink.com > Account > Generate v2 Key; una clau de Weather Underground o la contrasenya d’inici de sessió no funcionaran.",
+      "weatherlink_stations_error": "No s’han pogut carregar les estacions WeatherLink.",
+      "weatherlink_no_stations": "WeatherLink no ha retornat cap estació per a aquestes credencials.",
+      "altitude_out_of_range": "Altitud fora d’interval ({min} a {max}m)",
+      "altitude_invalid": "Altitud no vàlida. Fes servir un número (p. ex. 12.5)"
+    },
+    "status": {
+      "connected": "Connectat: {station}",
+      "disconnected": "No connectat",
+      "last_update": "Última actualització: {time}"
+    },
+    "time_ago": {
+      "seconds": "fa {value}s",
+      "minutes": "fa {value} min",
+      "hours_minutes": "fa {hours}h {minutes} min"
+    },
+    "provider_status": {
+      "connected_to": "Connectat a {provider}",
+      "station_id": "ID: {station_id}",
+      "altitude": "Alt: {altitude}m",
+      "refresh_help": "Força l’actualització de dades (sense cache)"
+    }
+  },
+  "historical": {
+    "section_title": "Històric",
+    "connect_prompt": "👈 Connecta una estació per veure dades històriques.",
+    "notes": {
+      "nws_unavailable": "NWS no proporciona a través d’aquest servei les dades històriques i climatològiques necessàries per a aquesta secció.",
+      "euskalmet_unavailable": "Euskalmet no proporciona a través d’aquest servei les dades històriques i climatològiques necessàries per a aquesta secció.",
+      "implemented_providers": "De moment, l’Històric està implementat per a WU, WeatherLink, IEM, Meteocat, AEMET, Meteo-France, MeteoGalicia i Frost. La capa de càlcul compartida ja està preparada per estendre-ho a altres proveïdors.",
+      "series_start": "Inici de sèrie {provider} (inventari): {value}",
+      "series_start_unavailable": "Inici de sèrie {provider} (inventari): no disponible."
+    },
+    "errors": {
+      "missing_wu_credentials": "⚠️ Falten les credencials WU (ID d’estació/API Key) per a consultes històriques.",
+      "missing_weatherlink_credentials": "⚠️ Falten les credencials WeatherLink (ID d’estació/API Key/API Secret) per a consultes històriques.",
+      "missing_meteocat_station": "⚠️ Falta el codi d’estació Meteocat per a consultes històriques.",
+      "missing_aemet_station": "⚠️ Falta el codi d’estació AEMET per a consultes històriques.",
+      "missing_meteofrance_station": "⚠️ Falta el codi d’estació Meteo-France per a consultes històriques.",
+      "missing_meteogalicia_station": "⚠️ Falta el codi d’estació MeteoGalicia per a consultes històriques.",
+      "missing_iem_station": "⚠️ Falta l’estació IEM amb format network|station per a consultes històriques.",
+      "wu_unauthorized": "❌ API key no vàlida o sense permís per a dades històriques.",
+      "wu_notfound": "❌ ID d’estació no trobat a l’històric WU.",
+      "wu_ratelimit": "❌ Límit de peticions assolit a l’històric WU.",
+      "wu_timeout": "❌ Temps d’espera esgotat consultant l’històric WU.",
+      "wu_network": "❌ Error de xarxa consultant l’històric WU.",
+      "wu_http": "❌ Error consultant l’històric WU{status_msg}.",
+      "meteocat_generic": "❌ Error consultant l’històric Meteocat.",
+      "provider_generic": "❌ Error consultant l’històric {provider}: {error_type}: {error}"
+    },
+    "summary": {
+      "label": "Tipus de resum",
+      "options": {
+        "monthly": "Mensual",
+        "annual": "Anual"
+      }
+    },
+    "inputs": {
+      "months": "Mes/os",
+      "years": "Any/s"
+    },
+    "warnings": {
+      "max_monthly_blocks": "⚠️ En mode mensual el màxim és {max_blocks} blocs mes×any (seleccionats: {selected_blocks}). Redueix la selecció.",
+      "invalid_period": "⚠️ No s’ha pogut construir un període vàlid.",
+      "no_data_selected_period": "⚠️ No hi ha dades disponibles per al període seleccionat."
+    },
+    "info": {
+      "select_month_and_year": "Selecciona almenys un mes i un any.",
+      "select_year": "Selecciona almenys un any."
+    },
+    "caption": {
+      "period_summary": "Període: {period_range} · Blocs seleccionats: {blocks} · Dies sol·licitats: {days}",
+      "records_received": "Registres vàlids rebuts: {count} · {start} → {end}",
+      "weatherlink_monthly_only": "WeatherLink v2 només permet dades històriques en finestres de 24 h; per evitar límits, consulta mesos concrets."
+    },
+    "spinner": {
+      "loading": "Consultant l’històric de {provider}..."
+    },
+    "sections": {
+      "extremes": "Extrems del període",
+      "summary": "Resum del període",
+      "data_by": "Dades per {scope}"
+    },
+    "chart": {
+      "title": "Climograma ({scope})",
+      "x": {
+        "day": "Dia",
+        "month": "Mes",
+        "year": "Any"
+      },
+      "scope": {
+        "daily": "diari",
+        "monthly": "mensual",
+        "yearly": "anual"
+      },
+      "legend": {
+        "precip": "Precipitació",
+        "temp_mean": "Temperatura mitjana",
+        "temp_max": "Mitjana de màximes",
+        "temp_min": "Mitjana de mínimes"
+      },
+      "y": {
+        "temp": "Temperatura (°C)",
+        "precip": "Precipitació (mm)"
+      }
+    },
+    "wind_rose": {
+      "heading": "Rosa dels vents del període",
+      "title": "Rosa dels vents del període (% per direcció)",
+      "frequency": "Freqüència",
+      "samples": "Mostres",
+      "calm": "Calma (<2.0 km/h)",
+      "dominant": "Dominant",
+      "unavailable": "Rosa dels vents no disponible: no hi ha mostres vàlides de direcció en aquest període (direcció vàlida: {valid_direction}, mostres de calma: {calm})."
+    },
+    "table": {
+      "headers": {
+        "metric": "Mètrica",
+        "value": "Valor",
+        "date": "Data"
+      },
+      "scope": {
+        "day": "dia",
+        "month": "mes",
+        "year": "any"
+      },
+      "period_col": {
+        "day": "Dia",
+        "month": "Mes",
+        "year": "Any"
+      },
+      "columns": {
+        "temp_abs_max": "Màxima absoluta",
+        "temp_abs_min": "Mínima absoluta",
+        "temp_mean": "Mitjana",
+        "precip": "Precipitació"
+      }
+    },
+    "units": {
+      "days": "dies",
+      "nights": "nits"
+    },
+    "metrics": {
+      "absolute_max": "Màxima absoluta",
+      "absolute_min": "Mínima absoluta",
+      "warmest_year": "Any més càlid (temperatura mitjana)",
+      "coldest_year": "Any més fred (temperatura mitjana)",
+      "windiest_year": "Any més ventós (vent mitjà)",
+      "max_gust": "Ratxa màxima",
+      "wettest_year": "Any més plujós",
+      "driest_year": "Any més sec",
+      "most_rain_days_year": "Any amb més dies de pluja",
+      "max_precip_24h": "Precipitació màxima en 24 hores",
+      "sunniest_year": "Any més assolellat",
+      "least_sunny_year": "Any amb menys sol",
+      "lowest_maximum": "Màxima més baixa",
+      "highest_minimum": "Mínima més alta",
+      "windiest_month": "Mes més ventós (vent mitjà)",
+      "max_precip_24h_short": "Precipitació màx. en 24h",
+      "windiest_day": "Dia més ventós (vent mitjà)",
+      "rainiest_day": "Dia més plujós",
+      "mean_temperature": "Temperatura mitjana",
+      "mean_maximums": "Mitjana de màximes",
+      "mean_minimums": "Mitjana de mínimes",
+      "temperature_stddev": "Desviació estàndard de la temperatura",
+      "mean_wind": "Vent mitjà",
+      "accumulated_precipitation": "Precipitació acumulada",
+      "mean_precipitation": "Precipitació mitjana",
+      "mean_solar_irradiance": "Irradiància solar mitjana",
+      "mean_sunshine_hours": "Hores de sol mitjanes",
+      "tropical_nights": "Nits tropicals (mín > 20 °C)",
+      "frost_nights": "Nits de gelada (mín ≤ 0 °C)",
+      "torrid_nights": "Nits tòrrides (mín > 25 °C)"
+    }
+  },
+  "observation": {
+    "sections": {
+      "observed": "Observat",
+      "thermodynamics": "Termodinàmica",
+      "radiation": "Radiació"
+    },
+    "cards": {
+      "basic": {
+        "temperature": {
+          "title": "Temperatura",
+          "feels_like": "Sensació",
+          "heat_index": "Índex de calor"
+        },
+        "relative_humidity": {
+          "title": "Humitat relativa",
+          "vapor_pressure": "Pressió de vapor"
+        },
+        "dew_point": {
+          "title": "Punt de rosada",
+          "wet_bulb": "Bulb humit",
+          "wet_bulb_risk": {
+            "potential": "condicions potencialment perilloses",
+            "critical": "Condicions crítiques",
+            "extreme": "condicions extremes"
+          },
+          "wet_bulb_alert": {
+            "warning": "Evita l’esforç físic i l’exposició prolongada.",
+            "extreme": "Valor proper al límit fisiològic teòric de 35 °C. L’exposició sostinguda pot ser perillosa fins i tot en repòs i a l’ombra."
+          }
+        },
+        "pressure": {
+          "title": "Pressió",
+          "trend": "Tendència",
+          "delta_3h": "Δ3h",
+          "msl": "MSL"
+        },
+        "wind": {
+          "title": "Vent",
+          "gust": "Ratxa",
+          "direction": "Direcció"
+        },
+        "precipitation_today": {
+          "title": "Precipitació avui",
+          "instantaneous": "Instantània",
+          "intensity": "Intensitat",
+          "minute_5": "5 min",
+          "minute_10": "10 min"
+        }
+      },
+      "thermo": {
+        "specific_humidity": "Humitat específica",
+        "absolute_humidity": "Humitat absoluta",
+        "virtual_temp": "Temp. virtual",
+        "equivalent_temp": "Temp. equivalent",
+        "potential_temp": "Temp. potencial",
+        "air_density": "Densitat de l’aire",
+        "lcl": "Base de núvol LCL",
+        "speed_of_sound": "Velocitat del so"
+      },
+      "radiation": {
+        "irradiance": {
+          "title": "Irradiància",
+          "energy_today": "Energia avui"
+        },
+        "uv_index": {
+          "title": "Índex UV",
+          "erythemal_irradiance": "Irradiància eritemàtica"
+        },
+        "erythemal_dose": {
+          "title": "Dosi eritemàtica",
+          "dose_j_m2_label": "Energia eritemàtica"
+        },
+        "et0_today": {
+          "title": "Evapotranspiració avui",
+          "model": "FAO-56 Penman-Monteith"
+        },
+        "sky_clarity": {
+          "title": "Claredat del cel",
+          "night": "Nit",
+          "sunrise_sunset": "Sortida {sunrise} · Posta {sunset}",
+          "twilight_civil": "Crepuscle civil",
+          "twilight_nautical": "Crepuscle nàutic",
+          "twilight_astronomical": "Crepuscle astronòmic",
+          "night_closed": "Nit"
+        },
+        "sun_altitude": {
+          "title": "Altura del Sol",
+          "culmination": "Culminació"
+        },
+        "water_balance_today": {
+          "title": "Balanç hídric avui"
+        }
+      },
+      "dynamic": {
+        "pressure": {
+          "stable": "Estable",
+          "rising_fast": "Pujant ràpidament",
+          "rising": "Pujant",
+          "falling_fast": "Baixant ràpidament",
+          "falling": "Baixant"
+        },
+        "rain": {
+          "no_precip": "Sense precipitació",
+          "trace": "Traça de precipitació",
+          "very_light": "Pluja molt feble",
+          "light": "Pluja feble",
+          "light_moderate": "Pluja moderada feble",
+          "moderate": "Pluja moderada",
+          "heavy": "Pluja intensa",
+          "very_heavy": "Pluja molt intensa",
+          "torrential": "Pluja torrencial"
+        },
+        "clarity": {
+          "clear": "Serè",
+          "mostly_clear": "Majoritàriament serè",
+          "partly_cloudy": "Parcialment ennuvolat",
+          "cloudy": "Ennuvolat",
+          "very_cloudy": "Cobert"
+        },
+        "balance": {
+          "surplus": "Excedent",
+          "positive": "Positiu",
+          "balance": "Equilibrat",
+          "deficit": "Dèficit"
+        }
+      },
+      "charts": {
+        "temperature_heading": "Temperatura",
+        "temperature_name": "Temperatura",
+        "temperature_title_today": "Temperatura d’avui",
+        "temperature_title_day": "Temperatura del dia",
+        "temperature_axis": "Temperatura (°C)",
+        "vapor_heading": "Pressió de vapor",
+        "vapor_title": "Pressió de vapor i saturació",
+        "vapor_line": "e (pressió de vapor)",
+        "vapor_saturation_line": "e_s (pressió de saturació)",
+        "vapor_axis": "Pressió de vapor (hPa)",
+        "precipitation_heading": "Precipitació avui",
+        "precipitation_title": "Precipitació registrada avui",
+        "precipitation_line": "Precipitació",
+        "wind_heading": "Vent i ratxes avui",
+        "wind_no_data_today": "No hi ha dades de vent disponibles en la finestra temporal mostrada (avui).",
+        "wind_no_mean": "Aquesta estació no retorna vent mitjà utilitzable (VV); es mostren les ratxes i la rosa usa ratxa+direcció.",
+        "wind_line": "Vent",
+        "gust_line": "Ratxa",
+        "direction_line": "Direcció",
+        "speed_axis": "km/h",
+        "direction_axis": "Direcció",
+        "wind_rose_heading": "Rosa dels vents",
+        "wind_rose_title": "Rosa dels vents (% per direcció)",
+        "wind_rose_frequency": "Freqüència",
+        "wind_rose_samples": "Mostres",
+        "wind_rose_calm": "Calma (<2.0 km/h)",
+        "wind_rose_dominant": "Dominant",
+        "irradiance_heading": "Irradiància solar",
+        "irradiance_title": "Irradiància mesurada vs teòrica",
+        "irradiance_measured": "Mesurada",
+        "irradiance_theoretical": "Teòrica",
+        "irradiance_hour_axis": "Hora solar útil",
+        "irradiance_axis": "Irradiància (W/m²)"
+      },
+      "info": {
+        "invalid_aemet_tenmin": "⚠️ Aquesta estació no retorna actualment una sèrie vàlida de deu minuts, així que no es pot dibuixar el gràfic.",
+        "no_series": "ℹ️ Ara mateix no hi ha cap sèrie temporal disponible per dibuixar el gràfic.",
+        "loading_charts": "Carregant sèries d’observació i gràfics...",
+        "loading_charts_unavailable": "ℹ️ Les dades de base ja estan carregades, però la sèrie d’observació encara no està disponible.",
+        "wind_rose_unavailable": "⚠️ Rosa dels vents no disponible: no hi ha mostres vàlides de direcció en aquest període (direcció vàlida: {valid_direction}, mostres de calma: {calm})."
+      }
+    }
+  },
+  "trends": {
+    "section_title": "Tendències",
+    "connect_prompt": "👈 Connecta una estació per veure tendències",
+    "period_label": "Període",
+    "periods": {
+      "today": "Avui",
+      "synoptic": "Tendència sinòptica"
+    },
+    "derivatives_today": "Derivades discretes calculades segons la resolució temporal de cada proveïdor.",
+    "derivatives_synoptic": "Derivades discretes calculades a intervals de 3 hores",
+    "source_label": "Font de la tendència: {source}",
+    "sources": {
+      "aemet_today": "Dades AEMET de deu minuts (avui + 3 h anteriors, derivades a {minutes} min)",
+      "meteocat_today": "Meteocat mesurades (avui + 3 h anteriors, {minutes} min)",
+      "weatherlink_today": "Dades històriques WeatherLink (avui + 3 h anteriors, {minutes} min)",
+      "local_today": "Sèrie local del proveïdor ({minutes} min)",
+      "aemet_synoptic": "AEMET horari 7 dies (mostreig 3 h)",
+      "wu_synoptic": "WU horari/7 dies",
+      "weatherlink_synoptic": "Dades històriques WeatherLink Pro (7 dies, mostreig 3 h)",
+      "meteofrance_synoptic": "Meteo-France horaire (7 dies, mostreig 3 h)",
+      "meteocat_synoptic": "Meteocat mesurades (7 dies)",
+      "meteogalicia_synoptic": "MeteoGalicia horari (màxim disponible ~72 h, mostreig 3 h)",
+      "poem_synoptic": "Sèrie recent POEM (màxim disponible del proveïdor, mostreig 3 h)",
+      "metoffice_today": "Met Office Land Observations (48 h, derivades a {minutes} min)",
+      "metoffice_synoptic": "Met Office Land Observations (48 h, mostreig 3 h)",
+      "meteohub_today": "Observacions recents MeteoHub Italia ({minutes} min)",
+      "meteohub_synoptic": "Observacions recents MeteoHub Italia (mostreig 3 h)",
+      "euskalmet_synoptic": "Euskalmet (sense sèrie sinòptica setmanal disponible)",
+      "generic_synoptic": "{provider} (sèrie horària genèrica)",
+      "sampling_suffix_3h": "{source} (mostreig 3 h)"
+    },
+    "warnings": {
+      "series_unavailable": "⚠️ L’estació no retorna actualment cap sèrie de dades.",
+      "aemet_weekly_unavailable": "⚠️ AEMET no retorna actualment cap sèrie horària de 7 dies per a aquesta estació.",
+      "aemet_weekly_caption": "Endpoint horari de 7 dies sense dades o cobertura per a aquesta estació ara mateix.",
+      "no_theta_e": "⚠️ No hi ha prou dades per calcular la tendència de θe en aquest període.",
+      "no_vapor_pressure": "⚠️ No hi ha prou dades per calcular la tendència de e en aquest període.",
+      "no_mixing_ratio": "⚠️ No hi ha prou dades per calcular la tendència de la relació de mescla en aquest període.",
+      "no_pressure": "⚠️ No hi ha prou dades per calcular la tendència de la pressió en aquest període."
+    },
+    "notes": {
+      "provider_insufficient_data": "El proveïdor no té prou dades.",
+      "provider_coverage_title": "Cobertura del proveïdor",
+      "synoptic_insufficient_coverage": "El proveïdor no retorna una sèrie prou llarga per calcular la tendència sinòptica setmanal.",
+      "meteogalicia_max_coverage": "La cobertura màxima del proveïdor és de 72 hores.",
+      "metoffice_48h_coverage": "Met Office Land Observations proporciona fins a les últimes 48 hores per estació.",
+      "uv_insufficient": "L’estació no té prou dades de vent i direcció per calcular ara mateix les components u/v.",
+      "missing_sensors": "L’estació no té {sensors}, de manera que no es poden calcular {calculations}."
+    },
+    "sensor_titles": {
+      "unavailable": "Sensors no disponibles"
+    },
+    "sensors": {
+      "barometer": "baròmetre",
+      "barometer_series": "sèrie del baròmetre",
+      "hygrometer": "higròmetre"
+    },
+    "calculations": {
+      "theta_e": "tendència de θe",
+      "vapor_pressure": "tendència de la pressió de vapor",
+      "mixing_ratio": "tendència de la relació de mescla",
+      "pressure": "tendència de la pressió"
+    },
+    "tooltips": {
+      "theta_e": "Magnitud que representa conjuntament la temperatura de l’aire, la humitat i la pressió. Es conserva aproximadament durant ascensos i descensos adiabàtics humits, cosa que la fa útil per identificar canvis de massa d’aire. Les variacions en superfície poden ser causades per escalfament o refredament radiatiu, canvis en el contingut d’humitat, mescla vertical o advecció.",
+      "mixing_ratio": "Relació de mescla (r). Massa de vapor d’aigua per unitat de massa d’aire sec. Les seves variacions ajuden a detectar canvis en el contingut d’humitat atmosfèrica i poden indicar l’arribada d’una massa d’aire més seca o més humida. També poden ser causades per evaporació, precipitació o mescla vertical.",
+      "uv": "Descomposició vectorial del vent en les components zonal i meridional. La component u (zonal) representa el moviment oest-est: valors positius indiquen vent provinent de l’oest i valors negatius de l’est. La component v (meridional) representa el moviment sud-nord: valors positius indiquen vent provinent del sud i valors negatius del nord. Això permet analitzar per separat la intensitat de l’advecció zonal i meridional."
+    },
+    "charts": {
+      "theta_e_title": "Tendència de la temperatura potencial equivalent (θe)",
+      "theta_e_axis": "dθe/dt (K/h)",
+      "vapor_pressure_title": "Tendència de la pressió de vapor (e)",
+      "vapor_pressure_axis": "de/dt (hPa/h)",
+      "mixing_ratio_title": "Tendència de la relació de mescla (r)",
+      "mixing_ratio_axis": "dr/dt (g/kg/h)",
+      "uv_title": "Components del vent",
+      "uv_u": "u (zonal)",
+      "uv_v": "v (meridional)",
+      "uv_axis": "Velocitat (km/h)",
+      "pressure_title": "Tendència de la pressió absoluta (interval 3 h)",
+      "pressure_axis": "dp/dt (hPa/h)"
+    },
+    "errors": {
+      "theta_e": "Error calculant la tendència de θe: {error}",
+      "vapor_pressure": "Error calculant la tendència de e: {error}",
+      "mixing_ratio": "Error calculant la tendència de la relació de mescla: {error}",
+      "uv": "Error calculant les components del vent (u/v): {error}",
+      "pressure": "Error calculant la tendència de la pressió: {error}"
+    }
+  },
+  "info": {
+    "coming_soon": "Secció en desenvolupament - Properament",
+    "description": "Aquesta secció contindrà contingut educatiu de meteorologia."
+  },
+  "map": {
+    "section_title": "Mapa d’estacions",
+    "location_title": "Ubicació",
+    "use_my_location": "📍 Usa la meva ubicació actual",
+    "waiting_geolocation": "Esperant el permís de geolocalització o la resposta del navegador...",
+    "gps_unavailable": "No s’ha pogut llegir la ubicació GPS del navegador. Comprova els permisos del lloc.",
+    "geo_error_default": "No s’ha pogut obtenir la ubicació del navegador.",
+    "browser_detail": "Detall del navegador: {detail}",
+    "geo_detected": "Ubicació detectada.",
+    "geo_detected_accuracy": "Ubicació detectada (±{accuracy:.0f} m).",
+    "coords_swapped": " S’han corregit les coordenades invertides.",
+    "center_current": "Centre actual: {lat:.4f}, {lon:.4f}",
+    "filters_title": "Filtres",
+    "providers_menu_title": "Proveïdors",
+    "providers_menu_caption": "Activa proveïdors per mostrar les seves estacions al mapa.",
+    "nearby_providers": "Proveïdors propers",
+    "far_providers": "Proveïdors llunyans",
+    "sensor_filter": "Sensors",
+    "historical_only": "Mostra només estacions amb dades històriques",
+    "hide_historical_only": "Amaga estacions històriques",
+    "hide_historical_only_help": "Les estacions històriques ja no registren dades, però se’n pot consultar l’arxiu històric.",
+    "country_search": "Cerca país…",
+    "country_clear": "Neteja filtre",
+    "sensor_filter_clear": "Neteja",
+    "filters_caption": "El mapa mostra primer els proveïdors propers al centre actual. Els llunyans s’afegeixen manualment.",
+    "sensor_filter_caption": "De moment el filtre de sensors no s’aplica a NWS.",
+    "visible_stations": "Estacions visibles",
+    "providers": "Proveïdors",
+    "no_stations": "No hi ha estacions disponibles per als filtres actuals.",
+    "selected_station": "Estació seleccionada",
+    "autoconnect": "Connecta automàticament en iniciar",
+    "autoconnect_saved": "Connexió automàtica desada per a {station}.",
+    "autoconnect_save_error": "No s’ha pogut desar la connexió automàtica per a l’estació seleccionada.",
+    "autoconnect_disabled": "Connexió automàtica desactivada en aquest dispositiu.",
+    "connect_success": "Connectat a {station}. Ara pots veure les dades a Observació.",
+    "connect_error": "No s’ha pogut connectar l’estació seleccionada.",
+    "select_station_hint": "Fes clic en una estació del mapa per veure’n els detalls i connectar-la.",
+    "table_showing": "Es mostren a la taula les {count} estacions més properes.",
+    "table_columns": {
+      "station": "Estació",
+      "provider": "Proveïdor",
+      "id": "ID",
+      "locality": "Localitat",
+      "altitude": "Altitud (m)",
+      "distance": "Distància (km)",
+      "lat": "Lat",
+      "lon": "Lon"
+    },
+    "sensors": {
+      "thermometer": "Termòmetre",
+      "hygrometer": "Higròmetre",
+      "barometer": "Baròmetre",
+      "anemometer": "Anemòmetre",
+      "wind_vane": "Penell",
+      "rain_gauge": "Pluviòmetre",
+      "pyranometer": "Piranòmetre",
+      "uv": "UV"
+    }
+  },
+  "station_selector": {
+    "search_near_me": "📍 Troba estacions a prop meu",
+    "requesting_geo": "Sol·licitant la ubicació GPS al navegador...",
+    "waiting_geo": "Esperant la resposta de geolocalització del navegador...",
+    "gps_unavailable": "No he pogut llegir la ubicació GPS del navegador. Comprova els permisos d’ubicació del lloc.",
+    "geo_error_default": "No s’ha pogut obtenir la teva ubicació GPS.",
+    "browser_detail": "Detall del navegador: {detail}",
+    "geo_detected": "Ubicació GPS detectada.",
+    "geo_detected_accuracy": "Ubicació GPS detectada (±{accuracy:.0f} m).",
+    "coords_swapped": " S’han corregit les coordenades invertides.",
+    "search_by_city": "O cerca per ciutat/coordenades",
+    "city_optional": "Ciutat (opcional)",
+    "city_placeholder": "P. ex. Madrid",
+    "city_help": "Escriu un lloc per geocodificar-lo amb Nominatim o ajusta lat/lon manualment",
+    "nominatim_caption": "Cerca textual geocodificada per Nominatim (OpenStreetMap).",
+    "osm_caption": "Dades geogràfiques © contribuïdors d’OpenStreetMap (ODbL).",
+    "latitude": "Latitud",
+    "latitude_help": "Exemple: 40.42",
+    "longitude": "Longitud",
+    "longitude_help": "Exemple: -3.70",
+    "search_with_data": "🔎 Cerca amb aquests valors",
+    "nominatim_result": "Resultat de Nominatim: {result}",
+    "nearby_title": "🎯 Estacions properes",
+    "no_nearby": "⚠️ No s’han trobat estacions properes",
+    "autoconnect": "Connecta automàticament en iniciar",
+    "autoconnect_saved": "✅ Connexió automàtica desada per a {station}",
+    "autoconnect_save_error": "No s’ha pogut desar la connexió automàtica",
+    "autoconnect_disabled": "Connexió automàtica desactivada en aquest dispositiu.",
+    "distance": "Distància",
+    "connect_success": "✅ Connectat a {station} ({provider})"
+  },
+  "months": {
+    "long": {
+      "1": "Gener",
+      "2": "Febrer",
+      "3": "Març",
+      "4": "Abril",
+      "5": "Maig",
+      "6": "Juny",
+      "7": "Juliol",
+      "8": "Agost",
+      "9": "Setembre",
+      "10": "Octubre",
+      "11": "Novembre",
+      "12": "Desembre"
+    },
+    "short": {
+      "1": "Gen",
+      "2": "Feb",
+      "3": "Mar",
+      "4": "Abr",
+      "5": "Mai",
+      "6": "Jun",
+      "7": "Jul",
+      "8": "Ago",
+      "9": "Set",
+      "10": "Oct",
+      "11": "Nov",
+      "12": "Des"
+    }
+  }
+}

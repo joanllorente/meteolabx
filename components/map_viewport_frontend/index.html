@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Viewport Component</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        const MAX_DEPTH = 8;
+        const MAX_VISITS = 2000;
+        const VIEW_EPSILON = 0.00001;
+        const ZOOM_EPSILON = 0.001;
+        let lastPayloadKey = "";
+        let wheelTimer = null;
+        let pollTimer = null;
+        let listenerAttached = false;
+
+        function sendMessage(type, payload) {
+          const message = Object.assign(
+            {
+              isStreamlitMessage: true,
+              type: type,
+            },
+            payload || {}
+          );
+          window.parent.postMessage(message, "*");
+        }
+
+        function setComponentValue(value) {
+          sendMessage("streamlit:setComponentValue", {
+            value: value,
+            dataType: "json",
+          });
+        }
+
+        function componentReady() {
+          sendMessage("streamlit:componentReady", { apiVersion: 1 });
+        }
+
+        function setFrameHeight(height) {
+          sendMessage("streamlit:setFrameHeight", { height: height });
+        }
+
+        function finiteNumber(value) {
+          const number = Number(value);
+          return Number.isFinite(number) ? number : null;
+        }
+
+        function normalizeViewport(viewport) {
+          if (!viewport || typeof viewport !== "object") return null;
+          let latitude = finiteNumber(viewport.latitude);
+          let longitude = finiteNumber(viewport.longitude);
+          const zoom = finiteNumber(viewport.zoom);
+          if (latitude === null && viewport.lat !== undefined) {
+            latitude = finiteNumber(viewport.lat);
+          }
+          if (longitude === null && viewport.lon !== undefined) {
+            longitude = finiteNumber(viewport.lon);
+          }
+          if (longitude === null && viewport.lng !== undefined) {
+            longitude = finiteNumber(viewport.lng);
+          }
+          if (
+            latitude === null ||
+            longitude === null ||
+            zoom === null ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180 ||
+            zoom < 0 ||
+            zoom > 24
+          ) {
+            return null;
+          }
+          return {
+            latitude: latitude,
+            longitude: longitude,
+            zoom: zoom,
+          };
+        }
+
+        function viewportFromMapObject(obj) {
+          if (!obj || typeof obj !== "object") return null;
+          try {
+            if (
+              typeof obj.getCenter === "function" &&
+              typeof obj.getZoom === "function"
+            ) {
+              const center = obj.getCenter();
+              const lat =
+                center && center.lat !== undefined ? center.lat : center && center.latitude;
+              const lon =
+                center && center.lng !== undefined
+                  ? center.lng
+                  : center && center.lon !== undefined
+                  ? center.lon
+                  : center && center.longitude;
+              return normalizeViewport({
+                latitude: lat,
+                longitude: lon,
+                zoom: obj.getZoom(),
+              });
+            }
+          } catch (_e) {}
+          return null;
+        }
+
+        function viewportFromDeckObject(obj) {
+          if (!obj || typeof obj !== "object") return null;
+          try {
+            if (
+              obj.viewManager &&
+              typeof obj.viewManager.getViewports === "function"
+            ) {
+              const viewports = obj.viewManager.getViewports();
+              const viewport = Array.isArray(viewports) ? viewports[0] : null;
+              const normalized = normalizeViewport(viewport);
+              if (normalized) return normalized;
+            }
+          } catch (_e) {}
+          try {
+            if (typeof obj.getViewports === "function") {
+              const viewports = obj.getViewports();
+              const viewport = Array.isArray(viewports) ? viewports[0] : null;
+              const normalized = normalizeViewport(viewport);
+              if (normalized) return normalized;
+            }
+          } catch (_e) {}
+          try {
+            const normalized = normalizeViewport(obj.props && obj.props.viewState);
+            if (normalized) return normalized;
+          } catch (_e) {}
+          return null;
+        }
+
+        function isWorthTraversing(value) {
+          if (!value || typeof value !== "object") return false;
+          if (value === window || value === window.parent) return false;
+          if (value.nodeType === 9) return false;
+          return true;
+        }
+
+        function enqueueObject(queue, value, depth, viaDom) {
+          if (!isWorthTraversing(value)) return;
+          if (!viaDom && value.nodeType === 1) return;
+          queue.push({ value: value, depth: depth });
+        }
+
+        function viewportFromObjectGraph(root) {
+          const queue = [];
+          const seen = new WeakSet();
+          enqueueObject(queue, root, 0, true);
+          let visits = 0;
+          while (queue.length && visits < MAX_VISITS) {
+            const item = queue.shift();
+            const obj = item.value;
+            const depth = item.depth;
+            if (!isWorthTraversing(obj) || seen.has(obj)) continue;
+            seen.add(obj);
+            visits += 1;
+
+            const fromMap = viewportFromMapObject(obj);
+            if (fromMap) return fromMap;
+            const fromDeck = viewportFromDeckObject(obj);
+            if (fromDeck) return fromDeck;
+
+            if (depth >= MAX_DEPTH) continue;
+            let names = [];
+            try {
+              names = Object.getOwnPropertyNames(obj);
+            } catch (_e) {
+              continue;
+            }
+            for (const name of names) {
+              if (name === "ownerDocument" || name === "parentNode") continue;
+              let value = null;
+              try {
+                value = obj[name];
+              } catch (_e) {
+                continue;
+              }
+              enqueueObject(queue, value, depth + 1, name.indexOf("__react") === 0);
+            }
+          }
+          return null;
+        }
+
+        function parentDocument() {
+          try {
+            return window.parent && window.parent.document;
+          } catch (_e) {
+            return null;
+          }
+        }
+
+        function mapRoots() {
+          const doc = parentDocument();
+          if (!doc) return [];
+          const selectors = [
+            '[data-testid="stDeckGlJsonChart"]',
+            ".mapboxgl-map",
+            ".maplibregl-map",
+            "canvas",
+          ];
+          const roots = [];
+          for (const selector of selectors) {
+            try {
+              doc.querySelectorAll(selector).forEach(function (element) {
+                if (!roots.includes(element)) roots.push(element);
+              });
+            } catch (_e) {}
+          }
+          return roots;
+        }
+
+        function findViewport() {
+          const roots = mapRoots();
+          for (const root of roots) {
+            const viewport = viewportFromObjectGraph(root);
+            if (viewport) return viewport;
+          }
+          return null;
+        }
+
+        function payloadKey(viewport) {
+          return [
+            Math.round(viewport.latitude / VIEW_EPSILON),
+            Math.round(viewport.longitude / VIEW_EPSILON),
+            Math.round(viewport.zoom / ZOOM_EPSILON),
+          ].join(":");
+        }
+
+        function emitViewport(reason, force) {
+          const viewport = findViewport();
+          if (!viewport) return;
+          const key = payloadKey(viewport);
+          if (!force && key === lastPayloadKey) return;
+          lastPayloadKey = key;
+          setComponentValue({
+            source: "map_viewport",
+            reason: reason || "sample",
+            latitude: viewport.latitude,
+            longitude: viewport.longitude,
+            zoom: viewport.zoom,
+            ts: Date.now(),
+          });
+        }
+
+        function scheduleWheelEmit() {
+          if (wheelTimer) window.clearTimeout(wheelTimer);
+          wheelTimer = window.setTimeout(function () {
+            emitViewport("wheel", false);
+          }, 350);
+        }
+
+        function isFilterInteraction(target) {
+          if (!target || typeof target.closest !== "function") return false;
+          return Boolean(
+            target.closest(".st-key-map_country_overlay") ||
+              target.closest(".st-key-map_sensor_overlay") ||
+              target.closest(".st-key-map_country_clear_btn") ||
+              target.closest(".st-key-map_sensor_filter_clear_btn")
+          );
+        }
+
+        function attachListeners() {
+          if (listenerAttached) return;
+          const doc = parentDocument();
+          if (!doc) return;
+          listenerAttached = true;
+          const captureBeforeFilterRerun = function (event) {
+            if (isFilterInteraction(event.target)) {
+              emitViewport("before_filter", true);
+            }
+          };
+          try {
+            doc.addEventListener("pointerdown", captureBeforeFilterRerun, true);
+            doc.addEventListener("change", captureBeforeFilterRerun, true);
+            doc.addEventListener("click", captureBeforeFilterRerun, true);
+            doc.addEventListener("pointerup", function () {
+              emitViewport("pointerup", false);
+            }, true);
+            doc.addEventListener("touchend", function () {
+              emitViewport("touchend", false);
+            }, true);
+            doc.addEventListener("keyup", function () {
+              emitViewport("keyup", false);
+            }, true);
+            doc.addEventListener("wheel", scheduleWheelEmit, {
+              capture: true,
+              passive: true,
+            });
+          } catch (_e) {}
+        }
+
+        function startPolling() {
+          if (pollTimer) window.clearInterval(pollTimer);
+          let attempts = 0;
+          pollTimer = window.setInterval(function () {
+            attempts += 1;
+            emitViewport("poll", false);
+            if (attempts > 20) {
+              window.clearInterval(pollTimer);
+              pollTimer = null;
+            }
+          }, 500);
+        }
+
+        function onRender(event) {
+          const data = event.data;
+          if (!data || data.type !== "streamlit:render") return;
+          setFrameHeight(0);
+          attachListeners();
+          emitViewport("render", false);
+          startPolling();
+        }
+
+        window.addEventListener("message", onRender);
+        componentReady();
+        setFrameHeight(0);
+      })();
+    </script>
+  </body>
+</html>

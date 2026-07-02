@@ -277,11 +277,6 @@ def _aemet_climo_num(record: Dict[str, Any], keys: List[str], patterns: List[str
     return _parse_num(value)
 
 
-def _aemet_climo_date_field(record: Dict[str, Any], keys: List[str], patterns: List[str]) -> Optional[str]:
-    value = _aemet_first_by_patterns(record, keys, patterns)
-    return _parse_aemet_climo_date(value)
-
-
 def _aemet_daily_record_to_row(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not isinstance(record, dict):
         return None

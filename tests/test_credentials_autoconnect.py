@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 from config import (
     LS_APIKEY,
@@ -20,7 +19,6 @@ from utils.state_keys import AUTOCONNECT_ATTEMPTED
 
 def _patch_storage(monkeypatch, patch_streamlit):
     patch_streamlit(storage)
-    monkeypatch.setattr(storage, "_get_local_storage", lambda: SimpleNamespace(getItem=lambda *args, **kwargs: None))
 
 
 def _pending_writes(fake_session_state):
@@ -70,7 +68,6 @@ def test_weatherlink_credentials_read_from_snapshot_without_legacy_component(
     monkeypatch,
 ):
     patch_streamlit(storage)
-    monkeypatch.setattr(storage, "_get_local_storage", lambda: None)
     fake_session_state["_mlx_local_storage_snapshot_ready"] = True
     fake_session_state["_mlx_local_storage_snapshot"] = {
         LS_WEATHERLINK_APIKEY: "weatherlink-key",
@@ -379,11 +376,6 @@ def test_local_storage_reads_use_write_cache_before_empty_component_instance(
         LS_AUTOCONNECT: "",
         LS_AUTOCONNECT_TARGET: "",
     }
-    monkeypatch.setattr(
-        storage,
-        "_get_local_storage",
-        lambda: SimpleNamespace(getItem=lambda *args, **kwargs: ""),
-    )
 
     assert storage.get_stored_autoconnect() is True
     assert storage.get_stored_autoconnect_target() == target

@@ -27,7 +27,7 @@ import httpx
 import pandas as pd
 
 from server.schemas.errors import ProviderError
-from server.services.aemet import BASE_URL, _fetch_aemet_two_step
+from server.services.aemet import _fetch_aemet_two_step
 from domain.parsing.aemet_climo import (
     _aemet_daily_record_to_row,
     _bucket_monthlyannual_records,

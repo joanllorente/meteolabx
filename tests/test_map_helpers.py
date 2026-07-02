@@ -81,3 +81,31 @@ def test_map_country_counts_fallback_uses_local_inventory():
     assert counts["ES"] > 0
     assert counts["US"] > 0
     assert len(counts) > 100
+
+
+def test_deck_frozen_view_state_only_jumps_on_signature_change(monkeypatch):
+    import streamlit as st
+
+    fake_state = {}
+    monkeypatch.setattr(st, "session_state", fake_state)
+
+    captured = {"latitude": 40.0, "longitude": -3.0, "zoom": 6.0}
+    sig_a = ("stations", "style", 40.0, -3.0, 140, 111)
+
+    frozen_1 = map_tab._deck_frozen_view_state(captured, sig_a)
+    assert frozen_1["latitude"] == 40.0 and frozen_1["zoom"] == 6.0
+
+    # Rerun solo-viewport: la cámara capturada cambió (pan del usuario) pero la
+    # firma no → el initial_view_state renderizado NO debe moverse (evita el
+    # repintado del deck en cada gesto).
+    captured_panned = {"latitude": 42.5, "longitude": -8.9, "zoom": 11.0}
+    frozen_2 = map_tab._deck_frozen_view_state(captured_panned, sig_a)
+    assert frozen_2 == frozen_1
+
+    # Cambio real de contenido (filtro/tema): la firma cambia → salta a la
+    # cámara capturada para preservar el pan/zoom del usuario.
+    sig_b = ("stations", "style", 40.0, -3.0, 140, 222)
+    frozen_3 = map_tab._deck_frozen_view_state(captured_panned, sig_b)
+    assert frozen_3["latitude"] == 42.5
+    assert frozen_3["longitude"] == -8.9
+    assert frozen_3["zoom"] == 11.0

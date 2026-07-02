@@ -7,7 +7,6 @@ from uuid import uuid4
 from typing import Optional
 
 import streamlit as st
-from streamlit_local_storage import LocalStorage
 from config import (
     LS_STATION,
     LS_APIKEY,
@@ -76,39 +75,14 @@ def _session_storage_key() -> str:
         return "mlx_storage_fallback"
 
 
-def _get_local_storage() -> Optional[LocalStorage]:
-    """
-    Crea una instancia de ``LocalStorage`` ligada a la sesión actual.
-
-    IMPORTANTE: NO cachear la instancia entre llamadas. ``streamlit_local_storage``
-    renderiza widgets de Streamlit internamente cada vez que se llama a
-    ``setItem``/``getItem``, y reusar la misma instancia para varias
-    operaciones provoca colisiones del estilo
-    ``"multiple elements with the same key='set'"`` y warnings tipo
-    ``'NoneType' object does not support item assignment``. Cada llamada
-    necesita su propia instancia para que el componente reciba una key fresca.
-    """
-    try:
-        return LocalStorage(key=_session_storage_key())
-    except TypeError as exc:
-        logger.error(
-            "LocalStorage no acepta key de sesión; se desactiva la persistencia local por seguridad: %s",
-            exc,
-        )
-        return None
-    except Exception as exc:
-        logger.warning("No se pudo inicializar LocalStorage: %s", exc)
-        return None
-
-
 def _merge_session_storage_cache(updates: dict, *, authoritative: bool = False) -> None:
     """
     Mantiene una copia en ``st.session_state`` de valores de localStorage.
 
-    ``streamlit_local_storage`` crea instancias nuevas y su cache interno puede
-    llegar vacío justo después de un rerun. Para evitar carreras, distinguimos
-    snapshots pasivos del navegador de escrituras reales hechas por la app:
-    solo las escrituras autoritativas ganan en lecturas inmediatas.
+    Los snapshots del bridge pueden llegar vacíos justo después de un rerun.
+    Para evitar carreras, distinguimos snapshots pasivos del navegador de
+    escrituras reales hechas por la app: solo las escrituras autoritativas
+    ganan en lecturas inmediatas.
     """
     if not isinstance(updates, dict) or not updates:
         return
@@ -141,28 +115,12 @@ def _session_cached_item(item_key: str) -> tuple[bool, str]:
     return True, _unwrap_ls_value(cached.get(item_key), item_key)
 
 
-class _LocalStorageProxy:
-    """
-    Proxy compatible con imports legacy (`localS`) sin estado global persistente.
-    """
-
-    def __getattr__(self, name):
-        storage = _get_local_storage()
-        if storage is None:
-            raise AttributeError(name)
-        return getattr(storage, name)
-
-
-# Compatibilidad legacy: no guarda estado global, delega por llamada.
-localS = _LocalStorageProxy()
-
-
 def _unwrap_ls_value(raw, item_key: str) -> str:
     """
-    La librería streamlit_local_storage almacena los valores en el navegador
-    envueltos en un objeto JSON: {"meteolabx_active_station": "ILHOSP26"}.
-    Cuando getItem() lo deserializa, devuelve ese dict Python.
-    Esta función extrae el valor real sea cual sea el formato recibido.
+    Versiones anteriores almacenaban los valores en el navegador envueltos en
+    un objeto JSON: {"meteolabx_active_station": "ILHOSP26"}. Al deserializar
+    puede llegar ese dict Python. Esta función extrae el valor real sea cual
+    sea el formato recibido.
     """
     if raw is None:
         return ""
@@ -338,18 +296,6 @@ def _read_cached_or_snapshot_item(item_key: str) -> tuple[bool, str]:
     if has_snapshot:
         return True, snapshot_value
     return False, ""
-
-
-def _read_ls_item(storage: LocalStorage, item_key: str, getter_key: str) -> str:
-    """Lee una key del localStorage y desenvuelve el formato wrapper si es necesario."""
-    has_value, value = _read_cached_or_snapshot_item(item_key)
-    if has_value:
-        return value
-    try:
-        raw = storage.getItem(item_key, key=getter_key)
-    except TypeError:
-        raw = storage.getItem(item_key)
-    return _unwrap_ls_value(raw, item_key)
 
 
 def _read_stored_text(item_key: str, getter_key: str) -> str:

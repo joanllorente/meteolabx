@@ -295,7 +295,7 @@ def _mc_build_records(raw: Dict[str, Dict[str, List[float]]]) -> List[StationDai
                 tmax=round(max(tmax_vals), 1) if tmax_vals else None,
                 tmin=round(min(tmin_vals), 1) if tmin_vals else None,
                 rain=round(sum(rain_vals), 1) if rain_vals else None,
-                gust=_ms_to_kmh(max(gust_vals)) if gust_vals else None,
+                gust=_daily_gust_max_from_series([v * 3.6 for v in gust_vals]) if gust_vals else None,
             )
         )
     return out
@@ -670,6 +670,47 @@ def _clean(x) -> Optional[float]:
     return None if (x is None or x != x) else float(x)
 
 
+_TEMPORAL_GUST_MIN_SAMPLES = 6
+_TEMPORAL_GUST_SUSPECT_FLOOR_KMH = 120.0
+_TEMPORAL_GUST_MIN_DELTA_KMH = 70.0
+_TEMPORAL_GUST_MIN_RATIO = 1.65
+
+
+def _daily_gust_max_from_series(values: List[float]) -> Optional[float]:
+    """Máxima diaria de racha con descarte de picos temporales aislados.
+
+    Algunos proveedores publican una racha horaria puntual claramente espuria
+    (p. ej. un único 267 km/h rodeado de valores de 60-90 km/h). No aplicamos
+    un techo fijo porque puede haber temporales reales: solo retiramos el
+    máximo cuando hay suficientes muestras y está muy separado del segundo
+    valor más alto. Si hay varias lecturas altas, se conserva.
+    """
+    valid = sorted(
+        float(v)
+        for v in values
+        if v is not None and v == v and 0.0 <= float(v) <= _WORLD_GUST_RECORD_KMH
+    )
+    if not valid:
+        return None
+    if len(valid) < _TEMPORAL_GUST_MIN_SAMPLES:
+        return round(max(valid), 1)
+
+    max_v = valid[-1]
+    second = valid[-2]
+    if (
+        max_v >= _TEMPORAL_GUST_SUSPECT_FLOOR_KMH
+        and max_v >= second + _TEMPORAL_GUST_MIN_DELTA_KMH
+        and max_v >= second * _TEMPORAL_GUST_MIN_RATIO
+    ):
+        logger.info(
+            "ranking: racha máxima aislada descartada %.1f km/h; siguiente %.1f km/h",
+            max_v,
+            second,
+        )
+        return round(second, 1)
+    return round(max_v, 1)
+
+
 async def fetch_aemet_records(
     store: "RankingStore",
     api_key: str,
@@ -1002,48 +1043,6 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
-def _sanitize_records(records: List[StationDaily]) -> List[StationDaily]:
-    """Anula valores imposibles (rango duro) y outliers espaciales aislados
-    en Tmáx/ráfaga. Muta los registros in situ y los devuelve."""
-    # 1) Rango duro.
-    for r in records:
-        for metric, (lo, hi) in _HARD_BOUNDS.items():
-            v = getattr(r, metric)
-            if v is not None and not (lo <= v <= hi):
-                setattr(r, metric, None)
-
-    # 2) Coherencia espacial one-sided (Tmáx, ráfaga).
-    for metric, delta in _SPATIAL_DELTA.items():
-        pts = [
-            r for r in records
-            if getattr(r, metric) is not None and r.lat is not None and r.lon is not None
-        ]
-        grid: Dict[tuple, List[StationDaily]] = {}
-        for r in pts:
-            grid.setdefault(_grid_key(r.lat, r.lon), []).append(r)
-        # Computar todos los flags sobre los valores ORIGINALES y anular al
-        # final (no mutar durante la pasada → no contaminar a los vecinos).
-        to_null: List[StationDaily] = []
-        for r in pts:
-            gk = _grid_key(r.lat, r.lon)
-            neigh_vals = []
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    for o in grid.get((gk[0] + dx, gk[1] + dy), []):
-                        if o is r:
-                            continue
-                        if _haversine_km(r.lat, r.lon, o.lat, o.lon) <= _SPATIAL_RADIUS_KM:
-                            neigh_vals.append(getattr(o, metric))
-            if len(neigh_vals) >= _SPATIAL_MIN_NEIGHBORS:
-                neigh_vals.sort()
-                median = neigh_vals[len(neigh_vals) // 2]
-                if getattr(r, metric) > median + delta:
-                    to_null.append(r)
-        for r in to_null:
-            setattr(r, metric, None)
-    return records
-
-
 _DAY_FLOOR = 15  # nº mínimo de estaciones para dar un día por "vivo"
 
 
@@ -1195,7 +1194,7 @@ class RankingStore:
                         lon=meta.get("lon"),
                         tmax=round(max(txs), 1) if txs else None,
                         tmin=round(min(tns), 1) if tns else None,
-                        gust=round(max(gus), 1) if gus else None,
+                        gust=_daily_gust_max_from_series(gus) if gus else None,
                         rain=round(sum(rns), 1) if rns else None,
                     )
                 )

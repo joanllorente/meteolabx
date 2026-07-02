@@ -1,0 +1,791 @@
+{
+  "warnings": {
+    "data_age": "⚠️ I dati di {provider} risalgono a {minutes} minuti fa. La stazione potrebbe non stare trasmettendo.",
+    "missing_elevation": "⚠️ Manca la quota. Pressione assoluta e termodinamica sono state calcolate con quota 0; inserisci la quota nella barra laterale per una maggiore precisione."
+  },
+  "tabs": {
+    "observation": "Osservazione",
+    "trends": "Tendenze",
+    "historical": "Storico",
+    "info": "Impara",
+    "map": "Mappa",
+    "ranking": "Classifica"
+  },
+  "ranking": {
+    "section_title": "Classifica delle stazioni",
+    "intro": "Top 10 di oggi per temperatura massima, temperatura minima, raffica di vento e pioggia.",
+    "updated": "Ultimo aggiornamento: {time} ({mins} min fa)",
+    "country_title": "Il tuo paese: {country}",
+    "country_section": "Classifica per paese",
+    "country_label": "Paese",
+    "exclude_antarctica": "Escludi Antartide",
+    "global_title": "Globale",
+    "no_country": "Non è stato possibile determinare il paese dalla posizione. Usa la mappa per impostare la tua posizione.",
+    "country_empty": "Nessun dato di classifica per {provider} oggi.",
+    "global_empty": "Nessun dato di classifica ancora disponibile.",
+    "providers_note": "Provider inclusi: {providers}.",
+    "countries": {
+      "ES": "Spagna",
+      "FR": "Francia",
+      "IT": "Italia",
+      "NO": "Norvegia"
+    },
+    "metrics": {
+      "tmax": "Temperatura massima",
+      "tmin": "Temperatura minima",
+      "gust": "Raffica di vento",
+      "rain": "Precipitazioni"
+    }
+  },
+  "weatherlink": {
+    "station_selector": {
+      "label": "Stazione WeatherLink"
+    }
+  },
+  "common": {
+    "information": "Informazioni",
+    "charts": "Grafici",
+    "hour": "Ora",
+    "and": "e",
+    "off": "Disattivato",
+    "on": "Attivato"
+  },
+  "meta": {
+    "last_data": "Ultimo dato",
+    "user_time": "Ora utente",
+    "station_time": "Fuso orario della stazione",
+    "age": "Età"
+  },
+  "connection": {
+    "loading_title": "Connessione alla stazione..."
+  },
+  "header": {
+    "theme_label": "Tema",
+    "refresh_label": "Aggiorna",
+    "available_stations": "{count} stazioni disponibili",
+    "station_id_short": "ID",
+    "altitude_short": "Quota",
+    "latitude_short": "Lat",
+    "longitude_short": "Lon",
+    "connect_prompt": "Collega la tua stazione dal pannello laterale o esplora le stazioni vicine.",
+    "manual_station": "ℹ️ Stazione NWS manuale: riporta massime/minime giornaliere una volta al giorno. Nessun dato in tempo reale."
+  },
+  "favorites": {
+    "title": "Preferiti",
+    "connect": "Connetti",
+    "save": "Salva preferito",
+    "save_short": "Preferito",
+    "saved": "{station} aggiunta ai preferiti.",
+    "save_error": "Impossibile salvare il preferito.",
+    "remove": "Rimuovi dai preferiti",
+    "remove_error": "Impossibile rimuovere il preferito.",
+    "connect_error": "Impossibile connettere quel preferito."
+  },
+  "footer": {
+    "version": "Versione {version}",
+    "whats_new": "Novità",
+    "improvements_title": "Miglioramenti",
+    "fixes_title": "Correzioni",
+    "improvements": [
+      "Migrazione completa e funzionale alla modalità FastAPI.",
+      "Nuova scheda Classifica, con ranking di temperatura, vento e precipitazione per paese e globale.",
+      "Nuovo provider IEM, con più di 100.000 stazioni in tutto il mondo.",
+      "Ridisegno completo della scheda Mappa.",
+      "Nuovo filtro paese sulla mappa.",
+      "Nuovo filtro per i sensori disponibili sulla mappa.",
+      "I sensori disponibili ora sono mostrati come metadati per ogni stazione.",
+      "Nuovo filtro per mostrare sulla mappa le stazioni con dati storici disponibili.",
+      "I dati storici ora sono disponibili per la rete WeatherLink."
+    ],
+    "fixes": [
+      "Corretto un errore che impediva di mostrare i valori del vento anche quando il provider li misurava.",
+      "Corretto un errore nel conteggio delle notti tropicali e torride nella scheda Storico.",
+      "Corretto un problema che impediva il calcolo corretto della tendenza completa della pressione.",
+      "Corretto un errore che faceva mostrare ad AEMET e MeteoGalicia massime e minime di temperatura non corrette.",
+      "Corretto un errore che faceva mostrare valori errati della raffica massima MeteoGalicia."
+    ],
+    "previous_improvements": [
+      "Aggiunti due nuovi provider di dati: Met Office e MeteoHub Italia.",
+      "Aggiunto un sistema di preferiti per accedere rapidamente a qualsiasi stazione.",
+      "Aggiunto un nuovo grafico delle precipitazioni.",
+      "Aggiunto il supporto WeatherLink.",
+      "Migliorata la visualizzazione dei grafici settimanali.",
+      "La scheda Chiarezza del cielo ora mostra i crepuscoli.",
+      "Ridotto il tempo di caricamento iniziale della web app.",
+      "Aggiunte definizioni ai grafici nella scheda Tendenze."
+    ],
+    "previous_fixes": [
+      "Corretto un errore che mostrava dati non corretti nei mareografi di Puertos del Estado.",
+      "Corretti problemi di cache nel passaggio tra stazioni.",
+      "Corretto un errore che impediva di mostrare la serie sinottica nella scheda Tendenze anche quando il provider restituiva i dati.",
+      "Corretto un errore che impediva la visualizzazione dei grafici di tendenza di alcuni provider.",
+      "Corretto un errore che impediva di mostrare alba e tramonto in ora locale.",
+      "Corretto un errore che mostrava massime e minime errate di temperatura e umidità in Meteocat.",
+      "Corretto un errore che impediva di interrogare lo storico dell’anno corrente in Weather Underground."
+    ],
+    "sources": "Fonti",
+    "unaffiliated": "Non affiliato"
+  },
+  "cards": {
+    "help_aria": "Aiuto per {title}",
+    "tooltip_unavailable": "Definizione non ancora disponibile per questa variabile."
+  },
+  "sidebar": {
+    "settings_title": "Impostazioni",
+    "language": {
+      "label": "Lingua"
+    },
+    "theme": {
+      "label": "Tema",
+      "options": {
+        "auto": "Auto",
+        "light": "Chiaro",
+        "dark": "Scuro"
+      }
+    },
+    "connection": {
+      "title": "Connetti stazione",
+      "source": {
+        "label": "Fonte",
+        "options": {
+          "wu": "Weather Underground",
+          "weatherlink": "WeatherLink"
+        }
+      },
+      "fields": {
+        "station_id": "ID stazione (WU)",
+        "api_key": "API Key (WU)",
+        "weatherlink_api_key": "API Key (WeatherLink)",
+        "weatherlink_api_secret": "API Secret (WeatherLink)",
+        "altitude": "Quota (m)",
+        "weatherlink_favorite_name": "Nome preferito"
+      },
+      "placeholders": {
+        "station_id": "Inserisci ID",
+        "api_key": "Incolla qui la tua API key",
+        "api_secret": "Incolla qui il tuo API secret",
+        "altitude": "Opzionale (recuperata dall’API)",
+        "weatherlink_favorite_name": "es. La mia stazione"
+      },
+      "caption": "Fai clic su Salva per ricordare ID, API key e quota in questo browser e aggiungerli ai preferiti.",
+      "loading_saved": "Caricamento dei dati salvati nel browser...",
+      "weatherlink_session_caption": "WeatherLink carica le tue stazioni con API Key e API Secret. Se fai clic su Salva, vengono ricordate separatamente da Weather Underground in questo browser.",
+      "api_key_help": "Questi dati possono essere salvati localmente in questo browser se usi Salva. Se condividi dispositivo o profilo del browser, un’altra persona potrebbe riutilizzarli. È più sicuro salvare la API key nel gestore password del dispositivo o del browser.",
+      "api_secret_help": "WeatherLink richiede l’invio dell’API Secret nell’header X-Api-Secret. Se lo salvi, viene memorizzato localmente in questo browser.",
+      "weatherlink_favorite_name_help": "Lascia vuoto per usare il nome riportato da WeatherLink. Utile quando l’API espone solo un codice numerico."
+    },
+    "autoconnect": {
+      "label": "Connetti automaticamente all’avvio",
+      "caption": "",
+      "enabled": "Connessione automatica all’avvio attivata (WU)",
+      "enabled_weatherlink": "Connessione automatica all’avvio attivata (WeatherLink)",
+      "disabled": "Connessione automatica all’avvio disattivata.",
+      "missing_credentials": "Per attivare la connessione automatica WU, inserisci ID stazione e API Key.",
+      "missing_weatherlink_credentials": "Per attivare la connessione automatica WeatherLink, connetti o salva una stazione con API Key e API Secret."
+    },
+    "calibration": {
+      "title": "Calibrazione sensori",
+      "loading": "Caricamento sensori Weather Underground...",
+      "range_help": "Intervallo consentito: da {min} a {max} {unit}",
+      "save": "Salva calibrazione",
+      "saved": "Calibrazione salvata",
+      "unsaved": "Le modifiche di calibrazione non sono ancora salvate.",
+      "fields": {
+        "barometer": "Barometro (hPa)",
+        "wind_vane": "Banderuola (°)",
+        "thermometer": "Termometro (°C)",
+        "hygrometer": "Igrometro (%)",
+        "anemometer": "Anemometro (km/h)",
+        "rain_gauge": "Pluviometro (mm)",
+        "pyranometer": "Piranometro (W/m²)"
+      }
+    },
+    "units": {
+      "title": "Unità",
+      "fields": {
+        "temperature": "Temperatura",
+        "wind": "Vento",
+        "pressure": "Pressione",
+        "precip": "Precipitazione",
+        "radiation": "Radiazione"
+      }
+    },
+    "buttons": {
+      "save": "Salva",
+      "forget": "Dimentica",
+      "connect": "Connetti",
+      "disconnect": "Disconnetti",
+      "refresh": "Aggiorna"
+    },
+    "messages": {
+      "saved_device": "Salvato su questo dispositivo",
+      "data_erased": "Dati rimossi",
+      "missing_station_or_key": "Manca ID stazione o API key.",
+      "wu_credentials_rejected": "Weather Underground ha rifiutato la API key. Controlla che sia corretta e abbia i permessi PWS.",
+      "wu_station_not_found": "Weather Underground non ha trovato quell’ID stazione. Controlla l’identificativo.",
+      "wu_rate_limited": "Weather Underground ha limitato le richieste. Attendi un po’ prima di riconnettere.",
+      "wu_timeout": "Weather Underground ha impiegato troppo tempo a rispondere. Riprova tra qualche minuto.",
+      "wu_network": "Impossibile contattare Weather Underground. Controlla la connessione o riprova.",
+      "wu_bad_response": "Weather Underground ha restituito una risposta non valida per quella stazione.",
+      "wu_connection_error": "Impossibile connettersi a Weather Underground{status}. Controlla credenziali e stazione.",
+      "missing_weatherlink_credentials": "Manca API Key o API Secret WeatherLink.",
+      "weatherlink_credentials_rejected": "WeatherLink ha rifiutato API Key o API Secret. Usa le credenziali v2 generate su WeatherLink.com > Account > Generate v2 Key; una chiave Weather Underground o la password di accesso non funzionano.",
+      "weatherlink_stations_error": "Impossibile caricare le stazioni WeatherLink.",
+      "weatherlink_no_stations": "WeatherLink non ha restituito stazioni per queste credenziali.",
+      "altitude_out_of_range": "Quota fuori intervallo ({min} a {max}m)",
+      "altitude_invalid": "Quota non valida. Usa un numero (es. 12.5)"
+    },
+    "status": {
+      "connected": "Connesso: {station}",
+      "disconnected": "Non connesso",
+      "last_update": "Ultimo aggiornamento: {time}"
+    },
+    "time_ago": {
+      "seconds": "{value}s fa",
+      "minutes": "{value} min fa",
+      "hours_minutes": "{hours}h {minutes} min fa"
+    },
+    "provider_status": {
+      "connected_to": "Connesso a {provider}",
+      "station_id": "ID: {station_id}",
+      "altitude": "Quota: {altitude}m",
+      "refresh_help": "Forza aggiornamento dati (bypass cache)"
+    }
+  },
+  "historical": {
+    "section_title": "Storico",
+    "connect_prompt": "👈 Connetti una stazione per vedere i dati storici.",
+    "notes": {
+      "nws_unavailable": "NWS non fornisce tramite questo servizio i dati storici e climatologici necessari per questa sezione.",
+      "euskalmet_unavailable": "Euskalmet non fornisce tramite questo servizio i dati storici e climatologici necessari per questa sezione.",
+      "implemented_providers": "Per ora lo Storico è implementato per WU, WeatherLink, IEM, Meteocat, AEMET, Meteo-France, MeteoGalicia e Frost. Il livello di calcolo condiviso è già pronto per estenderlo ad altri provider.",
+      "series_start": "Inizio serie {provider} (inventario): {value}",
+      "series_start_unavailable": "Inizio serie {provider} (inventario): non disponibile."
+    },
+    "errors": {
+      "missing_wu_credentials": "⚠️ Mancano le credenziali WU (ID stazione/API Key) per le query storiche.",
+      "missing_weatherlink_credentials": "⚠️ Mancano le credenziali WeatherLink (ID stazione/API Key/API Secret) per le query storiche.",
+      "missing_meteocat_station": "⚠️ Manca il codice stazione Meteocat per le query storiche.",
+      "missing_aemet_station": "⚠️ Manca il codice stazione AEMET per le query storiche.",
+      "missing_meteofrance_station": "⚠️ Manca il codice stazione Meteo-France per le query storiche.",
+      "missing_meteogalicia_station": "⚠️ Manca il codice stazione MeteoGalicia per le query storiche.",
+      "missing_iem_station": "⚠️ Manca la stazione IEM nel formato network|station per le query storiche.",
+      "wu_unauthorized": "❌ API key non valida o senza permesso per i dati storici.",
+      "wu_notfound": "❌ ID stazione non trovato nello storico WU.",
+      "wu_ratelimit": "❌ Limite di richieste raggiunto nello storico WU.",
+      "wu_timeout": "❌ Timeout durante la query allo storico WU.",
+      "wu_network": "❌ Errore di rete durante la query allo storico WU.",
+      "wu_http": "❌ Errore durante la query allo storico WU{status_msg}.",
+      "meteocat_generic": "❌ Errore durante la query allo storico Meteocat.",
+      "provider_generic": "❌ Errore durante la query allo storico {provider}: {error_type}: {error}"
+    },
+    "summary": {
+      "label": "Tipo di riepilogo",
+      "options": {
+        "monthly": "Mensile",
+        "annual": "Annuale"
+      }
+    },
+    "inputs": {
+      "months": "Mese/i",
+      "years": "Anno/i"
+    },
+    "warnings": {
+      "max_monthly_blocks": "⚠️ In modalità mensile il massimo è {max_blocks} blocchi mese×anno (selezionati: {selected_blocks}). Riduci la selezione.",
+      "invalid_period": "⚠️ Impossibile costruire un periodo valido.",
+      "no_data_selected_period": "⚠️ Nessun dato disponibile per il periodo selezionato."
+    },
+    "info": {
+      "select_month_and_year": "Seleziona almeno un mese e un anno.",
+      "select_year": "Seleziona almeno un anno."
+    },
+    "caption": {
+      "period_summary": "Periodo: {period_range} · Blocchi selezionati: {blocks} · Giorni richiesti: {days}",
+      "records_received": "Record validi ricevuti: {count} · {start} → {end}",
+      "weatherlink_monthly_only": "WeatherLink v2 consente dati storici solo in finestre di 24 h; per evitare limiti, interroga mesi specifici."
+    },
+    "spinner": {
+      "loading": "Interrogazione dello storico {provider}..."
+    },
+    "sections": {
+      "extremes": "Estremi del periodo",
+      "summary": "Riepilogo del periodo",
+      "data_by": "Dati per {scope}"
+    },
+    "chart": {
+      "title": "Climogramma ({scope})",
+      "x": {
+        "day": "Giorno",
+        "month": "Mese",
+        "year": "Anno"
+      },
+      "scope": {
+        "daily": "giornaliero",
+        "monthly": "mensile",
+        "yearly": "annuale"
+      },
+      "legend": {
+        "precip": "Precipitazione",
+        "temp_mean": "Temperatura media",
+        "temp_max": "Media delle massime",
+        "temp_min": "Media delle minime"
+      },
+      "y": {
+        "temp": "Temperatura (°C)",
+        "precip": "Precipitazione (mm)"
+      }
+    },
+    "wind_rose": {
+      "heading": "Rosa dei venti del periodo",
+      "title": "Rosa dei venti del periodo (% per direzione)",
+      "frequency": "Frequenza",
+      "samples": "Campioni",
+      "calm": "Calma (<2.0 km/h)",
+      "dominant": "Dominante",
+      "unavailable": "Rosa dei venti non disponibile: non ci sono campioni validi di direzione in questo periodo (direzione valida: {valid_direction}, campioni di calma: {calm})."
+    },
+    "table": {
+      "headers": {
+        "metric": "Metrica",
+        "value": "Valore",
+        "date": "Data"
+      },
+      "scope": {
+        "day": "giorno",
+        "month": "mese",
+        "year": "anno"
+      },
+      "period_col": {
+        "day": "Giorno",
+        "month": "Mese",
+        "year": "Anno"
+      },
+      "columns": {
+        "temp_abs_max": "Massima assoluta",
+        "temp_abs_min": "Minima assoluta",
+        "temp_mean": "Media",
+        "precip": "Precipitazione"
+      }
+    },
+    "units": {
+      "days": "giorni",
+      "nights": "notti"
+    },
+    "metrics": {
+      "absolute_max": "Massima assoluta",
+      "absolute_min": "Minima assoluta",
+      "warmest_year": "Anno più caldo (temperatura media)",
+      "coldest_year": "Anno più freddo (temperatura media)",
+      "windiest_year": "Anno più ventoso (vento medio)",
+      "max_gust": "Raffica massima",
+      "wettest_year": "Anno più piovoso",
+      "driest_year": "Anno più secco",
+      "most_rain_days_year": "Anno con più giorni di pioggia",
+      "max_precip_24h": "Precipitazione massima in 24 ore",
+      "sunniest_year": "Anno più soleggiato",
+      "least_sunny_year": "Anno con meno sole",
+      "lowest_maximum": "Massima più bassa",
+      "highest_minimum": "Minima più alta",
+      "windiest_month": "Mese più ventoso (vento medio)",
+      "max_precip_24h_short": "Max precipitazione in 24h",
+      "windiest_day": "Giorno più ventoso (vento medio)",
+      "rainiest_day": "Giorno più piovoso",
+      "mean_temperature": "Temperatura media",
+      "mean_maximums": "Media delle massime",
+      "mean_minimums": "Media delle minime",
+      "temperature_stddev": "Deviazione standard della temperatura",
+      "mean_wind": "Vento medio",
+      "accumulated_precipitation": "Precipitazione accumulata",
+      "mean_precipitation": "Precipitazione media",
+      "mean_solar_irradiance": "Irradianza solare media",
+      "mean_sunshine_hours": "Ore di sole medie",
+      "tropical_nights": "Notti tropicali (min > 20 °C)",
+      "frost_nights": "Notti di gelo (min ≤ 0 °C)",
+      "torrid_nights": "Notti torride (min > 25 °C)"
+    }
+  },
+  "observation": {
+    "sections": {
+      "observed": "Osservato",
+      "thermodynamics": "Termodinamica",
+      "radiation": "Radiazione"
+    },
+    "cards": {
+      "basic": {
+        "temperature": {
+          "title": "Temperatura",
+          "feels_like": "Percepita",
+          "heat_index": "Indice di calore"
+        },
+        "relative_humidity": {
+          "title": "Umidità relativa",
+          "vapor_pressure": "Pressione di vapore"
+        },
+        "dew_point": {
+          "title": "Punto di rugiada",
+          "wet_bulb": "Bulbo umido",
+          "wet_bulb_risk": {
+            "potential": "condizioni potenzialmente pericolose",
+            "critical": "Condizioni critiche",
+            "extreme": "condizioni estreme"
+          },
+          "wet_bulb_alert": {
+            "warning": "Evita sforzi fisici ed esposizione prolungata.",
+            "extreme": "Valore vicino al limite fisiologico teorico di 35 °C. L’esposizione prolungata può essere pericolosa anche a riposo e all’ombra."
+          }
+        },
+        "pressure": {
+          "title": "Pressione",
+          "trend": "Tendenza",
+          "delta_3h": "Δ3h",
+          "msl": "MSL"
+        },
+        "wind": {
+          "title": "Vento",
+          "gust": "Raffica",
+          "direction": "Direzione"
+        },
+        "precipitation_today": {
+          "title": "Precipitazione oggi",
+          "instantaneous": "Istantanea",
+          "intensity": "Intensità",
+          "minute_5": "5 min",
+          "minute_10": "10 min"
+        }
+      },
+      "thermo": {
+        "specific_humidity": "Umidità specifica",
+        "absolute_humidity": "Umidità assoluta",
+        "virtual_temp": "Temp. virtuale",
+        "equivalent_temp": "Temp. equivalente",
+        "potential_temp": "Temp. potenziale",
+        "air_density": "Densità dell’aria",
+        "lcl": "Base nube LCL",
+        "speed_of_sound": "Velocità del suono"
+      },
+      "radiation": {
+        "irradiance": {
+          "title": "Irradianza",
+          "energy_today": "Energia oggi"
+        },
+        "uv_index": {
+          "title": "Indice UV",
+          "erythemal_irradiance": "Irradianza eritemica"
+        },
+        "erythemal_dose": {
+          "title": "Dose eritemica",
+          "dose_j_m2_label": "Energia eritemica"
+        },
+        "et0_today": {
+          "title": "Evapotraspirazione oggi",
+          "model": "FAO-56 Penman-Monteith"
+        },
+        "sky_clarity": {
+          "title": "Chiarezza del cielo",
+          "night": "Notte",
+          "sunrise_sunset": "Alba {sunrise} · Tramonto {sunset}",
+          "twilight_civil": "Crepuscolo civile",
+          "twilight_nautical": "Crepuscolo nautico",
+          "twilight_astronomical": "Crepuscolo astronomico",
+          "night_closed": "Notte"
+        },
+        "sun_altitude": {
+          "title": "Altezza del Sole",
+          "culmination": "Culminazione"
+        },
+        "water_balance_today": {
+          "title": "Bilancio idrico oggi"
+        }
+      },
+      "dynamic": {
+        "pressure": {
+          "stable": "Stabile",
+          "rising_fast": "In rapido aumento",
+          "rising": "In aumento",
+          "falling_fast": "In rapido calo",
+          "falling": "In calo"
+        },
+        "rain": {
+          "no_precip": "Nessuna precipitazione",
+          "trace": "Traccia di precipitazione",
+          "very_light": "Pioggia molto debole",
+          "light": "Pioggia debole",
+          "light_moderate": "Pioggia moderata debole",
+          "moderate": "Pioggia moderata",
+          "heavy": "Pioggia intensa",
+          "very_heavy": "Pioggia molto intensa",
+          "torrential": "Pioggia torrenziale"
+        },
+        "clarity": {
+          "clear": "Sereno",
+          "mostly_clear": "Prevalentemente sereno",
+          "partly_cloudy": "Parzialmente nuvoloso",
+          "cloudy": "Nuvoloso",
+          "very_cloudy": "Coperto"
+        },
+        "balance": {
+          "surplus": "Eccedenza",
+          "positive": "Positivo",
+          "balance": "In equilibrio",
+          "deficit": "Disavanzo"
+        }
+      },
+      "charts": {
+        "temperature_heading": "Temperatura",
+        "temperature_name": "Temperatura",
+        "temperature_title_today": "Temperatura di oggi",
+        "temperature_title_day": "Temperatura del giorno",
+        "temperature_axis": "Temperatura (°C)",
+        "vapor_heading": "Pressione di vapore",
+        "vapor_title": "Pressione di vapore e saturazione",
+        "vapor_line": "e (pressione di vapore)",
+        "vapor_saturation_line": "e_s (pressione di saturazione)",
+        "vapor_axis": "Pressione di vapore (hPa)",
+        "precipitation_heading": "Precipitazione oggi",
+        "precipitation_title": "Precipitazione registrata oggi",
+        "precipitation_line": "Precipitazione",
+        "wind_heading": "Vento e raffiche oggi",
+        "wind_no_data_today": "Nessun dato di vento disponibile nella finestra temporale mostrata (oggi).",
+        "wind_no_mean": "Questa stazione non restituisce vento medio utilizzabile (VV); vengono mostrate le raffiche e la rosa usa raffica+direzione.",
+        "wind_line": "Vento",
+        "gust_line": "Raffica",
+        "direction_line": "Direzione",
+        "speed_axis": "km/h",
+        "direction_axis": "Direzione",
+        "wind_rose_heading": "Rosa dei venti",
+        "wind_rose_title": "Rosa dei venti (% per direzione)",
+        "wind_rose_frequency": "Frequenza",
+        "wind_rose_samples": "Campioni",
+        "wind_rose_calm": "Calma (<2.0 km/h)",
+        "wind_rose_dominant": "Dominante",
+        "irradiance_heading": "Irradianza solare",
+        "irradiance_title": "Irradianza misurata vs teorica",
+        "irradiance_measured": "Misurata",
+        "irradiance_theoretical": "Teorica",
+        "irradiance_hour_axis": "Ora solare utile",
+        "irradiance_axis": "Irradianza (W/m²)"
+      },
+      "info": {
+        "invalid_aemet_tenmin": "⚠️ Questa stazione non restituisce attualmente una serie valida a dieci minuti, quindi il grafico non può essere disegnato.",
+        "no_series": "ℹ️ Al momento non è disponibile una serie temporale per disegnare il grafico.",
+        "loading_charts": "Caricamento serie di osservazione e grafici...",
+        "loading_charts_unavailable": "ℹ️ I dati di base sono già caricati, ma la serie di osservazione non è ancora disponibile.",
+        "wind_rose_unavailable": "⚠️ Rosa dei venti non disponibile: non ci sono campioni validi di direzione in questo periodo (direzione valida: {valid_direction}, campioni di calma: {calm})."
+      }
+    }
+  },
+  "trends": {
+    "section_title": "Tendenze",
+    "connect_prompt": "👈 Connetti una stazione per vedere le tendenze",
+    "period_label": "Periodo",
+    "periods": {
+      "today": "Oggi",
+      "synoptic": "Tendenza sinottica"
+    },
+    "derivatives_today": "Derivate discrete calcolate secondo la risoluzione temporale di ciascun provider.",
+    "derivatives_synoptic": "Derivate discrete calcolate a intervalli di 3 ore",
+    "source_label": "Fonte della tendenza: {source}",
+    "sources": {
+      "aemet_today": "Dati AEMET a dieci minuti (oggi + 3 h precedenti, derivate a {minutes} min)",
+      "meteocat_today": "Meteocat mesurades (oggi + 3 h precedenti, {minutes} min)",
+      "weatherlink_today": "Dati storici WeatherLink (oggi + 3 h precedenti, {minutes} min)",
+      "local_today": "Serie locale del provider ({minutes} min)",
+      "aemet_synoptic": "AEMET orario 7 giorni (campionamento 3 h)",
+      "wu_synoptic": "WU orario/7 giorni",
+      "weatherlink_synoptic": "Dati storici WeatherLink Pro (7 giorni, campionamento 3 h)",
+      "meteofrance_synoptic": "Meteo-France orario (7 giorni, campionamento 3 h)",
+      "meteocat_synoptic": "Meteocat mesurades (7 giorni)",
+      "meteogalicia_synoptic": "MeteoGalicia orario (max disponibile ~72 h, campionamento 3 h)",
+      "poem_synoptic": "Serie recente POEM (massimo disponibile del provider, campionamento 3 h)",
+      "metoffice_today": "Met Office Land Observations (48 h, derivate a {minutes} min)",
+      "metoffice_synoptic": "Met Office Land Observations (48 h, campionamento 3 h)",
+      "meteohub_today": "Osservazioni recenti MeteoHub Italia ({minutes} min)",
+      "meteohub_synoptic": "Osservazioni recenti MeteoHub Italia (campionamento 3 h)",
+      "euskalmet_synoptic": "Euskalmet (nessuna serie sinottica settimanale disponibile)",
+      "generic_synoptic": "{provider} (serie oraria generica)",
+      "sampling_suffix_3h": "{source} (campionamento 3 h)"
+    },
+    "warnings": {
+      "series_unavailable": "⚠️ La stazione al momento non restituisce una serie di dati.",
+      "aemet_weekly_unavailable": "⚠️ AEMET al momento non restituisce una serie oraria a 7 giorni per questa stazione.",
+      "aemet_weekly_caption": "Endpoint orario a 7 giorni senza dati o copertura per questa stazione in questo momento.",
+      "no_theta_e": "⚠️ Non ci sono dati sufficienti per calcolare la tendenza di θe in questo periodo.",
+      "no_vapor_pressure": "⚠️ Non ci sono dati sufficienti per calcolare la tendenza di e in questo periodo.",
+      "no_mixing_ratio": "⚠️ Non ci sono dati sufficienti per calcolare la tendenza del rapporto di mescolanza in questo periodo.",
+      "no_pressure": "⚠️ Non ci sono dati sufficienti per calcolare la tendenza della pressione in questo periodo."
+    },
+    "notes": {
+      "provider_insufficient_data": "Il provider non dispone di dati sufficienti.",
+      "provider_coverage_title": "Copertura del provider",
+      "synoptic_insufficient_coverage": "Il provider non restituisce una serie abbastanza lunga per calcolare la tendenza sinottica settimanale.",
+      "meteogalicia_max_coverage": "La copertura massima del provider è 72 ore.",
+      "metoffice_48h_coverage": "Met Office Land Observations fornisce fino alle ultime 48 ore per stazione.",
+      "uv_insufficient": "La stazione non dispone ora di dati sufficienti di vento e direzione per calcolare le componenti u/v.",
+      "missing_sensors": "La stazione non dispone di {sensors}, quindi {calculations} non possono essere calcolati."
+    },
+    "sensor_titles": {
+      "unavailable": "Sensori non disponibili"
+    },
+    "sensors": {
+      "barometer": "barometro",
+      "barometer_series": "serie del barometro",
+      "hygrometer": "igrometro"
+    },
+    "calculations": {
+      "theta_e": "tendenza di θe",
+      "vapor_pressure": "tendenza della pressione di vapore",
+      "mixing_ratio": "tendenza del rapporto di mescolanza",
+      "pressure": "tendenza della pressione"
+    },
+    "tooltips": {
+      "theta_e": "Grandezza che rappresenta congiuntamente temperatura dell’aria, umidità e pressione. Si conserva approssimativamente durante salite e discese adiabatiche umide, quindi è utile per identificare cambiamenti di massa d’aria. Le variazioni in superficie possono essere causate da riscaldamento o raffreddamento radiativo, cambiamenti del contenuto di umidità, rimescolamento verticale o avvezione.",
+      "mixing_ratio": "Rapporto di mescolanza (r). Massa di vapore acqueo per unità di massa di aria secca. Le sue variazioni aiutano a rilevare cambiamenti del contenuto di umidità atmosferica e possono indicare l’arrivo di una massa d’aria più secca o più umida. Possono anche essere causate da evaporazione, precipitazione o rimescolamento verticale.",
+      "uv": "Scomposizione vettoriale del vento nelle componenti zonale e meridionale. La componente u (zonale) rappresenta il moto ovest-est: valori positivi indicano vento proveniente da ovest e valori negativi da est. La componente v (meridionale) rappresenta il moto sud-nord: valori positivi indicano vento proveniente da sud e valori negativi da nord. Questo permette di analizzare separatamente l’intensità dell’avvezione zonale e meridionale."
+    },
+    "charts": {
+      "theta_e_title": "Tendenza della temperatura potenziale equivalente (θe)",
+      "theta_e_axis": "dθe/dt (K/h)",
+      "vapor_pressure_title": "Tendenza della pressione di vapore (e)",
+      "vapor_pressure_axis": "de/dt (hPa/h)",
+      "mixing_ratio_title": "Tendenza del rapporto di mescolanza (r)",
+      "mixing_ratio_axis": "dr/dt (g/kg/h)",
+      "uv_title": "Componenti del vento",
+      "uv_u": "u (zonale)",
+      "uv_v": "v (meridionale)",
+      "uv_axis": "Velocità (km/h)",
+      "pressure_title": "Tendenza della pressione assoluta (intervallo 3 h)",
+      "pressure_axis": "dp/dt (hPa/h)"
+    },
+    "errors": {
+      "theta_e": "Errore nel calcolo della tendenza di θe: {error}",
+      "vapor_pressure": "Errore nel calcolo della tendenza di e: {error}",
+      "mixing_ratio": "Errore nel calcolo della tendenza del rapporto di mescolanza: {error}",
+      "uv": "Errore nel calcolo delle componenti del vento (u/v): {error}",
+      "pressure": "Errore nel calcolo della tendenza della pressione: {error}"
+    }
+  },
+  "info": {
+    "coming_soon": "Sezione in sviluppo - In arrivo",
+    "description": "Questa sezione conterrà contenuti didattici di meteorologia."
+  },
+  "map": {
+    "section_title": "Mappa delle stazioni",
+    "location_title": "Posizione",
+    "use_my_location": "📍 Usa la mia posizione attuale",
+    "waiting_geolocation": "In attesa del permesso di geolocalizzazione o della risposta del browser...",
+    "gps_unavailable": "Impossibile leggere la posizione GPS del browser. Controlla i permessi del sito.",
+    "geo_error_default": "Impossibile ottenere la posizione del browser.",
+    "browser_detail": "Dettaglio browser: {detail}",
+    "geo_detected": "Posizione rilevata.",
+    "geo_detected_accuracy": "Posizione rilevata (±{accuracy:.0f} m).",
+    "coords_swapped": " Coordinate invertite corrette.",
+    "center_current": "Centro attuale: {lat:.4f}, {lon:.4f}",
+    "filters_title": "Filtri",
+    "providers_menu_title": "Provider",
+    "providers_menu_caption": "Attiva i provider per mostrare le loro stazioni sulla mappa.",
+    "nearby_providers": "Provider vicini",
+    "far_providers": "Provider lontani",
+    "sensor_filter": "Sensori",
+    "historical_only": "Mostra solo stazioni con dati storici",
+    "hide_historical_only": "Nascondi stazioni storiche",
+    "hide_historical_only_help": "Le stazioni storiche non registrano più dati, ma il loro archivio storico può essere consultato.",
+    "country_search": "Cerca paese…",
+    "country_clear": "Cancella filtro",
+    "sensor_filter_clear": "Cancella",
+    "filters_caption": "La mappa mostra prima i provider vicini al centro attuale. Quelli lontani vengono aggiunti manualmente.",
+    "sensor_filter_caption": "Per ora il filtro sensori non si applica a NWS.",
+    "visible_stations": "Stazioni visibili",
+    "providers": "Provider",
+    "no_stations": "Nessuna stazione disponibile per i filtri correnti.",
+    "selected_station": "Stazione selezionata",
+    "autoconnect": "Connetti automaticamente all’avvio",
+    "autoconnect_saved": "Connessione automatica salvata per {station}.",
+    "autoconnect_save_error": "Impossibile salvare la connessione automatica per la stazione selezionata.",
+    "autoconnect_disabled": "Connessione automatica disattivata su questo dispositivo.",
+    "connect_success": "Connesso a {station}. Ora puoi vedere i dati in Osservazione.",
+    "connect_error": "Impossibile connettere la stazione selezionata.",
+    "select_station_hint": "Fai clic su una stazione sulla mappa per vedere i dettagli e connetterla.",
+    "table_showing": "Mostro nella tabella le {count} stazioni più vicine.",
+    "table_columns": {
+      "station": "Stazione",
+      "provider": "Fornitore",
+      "id": "ID",
+      "locality": "Località",
+      "altitude": "Quota (m)",
+      "distance": "Distanza (km)",
+      "lat": "Lat",
+      "lon": "Lon"
+    },
+    "sensors": {
+      "thermometer": "Termometro",
+      "hygrometer": "Igrometro",
+      "barometer": "Barometro",
+      "anemometer": "Anemometro",
+      "wind_vane": "Banderuola",
+      "rain_gauge": "Pluviometro",
+      "pyranometer": "Piranometro",
+      "uv": "UV"
+    }
+  },
+  "station_selector": {
+    "search_near_me": "📍 Trova stazioni vicino a me",
+    "requesting_geo": "Richiesta della posizione GPS al browser...",
+    "waiting_geo": "In attesa della risposta di geolocalizzazione del browser...",
+    "gps_unavailable": "Non sono riuscito a leggere la posizione GPS del browser. Controlla i permessi di posizione del sito.",
+    "geo_error_default": "Impossibile ottenere la tua posizione GPS.",
+    "browser_detail": "Dettaglio browser: {detail}",
+    "geo_detected": "Posizione GPS rilevata.",
+    "geo_detected_accuracy": "Posizione GPS rilevata (±{accuracy:.0f} m).",
+    "coords_swapped": " Coordinate invertite corrette.",
+    "search_by_city": "Oppure cerca per città/coordinate",
+    "city_optional": "Città (opzionale)",
+    "city_placeholder": "Es. Madrid",
+    "city_help": "Scrivi un luogo per geocodificarlo con Nominatim o regola manualmente lat/lon",
+    "nominatim_caption": "Ricerca testuale geocodificata da Nominatim (OpenStreetMap).",
+    "osm_caption": "Dati geografici © contributori OpenStreetMap (ODbL).",
+    "latitude": "Latitudine",
+    "latitude_help": "Esempio: 40.42",
+    "longitude": "Longitudine",
+    "longitude_help": "Esempio: -3.70",
+    "search_with_data": "🔎 Cerca con questi valori",
+    "nominatim_result": "Risultato Nominatim: {result}",
+    "nearby_title": "🎯 Stazioni vicine",
+    "no_nearby": "⚠️ Nessuna stazione vicina trovata",
+    "autoconnect": "Connetti automaticamente all’avvio",
+    "autoconnect_saved": "✅ Connessione automatica salvata per {station}",
+    "autoconnect_save_error": "Impossibile salvare la connessione automatica",
+    "autoconnect_disabled": "Connessione automatica disattivata su questo dispositivo.",
+    "distance": "Distanza",
+    "connect_success": "✅ Connesso a {station} ({provider})"
+  },
+  "months": {
+    "long": {
+      "1": "Gennaio",
+      "2": "Febbraio",
+      "3": "Marzo",
+      "4": "Aprile",
+      "5": "Maggio",
+      "6": "Giugno",
+      "7": "Luglio",
+      "8": "Agosto",
+      "9": "Settembre",
+      "10": "Ottobre",
+      "11": "Novembre",
+      "12": "Dicembre"
+    },
+    "short": {
+      "1": "Gen",
+      "2": "Feb",
+      "3": "Mar",
+      "4": "Apr",
+      "5": "Mag",
+      "6": "Giu",
+      "7": "Lug",
+      "8": "Ago",
+      "9": "Set",
+      "10": "Ott",
+      "11": "Nov",
+      "12": "Dic"
+    }
+  }
+}

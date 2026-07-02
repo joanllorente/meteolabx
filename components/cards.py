@@ -127,7 +127,7 @@ def _load_definitions() -> dict:
     return definitions
 
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=5)
 def _load_i18n_definitions(lang: str) -> dict:
     lang = str(lang or "").strip().lower()
     if lang == "es":
@@ -175,9 +175,15 @@ def _card_tooltip_text(title: str, tooltip_key: str = "") -> str:
         if lang == "es":
             extra = "- Energía hoy: integración de la irradiancia solar desde las 00:00 hasta ahora, expresada en MJ/m²."
             fallback = "Radiación solar instantánea medida por piranómetro."
+        elif lang == "ca":
+            extra = "- Energia avui: integració de la irradiància solar des de les 00:00 fins ara, expressada en MJ/m²."
+            fallback = "Radiació solar instantània mesurada pel piranòmetre."
         elif lang == "fr":
             extra = "- Énergie du jour: intégration de l'irradiance solaire de 00:00 jusqu'à maintenant, exprimée en MJ/m²."
             fallback = "Rayonnement solaire instantané mesuré par pyranomètre."
+        elif lang == "it":
+            extra = "- Energia oggi: integrazione dell'irradianza solare dalle 00:00 fino a ora, espressa in MJ/m²."
+            fallback = "Radiazione solare istantanea misurata dal piranometro."
         else:
             extra = "- Energy today: integration of solar irradiance from 00:00 until now, expressed in MJ/m²."
             fallback = "Instantaneous solar radiation measured by pyranometer."
@@ -188,9 +194,15 @@ def _card_tooltip_text(title: str, tooltip_key: str = "") -> str:
         if lang == "es":
             extra = "- Culminación: altura máxima que alcanza el Sol ese día al pasar por el meridiano local."
             fallback = "Altura angular del Sol sobre el horizonte."
+        elif lang == "ca":
+            extra = "- Culminació: altura màxima que assoleix el Sol aquell dia en passar pel meridià local."
+            fallback = "Altura angular del Sol sobre l'horitzó."
         elif lang == "fr":
             extra = "- Culmination: hauteur maximale atteinte par le Soleil ce jour-là lors de son passage au méridien local."
             fallback = "Hauteur angulaire du Soleil au-dessus de l'horizon."
+        elif lang == "it":
+            extra = "- Culminazione: altezza massima raggiunta dal Sole quel giorno al passaggio sul meridiano locale."
+            fallback = "Altezza angolare del Sole sopra l'orizzonte."
         else:
             extra = "- Culmination: maximum solar altitude reached that day when the Sun crosses the local meridian."
             fallback = "Angular height of the Sun above the horizon."

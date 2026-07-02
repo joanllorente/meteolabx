@@ -12,7 +12,6 @@ from utils.api_client import fetch_geocode_via_api
 from utils.i18n import t
 from utils.provider_state import (
     apply_station_selection,
-    clear_provider_runtime_cache,
     disable_provider_autoconnect,
     persist_provider_autoconnect_target,
 )
@@ -482,28 +481,3 @@ def render_station_selector():
                 st.markdown("---")
 
 
-def show_provider_connection_status():
-    """Muestra estado de conexión en sidebar para proveedores que lo requieren."""
-    if not st.session_state.get("connected"):
-        return
-
-    provider_id = st.session_state.get("connection_type", "")
-    if provider_id != "AEMET":
-        return
-
-    station_name = st.session_state.get("aemet_station_name")
-    station_id = st.session_state.get("aemet_station_id")
-    station_alt = st.session_state.get("aemet_station_alt")
-
-    st.sidebar.markdown(f"### {t('sidebar.provider_status.connected_to', provider=provider_id)}")
-    st.sidebar.markdown(f"**{station_name}**")
-    st.sidebar.caption(t("sidebar.provider_status.station_id", station_id=station_id))
-    st.sidebar.caption(t("sidebar.provider_status.altitude", altitude=station_alt))
-
-    if st.sidebar.button(
-        t("sidebar.buttons.refresh"),
-        width="stretch",
-        help=t("sidebar.provider_status.refresh_help"),
-    ):
-        clear_provider_runtime_cache(provider_id)
-        st.rerun()

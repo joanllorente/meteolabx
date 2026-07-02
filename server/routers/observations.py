@@ -14,6 +14,7 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -949,6 +950,9 @@ def _build_daily_extremes(
     provider_extremes = series_dict.get("daily_extremes", {})
     if not isinstance(provider_extremes, dict):
         provider_extremes = {}
+    current_extremes = current.get("daily_extremes", {})
+    if not isinstance(current_extremes, dict):
+        current_extremes = {}
 
     if str(provider or "").strip().upper() == "METEOCAT":
         # Meteocat publica extremos diarios específicos: 40=Tx, 42=Tn,
@@ -1027,6 +1031,9 @@ def _build_daily_extremes(
         provider_value = provider_extremes.get(key)
         if isinstance(provider_value, (int, float)) and not _is_nan_value(float(provider_value)):
             return float(provider_value)
+        current_value = current_extremes.get(key)
+        if isinstance(current_value, (int, float)) and not _is_nan_value(float(current_value)):
+            return float(current_value)
         return _series_extreme(values, fn)
 
     return DailyExtremes(

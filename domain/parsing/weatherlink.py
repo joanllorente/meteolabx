@@ -8,11 +8,13 @@ imperiales→métricas) sin importar ``streamlit``.
 
 from __future__ import annotations
 
-import hashlib
+import logging
 import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+logger = logging.getLogger(__name__)
 
 INHG_TO_HPA = 33.8638866667
 MPH_TO_KMH = 1.609344
@@ -57,14 +59,6 @@ def _inch_to_mm(value: Any) -> float:
 def _inhg_to_hpa(value: Any) -> float:
     parsed = _safe_float(value)
     return parsed * INHG_TO_HPA if not _is_nan(parsed) else float("nan")
-
-
-def _key_hash(value: str) -> str:
-    return hashlib.sha1(str(value or "").strip().encode("utf-8")).hexdigest()[:12]
-
-
-def _credential_hash(api_key: str, api_secret: str) -> str:
-    return _key_hash(f"{str(api_key or '').strip()}:{str(api_secret or '').strip()}")
 
 
 def _station_id(station: Dict[str, Any]) -> str:
@@ -178,13 +172,6 @@ def _values_from_records(records: List[Tuple[int, int, int, Dict[str, Any]]], ke
 
 def _with_fallback(value: float, fallback: float) -> float:
     return fallback if _is_nan(value) else value
-
-
-def _series_date_key(epoch: int) -> str:
-    try:
-        return datetime.fromtimestamp(int(epoch)).date().isoformat()
-    except Exception:
-        return ""
 
 
 def _valid_values(values: Iterable[Any]) -> List[float]:
@@ -329,48 +316,6 @@ def normalize_weatherlink_historic_series(payload: Dict[str, Any], altitude_m: A
     return series
 
 
-def _merge_weatherlink_series(historic: Dict[str, Any], current: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(historic, dict) or not historic.get("has_data"):
-        return current if isinstance(current, dict) else {}
-    if not isinstance(current, dict) or not current.get("epochs"):
-        return historic
-
-    series_keys = (
-        "epochs", "temps", "humidities", "dewpts",
-        "pressures_abs", "pressures_msl", "winds", "gusts",
-        "wind_dirs", "precips", "solar_radiations", "uv_indexes",
-    )
-    merged = {key: list(historic.get(key, [])) for key in series_keys}
-    current_epoch = int(_safe_float(current.get("epochs", [0])[-1], 0) or 0)
-    if current_epoch <= 0:
-        merged["has_data"] = True
-        if "daily_extremes" in historic:
-            merged["daily_extremes"] = historic["daily_extremes"]
-        return merged
-
-    if merged["epochs"] and current_epoch <= int(_safe_float(merged["epochs"][-1], 0) or 0):
-        target_index = len(merged["epochs"]) - 1
-    else:
-        merged["epochs"].append(current_epoch)
-        target_index = len(merged["epochs"]) - 1
-        for key in series_keys:
-            if key != "epochs":
-                merged.setdefault(key, []).append(float("nan"))
-
-    current_index = len(current.get("epochs", [])) - 1
-    for key in series_keys:
-        if key == "epochs":
-            continue
-        values = current.get(key, [])
-        if current_index < len(values):
-            merged[key][target_index] = values[current_index]
-
-    merged["has_data"] = True
-    if "daily_extremes" in historic:
-        merged["daily_extremes"] = historic["daily_extremes"]
-    return merged
-
-
 def _empty_weatherlink_series() -> Dict[str, Any]:
     return {
         "epochs": [],
@@ -395,32 +340,6 @@ def _series_keys() -> Tuple[str, ...]:
         "pressures_abs", "pressures_msl", "winds", "gusts",
         "wind_dirs", "precips", "solar_radiations", "uv_indexes",
     )
-
-
-def _sort_dedupe_series(series: Dict[str, Any]) -> Dict[str, Any]:
-    epochs = list(series.get("epochs", []) or [])
-    rows: List[Tuple[int, int]] = []
-    for index, epoch in enumerate(epochs):
-        epoch_int = int(_safe_float(epoch, 0) or 0)
-        if epoch_int > 0:
-            rows.append((epoch_int, index))
-    rows.sort(key=lambda item: item[0])
-
-    deduped = _empty_weatherlink_series()
-    seen: set[int] = set()
-    for epoch_int, index in rows:
-        if epoch_int in seen:
-            continue
-        seen.add(epoch_int)
-        deduped["epochs"].append(epoch_int)
-        for key in _series_keys():
-            if key == "epochs":
-                continue
-            values = list(series.get(key, []) or [])
-            deduped[key].append(values[index] if index < len(values) else float("nan"))
-
-    deduped["has_data"] = bool(deduped["epochs"])
-    return deduped
 
 
 def _latest_epoch(records: List[Tuple[int, int, int, Dict[str, Any]]], payload: Dict[str, Any]) -> int:
@@ -497,7 +416,6 @@ def normalize_weatherlink_current(payload: Dict[str, Any], station: Optional[Dic
     uv = _first_from_records(records, ("uv_index", "uv_index_hi", "uv_index_avg"))
     heat_index_c = _first_from_records(records, ("heat_index", "heat_index_out", "thw_index"), convert=_f_to_c)
     wind_chill_c = _first_from_records(records, ("wind_chill", "wind_chill_last"), convert=_f_to_c)
-    wet_bulb_c = _first_from_records(records, ("wet_bulb",), convert=_f_to_c)
     temp_max_c = _first_from_records(
         records,
         (

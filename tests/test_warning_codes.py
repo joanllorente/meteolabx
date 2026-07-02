@@ -15,9 +15,10 @@ from pathlib import Path
 import pytest
 
 from domain import observation_warnings as ow
+from utils.i18n import get_supported_languages
 
 _LOCALES = Path(__file__).resolve().parent.parent / "locales"
-_LANGS = ("es", "en", "fr")
+_LANGS = tuple(get_supported_languages())
 
 # Cada código + un ejemplo representativo de sus params.
 _SAMPLES = {

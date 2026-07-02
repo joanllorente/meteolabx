@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from html import escape
 
 import streamlit as st
@@ -535,9 +535,6 @@ def render_trends_tab(ctx):
                 day_end = today_source["day_end"]
                 grid = today_source["grid"]
                 series_step_min = today_source["series_step_min"]
-                interval_theta_e = today_source["interval_theta_e"]
-                interval_e = today_source["interval_e"]
-                interval_p = today_source["interval_p"]
                 dataset_ready = True
         else:
             st.markdown(t("trends.derivatives_synoptic"))
@@ -568,9 +565,6 @@ def render_trends_tab(ctx):
                     day_start = synoptic_source["day_start"]
                     day_end = synoptic_source["day_end"]
                     series_step_min = synoptic_source["series_step_min"]
-                    interval_theta_e = synoptic_source["interval_theta_e"]
-                    interval_e = synoptic_source["interval_e"]
-                    interval_p = synoptic_source["interval_p"]
                     provider_coverage_limited = bool(synoptic_source.get("coverage_limited", False))
                     dataset_ready = not provider_coverage_limited
 

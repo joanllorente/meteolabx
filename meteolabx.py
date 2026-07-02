@@ -4,7 +4,6 @@ Aplicación principal
 """
 import time as _time_boot
 import os as _os_boot
-import sys as _sys_boot
 _BOOT_T0 = _time_boot.perf_counter()
 _BOOT_LAST = _BOOT_T0
 _BOOT_ENABLED = _os_boot.environ.get("MLX_BOOT_PROFILE", "1") != "0"
@@ -91,23 +90,20 @@ import time
 import math
 import logging
 import html
-import os
 import hashlib
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 _boot_mark("stdlib imports")
 
 # Imports locales
-from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, LS_AUTOCONNECT, RD
+from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, RD
 _boot_mark("import config")
-from data_files import METOFFICE_STATIONS_PATH, STATION_CATALOG_TOTAL
+from data_files import METOFFICE_STATIONS_PATH, STATION_CATALOG_TOTAL, STATIONS_DB_PATH
 _boot_mark("import data_files")
-from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, fmt_hpa, month_name, t, t_list
+from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, month_name, t, t_list
 _boot_mark("import utils")
 from utils.storage import (
     flush_local_storage_writes,
-    set_local_storage,
-    set_stored_autoconnect_target,
     get_stored_autoconnect,
     get_stored_autoconnect_target,
 )
@@ -154,13 +150,9 @@ from utils.state_keys import (
     CONNECTION_TYPE,
     ELEVATION_SOURCE,
     LAST_UPDATE_TIME,
-    PENDING_ACTIVE_TAB,
     PROVIDER_STATION_ALT,
     PROVIDER_STATION_ID,
-    PROVIDER_STATION_LAT,
-    PROVIDER_STATION_LON,
     PROVIDER_STATION_NAME,
-    PROVIDER_STATION_TZ,
     STATION_ELEVATION,
     STATION_LAT,
     STATION_LON,
@@ -169,7 +161,6 @@ from utils.units import (
     convert_precip,
     convert_pressure,
     convert_radiation,
-    convert_radiation_energy,
     convert_temperature,
     convert_temperature_delta,
     convert_wind,
@@ -178,7 +169,6 @@ from utils.units import (
     format_radiation,
     format_radiation_energy,
     format_temperature,
-    format_temperature_delta,
     format_wind,
     normalize_unit_preferences,
     precip_unit_label,
@@ -450,10 +440,7 @@ def _process_standard_provider_connection(provider_id: str):
 
     try:
         from frontend.dashboard_payload import build_dashboard_payload
-        from utils.api_client import (
-            fetch_provider_current_processed_via_api,
-            fetch_provider_recent_series_via_api_strict,
-        )
+        from utils.api_client import fetch_provider_current_processed_via_api
 
         station_id = _get_provider_station_id(provider_id)
         if not station_id:
@@ -485,22 +472,19 @@ def _process_standard_provider_connection(provider_id: str):
             **credentials,
         )
 
+        # La serie sinóptica de 7 días NO se pide aquí: para proveedores lentos
+        # (AEMET puede tardar 15-60 s o fallar con 404/429) bloqueaba la
+        # conexión —y cada rerun del ciclo de conexión y cada autorefresh la
+        # repetía—, dejando la página clavada tras conectar desde el Ranking.
+        # La pestaña Tendencias la trae bajo demanda con su propio spinner
+        # (_fetch_trends_synoptic_series) y la persiste en session_state; aquí
+        # solo la reutilizamos si ya está en el estado para esta estación.
         recent_series = None
         if str(config.get("series_mode", "none")).strip().lower() == "from_base":
-            try:
-                recent_series = fetch_provider_recent_series_via_api_strict(
-                    provider_id,
-                    station_id,
-                    days_back=7,
-                    station_elevation=user_elevation if user_elevation > 0 else None,
-                    **credentials,
-                )
-            except BackendApiError as exc:
-                logger.info(
-                    "Backend %s recent series fallo (%s); usando serie diaria",
-                    provider_id,
-                    exc.kind,
-                )
+            if series_owner_matches(st.session_state, "trend_hourly", provider_id, station_id):
+                state_series = series_from_state(st.session_state, "trend_hourly")
+                if state_series.get("has_data") or state_series.get("epochs"):
+                    recent_series = state_series
 
         dashboard = build_dashboard_payload(processed_response, recent_series=recent_series)
         derivatives = process_standard_provider(
@@ -743,6 +727,16 @@ def _fetch_trends_synoptic_series(provider_id: str):
         from utils.api_client import fetch_provider_recent_series_via_api_strict
 
         source_label = t(str(provider_feature.get("synoptic_source_key", "")).strip())
+
+        # Negative cache: si el fetch acaba de fallar (proveedores lentos como
+        # AEMET pueden tardar 15-60 s en fallar), no lo repitas en cada rerun
+        # de la pestaña; muestra el aviso y reintenta pasada la ventana.
+        fail_key = f"_trends_synoptic_fail_{provider_id}_{station_id}"
+        fail_info = st.session_state.get(fail_key)
+        if isinstance(fail_info, dict) and (time.time() - float(fail_info.get("at", 0))) < 120:
+            _render_trends_synoptic_warning(str(fail_info.get("kind", "")))
+            return _empty_synoptic_series(), source_label
+
         credentials = {}
         if provider_id == "WEATHERLINK":
             credentials = {
@@ -751,13 +745,13 @@ def _fetch_trends_synoptic_series(provider_id: str):
             }
         try:
             with st.spinner("Obteniendo serie sinóptica reciente..."):
-                return fetch_provider_recent_series_via_api_strict(
+                hourly7d = fetch_provider_recent_series_via_api_strict(
                     provider_id,
                     station_id,
                     days_back=7,
                     station_elevation=station_elevation if station_elevation > 0 else None,
                     **credentials,
-                ), source_label
+                )
         except BackendApiError as exc:
             # El backend no pudo servir la serie sinóptica (rate limit del
             # proveedor, timeout, backend caído…). No reventamos la pestaña:
@@ -766,19 +760,32 @@ def _fetch_trends_synoptic_series(provider_id: str):
             logger.warning(
                 "Serie sinóptica %s no disponible (%s)", provider_id, exc.kind,
             )
-            if exc.kind == "ratelimit":
-                st.warning(
-                    "⚠️ El proveedor ha limitado las peticiones (rate limit). "
-                    "La serie de tendencias no está disponible ahora mismo; "
-                    "reinténtalo en unos minutos."
-                )
-            else:
-                st.warning(
-                    "⚠️ No se pudo obtener la serie de tendencias ahora mismo. "
-                    "Reinténtalo en unos minutos."
-                )
+            st.session_state[fail_key] = {"at": time.time(), "kind": str(exc.kind)}
+            _render_trends_synoptic_warning(str(exc.kind))
             return _empty_synoptic_series(), source_label
+        st.session_state.pop(fail_key, None)
+        # Persistir en session_state (con ownership) para que los siguientes
+        # renders de Tendencias —y el pipeline de Observación vía
+        # _process_standard_provider_connection— reutilicen la serie sin
+        # volver a pedirla al backend.
+        stored = store_trend_hourly_series(st.session_state, hourly7d)
+        _set_trend_hourly_series_owner(provider_id, station_id)
+        return stored, source_label
     return state_hourly7d, state_source_label
+
+
+def _render_trends_synoptic_warning(kind: str) -> None:
+    if kind == "ratelimit":
+        st.warning(
+            "⚠️ El proveedor ha limitado las peticiones (rate limit). "
+            "La serie de tendencias no está disponible ahora mismo; "
+            "reinténtalo en unos minutos."
+        )
+    else:
+        st.warning(
+            "⚠️ No se pudo obtener la serie de tendencias ahora mismo. "
+            "Reinténtalo en unos minutos."
+        )
 
 
 def _build_observation_tab_context() -> dict:
@@ -827,16 +834,7 @@ def _build_observation_tab_context() -> dict:
                 ).strip(),
             )
             timeseries = dict(dashboard.get("series") or {})
-            chart_epochs = timeseries.get("epochs", [])
-            chart_temps = timeseries.get("temps", [])
-            chart_humidities = timeseries.get("humidities", [])
-            chart_dewpts = timeseries.get("dewpts", [])
             chart_pressures = timeseries.get("pressures_abs", []) or []
-            chart_uv_indexes = timeseries.get("uv_indexes", [])
-            chart_solar_radiations = timeseries.get("solar_radiations", [])
-            chart_winds = timeseries.get("winds", [])
-            chart_gusts = timeseries.get("gusts", [])
-            chart_wind_dirs = timeseries.get("wind_dirs", [])
             chart_precips = timeseries.get("precips", [])
 
             ts_lat = timeseries.get("lat", float("nan"))
@@ -992,6 +990,14 @@ MAP_CATALOG_FILTER_CACHE_VERSION = 2
 def _build_map_tab_context() -> dict:
     def _map_catalog_cache_version(provider_ids: tuple[str, ...]) -> tuple[tuple[str, int], ...]:
         versions = [("COUNTRY_FILTER", MAP_CATALOG_FILTER_CACHE_VERSION)]
+        # mtime del catálogo SQLite: si el catálogo cambia (rebuild, reparación
+        # de flags IEM…), las cachés del mapa (st.cache_data y las de sesión)
+        # deben invalidarse; sin esto una sesión abierta seguía sirviendo
+        # estaciones con flags antiguos indefinidamente.
+        try:
+            versions.append(("STATIONS_DB", int(_Path(STATIONS_DB_PATH).stat().st_mtime_ns)))
+        except Exception:
+            versions.append(("STATIONS_DB", 0))
         provider_set = {coerce_str(provider_id, upper=True) for provider_id in provider_ids}
         if "METOFFICE" in provider_set:
             try:
@@ -1526,6 +1532,20 @@ def _apply_observation_side_effects(result) -> None:
     apply_observation_effects(result, st.session_state, handlers)
 
 
+def _remember_provider_catalog_altitude(provider_name: str, station_id: str, station: dict) -> None:
+    """Persist catalog altitude from the backend station block for the active station."""
+    prefix = coerce_str(provider_name, upper=True).lower()
+    if not prefix or not station_id or not isinstance(station, dict):
+        return
+    elevation = _first_valid_float(station.get("elevation"), default=float("nan"))
+    if is_nan(elevation):
+        return
+    st.session_state["provider_station_catalog_alt"] = elevation
+    st.session_state["provider_station_catalog_station_id"] = station_id
+    st.session_state[f"{prefix}_station_catalog_alt"] = elevation
+    st.session_state[f"{prefix}_station_catalog_station_id"] = station_id
+
+
 def process_standard_provider(
     dashboard: DashboardPayload,
     provider_name: str,
@@ -1539,12 +1559,29 @@ def process_standard_provider(
     historial y ownership de series); nunca recalcula termodinámica, presión,
     radiación o ET0 como fallback.
     """
-    observation = dashboard.observation
+    observation = dict(dashboard.observation)
     station = dashboard.station
+    for key in ("lat", "lon", "elevation"):
+        current_value = observation.get(key)
+        station_value = station.get(key)
+        if (
+            station_value is not None
+            and station_value != ""
+            and (
+                current_value is None
+                or current_value == ""
+                or (isinstance(current_value, float) and math.isnan(current_value))
+            )
+        ):
+            observation[key] = station_value
     ctx = _PipelineContext(
         provider_name=provider_name,
         elevation_fallback=float(
-            st.session_state.get(elevation_fallback_key, 0) or 0
+            _first_valid_float(
+                station.get("elevation"),
+                st.session_state.get(elevation_fallback_key, 0),
+                default=0.0,
+            )
         ),
         provider_for_pressure=str(
             st.session_state.get(CONNECTION_TYPE, provider_name) or provider_name
@@ -1567,6 +1604,7 @@ def process_standard_provider(
     )
     effects = prepare_observation_effects(observation, ctx)
     _apply_observation_side_effects(effects)
+    _remember_provider_catalog_altitude(provider_name, ctx.owner_station_id, station)
 
     for warning in dashboard.warnings:
         logger.info("Backend %s /processed warning: %s", provider_name, warning)
@@ -1652,10 +1690,6 @@ radiation_energy_unit_txt = radiation_energy_unit_label(radiation_unit_pref)
 
 def _fmt_temp_display(value, decimals: int = 1) -> str:
     return format_temperature(value, temp_unit_pref, decimals=decimals)
-
-
-def _fmt_temp_delta_display(value, decimals: int = 1) -> str:
-    return format_temperature_delta(value, temp_unit_pref, decimals=decimals)
 
 
 def _fmt_wind_display(value, decimals: int = 1) -> str:
@@ -3559,17 +3593,6 @@ def _pressure_decimals_for_provider(provider_id: str) -> int:
     return 0 if str(provider_id).strip().upper() == "WU" else 1
 
 
-def _fmt_pressure_for_provider(value, provider_id: str) -> str:
-    try:
-        v = float(value)
-    except Exception:
-        return "—"
-    if is_nan(v):
-        return "—"
-    decimals = _pressure_decimals_for_provider(provider_id)
-    return f"{v:.{decimals}f}"
-
-
 def _total_catalog_stations() -> int:
     return int(STATION_CATALOG_TOTAL)
 
@@ -3971,8 +3994,10 @@ if connected and int(base.get("epoch", 0) or 0) > 0:
         station=station_info,
     )
 
-# Mostrar metadata si está conectado (común para AEMET y WU)
-if connected:
+# Mostrar metadata si está conectado (común para AEMET y WU). Sin epoch
+# válido (p. ej. estación de archivo sin observación actual) no hay "último
+# dato" que mostrar: pintar epoch=0 enseñaba "01-01-1970" y una edad absurda.
+if connected and int(base.get("epoch", 0) or 0) > 0:
     browser_tz_name = str(
         st.session_state.get("browser_tz") or st.query_params.get("_tz", "")
     ).strip()
@@ -4210,7 +4235,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 
 
 def _whats_new_footer_html() -> str:
