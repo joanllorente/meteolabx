@@ -356,10 +356,14 @@ def _read_stored_text(item_key: str, getter_key: str) -> str:
     has_value, value = _read_cached_or_snapshot_item(item_key)
     if has_value:
         return value
-    storage = _get_local_storage()
-    if storage is None:
-        return ""
-    return _read_ls_item(storage, item_key, getter_key)
+    # Sin fallback a ``streamlit_local_storage``: su constructor monta un iframe
+    # de ~2.4MB y BLOQUEA el hilo del script (while + time.sleep) hasta que el
+    # navegador responde, lo que en el primer run de cada sesión retrasa el
+    # primer render varios segundos. Todas las keys que se leen en la app están
+    # en LOCAL_STORAGE_BOOTSTRAP_KEYS, así que el bridge propio las trae en el
+    # snapshot (las ausentes llegan como "") y fuerza un rerun de hidratación;
+    # antes de ese rerun devolvemos "" igual que haría un localStorage vacío.
+    return ""
 
 
 def get_stored_station():

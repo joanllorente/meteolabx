@@ -13,8 +13,10 @@ import streamlit as st
 DEFAULT_LANG = "es"
 SUPPORTED_LANGUAGES = {
     "es": "Español",
+    "ca": "Català",
     "en": "English",
     "fr": "Français",
+    "it": "Italiano",
 }
 
 _LOCALES_DIR = Path(__file__).resolve().parent.parent / "locales"

@@ -4210,7 +4210,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 
 
 def _whats_new_footer_html() -> str:
