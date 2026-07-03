@@ -4,8 +4,6 @@ Cálculos de tendencias meteorológicas
 Todas las variables calculadas a partir de T, RH y p_abs
 """
 import math
-import numpy as np
-import pandas as pd
 
 
 # Constantes físicas
@@ -153,6 +151,12 @@ def calculate_trend(values, times, interval_minutes=10):
     Adaptado para series irregulares: la tolerancia temporal se ajusta
     automáticamente según la resolución real de la serie.
     """
+    # Import lazy: pandas/numpy solo se necesitan aquí. Mantenerlos fuera
+    # del scope de módulo evita pagar ~0,7s de import al arrancar el
+    # backend (server.main llega hasta aquí vía routers/observations).
+    import numpy as np
+    import pandas as pd
+
     trends = []
 
     # Convertir times a DatetimeIndex si no lo es
@@ -184,7 +188,9 @@ def calculate_trend(values, times, interval_minutes=10):
     tolerance = max(tolerance_candidates)
 
     for i, t in enumerate(times):
-        target_time = t - pd.Timedelta(minutes=interval_minutes)
+        # (valor, unit=) en vez de kwarg: pd.Timedelta(minutes=...) dispara
+        # DeprecationWarning con numpy>=2.5 (unidad "generic" deprecada).
+        target_time = t - pd.Timedelta(interval_minutes, unit="min")
 
         time_diffs_td = np.abs(times - target_time)
         if hasattr(time_diffs_td, 'total_seconds'):

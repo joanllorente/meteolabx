@@ -122,11 +122,22 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     # Ranking diario: store en memoria + job horario que rellena los
-    # agregados por proveedor. No persiste entre reinicios (los directos
-    # se rehacen en 1 llamada; AEMET backfillea 12 h).
+    # agregados por proveedor. Con un snapshot en disco (Railway Volume o
+    # ``METEOLABX_RANKING_STATE_PATH``) el estado sobrevive a reinicios y
+    # redeploys: días anteriores del selector y horas acumuladas de
+    # AEMET/Meteo-France incluidos. Sin ruta configurada, comportamiento
+    # histórico (memoria pura).
     from server.services.ranking import RankingStore, refresh_loop
 
+    ranking_state_path = str(getattr(settings, "ranking_state_path", "") or "").strip()
+    if not ranking_state_path:
+        volume_dir = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+        if volume_dir:
+            ranking_state_path = os.path.join(volume_dir, "ranking_state.json.gz")
+
     app.state.ranking_store = RankingStore()
+    if ranking_state_path:
+        app.state.ranking_store.load_from_disk(ranking_state_path)
     ranking_task = asyncio.create_task(
         refresh_loop(
             app.state.ranking_store,
@@ -134,6 +145,7 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
             settings=settings,
             interval_s=float(getattr(settings, "ranking_refresh_interval_s", 1800.0)),
             retry_interval_s=float(getattr(settings, "ranking_retry_interval_s", 60.0)),
+            state_path=ranking_state_path,
         )
     )
 
@@ -145,6 +157,16 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
             await ranking_task
         except asyncio.CancelledError:
             pass
+        # Último volcado antes de apagar: captura lo acumulado desde el
+        # último ciclo (p. ej. horas de Meteo-France de los reintentos).
+        if ranking_state_path:
+            try:
+                app.state.ranking_store.save_to_disk(ranking_state_path)
+            except Exception:
+                logger.warning(
+                    "ranking: no se pudo guardar el snapshot final en %s",
+                    ranking_state_path, exc_info=True,
+                )
         await client.aclose()
 
 

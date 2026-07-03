@@ -27,16 +27,16 @@ from pathlib import Path as _Path
 _boot_mark("import streamlit.components / pathlib")
 
 
-def _resolve_favicon_path() -> str:
+def _resolve_favicon_data_url() -> str:
     """
-    Devuelve un path ABSOLUTO al favicon, evitando dependencia de cwd.
+    Devuelve el favicon como data-URL base64.
 
-    Streamlit acepta un string-path como ``page_icon``; el problema con el
-    string anterior ("favicon.png") era que se resolvía relativo al cwd y
-    en algunos lanzamientos locales fallaba. Usando ``Path(__file__).parent``
-    nos aseguramos de un path estable sin pagar el coste de instanciar
-    ``PIL.Image`` (que ralentizaba el primer render y dejaba los widgets
-    del sidebar sin valor seleccionado hasta el siguiente rerun).
+    Si a ``page_icon`` se le pasa un path, Streamlit lo procesa en cada
+    rerun vía ``image_to_url`` (importa PIL/numpy la primera vez y registra
+    el fichero en el MediaFileManager en las siguientes). Con una URL de
+    esquema ``data:`` entra en el fast path de ``image_to_url`` y se
+    devuelve tal cual, sin tocar PIL. El PNG son ~2 KB: leer + codificar
+    en base64 cuesta microsegundos por rerun.
     """
     candidates = [
         _Path(__file__).parent / "static" / "favicon.png",
@@ -46,11 +46,13 @@ def _resolve_favicon_path() -> str:
     ]
     for candidate in candidates:
         if candidate.is_file():
-            return str(candidate)
+            import base64
+            encoded = base64.b64encode(candidate.read_bytes()).decode("ascii")
+            return f"data:image/png;base64,{encoded}"
     return ""
 
 
-_FAVICON_PATH = _resolve_favicon_path()
+_FAVICON_PATH = _resolve_favicon_data_url()
 
 st.set_page_config(
     page_title="MeteoLabX",
@@ -4235,7 +4237,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.3"
 
 
 def _whats_new_footer_html() -> str:
@@ -4256,7 +4258,7 @@ def _whats_new_footer_html() -> str:
 
     return (
         _release("1.2.0", "footer.improvements", "footer.fixes")
-        + _release("1.1.1", "footer.previous_improvements", "footer.previous_fixes")
+        + _release("1.1.0", "footer.previous_improvements", "footer.previous_fixes")
     )
 
 

@@ -6,3 +6,7 @@ toolbarMode = "minimal"
 
 [server]
 enableStaticServing = true
+
+[browser]
+# Sin telemetría de uso: evita la llamada de red a segment.io en el arranque.
+gatherUsageStats = false

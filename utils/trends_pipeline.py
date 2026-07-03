@@ -188,7 +188,10 @@ def load_synoptic_trends_source(
     df_trends["dt"] = pd.to_datetime(df_trends["dt"]).dt.floor("3h")
     df_trends = df_trends.groupby("dt", as_index=False).last()
     max_dt = df_trends["dt"].max()
-    min_dt = max_dt - pd.Timedelta(days=7)
+    # pd.Timedelta(days=7) dispara DeprecationWarning con numpy>=2.5 (unidad
+    # "generic" deprecada en la conversión interna); la forma (valor, unit=)
+    # no pasa por esa ruta.
+    min_dt = max_dt - pd.Timedelta(7, unit="D")
     df_trends = df_trends[df_trends["dt"] >= min_dt]
     if df_trends.empty:
         logger.warning(f"Tendencia sinóptica {provider_id}: DataFrame vacío tras limitar a 7 días")

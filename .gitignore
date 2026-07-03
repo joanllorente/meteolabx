@@ -13,3 +13,6 @@ __pycache__/
 data/stations.sqlite
 data/iem_stations.sqlite
 data/data_estaciones_iem.json
+
+# Entorno virtual local (Python 3.14)
+.venv/

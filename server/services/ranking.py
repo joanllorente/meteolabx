@@ -1085,6 +1085,96 @@ class RankingStore:
     def mark_refreshed(self) -> None:
         self.updated_at = datetime.now(tz=timezone.utc)
 
+    # ------------------------------------------------------------------
+    # Persistencia en disco (Railway Volume). El store es memoria pura: sin
+    # snapshot, cada redeploy pierde los días anteriores del selector y las
+    # horas acumuladas de AEMET/Meteo-France. Se guarda tras cada ciclo del
+    # refresh_loop y se restaura en el lifespan al arrancar.
+    _STATE_VERSION = 1
+
+    def save_to_disk(self, path: str) -> None:
+        """Vuelca el estado a ``path`` (gzip JSON). Escritura atómica: fichero
+        temporal + ``os.replace``, para que un reinicio a mitad de escritura
+        no deje un snapshot corrupto. Es I/O síncrona: llamar con
+        ``asyncio.to_thread`` desde el event loop."""
+        import gzip
+        import os
+        from dataclasses import asdict
+
+        payload = {
+            "version": self._STATE_VERSION,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            # Las claves tupla (proveedor, día) no son serializables en JSON:
+            # se aplanan a listas [proveedor, día, estaciones].
+            "daily": [
+                [provider, day, {sid: asdict(rec) for sid, rec in stations.items()}]
+                for (provider, day), stations in self._daily.items()
+            ],
+            "hourly": [
+                [provider, day, stations]
+                for (provider, day), stations in self._hourly.items()
+            ],
+        }
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        tmp_path = f"{path}.tmp"
+        with gzip.open(tmp_path, "wt", encoding="utf-8") as fh:
+            json.dump(payload, fh, separators=(",", ":"))
+        os.replace(tmp_path, path)
+
+    def load_from_disk(self, path: str) -> bool:
+        """Restaura el estado desde ``path``. Devuelve True si cargó algo.
+        Cualquier problema (fichero ausente, corrupto, versión desconocida)
+        deja el store intacto y devuelve False: el ranking arranca vacío,
+        exactamente como antes de existir la persistencia."""
+        import gzip
+        import os
+        from dataclasses import fields as dc_fields
+
+        if not path or not os.path.isfile(path):
+            return False
+        try:
+            with gzip.open(path, "rt", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            if payload.get("version") != self._STATE_VERSION:
+                logger.warning(
+                    "ranking: snapshot con versión desconocida (%s) en %s; se ignora",
+                    payload.get("version"), path,
+                )
+                return False
+            # Solo campos conocidos de StationDaily: un snapshot escrito por
+            # una versión más nueva del código no revienta la carga.
+            known = {f.name for f in dc_fields(StationDaily)}
+            daily: Dict[Tuple[str, str], Dict[str, StationDaily]] = {}
+            for provider, day, stations in payload.get("daily", []):
+                daily[(str(provider), str(day))] = {
+                    str(sid): StationDaily(**{k: v for k, v in rec.items() if k in known})
+                    for sid, rec in stations.items()
+                }
+            hourly: Dict[Tuple[str, str], Dict[str, dict]] = {
+                (str(provider), str(day)): stations
+                for provider, day, stations in payload.get("hourly", [])
+            }
+        except Exception:
+            logger.warning("ranking: snapshot ilegible en %s; se ignora", path, exc_info=True)
+            return False
+
+        self._daily = daily
+        self._hourly = hourly
+        raw_updated = payload.get("updated_at")
+        try:
+            self.updated_at = datetime.fromisoformat(raw_updated) if raw_updated else None
+        except (TypeError, ValueError):
+            self.updated_at = None
+        for provider in {key[0] for key in self._daily}:
+            self._prune_days(provider)
+        logger.info(
+            "ranking: snapshot restaurado de %s · %d buckets diarios, %d acumulables",
+            path, len(self._daily), len(self._hourly),
+        )
+        return True
+
     @staticmethod
     def local_day(provider: str, now: Optional[datetime] = None) -> str:
         tz = ZoneInfo(PROVIDER_TZ.get(provider, "UTC"))
@@ -1412,6 +1502,7 @@ async def refresh_loop(
     settings=None,
     interval_s: float = 3600.0,  # compat; la cadencia real es horaria alineada
     retry_interval_s: float = 60.0,
+    state_path: str = "",
 ) -> None:
     """Bucle de refresco ALINEADO a la hora: un ciclo COMPLETO en el minuto
     ``ranking_refresh_offset_min`` (def. :05) de cada hora, para pillar la
@@ -1419,19 +1510,34 @@ async def refresh_loop(
     un primer ciclo INMEDIATO al arrancar (para no salir vacío hasta el próximo
     :05). Entre ciclos, si quedaron proveedores con fallo, reintenta SOLO esos
     cada ``retry_interval_s`` (sin re-llamar a los que van bien). Cancela limpio
-    al apagar el server."""
+    al apagar el server. Con ``state_path``, tras cada ciclo se vuelca el store
+    a disco para que reinicios/redeploys no pierdan el estado."""
     import asyncio
 
     offset_min = int(getattr(settings, "ranking_refresh_offset_min", 5)) if settings else 5
 
+    async def _persist() -> None:
+        if not state_path:
+            return
+        try:
+            # En thread aparte: el dump gzip puede tardar algún segundo con
+            # muchos buckets y no debe congelar las requests del ranking.
+            await asyncio.to_thread(store.save_to_disk, state_path)
+        except Exception:
+            logger.warning(
+                "ranking: no se pudo guardar el snapshot en %s", state_path, exc_info=True,
+            )
+
     # Ciclo inmediato al arrancar: el ranking no debe salir vacío hasta el :05.
     pending = await refresh_once(store, client=client, settings=settings)
+    await _persist()
     next_full = _next_aligned_run(offset_min)
 
     while True:
         secs_to_full = (next_full - datetime.now(tz=timezone.utc)).total_seconds()
         if secs_to_full <= 0:
             pending = await refresh_once(store, client=client, settings=settings)  # completo
+            await _persist()
             next_full = _next_aligned_run(offset_min)
             continue
         if pending:
@@ -1442,5 +1548,6 @@ async def refresh_loop(
             await asyncio.sleep(max(1.0, min(secs_to_full, retry_interval_s)))
             if datetime.now(tz=timezone.utc) < next_full:
                 pending = await refresh_once(store, client=client, settings=settings, only=pending)
+                await _persist()
         else:
             await asyncio.sleep(max(1.0, secs_to_full))

@@ -6,9 +6,9 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
-import numpy as np
-import pandas as pd
-
+# pandas/numpy se importan lazy dentro de las funciones que los usan para
+# no cargar ~0,7s de import al arrancar el backend (este módulo se importa
+# a nivel de módulo desde server/routers/observations.py).
 from models.thermodynamics import mixing_ratio
 from models.trends import (
     calculate_trend,
@@ -94,6 +94,8 @@ def _canonical_daily_precip(data: dict[str, Any], count: int) -> list[float]:
 
 
 def _typical_step_minutes(epochs: list[int], valid_mask: list[bool] | None = None) -> int:
+    import numpy as np
+
     selected = [epoch for index, epoch in enumerate(epochs) if valid_mask is None or valid_mask[index]]
     if len(selected) < 2:
         return 0
@@ -240,6 +242,8 @@ def derive_trend_series(
     minimum_interval = 180 if str(period).lower() == "synoptic" else 20
     thermo_interval = max(minimum_interval, humidity_step or minimum_interval)
     pressure_interval = 180
+    import pandas as pd
+
     times = pd.DatetimeIndex([datetime.fromtimestamp(epoch, tz=timezone.utc) for epoch in epochs])
 
     result["pressures_abs"] = pressures_abs

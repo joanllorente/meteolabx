@@ -50,10 +50,14 @@ trap 'kill -TERM "${UVICORN_PID}" 2>/dev/null || true' EXIT
 # API tarde unos segundos más; si el backend muere, el wait final reinicia todo.
 python3 scripts/patch_streamlit_index.py
 export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
+# fileWatcherType=none: en producción no hay recarga en caliente y, sin
+# watchdog instalado, Streamlit cae a un watcher por polling que consume
+# CPU de forma continua en la instancia compartida.
 streamlit run meteolabx.py \
   --server.port="${STREAMLIT_PORT}" \
   --server.address=0.0.0.0 \
-  --server.headless=true &
+  --server.headless=true \
+  --server.fileWatcherType=none &
 STREAMLIT_PID=$!
 
 echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."

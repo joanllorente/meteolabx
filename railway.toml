@@ -1,5 +1,8 @@
+# RAILPACK (no NIXPACKS): Nixpacks está deprecado por Railway y su provider
+# de Python llega solo hasta 3.13. Railpack lee la versión de .python-version
+# (3.14.6, la misma que el venv local).
 [build]
-builder = "NIXPACKS"
+builder = "RAILPACK"
 
 [deploy]
 startCommand = "bash scripts/start_web.sh"

@@ -106,6 +106,17 @@ class Settings(BaseSettings):
     ciclo completo. Configurar vía ``METEOLABX_RANKING_RETRY_INTERVAL_S``.
     """
 
+    ranking_state_path: str = ""
+    """
+    Ruta del snapshot en disco del ``RankingStore`` (gzip JSON). Si se define,
+    el estado del ranking (días anteriores + horas acumuladas de AEMET/
+    Meteo-France) sobrevive a reinicios y redeploys: se guarda tras cada ciclo
+    y se restaura al arrancar. Vacío → sin persistencia (comportamiento
+    histórico). En Railway no hace falta configurarlo: si hay un Volume
+    adjunto, se usa automáticamente ``$RAILWAY_VOLUME_MOUNT_PATH/
+    ranking_state.json.gz``. Configurar vía ``METEOLABX_RANKING_STATE_PATH``.
+    """
+
     # --- Provider API keys ---
     aemet_api_key: str = ""
     """
