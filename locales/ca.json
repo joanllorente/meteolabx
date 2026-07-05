@@ -725,7 +725,12 @@
       "rain_gauge": "Pluviòmetre",
       "pyranometer": "Piranòmetre",
       "uv": "UV"
-    }
+    },
+    "hide_manual": "Amaga les estacions manuals",
+    "hide_manual_help": "Les estacions manuals (observadors COOP/CoCoRaHS) publiquen una lectura al dia presa a mà, sense dades en temps real.",
+    "station_type": "Tipus",
+    "station_type_automatic": "Automàtica",
+    "station_type_manual": "Manual"
   },
   "station_selector": {
     "search_near_me": "📍 Troba estacions a prop meu",

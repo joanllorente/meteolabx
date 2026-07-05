@@ -14,9 +14,34 @@ suficiente para un buen rato.
 
 from __future__ import annotations
 
+import re
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+# Nombres de parámetro de credencial que usan los proveedores de la app:
+# ``apiKey`` (WU), ``api-key`` (WeatherLink), ``api_key`` (AEMET),
+# ``api_secret``/``client_secret``/``token`` (varios). Cubre tanto query
+# strings de URLs como pares clave=valor sueltos en texto libre.
+_SECRET_PARAM_RE = re.compile(
+    r"(?i)\b(api[-_]?key|apikey|api[-_]?secret|client[-_]?secret|access[-_]?token|token)"
+    r"\s*=\s*[^&\s'\"]+"
+)
+
+
+def _mask_secrets(text: Optional[str]) -> Optional[str]:
+    """Enmascara valores de credenciales en un texto libre.
+
+    Red de seguridad para ``ProviderError.detail``: los servicios sanean sus
+    mensajes a mano, pero nada impide que un servicio futuro haga
+    ``detail=str(exc)`` con un ``httpx.HTTPStatusError``, cuyo ``str``
+    incluye la URL COMPLETA con la query (``...?apiKey=SECRETO``). El detail
+    acaba en los logs, en ``/v1/diagnostics`` (vía metrics) y en la
+    respuesta HTTP de error — por aquí no debe salir ninguna key.
+    """
+    if not text:
+        return text
+    return _SECRET_PARAM_RE.sub(lambda m: f"{m.group(1)}=***", text)
 
 
 class ErrorResponse(BaseModel):
@@ -85,6 +110,10 @@ class ProviderError(Exception):
         detail: Optional[str] = None,
         status_code: int = 502,
     ) -> None:
+        # Enmascarado en el constructor (no en to_response): así el detail
+        # ya sale limpio por TODOS los caminos — str(exc) en logs, el
+        # record_error de metrics/diagnostics y la respuesta HTTP.
+        detail = _mask_secrets(detail)
         super().__init__(detail or error_code)
         self.error_code = error_code
         self.provider = provider

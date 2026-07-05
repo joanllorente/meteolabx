@@ -107,6 +107,20 @@ def _browser_tz() -> str:
     return str(raw or "").strip()
 
 
+def _user_today_iso() -> str:
+    """Fecha de HOY en el huso del navegador del usuario (fallback: huso del
+    proceso, que en local coincide con el del usuario)."""
+    tz_name = _browser_tz()
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+
+            return datetime.now(ZoneInfo(tz_name)).date().isoformat()
+        except Exception:
+            pass
+    return datetime.now().astimezone().date().isoformat()
+
+
 def _resolve_user_country(lat: float, lon: float) -> Optional[str]:
     """País del usuario: heurística precisa de bounding-box (ES/FR/IT/NO) y, si
     no, aproximación por la zona horaria del navegador (cobertura mundial)."""
@@ -149,7 +163,9 @@ def _fmt_value(metric: str, value: float) -> str:
 
 def _updated_caption(data: Dict[str, Any], t) -> Optional[str]:
     """Texto 'última actualización' a partir del ``updated_at`` (ISO UTC) del
-    backend, mostrado en la hora local con los minutos transcurridos."""
+    backend, mostrado en la hora local DEL NAVEGADOR con los minutos
+    transcurridos. ``astimezone()`` a secas usaría el huso del proceso, que en
+    producción (Railway) es UTC → mostraba la hora UTC a todos los usuarios."""
     iso = data.get("updated_at") if isinstance(data, dict) else None
     if not iso:
         return None
@@ -159,7 +175,15 @@ def _updated_caption(data: Dict[str, Any], t) -> Optional[str]:
         return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    local = dt.astimezone()  # huso local del proceso
+    local = dt.astimezone()  # fallback: huso del proceso (dev local)
+    tz_name = _browser_tz()
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+
+            local = dt.astimezone(ZoneInfo(tz_name))
+        except Exception:
+            pass
     mins = max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
     return t("ranking.updated", time=local.strftime("%H:%M"), mins=mins)
 
@@ -403,6 +427,14 @@ def render_ranking_tab(ctx) -> None:
     # Datos (cacheados). Cada sección muestra UNA fecha local (sin mezclar
     # husos); el día se elige con las flechas ◀▶ (state en session_state).
     # Toggle "sin Antártida": excluye AQ del global (domina siempre las mínimas).
+    # Al abrir (sin día elegido aún) se pide explícitamente el HOY del usuario:
+    # sin esto el backend elige su fecha principal, y un día pasado completo
+    # puede ganar al día en curso. Si el hoy local todavía no tiene datos, el
+    # backend cae solo a su fecha principal (el request lleva el día como
+    # preferencia, no como exigencia).
+    today_local = _user_today_iso()
+    st.session_state.setdefault("ranking_global_day", today_local)
+    st.session_state.setdefault("ranking_country_day", today_local)
     g_exclude = "AQ" if st.session_state.get("ranking_no_antarctica") else None
     gdata = _cached_ranking(None, 10, st.session_state.get("ranking_global_day"), g_exclude)
     lat = _safe_float(st.session_state.get("map_search_lat"), 40.4168)

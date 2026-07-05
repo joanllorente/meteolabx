@@ -42,7 +42,38 @@ CREATE TABLE IF NOT EXISTS station_alias_observation_checks (
 CREATE INDEX IF NOT EXISTS idx_alias_observation_checks_alias
 ON station_alias_observation_checks(alias_pk, checked_at);
 """
-TOLERANCES = {"temperature_c": 0.2, "humidity_pct": 1.0, "wind_kmh": 0.5, "wind_dir_deg": 3.0}
+# temperature_c 0.3: IEM almacena °F y el ida-y-vuelta °C→°F→°C mete ±0,1-0,3
+# de ruido en pares BUFR con décimas; los feeds exactos (FROST↔WMO) casan a
+# 0,0-0,1 así que no pierde discriminación. humidity_pct 2.0: la RH de BUFR
+# se deriva de T/Td redondeados.
+TOLERANCES = {"temperature_c": 0.3, "humidity_pct": 2.0, "wind_kmh": 0.5, "wind_dir_deg": 3.0}
+
+# Paso de cuantización por variable cuando la serie IEM viene redondeada en
+# origen: los METAR (redes *_ASOS) publican temperatura en °C ENTEROS y
+# viento en nudos enteros. Contra una fuente con décimas (AEMET 18,4 °C vs
+# METAR 18) la tolerancia base es inalcanzable aunque sea la MISMA estación:
+# se suma medio paso al detectar la rejilla.
+QUANTIZATION_STEPS = {
+    "temperature_c": (1.0, 0.5),          # °C enteros (METAR) o medios grados
+    "wind_kmh": (1.852, 0.926),           # nudos enteros o medios nudos
+    "humidity_pct": (1.0,),
+    "wind_dir_deg": (10.0,),              # METAR reporta dirección en decenas
+}
+
+
+def _detect_quantization(values: list[float], steps: tuple[float, ...]) -> float:
+    """Mayor paso de rejilla al que se ajusta ≥80% de la serie (0 si ninguno)."""
+    meaningful = [v for v in values if v is not None]
+    if len(meaningful) < 4:
+        return 0.0
+    for step in sorted(steps, reverse=True):
+        fits = sum(
+            1 for v in meaningful
+            if abs(v / step - round(v / step)) < 0.02
+        )
+        if fits / len(meaningful) >= 0.8:
+            return step
+    return 0.0
 
 
 def _number(value: Any) -> float | None:
@@ -106,15 +137,31 @@ def _hourly_iem(rows: list[dict[str, Any]]) -> dict[int, dict[str, float]]:
     return hourly
 
 
-def compare_hourly(source: dict[int, dict[str, float]], iem: dict[int, dict[str, float]]) -> dict[str, Any]:
+def _effective_tolerances(iem: dict[int, dict[str, float]]) -> dict[str, float]:
+    tolerances = dict(TOLERANCES)
+    for variable, steps in QUANTIZATION_STEPS.items():
+        values = [row[variable] for row in iem.values() if variable in row]
+        step = _detect_quantization(values, steps)
+        if step:
+            tolerances[variable] = TOLERANCES[variable] + step / 2.0
+    return tolerances
+
+
+def _compare_at_offset(
+    source: dict[int, dict[str, float]],
+    iem: dict[int, dict[str, float]],
+    offset_hours: int,
+    tolerances: dict[str, float],
+) -> tuple[list[dict[str, Any]], int]:
     comparisons = []
     matched_hours = 0
-    for hour in sorted(set(source) & set(iem)):
+    for hour in sorted(set(source) & {h - offset_hours for h in iem}):
+        iem_row = iem[hour + offset_hours]
         matched_hours += 1
-        for variable, tolerance in TOLERANCES.items():
-            if variable not in source[hour] or variable not in iem[hour]:
+        for variable, tolerance in tolerances.items():
+            if variable not in source[hour] or variable not in iem_row:
                 continue
-            left, right = source[hour][variable], iem[hour][variable]
+            left, right = source[hour][variable], iem_row[variable]
             difference = abs(left - right)
             if variable == "wind_dir_deg":
                 difference = min(difference, 360.0 - difference)
@@ -123,6 +170,35 @@ def compare_hourly(source: dict[int, dict[str, float]], iem: dict[int, dict[str,
                 "source": round(left, 3), "iem": round(right, 3),
                 "difference": round(difference, 3), "agrees": difference <= tolerance,
             })
+    return comparisons, matched_hours
+
+
+def compare_hourly(source: dict[int, dict[str, float]], iem: dict[int, dict[str, float]]) -> dict[str, Any]:
+    # Se prueban desfases de ±1 h además del alineado directo: algunas
+    # series (p.ej. los partes BUFR de estaciones AEMET) llegan con el
+    # sello horario corrido una hora (huso/DST del emisor), lo que hacía
+    # que la MISMA estación puntuara como "conflict" — coincidencia exacta
+    # de noche (temperatura plana) y desvíos de ~1 °C con la rampa diurna.
+    # Una estación realmente distinta no se rescata con un desfase: sus
+    # diferencias no son un corrimiento temporal limpio.
+    tolerances = _effective_tolerances(iem)
+    best_offset = 0
+    comparisons: list[dict[str, Any]] = []
+    matched_hours = 0
+    best_ratio = -1.0
+    for offset in (0, -1, 1):
+        offset_comparisons, offset_hours = _compare_at_offset(source, iem, offset, tolerances)
+        if not offset_comparisons:
+            continue
+        offset_ratio = sum(bool(row["agrees"]) for row in offset_comparisons) / len(offset_comparisons)
+        # Preferir el alineado directo salvo mejora clara (evita elegir un
+        # desfase por ruido cuando ambos empatan).
+        margin = 0.0 if offset == 0 else 0.15
+        if offset_ratio > best_ratio + margin:
+            best_ratio = offset_ratio
+            best_offset = offset
+            comparisons = offset_comparisons
+            matched_hours = offset_hours
     agreeing = sum(bool(row["agrees"]) for row in comparisons)
     total = len(comparisons)
     ratio = agreeing / total if total else 0.0
@@ -143,6 +219,8 @@ def compare_hourly(source: dict[int, dict[str, float]], iem: dict[int, dict[str,
         "status": status, "matched_hours": matched_hours, "compared_values": total,
         "agreeing_values": agreeing, "agreement_ratio": round(ratio, 3),
         "temperature_agreement_ratio": round(temperature_ratio, 3),
+        "hour_offset": best_offset,
+        "tolerances": {key: round(value, 3) for key, value in tolerances.items()},
         "comparisons": comparisons,
     }
 
@@ -213,8 +291,10 @@ def _candidates(
         provider_clause = " AND source.provider = ?"
         params.append(provider.upper())
     params.append(limit)
+    # 'error' también se reintenta: un 429/timeout transitorio del proveedor
+    # no debe excluir el par para siempre.
     pending_clause = (
-        "(latest.check_pk IS NULL OR latest.status = 'inconclusive')"
+        "(latest.check_pk IS NULL OR latest.status IN ('inconclusive', 'error'))"
         if retry_inconclusive else "latest.check_pk IS NULL"
     )
     methods = "'inventory_probable', 'inventory_ambiguous'"

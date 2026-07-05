@@ -19,7 +19,30 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATABASE = ROOT / "data" / "stations.sqlite"
 DEFAULT_REPORT = ROOT / "data" / "station_alias_review_report.json"
 NEAR_DISTANCE_M = 150.0
-IDENTIFIER_DISTANCE_M = 1_000.0
+# Radio para matches por identificador fuerte (WMO/WIGOS/ICAO). Los partes
+# synop/BUFR reportan coordenadas redondeadas (a veces al minuto) y el punto
+# de referencia del aeropuerto puede estar a km del sensor: con id compartido
+# el emparejamiento sigue siendo inequívoco a esta distancia.
+IDENTIFIER_DISTANCE_M = 5_000.0
+# Radio relajado para estaciones IEM de la red WMO_BUFR_SRF: nombres truncados
+# a 20 chars en mayúsculas ("BARCELONA/JOSEP TARR") y coordenadas redondeadas,
+# así que ni el nombre ni los 150 m generales funcionan. Caso testigo: AEMET
+# 0076 "BARCELONA AEROPUERTO" ↔ WMO_BUFR 0-724-0-181 a ~830 m.
+BUFR_NEAR_DISTANCE_M = 1_200.0
+# Máximo de candidatos IEM conservados por estación oficial. IEM suele tener
+# VARIOS duplicados de la misma estación física (p.ej. ES__ASOS|LEBL y
+# WMO_BUFR_SRF|0-724-0-181 para el aeropuerto de Barcelona); quedarse solo
+# con el mejor dejaba el resto escapar.
+MAX_CANDIDATES_PER_SOURCE = 4
+
+# ISO 3166-1 numérico por proveedor: los ids WIGOS de WMO_BUFR_SRF son
+# ``0-{ISO numérico}-0-{nº nacional}`` (p.ej. 0-724-0-181 = España, synop
+# 08181). Permite casar el id nacional con el WMO de los inventarios.
+PROVIDER_ISO_NUMERIC = {
+    "AEMET": 724, "METEOCAT": 724, "METEOGALICIA": 724, "EUSKALMET": 724,
+    "POEM": 724, "METEOFRANCE": 250, "METEOHUB_IT": 380, "METOFFICE": 826,
+    "FROST": 578,
+}
 
 # IEM labels WMO/BUFR records as UN even when their coordinates are inside the
 # provider territory. Those records remain valid because the original catalog
@@ -65,7 +88,27 @@ def _identifier(value: Any) -> str:
     return "" if text in {"", "NONE", "NULL", "9999", "99999"} else text
 
 
-def _strong_identifiers(raw: dict[str, Any], station_id: str, provider: str) -> set[str]:
+def _wmo_int(value: Any) -> int | None:
+    clean = _identifier(value)
+    if clean and re.fullmatch(r"\d{1,6}", clean):
+        return int(clean)
+    return None
+
+
+def _wigos_parts(value: Any) -> tuple[int, int] | None:
+    """``0-{emisor}-0-{nº local}`` → (emisor, nº). Emisor 20000 = WMO global
+    (el nº local es el synop de 5 dígitos); otro emisor = ISO numérico del
+    país (el nº local es el identificador nacional, sin el bloque WMO)."""
+    parts = str(value or "").strip().split("-")
+    if len(parts) != 4:
+        return None
+    try:
+        return int(parts[1]), int(parts[3])
+    except ValueError:
+        return None
+
+
+def _strong_identifiers(raw: dict[str, Any], station_id: str, provider: str, network: str = "") -> set[str]:
     identifiers: set[str] = set()
 
     def add(namespace: str, value: Any) -> None:
@@ -73,11 +116,32 @@ def _strong_identifiers(raw: dict[str, Any], station_id: str, provider: str) -> 
         if clean:
             identifiers.add(f"{namespace}:{clean}")
 
-    add("WMO", raw.get("id_omm"))
-    add("WMO", raw.get("synop"))
+    def add_wmo(value: Any) -> None:
+        """WMO de 5 dígitos → id global + id nacional (emisor ISO + nº sin
+        bloque). El nº nacional solo es fiable en países de bloque único
+        (ES=08, FR=07, NO=01, IT=16, GB=03), que son justo los proveedores
+        del catálogo; la distancia acota cualquier colisión residual."""
+        number = _wmo_int(value)
+        if number is None or number <= 0:
+            return
+        identifiers.add(f"WMO:{number}")
+        issuer = PROVIDER_ISO_NUMERIC.get(provider)
+        if issuer:
+            identifiers.add(f"WMONAT:{issuer}:{number % 1000}")
+
+    add_wmo(raw.get("id_omm"))
+    add_wmo(raw.get("synop"))
+    add_wmo(raw.get("wmo_id"))
+    wigos = _wigos_parts(raw.get("wigos_id"))
+    if wigos:
+        issuer, local = wigos
+        if issuer == 20000:
+            add_wmo(local)
+        else:
+            identifiers.add(f"WMONAT:{issuer}:{local}")
     attributes = raw.get("attributes")
     if isinstance(attributes, dict):
-        add("WMO", attributes.get("WMO_ID"))
+        add_wmo(attributes.get("WMO_ID"))
         add("GHCN", attributes.get("GHCNH_ID"))
         add("NCEI", attributes.get("NCEI_ID"))
         add("ICAO", attributes.get("ICAO"))
@@ -86,6 +150,15 @@ def _strong_identifiers(raw: dict[str, Any], station_id: str, provider: str) -> 
     clean_station_id = _identifier(station_id)
     if provider == "IEM" and re.fullmatch(r"[A-Z]{4}", clean_station_id):
         add("ICAO", clean_station_id)
+    # El station_id de WMO_BUFR_SRF ES un id WIGOS (0-724-0-181).
+    if provider == "IEM" and "WMO_BUFR" in str(network).upper():
+        bufr = _wigos_parts(clean_station_id)
+        if bufr:
+            issuer, local = bufr
+            if issuer == 20000:
+                identifiers.add(f"WMO:{local}")
+            else:
+                identifiers.add(f"WMONAT:{issuer}:{local}")
     return identifiers
 
 
@@ -103,22 +176,37 @@ def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def _classify(
     *, distance_m: float, name_similarity: float,
     elevation_delta_m: float | None, shared_identifiers: set[str],
+    iem_network: str = "",
 ) -> tuple[str, float] | None:
     if shared_identifiers and distance_m <= IDENTIFIER_DISTANCE_M:
         return "secure", 0.99
-    if distance_m > NEAR_DISTANCE_M:
+    is_bufr = "WMO_BUFR" in str(iem_network).upper()
+    if distance_m > (BUFR_NEAR_DISTANCE_M if is_bufr else NEAR_DISTANCE_M):
         return None
     elevation_compatible = elevation_delta_m is None or elevation_delta_m <= 50
     if distance_m <= 50 and name_similarity >= 0.55 and elevation_compatible:
         confidence = min(0.97, 0.86 + 0.08 * name_similarity + 0.03 * (1 - distance_m / 50))
         return "secure", confidence
-    if name_similarity >= 0.55 and elevation_compatible:
+    if distance_m <= NEAR_DISTANCE_M and name_similarity >= 0.55 and elevation_compatible:
         confidence = min(0.85, 0.66 + 0.14 * name_similarity + 0.05 * (1 - distance_m / 150))
         return "probable", confidence
     if distance_m <= 75 and name_similarity >= 0.35 and (
         elevation_delta_m is None or elevation_delta_m <= 20
     ):
         return "probable", min(0.78, 0.62 + 0.20 * name_similarity)
+    if is_bufr:
+        # Nombres BUFR truncados/mayúsculas y coordenadas redondeadas: el
+        # nombre pesa poco y la distancia tolera más. El validador de
+        # observaciones (validate_station_alias_observations.py) es quien
+        # confirma o refuta antes de ocultar nada.
+        strict_elevation = elevation_delta_m is None or elevation_delta_m <= 25
+        if name_similarity >= 0.3 and strict_elevation:
+            confidence = min(0.8, 0.6 + 0.15 * name_similarity + 0.1 * (1 - distance_m / BUFR_NEAR_DISTANCE_M))
+            return "probable", confidence
+        if distance_m <= 600 and strict_elevation:
+            return "ambiguous", max(0.35, 0.55 - distance_m / 2000)
+    if distance_m > NEAR_DISTANCE_M:
+        return None
     confidence = max(0.30, min(0.60, 0.55 - distance_m / 1000 + name_similarity * 0.15))
     return "ambiguous", confidence
 
@@ -194,8 +282,12 @@ def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[
                     continue
                 distance = _distance_m(lat, lon, float(iem["latitude"]), float(iem["longitude"]))
                 iem_raw = _raw(iem["raw_json"])
-                shared = source_ids & _strong_identifiers(iem_raw, iem["station_id"], "IEM")
-                if distance > NEAR_DISTANCE_M and not shared:
+                shared = source_ids & _strong_identifiers(
+                    iem_raw, iem["station_id"], "IEM", iem["network_code"],
+                )
+                is_bufr = "WMO_BUFR" in str(iem["network_code"]).upper()
+                near_cutoff = BUFR_NEAR_DISTANCE_M if is_bufr else NEAR_DISTANCE_M
+                if distance > near_cutoff and not shared:
                     continue
                 name_score = _name_similarity(source["name"], iem["name"])
                 elevation_delta = None
@@ -204,6 +296,7 @@ def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[
                 classification = _classify(
                     distance_m=distance, name_similarity=name_score,
                     elevation_delta_m=elevation_delta, shared_identifiers=shared,
+                    iem_network=iem["network_code"],
                 )
                 if classification is None:
                     continue
@@ -213,32 +306,38 @@ def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[
             if not ranked:
                 continue
             ranked.sort(key=lambda item: item[:3])
-            _, _, distance, iem, label, confidence, name_score, elevation_delta, shared = ranked[0]
-            evidence = {
-                "classification": label,
-                "distance_m": round(distance, 1),
-                "name_similarity": round(name_score, 3),
-                "elevation_delta_m": round(elevation_delta, 1) if elevation_delta is not None else None,
-                "shared_identifiers": shared,
-                "source": {
-                    "provider": source["provider"], "network": source["network_code"],
-                    "station_id": source["station_id"], "name": source["name"],
-                },
-                "iem": {
-                    "network": iem["network_code"], "station_id": iem["station_id"],
-                    "name": iem["name"], "country": iem["country"],
-                },
-                "observation_comparison": None,
-            }
-            candidates_to_insert.append((
-                iem["station_pk"], source["station_pk"], confidence,
-                f"inventory_{label}", json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
-            ))
-            counts[label] += 1
-            provider_counts[source["provider"]] += 1
-            iem_candidate_counts[int(iem["station_pk"])] += 1
-            if len(examples[label]) < 10:
-                examples[label].append(evidence)
+            # TODOS los candidatos plausibles (hasta el tope), no solo el
+            # mejor: IEM suele duplicar la misma estación física en varias
+            # redes (ASOS + WMO_BUFR_SRF) y quedarse con una dejaba escapar
+            # el resto. Si dos oficiales reclaman la misma IEM, ambos alias
+            # conviven y el validador de observaciones decide.
+            for entry in ranked[:MAX_CANDIDATES_PER_SOURCE]:
+                _, _, distance, iem, label, confidence, name_score, elevation_delta, shared = entry
+                evidence = {
+                    "classification": label,
+                    "distance_m": round(distance, 1),
+                    "name_similarity": round(name_score, 3),
+                    "elevation_delta_m": round(elevation_delta, 1) if elevation_delta is not None else None,
+                    "shared_identifiers": shared,
+                    "source": {
+                        "provider": source["provider"], "network": source["network_code"],
+                        "station_id": source["station_id"], "name": source["name"],
+                    },
+                    "iem": {
+                        "network": iem["network_code"], "station_id": iem["station_id"],
+                        "name": iem["name"], "country": iem["country"],
+                    },
+                    "observation_comparison": None,
+                }
+                candidates_to_insert.append((
+                    iem["station_pk"], source["station_pk"], confidence,
+                    f"inventory_{label}", json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
+                ))
+                counts[label] += 1
+                provider_counts[source["provider"]] += 1
+                iem_candidate_counts[int(iem["station_pk"])] += 1
+                if len(examples[label]) < 10:
+                    examples[label].append(evidence)
 
         connection.execute(
             "DELETE FROM station_aliases WHERE reviewed = 0 AND method LIKE 'inventory_%'"

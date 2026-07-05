@@ -538,6 +538,7 @@ def render_map_tab(ctx):
             "connectable": bool(getattr(candidate, "connectable", True)),
             "has_historical": bool(metadata.get("has_historical", False)),
             "is_historical_only": bool(metadata.get("is_historical_only", False)),
+            "manual": bool(metadata.get("manual", False)),
             "distance_km": float(haversine_distance(search_lat, search_lon, candidate.lat, candidate.lon)),
             "locality": resolve_provider_locality(candidate.provider_id, metadata, candidate.name),
             "elevation_m": float(candidate.elevation_m),
@@ -903,6 +904,13 @@ def render_map_tab(ctx):
             st.session_state["map_hide_historical_only"] = str(raw_hide_historical).strip().lower() in {
                 "1", "true", "yes", "si", "sí",
             }
+        if "map_hide_manual" not in st.session_state:
+            raw_hide_manual = st.query_params.get("map_hide_manual", "")
+            if isinstance(raw_hide_manual, list):
+                raw_hide_manual = raw_hide_manual[0] if raw_hide_manual else ""
+            st.session_state["map_hide_manual"] = str(raw_hide_manual).strip().lower() in {
+                "1", "true", "yes", "si", "sí",
+            }
         for sensor_key in MAP_SENSOR_FILTER_OPTIONS:
             chk_key = f"map_sensor_chk_{sensor_key}"
             if chk_key not in st.session_state:
@@ -921,6 +929,11 @@ def render_map_tab(ctx):
                     t("map.hide_historical_only"),
                     key="map_hide_historical_only",
                     help=t("map.hide_historical_only_help"),
+                )
+                hide_manual = st.toggle(
+                    t("map.hide_manual"),
+                    key="map_hide_manual",
+                    help=t("map.hide_manual_help"),
                 )
                 st.divider()
                 selected_sensor_list = [
@@ -952,6 +965,10 @@ def render_map_tab(ctx):
                 st.query_params["map_hide_historical"] = "1"
             elif "map_hide_historical" in st.query_params:
                 del st.query_params["map_hide_historical"]
+            if st.session_state.get("map_hide_manual"):
+                st.query_params["map_hide_manual"] = "1"
+            elif "map_hide_manual" in st.query_params:
+                del st.query_params["map_hide_manual"]
         except Exception:
             pass
 
@@ -968,6 +985,7 @@ def render_map_tab(ctx):
             len(selected_sensor_list)
             + (1 if st.session_state.get("map_historical_only") else 0)
             + (1 if st.session_state.get("map_hide_historical_only") else 0)
+            + (1 if st.session_state.get("map_hide_manual") else 0)
         )
         badge_css = (
             f"""
@@ -1098,6 +1116,8 @@ def render_map_tab(ctx):
                 nearest = [s for s in nearest if bool(s.get("has_historical", False))]
             if hide_historical_only:
                 nearest = [s for s in nearest if not bool(s.get("is_historical_only", False))]
+            if hide_manual:
+                nearest = [s for s in nearest if not bool(s.get("manual", False))]
             nearest = [
                 station
                 for station in nearest
@@ -1343,6 +1363,11 @@ def render_map_tab(ctx):
                 selected_lat = safe_float(selected_station.get("lat"), default=None)
                 selected_lon = safe_float(selected_station.get("lon"), default=None)
                 selected_connectable = bool(selected_station.get("connectable", True))
+                selected_type_txt = str(
+                    t("map.station_type_manual")
+                    if bool(selected_station.get("manual", False))
+                    else t("map.station_type_automatic")
+                )
                 selected_alt_txt = "—" if selected_alt is None else f"{selected_alt:.0f} m"
                 selected_dist_txt = "—" if selected_dist is None else f"{selected_dist:.1f} km"
                 selected_coords_txt = (
@@ -1375,6 +1400,7 @@ def render_map_tab(ctx):
                                 <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.altitude').replace(' (m)', ''))}: {_meta_chip(selected_alt_txt)}</span>
                                 <span class="mlbx-map-meta-item">{html.escape(t('map.table_columns.distance').replace(' (km)', ''))}: {_meta_chip(selected_dist_txt)}</span>
                                 <span class="mlbx-map-meta-item">Lat/Lon: {_meta_chip(selected_coords_txt)}</span>
+                                <span class="mlbx-map-meta-item">{html.escape(t('map.station_type'))}: {_meta_chip(selected_type_txt)}</span>
                             </div>
                             {selected_sensor_meta_html}
                             """

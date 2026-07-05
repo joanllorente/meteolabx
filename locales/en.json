@@ -685,11 +685,11 @@
     "providers_menu_caption": "Turn on providers to show their stations on the map.",
     "nearby_providers": "Nearby providers",
     "far_providers": "Distant providers",
-        "sensor_filter": "Sensors",
-        "historical_only": "Show only stations with historical data",
-        "hide_historical_only": "Hide historical stations",
-        "hide_historical_only_help": "Historical stations no longer record data, but their historical archive can be consulted.",
-        "country_search": "Search country…",
+    "sensor_filter": "Sensors",
+    "historical_only": "Show only stations with historical data",
+    "hide_historical_only": "Hide historical stations",
+    "hide_historical_only_help": "Historical stations no longer record data, but their historical archive can be consulted.",
+    "country_search": "Search country…",
     "country_clear": "Clear filter",
     "sensor_filter_clear": "Clear",
     "filters_caption": "The map first shows providers near the current center. Distant ones are added manually.",
@@ -725,7 +725,12 @@
       "rain_gauge": "Rain gauge",
       "pyranometer": "Pyranometer",
       "uv": "UV"
-    }
+    },
+    "hide_manual": "Hide manual stations",
+    "hide_manual_help": "Manual stations (COOP/CoCoRaHS observers) publish one hand-taken reading per day, with no real-time data.",
+    "station_type": "Type",
+    "station_type_automatic": "Automatic",
+    "station_type_manual": "Manual"
   },
   "station_selector": {
     "search_near_me": "📍 Find stations near me",

@@ -48,7 +48,9 @@ def test_provider_counts_covers_all_catalogs() -> None:
     assert set(counts) == set(stations.CATALOG_PROVIDERS)
     assert counts["NWS"] > 30000
     assert counts["METEOCAT"] > 100
-    assert counts["IEM"] > 190000
+    # ~170k tras podar las DCP hidrológicas sin sensores meteo
+    # (scripts/prune_iem_hydro_dcp.py).
+    assert counts["IEM"] > 160000
 
 
 def test_country_counts_and_iem_country_filter() -> None:
@@ -64,7 +66,9 @@ def test_country_counts_and_iem_country_filter() -> None:
     assert all_counts["ES"] > counts["ES"]
     assert all_counts["TR"] == 75
     assert "TU" not in all_counts
-    assert all_counts["PR"] == 2
+    # Era 2 hasta la poda de DCP hidrológicas: la segunda estación de PR era
+    # una DCP de nivel de río sin sensores meteo. Queda el radiosondeo TJSJ.
+    assert all_counts["PR"] == 1
     assert "RQ" not in all_counts
 
     results = stations.search_near(

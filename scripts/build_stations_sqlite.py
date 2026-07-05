@@ -86,6 +86,7 @@ CREATE TABLE stations (
     locality TEXT,
     online INTEGER CHECK (online IN (0, 1)),
     has_historical INTEGER NOT NULL DEFAULT 0 CHECK (has_historical IN (0, 1)),
+    manual INTEGER NOT NULL DEFAULT 0 CHECK (manual IN (0, 1)),
     FOREIGN KEY (source_record_pk) REFERENCES station_inventory_records(record_pk),
     UNIQUE (provider, network_code, station_id)
 );
@@ -210,6 +211,11 @@ SENSOR_KEYS = (
 HISTORICAL_PROVIDER_IDS = {"AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA"}
 IEM_HISTORICAL_NETWORK_MARKERS = ("ASOS", "AWOS", "METAR")
 
+# Redes IEM de observadores MANUALES: COOP (cooperativos del NWS, máx/mín una
+# vez al día) y CoCoRaHS (voluntarios con pluviómetro, una lectura diaria).
+# El resto de proveedores del catálogo son redes automáticas.
+IEM_MANUAL_NETWORK_MARKERS = ("_COOP", "COCORAHS")
+
 
 def _first(row: dict[str, Any], *keys: str) -> Any:
     for key in keys:
@@ -236,6 +242,11 @@ def _nested_name(value: Any) -> str | None:
 def _iem_network_has_historical(network: Any) -> bool:
     network_code = str(network or "").strip().upper()
     return any(marker in network_code for marker in IEM_HISTORICAL_NETWORK_MARKERS)
+
+
+def _iem_network_is_manual(network: Any) -> bool:
+    network_code = str(network or "").strip().upper()
+    return any(marker in network_code for marker in IEM_MANUAL_NETWORK_MARKERS)
 
 
 def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] | None:
@@ -275,10 +286,11 @@ def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] |
         provider in HISTORICAL_PROVIDER_IDS
         or (provider == "IEM" and _iem_network_has_historical(network))
     )
+    manual = int(provider == "IEM" and _iem_network_is_manual(network))
     return (
         provider, network, station_id, str(name or station_id).strip(), latitude,
         longitude, elevation, timezone, _nested_name(country), region, locality, online,
-        has_historical,
+        has_historical, manual,
     )
 
 
@@ -362,8 +374,8 @@ def build_database(
                         INSERT INTO stations(
                             source_record_pk, provider, network_code, station_id,
                             name, latitude, longitude, elevation_m, timezone,
-                            country, region, locality, online, has_historical
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            country, region, locality, online, has_historical, manual
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (record_pks[ordinal], *normalized),
                     )

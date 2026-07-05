@@ -464,3 +464,46 @@ async def test_fetch_current_step2_latin1_fallback() -> None:
     finally:
         await client.aclose()
     assert result["station_name"] == "AÑEJA STATION"
+
+
+# =====================================================================
+# Ranking: fetch_aemet_records usa tamax/tamin (extremos intra-horarios)
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_ranking_aemet_uses_intra_hour_extremes() -> None:
+    """El ranking debe usar tamax/tamin de /todas, no la instantánea ta:
+    con ta se perdía el pico entre muestras horarias (Sevilla/San Pablo
+    43.2 oficial vs 42.3 en el ranking). ta queda solo como fallback si el
+    registro no trae extremos."""
+    from server.services import ranking as ranking_svc
+
+    records = [
+        {
+            **REAL_AEMET_RECORD,
+            "fint": "2026-07-04T15:00:00+0000",
+            "ta": "42.3", "tamax": "43.2", "tamin": "41.8",
+        },
+        # Registro sin extremos → cae a ta.
+        {
+            **REAL_AEMET_RECORD,
+            "fint": "2026-07-04T16:00:00+0000",
+            "ta": "41.0", "tamax": None, "tamin": None,
+        },
+    ]
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Paso 1 = /observacion/convencional/todas (bulk); paso 2 = datos_url.
+        if "/observacion/convencional/todas" in str(request.url):
+            return httpx.Response(200, json=STEP1_OK)
+        return httpx.Response(200, json=records)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    store = ranking_svc.RankingStore()
+    try:
+        out = await ranking_svc.fetch_aemet_records(store, "FAKE_KEY", client=client)
+    finally:
+        await client.aclose()
+
+    assert len(out) == 1
+    assert out[0].tmax == pytest.approx(43.2)
+    assert out[0].tmin == pytest.approx(41.0)  # min(41.8, fallback ta=41.0)

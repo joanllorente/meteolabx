@@ -1,0 +1,779 @@
+{
+ "stations": {
+  "WMO_BUFR_SRF|0-578-0-287": {
+   "name": "SOLENDET",
+   "canonical": "FROST:SN10800",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-381": {
+   "name": "APELSVOLL",
+   "canonical": "FROST:SN11500",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-386": {
+   "name": "HAMAR II",
+   "canonical": "FROST:SN12290",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-385": {
+   "name": "HAMAR",
+   "canonical": "FROST:SN12320",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-382": {
+   "name": "KISE",
+   "canonical": "FROST:SN12550",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-378": {
+   "name": "LILLEHAMMER-SAETHERE",
+   "canonical": "FROST:SN12680",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-387": {
+   "name": "FAVANG",
+   "canonical": "FROST:SN13150",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-375": {
+   "name": "KVITFJELL",
+   "canonical": "FROST:SN13160",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-370": {
+   "name": "SKABU",
+   "canonical": "FROST:SN13655",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-361": {
+   "name": "GROTLI III",
+   "canonical": "FROST:SN15890",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-495": {
+   "name": "STROMTANGEN LH",
+   "canonical": "FROST:SN17000",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-494": {
+   "name": "RYGGE",
+   "canonical": "FROST:SN17150",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-486": {
+   "name": "ASKER",
+   "canonical": "FROST:SN19710",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-469": {
+   "name": "HONEFOSS-HOYBY",
+   "canonical": "FROST:SN20301",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-368": {
+   "name": "FAGERNES AP",
+   "canonical": "FROST:SN23410",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-371": {
+   "name": "LOKEN I VOLBU",
+   "canonical": "FROST:SN23500",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-376": {
+   "name": "GULSVIK II",
+   "canonical": "FROST:SN24710",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-357": {
+   "name": "HOLLEKOLTEN",
+   "canonical": "FROST:SN25112",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-350": {
+   "name": "FINSEVATN",
+   "canonical": "FROST:SN25830",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-484": {
+   "name": "AURSKOG",
+   "canonical": "FROST:SN2650",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-480": {
+   "name": "DRAMMEN BERSKOG",
+   "canonical": "FROST:SN26900",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-485": {
+   "name": "SANDE-GALLEBERG",
+   "canonical": "FROST:SN26990",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-477": {
+   "name": "KONNERUD",
+   "canonical": "FROST:SN27010",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-481": {
+   "name": "MELSOM",
+   "canonical": "FROST:SN27450",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-482": {
+   "name": "FERDER LH",
+   "canonical": "FROST:SN27500",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-471": {
+   "name": "VEGGLI II",
+   "canonical": "FROST:SN28922",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-352": {
+   "name": "SANDHAUG",
+   "canonical": "FROST:SN29400",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-363": {
+   "name": "DAGALI AP",
+   "canonical": "FROST:SN29720",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-462": {
+   "name": "PORSGRUNN",
+   "canonical": "FROST:SN30255",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-450": {
+   "name": "MOSSTRAND II",
+   "canonical": "FROST:SN31620",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-461": {
+   "name": "GAUSTATOPPEN",
+   "canonical": "FROST:SN31970",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-470": {
+   "name": "GVARV",
+   "canonical": "FROST:SN32060",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-434": {
+   "name": "VAAGSLI",
+   "canonical": "FROST:SN33890",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-449": {
+   "name": "GJERSTAD",
+   "canonical": "FROST:SN35210",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-467": {
+   "name": "LYNGOR LH",
+   "canonical": "FROST:SN35860",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-455": {
+   "name": "TVEITSUND",
+   "canonical": "FROST:SN37230",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-464": {
+   "name": "LANDVIK",
+   "canonical": "FROST:SN38140",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-453": {
+   "name": "HYNNEKLEIV",
+   "canonical": "FROST:SN38730",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-452": {
+   "name": "KRISTIANSAND/KJEVIK",
+   "canonical": "FROST:SN39040",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-448": {
+   "name": "OKSOY LH",
+   "canonical": "FROST:SN39100",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-442": {
+   "name": "BYGLANDSFJORD",
+   "canonical": "FROST:SN39750",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-444": {
+   "name": "VALLE",
+   "canonical": "FROST:SN40250",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-440": {
+   "name": "BLASJO",
+   "canonical": "FROST:SN40510",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-436": {
+   "name": "LINDESNES LH",
+   "canonical": "FROST:SN41770",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-466": {
+   "name": "KJELLER AP",
+   "canonical": "FROST:SN4200",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-427": {
+   "name": "LISTA LH",
+   "canonical": "FROST:SN42160",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-431": {
+   "name": "SIRDAL-SINNES",
+   "canonical": "FROST:SN42940",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-413": {
+   "name": "SAERHEIM",
+   "canonical": "FROST:SN44300",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-415": {
+   "name": "STAVANGER/SOLA",
+   "canonical": "FROST:SN44560",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-488": {
+   "name": "HAKADAL",
+   "canonical": "FROST:SN4460",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-416": {
+   "name": "STAVANGER VAALAND",
+   "canonical": "FROST:SN44640",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-419": {
+   "name": "LIARVATN",
+   "canonical": "FROST:SN45530",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-422": {
+   "name": "FISTER_SIGMUNDSTAD",
+   "canonical": "FROST:SN45870",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-417": {
+   "name": "NEDRE VATS",
+   "canonical": "FROST:SN46930",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-408": {
+   "name": "HAUGESUND AP",
+   "canonical": "FROST:SN47260",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-403": {
+   "name": "UTSIRA LH",
+   "canonical": "FROST:SN47300",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-414": {
+   "name": "ROVER",
+   "canonical": "FROST:SN47350",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-384": {
+   "name": "OSLO/GARDERMOEN",
+   "canonical": "FROST:SN4780",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-406": {
+   "name": "SLATTEROY LH",
+   "canonical": "FROST:SN48330",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-342": {
+   "name": "ULLENSVANG",
+   "canonical": "FROST:SN49490",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-418": {
+   "name": "AUSTEVOLL",
+   "canonical": "FROST:SN50175",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-327": {
+   "name": "KVAMSKOGEN-JONSHOGDI",
+   "canonical": "FROST:SN50310",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-311": {
+   "name": "BERGEN/FLESLAND",
+   "canonical": "FROST:SN50500",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-317": {
+   "name": "BERGEN/FLORIDA",
+   "canonical": "FROST:SN50540",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-314": {
+   "name": "FOSSMARK",
+   "canonical": "FROST:SN51010",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-315": {
+   "name": "EVANGER",
+   "canonical": "FROST:SN51440",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-336": {
+   "name": "BULKEN",
+   "canonical": "FROST:SN51470",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-326": {
+   "name": "MODALEN III",
+   "canonical": "FROST:SN52310",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-307": {
+   "name": "FEDJE",
+   "canonical": "FROST:SN52535",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-319": {
+   "name": "TAKLE",
+   "canonical": "FROST:SN52860",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-346": {
+   "name": "MIDTSTOVA",
+   "canonical": "FROST:SN53530",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-355": {
+   "name": "LAERDAL IV",
+   "canonical": "FROST:SN54110",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-364": {
+   "name": "FILEFJELL",
+   "canonical": "FROST:SN54710",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-366": {
+   "name": "SOGNEFJELL",
+   "canonical": "FROST:SN55290",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-347": {
+   "name": "SOGNDAL AP",
+   "canonical": "FROST:SN55700",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-468": {
+   "name": "KONGSVINGER",
+   "canonical": "FROST:SN5590",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-308": {
+   "name": "FURUNESET",
+   "canonical": "FROST:SN56420",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-304": {
+   "name": "YTTEROYANE LH",
+   "canonical": "FROST:SN57770",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-321": {
+   "name": "STRYN",
+   "canonical": "FROST:SN58900",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-203": {
+   "name": "KRAKENES",
+   "canonical": "FROST:SN59110",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-209": {
+   "name": "ORSTA-VOLDA AP",
+   "canonical": "FROST:SN59680",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-205": {
+   "name": "SVINOY LH",
+   "canonical": "FROST:SN59800",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-392": {
+   "name": "FLISA II",
+   "canonical": "FROST:SN6020",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-218": {
+   "name": "TAFJORD",
+   "canonical": "FROST:SN60500",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-229": {
+   "name": "LEBERGSFJELLET",
+   "canonical": "FROST:SN60810",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-210": {
+   "name": "ALESUND/VIGRA",
+   "canonical": "FROST:SN60990",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-220": {
+   "name": "MANNEN",
+   "canonical": "FROST:SN61410",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-232": {
+   "name": "MARSTEIN",
+   "canonical": "FROST:SN61420",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-230": {
+   "name": "BJORLI",
+   "canonical": "FROST:SN61630",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-217": {
+   "name": "MOLDE AP",
+   "canonical": "FROST:SN62270",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-212": {
+   "name": "ONA II",
+   "canonical": "FROST:SN62480",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-221": {
+   "name": "TAGDALEN",
+   "canonical": "FROST:SN64870",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-225": {
+   "name": "VEIHOLMEN",
+   "canonical": "FROST:SN65310",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-237": {
+   "name": "HITRA",
+   "canonical": "FROST:SN65451",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-228": {
+   "name": "SULA",
+   "canonical": "FROST:SN65940",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-253": {
+   "name": "SOKNEDAL",
+   "canonical": "FROST:SN67280",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-257": {
+   "name": "TRONDHEIM/VOLL",
+   "canonical": "FROST:SN68863",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-271": {
+   "name": "TRONDHEIM/VERNES",
+   "canonical": "FROST:SN69100",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-272": {
+   "name": "FROSTA",
+   "canonical": "FROST:SN69655",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-242": {
+   "name": "AFJORD II",
+   "canonical": "FROST:SN71780",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-240": {
+   "name": "HALTEN LH",
+   "canonical": "FROST:SN71850",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-259": {
+   "name": "BUHOLMRASA LH",
+   "canonical": "FROST:SN71990",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-290": {
+   "name": "NAMSOS AP",
+   "canonical": "FROST:SN72580",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-291": {
+   "name": "GARTLAND",
+   "canonical": "FROST:SN73550",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-262": {
+   "name": "NORDOYAN LH",
+   "canonical": "FROST:SN75410",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-102": {
+   "name": "SKLINNA LH",
+   "canonical": "FROST:SN75550",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-136": {
+   "name": "SOMNA-KVALOYFJELLET",
+   "canonical": "FROST:SN76240",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-108": {
+   "name": "VEGA-VALLSJO",
+   "canonical": "FROST:SN76450",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-117": {
+   "name": "TJOTTA",
+   "canonical": "FROST:SN76530",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-122": {
+   "name": "MOSJOEN AP",
+   "canonical": "FROST:SN77230",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-133": {
+   "name": "LAKSFORS",
+   "canonical": "FROST:SN77280",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-132": {
+   "name": "MAJAVATN V",
+   "canonical": "FROST:SN77425",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-135": {
+   "name": "SELJELIA",
+   "canonical": "FROST:SN78360",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-147": {
+   "name": "VARNTRESK",
+   "canonical": "FROST:SN78800",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-146": {
+   "name": "SKAMDAL",
+   "canonical": "FROST:SN79220",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-151": {
+   "name": "MO I RANA AP",
+   "canonical": "FROST:SN79600",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-148": {
+   "name": "STORFORSHEI",
+   "canonical": "FROST:SN79700",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-150": {
+   "name": "HJARTASEN",
+   "canonical": "FROST:SN79764",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-115": {
+   "name": "MYKEN",
+   "canonical": "FROST:SN80610",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-169": {
+   "name": "SALTDAL-NORDNES",
+   "canonical": "FROST:SN81650",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-158": {
+   "name": "SETSA",
+   "canonical": "FROST:SN82000",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-144": {
+   "name": "HELLIGVAER II",
+   "canonical": "FROST:SN82410",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-192": {
+   "name": "STRAUMSNES",
+   "canonical": "FROST:SN84500",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-183": {
+   "name": "EVENES AP",
+   "canonical": "FROST:SN84970",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-105": {
+   "name": "ROTVAER",
+   "canonical": "FROST:SN85040",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-160": {
+   "name": "SKROVA LH",
+   "canonical": "FROST:SN85380",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-141": {
+   "name": "LEKNES AP",
+   "canonical": "FROST:SN85560",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-162": {
+   "name": "STOKMARKNES AP",
+   "canonical": "FROST:SN86600",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-15": {
+   "name": "HEKKINGEN LH",
+   "canonical": "FROST:SN88690",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-30": {
+   "name": "KISTEFJELL",
+   "canonical": "FROST:SN89010",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-23": {
+   "name": "BARDUFOSS",
+   "canonical": "FROST:SN89350",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-27": {
+   "name": "TROMSO-HOLT",
+   "canonical": "FROST:SN90400",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-25": {
+   "name": "TROMSO/LANGNES",
+   "canonical": "FROST:SN90490",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-33": {
+   "name": "TORSVAG LH",
+   "canonical": "FROST:SN90800",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-35": {
+   "name": "LYNGEN GJERDVASSBU",
+   "canonical": "FROST:SN91130",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-250": {
+   "name": "FOLLDAL-FREDHEIM",
+   "canonical": "FROST:SN9160",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-239": {
+   "name": "HJERKINN II",
+   "canonical": "FROST:SN9310",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-47": {
+   "name": "KAUTOKEINO",
+   "canonical": "FROST:SN93700",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-199": {
+   "name": "SIHCCAJAVRI",
+   "canonical": "FROST:SN93900",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-43": {
+   "name": "ROGNSUNDET",
+   "canonical": "FROST:SN94230",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-52": {
+   "name": "HAMMERFEST AP",
+   "canonical": "FROST:SN94280",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-68": {
+   "name": "HONNINGSVAG AP",
+   "canonical": "FROST:SN94680",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-74": {
+   "name": "MEHAMN AP",
+   "canonical": "FROST:SN96310",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-78": {
+   "name": "SLETTNES LH",
+   "canonical": "FROST:SN96400",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-65": {
+   "name": "KARASJOK",
+   "canonical": "FROST:SN97251",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-64": {
+   "name": "ISKORAS II",
+   "canonical": "FROST:SN97710",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-83": {
+   "name": "BERLEVAG AP",
+   "canonical": "FROST:SN98090",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-86": {
+   "name": "BATSFJORD AP",
+   "canonical": "FROST:SN98360",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-92": {
+   "name": "MAKKAUR LH",
+   "canonical": "FROST:SN98400",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-99": {
+   "name": "VARDO AP",
+   "canonical": "FROST:SN98580",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-88": {
+   "name": "VADSO AP",
+   "canonical": "FROST:SN98790",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-89": {
+   "name": "KIRKENES",
+   "canonical": "FROST:SN99370",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-84": {
+   "name": "PASVIK",
+   "canonical": "FROST:SN99460",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-82": {
+   "name": "NYRUD",
+   "canonical": "FROST:SN99540",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-724-0-1": {
+   "name": "EL HIERRO",
+   "canonical": "AEMET:C929I",
+   "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  }
+ }
+}

@@ -725,7 +725,12 @@
       "rain_gauge": "Pluviometro",
       "pyranometer": "Piranometro",
       "uv": "UV"
-    }
+    },
+    "hide_manual": "Nascondi le stazioni manuali",
+    "hide_manual_help": "Le stazioni manuali (osservatori COOP/CoCoRaHS) pubblicano una lettura al giorno presa a mano, senza dati in tempo reale.",
+    "station_type": "Tipo",
+    "station_type_automatic": "Automatica",
+    "station_type_manual": "Manuale"
   },
   "station_selector": {
     "search_near_me": "📍 Trova stazioni vicino a me",

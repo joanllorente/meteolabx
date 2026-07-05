@@ -691,11 +691,11 @@
     "providers_menu_caption": "Activez des fournisseurs pour afficher leurs stations sur la carte.",
     "nearby_providers": "Fournisseurs proches",
     "far_providers": "Fournisseurs éloignés",
-        "sensor_filter": "Capteurs",
-        "historical_only": "Afficher uniquement les stations avec historique",
-        "hide_historical_only": "Masquer les stations historiques",
-        "hide_historical_only_help": "Les stations historiques n'enregistrent plus de données, mais leur historique peut être consulté.",
-        "country_search": "Rechercher un pays…",
+    "sensor_filter": "Capteurs",
+    "historical_only": "Afficher uniquement les stations avec historique",
+    "hide_historical_only": "Masquer les stations historiques",
+    "hide_historical_only_help": "Les stations historiques n'enregistrent plus de données, mais leur historique peut être consulté.",
+    "country_search": "Rechercher un pays…",
     "country_clear": "Effacer le filtre",
     "sensor_filter_clear": "Effacer",
     "filters_caption": "La carte affiche d'abord les fournisseurs proches du centre actuel. Les plus éloignés sont ajoutés manuellement.",
@@ -731,7 +731,12 @@
       "rain_gauge": "Pluviomètre",
       "pyranometer": "Pyranomètre",
       "uv": "UV"
-    }
+    },
+    "hide_manual": "Masquer les stations manuelles",
+    "hide_manual_help": "Les stations manuelles (observateurs COOP/CoCoRaHS) publient un relevé manuel par jour, sans données en temps réel.",
+    "station_type": "Type",
+    "station_type_automatic": "Automatique",
+    "station_type_manual": "Manuelle"
   },
   "station_selector": {
     "search_near_me": "📍 Trouver des stations près de moi",

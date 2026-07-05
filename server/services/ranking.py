@@ -737,14 +737,18 @@ async def fetch_aemet_records(
         if not idema or epoch is None:
             continue
         local = datetime.fromtimestamp(epoch, tz=aemet.LOCAL_TZ)
-        # Tmáx/Tmín desde la temperatura INSTANTÁNEA `ta`, NO desde
-        # `tamax`/`tamin`: el campo `tamax` de /todas es un máximo horario
-        # CRUDO sin validar que puede superar el máximo oficial de AEMET (p.ej.
-        # Andújar: oficial 44.8, tamax 45.1) y, al ser ruidoso, colaría
-        # estaciones rotas al top del ranking. Con max/min de `ta` nunca
-        # mostramos un valor por encima del oficial (a costa de quedarnos un
-        # poco cortos: el bulk es horario y se pierde el pico entre muestras).
+        # Tmáx/Tmín desde los EXTREMOS INTRA-HORARIOS `tamax`/`tamin` de
+        # /todas (con fallback a la instantánea `ta` si faltan). Los extremos
+        # oficiales de AEMET salen de datos 10-minutales: usando solo `ta`
+        # (horaria) el ranking se quedaba 0,1-0,9 °C corto siempre que el pico
+        # caía entre muestras (Montoro 43,2 oficial vs 42,6; Sevilla/San Pablo
+        # 43,2 vs 42,3). Riesgo asumido: `tamax` es crudo sin validar y a
+        # veces excede el oficial en ~0,3 (Andújar 45,1 vs 44,8 oficial);
+        # los disparates físicos los sigue cortando
+        # ``_sanitize_record_extremes`` en el commit.
         ta = _clean(aemet._parse_num(aemet._field(rec, "ta", "TA")))
+        tamax = _clean(aemet._parse_num(aemet._field(rec, "tamax", "TAMAX")))
+        tamin = _clean(aemet._parse_num(aemet._field(rec, "tamin", "TAMIN")))
         store.upsert_hourly(
             "AEMET", idema,
             day=local.date().isoformat(),
@@ -754,8 +758,8 @@ async def fetch_aemet_records(
             lat=_clean(aemet._parse_num(aemet._field(rec, "lat", "LAT"))),
             lon=_clean(aemet._parse_num(aemet._field(rec, "lon", "LON"))),
             values={
-                "tmax": ta,
-                "tmin": ta,
+                "tmax": tamax if tamax is not None else ta,
+                "tmin": tamin if tamin is not None else ta,
                 "gust": _clean(aemet._ms_to_kmh(aemet._field(rec, "vmax", "VMAX"))),
                 "rain": _clean(aemet._parse_num(aemet._field(rec, "prec", "PREC"))),
             },
@@ -1345,8 +1349,14 @@ class RankingStore:
         country: Optional[str] = None,
     ) -> tuple[List[str], Optional[str]]:
         """Fechas locales disponibles para ese pool (orden cronológico) y la
-        fecha PRINCIPAL (la que más estaciones tienen en curso). La principal es
-        el día por defecto; las flechas del frontend permiten ver las demás."""
+        fecha PRINCIPAL. La principal es el día por defecto; las flechas del
+        frontend permiten ver las demás.
+
+        Principal = la fecha MÁS RECIENTE con una cobertura razonable (≥25%
+        de la fecha más poblada). Elegir simplemente "la que más estaciones
+        tiene" hacía que un día pasado ya COMPLETO (todas sus estaciones
+        reportaron) ganara siempre al día en curso, que arranca con pocas —
+        el ranking abría enseñando el viernes un domingo."""
         counts: Dict[str, int] = {}
         for d, r in self._filtered_records(providers=providers, country=country, day=None):
             if _station_has_data(r):
@@ -1354,7 +1364,8 @@ class RankingStore:
         if not counts:
             return [], None
         days = sorted(counts)
-        main = max(counts.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        threshold = max(counts.values()) * 0.25
+        main = max(d for d, n in counts.items() if n >= threshold)
         return days, main
 
     def top(
@@ -1408,12 +1419,20 @@ class RankingStore:
 
     def countries(self, *, now: Optional[datetime] = None) -> List[str]:
         """Países (ISO2) con al menos una estación con dato en cualquier fecha
-        viva. Excluye el centinela ``UN`` (estaciones de redes globales)."""
+        viva. Excluye el centinela ``UN`` (redes globales) y normaliza códigos
+        legacy (TU→TR, AN fuera): defensa para registros antiguos que entren
+        por el snapshot persistido, escritos antes de la normalización."""
+        from server.services.stations import (
+            COUNTRY_CODE_ALIASES,
+            COUNTRY_CODES_RESOLVED_BY_COORDS,
+        )
+
         out: set = set()
         for (_prov, _d), recs in self._daily.items():
             for r in recs.values():
                 code = str(r.country or "").strip().upper()
-                if code and code != "UN" and _station_has_data(r):
+                code = COUNTRY_CODE_ALIASES.get(code, code)
+                if code and code not in COUNTRY_CODES_RESOLVED_BY_COORDS and _station_has_data(r):
                     out.add(code)
         return sorted(out)
 

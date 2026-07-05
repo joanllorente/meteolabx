@@ -722,16 +722,19 @@ def disable_provider_autoconnect(_toggle_prefix: str) -> None:
 
 
 def is_manual_iem_station(state: Any) -> bool:
-    """¿La estación conectada es MANUAL (observador cooperativo del NWS vía IEM)?
+    """¿La estación conectada es MANUAL (observador humano vía IEM)?
 
-    Las redes ``*_COOP`` (p.ej. ``NV_COOP|MOMN2``) solo publican máx/mín una vez
-    al día, sin datos en tiempo real ni serie horaria. Sirve para ocultar avisos
-    de "datos antiguos / serie no disponible" que no aplican a estas estaciones.
+    Las redes ``*_COOP`` (cooperativos del NWS, p.ej. ``NV_COOP|MOMN2``) y
+    ``*COCORAHS*`` (voluntarios CoCoRaHS con pluviómetro) solo publican
+    lecturas a mano una vez al día, sin datos en tiempo real ni serie horaria.
+    Sirve para ocultar avisos de "datos antiguos / serie no disponible" que
+    no aplican a estas estaciones. Mismo criterio que la columna ``manual``
+    del catálogo (scripts/build_stations_sqlite.py).
     """
     if coerce_str(state.get(CONNECTION_TYPE, ""), upper=True) != "IEM":
         return False
-    network = str(state.get(PROVIDER_STATION_ID, "") or "").split("|", 1)[0]
-    return network.strip().upper().endswith("_COOP")
+    network = str(state.get(PROVIDER_STATION_ID, "") or "").split("|", 1)[0].strip().upper()
+    return network.endswith("_COOP") or "COCORAHS" in network
 
 
 def resolve_provider_locality(provider_id: str, metadata: Any, fallback: str = "") -> str:

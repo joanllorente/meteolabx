@@ -49,6 +49,12 @@ COUNTRY_CODE_ALIASES = {
     "TU": "TR",
 }
 
+# Códigos de "país" del catálogo que NO son un país real y se resuelven por
+# coordenadas (point-in-polygon), igual que las redes globales: ``UN`` es el
+# centinela de red global (WMO) y ``AN`` son las Antillas Neerlandesas,
+# disueltas en 2010 en BQ/CW/SX → no existe alias 1:1, la isla decide.
+COUNTRY_CODES_RESOLVED_BY_COORDS = {"UN", "AN"}
+
 
 def _connect() -> sqlite3.Connection:
     path = Path(data_files.STATIONS_DB_PATH).resolve()
@@ -121,6 +127,11 @@ def _record(row: sqlite3.Row) -> Dict[str, Any]:
         if "has_historical" in row.keys()
         else _computed_has_historical(row["provider"], row["network_code"]),
         "is_historical_only": _is_historical_only(row),
+        # Estación de observador MANUAL (IEM COOP/CoCoRaHS: lecturas a mano
+        # una vez al día) frente a automática. Catálogos antiguos sin la
+        # columna caen a False (todas las redes del resto de proveedores
+        # son automáticas).
+        "manual": bool(row["manual"]) if "manual" in row.keys() else False,
         "sensors": _sensors(row),
     }
 
@@ -404,10 +415,14 @@ def iem_station_countries() -> Dict[str, str]:
         if _is_dcp_scan(network) and f"{network}|{row['station_id']}" not in _IEM_DCP_SCAN_KEEP:
             continue
         catalog_country = str(row["country"] or "").strip().upper()
-        if catalog_country and catalog_country != "UN":
+        # Normaliza códigos legacy (FIPS/obsoletos) del catálogo: TU→TR, etc.
+        # Sin esto, el selector de países del ranking mostraba "TU" o "AN".
+        catalog_country = COUNTRY_CODE_ALIASES.get(catalog_country, catalog_country)
+        if catalog_country and catalog_country not in COUNTRY_CODES_RESOLVED_BY_COORDS:
             iso = catalog_country
         else:
-            # Solo las globales sin país (WMO) pagan el point-in-polygon.
+            # Globales sin país (WMO) y códigos no-país (AN) pagan el
+            # point-in-polygon sobre sus coordenadas.
             iso = country_for_point(row["latitude"], row["longitude"])
         if iso and iso not in excluded:
             out[f"{network}|{row['station_id']}"] = iso
