@@ -1377,17 +1377,26 @@ class RankingStore:
         day: Optional[str] = None,
         exclude_countries: Optional[set] = None,
         limit: int = 10,
+        descending: Optional[bool] = None,
         now: Optional[datetime] = None,
     ) -> List[StationDaily]:
         """Top-N de UNA fecha local concreta (``day``). Si no se pasa, usa la
         fecha principal del pool (no mezcla husos: una sola fecha por lista).
-        ``exclude_countries`` quita esos países (toggle "sin Antártida")."""
+        ``exclude_countries`` quita esos países (toggle "sin Antártida").
+
+        ``descending`` invierte el sentido del ranking respecto al natural de la
+        métrica (``METRIC_DESC``): con ``None`` se usa el natural (Tmáx de mayor
+        a menor, Tmín de menor a mayor); ``True``/``False`` lo fuerza, de modo
+        que se puede pedir p.ej. la Tmáx MÁS BAJA (mínimas de máximas) o la Tmín
+        MÁS ALTA (máximas de mínimas) — el otro extremo, no solo el top-N
+        invertido en pantalla."""
         if metric not in METRICS:
             return []
         if day is None:
             _, day = self.day_options(providers=providers, country=country)
             if day is None:
                 return []
+        reverse = METRIC_DESC[metric] if descending is None else bool(descending)
         ranked = [
             r
             for _, r in self._filtered_records(
@@ -1395,7 +1404,7 @@ class RankingStore:
             )
             if r.value(metric) is not None
         ]
-        ranked.sort(key=lambda r: r.value(metric), reverse=METRIC_DESC[metric])
+        ranked.sort(key=lambda r: r.value(metric), reverse=reverse)
         return ranked[:limit]
 
     def station_daily(
@@ -1468,8 +1477,11 @@ async def refresh_once(
     frost_secret = getattr(settings, "frost_client_secret", "") if settings else ""
 
     # Cada proveedor es independiente → se lanzan TODOS en paralelo y se
-    # publican juntos. Así el ciclo dura lo que el más lento (~15s), no la
-    # suma (~40s). Los `fetch_*` ya limitan su propia concurrencia interna.
+    # publican POR SEPARADO en cuanto cada uno termina (no se espera al gather
+    # completo). Así un proveedor inalcanzable (p.ej. MeteoHub, cuyo host puede
+    # colgar hasta el timeout de connect desde ciertas redes) no retiene la
+    # publicación de los que ya respondieron: MeteoGalicia/IEM/AEMET/… aparecen
+    # en segundos y el lento se marca fallido → reintento a los 60s.
     tasks: Dict[str, Any] = {}
     if _want("METEOGALICIA"):
         tasks["METEOGALICIA"] = fetch_meteogalicia_daily(client=client)
@@ -1486,20 +1498,28 @@ async def refresh_once(
     if _want("IEM"):
         tasks["IEM"] = fetch_iem_daily(client=client)
 
-    staged: Dict[str, List[StationDaily]] = {}
-    failed: set = set()
-    if tasks:
-        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-        for provider, result in zip(tasks.keys(), results):
-            if isinstance(result, Exception):
-                logger.warning("ranking: %-12s FALLO · %s (reintento)", provider, type(result).__name__)
-                failed.add(provider)
-            else:
-                staged[provider] = result
-                logger.info("ranking: %-12s OK · %d estaciones", provider, len(result))
+    async def _run(provider: str, coro):
+        """Envuelve el fetch para devolver ``(proveedor, resultado|excepción)``,
+        de modo que ``as_completed`` los entregue en orden de finalización sin
+        que una excepción cancele a los hermanos."""
+        try:
+            return provider, await coro
+        except Exception as exc:  # noqa: BLE001 — cualquier fallo → reintento del ciclo
+            return provider, exc
 
-    # Publica lo conseguido (commit solo avanza updated_at si hubo algo).
-    store.commit(staged)
+    failed: set = set()
+    for finished in asyncio.as_completed([_run(p, c) for p, c in tasks.items()]):
+        provider, result = await finished
+        if isinstance(result, Exception):
+            logger.warning("ranking: %-12s FALLO · %s (reintento)", provider, type(result).__name__)
+            failed.add(provider)
+        else:
+            logger.info("ranking: %-12s OK · %d estaciones", provider, len(result))
+            # Commit incremental: publica ESTE proveedor ya, sin esperar a los
+            # demás. ``commit`` es síncrono y atómico por llamada → los lectores
+            # ven el pool consistente (nuevos de este proveedor + últimos buenos
+            # de los que aún no han terminado).
+            store.commit({provider: result})
     return failed
 
 

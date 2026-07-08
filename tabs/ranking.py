@@ -41,6 +41,40 @@ from utils.i18n import get_language
 
 RANKING_METRICS = ["tmax", "tmin", "gust", "rain"]
 
+# Sentido "natural" del ranking por métrica (Tmáx de mayor a menor, Tmín de
+# menor a mayor). Espejo del ``METRIC_DESC`` del backend.
+_METRIC_DEFAULT_DESC = {"tmax": True, "tmin": False, "gust": True, "rain": True}
+# Métricas con control de orden en la UI: solo temperaturas — invertir lluvia o
+# racha muestra ceros (los sitios más secos / más calmados), sin interés.
+_SORTABLE_METRICS = ("tmax", "tmin")
+
+
+def _order_state_key(section: str, metric: str) -> str:
+    return f"ranking_order__{section}__{metric}"
+
+
+def _metric_descending(section: str, metric: str) -> bool:
+    """¿Orden descendente para (sección, métrica)? Respeta la elección del
+    usuario en session_state; si no ha tocado nada, el natural de la métrica."""
+    choice = st.session_state.get(_order_state_key(section, metric))
+    if choice == "asc":
+        return False
+    if choice == "desc":
+        return True
+    return _METRIC_DEFAULT_DESC.get(metric, True)
+
+
+def _order_param(section: str) -> Optional[str]:
+    """Cadena ``metrica:asc|desc`` (CSV) para el backend con las métricas cuyo
+    orden difiere del natural. ``None`` si todas van en su sentido natural (así
+    la petición y la caché no cambian mientras el usuario no invierta nada)."""
+    parts = [
+        f"{metric}:{'desc' if _metric_descending(section, metric) else 'asc'}"
+        for metric in _SORTABLE_METRICS
+        if _metric_descending(section, metric) != _METRIC_DEFAULT_DESC.get(metric, True)
+    ]
+    return ",".join(parts) or None
+
 
 def _safe_float(value: Any, default: float) -> float:
     try:
@@ -66,22 +100,33 @@ def _country_from_center(lat: float, lon: float) -> Optional[str]:
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _cached_ranking(
-    providers: Optional[str], limit: int, day: Optional[str] = None, exclude: Optional[str] = None
+    providers: Optional[str],
+    limit: int,
+    day: Optional[str] = None,
+    exclude: Optional[str] = None,
+    order: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
-        return fetch_ranking_via_api(providers=providers, day=day, exclude=exclude, limit=limit)
+        return fetch_ranking_via_api(
+            providers=providers, day=day, exclude=exclude, order=order, limit=limit
+        )
     except BackendApiError:
         return {}
 
 
 @st.cache_data(ttl=120, show_spinner=False)
-def _cached_country_ranking(country: Optional[str], limit: int, day: Optional[str] = None) -> Dict[str, Any]:
+def _cached_country_ranking(
+    country: Optional[str],
+    limit: int,
+    day: Optional[str] = None,
+    order: Optional[str] = None,
+) -> Dict[str, Any]:
     """Ranking del país ``country`` (ISO2). Incluye IEM + proveedores
     nacionales (el backend filtra por país de la estación)."""
     if not country:
         return {}
     try:
-        return fetch_ranking_via_api(country=country, day=day, limit=limit)
+        return fetch_ranking_via_api(country=country, day=day, order=order, limit=limit)
     except BackendApiError:
         return {}
 
@@ -229,18 +274,47 @@ def _render_day_nav(data: Dict[str, Any], state_key: str) -> None:
             st.rerun()
 
 
+def _toggle_metric_order(section: str, metric: str) -> None:
+    """Callback del enlace de orden: invierte el sentido de la métrica. Como
+    ``on_click``, corre ANTES del rerun de Streamlit, así el refetch de ese
+    rerun ya usa el nuevo ``order`` (trae el otro extremo, no el top-N
+    invertido)."""
+    st.session_state[_order_state_key(section, metric)] = (
+        "asc" if _metric_descending(section, metric) else "desc"
+    )
+
+
+def _render_sort_toggle(section: str, metric: str, t) -> None:
+    """Orden de la métrica como enlace discreto (texto gris subrayado). Es un
+    ``st.button`` estilizado por CSS (contenedor ``st-key-ranking_sort…``), no un
+    ``<a>``: así el clic hace un rerun PARCIAL de Streamlit (websocket) y no
+    recarga toda la página."""
+    desc = _metric_descending(section, metric)
+    label = t("ranking.order_desc") if desc else t("ranking.order_asc")
+    st.button(
+        label,
+        key=f"ranking_sort__{section}__{metric}",
+        on_click=_toggle_metric_order,
+        args=(section, metric),
+        help=t("ranking.order_help"),
+    )
+
+
 def _render_metric_block(
     metric: str,
     entries: List[dict],
     unit: str,
     t,
     *,
+    section: str,
     show_provider: bool,
     dark: bool,
     show_country: bool = False,
 ) -> None:
     title = t(f"ranking.metrics.{metric}")
     st.markdown(f"**{title}**")
+    if metric in _SORTABLE_METRICS:
+        _render_sort_toggle(section, metric, t)
     if not entries:
         st.caption("—")
         return
@@ -290,6 +364,7 @@ def _render_section(
     data: Dict[str, Any],
     t,
     *,
+    section: str,
     show_provider: bool,
     dark: bool,
     empty_msg: str,
@@ -308,6 +383,7 @@ def _render_section(
                 metrics.get(metric, []) or [],
                 str(units.get(metric, "")),
                 t,
+                section=section,
                 show_provider=show_provider,
                 dark=dark,
                 show_country=show_country,
@@ -336,6 +412,27 @@ _RANKING_CSS = """
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mlbx-rank-val { flex: 0 0 auto; font-weight: 700; font-size: 0.95rem; color: var(--text); }
 .mlbx-rank-unit { font-size: 0.68rem; opacity: 0.6; margin-left: 2px; font-weight: 500; }
+/* Enlace de orden: st.button desnudo → texto gris subrayado, sin caja. Se
+   apunta por la clase st-key-<key> que Streamlit pone al contenedor. */
+[class*="st-key-ranking_sort"] { margin: 0 0 4px; }
+[class*="st-key-ranking_sort"] button {
+    border: none !important; background: transparent !important;
+    box-shadow: none !important; padding: 0 !important;
+    min-height: 0 !important; height: auto !important; width: auto !important;
+    color: var(--text) !important; opacity: 0.5;
+    font-size: 0.72rem !important; font-weight: 400 !important;
+    text-decoration: underline; text-underline-offset: 2px;
+}
+[class*="st-key-ranking_sort"] button:hover,
+[class*="st-key-ranking_sort"] button:focus,
+[class*="st-key-ranking_sort"] button:active {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; outline: none !important;
+    color: #ff5a54 !important; opacity: 0.9;
+}
+[class*="st-key-ranking_sort"] button p {
+    font-size: 0.72rem !important; font-weight: 400 !important; margin: 0 !important;
+}
 </style>
 """
 
@@ -404,11 +501,11 @@ def handle_rank_connect_query(ctx) -> None:
     if not rc or not callable(apply_station_selection):
         return
 
-    gdata = _cached_ranking(None, 10)
+    gdata = _cached_ranking(None, 10, order=_order_param("global"))
     lat = _safe_float(st.session_state.get("map_search_lat"), 40.4168)
     lon = _safe_float(st.session_state.get("map_search_lon"), -3.7038)
     country = _selected_country(lat, lon, _cached_ranking_countries())
-    cdata = _cached_country_ranking(country, 10) if country else {}
+    cdata = _cached_country_ranking(country, 10, order=_order_param("country")) if country else {}
     _handle_rank_connect(cdata, gdata, apply_station_selection=apply_station_selection)
 
 
@@ -436,7 +533,9 @@ def render_ranking_tab(ctx) -> None:
     st.session_state.setdefault("ranking_global_day", today_local)
     st.session_state.setdefault("ranking_country_day", today_local)
     g_exclude = "AQ" if st.session_state.get("ranking_no_antarctica") else None
-    gdata = _cached_ranking(None, 10, st.session_state.get("ranking_global_day"), g_exclude)
+    gdata = _cached_ranking(
+        None, 10, st.session_state.get("ranking_global_day"), g_exclude, _order_param("global")
+    )
     lat = _safe_float(st.session_state.get("map_search_lat"), 40.4168)
     lon = _safe_float(st.session_state.get("map_search_lon"), -3.7038)
     available = _cached_ranking_countries()
@@ -447,7 +546,9 @@ def render_ranking_tab(ctx) -> None:
         detected = _resolve_user_country(lat, lon)
         st.session_state["ranking_country"] = detected if detected in options else options[0]
     selected = st.session_state.get("ranking_country")
-    cdata = _cached_country_ranking(selected, 10, st.session_state.get("ranking_country_day"))
+    cdata = _cached_country_ranking(
+        selected, 10, st.session_state.get("ranking_country_day"), _order_param("country")
+    )
 
     # Clic en un nombre del ranking → conectar (antes de renderizar).
     _handle_rank_connect(cdata, gdata, apply_station_selection=apply_station_selection)
@@ -467,11 +568,14 @@ def render_ranking_tab(ctx) -> None:
             key="ranking_country",
         )
         # Refetch por si cambió el país (las fechas disponibles dependen de él).
-        cdata = _cached_country_ranking(selected, 10, st.session_state.get("ranking_country_day"))
+        cdata = _cached_country_ranking(
+            selected, 10, st.session_state.get("ranking_country_day"), _order_param("country")
+        )
         _render_day_nav(cdata, "ranking_country_day")
         country_name = _country_name(selected)
         _render_section(
             cdata, t,
+            section="country",
             show_provider=True,
             dark=dark,
             empty_msg=t("ranking.country_empty", provider=country_name),
@@ -487,6 +591,7 @@ def render_ranking_tab(ctx) -> None:
     _render_day_nav(gdata, "ranking_global_day")
     _render_section(
         gdata, t,
+        section="global",
         show_provider=False,
         show_country=True,
         dark=dark,

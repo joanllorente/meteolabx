@@ -16,3 +16,6 @@ data/data_estaciones_iem.json
 
 # Entorno virtual local (Python 3.14)
 .venv/
+
+# Estadísticas internas de uso (en el Volume en producción)
+data/usage_stats.sqlite

@@ -1596,7 +1596,14 @@ def render_sidebar(_local_storage_unused=None):
             api_key = str(st.session_state.get("active_key", "")).strip()
             z_raw = str(st.session_state.get("active_z", "")).strip()
 
-            if not station or not api_key:
+            # Puerta del panel INTERNO de estadísticas: id especial +
+            # contraseña de administración en el campo API key. No conecta
+            # a ninguna estación; abre el panel en el área principal.
+            from components.internal_stats import maybe_intercept_wu_connect
+
+            if maybe_intercept_wu_connect(station, api_key):
+                st.rerun()
+            elif not station or not api_key:
                 st.sidebar.error(t("sidebar.messages.missing_station_or_key"))
             else:
                 # Validar altitud si se proporcionó

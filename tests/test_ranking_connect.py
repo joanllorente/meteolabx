@@ -21,7 +21,7 @@ def test_rank_connect_query_is_processed_outside_ranking_tab(monkeypatch):
     monkeypatch.setattr(
         ranking,
         "_cached_ranking",
-        lambda providers, limit: {
+        lambda providers, limit, order=None: {
             "metrics": {
                 "tmax": [
                     {

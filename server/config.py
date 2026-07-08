@@ -117,6 +117,22 @@ class Settings(BaseSettings):
     ranking_state.json.gz``. Configurar vía ``METEOLABX_RANKING_STATE_PATH``.
     """
 
+    usage_stats_path: str = ""
+    """
+    Ruta del sqlite de estadísticas internas de uso (visitas por estación).
+    Vacío → ``$RAILWAY_VOLUME_MOUNT_PATH/usage_stats.sqlite`` si hay Volume,
+    o ``data/usage_stats.sqlite`` en local. Configurar vía
+    ``METEOLABX_USAGE_STATS_PATH``.
+    """
+
+    stats_admin_password: str = "admin"
+    """
+    Contraseña del panel interno de estadísticas (se introduce en el campo
+    API key del formulario WU junto al id especial ``Statics_admin``).
+    Cadena vacía → panel deshabilitado (404). CAMBIARLA en producción vía
+    ``METEOLABX_STATS_ADMIN_PASSWORD``.
+    """
+
     # --- Provider API keys ---
     aemet_api_key: str = ""
     """

@@ -159,13 +159,16 @@ def fetch_ranking_via_api(
     country: Optional[str] = None,
     day: Optional[str] = None,
     exclude: Optional[str] = None,
+    order: Optional[str] = None,
     limit: int = 10,
 ) -> Dict[str, Any]:
     """Ranking diario top-N. ``providers`` = lista CSV para filtrar por país
     (sin valor → global); ``country`` = ISO2 para rankear ese país (incluye
     IEM multi-país); ``day`` = fecha local ISO a mostrar (sin valor → la
-    principal); ``exclude`` = ISO2 CSV a quitar (p.ej. ``AQ`` Antártida). Lanza
-    ``BackendApiError`` si el backend falla."""
+    principal); ``exclude`` = ISO2 CSV a quitar (p.ej. ``AQ`` Antártida);
+    ``order`` = pares ``metrica:asc|desc`` CSV para forzar el sentido del orden
+    (p.ej. ``tmax:asc`` da las máximas más bajas). Lanza ``BackendApiError`` si
+    el backend falla."""
     params: Dict[str, Any] = {"limit": int(limit)}
     if providers:
         params["providers"] = str(providers)
@@ -175,6 +178,8 @@ def fetch_ranking_via_api(
         params["day"] = str(day).strip()
     if exclude:
         params["exclude"] = str(exclude).strip().upper()
+    if order:
+        params["order"] = str(order).strip()
     return _request_json("GET", "/v1/ranking", params=params)
 
 
@@ -292,6 +297,49 @@ def _request_json(
         body = response.json()
     except ValueError as exc:
         raise BackendApiError("badjson") from exc
+    if not isinstance(body, dict):
+        raise BackendApiError("badjson")
+    return body
+
+
+# =====================================================================
+# Estadísticas internas de uso
+# =====================================================================
+
+def track_station_visit_via_api(provider: str, station_id: str, name: str = "") -> None:
+    """Registra una conexión a estación. Fire-and-forget: cualquier fallo se
+    traga en silencio — las estadísticas nunca deben romper una conexión."""
+    try:
+        requests.post(
+            f"{backend_url()}/v1/stats/visit",
+            json={
+                "provider": str(provider or "").strip().upper(),
+                "station_id": str(station_id or "").strip(),
+                "name": str(name or "").strip(),
+            },
+            timeout=2.0,
+        )
+    except Exception:
+        pass
+
+
+def fetch_usage_stats_via_api(password: str) -> Dict[str, Any]:
+    """Visitas agregadas por estación (panel interno). Lanza BackendApiError
+    ('unauthorized' si la contraseña no es correcta)."""
+    url = f"{backend_url()}/v1/stats/stations"
+    try:
+        response = requests.get(
+            url, headers={"X-Stats-Password": str(password or "")}, timeout=10.0,
+        )
+    except requests.Timeout as exc:
+        raise BackendApiError("timeout") from exc
+    except requests.RequestException as exc:
+        raise BackendApiError("network") from exc
+    if response.status_code == 401:
+        raise BackendApiError("unauthorized")
+    if response.status_code >= 400:
+        _raise_api_error_from_response(response)
+    body = response.json()
     if not isinstance(body, dict):
         raise BackendApiError("badjson")
     return body

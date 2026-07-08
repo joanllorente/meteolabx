@@ -66,6 +66,15 @@ async def get_ranking(
         default=None,
         description="ISO2 a EXCLUIR, separados por comas (p.ej. ``AQ`` para quitar la Antártida).",
     ),
+    order: Optional[str] = Query(
+        default=None,
+        description=(
+            "Sentido del orden por métrica: pares ``metrica:asc|desc`` separados "
+            "por comas (p.ej. ``tmax:asc,tmin:desc``). Solo altera las métricas "
+            "listadas; el resto usa su orden natural (Tmáx desc, Tmín asc). "
+            "Permite ver el otro extremo: la Tmáx más baja o la Tmín más alta."
+        ),
+    ),
     limit: int = Query(default=10, ge=1, le=50),
 ) -> RankingResponse:
     store: Optional[ranking_svc.RankingStore] = getattr(request.app.state, "ranking_store", None)
@@ -73,6 +82,14 @@ async def get_ranking(
     country_filter = (country or "").strip().upper() or None
     exclude_set = {c.strip().upper() for c in (exclude or "").split(",") if c.strip()} or None
     requested_day = (day or "").strip() or None
+    # {metrica: descendente?} para las métricas cuyo orden se fuerza.
+    order_map: Dict[str, bool] = {}
+    for part in (order or "").split(","):
+        metric_name, _, direction = part.strip().partition(":")
+        metric_name = metric_name.strip().lower()
+        direction = direction.strip().lower()
+        if metric_name in ranking_svc.METRICS and direction in ("asc", "desc"):
+            order_map[metric_name] = direction == "desc"
 
     if store is None:
         return RankingResponse(providers=[], units=_UNITS, metrics={m: [] for m in ranking_svc.METRICS})
@@ -91,6 +108,7 @@ async def get_ranking(
             day=target_day,
             exclude_countries=exclude_set,
             limit=limit,
+            descending=order_map.get(metric),
         )
         metrics_out[metric] = [
             RankingEntry(

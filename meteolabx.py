@@ -4184,6 +4184,15 @@ _sync_shareable_url(active_tab)
 # figura, antes de pasar por _plotly_chart_stretch.
 _register_plotly_templates()
 
+# Panel INTERNO de estadísticas (administración): sustituye a las pestañas
+# mientras está abierto. Se activa desde el formulario WU con el id especial
+# Statics_admin + contraseña (ver components/internal_stats.py).
+if st.session_state.get("internal_stats_open"):
+    from components.internal_stats import render_internal_stats
+
+    render_internal_stats()
+    st.stop()
+
 # TAB 1: OBSERVACIÓN
 _boot_mark(f"before tab render (active_tab={active_tab})")
 if active_tab == "observation":
@@ -4237,7 +4246,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.4"
+APP_VERSION = "1.2.5"
 
 
 def _whats_new_footer_html() -> str:

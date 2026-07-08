@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse
 from server import __version__
 from server.config import Settings, get_settings
 from server.dependencies.http import http_client_lifespan
-from server.routers import climo, health, observations, ranking, stations
+from server.routers import climo, health, observations, ranking, stations, stats
 from server.schemas.errors import ProviderError
 
 logger = logging.getLogger(__name__)
@@ -105,6 +105,7 @@ def create_app() -> FastAPI:
     app.include_router(climo.router, prefix=api_prefix)
     app.include_router(stations.router, prefix=api_prefix)
     app.include_router(ranking.router, prefix=api_prefix)
+    app.include_router(stats.router, prefix=api_prefix)
 
     return app
 

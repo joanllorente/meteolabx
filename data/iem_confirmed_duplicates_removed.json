@@ -774,6 +774,36 @@
    "name": "EL HIERRO",
    "canonical": "AEMET:C929I",
    "removed_at": "2026-07-03T20:21:25.551716+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-288": {
+   "name": "ROROS AP",
+   "canonical": "FROST:SN10380",
+   "removed_at": "2026-07-05T11:53:33.908137+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-460": {
+   "name": "GULLHOLMEN",
+   "canonical": "FROST:SN17280",
+   "removed_at": "2026-07-05T11:53:33.908137+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-397": {
+   "name": "TRYSIL VEGSTASJON",
+   "canonical": "FROST:SN180",
+   "removed_at": "2026-07-05T11:53:33.908137+00:00"
+  },
+  "WMO_BUFR_SRF|0-250-0-591": {
+   "name": "EMBRUN",
+   "canonical": "METEOFRANCE:05046001",
+   "removed_at": "2026-07-05T11:53:33.908137+00:00"
+  },
+  "WMO_BUFR_SRF|0-250-0-593": {
+   "name": "VILLAR ST PANCRACE",
+   "canonical": "METEOFRANCE:05183001",
+   "removed_at": "2026-07-05T12:14:42.998665+00:00"
+  },
+  "WMO_BUFR_SRF|0-724-0-222": {
+   "name": "MADRID RETIRO",
+   "canonical": "AEMET:3195",
+   "removed_at": "2026-07-05T13:02:30.006858+00:00"
   }
  }
 }

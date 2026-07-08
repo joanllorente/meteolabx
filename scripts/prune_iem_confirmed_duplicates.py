@@ -8,8 +8,9 @@ proveedor oficial (AEMET, FROST, METEOFRANCE…). Nos quedamos con la oficial.
 reales de ambas y coinciden. Es el nivel máximo de certeza del pipeline; los
 ``inventory_*`` (solo indicios de inventario) NO se borran.
 
-Excepción NWS: los duplicados IEM de estaciones NWS se CONSERVAN — NWS no
-tiene endpoint bulk y el ranking los necesita.
+Excepción NWS y METOFFICE: los duplicados IEM de estaciones de esos dos
+proveedores se CONSERVAN — ninguno tiene endpoint bulk y el ranking de sus
+países (US, GB) se alimenta de las estaciones IEM.
 
 Reejecutable: tras cada ronda de validación que confirme pares nuevos, correr
 de nuevo. Borra de: stations, station_aliases (+checks), visibility_overrides,
@@ -41,7 +42,11 @@ SQLITE_PATH = ROOT_DIR / "data" / "stations.sqlite"
 INVENTORY_PATH = ROOT_DIR / "data" / "data_estaciones_iem.json"
 KILL_LIST_PATH = ROOT_DIR / "data" / "iem_confirmed_duplicates_removed.json"
 
-_SELECT_DOOMED = """
+# Proveedores SIN bulk: sus duplicados IEM se conservan (el ranking de su
+# país sale de IEM).
+KEEP_CANONICAL_PROVIDERS = ("NWS", "METOFFICE")
+
+_SELECT_DOOMED = f"""
 SELECT DISTINCT s_iem.station_pk, s_iem.network_code, s_iem.station_id,
        s_iem.name, s_iem.source_record_pk,
        s_src.provider AS canonical_provider, s_src.station_id AS canonical_id
@@ -49,13 +54,14 @@ FROM station_aliases a
 JOIN stations s_iem ON s_iem.station_pk = a.station_pk AND s_iem.provider = 'IEM'
 JOIN stations s_src ON s_src.station_pk = a.canonical_station_pk
 WHERE a.method = 'observation_confirmed'
-  AND s_src.provider <> 'NWS'
-  -- Defensa: si la misma IEM estuviera además confirmada contra NWS
-  -- (imposible geográficamente hoy), se conserva.
+  AND s_src.provider NOT IN {KEEP_CANONICAL_PROVIDERS!r}
+  -- Defensa: si la misma IEM estuviera además confirmada contra un
+  -- proveedor sin bulk, se conserva.
   AND s_iem.station_pk NOT IN (
       SELECT a2.station_pk FROM station_aliases a2
       JOIN stations n ON n.station_pk = a2.canonical_station_pk
-      WHERE a2.method = 'observation_confirmed' AND n.provider = 'NWS'
+      WHERE a2.method = 'observation_confirmed'
+        AND n.provider IN {KEEP_CANONICAL_PROVIDERS!r}
   )
 """
 
@@ -68,7 +74,10 @@ def main() -> int:
     connection = sqlite3.connect(SQLITE_PATH)
     connection.row_factory = sqlite3.Row
     doomed = connection.execute(_SELECT_DOOMED).fetchall()
-    print(f"Duplicados IEM confirmados (no-NWS) a eliminar: {len(doomed)}")
+    print(
+        "Duplicados IEM confirmados a eliminar "
+        f"(se conservan {'/'.join(KEEP_CANONICAL_PROVIDERS)}): {len(doomed)}"
+    )
     if not doomed:
         connection.close()
         return 0

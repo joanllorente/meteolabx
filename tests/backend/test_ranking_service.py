@@ -68,6 +68,36 @@ def test_countries_normalizes_legacy_codes():
     assert store.countries() == ["DE", "TR"]
 
 
+def test_top_descending_override_returns_opposite_extreme():
+    """``descending`` fuerza el sentido del orden: la Tmáx natural va de mayor a
+    menor (día más caluroso primero); forzada ascendente devuelve la máxima MÁS
+    BAJA (mínimas de máximas), no solo el top-N invertido. Simétrico para Tmín."""
+
+    def _rec(sid: str, tmax: float, tmin: float) -> StationDaily:
+        return StationDaily(
+            provider="IEM", station_id=sid, name=sid, tmax=tmax, tmin=tmin,
+            country="DE", local_date="2026-07-05",
+        )
+
+    store = RankingStore()
+    store.replace_daily(
+        "IEM",
+        [_rec("a", 40.0, 20.0), _rec("b", 30.0, 10.0), _rec("c", 35.0, 15.0)],
+    )
+
+    # Natural: Tmáx desc (más alta primero), Tmín asc (más baja primero).
+    assert [r.station_id for r in store.top("tmax", day="2026-07-05")] == ["a", "c", "b"]
+    assert [r.station_id for r in store.top("tmin", day="2026-07-05")] == ["b", "c", "a"]
+
+    # Forzado: Tmáx asc → máxima más baja primero; Tmín desc → mínima más alta.
+    assert [
+        r.station_id for r in store.top("tmax", day="2026-07-05", descending=False)
+    ] == ["b", "c", "a"]
+    assert [
+        r.station_id for r in store.top("tmin", day="2026-07-05", descending=True)
+    ] == ["a", "c", "b"]
+
+
 def test_day_options_prefers_recent_day_with_reasonable_coverage():
     """La fecha principal debe ser la más reciente con cobertura razonable,
     no la más poblada: un día pasado COMPLETO ganaba siempre al día en curso

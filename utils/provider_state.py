@@ -462,6 +462,18 @@ def disconnect_active_station(*, clear_runtime_cache: bool = True) -> None:
     _clear_prefixed_session_keys(PROVIDER_RUNTIME_PREFIXES)
 
 
+def _track_station_visit(provider_id: str, station_id: str, name: str = "") -> None:
+    """Registra la conexión en las estadísticas internas (fire-and-forget).
+    Cubre todas las vías de entrada: selector, mapa, ranking, deep links y
+    autoconexión, porque se llama desde los ``apply_*_station_state``."""
+    try:
+        from utils.api_client import track_station_visit_via_api
+
+        track_station_visit_via_api(provider_id, station_id, name)
+    except Exception:
+        pass
+
+
 def apply_wu_station_state(
     station_id: str,
     api_key: str,
@@ -498,6 +510,7 @@ def apply_wu_station_state(
     st.session_state[CONNECTED] = bool(connected)
     if connected:
         set_connection_loading("WU", station_id, station_id, previous_state=previous_state)
+        _track_station_visit("WU", station_id)
     return True
 
 
@@ -557,6 +570,7 @@ def apply_weatherlink_station_state(
     st.session_state[CONNECTED] = bool(connected)
     if connected:
         set_connection_loading("WEATHERLINK", station_id, station_name, previous_state=previous_state)
+        _track_station_visit("WEATHERLINK", station_id, station_name)
     return True
 
 
@@ -632,6 +646,7 @@ def apply_provider_station_state(
         st.session_state[CONNECTED] = connected
         if connected:
             set_connection_loading(provider_id, station_id, station_name, previous_state=previous_state)
+            _track_station_visit(provider_id, station_id, station_name)
     if show_results is not None:
         st.session_state[SHOW_RESULTS] = show_results
     if pending_active_tab is not None:

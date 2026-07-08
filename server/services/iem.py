@@ -177,7 +177,9 @@ async def _fetch_current_summary(
     return {}
 
 
-def _daily_summary_from_current(row: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
+def _daily_summary_from_current(
+    row: Dict[str, Any], lat: Optional[float] = None
+) -> Tuple[Dict[str, float], float]:
     daily_extremes: Dict[str, float] = {}
     for source, target, converter in (
         ("max_tmpf", "temp_max", _f_to_c),
@@ -185,6 +187,10 @@ def _daily_summary_from_current(row: Dict[str, Any]) -> Tuple[Dict[str, float], 
         ("max_gust", "gust_max", _knots_to_kmh),
     ):
         value = converter(row.get(source))
+        # Las temperaturas extremas del summary también vienen de sensores IEM
+        # sin validar → mismo filtro climatológico que la actual (la ráfaga no).
+        if target in ("temp_max", "temp_min"):
+            value = _plausible_temp_c(value, lat)
         if _valid(value):
             daily_extremes[target] = float(value)
 
@@ -310,10 +316,29 @@ async def _fetch_rows(
     return rows, meta
 
 
-def _row_to_values(row: Dict[str, Any]) -> Dict[str, float]:
+def _plausible_temp_c(value: float, lat: Optional[float]) -> float:
+    """Anula (→ NaN) una temperatura climatológicamente IMPOSIBLE para la
+    latitud de la estación. IEM agrega redes sin validar y cuela sensores rotos:
+    la estación BUFR de Camboya (lat ~11) llegó a reportar −39.7°C, imposible en
+    los trópicos. Reutiliza el suelo por latitud/estación del ranking
+    (``_tmin_floor``) y el récord mundial de calor, de modo que el frío/calor
+    REAL (Ártico en invierno, Death Valley) se conserva y solo cae lo imposible.
+    Sin latitud conocida (o no numérica) no se filtra (no hay con qué juzgar)."""
+    if not _valid(value) or not _valid(lat):
+        return value
+    # Import perezoso: no acopla iem.py al módulo de ranking en tiempo de carga.
+    from server.services.ranking import _WORLD_TMAX_RECORD_C, _tmin_floor
+
+    v = float(value)
+    if v < _tmin_floor(float(lat)) or v > _WORLD_TMAX_RECORD_C:
+        return float("nan")
+    return value
+
+
+def _row_to_values(row: Dict[str, Any], lat: Optional[float] = None) -> Dict[str, float]:
     return {
-        "temp": _f_to_c(row.get("tmpf")),
-        "dewpt": _f_to_c(row.get("dwpf")),
+        "temp": _plausible_temp_c(_f_to_c(row.get("tmpf")), lat),
+        "dewpt": _plausible_temp_c(_f_to_c(row.get("dwpf")), lat),
         "rh": _safe_float(row.get("relh")),
         "pressure": _inhg_to_hpa(row.get("alti") or row.get("mslp")),
         "wind": _knots_to_kmh(row.get("sknt")),
@@ -366,7 +391,7 @@ def _series_from_rows(rows: List[Dict[str, Any]], meta: Dict[str, Any]) -> Dict[
         epoch = _parse_epoch(row)
         if epoch is None:
             continue
-        parsed = _row_to_values(row)
+        parsed = _row_to_values(row, meta.get("lat"))
         precip = parsed["precip"]
         if _valid(precip):
             bucket = int(epoch) // 3600
@@ -445,7 +470,7 @@ async def fetch_current(
             status_code=502,
         )
 
-    parsed = _row_to_values(latest)
+    parsed = _row_to_values(latest, meta.get("lat"))
     epoch = int(_parse_epoch(latest) or 0)
     dt_utc = datetime.fromtimestamp(epoch, tz=timezone.utc)
     tz = _station_tz(meta)
@@ -466,7 +491,9 @@ async def fetch_current(
     )
     daily_extremes: Dict[str, float] = {}
     if current_summary:
-        summary_extremes, summary_precip_total = _daily_summary_from_current(current_summary)
+        summary_extremes, summary_precip_total = _daily_summary_from_current(
+            current_summary, meta.get("lat")
+        )
         if (
             ("temp_max" in summary_extremes or "temp_min" in summary_extremes)
             and not _summary_has_current_temperature(current_summary)
