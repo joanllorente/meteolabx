@@ -57,6 +57,11 @@ def _max(values: Sequence[Any]) -> float:
     return max(valid) if valid else float("nan")
 
 
+def _sum(values: Sequence[Any]) -> float:
+    valid = _valid_numbers(values)
+    return float(sum(valid)) if valid else float("nan")
+
+
 def _min(values: Sequence[Any]) -> float:
     valid = _valid_numbers(values)
     return min(valid) if valid else float("nan")
@@ -106,7 +111,11 @@ def _series_to_daily_row(
 
     temp_values = _col("temps")
     latest_epoch = max(epochs[idx] for idx in row_indexes)
-    precip_total = _max(_col("precips"))
+    # La lluvia del día es la SUMA de la caída en cada intervalo (``rainfall_mm``
+    # es el incremento por registro, no un acumulado corrido), no el máximo: con
+    # ``_max`` solo se contaba el intervalo más lluvioso del día y el total
+    # mensual salía ~20x corto (Roses enero: 12,6 mm vs 271 mm reales).
+    precip_total = _sum(_col("precips"))
     if not math.isnan(precip_total):
         precip_total = max(0.0, precip_total)
 

@@ -21,6 +21,14 @@ construye un índice espacial RTree:
 python3 scripts/build_stations_sqlite.py
 ```
 
+`build_windy_pws_sqlite.py` descarga el catálogo abierto de estaciones amateur
+de Windy en una base separada. La clave se lee de `WINDY_API_KEY` y el resultado
+se guarda en `data/pws_stations.sqlite`; no modifica el catálogo oficial.
+
+```bash
+WINDY_API_KEY=... python3 scripts/build_windy_pws_sqlite.py
+```
+
 FastAPI consulta esta base directamente. Las estaciones IEM se almacenan e
 indexan, pero quedan fuera de `connectable_stations` hasta disponer de su
 servicio de observaciones. La tabla `station_aliases` queda preparada para la

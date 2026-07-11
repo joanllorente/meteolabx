@@ -692,6 +692,7 @@
     "historical_only": "Show only stations with historical data",
     "hide_historical_only": "Hide historical stations",
     "hide_historical_only_help": "Historical stations no longer record data, but their historical archive can be consulted.",
+    "country_filter": "Countries",
     "country_search": "Search country…",
     "country_clear": "Clear filter",
     "sensor_filter_clear": "Clear",

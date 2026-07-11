@@ -2024,6 +2024,7 @@
     {
       "idema": "0076",
       "nombre": "BARCELONA  AEROPUERTO",
+      "archive_begin": "1934-06-01",
       "provincia": "",
       "lat": 41.292781,
       "lon": 2.069995,
@@ -7442,6 +7443,7 @@
     {
       "idema": "9771C",
       "nombre": "LLEIDA",
+      "archive_begin": "1950-01-01",
       "provincia": "",
       "lat": 41.626108,
       "lon": 0.598058,
@@ -10772,6 +10774,7 @@
     {
       "idema": "0016A",
       "nombre": "REUS  AEROPUERTO",
+      "archive_begin": "1950-01-01",
       "provincia": "",
       "lat": 41.145,
       "lon": 1.163611,
@@ -13148,6 +13151,7 @@
     {
       "idema": "9981A",
       "nombre": "TORTOSA",
+      "archive_begin": "1920-01-01",
       "provincia": "",
       "lat": 40.820278,
       "lon": 0.493333,

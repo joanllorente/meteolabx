@@ -50,13 +50,12 @@ def meteocat_series_start(station_id: str) -> str | None:
     return min(candidates) if candidates else None
 
 
-def iem_series_start(station_id: str) -> str | None:
-    raw = str(station_id or "").strip()
-    if "|" not in raw:
-        return None
-    network, station = (part.strip() for part in raw.split("|", 1))
-    if not network or not station:
-        return None
+def _sqlite_raw_station_payload(provider: str, station_id: str, network_code: str = "") -> dict[str, Any]:
+    station = str(station_id or "").strip()
+    if not station:
+        return {}
+    provider_id = str(provider or "").strip().upper()
+    network = str(network_code or "").strip()
     try:
         connection = sqlite3.connect(f"file:{Path(STATIONS_DB_PATH).resolve()}?mode=ro", uri=True)
         connection.row_factory = sqlite3.Row
@@ -65,21 +64,38 @@ def iem_series_start(station_id: str) -> str | None:
             SELECT r.raw_json
             FROM stations s
             JOIN station_inventory_records r ON r.record_pk = s.source_record_pk
-            WHERE s.provider = 'IEM'
+            WHERE s.provider = ? COLLATE NOCASE
               AND s.network_code = ? COLLATE NOCASE
               AND s.station_id = ? COLLATE NOCASE
             LIMIT 1
             """,
-            (network, station),
+            (provider_id, network, station),
         ).fetchone()
         connection.close()
     except sqlite3.Error:
-        return None
+        return {}
     if not row:
-        return None
+        return {}
     try:
         payload = json.loads(str(row["raw_json"] or "{}"))
     except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def aemet_series_start(station_id: str) -> str | None:
+    payload = _sqlite_raw_station_payload("AEMET", station_id)
+    start = str(payload.get("archive_begin") or payload.get("series_start") or "").strip()
+    return start or None
+
+
+def iem_series_start(station_id: str) -> str | None:
+    raw = str(station_id or "").strip()
+    if "|" not in raw:
         return None
+    network, station = (part.strip() for part in raw.split("|", 1))
+    if not network or not station:
+        return None
+    payload = _sqlite_raw_station_payload("IEM", station, network)
     start = str(payload.get("archive_begin") or "").strip()
     return start or None

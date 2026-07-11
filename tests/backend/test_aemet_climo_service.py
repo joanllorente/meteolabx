@@ -126,6 +126,120 @@ async def test_daily_long_range_splits_in_150_day_chunks() -> None:
 
 
 @pytest.mark.asyncio
+async def test_legacy_txt_station_served_without_aemet_api_calls() -> None:
+    from server.services.aemet_climo import fetch_climo_daily_for_periods
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(500, json={})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    async with client:
+        df = await fetch_climo_daily_for_periods(
+            client, "9771C", "K", [(date(1950, 1, 1), date(1950, 1, 31))],
+        )
+
+    assert calls == []
+    assert len(df) == 31
+    first = df.iloc[0]
+    assert first["date"].strftime("%Y-%m-%d") == "1950-01-01"
+    assert first["temp_max"] == pytest.approx(9.1)
+    assert first["temp_min"] == pytest.approx(3.3)
+    assert first["precip_total"] == pytest.approx(0.0)
+    assert first["solar_hours"] == pytest.approx(6.3)
+
+
+@pytest.mark.asyncio
+async def test_legacy_txt_station_uses_aemet_api_only_outside_local_coverage() -> None:
+    from server.services.aemet_climo import fetch_climo_daily_for_periods
+
+    records = [
+        {
+            "fecha": "2026-01-01",
+            "indicativo": "9771C",
+            "tmax": "10,0",
+            "tmin": "2,0",
+            "prec": "1,0",
+        }
+    ]
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = str(request.url)
+        calls.append(path)
+        if "/valores/climatologicos/" in path:
+            return httpx.Response(
+                200, json={"estado": 200, "datos": "https://opendata.aemet.es/datos/x"},
+            )
+        return httpx.Response(200, json=records)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    async with client:
+        df = await fetch_climo_daily_for_periods(
+            client, "9771C", "K", [(date(2025, 12, 31), date(2026, 1, 1))],
+        )
+
+    assert len(calls) == 2
+    assert "2026-01-01T00%3A00%3A00UTC" in calls[0]
+    assert len(df) == 2
+    assert df.iloc[0]["date"].strftime("%Y-%m-%d") == "2025-12-31"
+    assert df.iloc[1]["date"].strftime("%Y-%m-%d") == "2026-01-01"
+
+
+@pytest.mark.asyncio
+async def test_legacy_txt_station_monthly_summary_uses_local_daily_file() -> None:
+    from server.services.aemet_climo import fetch_climo_monthly_for_year
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(500, json={})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    async with client:
+        df = await fetch_climo_monthly_for_year(client, "9771C", "K", 1950)
+
+    assert calls == []
+    assert len(df) == 12
+    assert df.iloc[0]["date"].strftime("%Y-%m-%d") == "1950-01-01"
+    assert df.iloc[0]["precip_total"] == pytest.approx(4.8)
+    assert df.iloc[0]["temp_abs_min"] == pytest.approx(-4.4)
+
+
+@pytest.mark.asyncio
+async def test_legacy_txt_station_yearly_summary_mixes_local_and_api_years() -> None:
+    from server.services.aemet_climo import fetch_climo_yearly_for_years
+
+    records = [
+        {"fecha": "2026-1", "tm_mes": "12,0", "p_mes": "10,0"},
+        {"fecha": "2026-13", "tm_mes": "13,0", "p_mes": "100,0"},
+    ]
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = str(request.url)
+        calls.append(path)
+        if "/valores/climatologicos/" in path:
+            return httpx.Response(
+                200, json={"estado": 200, "datos": "https://opendata.aemet.es/datos/x"},
+            )
+        return httpx.Response(200, json=records)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    async with client:
+        df = await fetch_climo_yearly_for_years(client, "9771C", "K", [1950, 2026])
+
+    assert len(calls) == 2
+    assert "anioini/2026/aniofin/2026" in calls[0]
+    assert df["date"].dt.strftime("%Y-%m-%d").tolist() == ["1950-01-01", "2026-01-01"]
+    assert df.iloc[0]["precip_total"] == pytest.approx(240.2)
+    assert df.iloc[1]["precip_total"] == pytest.approx(100.0)
+
+
+@pytest.mark.asyncio
 async def test_monthly_year_uses_annual_record_for_absolute_extremes() -> None:
     from server.services.aemet_climo import fetch_climo_monthly_for_year
 

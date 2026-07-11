@@ -26,6 +26,28 @@ def test_weatherlink_historical_summary_mode_is_monthly_only():
     assert session_state["climo_summary_mode"] == "monthly"
 
 
+def test_year_options_default_keeps_recent_window():
+    options = historical._year_options(datetime(2026, 7, 9))
+
+    assert options[0] == 2026
+    assert options[-1] == 1991
+
+
+def test_provider_year_options_aemet_reaches_1950():
+    options = historical._provider_year_options("AEMET", datetime(2026, 7, 9))
+
+    assert options[0] == 2026
+    assert options[-1] == 1950
+    assert 1950 in options
+
+
+def test_provider_year_options_non_aemet_keeps_recent_window():
+    options = historical._provider_year_options("WU", datetime(2026, 7, 9))
+
+    assert options[0] == 2026
+    assert options[-1] == 1991
+
+
 def test_historical_provider_support_uses_manual_notes_for_unavailable(note_recorder, translation_stub):
     supported = historical._historical_provider_is_supported("NWS", note_recorder, translation_stub)
 

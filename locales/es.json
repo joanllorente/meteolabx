@@ -692,6 +692,7 @@
     "historical_only": "Mostrar solo estaciones con histórico disponible",
     "hide_historical_only": "Ocultar estaciones históricas",
     "hide_historical_only_help": "Las estaciones históricas ya no registran datos pero puede consultarse el histórico.",
+    "country_filter": "Países",
     "country_search": "Buscar país…",
     "country_clear": "Limpiar filtro",
     "sensor_filter_clear": "Limpiar",

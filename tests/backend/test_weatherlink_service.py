@@ -99,7 +99,9 @@ CLIMO_HISTORIC_PAYLOAD = {
                     "wind_speed_avg": 5.0,    # mph → km/h
                     "wind_speed_hi": 12.0,
                     "wind_dir_of_prevail": 90.0,
-                    "rainfall_daily_mm": 0.4,
+                    # El histórico real trae ``rainfall_mm`` = lluvia caída EN ese
+                    # intervalo (incremento), no un acumulado → se SUMAN.
+                    "rainfall_mm": 0.4,
                 },
                 {
                     "ts": int(datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc).timestamp()),
@@ -107,7 +109,7 @@ CLIMO_HISTORIC_PAYLOAD = {
                     "wind_speed_avg": 10.0,
                     "wind_speed_hi": 20.0,
                     "wind_dir_of_prevail": 180.0,
-                    "rainfall_daily_mm": 1.8,
+                    "rainfall_mm": 1.8,
                 },
             ],
         }
@@ -253,7 +255,8 @@ def test_weatherlink_climo_daily_aggregates_historic_records() -> None:
     assert row["temp_min"] == pytest.approx(20.0)
     assert row["wind_mean"] == pytest.approx((5.0 + 10.0) * 1.609344 / 2.0)
     assert row["gust_max"] == pytest.approx(20.0 * 1.609344)
-    assert row["precip_total"] == pytest.approx(1.8)
+    # Suma de los incrementos por intervalo (0.4 + 1.8), no el máximo.
+    assert row["precip_total"] == pytest.approx(2.2)
 
 
 def test_weatherlink_climo_forbidden_maps_to_unauthorized() -> None:

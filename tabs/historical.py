@@ -1,6 +1,7 @@
 from datetime import datetime
 import html
 import math
+from typing import Optional
 
 import streamlit as st
 from utils.helpers import coerce_str
@@ -47,9 +48,21 @@ def _normalize_historical_summary_mode(session_state, provider_id: str = "") -> 
     return current_summary_mode
 
 
-def _year_options(now_local: datetime, *, min_year: int = 1990, lookback_years: int = 35):
-    year_floor = max(min_year, now_local.year - lookback_years)
+def _year_options(now_local: datetime, *, min_year: int = 1990, lookback_years: Optional[int] = 35):
+    if lookback_years is None:
+        year_floor = min_year
+    else:
+        year_floor = max(min_year, now_local.year - lookback_years)
     return list(range(now_local.year, year_floor - 1, -1))
+
+
+def _provider_year_options(provider_id: str, now_local: datetime):
+    provider_config = get_provider_feature(provider_id)
+    min_year = int(provider_config.get("historical_min_year") or 1990)
+    lookback_years = provider_config.get("historical_lookback_years", 35)
+    if lookback_years is not None:
+        lookback_years = int(lookback_years)
+    return _year_options(now_local, min_year=min_year, lookback_years=lookback_years)
 
 
 def _load_frost_period_options(provider_id, station_id):
@@ -510,7 +523,7 @@ def render_historical_tab(ctx):
                 from plotly.subplots import make_subplots
 
                 now_local = datetime.now()
-                year_options = _year_options(now_local)
+                year_options = _provider_year_options(provider_id, now_local)
                 summary_mode_options = _summary_mode_options(provider_id)
                 _normalize_historical_summary_mode(st.session_state, provider_id)
 

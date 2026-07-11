@@ -98,6 +98,27 @@ def test_top_descending_override_returns_opposite_extreme():
     ] == ["a", "c", "b"]
 
 
+def test_tropical_tmax_ceiling_drops_broken_spikes_keeps_real_heat():
+    """Estación IEM tropical con serie del día rota (Koh Kong, lat ~11) reporta
+    una máxima de 54°C, imposible en el trópico → se anula (sale del ranking de
+    máximas), pero su mínima real se conserva. El calor REAL subtropical/tropical
+    (Death Valley 54°C @lat36, Sahel 45°C @lat18) NO se toca."""
+    from server.services.ranking import _clean_iem_extremes, _tmax_ceiling
+
+    assert _tmax_ceiling(11.6) == 50.0        # trópico profundo
+    assert _tmax_ceiling(36.0) == _tmax_ceiling(None)  # subtropical = récord mundial
+
+    # Koh Kong: máxima rota → None; mínima real intacta.
+    tmax, tmin, _ = _clean_iem_extremes(54.2, 23.1, None, 11.6, 24.0)
+    assert tmax is None
+    assert tmin == 23.1
+    # Sahel (lat 18) 45°C real y Death Valley (lat 36) 54°C real → se conservan.
+    assert _clean_iem_extremes(45.0, 30.0, None, 18.0, 44.0)[0] == 45.0
+    assert _clean_iem_extremes(54.0, 35.0, None, 36.0, 52.0)[0] == 54.0
+    # Falso positivo evitado: España 37,6°C @lat40 con actual fría (amanecer).
+    assert _clean_iem_extremes(37.6, 10.9, None, 40.6, 12.4)[0] == 37.6
+
+
 def test_day_options_prefers_recent_day_with_reasonable_coverage():
     """La fecha principal debe ser la más reciente con cobertura razonable,
     no la más poblada: un día pasado COMPLETO ganaba siempre al día en curso

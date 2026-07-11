@@ -807,6 +807,13 @@ _IEM_NO_RAIN_NETWORK_TOKEN = "DCP"
 # espacial (ese mataba récords reales); esto es solo IMPOSIBILIDAD FÍSICA, que
 # los extremos reales (Death Valley 43°C, Antártida −68°C…) pasan de sobra.
 _WORLD_TMAX_RECORD_C = 59.0   # récord mundial 56,7°C + margen (clima cambiante)
+# Techo de máxima por latitud (imposibilidad climatológica, espejo de
+# ``_tmin_floor``). El récord mundial (56,7°C, Death Valley) es SUBTROPICAL: en el
+# trópico profundo (|lat|<25) no se pasa de ~48-50°C ni en los márgenes saharianos
+# (Bilma, Faya Largeau ~44-45°C reales). Así una estación tropical con serie del
+# día rota que reporta 54-60°C (Koh Kong, Siem Reap) cae, y el calor REAL del
+# Sahel y de Death Valley se conserva.
+_TMAX_CEIL_TROPICAL_C = 50.0
 _MAX_DIURNAL_RANGE_C = 40.0   # salto diurno máx−mín imposible (real ≲30°C)
 # Diferencia ACTUAL−mín máxima coherente: un sitio realmente frío tiene la actual
 # fría (diferencia pequeña); actual templada + mín −12 (Meadows of Dan, Virginia
@@ -845,6 +852,16 @@ def _tmin_floor(lat: Optional[float], month: Optional[int] = None) -> float:
     return _TMIN_FLOOR_SUMMER_C if summer else _TMIN_FLOOR_NONPOLAR_C
 
 
+def _tmax_ceiling(lat: Optional[float]) -> float:
+    """Techo de máxima plausible según latitud: estricto en el trópico
+    (|lat|<25 → 50°C, las máximas reales no pasan de ~45-48°C ni en el Sahel),
+    récord mundial fuera (Death Valley 56,7°C es subtropical). Sin latitud, el
+    récord mundial (no se filtra por falta de contexto)."""
+    if lat is None:
+        return _WORLD_TMAX_RECORD_C
+    return _TMAX_CEIL_TROPICAL_C if abs(lat) < _TROPICAL_LAT else _WORLD_TMAX_RECORD_C
+
+
 def _clean_iem_extremes(
     tmax: Optional[float],
     tmin: Optional[float],
@@ -871,10 +888,13 @@ def _clean_iem_extremes(
             tmin < _tmin_floor(lat) or (tcur - tmin) > _MAX_TCUR_TMIN_GAP_C
         ):
             tmin = None
-        # 2) Máxima imposible: por encima del récord mundial, o un rango diurno
-        #    imposible respecto a una mínima ya saneada (pico de la máxima).
+        # 2) Máxima imposible: por encima del techo por latitud (trópico ≤50°C,
+        #    récord mundial fuera), o un rango diurno imposible respecto a una
+        #    mínima ya saneada (pico de la máxima). El techo tropical pilla la
+        #    estación de serie rota (Koh Kong 54°C a lat 11) que el récord
+        #    mundial dejaba pasar.
         if tmax is not None:
-            if tmax > _WORLD_TMAX_RECORD_C:
+            if tmax > _tmax_ceiling(lat):
                 tmax = None
             elif tmin is not None and (tmax - tmin) > _MAX_DIURNAL_RANGE_C:
                 tmax = None
@@ -898,7 +918,7 @@ def _sanitize_record_extremes(rec: StationDaily) -> None:
     if rec.tmin is not None and rec.tmin < _tmin_floor(rec.lat):
         rec.tmin = None
     if rec.tmax is not None:
-        if rec.tmax > _WORLD_TMAX_RECORD_C:
+        if rec.tmax > _tmax_ceiling(rec.lat):
             rec.tmax = None
         elif rec.tmin is not None and (rec.tmax - rec.tmin) > _MAX_DIURNAL_RANGE_C:
             rec.tmax = None

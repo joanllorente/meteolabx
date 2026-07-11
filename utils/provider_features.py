@@ -18,6 +18,8 @@ PROVIDER_FEATURES: dict[str, dict[str, Any]] = {
     },
     "AEMET": {
         "historical_supported": True,
+        "historical_min_year": 1950,
+        "historical_lookback_years": None,
         "historical_missing_key": "historical.errors.missing_aemet_station",
         "requires_api_key": False,
         "api_key_source": "aemet",
@@ -25,6 +27,8 @@ PROVIDER_FEATURES: dict[str, dict[str, Any]] = {
         "synoptic_source_key": "trends.sources.aemet_synoptic",
         "synoptic_unavailable_warning_key": "trends.warnings.aemet_weekly_unavailable",
         "synoptic_unavailable_caption_key": "trends.warnings.aemet_weekly_caption",
+        "series_start_provider_label": "AEMET",
+        "series_start_source": "aemet",
     },
     "METEOCAT": {
         "historical_supported": True,

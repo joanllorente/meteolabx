@@ -208,10 +208,16 @@ def _today_window(station: Dict[str, Any], *, now_epoch: Optional[int] = None) -
 
 
 def _first_precip_mm(rows: List[Tuple[int, int, int, Dict[str, Any]]]) -> float:
-    value = _first_from_records(rows, ("rainfall_mm", "rainfall_daily_mm", "rain_rate_last_mm"))
+    """Lluvia caída EN el intervalo del registro histórico (incremento). Solo
+    campos por-intervalo (``rainfall_mm`` / ``rainfall_in``): el consumidor
+    (climograma diario, serie de observación) los SUMA, así que NO se puede caer
+    a ``rainfall_daily_mm`` (acumulado corrido) ni a ``rain_rate_last_mm``
+    (tasa) — sumar esos daría un total disparatado. Sin campo por-intervalo →
+    NaN (dato ausente), que es preferible a un total erróneo."""
+    value = _first_from_records(rows, ("rainfall_mm",))
     if not _is_nan(value):
         return value
-    return _first_from_records(rows, ("rainfall_in", "rainfall_daily_in"), convert=_inch_to_mm)
+    return _first_from_records(rows, ("rainfall_in",), convert=_inch_to_mm)
 
 
 def _series_value_from_rows(

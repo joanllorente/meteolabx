@@ -216,8 +216,13 @@ _FRONTEND_HTTP_TIMEOUT_S = 20.0
 # límite; de lo contrario corta una petición que FastAPI aún está
 # resolviendo y muestra un timeout falso.
 _AEMET_FRONTEND_HTTP_TIMEOUT_S = 75.0
-_WEATHERLINK_CLIMO_FRONTEND_HTTP_TIMEOUT_S = 180.0
-_IEM_CLIMO_FRONTEND_HTTP_TIMEOUT_S = 180.0
+# El histórico (sobre todo el ANUAL) agrega muchas llamadas al proveedor y es
+# lento en TODOS los proveedores, no solo IEM/WeatherLink. El backend cachea el
+# dataset (``/v1/climo/dataset`` con get_or_fetch), pero si el frontend corta
+# antes (default 20s) el usuario ve un timeout FALSO en el primer intento y el
+# dato "aparece" solo al cambiar de pestaña y volver (caché ya caliente). Un
+# único timeout generoso para ese endpoint cubre a todos los proveedores.
+_CLIMO_FRONTEND_HTTP_TIMEOUT_S = 180.0
 
 
 # =====================================================================
@@ -358,12 +363,13 @@ def _post_observation_request(endpoint: str, payload: Dict[str, Any]) -> Dict[st
     """
     provider = payload.get("provider", "?")
     provider_norm = str(provider).strip().upper()
-    if provider_norm == "AEMET":
+    if endpoint == "/v1/climo/dataset":
+        # Histórico: lento en todos los proveedores (el anual agrega mucho). El
+        # backend cachea, así que este timeout generoso solo se "paga" una vez.
+        timeout_s = _CLIMO_FRONTEND_HTTP_TIMEOUT_S
+    elif provider_norm == "AEMET":
+        # Observación actual de AEMET: 2-step (URL temporal, hasta ~60s backend).
         timeout_s = _AEMET_FRONTEND_HTTP_TIMEOUT_S
-    elif provider_norm == "WEATHERLINK" and endpoint == "/v1/climo/dataset":
-        timeout_s = _WEATHERLINK_CLIMO_FRONTEND_HTTP_TIMEOUT_S
-    elif provider_norm == "IEM" and endpoint == "/v1/climo/dataset":
-        timeout_s = _IEM_CLIMO_FRONTEND_HTTP_TIMEOUT_S
     else:
         timeout_s = _FRONTEND_HTTP_TIMEOUT_S
 

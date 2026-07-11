@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from server.services import iem_climo
-from utils.station_metadata import iem_series_start
+from utils.station_metadata import aemet_series_start, iem_series_start
 
 
 class _Response:
@@ -61,3 +61,10 @@ async def test_iem_climo_fetches_asos_csv_and_aggregates_daily_rows():
 
 def test_iem_series_start_uses_archive_begin_from_inventory():
     assert iem_series_start("TR__ASOS|LTFG") == "2004-05-09"
+
+
+def test_aemet_series_start_uses_archive_begin_from_inventory():
+    assert aemet_series_start("0076") == "1934-06-01"
+    assert aemet_series_start("0016A") == "1950-01-01"
+    assert aemet_series_start("9771C") == "1950-01-01"
+    assert aemet_series_start("9981A") == "1920-01-01"

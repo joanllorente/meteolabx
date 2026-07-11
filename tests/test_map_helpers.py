@@ -50,10 +50,44 @@ def test_provider_country_filter_keeps_official_country_scope():
     assert map_tab.provider_country_filter("IEM", ["ES", "PT"]) == ["ES", "PT"]
 
 
+def test_regional_providers_are_batched_for_selected_countries():
+    providers = map_tab.regional_provider_ids_for_countries(
+        list(map_tab.ALL_MAP_PROVIDER_OPTIONS),
+        ["ES"],
+    )
+
+    assert providers == ("AEMET", "EUSKALMET", "METEOCAT", "METEOGALICIA", "POEM")
+    assert map_tab.regional_catalog_result_limit(providers) == 1960
+
+
+def test_regional_provider_batch_excludes_unselected_official_countries():
+    batches = map_tab.regional_provider_batches(
+        list(map_tab.ALL_MAP_PROVIDER_OPTIONS),
+        ["FR", "GB"],
+    )
+
+    assert batches == (
+        ("FR", ("METEOFRANCE",)),
+        ("GB", ("METOFFICE",)),
+    )
+
+
 def test_map_country_default_only_applies_before_filter_is_initialized():
     assert map_tab.map_country_default_enabled("ES", ("ES",), False) is True
     assert map_tab.map_country_default_enabled("ES", ("ES",), True) is False
     assert map_tab.map_country_default_enabled("GB", ("ES",), False) is False
+
+
+def test_country_multiselect_callback_normalizes_filter_state(monkeypatch):
+    import streamlit as st
+
+    state = {"picker": ["fr", "ES", ""]}
+    monkeypatch.setattr(st, "session_state", state)
+
+    map_tab._handle_map_country_selection_change("picker")
+
+    assert state[map_tab.MAP_COUNTRY_FILTER_INITIALIZED_KEY] is True
+    assert state["map_country_filter"] == ["ES", "FR"]
 
 
 def test_legacy_country_codes_have_human_display_names():

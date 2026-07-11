@@ -128,6 +128,45 @@ def provider_country_filter(provider_id: str, selected_countries: list[str]) -> 
     return [country for country in countries if country in allowed]
 
 
+def regional_provider_ids_for_countries(
+    provider_ids: list[str],
+    selected_countries: list[str],
+) -> tuple[str, ...]:
+    """Providers whose official catalog overlaps the selected countries."""
+    return tuple(
+        provider_id
+        for provider_id in sorted({coerce_str(item, upper=True) for item in provider_ids})
+        if provider_id in REGIONAL_CATALOG_SPECS
+        and provider_country_filter(provider_id, selected_countries)
+    )
+
+
+def regional_provider_batches(
+    provider_ids: list[str],
+    selected_countries: list[str],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Batch providers per country without letting one country crowd another."""
+    batches = []
+    for country in sorted({coerce_str(item, upper=True) for item in selected_countries}):
+        if not country:
+            continue
+        providers = regional_provider_ids_for_countries(provider_ids, [country])
+        if providers:
+            batches.append((country, providers))
+    return tuple(batches)
+
+
+def regional_catalog_result_limit(provider_ids: tuple[str, ...]) -> int:
+    return max(
+        1,
+        sum(
+            int(REGIONAL_CATALOG_SPECS[provider_id]["max_results"])
+            for provider_id in provider_ids
+            if provider_id in REGIONAL_CATALOG_SPECS
+        ),
+    )
+
+
 def map_country_default_enabled(
     country_code: str,
     default_countries: tuple[str, ...],
@@ -138,19 +177,14 @@ def map_country_default_enabled(
     return bool(code) and not filter_initialized and code in defaults
 
 
-def _handle_map_country_toggle_change(country: str, toggle_key: str) -> None:
+def _handle_map_country_selection_change(selection_key: str) -> None:
     st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
-    selected = {
+    selected = [
         coerce_str(item, upper=True)
-        for item in st.session_state.get("map_country_filter", [])
+        for item in st.session_state.get(selection_key, [])
         if coerce_str(item, upper=True)
-    }
-    country_code = coerce_str(country, upper=True)
-    if bool(st.session_state.get(toggle_key, False)):
-        selected.add(country_code)
-    else:
-        selected.discard(country_code)
-    st.session_state["map_country_filter"] = sorted(selected, key=country_sort_key)
+    ]
+    st.session_state["map_country_filter"] = sorted(set(selected), key=country_sort_key)
 
 
 def _sync_map_autoconnect_toggle(toggle_key: str, is_target_station: bool) -> bool:
@@ -558,21 +592,24 @@ def render_map_tab(ctx):
             target.append(candidate)
             seen.add(key)
 
-    def _load_regional_candidates(
-        provider_id: str,
+    def _load_regional_candidates_batch(
+        provider_ids: tuple[str, ...],
         country_filter: list[str],
         *,
         historical_only: bool = False,
         hide_historical_only: bool = False,
     ) -> list[dict]:
-        spec = regional_catalog_spec(provider_id)
-        if spec is None:
+        if not provider_ids:
             return []
         cache_store = st.session_state.setdefault("map_regional_rows_cache", {})
-        provider_ids = (provider_id,)
         catalog_version = _map_catalog_cache_version(provider_ids)
         cache_key = (
-            _map_cache_key(provider_id, search_lat, search_lon, catalog_version),
+            _map_cache_key(
+                "REGIONAL:" + ",".join(provider_ids),
+                search_lat,
+                search_lon,
+                catalog_version,
+            ),
             tuple(sorted(country_filter)),
             bool(historical_only),
             bool(hide_historical_only),
@@ -583,12 +620,10 @@ def render_map_tab(ctx):
             and all(isinstance(row, dict) and "sensors" in row for row in cached_rows)
         ):
             return [dict(row) for row in cached_rows]
-        query_lat = float(spec["lat"])
-        query_lon = float(spec["lon"])
         regional_candidates = _cached_map_search_nearby_stations(
-            float(query_lat),
-            float(query_lon),
-            int(spec["max_results"]),
+            float(search_lat),
+            float(search_lon),
+            regional_catalog_result_limit(provider_ids),
             provider_ids,
             tuple(sorted(country_filter)),
             catalog_version,
@@ -717,12 +752,9 @@ def render_map_tab(ctx):
                 )
             )
 
-        # Menú flotante de países sobre la esquina superior izquierda
-        # del mapa: lista plana, un toggle por país. Es un contenedor
-        # Streamlit de altura 0 reposicionado por CSS sobre el canvas (igual
-        # patrón que el filtro de sensores de la derecha). Al ser widgets
-        # reales del fragmento, activar un toggle re-filtra el mapa al
-        # instante, sin recargar la página.
+        # Menú flotante de países sobre la esquina superior izquierda. Un
+        # único multiselect evita montar un widget por cada país y re-filtra
+        # el fragmento al instante sin recargar la página completa.
         all_provider_options = list(ALL_MAP_PROVIDER_OPTIONS)
         provider_filter = set(all_provider_options)
         try:
@@ -750,35 +782,45 @@ def render_map_tab(ctx):
                     default_countries,
                     country_filter_initialized,
                 )
-                st.session_state[f"map_country_toggle_{country}"] = enabled
                 if enabled:
                     default_selected_countries.append(country)
             country_filter_initialized = True
             st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
             st.session_state["map_country_default_key"] = default_country_key
             st.session_state["map_country_filter"] = default_selected_countries
+            st.session_state["map_country_picker"] = default_selected_countries
+        elif "map_country_picker" not in st.session_state:
+            stored_countries = {
+                coerce_str(country, upper=True)
+                for country in st.session_state.get("map_country_filter", [])
+                if coerce_str(country, upper=True)
+            }
+            st.session_state["map_country_picker"] = [
+                country for country in country_options if country in stored_countries
+            ]
+
         def _clear_map_country_filter() -> None:
             st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
             st.session_state["map_country_filter"] = []
-            for c in country_options:
-                st.session_state[f"map_country_toggle_{c}"] = False
+            st.session_state["map_country_picker"] = []
 
-        # Contenedor externo = ancla de altura 0 (no empuja el layout).
-        # Contenedor interno = el panel real, reposicionado en absoluto sobre
-        # el mapa. Necesitamos el wrapper interno porque los toggles son
-        # hijos directos del contenedor; sin él, el CSS los posicionaría uno
-        # encima de otro y solo se vería el último.
+        # Popover flotante: permanece cerrado mientras se navega por el mapa
+        # y se cierra de forma nativa al interactuar fuera de él.
         with st.container(key="map_country_overlay"):
-            with st.container(key="map_country_panel"):
+            with st.popover(str(t("map.country_filter"))):
                 st.markdown(
-                    "<div class='mlbx-country-menu-title'>PAÍSES</div>",
+                    f"<div class='mlbx-country-menu-title'>{html.escape(str(t('map.country_filter')).upper())}</div>",
                     unsafe_allow_html=True,
                 )
-                country_search = st.text_input(
-                    t("map.country_search"),
-                    key="map_country_search",
+                country_selection = st.multiselect(
+                    t("map.country_filter"),
+                    options=country_options,
+                    key="map_country_picker",
                     placeholder=str(t("map.country_search")),
+                    format_func=country_display_name,
                     label_visibility="collapsed",
+                    on_change=_handle_map_country_selection_change,
+                    args=("map_country_picker",),
                 )
                 st.button(
                     t("map.country_clear"),
@@ -786,29 +828,9 @@ def render_map_tab(ctx):
                     on_click=_clear_map_country_filter,
                     width="stretch",
                 )
-                search_term = str(country_search or "").strip().lower()
-                for country in country_options:
-                    toggle_key = f"map_country_toggle_{country}"
-                    if toggle_key not in st.session_state:
-                        st.session_state[toggle_key] = map_country_default_enabled(
-                            country,
-                            default_countries,
-                            country_filter_initialized,
-                        )
-                    name = country_display_name(country)
-                    # Solo se PINTA si coincide con la búsqueda; pero la
-                    # selección se lee del ESTADO, así un país oculto por el
-                    # buscador NO se deselecciona del mapa.
-                    if not search_term or search_term in str(name).lower():
-                        st.toggle(
-                            name,
-                            key=toggle_key,
-                            on_change=_handle_map_country_toggle_change,
-                            args=(country, toggle_key),
-                        )
         selected_codes = {
             coerce_str(country, upper=True)
-            for country in st.session_state.get("map_country_filter", [])
+            for country in country_selection
             if coerce_str(country, upper=True)
         }
         selected_countries = [country for country in country_options if country in selected_codes]
@@ -817,6 +839,27 @@ def render_map_tab(ctx):
         provider_overlay_bg = "rgba(13,17,24,0.96)" if dark else "rgba(255,255,255,0.97)"
         provider_overlay_border = "rgba(255,255,255,0.14)" if dark else "rgba(15,18,25,0.14)"
         provider_overlay_shadow = "0 10px 24px rgba(0,0,0,0.28)" if dark else "0 10px 24px rgba(0,0,0,0.12)"
+        provider_overlay_hover_bg = "rgba(33,40,54,0.98)" if dark else "rgba(236,239,243,0.98)"
+        provider_overlay_icon_stroke = "%23f4f7fb" if dark else "%23242933"
+        country_badge_css = (
+            f"""
+            .st-key-map_country_overlay [data-testid="stPopoverButton"]::after {{
+                content: "{len(selected_countries)}";
+                position: absolute;
+                top: -5px;
+                right: -5px;
+                min-width: 17px;
+                height: 17px;
+                padding: 0 4px;
+                border-radius: 999px;
+                background: #ff5a54;
+                color: #fff;
+                font: 700 10px/17px system-ui, -apple-system, "Segoe UI", sans-serif;
+                text-align: center;
+            }}
+            """
+            if selected_countries else ""
+        )
         st.markdown(
             f"""
             <style>
@@ -826,42 +869,54 @@ def render_map_tab(ctx):
                 overflow: visible;
                 z-index: 61;
             }}
-            .st-key-map_country_panel {{
-                position: absolute;
-                /* El contenedor del overlay tiene el mismo ancho que el mapa,
-                   así que left se mide desde el borde izquierdo del mapa. El
-                   anclaje (altura 0) cae ~45px por encima del borde superior
-                   del mapa, por eso top:70 deja el panel ~25px por debajo. */
-                left: 5px;
-                top: 70px;
-                width: 188px;
-                max-height: 820px;
-                overflow-y: auto;
-                background: {provider_overlay_bg};
-                border: 1px solid {provider_overlay_border};
-                border-radius: 12px;
-                box-shadow: {provider_overlay_shadow};
-                padding: 10px 12px 8px;
-                /* Fade-in con retardo: el mapa (canvas pydeck) tarda un poco
-                   en pintar; ocultamos el panel ~0.5s para que no aparezca
-                   "flotando" sobre el blanco antes que el mapa. Streamlit
-                   reutiliza el elemento por su key, así que la animación solo
-                   corre al montar (carga de página), no en cada toggle. */
-                animation: mlbxCountryPanelIn 0.3s ease 0.5s both;
+            /* PyDeck tarda unas décimas en montar el canvas. Retrasamos solo
+               la pintura; los controles conservan siempre sus eventos para
+               no depender de :has() ni del estado interno de Streamlit. */
+            .st-key-map_country_overlay,
+            .st-key-map_sensor_overlay {{
+                animation: mlbxMapControlIn 0.2s ease 0.55s both;
             }}
-            @keyframes mlbxCountryPanelIn {{
+            @keyframes mlbxMapControlIn {{
                 from {{ opacity: 0; }}
                 to {{ opacity: 1; }}
             }}
-            /* Compacta el espaciado vertical interno del panel */
-            .st-key-map_country_panel [data-testid="stVerticalBlock"] {{
-                gap: 0.25rem;
+            .st-key-map_country_overlay [data-testid="stPopover"] {{
+                position: absolute;
+                left: 5px;
+                top: 70px;
+                width: auto;
             }}
-            /* Buscador y botón "limpiar" compactos dentro del panel */
-            .st-key-map_country_panel [data-testid="stTextInput"] input {{
-                padding: 3px 8px;
-                font-size: 12px;
+            .st-key-map_country_overlay [data-testid="stPopoverButton"] {{
+                position: relative;
+                width: 40px;
+                height: 40px;
+                min-height: 40px;
+                padding: 0;
+                border-radius: 12px;
+                background: {provider_overlay_bg} !important;
+                border: 1px solid {provider_overlay_border} !important;
+                box-shadow: {provider_overlay_shadow};
+                justify-content: center;
             }}
+            .st-key-map_country_overlay [data-testid="stPopoverButton"]:hover,
+            .st-key-map_country_overlay [data-testid="stPopoverButton"]:active {{
+                background: {provider_overlay_hover_bg} !important;
+            }}
+            .st-key-map_country_overlay [data-testid="stPopoverButton"] p,
+            .st-key-map_country_overlay [data-testid="stPopoverButton"] svg {{
+                display: none;
+            }}
+            .st-key-map_country_overlay [data-testid="stPopoverButton"]::before {{
+                content: "";
+                display: block;
+                width: 23px;
+                height: 23px;
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: 23px 23px;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{provider_overlay_icon_stroke}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21M12 3c-2.5 2.5-3.8 5.5-3.8 9S9.5 18.5 12 21'/%3E%3C/svg%3E");
+            }}
+            {country_badge_css}
             .st-key-map_country_clear_btn button {{
                 padding: 1px 8px;
                 min-height: 0;
@@ -1080,15 +1135,16 @@ def render_map_tab(ctx):
 
         nearest = []
         if effective_provider_ids and selected_countries:
-            for provider_id in sorted(effective_provider_ids):
-                provider_countries = provider_country_filter(provider_id, selected_countries)
-                if not provider_countries:
-                    continue
+            regional_batches = regional_provider_batches(
+                effective_provider_ids,
+                selected_countries,
+            )
+            for regional_country, regional_provider_ids in regional_batches:
                 _extend_unique_candidates(
                     nearest,
-                    _load_regional_candidates(
-                        provider_id,
-                        provider_countries,
+                    _load_regional_candidates_batch(
+                        regional_provider_ids,
+                        [regional_country],
                         historical_only=historical_only,
                         hide_historical_only=hide_historical_only,
                     ),

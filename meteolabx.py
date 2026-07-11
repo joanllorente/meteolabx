@@ -130,7 +130,7 @@ from utils.browser_sync import (
     sync_browser_context_early,
 )
 from utils.historical_dispatch import fetch_historical_dataset
-from utils.station_metadata import iem_series_start, meteocat_series_start, meteofrance_series_start
+from utils.station_metadata import aemet_series_start, iem_series_start, meteocat_series_start, meteofrance_series_start
 from utils.station_slug import slugify as _station_slug
 from utils.series_state import (
     chart_series_has_backend_derivatives,
@@ -281,6 +281,10 @@ def _get_provider_api_secret(provider_id: str) -> str:
 
 
 SERIES_START_LOADERS = {
+    "AEMET": {
+        "loader": aemet_series_start,
+        "formatter": lambda value: datetime.fromisoformat(value).strftime("%d/%m/%Y"),
+    },
     "METEOCAT": {
         "loader": meteocat_series_start,
         "formatter": lambda value: datetime.fromisoformat(value).strftime("%d/%m/%Y"),
@@ -4246,7 +4250,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.5"
+APP_VERSION = "1.2.6"
 
 
 def _whats_new_footer_html() -> str:

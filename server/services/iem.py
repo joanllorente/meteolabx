@@ -319,18 +319,18 @@ async def _fetch_rows(
 def _plausible_temp_c(value: float, lat: Optional[float]) -> float:
     """Anula (→ NaN) una temperatura climatológicamente IMPOSIBLE para la
     latitud de la estación. IEM agrega redes sin validar y cuela sensores rotos:
-    la estación BUFR de Camboya (lat ~11) llegó a reportar −39.7°C, imposible en
-    los trópicos. Reutiliza el suelo por latitud/estación del ranking
-    (``_tmin_floor``) y el récord mundial de calor, de modo que el frío/calor
-    REAL (Ártico en invierno, Death Valley) se conserva y solo cae lo imposible.
-    Sin latitud conocida (o no numérica) no se filtra (no hay con qué juzgar)."""
+    la estación BUFR de Camboya (lat ~11) llegó a reportar −39.7°C (y otra 54°C),
+    imposibles en los trópicos. Reutiliza el suelo y el techo por latitud del
+    ranking (``_tmin_floor`` / ``_tmax_ceiling``), de modo que el frío/calor REAL
+    (Ártico en invierno, Death Valley, Sahel ~45°C) se conserva y solo cae lo
+    imposible. Sin latitud conocida (o no numérica) no se filtra."""
     if not _valid(value) or not _valid(lat):
         return value
     # Import perezoso: no acopla iem.py al módulo de ranking en tiempo de carga.
-    from server.services.ranking import _WORLD_TMAX_RECORD_C, _tmin_floor
+    from server.services.ranking import _tmax_ceiling, _tmin_floor
 
     v = float(value)
-    if v < _tmin_floor(float(lat)) or v > _WORLD_TMAX_RECORD_C:
+    if v < _tmin_floor(float(lat)) or v > _tmax_ceiling(float(lat)):
         return float("nan")
     return value
 
