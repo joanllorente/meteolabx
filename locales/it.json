@@ -1,7 +1,8 @@
 {
   "warnings": {
     "data_age": "⚠️ I dati di {provider} risalgono a {minutes} minuti fa. La stazione potrebbe non stare trasmettendo.",
-    "missing_elevation": "⚠️ Manca la quota. Pressione assoluta e termodinamica sono state calcolate con quota 0; inserisci la quota nella barra laterale per una maggiore precisione."
+    "missing_elevation": "⚠️ Manca la quota. Pressione assoluta e termodinamica sono state calcolate con quota 0; inserisci la quota nella barra laterale per una maggiore precisione.",
+    "flatlined_series": "⚠️ Windy restituisce una o più variabili senza alcuna variazione per diverse ore. Il grafico mostra i dati ricevuti, ma gli estremi interessati sono nascosti perché non affidabili."
   },
   "tabs": {
     "observation": "Osservazione",
@@ -89,6 +90,15 @@
     "whats_new": "Novità",
     "improvements_title": "Miglioramenti",
     "fixes_title": "Correzioni",
+    "v127_improvements": [
+      "Nuovo provider Windy PWS con stazioni meteorologiche amatoriali aperte di tutto il mondo.",
+      "Le stazioni Windy attive possono essere esplorate sulla mappa, collegate e aggiunte ai preferiti.",
+      "Osservazioni attuali e serie recenti Windy disponibili in Osservazione e Tendenze."
+    ],
+    "v127_fixes": [
+      "L'inventario amatoriale resta separato dal catalogo delle stazioni ufficiali.",
+      "La mappa mostra per impostazione predefinita solo le stazioni Windy con dati recenti."
+    ],
     "improvements": [
       "Migrazione completa e funzionale alla modalità FastAPI.",
       "Nuova scheda Classifica, con ranking di temperatura, vento e precipitazione per paese e globale.",
@@ -418,7 +428,16 @@
         "temperature": {
           "title": "Temperatura",
           "feels_like": "Percepita",
-          "heat_index": "Indice di calore"
+          "heat_index": "Indice di calore",
+          "heat_risk": {
+            "high": "Avviso di caldo: evitare l'esposizione prolungata a queste condizioni",
+            "very_high": "Caldo intenso",
+            "extreme": "Caldo estremo"
+          },
+          "heat_alert": {
+            "warning": "Caldo intenso: evitare l'attività fisica e l'esposizione al sole. Rischio di colpo di calore con esposizione prolungata.",
+            "extreme": "Caldo estremo: rischio imminente di colpo di calore. Rimanere in un luogo fresco e idratarsi; pericolo anche a riposo."
+          }
         },
         "relative_humidity": {
           "title": "Umidità relativa",
@@ -604,6 +623,10 @@
       "metoffice_synoptic": "Met Office Land Observations (48 h, campionamento 3 h)",
       "meteohub_today": "Osservazioni recenti MeteoHub Italia ({minutes} min)",
       "meteohub_synoptic": "Osservazioni recenti MeteoHub Italia (campionamento 3 h)",
+      "windy_today": "Osservazioni recenti Windy PWS",
+      "windy_synoptic": "Osservazioni recenti Windy PWS (campionamento 3 h)",
+      "netatmo_today": "Osservazioni recenti Netatmo",
+      "netatmo_synoptic": "Osservazioni recenti Netatmo (campionamento 3 h)",
       "euskalmet_synoptic": "Euskalmet (nessuna serie sinottica settimanale disponibile)",
       "generic_synoptic": "{provider} (serie oraria generica)",
       "sampling_suffix_3h": "{source} (campionamento 3 h)"

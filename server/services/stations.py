@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,9 +21,14 @@ SENSOR_KEYS = (
 CONNECTABLE_PROVIDERS = (
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
     "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT",
-    "IEM",
+    "IEM", "WINDY", "NETATMO",
 )
 CATALOG_PROVIDERS = CONNECTABLE_PROVIDERS
+PWS_CATALOG_PROVIDERS = ("WINDY", "NETATMO")
+OFFICIAL_CATALOG_PROVIDERS = tuple(
+    provider for provider in CATALOG_PROVIDERS
+    if provider not in PWS_CATALOG_PROVIDERS
+)
 
 PROVIDER_COUNTRIES = {
     "AEMET": "ES",
@@ -47,6 +53,8 @@ IEM_COUNTRY_TIMEZONE_OVERRIDES = {
 COUNTRY_CODE_ALIASES = {
     "RQ": "PR",
     "TU": "TR",
+    "DR": "DO",  # FIPS República Dominicana → ISO (evita país duplicado)
+    "NN": "SX",  # FIPS Sint Maarten (RAOB TNCM) → ISO
 }
 
 # Códigos de "país" del catálogo que NO son un país real y se resuelven por
@@ -61,6 +69,330 @@ def _connect() -> sqlite3.Connection:
     connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def _connect_pws() -> sqlite3.Connection:
+    path = Path(data_files.PWS_STATIONS_DB_PATH).resolve()
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def _pws_fresh_cutoff_iso(hours: int = 3) -> str:
+    return datetime.fromtimestamp(
+        datetime.now(timezone.utc).timestamp() - max(1, int(hours)) * 3600,
+        timezone.utc,
+    ).isoformat().replace("+00:00", "Z")
+
+
+def _pws_record(row: sqlite3.Row) -> Dict[str, Any]:
+    lat = row["latitude"]
+    lon = row["longitude"]
+    country = row["country"] if "country" in row.keys() else None
+    if not country and lat is not None and lon is not None:
+        country = country_for_point(float(lat), float(lon))
+    sensors: Dict[str, bool] = {}
+    if row["temp_height_m"] is not None:
+        sensors["thermometer"] = True
+    if row["wind_height_m"] is not None:
+        sensors["anemometer"] = True
+        sensors["wind_vane"] = True
+    return {
+        "provider": "WINDY",
+        "network": "PWS",
+        "station_id": str(row["station_id"]),
+        "name": str(row["name"]),
+        "lat": lat,
+        "lon": lon,
+        "elevation": row["elevation_m"],
+        "tz": None,
+        "country": country or "UNSPECIFIED",
+        "region": None,
+        "locality": str(row["station_type"] or ""),
+        "connectable": True,
+        "has_historical": False,
+        "is_historical_only": False,
+        "manual": False,
+        "sensors": sensors or None,
+    }
+
+
+def _pws_matches_sensors(record: Dict[str, Any], sensors: Optional[List[str]]) -> bool:
+    wanted = [sensor for sensor in (sensors or []) if sensor in SENSOR_KEYS]
+    if not wanted:
+        return True
+    available = record.get("sensors")
+    return isinstance(available, dict) and all(bool(available.get(sensor)) for sensor in wanted)
+
+
+def _pws_get_station(station_id: str) -> Optional[Dict[str, Any]]:
+    if not Path(data_files.PWS_STATIONS_DB_PATH).exists():
+        return None
+    with _connect_pws() as connection:
+        row = connection.execute(
+            "SELECT * FROM pws_stations WHERE station_id = ? COLLATE NOCASE LIMIT 1",
+            (str(station_id or "").strip(),),
+        ).fetchone()
+    return _pws_record(row) if row is not None else None
+
+
+def _pws_find_by_name_slug(slug: str) -> Optional[Dict[str, Any]]:
+    if not Path(data_files.PWS_STATIONS_DB_PATH).exists():
+        return None
+    from utils.station_slug import slugify
+
+    target = slugify(slug)
+    if not target:
+        return None
+    with _connect_pws() as connection:
+        rows = connection.execute(
+            "SELECT * FROM pws_stations ORDER BY station_id COLLATE NOCASE"
+        ).fetchall()
+    for row in rows:
+        if slugify(row["name"]) == target:
+            return _pws_record(row)
+    return None
+
+
+def _pws_search_near(
+    lat: float,
+    lon: float,
+    *,
+    radius_km: float,
+    countries: Optional[List[str]],
+    sensors: Optional[List[str]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not Path(data_files.PWS_STATIONS_DB_PATH).exists():
+        return []
+    latitude_delta = radius_km / 110.574
+    longitude_scale = max(0.01, abs(math.cos(math.radians(float(lat)))))
+    longitude_delta = radius_km / (111.320 * longitude_scale)
+    with _connect_pws() as connection:
+        country_clause = ""
+        country_parameters: tuple[str, ...] = ()
+        wanted_countries = {
+            _normalize_country_code(country) for country in (countries or []) if str(country).strip()
+        }
+        if wanted_countries:
+            placeholders = ",".join("?" for _ in wanted_countries)
+            country_clause = f" AND UPPER(COALESCE(s.country, '')) IN ({placeholders})"
+            country_parameters = tuple(sorted(wanted_countries))
+        rows = connection.execute(
+            f"""
+            SELECT s.*
+            FROM pws_stations s
+            JOIN pws_station_rtree r USING(station_pk)
+            WHERE r.min_latitude >= ? AND r.max_latitude <= ?
+              AND r.min_longitude >= ? AND r.max_longitude <= ?
+              AND s.last_observation_time >= ?
+              {country_clause}
+            """,
+            (
+                float(lat) - latitude_delta, float(lat) + latitude_delta,
+                float(lon) - longitude_delta, float(lon) + longitude_delta,
+                _pws_fresh_cutoff_iso(),
+                *country_parameters,
+            ),
+        ).fetchall()
+    results = []
+    for row in rows:
+        distance = _haversine_km(float(lat), float(lon), row["latitude"], row["longitude"])
+        if distance > radius_km:
+            continue
+        record = _pws_record(row)
+        if not _pws_matches_sensors(record, sensors):
+            continue
+        results.append({**record, "distance_km": round(distance, 2)})
+    results.sort(key=lambda item: item["distance_km"])
+    return results[:max(1, int(limit))]
+
+
+def _pws_search_catalog(
+    *,
+    lat: Optional[float],
+    lon: Optional[float],
+    countries: List[str],
+    sensors: Optional[List[str]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not Path(data_files.PWS_STATIONS_DB_PATH).exists() or not countries:
+        return []
+    wanted_countries = sorted({_normalize_country_code(country) for country in countries})
+    placeholders = ",".join("?" for _ in wanted_countries)
+    with _connect_pws() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT *
+            FROM pws_stations
+            WHERE UPPER(COALESCE(country, '')) IN ({placeholders})
+              AND last_observation_time >= ?
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+            """,
+            (*wanted_countries, _pws_fresh_cutoff_iso()),
+        ).fetchall()
+    has_distance = lat is not None and lon is not None
+    results = []
+    for row in rows:
+        record = _pws_record(row)
+        if not _pws_matches_sensors(record, sensors):
+            continue
+        record["distance_km"] = (
+            round(_haversine_km(float(lat), float(lon), row["latitude"], row["longitude"]), 2)
+            if has_distance else 0.0
+        )
+        results.append(record)
+    results.sort(key=lambda item: item["station_id"].casefold())
+    return results[:max(1, int(limit))]
+
+
+def _connect_netatmo() -> sqlite3.Connection:
+    path = Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).resolve()
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def _netatmo_record(row: sqlite3.Row) -> Dict[str, Any]:
+    sensors = {key: True for key in SENSOR_KEYS if row[key]}
+    return {
+        "provider": "NETATMO",
+        "network": "PWS",
+        "station_id": str(row["station_id"]),
+        "name": str(row["name"]),
+        "lat": row["latitude"],
+        "lon": row["longitude"],
+        "elevation": row["elevation_m"],
+        "tz": row["timezone"],
+        "country": _normalize_country_code(row["country"]),
+        "region": None,
+        "locality": str(row["city"] or ""),
+        "connectable": True,
+        "has_historical": False,
+        "is_historical_only": False,
+        "manual": False,
+        "sensors": sensors or None,
+    }
+
+
+def _netatmo_get_station(station_id: str) -> Optional[Dict[str, Any]]:
+    if not Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists():
+        return None
+    with _connect_netatmo() as connection:
+        row = connection.execute(
+            "SELECT * FROM netatmo_stations WHERE station_id = ? COLLATE NOCASE LIMIT 1",
+            (str(station_id or "").strip(),),
+        ).fetchone()
+    return _netatmo_record(row) if row is not None else None
+
+
+def _netatmo_find_by_name_slug(slug: str) -> Optional[Dict[str, Any]]:
+    if not Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists():
+        return None
+    from utils.station_slug import slugify
+
+    target = slugify(slug)
+    if not target:
+        return None
+    with _connect_netatmo() as connection:
+        rows = connection.execute(
+            "SELECT * FROM netatmo_stations ORDER BY station_id COLLATE NOCASE"
+        ).fetchall()
+    for row in rows:
+        if slugify(row["name"]) == target:
+            return _netatmo_record(row)
+    return None
+
+
+def _netatmo_search_near(
+    lat: float,
+    lon: float,
+    *,
+    radius_km: float,
+    countries: Optional[List[str]],
+    sensors: Optional[List[str]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists():
+        return []
+    latitude_delta = radius_km / 110.574
+    longitude_scale = max(0.01, abs(math.cos(math.radians(float(lat)))))
+    longitude_delta = radius_km / (111.320 * longitude_scale)
+    with _connect_netatmo() as connection:
+        country_clause = ""
+        country_parameters: tuple[str, ...] = ()
+        wanted_countries = {
+            _normalize_country_code(country) for country in (countries or []) if str(country).strip()
+        }
+        if wanted_countries:
+            placeholders = ",".join("?" for _ in wanted_countries)
+            country_clause = f" AND UPPER(COALESCE(s.country, '')) IN ({placeholders})"
+            country_parameters = tuple(sorted(wanted_countries))
+        rows = connection.execute(
+            f"""
+            SELECT s.*
+            FROM netatmo_stations s
+            JOIN netatmo_station_rtree r USING(station_pk)
+            WHERE r.min_latitude >= ? AND r.max_latitude <= ?
+              AND r.min_longitude >= ? AND r.max_longitude <= ?
+              {country_clause}
+            """,
+            (
+                float(lat) - latitude_delta, float(lat) + latitude_delta,
+                float(lon) - longitude_delta, float(lon) + longitude_delta,
+                *country_parameters,
+            ),
+        ).fetchall()
+    results = []
+    for row in rows:
+        distance = _haversine_km(float(lat), float(lon), row["latitude"], row["longitude"])
+        if distance > radius_km:
+            continue
+        record = _netatmo_record(row)
+        if not _pws_matches_sensors(record, sensors):
+            continue
+        results.append({**record, "distance_km": round(distance, 2)})
+    results.sort(key=lambda item: item["distance_km"])
+    return results[:max(1, int(limit))]
+
+
+def _netatmo_search_catalog(
+    *,
+    lat: Optional[float],
+    lon: Optional[float],
+    countries: List[str],
+    sensors: Optional[List[str]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists() or not countries:
+        return []
+    wanted_countries = sorted({_normalize_country_code(country) for country in countries})
+    placeholders = ",".join("?" for _ in wanted_countries)
+    with _connect_netatmo() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT *
+            FROM netatmo_stations
+            WHERE UPPER(COALESCE(country, '')) IN ({placeholders})
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+            """,
+            wanted_countries,
+        ).fetchall()
+    has_distance = lat is not None and lon is not None
+    results = []
+    for row in rows:
+        record = _netatmo_record(row)
+        if not _pws_matches_sensors(record, sensors):
+            continue
+        record["distance_km"] = (
+            round(_haversine_km(float(lat), float(lon), row["latitude"], row["longitude"]), 2)
+            if has_distance else 0.0
+        )
+        results.append(record)
+    results.sort(key=lambda item: item["station_id"].casefold())
+    return results[:max(1, int(limit))]
 
 
 def _sensors(row: sqlite3.Row) -> Optional[Dict[str, bool]]:
@@ -173,6 +505,10 @@ def get_station(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
     """Return one connectable station by case-insensitive provider identity."""
     provider = str(provider or "").strip().upper()
     station_id = str(station_id or "").strip()
+    if provider == "WINDY":
+        return _pws_get_station(station_id)
+    if provider == "NETATMO":
+        return _netatmo_get_station(station_id)
     if provider not in CATALOG_PROVIDERS or not station_id:
         return None
     network = ""
@@ -208,6 +544,10 @@ def find_by_slug(provider: str, slug: str) -> Optional[Dict[str, Any]]:
 
     provider = str(provider or "").strip().upper()
     target = slugify(slug)
+    if provider == "WINDY":
+        return _pws_find_by_name_slug(target)
+    if provider == "NETATMO":
+        return _netatmo_find_by_name_slug(target)
     if provider not in CATALOG_PROVIDERS or not target:
         return None
 
@@ -464,7 +804,7 @@ def country_for_timezone(timezone: str) -> Optional[str]:
 
 
 def provider_counts() -> Dict[str, int]:
-    placeholders = ",".join("?" for _ in CATALOG_PROVIDERS)
+    placeholders = ",".join("?" for _ in OFFICIAL_CATALOG_PROVIDERS)
     with _connect() as connection:
         rows = connection.execute(
             f"""
@@ -475,39 +815,87 @@ def provider_counts() -> Dict[str, int]:
               AND COALESCE(svo.hidden, 0) = 0
             GROUP BY provider
             """,
-            CATALOG_PROVIDERS,
+            OFFICIAL_CATALOG_PROVIDERS,
         ).fetchall()
     counts = {row["provider"]: int(row["station_count"]) for row in rows}
+    counts["WINDY"] = 0
+    if Path(data_files.PWS_STATIONS_DB_PATH).exists():
+        with _connect_pws() as connection:
+            counts["WINDY"] = int(connection.execute(
+                "SELECT COUNT(*) FROM pws_stations WHERE last_observation_time >= ?",
+                (_pws_fresh_cutoff_iso(),),
+            ).fetchone()[0])
+    counts["NETATMO"] = 0
+    if Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists():
+        with _connect_netatmo() as connection:
+            counts["NETATMO"] = int(connection.execute(
+                "SELECT COUNT(*) FROM netatmo_stations"
+            ).fetchone()[0])
     return {provider: counts.get(provider, 0) for provider in CATALOG_PROVIDERS}
 
 
 def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
-    wanted_providers = [
-        provider for provider in (
-            str(value).strip().upper()
-            for value in (providers or list(CATALOG_PROVIDERS))
-        )
-        if provider in CATALOG_PROVIDERS
+    requested_providers = [
+        str(value).strip().upper()
+        for value in (providers or list(CATALOG_PROVIDERS))
+        if str(value).strip().upper() in CATALOG_PROVIDERS
     ]
-    if not wanted_providers:
-        return {}
-    placeholders = ",".join("?" for _ in wanted_providers)
-    with _connect() as connection:
-        country_expr = _effective_country_sql()
-        rows = connection.execute(
-            f"""
-            SELECT {country_expr} AS country,
-                   COUNT(*) AS station_count
-            FROM stations s
-            LEFT JOIN station_visibility_overrides svo USING(station_pk)
-            WHERE s.provider IN ({placeholders})
-              AND COALESCE(svo.hidden, 0) = 0
-            GROUP BY {country_expr}
-            ORDER BY station_count DESC, country
-            """,
-            wanted_providers,
-        ).fetchall()
-    return {row["country"]: int(row["station_count"]) for row in rows}
+    include_windy = "WINDY" in requested_providers
+    include_netatmo = "NETATMO" in requested_providers
+    wanted_providers = [
+        provider for provider in requested_providers
+        if provider in OFFICIAL_CATALOG_PROVIDERS
+    ]
+    counts: Dict[str, int] = {}
+    if wanted_providers:
+        placeholders = ",".join("?" for _ in wanted_providers)
+        with _connect() as connection:
+            country_expr = _effective_country_sql()
+            rows = connection.execute(
+                f"""
+                SELECT {country_expr} AS country,
+                       COUNT(*) AS station_count
+                FROM stations s
+                LEFT JOIN station_visibility_overrides svo USING(station_pk)
+                WHERE s.provider IN ({placeholders})
+                  AND COALESCE(svo.hidden, 0) = 0
+                GROUP BY {country_expr}
+                ORDER BY station_count DESC, country
+                """,
+                wanted_providers,
+            ).fetchall()
+        counts.update({row["country"]: int(row["station_count"]) for row in rows})
+
+    if include_windy and Path(data_files.PWS_STATIONS_DB_PATH).exists():
+        with _connect_pws() as connection:
+            rows = connection.execute(
+                """
+                SELECT UPPER(COALESCE(country, 'UNSPECIFIED')) AS country,
+                       COUNT(*) AS station_count
+                FROM pws_stations
+                WHERE last_observation_time >= ?
+                GROUP BY UPPER(COALESCE(country, 'UNSPECIFIED'))
+                """,
+                (_pws_fresh_cutoff_iso(),),
+            ).fetchall()
+        for row in rows:
+            country = _normalize_country_code(row["country"])
+            counts[country] = counts.get(country, 0) + int(row["station_count"])
+
+    if include_netatmo and Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists():
+        with _connect_netatmo() as connection:
+            rows = connection.execute(
+                """
+                SELECT UPPER(COALESCE(country, 'UNSPECIFIED')) AS country,
+                       COUNT(*) AS station_count
+                FROM netatmo_stations
+                GROUP BY UPPER(COALESCE(country, 'UNSPECIFIED'))
+                """
+            ).fetchall()
+        for row in rows:
+            country = _normalize_country_code(row["country"])
+            counts[country] = counts.get(country, 0) + int(row["station_count"])
+    return counts
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -543,6 +931,12 @@ def search_near(
     ]
     if not wanted_providers:
         return []
+    include_windy = "WINDY" in wanted_providers
+    include_netatmo = "NETATMO" in wanted_providers
+    official_providers = [
+        provider for provider in wanted_providers
+        if provider not in PWS_CATALOG_PROVIDERS
+    ]
     wanted_countries = [
         _normalize_country_code(value) for value in (countries or [])
         if str(value).strip()
@@ -555,7 +949,7 @@ def search_near(
     latitude_delta = radius_km / 110.574
     longitude_scale = max(0.01, abs(math.cos(math.radians(float(lat)))))
     longitude_delta = radius_km / (111.320 * longitude_scale)
-    provider_placeholders = ",".join("?" for _ in wanted_providers)
+    provider_placeholders = ",".join("?" for _ in official_providers)
     country_clause = ""
     country_parameters: tuple[str, ...] = ()
     if wanted_countries:
@@ -570,7 +964,9 @@ def search_near(
         if hide_historical_only else ""
     )
 
-    query = _SELECT + f"""
+    rows = []
+    if official_providers:
+        query = _SELECT + f"""
     JOIN station_rtree r USING(station_pk)
     WHERE r.min_latitude >= ? AND r.max_latitude <= ?
       AND r.min_longitude >= ? AND r.max_longitude <= ?
@@ -580,21 +976,31 @@ def search_near(
       {historical_only_clause}
       {country_clause}
       {extra_where}
-    """
-    parameters = (
-        float(lat) - latitude_delta, float(lat) + latitude_delta,
-        float(lon) - longitude_delta, float(lon) + longitude_delta,
-        *wanted_providers,
-        *country_parameters,
-    )
-    with _connect() as connection:
-        rows = connection.execute(query, parameters).fetchall()
+        """
+        parameters = (
+            float(lat) - latitude_delta, float(lat) + latitude_delta,
+            float(lon) - longitude_delta, float(lon) + longitude_delta,
+            *official_providers,
+            *country_parameters,
+        )
+        with _connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
 
     results = []
     for row in rows:
         distance = _haversine_km(float(lat), float(lon), row["latitude"], row["longitude"])
         if distance <= radius_km:
             results.append({**_record(row), "distance_km": round(distance, 2)})
+    if include_windy and not has_historical:
+        results.extend(_pws_search_near(
+            lat, lon, radius_km=radius_km, countries=countries,
+            sensors=wanted_sensors, limit=limit,
+        ))
+    if include_netatmo and not has_historical:
+        results.extend(_netatmo_search_near(
+            lat, lon, radius_km=radius_km, countries=countries,
+            sensors=wanted_sensors, limit=limit,
+        ))
     results.sort(key=lambda item: item["distance_km"])
     return results[:max(1, int(limit))]
 
@@ -624,12 +1030,18 @@ def search_catalog(
     ]
     if not wanted_providers or not wanted_countries:
         return []
+    include_windy = "WINDY" in wanted_providers
+    include_netatmo = "NETATMO" in wanted_providers
+    official_providers = [
+        provider for provider in wanted_providers
+        if provider not in PWS_CATALOG_PROVIDERS
+    ]
     wanted_sensors = [
         str(value).strip().lower() for value in (sensors or [])
         if str(value).strip().lower() in SENSOR_KEYS
     ]
 
-    provider_placeholders = ",".join("?" for _ in wanted_providers)
+    provider_placeholders = ",".join("?" for _ in official_providers)
     country_placeholders = ",".join("?" for _ in wanted_countries)
     sensor_clauses = [f"ss.{key} = 1" for key in wanted_sensors]
     extra_where = "".join(f" AND {clause}" for clause in sensor_clauses)
@@ -638,7 +1050,9 @@ def search_catalog(
         " AND NOT (s.provider = 'IEM' AND s.has_historical = 1 AND s.online = 0)"
         if hide_historical_only else ""
     )
-    query = _SELECT + f"""
+    rows = []
+    if official_providers:
+        query = _SELECT + f"""
     WHERE s.provider IN ({provider_placeholders})
       AND COALESCE(svo.hidden, 0) = 0
       {historical_clause}
@@ -647,10 +1061,10 @@ def search_catalog(
       AND s.latitude IS NOT NULL
       AND s.longitude IS NOT NULL
       {extra_where}
-    """
-    parameters = (*wanted_providers, *wanted_countries)
-    with _connect() as connection:
-        rows = connection.execute(query, parameters).fetchall()
+        """
+        parameters = (*official_providers, *wanted_countries)
+        with _connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
 
     results = []
     has_distance = lat is not None and lon is not None
@@ -661,7 +1075,29 @@ def search_catalog(
         else:
             record["distance_km"] = 0.0
         results.append(record)
-    results.sort(key=lambda item: (item["distance_km"], item["provider"], item["station_id"]))
+    if include_windy and not has_historical:
+        results.extend(_pws_search_catalog(
+            lat=lat,
+            lon=lon,
+            countries=wanted_countries,
+            sensors=wanted_sensors,
+            limit=limit,
+        ))
+    if include_netatmo and not has_historical:
+        results.extend(_netatmo_search_catalog(
+            lat=lat,
+            lon=lon,
+            countries=wanted_countries,
+            sensors=wanted_sensors,
+            limit=limit,
+        ))
+    # PWS al final: con ``limit`` justo, los catálogos masivos (Netatmo)
+    # no deben expulsar a los proveedores oficiales del resultado.
+    results.sort(key=lambda item: (
+        item["provider"] in PWS_CATALOG_PROVIDERS,
+        item["provider"],
+        item["station_id"].casefold(),
+    ))
     return results[:max(1, int(limit))]
 
 

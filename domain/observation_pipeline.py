@@ -214,13 +214,28 @@ def _erythemal_metrics(epochs: List[Any], uv_values: List[Any], *, now_epoch: in
 
 
 def _wet_bulb_risk(value: float) -> Tuple[str, str]:
-    if _is_nan(value) or value < 28.0:
+    # Umbrales alineados con la evidencia empírica (Vecellio et al. 2022):
+    # el límite crítico real en humanos ronda Tw 25-28 °C, muy por debajo
+    # del teórico de 35 °C.
+    if _is_nan(value) or value < 27.0:
         return "", ""
     if value >= 34.0:
         return "extreme", "danger"
-    if value >= 30.5:
+    if value >= 30.0:
         return "critical", "warning"
     return "potential", ""
+
+
+def _heat_index_risk(value: float) -> Tuple[str, str]:
+    """Aviso por heat index (Rothfusz): complementa al de bulbo húmedo en
+    calor seco/moderadamente húmedo, donde Tw se queda corto."""
+    if _is_nan(value) or value < 40.0:
+        return "", ""
+    if value >= 50.0:
+        return "extreme", "danger"
+    if value >= 45.0:
+        return "very_high", "warning"
+    return "high", ""
 
 
 def normalize_chart_series(
@@ -931,6 +946,10 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
 
         wet_bulb_risk, wet_bulb_alert_level = _wet_bulb_risk(Tw)
 
+    heat_index_risk, heat_index_alert_level = _heat_index_risk(
+        base.get("heat_index", NaN) if base.get("heat_index") is not None else NaN
+    )
+
     # ---- 8. Radiación / UV / claridad --------------------------------
     solar_rad = base.get("solar_radiation", NaN) if base.get("solar_radiation") is not None else NaN
     uv = base.get("uv", NaN) if base.get("uv") is not None else NaN
@@ -1029,6 +1048,7 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
         "Te": Te_val, "rho": rho_val, "rho_v_gm3": rho_v_gm3, "lcl": lcl_val,
         "sound_speed_ms": sound_speed_ms,
         "wet_bulb_risk": wet_bulb_risk, "wet_bulb_alert_level": wet_bulb_alert_level,
+        "heat_index_risk": heat_index_risk, "heat_index_alert_level": heat_index_alert_level,
         "solar_rad": solar_rad, "uv": uv, "et0": et0,
         "clarity": clarity, "balance": balance,
         "solar_energy_today_wh_m2": solar_energy_today_wh_m2,

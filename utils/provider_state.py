@@ -180,6 +180,18 @@ PROVIDER_SPECS: dict[str, dict[str, Any]] = {
         "station_id_keys": ("iem_station_id", "provider_station_id"),
         "station_id_upper": False,
     },
+    "WINDY": {
+        "label": "Windy PWS",
+        "session_prefix": "windy",
+        "station_id_keys": ("windy_station_id", "provider_station_id"),
+        "station_id_upper": False,
+    },
+    "NETATMO": {
+        "label": "Netatmo",
+        "session_prefix": "netatmo",
+        "station_id_keys": ("netatmo_station_id", "provider_station_id"),
+        "station_id_upper": False,
+    },
 }
 
 PROVIDER_RUNTIME_PREFIXES = (
@@ -195,6 +207,8 @@ PROVIDER_RUNTIME_PREFIXES = (
     "metoffice_",
     "meteohub_",
     "weatherlink_",
+    "windy_",
+    "netatmo_",
 )
 
 PROVIDER_AUTOCONNECT_WIDGET_PREFIXES = (
@@ -291,6 +305,8 @@ PROVIDER_ERROR_KEYS = {
     "METOFFICE": "metoffice_last_error",
     "METEOHUB_IT": "meteohub_last_error",
     "WEATHERLINK": "weatherlink_last_error",
+    "WINDY": "windy_last_error",
+    "NETATMO": "netatmo_last_error",
 }
 
 

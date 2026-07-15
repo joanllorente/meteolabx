@@ -57,10 +57,12 @@ from server.services import (
     meteogalicia,
     meteohub,
     metoffice,
+    netatmo,
     nws,
     poem,
     stations,
     weatherlink,
+    windy,
     wu,
 )
 from server.services import ranking as ranking_svc
@@ -506,6 +508,64 @@ def _resolve_provider_fetchers(
             lambda: metoffice.fetch_today_series(body.station_id, mo_key, client=http),
         )
 
+    if body.provider == "WINDY":
+        windy_key = settings.windy_api_key
+        windy_tz = str(getattr(body, "sun_tz_name", "") or "UTC")
+
+        payload_task = None
+
+        async def _windy_payload():
+            nonlocal payload_task
+            if payload_task is None:
+                payload_task = asyncio.create_task(
+                    windy.fetch_observations(body.station_id, windy_key, client=http)
+                )
+            return await payload_task
+
+        async def _windy_current():
+            return windy.current_from_payload(await _windy_payload(), tz_name=windy_tz)
+
+        async def _windy_today():
+            return windy.today_series_from_payload(await _windy_payload(), tz_name=windy_tz)
+
+        return (
+            windy_key,
+            _windy_current,
+            _windy_today,
+        )
+
+    if body.provider == "NETATMO":
+        netatmo_secret = settings.netatmo_refresh_token
+        netatmo_tz = str(getattr(body, "sun_tz_name", "") or "UTC")
+
+        netatmo_task = None
+
+        async def _netatmo_payload():
+            nonlocal netatmo_task
+            if netatmo_task is None:
+                netatmo_task = asyncio.create_task(
+                    netatmo.fetch_observations(
+                        body.station_id,
+                        settings.netatmo_client_id,
+                        settings.netatmo_client_secret,
+                        settings.netatmo_refresh_token,
+                        client=http,
+                    )
+                )
+            return await netatmo_task
+
+        async def _netatmo_current():
+            return netatmo.current_from_payload(await _netatmo_payload(), tz_name=netatmo_tz)
+
+        async def _netatmo_today():
+            return netatmo.today_series_from_payload(await _netatmo_payload(), tz_name=netatmo_tz)
+
+        return (
+            netatmo_secret,
+            _netatmo_current,
+            _netatmo_today,
+        )
+
     raise ProviderError(
         "unsupported_provider",
         provider=body.provider,
@@ -839,6 +899,8 @@ async def post_current_processed(
     response_warnings = list(result.warnings)
     if elevation_warning:
         response_warnings.append(elevation_warning)
+    if body.provider == "WINDY" and _windy_flatlined_fields(series_dict):
+        response_warnings.append(observation_warnings.flatlined_series())
 
     return ProcessedCurrentObservationResponse(
         observation=CurrentObservation.from_provider_dict(result.base),
@@ -895,6 +957,28 @@ def _build_station_info(
         from domain.wu_calibration import detect_wu_sensor_presence
 
         sensors = detect_wu_sensor_presence(current, series or {})
+    elif sensors is None and provider == "WINDY":
+        series_data = series or {}
+
+        def _present(current_key: str, series_key: str) -> bool:
+            value = current.get(current_key)
+            if isinstance(value, (int, float)) and not _is_nan_value(float(value)):
+                return True
+            return any(
+                isinstance(item, (int, float)) and not _is_nan_value(float(item))
+                for item in series_data.get(series_key, []) or []
+            )
+
+        sensors = {
+            "thermometer": _present("Tc", "temps"),
+            "hygrometer": _present("RH", "humidities"),
+            "barometer": _present("p_abs_hpa", "pressures_abs"),
+            "anemometer": _present("wind", "winds"),
+            "wind_vane": _present("wind_dir_deg", "wind_dirs"),
+            "rain_gauge": _present("precip_rate", "precips"),
+            "pyranometer": _present("solar_radiation", "solar_radiations"),
+            "uv": _present("uv", "uv_indexes"),
+        }
 
     return StationInfo(
         provider=provider,
@@ -919,6 +1003,30 @@ def _series_extreme(values, fn) -> float:
         if isinstance(v, (int, float)) and not _is_nan_value(float(v))
     ]
     return fn(valid) if valid else float("nan")
+
+
+def _windy_flatlined_fields(series_dict: dict) -> set[str]:
+    """Detect Windy variables frozen for at least six hours."""
+    epochs = series_dict.get("epochs", []) or []
+    if not isinstance(epochs, list):
+        return set()
+    flatlined = set()
+    for field in ("temps", "humidities"):
+        values = series_dict.get(field, []) or []
+        valid = [
+            (int(epoch), float(value))
+            for epoch, value in zip(epochs, values)
+            if isinstance(epoch, (int, float))
+            and isinstance(value, (int, float))
+            and not _is_nan_value(float(value))
+        ]
+        if (
+            len(valid) >= 12
+            and valid[-1][0] - valid[0][0] >= 6 * 3600
+            and max(value for _, value in valid) - min(value for _, value in valid) < 0.001
+        ):
+            flatlined.add(field)
+    return flatlined
 
 
 def _build_daily_extremes(
@@ -947,6 +1055,11 @@ def _build_daily_extremes(
     temps = series_dict.get("temps", [])
     rhs = series_dict.get("humidities", [])
     gusts = series_dict.get("gusts", [])
+    windy_flatlined = (
+        _windy_flatlined_fields(series_dict)
+        if str(provider or "").strip().upper() == "WINDY"
+        else set()
+    )
     provider_extremes = series_dict.get("daily_extremes", {})
     if not isinstance(provider_extremes, dict):
         provider_extremes = {}
@@ -1037,10 +1150,10 @@ def _build_daily_extremes(
         return _series_extreme(values, fn)
 
     return DailyExtremes(
-        temp_max=_none_if_nan(_with_current(_provider_or_series("temp_max", temps, max), "Tc", max)),
-        temp_min=_none_if_nan(_with_current(_provider_or_series("temp_min", temps, min), "Tc", min)),
-        rh_max=_none_if_nan(_with_current(_provider_or_series("rh_max", rhs, max), "RH", max)),
-        rh_min=_none_if_nan(_with_current(_provider_or_series("rh_min", rhs, min), "RH", min)),
+        temp_max=None if "temps" in windy_flatlined else _none_if_nan(_with_current(_provider_or_series("temp_max", temps, max), "Tc", max)),
+        temp_min=None if "temps" in windy_flatlined else _none_if_nan(_with_current(_provider_or_series("temp_min", temps, min), "Tc", min)),
+        rh_max=None if "humidities" in windy_flatlined else _none_if_nan(_with_current(_provider_or_series("rh_max", rhs, max), "RH", max)),
+        rh_min=None if "humidities" in windy_flatlined else _none_if_nan(_with_current(_provider_or_series("rh_min", rhs, min), "RH", min)),
         gust_max=_none_if_nan(_with_current(_provider_or_series("gust_max", gusts, max), "gust", max)),
         precip_total=_none_if_nan(
             current.get("precip_total") if isinstance(current.get("precip_total"), (int, float)) else float("nan")
@@ -1197,6 +1310,27 @@ def _resolve_recent_fetcher(
             mo_key,
             lambda: metoffice.fetch_recent_series(
                 body.station_id, mo_key, days_back=days, client=http,
+            ),
+        )
+
+    if body.provider == "WINDY":
+        windy_key = settings.windy_api_key
+        return (
+            windy_key,
+            lambda: windy.fetch_recent_series(
+                body.station_id, windy_key, days_back=min(7, days), client=http,
+            ),
+        )
+
+    if body.provider == "NETATMO":
+        return (
+            settings.netatmo_refresh_token,
+            lambda: netatmo.fetch_recent_series(
+                body.station_id,
+                settings.netatmo_client_id,
+                settings.netatmo_client_secret,
+                settings.netatmo_refresh_token,
+                days_back=min(7, days), client=http,
             ),
         )
 

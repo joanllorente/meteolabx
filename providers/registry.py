@@ -22,6 +22,8 @@ PROVIDER_NAMES = {
     "METOFFICE": "Met Office",
     "METEOHUB_IT": "MeteoHub IT",
     "IEM": "IEM",
+    "WINDY": "Windy PWS",
+    "NETATMO": "Netatmo",
 }
 
 
@@ -81,6 +83,7 @@ def search_nearby_stations(
                 lon,
                 max_results=max_results,
                 provider_ids=sorted(allowed),
+                countries=country_filter,
                 has_historical=has_historical,
                 hide_historical_only=hide_historical_only,
             )

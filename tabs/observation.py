@@ -13,6 +13,11 @@ WET_BULB_CRITICAL_KEY = "observation.cards.basic.dew_point.wet_bulb_risk.critica
 WET_BULB_EXTREME_KEY = "observation.cards.basic.dew_point.wet_bulb_risk.extreme"
 WET_BULB_WARNING_KEY = "observation.cards.basic.dew_point.wet_bulb_alert.warning"
 WET_BULB_EXTREME_ALERT_KEY = "observation.cards.basic.dew_point.wet_bulb_alert.extreme"
+HEAT_INDEX_HIGH_KEY = "observation.cards.basic.temperature.heat_risk.high"
+HEAT_INDEX_VERY_HIGH_KEY = "observation.cards.basic.temperature.heat_risk.very_high"
+HEAT_INDEX_EXTREME_KEY = "observation.cards.basic.temperature.heat_risk.extreme"
+HEAT_INDEX_WARNING_KEY = "observation.cards.basic.temperature.heat_alert.warning"
+HEAT_INDEX_EXTREME_ALERT_KEY = "observation.cards.basic.temperature.heat_alert.extreme"
 
 
 @dataclass(frozen=True)
@@ -40,6 +45,38 @@ def _wet_bulb_risk(category: Any, alert_level: Any = "") -> WetBulbRisk:
     if category == "potential":
         return WetBulbRisk(label_key=WET_BULB_POTENTIAL_KEY)
     return WetBulbRisk()
+
+
+def _heat_index_risk(category: Any, alert_level: Any = "") -> WetBulbRisk:
+    category = str(category or "").strip().lower()
+    alert_level = str(alert_level or "").strip().lower()
+    if category == "extreme":
+        return WetBulbRisk(
+            label_key=HEAT_INDEX_EXTREME_KEY,
+            alert_level=alert_level or "danger",
+            alert_key=HEAT_INDEX_EXTREME_ALERT_KEY,
+        )
+    if category == "very_high":
+        return WetBulbRisk(
+            label_key=HEAT_INDEX_VERY_HIGH_KEY,
+            alert_level=alert_level or "warning",
+            alert_key=HEAT_INDEX_WARNING_KEY,
+        )
+    if category == "high":
+        return WetBulbRisk(label_key=HEAT_INDEX_HIGH_KEY)
+    return WetBulbRisk()
+
+
+def _worst_heat_alert(wet_bulb: WetBulbRisk, heat_index: WetBulbRisk) -> WetBulbRisk:
+    """Un solo banner cuando ambos riesgos disparan: gana el más severo y,
+    a igual severidad, el de bulbo húmedo (mensaje más específico)."""
+    if not heat_index.alert_key:
+        return wet_bulb
+    if not wet_bulb.alert_key:
+        return heat_index
+    if heat_index.alert_level == "danger" and wet_bulb.alert_level != "danger":
+        return heat_index
+    return wet_bulb
 
 
 def _wet_bulb_risk_subtitle_html(risk: WetBulbRisk, translate) -> str:
@@ -388,6 +425,8 @@ def render_observation_tab(ctx):
     sound_speed = derivatives.get("sound_speed_ms")
     wet_bulb_risk_category = derivatives.get("wet_bulb_risk")
     wet_bulb_alert_level = derivatives.get("wet_bulb_alert_level")
+    heat_index_risk_category = derivatives.get("heat_index_risk")
+    heat_index_alert_level = derivatives.get("heat_index_alert_level")
     energy_today_wh_m2 = derivatives.get("solar_energy_today_wh_m2")
     erythema_mw_m2 = derivatives.get("erythemal_irradiance_mw_m2")
     erythemal_dose_j_m2 = derivatives.get("erythemal_dose_today_j_m2")
@@ -465,9 +504,10 @@ def render_observation_tab(ctx):
     e_vapor_str = _fmt_pressure_display(e_vapor_val, decimals=1)
     tw_sub_str = "—" if is_nan(Tw) else f"{_fmt_temp_display(Tw, decimals=1)} {temp_unit_txt}"
     wet_bulb_risk = _wet_bulb_risk(wet_bulb_risk_category, wet_bulb_alert_level)
-    wet_bulb_alert = _wet_bulb_alert_html(wet_bulb_risk, t, dark=dark)
-    if wet_bulb_alert:
-        st.markdown(wet_bulb_alert, unsafe_allow_html=True)
+    heat_index_risk = _heat_index_risk(heat_index_risk_category, heat_index_alert_level)
+    heat_alert = _wet_bulb_alert_html(_worst_heat_alert(wet_bulb_risk, heat_index_risk), t, dark=dark)
+    if heat_alert:
+        st.markdown(heat_alert, unsafe_allow_html=True)
     dew_point_subtitle = (
         f"<div>{t('observation.cards.basic.dew_point.wet_bulb')}: <b>{tw_sub_str}</b></div>"
         f"{_wet_bulb_risk_subtitle_html(wet_bulb_risk, t)}"
@@ -516,6 +556,7 @@ def render_observation_tab(ctx):
              subtitle_html=(
                  f"<div>{t('observation.cards.basic.temperature.feels_like')}: <b>{fl_str}</b></div>"
                  f"<div>{t('observation.cards.basic.temperature.heat_index')}: <b>{hi_str}</b></div>"
+                 f"{_wet_bulb_risk_subtitle_html(heat_index_risk, t)}"
              ),
              side_html=temp_side, 
              uid="b1", dark=dark, tooltip_key="temperatura"),

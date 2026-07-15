@@ -1,7 +1,8 @@
 {
   "warnings": {
     "data_age": "⚠️ Les dades de {provider} tenen {minutes} minuts d’antiguitat. Pot ser que l’estació no estigui transmetent.",
-    "missing_elevation": "⚠️ Falta l’altitud. La pressió absoluta i la termodinàmica s’han calculat amb altitud 0; introdueix l’altitud a la barra lateral per obtenir més precisió."
+    "missing_elevation": "⚠️ Falta l’altitud. La pressió absoluta i la termodinàmica s’han calculat amb altitud 0; introdueix l’altitud a la barra lateral per obtenir més precisió.",
+    "flatlined_series": "⚠️ Windy retorna una o diverses variables sense cap variació durant hores. El gràfic mostra les dades rebudes, però s’oculten els màxims i mínims afectats perquè no són fiables."
   },
   "tabs": {
     "observation": "Observació",
@@ -89,6 +90,15 @@
     "whats_new": "Novetats",
     "improvements_title": "Millores",
     "fixes_title": "Correccions",
+    "v127_improvements": [
+      "Nou proveïdor Windy PWS amb estacions meteorològiques amateurs obertes de tot el món.",
+      "Les estacions Windy actives es poden explorar al mapa, connectar i afegir a preferits.",
+      "Observacions actuals i sèries recents de Windy disponibles a Observació i Tendències."
+    ],
+    "v127_fixes": [
+      "L'inventari amateur es manté separat del catàleg d'estacions oficials.",
+      "El mapa només mostra per defecte estacions Windy amb dades recents."
+    ],
     "improvements": [
       "Migració completa i funcional al mode FastAPI.",
       "Nova pestanya Rànquing, amb classificacions de temperatura, vent i precipitació per país i globals.",
@@ -418,7 +428,16 @@
         "temperature": {
           "title": "Temperatura",
           "feels_like": "Sensació",
-          "heat_index": "Índex de calor"
+          "heat_index": "Índex de calor",
+          "heat_risk": {
+            "high": "Avís de calor: evitar l'exposició prolongada a aquestes condicions",
+            "very_high": "Calor intensa",
+            "extreme": "Calor extrema"
+          },
+          "heat_alert": {
+            "warning": "Calor intensa: evitar l'activitat física i l'exposició al sol. Risc de cop de calor en exposició prolongada.",
+            "extreme": "Calor extrema: risc imminent de cop de calor. Romandre en un lloc fresc i hidratar-se; perill fins i tot en repòs."
+          }
         },
         "relative_humidity": {
           "title": "Humitat relativa",
@@ -604,6 +623,10 @@
       "metoffice_synoptic": "Met Office Land Observations (48 h, mostreig 3 h)",
       "meteohub_today": "Observacions recents MeteoHub Italia ({minutes} min)",
       "meteohub_synoptic": "Observacions recents MeteoHub Italia (mostreig 3 h)",
+      "windy_today": "Observacions recents de Windy PWS",
+      "windy_synoptic": "Observacions recents de Windy PWS (mostreig 3 h)",
+      "netatmo_today": "Observacions recents de Netatmo",
+      "netatmo_synoptic": "Observacions recents de Netatmo (mostreig 3 h)",
       "euskalmet_synoptic": "Euskalmet (sense sèrie sinòptica setmanal disponible)",
       "generic_synoptic": "{provider} (sèrie horària genèrica)",
       "sampling_suffix_3h": "{source} (mostreig 3 h)"

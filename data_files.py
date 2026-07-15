@@ -7,6 +7,10 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
 STATIONS_DB_PATH = DATA_DIR / "stations.sqlite"
+PWS_STATIONS_DB_PATH = DATA_DIR / "pws_stations.sqlite"
+# Catálogo mundial (scripts/build_netatmo_pws_sqlite.py --world); el fichero
+# netatmo_pws_stations.sqlite (solo ES, más denso) queda para análisis.
+NETATMO_PWS_STATIONS_DB_PATH = DATA_DIR / "netatmo_pws_stations_world.sqlite"
 
 AEMET_STATIONS_PATH = DATA_DIR / "data_estaciones_aemet.json"
 METEOCAT_STATIONS_PATH = DATA_DIR / "data_estaciones_meteocat.json"

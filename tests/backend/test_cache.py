@@ -58,6 +58,12 @@ def test_make_cache_key_normalizes_station_id_to_uppercase() -> None:
     assert a == b
 
 
+def test_make_cache_key_preserves_case_sensitive_windy_station_id() -> None:
+    a = make_cache_key("WINDY", "current", "nMcOlGzd", "k")
+    b = make_cache_key("WINDY", "current", "NMCOLGZD", "k")
+    assert a != b
+
+
 # =====================================================================
 # AsyncTTLCache unit tests
 # =====================================================================

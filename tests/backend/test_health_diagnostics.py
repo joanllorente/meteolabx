@@ -32,6 +32,7 @@ def test_health_providers_reports_credentials_status() -> None:
         )
         # Bypass del fallback legacy para tener un proveedor "missing".
         settings.metoffice_api_key = ""
+        settings.windy_api_key = "W"
         return settings
 
     app.dependency_overrides[get_settings] = _settings
@@ -45,6 +46,7 @@ def test_health_providers_reports_credentials_status() -> None:
     assert body["FROST"]["credentials"] == "configured"
     assert body["WU"]["credentials"] == "per_user"
     assert body["NWS"]["credentials"] == "public"
+    assert body["WINDY"]["credentials"] == "configured"
     # Sin tráfico todavía
     assert body["AEMET"]["calls"] == 0
     assert body["AEMET"]["last_error"] is None

@@ -42,7 +42,7 @@ def test_build_database_creates_separate_pws_catalog(tmp_path):
     with sqlite3.connect(output) as connection:
         station = connection.execute(
             """
-            SELECT station_id, provider, name, online, station_type
+            SELECT station_id, provider, name, online, station_type, country
             FROM pws_stations WHERE station_id = 'abc123'
             """
         ).fetchone()
@@ -51,7 +51,7 @@ def test_build_database_creates_separate_pws_catalog(tmp_path):
             "SELECT raw_json FROM pws_stations WHERE station_id = 'abc123'"
         ).fetchone()[0]
 
-    assert station == ("abc123", "WINDY", "Garden Station", 1, "Davis Vantage Pro 2")
+    assert station == ("abc123", "WINDY", "Garden Station", 1, "Davis Vantage Pro 2", "ES")
     assert metadata["reported_station_count"] == "2"
     assert metadata["downloaded_pages"] == "1"
     assert '"operator_text":"Amateur Observer"' in raw_json

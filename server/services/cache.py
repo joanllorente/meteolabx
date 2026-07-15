@@ -57,7 +57,9 @@ def make_cache_key(provider: str, kind: str, station_id: str, api_key: str) -> s
     hits son por usuario, no globales).
     """
     api_hash = hashlib.sha1(api_key.encode("utf-8") or b"").hexdigest()[:12]
-    return f"{provider.lower()}:{kind}:{station_id.upper()}:{api_hash}"
+    provider_key = provider.lower()
+    station_key = station_id if provider_key == "windy" else station_id.upper()
+    return f"{provider_key}:{kind}:{station_key}:{api_hash}"
 
 
 class AsyncTTLCache(Generic[T]):

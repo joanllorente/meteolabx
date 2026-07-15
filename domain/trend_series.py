@@ -9,7 +9,7 @@ from typing import Any
 # pandas/numpy se importan lazy dentro de las funciones que los usan para
 # no cargar ~0,7s de import al arrancar el backend (este módulo se importa
 # a nivel de módulo desde server/routers/observations.py).
-from models.thermodynamics import mixing_ratio
+from models.thermodynamics import dewpoint_from_vapor_pressure, mixing_ratio
 from models.trends import (
     calculate_trend,
     equivalent_potential_temperature,
@@ -139,11 +139,14 @@ def derive_trend_series(
 
     temps = _parallel_values(data, "temps", count)
     humidities = _parallel_values(data, "humidities", count)
-    dewpoints = _parallel_values(data, "dewpts", count)
-    for index, (temp, humidity, dewpoint) in enumerate(zip(temps, humidities, dewpoints)):
-        if math.isnan(humidity) and not math.isnan(temp) and not math.isnan(dewpoint):
-            e_sat = vapor_pressure(temp, 100.0)
-            humidities[index] = 100.0 * vapor_pressure(dewpoint, 100.0) / e_sat if e_sat > 0 else float("nan")
+    # El punto de rocío es una derivada canónica: nunca se conserva el valor
+    # del proveedor. Así tarjeta y series usan exactamente la misma fórmula.
+    dewpoints = [
+        dewpoint_from_vapor_pressure(vapor_pressure(temp, humidity))
+        if not math.isnan(temp) and not math.isnan(humidity)
+        else float("nan")
+        for temp, humidity in zip(temps, humidities)
+    ]
 
     pressures_abs = _parallel_values(data, "pressures_abs", count)
     if all(math.isnan(value) for value in pressures_abs):
@@ -248,6 +251,7 @@ def derive_trend_series(
 
     result["pressures_abs"] = pressures_abs
     result["humidities"] = humidities
+    result["dewpts"] = dewpoints
     result["theta_e"] = theta_e
     result["mixing_ratios"] = mixing_ratios
     result["theta_e_trends"] = calculate_trend(theta_e, times, interval_minutes=thermo_interval).tolist()

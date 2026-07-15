@@ -34,7 +34,7 @@ def test_derive_trend_series_calculates_thermodynamics_and_hourly_rates() -> Non
     )
 
 
-def test_derive_trend_series_recovers_humidity_and_absolute_pressure() -> None:
+def test_derive_trend_series_ignores_native_dewpoint_and_recovers_absolute_pressure() -> None:
     data = {
         "epochs": [1_700_000_000, 1_700_010_800],
         "temps": [20.0, 21.0],
@@ -45,10 +45,24 @@ def test_derive_trend_series_recovers_humidity_and_absolute_pressure() -> None:
 
     result = derive_trend_series(data, period="synoptic", station_elevation=800.0)
 
-    assert all(not math.isnan(value) for value in result["humidities"])
+    assert all(math.isnan(value) for value in result["humidities"])
+    assert all(math.isnan(value) for value in result["dewpts"])
     assert result["pressures_abs"][0] == pytest.approx(1015.0 * math.exp(-0.1))
     assert result["theta_e_interval_minutes"] == 180
     assert not math.isnan(result["pressure_trends"][1])
+
+
+def test_derive_trend_series_recalculates_dewpoint_from_temperature_and_humidity() -> None:
+    data = {
+        "epochs": [1_700_000_000],
+        "temps": [22.0],
+        "humidities": [65.0],
+        "dewpts": [-99.0],
+    }
+
+    result = derive_trend_series(data, period="today")
+
+    assert result["dewpts"][0] == pytest.approx(15.13, abs=0.2)
 
 
 def _hourly_series(*, base, n_before, n_today, with_abs):

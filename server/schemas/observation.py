@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 def _nan_to_none(value: Any) -> Optional[float]:
@@ -66,7 +66,7 @@ class _ProviderStationRequest(BaseModel):
     provider: Literal[
         "WU", "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS",
         "METEOFRANCE", "METOFFICE", "FROST", "POEM", "METEOHUB_IT",
-        "IEM", "WEATHERLINK",
+        "IEM", "WEATHERLINK", "WINDY", "NETATMO",
     ] = Field(
         default="WU",
         description=(
@@ -102,8 +102,12 @@ class _ProviderStationRequest(BaseModel):
 
     @field_validator("station_id", mode="before")
     @classmethod
-    def _normalize_station(cls, value: Any) -> str:
-        return str(value or "").strip().upper()
+    def _normalize_station(cls, value: Any, info: ValidationInfo) -> str:
+        station_id = str(value or "").strip()
+        # Windy es case-sensitive y las MAC de Netatmo van en minúsculas.
+        if info.data.get("provider") in ("WINDY", "NETATMO"):
+            return station_id
+        return station_id.upper()
 
     @field_validator("api_key", "api_secret", mode="before")
     @classmethod
@@ -533,6 +537,8 @@ class ObservationDerivatives(BaseModel):
     sound_speed_ms: Optional[float] = Field(default=None, description="Velocidad del sonido en aire húmedo (m/s).")
     wet_bulb_risk: str = Field(default="", description="Categoría estable: potential, critical o extreme.")
     wet_bulb_alert_level: str = Field(default="", description="Nivel de alerta estable: warning o danger.")
+    heat_index_risk: str = Field(default="", description="Categoría estable: high, very_high o extreme.")
+    heat_index_alert_level: str = Field(default="", description="Nivel de alerta estable: warning o danger.")
 
     # Radiación + ET0
     solar_rad: Optional[float] = Field(default=None, description="Irradiancia solar (W/m²).")
@@ -568,6 +574,8 @@ class ObservationDerivatives(BaseModel):
             sound_speed_ms=_nan_to_none(value("sound_speed_ms")),
             wet_bulb_risk=str(value("wet_bulb_risk", "")),
             wet_bulb_alert_level=str(value("wet_bulb_alert_level", "")),
+            heat_index_risk=str(value("heat_index_risk", "")),
+            heat_index_alert_level=str(value("heat_index_alert_level", "")),
             solar_rad=_nan_to_none(value("solar_rad")), uv=_nan_to_none(value("uv")),
             et0=_nan_to_none(value("et0")), clarity=_nan_to_none(value("clarity")),
             balance=_nan_to_none(value("balance")),

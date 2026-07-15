@@ -43,6 +43,79 @@ def test_get_station_unknown_returns_none() -> None:
     assert stations.get_station("WU", "IBARCE12345") is None  # sin catálogo
 
 
+def test_windy_uses_separate_pws_catalog(monkeypatch) -> None:
+    record = stations.get_station("WINDY", "F06EA43A")
+    assert record is not None
+    assert record["provider"] == "WINDY"
+    assert record["network"] == "PWS"
+    assert record["name"] == "KomokaWeather"
+
+    monkeypatch.setattr(stations, "_pws_fresh_cutoff_iso", lambda hours=3: "2020-01-01T00:00:00Z")
+    nearby = stations.search_near(
+        42.96, -81.438, radius_km=10, providers=["WINDY"], limit=20,
+    )
+    assert any(row["station_id"] == "f06ea43a" for row in nearby)
+    assert all(row["provider"] == "WINDY" for row in nearby)
+
+
+def test_windy_country_counts_come_from_separate_pws_catalog(monkeypatch) -> None:
+    monkeypatch.setattr(stations, "_pws_fresh_cutoff_iso", lambda hours=3: "1900-01-01T00:00:00Z")
+
+    counts = stations.country_counts(providers=["WINDY"])
+
+    assert counts["US"] > 0
+    assert counts["BR"] > 0
+    assert counts["AR"] > 0
+
+
+def test_windy_filters_catalog_sensors_declared_by_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(stations, "_pws_fresh_cutoff_iso", lambda hours=3: "2020-01-01T00:00:00Z")
+
+    with_temperature = stations.search_catalog(
+        providers=["WINDY"], countries=["ES"], sensors=["thermometer"], limit=5000,
+    )
+    with_wind = stations.search_catalog(
+        providers=["WINDY"], countries=["ES"], sensors=["anemometer"], limit=5000,
+    )
+    unknown_pressure = stations.search_catalog(
+        providers=["WINDY"], countries=["ES"], sensors=["barometer"], limit=5000,
+    )
+
+    assert with_temperature
+    assert with_wind
+    assert all(row["sensors"]["thermometer"] for row in with_temperature)
+    assert all(row["sensors"]["anemometer"] for row in with_wind)
+    assert unknown_pressure == []
+
+
+def test_country_filter_combines_official_and_windy_stations(monkeypatch) -> None:
+    monkeypatch.setattr(stations, "_pws_fresh_cutoff_iso", lambda hours=3: "2020-01-01T00:00:00Z")
+
+    results = stations.search_near(
+        40.4168,
+        -3.7038,
+        radius_km=1000,
+        providers=["AEMET", "WINDY"],
+        countries=["ES"],
+        limit=5000,
+    )
+
+    providers = {row["provider"] for row in results}
+    assert "AEMET" in providers
+    assert "WINDY" in providers
+    assert all(row["country"] == "ES" for row in results)
+
+    argentina = stations.search_catalog(
+        lat=40.4168,
+        lon=-3.7038,
+        providers=["IEM", "WINDY"],
+        countries=["AR"],
+        limit=5000,
+    )
+    assert {row["provider"] for row in argentina} >= {"IEM", "WINDY"}
+    assert all(row["country"] == "AR" for row in argentina)
+
+
 def test_provider_counts_covers_all_catalogs() -> None:
     counts = stations.provider_counts()
     assert set(counts) == set(stations.CATALOG_PROVIDERS)
@@ -62,13 +135,19 @@ def test_country_counts_and_iem_country_filter() -> None:
     assert nws_counts["US"] > 30000
     assert "UNSPECIFIED" not in nws_counts
 
+    official_counts = stations.country_counts(
+        providers=list(stations.OFFICIAL_CATALOG_PROVIDERS)
+    )
+    assert official_counts["TR"] == 75
+    assert official_counts["PR"] == 1
+
     all_counts = stations.country_counts()
     assert all_counts["ES"] > counts["ES"]
-    assert all_counts["TR"] == 75
+    assert all_counts["TR"] >= official_counts["TR"]
     assert "TU" not in all_counts
     # Era 2 hasta la poda de DCP hidrológicas: la segunda estación de PR era
     # una DCP de nivel de río sin sensores meteo. Queda el radiosondeo TJSJ.
-    assert all_counts["PR"] == 1
+    assert all_counts["PR"] >= official_counts["PR"]
     assert "RQ" not in all_counts
 
     results = stations.search_near(

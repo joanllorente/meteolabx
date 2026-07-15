@@ -53,11 +53,17 @@ def _credentials_status(settings: Settings) -> dict:
         "METEOCAT": _key(settings.meteocat_api_key),
         "METEOFRANCE": _key(settings.meteofrance_api_key),
         "METOFFICE": _key(settings.metoffice_api_key),
+        "WINDY": _key(settings.windy_api_key),
         "FROST": "configured" if (
             str(settings.frost_client_id or "").strip()
             and str(settings.frost_client_secret or "").strip()
         ) else "missing",
         "EUSKALMET": "configured" if euskalmet_ok else "missing",
+        "NETATMO": "configured" if (
+            str(settings.netatmo_client_id or "").strip()
+            and str(settings.netatmo_client_secret or "").strip()
+            and str(settings.netatmo_refresh_token or "").strip()
+        ) else "missing",
     }
 
 

@@ -93,6 +93,7 @@ import math
 import logging
 import html
 import hashlib
+import sqlite3
 from typing import Optional
 from datetime import datetime
 _boot_mark("stdlib imports")
@@ -100,7 +101,7 @@ _boot_mark("stdlib imports")
 # Imports locales
 from config import REFRESH_SECONDS, MIN_REFRESH_SECONDS, MAX_DATA_AGE_MINUTES, RD
 _boot_mark("import config")
-from data_files import METOFFICE_STATIONS_PATH, STATION_CATALOG_TOTAL, STATIONS_DB_PATH
+from data_files import METOFFICE_STATIONS_PATH, NETATMO_PWS_STATIONS_DB_PATH, PWS_STATIONS_DB_PATH, STATION_CATALOG_TOTAL, STATIONS_DB_PATH
 _boot_mark("import data_files")
 from utils import html_clean, is_nan, coerce_str, es_datetime_from_epoch, age_string, month_name, t, t_list
 _boot_mark("import utils")
@@ -434,6 +435,20 @@ def _standard_provider_runtime_config() -> dict[str, dict]:
             "detail_key": "weatherlink_last_error",
             "detail_prefix": "Detalle técnico WeatherLink: ",
             "series_mode": "none",
+        },
+        "WINDY": {
+            "fallback_key": "windy_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de Windy PWS por ahora.",
+            "detail_key": "windy_last_error",
+            "detail_prefix": "Detalle técnico Windy PWS: ",
+            "series_mode": "from_base",
+        },
+        "NETATMO": {
+            "fallback_key": "netatmo_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de Netatmo por ahora.",
+            "detail_key": "netatmo_last_error",
+            "detail_prefix": "Detalle técnico Netatmo: ",
+            "series_mode": "from_base",
         },
     }
 
@@ -1010,6 +1025,16 @@ def _build_map_tab_context() -> dict:
                 versions.append(("METOFFICE", int(METOFFICE_STATIONS_PATH.stat().st_mtime_ns)))
             except Exception:
                 versions.append(("METOFFICE", 0))
+        if "WINDY" in provider_set:
+            try:
+                versions.append(("WINDY", int(PWS_STATIONS_DB_PATH.stat().st_mtime_ns)))
+            except Exception:
+                versions.append(("WINDY", 0))
+        if "NETATMO" in provider_set:
+            try:
+                versions.append(("NETATMO", int(NETATMO_PWS_STATIONS_DB_PATH.stat().st_mtime_ns)))
+            except Exception:
+                versions.append(("NETATMO", 0))
         return tuple(versions)
 
     return {
@@ -1077,6 +1102,7 @@ TAB_SLUG_TO_INTERNAL.update({
 DEEPLINK_PROVIDERS = {
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
     "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IEM",
+    "WINDY", "NETATMO",
 }
 
 
@@ -3590,6 +3616,8 @@ def _provider_refresh_seconds() -> int:
         "POEM": 300,  # POEM dispone de endpoints TR y series con mayor frecuencia
         "METOFFICE": 3600,  # Land Observations devuelve una serie horaria de 48 h
         "WEATHERLINK": 60,  # WeatherLink current conditions; límite por defecto holgado
+        "WINDY": 300,  # Windy PWS suele publicar cada 5-10 minutos
+        "NETATMO": 600,  # Netatmo publica cada ~10 minutos
         "WU": REFRESH_SECONDS,
     }
     return int(defaults.get(provider_id, REFRESH_SECONDS))
@@ -3600,7 +3628,27 @@ def _pressure_decimals_for_provider(provider_id: str) -> int:
 
 
 def _total_catalog_stations() -> int:
-    return int(STATION_CATALOG_TOTAL)
+    try:
+        mtime = int(PWS_STATIONS_DB_PATH.stat().st_mtime_ns)
+    except OSError:
+        return int(STATION_CATALOG_TOTAL)
+    return int(STATION_CATALOG_TOTAL) + _active_windy_station_count(mtime)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _active_windy_station_count(_catalog_mtime: int) -> int:
+    try:
+        path = PWS_STATIONS_DB_PATH.resolve()
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
+            return int(connection.execute(
+                """
+                SELECT COUNT(*) FROM pws_stations
+                WHERE last_observation_time >=
+                      strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 hours')
+                """
+            ).fetchone()[0])
+    except (OSError, sqlite3.Error, TypeError):
+        return 0
 
 
 header_refresh_seconds = _provider_refresh_seconds() if st.session_state.get(CONNECTED, False) else REFRESH_SECONDS
@@ -4250,7 +4298,7 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.6"
+APP_VERSION = "1.2.7"
 
 
 def _whats_new_footer_html() -> str:
@@ -4270,7 +4318,8 @@ def _whats_new_footer_html() -> str:
         )
 
     return (
-        _release("1.2.0", "footer.improvements", "footer.fixes")
+        _release("1.2.7", "footer.v127_improvements", "footer.v127_fixes")
+        + _release("1.2.0", "footer.improvements", "footer.fixes")
         + _release("1.1.0", "footer.previous_improvements", "footer.previous_fixes")
     )
 
@@ -4322,7 +4371,7 @@ st.markdown(
 
 st.markdown(
     html_clean(
-        "<div class='mlb-footer-bottom'>%s: WU · WeatherLink · AEMET · Meteocat · "
+        "<div class='mlb-footer-bottom'>%s: WU · WeatherLink · Windy PWS · AEMET · Meteocat · "
         "Euskalmet · Frost · Meteo-France · MeteoGalicia · NWS · POEM · Met Office · "
         "MeteoHub Italia · IEM · %s · © 2026</div>"
         % (t("footer.sources"), t("footer.unaffiliated"))

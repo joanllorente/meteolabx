@@ -19,3 +19,6 @@ data/data_estaciones_iem.json
 
 # Estadísticas internas de uso (en el Volume en producción)
 data/usage_stats.sqlite
+data/netatmo_tile_cache/
+data/netatmo_pws_stations_world.sqlite
+data/netatmo_pws_stations.sqlite

@@ -1,7 +1,8 @@
 {
   "warnings": {
     "data_age": "⚠️ {provider} data is {minutes} minutes old. The station may not be reporting.",
-    "missing_elevation": "⚠️ Elevation is missing. Absolute pressure and thermodynamics were computed with elevation 0; enter the elevation in the sidebar for better accuracy."
+    "missing_elevation": "⚠️ Elevation is missing. Absolute pressure and thermodynamics were computed with elevation 0; enter the elevation in the sidebar for better accuracy.",
+    "flatlined_series": "⚠️ Windy is returning one or more variables with no variation for several hours. The chart shows the received data, but affected highs and lows are hidden because they are unreliable."
   },
   "tabs": {
     "observation": "Observation",
@@ -89,6 +90,15 @@
     "whats_new": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
+    "v127_improvements": [
+      "New Windy PWS provider with open amateur weather stations worldwide.",
+      "Active Windy stations can be explored on the map, connected and saved as favourites.",
+      "Windy current observations and recent series are available in Observation and Trends."
+    ],
+    "v127_fixes": [
+      "The amateur inventory is kept separate from the official station catalogue.",
+      "The map only shows Windy stations with recent data by default."
+    ],
     "improvements": [
       "Complete, functional migration to FastAPI mode.",
       "New Ranking tab, with temperature, wind and precipitation rankings by country and globally.",
@@ -418,7 +428,16 @@
         "temperature": {
           "title": "Temperature",
           "feels_like": "Feels like",
-          "heat_index": "Heat index"
+          "heat_index": "Heat index",
+          "heat_risk": {
+            "high": "Heat advisory: avoid prolonged exposure to these conditions",
+            "very_high": "Intense heat",
+            "extreme": "Extreme heat"
+          },
+          "heat_alert": {
+            "warning": "Intense heat: avoid physical activity and sun exposure. Risk of heat stroke with prolonged exposure.",
+            "extreme": "Extreme heat: imminent risk of heat stroke. Stay in a cool place and hydrate; dangerous even at rest."
+          }
         },
         "relative_humidity": {
           "title": "Relative humidity",
@@ -604,6 +623,10 @@
       "metoffice_synoptic": "Met Office Land Observations (48 h, 3 h sampling)",
       "meteohub_today": "MeteoHub Italia recent observations ({minutes} min)",
       "meteohub_synoptic": "MeteoHub Italia recent observations (3 h sampling)",
+      "windy_today": "Windy PWS recent observations",
+      "windy_synoptic": "Windy PWS recent observations (3 h sampling)",
+      "netatmo_today": "Netatmo recent observations",
+      "netatmo_synoptic": "Netatmo recent observations (3 h sampling)",
       "euskalmet_synoptic": "Euskalmet (no weekly synoptic series available)",
       "generic_synoptic": "{provider} (generic hourly series)",
       "sampling_suffix_3h": "{source} (3 h sampling)"

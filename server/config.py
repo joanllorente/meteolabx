@@ -196,6 +196,18 @@ class Settings(BaseSettings):
     ``apikey``). Configurar vía ``METEOLABX_METOFFICE_API_KEY``.
     """
 
+    windy_api_key: str = ""
+    """API key server-side para el catálogo abierto Windy PWS."""
+
+    netatmo_client_id: str = ""
+    """Client ID OAuth de Netatmo (``METEOLABX_NETATMO_CLIENT_ID``)."""
+
+    netatmo_client_secret: str = ""
+    """Client secret OAuth de Netatmo (``METEOLABX_NETATMO_CLIENT_SECRET``)."""
+
+    netatmo_refresh_token: str = ""
+    """Refresh token OAuth de Netatmo (``METEOLABX_NETATMO_REFRESH_TOKEN``)."""
+
     frost_client_id: str = ""
     """
     Client ID de Frost (frost.met.no, HTTP Basic). Configurar vía

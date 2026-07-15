@@ -21,8 +21,13 @@ from utils.provider_state import display_provider_station_id
 # espacial) y el ranking ya lo usa por su lado. En EE.UU. el mapa muestra las
 # OFICIALES de NWS. IEM se mantiene como proveedor conectable (ranking/deep link)
 # pero no se ofrece como capa del mapa.
-ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT"]
+ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "WINDY", "NETATMO"]
 IEM_FALLBACK_MAP_PROVIDER = "IEM"
+WINDY_MAP_PROVIDER = "WINDY"
+NETATMO_MAP_PROVIDER = "NETATMO"
+# Proveedores PWS con catálogo SQLite propio: se cargan por país, fuera del
+# lote regional.
+PWS_MAP_PROVIDERS = (WINDY_MAP_PROVIDER, NETATMO_MAP_PROVIDER)
 IEM_MAP_EXCLUDED_COUNTRIES = {"ES", "FR", "IT", "NO", "US"}
 MAP_SENSOR_FILTER_OPTIONS = [
     "thermometer",
@@ -95,7 +100,6 @@ _COUNTRY_LOCALE = Locale.parse("es")
 COUNTRY_NAME_OVERRIDES = {
     "AN": "Antillas Neerlandesas",
     "CS": "Serbia y Montenegro",
-    "DR": "República Dominicana",
     "KA": "Islas Carolinas (Palau/Micronesia)",
     "RQ": "Puerto Rico",
     "TU": "Turquía",
@@ -631,8 +635,11 @@ def render_map_tab(ctx):
             bool(hide_historical_only),
         )
         rows = [_candidate_to_map_row(candidate) for candidate in regional_candidates]
-        rows.sort(key=lambda row: float(row["distance_km"]))
-        cache_store[cache_key] = [dict(row) for row in rows]
+        rows.sort(key=lambda row: (row["provider_id"], row["station_id"].casefold()))
+        # No se cachean resultados vacíos: pueden venir de un backend caído
+        # y dejarían el mapa en blanco toda la sesión.
+        if rows:
+            cache_store[cache_key] = [dict(row) for row in rows]
         return rows
 
     def _load_iem_country_candidates(
@@ -670,8 +677,36 @@ def render_map_tab(ctx):
             bool(hide_historical_only),
         )
         rows = [_candidate_to_map_row(candidate) for candidate in candidates]
-        rows.sort(key=lambda row: float(row["distance_km"]))
-        cache_store[cache_key] = [dict(row) for row in rows]
+        rows.sort(key=lambda row: (row["provider_id"], row["station_id"].casefold()))
+        if rows:
+            cache_store[cache_key] = [dict(row) for row in rows]
+        return rows
+
+    def _load_pws_candidates(pws_provider: str, country_filter: list[str]) -> list[dict]:
+        provider_ids = (pws_provider,)
+        catalog_version = _map_catalog_cache_version(provider_ids)
+        cache_store = st.session_state.setdefault("map_pws_rows_cache", {})
+        cache_key = (
+            _map_cache_key(pws_provider, search_lat, search_lon, catalog_version),
+            tuple(sorted(country_filter)),
+        )
+        cached_rows = cache_store.get(cache_key)
+        if isinstance(cached_rows, list):
+            return [dict(row) for row in cached_rows]
+        candidates = _cached_map_search_nearby_stations(
+            float(search_lat),
+            float(search_lon),
+            5000,
+            provider_ids,
+            tuple(sorted(country_filter)),
+            catalog_version,
+            False,
+            False,
+        )
+        rows = [_candidate_to_map_row(candidate) for candidate in candidates]
+        rows.sort(key=lambda row: (row["provider_id"], row["station_id"].casefold()))
+        if rows:
+            cache_store[cache_key] = [dict(row) for row in rows]
         return rows
 
     ensure_geo_state("map_geo", request_id_start=10000)
@@ -1150,6 +1185,12 @@ def render_map_tab(ctx):
                     ),
                 )
 
+            for pws_provider in PWS_MAP_PROVIDERS:
+                if pws_provider in provider_filter:
+                    _extend_unique_candidates(
+                        nearest, _load_pws_candidates(pws_provider, selected_countries),
+                    )
+
             iem_countries = [
                 country for country in selected_countries
                 if country_uses_iem_map_fallback(country)
@@ -1179,7 +1220,9 @@ def render_map_tab(ctx):
                 for station in nearest
                 if station_matches_sensor_filter(station, selected_sensors)
             ]
-            nearest.sort(key=lambda station: float(station["distance_km"]))
+            nearest.sort(key=lambda station: (
+                station["provider_id"], station["station_id"].casefold(),
+            ))
         visible_station_count = len(nearest)
         visible_provider_count = len({s["provider_id"] for s in nearest})
 

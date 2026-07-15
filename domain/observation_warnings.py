@@ -23,6 +23,9 @@ DATA_AGE = "data_age"
 # Sin altitud de usuario ni del proveedor: presión absoluta y
 # termodinámica calculadas con z=0.
 MISSING_ELEVATION = "missing_elevation"
+# Windy devuelve suficientes puntos, pero una o varias variables quedan
+# exactamente congeladas durante horas. No son extremos diarios fiables.
+FLATLINED_SERIES = "flatlined_series"
 
 
 def data_age(provider: str, minutes: float) -> Dict[str, Any]:
@@ -36,3 +39,8 @@ def data_age(provider: str, minutes: float) -> Dict[str, Any]:
 def missing_elevation() -> Dict[str, Any]:
     """Warning estructurado de altitud ausente."""
     return {"code": MISSING_ELEVATION, "params": {}}
+
+
+def flatlined_series() -> Dict[str, Any]:
+    """Warning de serie upstream congelada durante varias horas."""
+    return {"code": FLATLINED_SERIES, "params": {}}

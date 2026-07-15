@@ -8,6 +8,7 @@ _CREDENTIAL_ENV_NAMES = (
     "METEOLABX_METEOCAT_API_KEY",
     "METEOLABX_METEOFRANCE_API_KEY",
     "METEOLABX_METOFFICE_API_KEY",
+    "METEOLABX_WINDY_API_KEY",
     "METEOLABX_FROST_CLIENT_ID",
     "METEOLABX_FROST_CLIENT_SECRET",
     "AEMET_API_KEY",
@@ -29,6 +30,7 @@ def test_provider_credentials_are_empty_without_environment(monkeypatch) -> None
     assert settings.meteocat_api_key == ""
     assert settings.meteofrance_api_key == ""
     assert settings.metoffice_api_key == ""
+    assert settings.windy_api_key == ""
     assert settings.frost_client_id == ""
     assert settings.frost_client_secret == ""
 

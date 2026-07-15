@@ -375,6 +375,25 @@ def test_radiation_and_ui_derivatives_are_computed_in_pipeline() -> None:
     assert derivatives["erythemal_dose_today_sed"] == pytest.approx(0.9)
 
 
+def test_wet_bulb_risk_thresholds() -> None:
+    from domain.observation_pipeline import _wet_bulb_risk
+
+    assert _wet_bulb_risk(26.9) == ("", "")
+    assert _wet_bulb_risk(27.0) == ("potential", "")
+    assert _wet_bulb_risk(30.0) == ("critical", "warning")
+    assert _wet_bulb_risk(34.0) == ("extreme", "danger")
+
+
+def test_heat_index_risk_thresholds() -> None:
+    from domain.observation_pipeline import _heat_index_risk
+
+    assert _heat_index_risk(float("nan")) == ("", "")
+    assert _heat_index_risk(39.9) == ("", "")
+    assert _heat_index_risk(40.0) == ("high", "")
+    assert _heat_index_risk(45.0) == ("very_high", "warning")
+    assert _heat_index_risk(50.0) == ("extreme", "danger")
+
+
 def test_chart_series_override_takes_precedence() -> None:
     base = _fresh_base()
     override = {"epochs": [99], "temps": [42.0], "has_data": True}
@@ -432,6 +451,7 @@ def test_pipeline_returns_complete_canonical_derivatives_block() -> None:
         "e_sat", "e", "Td_calc", "Tw", "q", "q_gkg",
         "theta", "Tv", "Te", "rho", "rho_v_gm3", "lcl",
         "sound_speed_ms", "wet_bulb_risk", "wet_bulb_alert_level",
+        "heat_index_risk", "heat_index_alert_level",
         "solar_rad", "uv", "et0", "clarity", "balance",
         "solar_energy_today_wh_m2", "erythemal_irradiance_mw_m2",
         "erythemal_dose_today_j_m2", "erythemal_dose_today_sed",
