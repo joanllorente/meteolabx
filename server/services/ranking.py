@@ -1543,6 +1543,24 @@ async def refresh_once(
     return failed
 
 
+def _retry_backoff_s(
+    consecutive_failures: int,
+    base_s: float = 60.0,
+    max_s: float = 900.0,
+) -> float:
+    """Espera antes del próximo reintento de un proveedor caído.
+
+    Las primeras 4 rachas reintentan al ritmo base (fallos transitorios:
+    un 500 suelto, un timeout); a partir de la 5ª el intervalo se duplica
+    por fallo hasta el techo, para no martillear en bucle a un proveedor
+    caído de verdad (AEMET puede pasarse horas devolviendo errores).
+    """
+    count = max(1, int(consecutive_failures))
+    if count <= 4:
+        return float(base_s)
+    return float(min(max_s, base_s * (2 ** (count - 4))))
+
+
 def _next_aligned_run(offset_min: int, now: Optional[datetime] = None) -> datetime:
     """Próximo instante con minuto == ``offset_min`` (segundo 0). El ciclo del
     ranking se alinea justo después de la publicación horaria de los proveedores.
@@ -1568,12 +1586,32 @@ async def refresh_loop(
     publicación horaria de los proveedores en vez de a minutos arbitrarios. Hace
     un primer ciclo INMEDIATO al arrancar (para no salir vacío hasta el próximo
     :05). Entre ciclos, si quedaron proveedores con fallo, reintenta SOLO esos
-    cada ``retry_interval_s`` (sin re-llamar a los que van bien). Cancela limpio
-    al apagar el server. Con ``state_path``, tras cada ciclo se vuelca el store
-    a disco para que reinicios/redeploys no pierdan el estado."""
+    con backoff por proveedor: ``retry_interval_s`` las primeras 4 rachas y
+    duplicando después hasta 15 min (``_retry_backoff_s``), para no martillear
+    a un proveedor caído de verdad. Cancela limpio al apagar el server. Con
+    ``state_path``, tras cada ciclo se vuelca el store a disco para que
+    reinicios/redeploys no pierdan el estado."""
     import asyncio
 
     offset_min = int(getattr(settings, "ranking_refresh_offset_min", 5)) if settings else 5
+    # Racha de fallos consecutivos y próximo reintento por proveedor.
+    failure_counts: Dict[str, int] = {}
+    next_retry_at: Dict[str, datetime] = {}
+
+    def _register_attempt(attempted: set, failed: set) -> None:
+        now = datetime.now(tz=timezone.utc)
+        for provider in attempted - failed:
+            failure_counts.pop(provider, None)
+            next_retry_at.pop(provider, None)
+        for provider in failed:
+            failure_counts[provider] = failure_counts.get(provider, 0) + 1
+            backoff = _retry_backoff_s(failure_counts[provider], base_s=retry_interval_s)
+            next_retry_at[provider] = now + timedelta(seconds=backoff)
+            if failure_counts[provider] > 4:
+                logger.warning(
+                    "ranking: %-12s lleva %d fallos seguidos → backoff %.0fs",
+                    provider, failure_counts[provider], backoff,
+                )
 
     async def _persist() -> None:
         if not state_path:
@@ -1589,24 +1627,39 @@ async def refresh_loop(
 
     # Ciclo inmediato al arrancar: el ranking no debe salir vacío hasta el :05.
     pending = await refresh_once(store, client=client, settings=settings)
+    _register_attempt(set(failure_counts) | pending, pending)
     await _persist()
     next_full = _next_aligned_run(offset_min)
 
     while True:
-        secs_to_full = (next_full - datetime.now(tz=timezone.utc)).total_seconds()
+        now = datetime.now(tz=timezone.utc)
+        secs_to_full = (next_full - now).total_seconds()
         if secs_to_full <= 0:
             pending = await refresh_once(store, client=client, settings=settings)  # completo
+            _register_attempt(set(failure_counts) | pending, pending)
             await _persist()
             next_full = _next_aligned_run(offset_min)
             continue
         if pending:
-            logger.info(
-                "ranking: con fallo %s → reintento solo esos (próximo completo a las :%02d)",
-                sorted(pending), max(0, min(59, offset_min)),
-            )
-            await asyncio.sleep(max(1.0, min(secs_to_full, retry_interval_s)))
-            if datetime.now(tz=timezone.utc) < next_full:
-                pending = await refresh_once(store, client=client, settings=settings, only=pending)
+            # Solo los proveedores cuyo backoff ya venció; el resto espera.
+            due = {p for p in pending if next_retry_at.get(p, now) <= now}
+            if due:
+                logger.info(
+                    "ranking: con fallo %s → reintento %s (próximo completo a las :%02d)",
+                    sorted(pending), sorted(due), max(0, min(59, offset_min)),
+                )
+                failed_again = await refresh_once(
+                    store, client=client, settings=settings, only=due,
+                )
+                _register_attempt(due, failed_again)
+                pending = (pending - due) | failed_again
                 await _persist()
+                continue
+            next_due = min(
+                (next_retry_at[p] for p in pending if p in next_retry_at),
+                default=next_full,
+            )
+            wait_s = (min(next_due, next_full) - datetime.now(tz=timezone.utc)).total_seconds()
+            await asyncio.sleep(max(1.0, wait_s))
         else:
             await asyncio.sleep(max(1.0, secs_to_full))
