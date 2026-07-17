@@ -29,4 +29,4 @@ ELEVATION_SOURCE = "elevation_source"
 BROWSER_TZ = "browser_tz"
 BROWSER_COLOR_SCHEME = "browser_color_scheme"
 BROWSER_VIEWPORT_WIDTH = "browser_viewport_width"
-
+BROWSER_LANGUAGES = "browser_languages"

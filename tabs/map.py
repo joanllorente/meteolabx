@@ -1,8 +1,11 @@
 import streamlit as st
 import colorsys
+import time as _time
 from babel import Locale
+from pathlib import Path
 from typing import Optional
 from components.map_viewport import get_map_viewport
+from components.temperature_clusters import render_temperature_clusters
 from components.geolocation_state import (
     consume_browser_geolocation,
     default_search_coords,
@@ -11,7 +14,19 @@ from components.geolocation_state import (
     start_browser_geolocation_request,
 )
 from providers.types import StationCandidate
-from utils.geo import haversine_distance
+from utils.geo import (
+    haversine_distance,
+    is_austria_map_center,
+    is_canada_map_center,
+    is_france_map_center,
+    is_iberia_map_center,
+    is_italy_map_center,
+    is_norway_map_center,
+    is_portugal_map_center,
+    is_sweden_map_center,
+    is_uk_map_center,
+    is_us_map_center,
+)
 from utils.helpers import coerce_str
 from utils.favorites import favorite_from_provider_station, upsert_favorite
 from utils.provider_state import display_provider_station_id
@@ -21,14 +36,14 @@ from utils.provider_state import display_provider_station_id
 # espacial) y el ranking ya lo usa por su lado. En EE.UU. el mapa muestra las
 # OFICIALES de NWS. IEM se mantiene como proveedor conectable (ranking/deep link)
 # pero no se ofrece como capa del mapa.
-ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "WINDY", "NETATMO"]
+ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IPMA", "GEOSPHERE", "SMHI", "ECCC", "WINDY", "NETATMO"]
 IEM_FALLBACK_MAP_PROVIDER = "IEM"
 WINDY_MAP_PROVIDER = "WINDY"
 NETATMO_MAP_PROVIDER = "NETATMO"
 # Proveedores PWS con catálogo SQLite propio: se cargan por país, fuera del
 # lote regional.
 PWS_MAP_PROVIDERS = (WINDY_MAP_PROVIDER, NETATMO_MAP_PROVIDER)
-IEM_MAP_EXCLUDED_COUNTRIES = {"ES", "FR", "IT", "NO", "US"}
+IEM_MAP_EXCLUDED_COUNTRIES = {"ES", "FR", "IT", "NO", "US", "PT", "AT", "SE", "CA"}
 MAP_SENSOR_FILTER_OPTIONS = [
     "thermometer",
     "hygrometer",
@@ -54,6 +69,10 @@ REGIONAL_CATALOG_SPECS = {
     "NWS": {"lat": 39.8283, "lon": -98.5795, "max_results": 38000},
     "METOFFICE": {"lat": 54.0000, "lon": -2.5000, "max_results": 260},
     "METEOHUB_IT": {"lat": 42.5000, "lon": 12.5000, "max_results": 5000},
+    "IPMA": {"lat": 39.0000, "lon": -12.0000, "max_results": 260},
+    "GEOSPHERE": {"lat": 47.6000, "lon": 14.1000, "max_results": 600},
+    "SMHI": {"lat": 62.0000, "lon": 15.0000, "max_results": 2400},
+    "ECCC": {"lat": 56.0000, "lon": -96.0000, "max_results": 10300},
 }
 MAP_PROVIDER_COUNTRIES = {
     "AEMET": {"ES"},
@@ -66,6 +85,10 @@ MAP_PROVIDER_COUNTRIES = {
     "NWS": {"US"},
     "METOFFICE": {"GB"},
     "METEOHUB_IT": {"IT"},
+    "IPMA": {"PT"},
+    "GEOSPHERE": {"AT"},
+    "SMHI": {"SE"},
+    "ECCC": {"CA"},
 }
 
 
@@ -89,7 +112,11 @@ def _fallback_map_country_counts(provider_ids: tuple[str, ...]) -> dict[str, int
 
 
 DEFAULT_MAP_COUNTRY_BY_CENTER = {
-    "iberia": ("ES",),
+    "iberia": ("ES", "PT"),
+    "portugal": ("PT",),
+    "austria": ("AT",),
+    "sweden": ("SE",),
+    "canada": ("CA",),
     "france": ("FR",),
     "norway": ("NO",),
     "uk": ("GB",),
@@ -105,6 +132,525 @@ COUNTRY_NAME_OVERRIDES = {
     "TU": "Turquía",
     "UNSPECIFIED": "Sin país",
 }
+
+
+# Rampa del campo de temperatura — misma paleta que
+# ``server/services/temperature_field.COLOR_STOPS`` (°C → color).
+_TEMP_FIELD_LEGEND_STOPS = (
+    (-20, "#621692"), (-10, "#347aeb"),
+    (0, "#58b0f5"), (5, "#82d7eb"), (10, "#6ecd7d"), (15, "#c8e150"),
+    (20, "#fad232"), (25, "#f89e26"), (30, "#ee5c1c"), (35, "#cd2016"),
+    (40, "#960820"), (46, "#60023a"),
+)
+_TEMP_FIELD_LEGEND_TICKS = (-20, -10, 0, 10, 20, 30, 40)
+
+_TEMP_FIELD_BOUNDS = (-180.0, -60.0, 180.0, 85.0)
+_TEMP_FIELD_PALETTE_VERSION = 2
+_TEMP_FIELD_ALGORITHM_VERSION = 5
+
+_WIND_FIELD_LEGEND_STOPS = (
+    (0, "#53a7e7"), (5, "#43c4cf"), (10, "#48c992"),
+    (20, "#b9da53"), (30, "#f7cf3f"), (40, "#f79732"),
+    (60, "#e24932"), (80, "#b22a5b"), (110, "#67237d"),
+    (150, "#36185b"),
+)
+_WIND_FIELD_LEGEND_TICKS = (0, 10, 20, 40, 60, 80, 110, 150)
+_WIND_FIELD_PALETTE_VERSION = 1
+_WIND_FIELD_ALGORITHM_VERSION = 1
+
+_PRECIP_FIELD_LEGEND_STOPS = (
+    (0, "#e0eef7"), (0.2, "#b7e0f0"), (1, "#74c8e1"),
+    (2, "#3ea9d6"), (5, "#2b7ebf"), (10, "#2a5ba6"),
+    (20, "#51419b"), (50, "#813090"), (100, "#b4246d"),
+    (200, "#6f1049"),
+)
+_PRECIP_FIELD_LEGEND_TICKS = (0, 1, 2, 5, 10, 20, 50, 100, 200)
+_PRECIP_FIELD_PALETTE_VERSION = 1
+_PRECIP_FIELD_ALGORITHM_VERSION = 3
+
+_MAP_FIELD_STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
+_MAP_FIELD_MANIFEST_PATH = _MAP_FIELD_STATIC_DIR / "map_field_assets.json"
+
+
+def _prebuilt_field_tiles(
+    mode: str,
+    data_version: str,
+    palette_version: int,
+    algorithm_version: int,
+    *,
+    allow_previous_version: bool = False,
+) -> tuple[tuple[str, tuple[float, float, float, float]], ...]:
+    """Texturas que Railway dejó listas tras el refresh del ranking."""
+    import json
+
+    try:
+        manifest = json.loads(_MAP_FIELD_MANIFEST_PATH.read_text(encoding="utf-8"))
+        asset = manifest["fields"][str(mode)]
+    except (OSError, ValueError, TypeError, KeyError):
+        return ()
+    if (
+        (
+            not allow_previous_version
+            and str(asset.get("version") or "") != str(data_version)
+        )
+        or int(asset.get("palette") or -1) != int(palette_version)
+        or int(asset.get("algorithm") or -1) != int(algorithm_version)
+    ):
+        return ()
+    tiles = asset.get("tiles")
+    if not isinstance(tiles, list) or len(tiles) != 2:
+        return ()
+    resolved = []
+    for tile in tiles:
+        if not isinstance(tile, dict):
+            return ()
+        filename = str(tile.get("file") or "")
+        bounds = tile.get("bounds")
+        if (
+            not filename
+            or Path(filename).name != filename
+            or not (_MAP_FIELD_STATIC_DIR / filename).is_file()
+            or not isinstance(bounds, list)
+            or len(bounds) != 4
+        ):
+            return ()
+        try:
+            resolved.append((filename, tuple(float(value) for value in bounds)))
+        except (TypeError, ValueError):
+            return ()
+    return tuple(resolved)
+
+
+def _map_deck_views(pdk):
+    """MapView con rueda utilizable tanto con raton como con trackpad."""
+    return [
+        pdk.View(
+            type="MapView",
+            controller={
+                # deck.gl usa 0.01 por defecto: una rueda convencional salta
+                # demasiados niveles y encadena repintados. Conservamos el
+                # zoom anclado al cursor con un paso bastante mas controlable.
+                "scrollZoom": {"speed": 0.003, "smooth": False},
+                "dragRotate": False,
+            },
+        )
+    ]
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_temp_field_static_path(
+    data_version: str,
+    palette_version: int,
+    algorithm_version: int,
+) -> tuple[tuple[str, tuple[float, float, float, float]], ...]:
+    """Descarga una unica textura mundial del campo (server-side: en
+    producción el backend es interno y el navegador no lo alcanza) y lo
+    publica vía static serving de Streamlit. Devuelve la RUTA relativa bajo
+    ``static/``. Se reutiliza durante todo el ciclo meteorológico: pan y zoom
+    no vuelven a ejecutar Streamlit ni generan otro PNG."""
+    import hashlib
+    import io
+    import os
+    import tempfile
+    import urllib.request
+
+    prebuilt = _prebuilt_field_tiles(
+        "temperature", data_version, palette_version, algorithm_version,
+    )
+    if prebuilt:
+        return prebuilt
+
+    from utils.api_client import backend_url
+
+    with urllib.request.urlopen(
+        f"{backend_url()}/v1/stations/temperature-field.png", timeout=45,
+    ) as response:
+        png = response.read()
+    static_dir = Path(__file__).resolve().parents[1] / "static"
+    cache_identity = (
+        f"field-{int(algorithm_version)}:"
+        f"palette-{int(palette_version)}:{data_version}"
+    )
+    digest = hashlib.sha1(cache_identity.encode("utf-8")).hexdigest()[:16]
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(png)).convert("RGBA")
+    # WebGL solo garantiza texturas de 4096 px. La imagen mundial de 7200 px
+    # se parte por el meridiano 0 en dos fuentes ImageSource de 3600 px, sin
+    # perder la resolución costera ni pedir nuevos recortes al mover la cámara.
+    if image.width > 4096:
+        midpoint = image.width // 2
+        tile_specs = (
+            (0, (0, 0, midpoint, image.height), (-180.0, -60.0, 0.0, 85.0)),
+            (1, (midpoint, 0, image.width, image.height), (0.0, -60.0, 180.0, 85.0)),
+        )
+    else:
+        tile_specs = ((0, (0, 0, image.width, image.height), _TEMP_FIELD_BOUNDS),)
+
+    tiles: list[tuple[str, tuple[float, float, float, float]]] = []
+    for index, crop_box, bounds in tile_specs:
+        name = f"temperature_field_{digest}_{index}.png"
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=".temperature_field.", suffix=".tmp", dir=static_dir,
+        )
+        os.close(fd)
+        image.crop(crop_box).save(tmp_name, format="PNG", compress_level=4)
+        os.replace(tmp_name, static_dir / name)
+        tiles.append((name, bounds))
+    # Elimina tambien los antiguos recortes por viewport creados por versiones
+    # anteriores, pero deja margen a otras sesiones que aun los tengan abiertos.
+    cutoff = _time.time() - 3600
+    for stale in static_dir.glob("temperature_field_*.png"):
+        try:
+            if stale.name not in {tile[0] for tile in tiles} and stale.stat().st_mtime < cutoff:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return tuple(tiles)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_wind_field_static_path(
+    data_version: str,
+    palette_version: int,
+    algorithm_version: int,
+) -> tuple[tuple[str, tuple[float, float, float, float]], ...]:
+    """Publica la textura mundial de viento mediante el static de Streamlit."""
+    import hashlib
+    import io
+    import os
+    import tempfile
+    import urllib.request
+
+    from PIL import Image
+
+    prebuilt = _prebuilt_field_tiles(
+        "wind", data_version, palette_version, algorithm_version,
+    )
+    if prebuilt:
+        return prebuilt
+
+    from utils.api_client import backend_url
+
+    with urllib.request.urlopen(
+        f"{backend_url()}/v1/stations/wind-field.png", timeout=45,
+    ) as response:
+        png = response.read()
+    static_dir = Path(__file__).resolve().parents[1] / "static"
+    cache_identity = (
+        f"wind-field-{int(algorithm_version)}:"
+        f"palette-{int(palette_version)}:{data_version}"
+    )
+    digest = hashlib.sha1(cache_identity.encode("utf-8")).hexdigest()[:16]
+    image = Image.open(io.BytesIO(png)).convert("RGBA")
+    if image.width > 4096:
+        midpoint = image.width // 2
+        tile_specs = (
+            (0, (0, 0, midpoint, image.height), (-180.0, -60.0, 0.0, 85.0)),
+            (1, (midpoint, 0, image.width, image.height), (0.0, -60.0, 180.0, 85.0)),
+        )
+    else:
+        tile_specs = ((0, (0, 0, image.width, image.height), _TEMP_FIELD_BOUNDS),)
+
+    tiles: list[tuple[str, tuple[float, float, float, float]]] = []
+    for index, crop_box, bounds in tile_specs:
+        name = f"wind_field_{digest}_{index}.png"
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=".wind_field.", suffix=".tmp", dir=static_dir,
+        )
+        os.close(fd)
+        image.crop(crop_box).save(tmp_name, format="PNG", compress_level=4)
+        os.replace(tmp_name, static_dir / name)
+        tiles.append((name, bounds))
+    cutoff = _time.time() - 3600
+    for stale in static_dir.glob("wind_field_*.png"):
+        try:
+            if stale.name not in {tile[0] for tile in tiles} and stale.stat().st_mtime < cutoff:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return tuple(tiles)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_precipitation_field_static_path(
+    data_version: str,
+    palette_version: int,
+    algorithm_version: int,
+) -> tuple[tuple[str, tuple[float, float, float, float]], ...]:
+    """Publica la textura mundial de precipitacion 24 h en dos mitades."""
+    import hashlib
+    import io
+    import os
+    import tempfile
+    import urllib.request
+
+    from PIL import Image
+    from utils.api_client import backend_url
+
+    prebuilt = _prebuilt_field_tiles(
+        "precipitation", data_version, palette_version, algorithm_version,
+    )
+    if prebuilt:
+        return prebuilt
+
+    with urllib.request.urlopen(
+        f"{backend_url()}/v1/stations/precipitation-field.png", timeout=45,
+    ) as response:
+        png = response.read()
+    static_dir = Path(__file__).resolve().parents[1] / "static"
+    cache_identity = (
+        f"precipitation-field-{int(algorithm_version)}:"
+        f"palette-{int(palette_version)}:{data_version}"
+    )
+    digest = hashlib.sha1(cache_identity.encode("utf-8")).hexdigest()[:16]
+    image = Image.open(io.BytesIO(png)).convert("RGBA")
+    if image.width > 4096:
+        midpoint = image.width // 2
+        tile_specs = (
+            (0, (0, 0, midpoint, image.height), (-180.0, -60.0, 0.0, 85.0)),
+            (1, (midpoint, 0, image.width, image.height), (0.0, -60.0, 180.0, 85.0)),
+        )
+    else:
+        tile_specs = ((0, (0, 0, image.width, image.height), _TEMP_FIELD_BOUNDS),)
+    tiles = []
+    for index, crop_box, bounds in tile_specs:
+        name = f"precipitation_field_{digest}_{index}.png"
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=".precipitation_field.", suffix=".tmp", dir=static_dir,
+        )
+        os.close(fd)
+        image.crop(crop_box).save(tmp_name, format="PNG", compress_level=4)
+        os.replace(tmp_name, static_dir / name)
+        tiles.append((name, bounds))
+    cutoff = _time.time() - 3600
+    for stale in static_dir.glob("precipitation_field_*.png"):
+        try:
+            if stale.name not in {tile[0] for tile in tiles} and stale.stat().st_mtime < cutoff:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return tuple(tiles)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_current_temperature_snapshot() -> tuple[list[dict], str]:
+    """Todas las estaciones con temperatura reciente para el cluster.
+
+    No se deduplican por celda: el agrupado es puramente visual y ocurre en el
+    navegador, de modo que cada estación reaparece al ampliar el mapa.
+    """
+    import json as _json
+    import urllib.request
+
+    from utils.api_client import backend_url
+
+    with urllib.request.urlopen(
+        f"{backend_url()}/v1/stations/current-temperatures", timeout=25,
+    ) as response:
+        payload = _json.load(response)
+    rows = _temperature_label_rows(payload.get("points", []))
+    data_version = str(
+        payload.get("updated_at") or f"count:{payload.get('count', len(rows))}"
+    )
+    return rows, data_version
+
+
+def _temperature_label_rows(points) -> list[dict]:
+    """Normaliza estaciones sin eliminar las que comparten una zona."""
+    rows: list[dict] = []
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        try:
+            lat = float(point["lat"])
+            lon = float(point["lon"])
+            temperature = float(point["t"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        rows.append({
+            "lat": lat,
+            "lon": lon,
+            "label": f"{temperature:.0f}",
+            "t": temperature,
+            "tmax": point.get("tmax"),
+            "tmin": point.get("tmin"),
+            "time": point.get("time") or "",
+            "provider": str(point.get("provider") or ""),
+            "station_id": str(point.get("station_id") or ""),
+            "name": str(point.get("name") or ""),
+            "country": str(point.get("country") or ""),
+        })
+    for index, row in enumerate(rows):
+        row["idx"] = index
+    return rows
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_current_wind_snapshot() -> tuple[list[dict], str]:
+    """Estaciones con vector de viento reciente para flechas y clusters."""
+    import json as _json
+    import urllib.request
+
+    from utils.api_client import backend_url
+
+    with urllib.request.urlopen(
+        f"{backend_url()}/v1/stations/current-winds", timeout=25,
+    ) as response:
+        payload = _json.load(response)
+    rows = _wind_label_rows(payload.get("points", []))
+    data_version = str(
+        payload.get("updated_at") or f"count:{payload.get('count', len(rows))}"
+    )
+    return rows, data_version
+
+
+def _wind_label_rows(points) -> list[dict]:
+    """Normaliza vectores recientes; conserva estaciones próximas distintas."""
+    rows: list[dict] = []
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        try:
+            lat = float(point["lat"])
+            lon = float(point["lon"])
+            speed = float(point["speed"])
+            direction = float(point["direction"]) % 360.0
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (
+            -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
+            and 0.0 <= speed <= 450.0
+        ):
+            continue
+        rows.append({
+            "lat": lat,
+            "lon": lon,
+            "speed": speed,
+            "direction": direction,
+            "gust": point.get("gust"),
+            "time": point.get("time") or "",
+            "provider": str(point.get("provider") or ""),
+            "station_id": str(point.get("station_id") or ""),
+            "name": str(point.get("name") or ""),
+            "country": str(point.get("country") or ""),
+        })
+    for index, row in enumerate(rows):
+        row["idx"] = index
+    return rows
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_precipitation_snapshot() -> tuple[list[dict], str]:
+    """Acumulados moviles 24 h para etiquetas y seleccion de estaciones."""
+    import json as _json
+    import urllib.request
+
+    from utils.api_client import backend_url
+
+    with urllib.request.urlopen(
+        f"{backend_url()}/v1/stations/precipitations-24h", timeout=25,
+    ) as response:
+        payload = _json.load(response)
+    rows = _precipitation_label_rows(payload.get("points", []))
+    data_version = str(
+        payload.get("updated_at") or f"count:{payload.get('count', len(rows))}"
+    )
+    return rows, data_version
+
+
+def _precipitation_label_rows(points) -> list[dict]:
+    rows: list[dict] = []
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        try:
+            lat = float(point["lat"])
+            lon = float(point["lon"])
+            amount = float(point["amount"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (
+            -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
+            and 0.0 <= amount <= 1900.0
+        ):
+            continue
+        rows.append({
+            "lat": lat,
+            "lon": lon,
+            "amount": amount,
+            "observed_at": point.get("observed_at"),
+            "time": point.get("time") or "",
+            "provider": str(point.get("provider") or ""),
+            "station_id": str(point.get("station_id") or ""),
+            "name": str(point.get("name") or ""),
+            "country": str(point.get("country") or ""),
+        })
+    for index, row in enumerate(rows):
+        row["idx"] = index
+    return rows
+
+
+def _page_origin() -> str:
+    """Origen (scheme://host) de la página, desde las cabeceras de la
+    petición: MapLibre necesita URLs completas en sus fuentes de imagen."""
+    try:
+        headers = st.context.headers
+        host = headers.get("Host", "")
+        proto = headers.get("X-Forwarded-Proto", "http")
+    except Exception:
+        host = ""
+        proto = "http"
+    return f"{proto}://{host}" if host else "http://localhost:8501"
+
+
+def _temperature_field_legend_html(t) -> str:
+    return _scalar_field_legend_html(
+        t("map.temp_field_legend"),
+        _TEMP_FIELD_LEGEND_STOPS,
+        _TEMP_FIELD_LEGEND_TICKS,
+    )
+
+
+def _wind_field_legend_html(t) -> str:
+    return _scalar_field_legend_html(
+        t("map.wind_field_legend"),
+        _WIND_FIELD_LEGEND_STOPS,
+        _WIND_FIELD_LEGEND_TICKS,
+    )
+
+
+def _precipitation_field_legend_html(t) -> str:
+    return _scalar_field_legend_html(
+        t("map.precip_field_legend"),
+        _PRECIP_FIELD_LEGEND_STOPS,
+        _PRECIP_FIELD_LEGEND_TICKS,
+    )
+
+
+def _scalar_field_legend_html(title, stops, tick_values) -> str:
+    low, high = stops[0][0], stops[-1][0]
+    span = float(high - low)
+    gradient = ", ".join(
+        f"{color} {100.0 * (value - low) / span:.1f}%"
+        for value, color in stops
+    )
+    ticks = "".join(
+        f"<span style='position:absolute; left:{100.0 * (tick - low) / span:.1f}%; "
+        "transform:translateX(-50%); font-size:0.72rem; opacity:0.8;'>"
+        f"{tick}</span>"
+        for tick in tick_values
+    )
+    return (
+        "<div style='max-width:520px; margin:0.4rem 0 0.1rem 0;'>"
+        f"<div style='font-size:0.78rem; font-weight:600; opacity:0.85; margin-bottom:2px;'>"
+        f"{title}</div>"
+        f"<div style='height:10px; border-radius:5px; background:linear-gradient(90deg, {gradient});'></div>"
+        f"<div style='position:relative; height:1rem; margin-top:2px;'>{ticks}</div>"
+        "</div>"
+    )
 
 
 def country_display_name(country_code: str) -> str:
@@ -241,46 +787,57 @@ def _handle_map_autoconnect_toggle_change(
         _clear_map_autoconnect_toggle_changed(toggle_key)
 
 
-def is_us_map_center(lat: float, lon: float) -> bool:
-    return 17.0 <= float(lat) <= 72.5 and -178.0 <= float(lon) <= -52.0
-
-
-def is_iberia_map_center(lat: float, lon: float) -> bool:
-    return 27.0 <= float(lat) <= 45.5 and -19.5 <= float(lon) <= 5.5
-
-
-def is_france_map_center(lat: float, lon: float) -> bool:
-    return 41.0 <= float(lat) <= 51.8 and -5.8 <= float(lon) <= 10.2
-
-
-def is_norway_map_center(lat: float, lon: float) -> bool:
-    return 57.0 <= float(lat) <= 72.5 and 2.0 <= float(lon) <= 32.5
-
-
-def is_uk_map_center(lat: float, lon: float) -> bool:
-    return 49.0 <= float(lat) <= 61.5 and -9.8 <= float(lon) <= 2.8
-
-
-def is_italy_map_center(lat: float, lon: float) -> bool:
-    return 35.0 <= float(lat) <= 48.5 and 5.0 <= float(lon) <= 19.5
-
-
 def default_map_countries_for_center(lat: float, lon: float) -> tuple[str, ...]:
-    # Un único país por defecto. Si una zona se solapa, gana el caso más
-    # específico/esperado para el centro actual.
+    # País(es) por defecto según el centro. Si una zona se solapa, gana el
+    # caso más específico/esperado para el centro actual. Iberia activa
+    # España y Portugal a la vez: la península se ve entera.
     if is_iberia_map_center(lat, lon):
         return DEFAULT_MAP_COUNTRY_BY_CENTER["iberia"]
+    if is_portugal_map_center(lat, lon):
+        # Fuera de la caja ibérica pero en el Atlántico portugués
+        # (Azores/Madeira): solo Portugal.
+        return DEFAULT_MAP_COUNTRY_BY_CENTER["portugal"]
     if is_france_map_center(lat, lon):
         return DEFAULT_MAP_COUNTRY_BY_CENTER["france"]
+    # Suecia antes que Noruega: la caja noruega (2°-32.5°E) cubre toda
+    # Escandinavia y se tragaría los centros suecos.
+    if is_sweden_map_center(lat, lon):
+        return DEFAULT_MAP_COUNTRY_BY_CENTER["sweden"]
+    # Canadá antes que EE. UU.: la caja estadounidense cubre todo el
+    # continente hasta el Ártico y se tragaría los centros canadienses.
+    if is_canada_map_center(lat, lon):
+        return DEFAULT_MAP_COUNTRY_BY_CENTER["canada"]
     if is_norway_map_center(lat, lon):
         return DEFAULT_MAP_COUNTRY_BY_CENTER["norway"]
     if is_uk_map_center(lat, lon):
         return DEFAULT_MAP_COUNTRY_BY_CENTER["uk"]
+    # Austria antes que Italia: sus cajas se solapan en los Alpes y la
+    # italiana (más amplia) se tragaría los centros austríacos.
+    if is_austria_map_center(lat, lon):
+        return DEFAULT_MAP_COUNTRY_BY_CENTER["austria"]
     if is_italy_map_center(lat, lon):
         return DEFAULT_MAP_COUNTRY_BY_CENTER["italy"]
     if is_us_map_center(lat, lon):
         return DEFAULT_MAP_COUNTRY_BY_CENTER["us"]
     return ()
+
+
+def automatic_map_countries_for_center(lat: float, lon: float) -> tuple[str, ...]:
+    """Country scope used by the map now that country controls are hidden."""
+    regional_defaults = default_map_countries_for_center(lat, lon)
+    if regional_defaults:
+        return regional_defaults
+    try:
+        from server.services.stations import country_for_point
+
+        country = coerce_str(country_for_point(lat, lon), upper=True)
+    except Exception:
+        country = ""
+    return (country,) if country else ()
+
+
+def map_filter_controls_visible(view_mode: str) -> bool:
+    return coerce_str(view_mode).lower() == "stations"
 
 
 def provider_is_near_center(provider_id: str, lat: float, lon: float) -> bool:
@@ -293,6 +850,14 @@ def provider_is_near_center(provider_id: str, lat: float, lon: float) -> bool:
         return is_uk_map_center(lat, lon)
     if pid == "METEOHUB_IT":
         return is_italy_map_center(lat, lon)
+    if pid == "IPMA":
+        return is_portugal_map_center(lat, lon)
+    if pid == "GEOSPHERE":
+        return is_austria_map_center(lat, lon)
+    if pid == "SMHI":
+        return is_sweden_map_center(lat, lon)
+    if pid == "ECCC":
+        return is_canada_map_center(lat, lon)
     if pid == "METEOFRANCE":
         return is_iberia_map_center(lat, lon) or is_france_map_center(lat, lon)
     if pid in {"AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM"}:
@@ -322,6 +887,9 @@ PROVIDER_DISPLAY_NAMES = {
     "POEM": "POEM",
     "METOFFICE": "Met Office",
     "METEOHUB_IT": "MeteoHub IT",
+    "IPMA": "IPMA",
+    "GEOSPHERE": "GeoSphere",
+    "SMHI": "SMHI",
     "IEM": "IEM",
 }
 
@@ -330,6 +898,10 @@ PROVIDER_DISPLAY_NAMES = {
 # color, p.ej. AEMET + Meteocat + MeteoGalicia + Euskalmet → mismo rojo de España.
 COUNTRY_COLORS = {
     "ES": [255, 75, 75, 220],
+    "PT": [46, 160, 67, 220],
+    "AT": [222, 60, 100, 220],
+    "SE": [235, 185, 15, 220],
+    "CA": [178, 34, 34, 220],
     "FR": [74, 124, 255, 220],
     "IT": [235, 112, 40, 220],
     "NO": [78, 180, 218, 220],
@@ -482,7 +1054,13 @@ def _coerce_map_viewport_state(value) -> Optional[dict]:
     }
 
 
-def _sync_map_view_state_from_browser(lat: float, lon: float, theme_mode: str) -> None:
+def _sync_map_view_state_from_browser(
+    lat: float,
+    lon: float,
+    theme_mode: str,
+    *,
+    enabled: bool = True,
+) -> None:
     """
     Captura el pan/zoom real del navegador.
 
@@ -491,9 +1069,13 @@ def _sync_map_view_state_from_browser(lat: float, lon: float, theme_mode: str) -
     inicial. El componente lee la cámara montada en el DOM y la guardamos como
     nuevo initial_view_state para el siguiente rerun del mismo centro.
     """
-    viewport = _coerce_map_viewport_state(
-        get_map_viewport(key=f"map_viewport_sync_{theme_mode}")
-    )
+    component_key = f"map_viewport_sync_{theme_mode}"
+    if not enabled:
+        # Mantener el componente montado pero sin listeners: al mover el mapa
+        # térmico no debe enviar eventos a Streamlit ni provocar reruns.
+        get_map_viewport(key=component_key, enabled=False)
+        return
+    viewport = _coerce_map_viewport_state(get_map_viewport(key=component_key))
     if viewport is None:
         return
     state = st.session_state.get("map_view_state")
@@ -758,7 +1340,12 @@ def render_map_tab(ctx):
         _render_map_results()
 
     def _render_map_results() -> None:
-        _sync_map_view_state_from_browser(search_lat, search_lon, theme_mode)
+        _sync_map_view_state_from_browser(
+            search_lat,
+            search_lon,
+            theme_mode,
+            enabled=st.session_state.get("map_view_mode", "stations") == "stations",
+        )
 
         # Barra superior: métricas (estaciones visibles / proveedores) a la
         # izquierda y el botón de ubicación a la derecha. Los valores de las
@@ -787,385 +1374,327 @@ def render_map_tab(ctx):
                 )
             )
 
-        # Menú flotante de países sobre la esquina superior izquierda. Un
-        # único multiselect evita montar un widget por cada país y re-filtra
-        # el fragmento al instante sin recargar la página completa.
         all_provider_options = list(ALL_MAP_PROVIDER_OPTIONS)
         provider_filter = set(all_provider_options)
-        try:
-            country_counts = _cached_map_country_counts((), MAP_COUNTRY_COUNTS_CACHE_VERSION)
-        except Exception:
-            country_counts = _fallback_map_country_counts(())
-        country_options = [
-            country for country, count in sorted(
-                country_counts.items(),
-                key=lambda item: country_sort_key(str(item[0])),
-            )
-            if country and country != "UNSPECIFIED"
-            and country != "UN"
-        ]
-        default_countries = default_map_countries_for_center(search_lat, search_lon)
-        default_country_key = ",".join(default_countries)
-        country_filter_initialized = bool(
-            st.session_state.get(MAP_COUNTRY_FILTER_INITIALIZED_KEY, False)
-        )
-        if country_options and not country_filter_initialized:
-            default_selected_countries: list[str] = []
-            for country in country_options:
-                enabled = map_country_default_enabled(
-                    country,
-                    default_countries,
-                    country_filter_initialized,
+
+        # El estado ya contiene el valor vigente del radio en cada rerun. Esto
+        # permite montar los controles flotantes antes de las tabs: al tener
+        # altura cero no dejan huecos entre las tabs y el mapa.
+        view_mode = str(st.session_state.get("map_view_mode", "stations"))
+        show_temp_field = view_mode == "temperature"
+        show_wind_field = view_mode == "wind"
+        show_precip_field = view_mode == "precipitation"
+        show_scalar_field = show_temp_field or show_wind_field or show_precip_field
+
+        if map_filter_controls_visible(view_mode):
+            try:
+                country_counts = _cached_map_country_counts(
+                    (), MAP_COUNTRY_COUNTS_CACHE_VERSION,
                 )
-                if enabled:
-                    default_selected_countries.append(country)
-            country_filter_initialized = True
-            st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
-            st.session_state["map_country_default_key"] = default_country_key
-            st.session_state["map_country_filter"] = default_selected_countries
-            st.session_state["map_country_picker"] = default_selected_countries
-        elif "map_country_picker" not in st.session_state:
-            stored_countries = {
+            except Exception:
+                country_counts = _fallback_map_country_counts(())
+            country_options = [
+                country
+                for country, _count in sorted(
+                    country_counts.items(),
+                    key=lambda item: country_sort_key(str(item[0])),
+                )
+                if country and country not in {"UNSPECIFIED", "UN"}
+            ]
+            if not st.session_state.get(MAP_COUNTRY_FILTER_INITIALIZED_KEY, False):
+                defaults = set(default_map_countries_for_center(search_lat, search_lon))
+                initial_countries = [
+                    country for country in country_options if country in defaults
+                ]
+                st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
+                st.session_state["map_country_filter"] = initial_countries
+                st.session_state["map_country_picker"] = initial_countries
+            elif "map_country_picker" not in st.session_state:
+                stored_countries = {
+                    coerce_str(country, upper=True)
+                    for country in st.session_state.get("map_country_filter", [])
+                    if coerce_str(country, upper=True)
+                }
+                st.session_state["map_country_picker"] = [
+                    country for country in country_options
+                    if country in stored_countries
+                ]
+
+            def _clear_map_country_filter() -> None:
+                st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
+                st.session_state["map_country_filter"] = []
+                st.session_state["map_country_picker"] = []
+
+            with st.container(key="map_country_overlay"):
+                with st.popover(str(t("map.country_filter"))):
+                    country_selection = st.multiselect(
+                        t("map.country_filter"),
+                        options=country_options,
+                        key="map_country_picker",
+                        placeholder=str(t("map.country_search")),
+                        format_func=country_display_name,
+                        label_visibility="collapsed",
+                        on_change=_handle_map_country_selection_change,
+                        args=("map_country_picker",),
+                    )
+                    st.button(
+                        t("map.country_clear"),
+                        key="map_country_clear_btn",
+                        on_click=_clear_map_country_filter,
+                        width="stretch",
+                    )
+            selected_codes = {
                 coerce_str(country, upper=True)
-                for country in st.session_state.get("map_country_filter", [])
+                for country in country_selection
                 if coerce_str(country, upper=True)
             }
-            st.session_state["map_country_picker"] = [
-                country for country in country_options if country in stored_countries
+            selected_countries = [
+                country for country in country_options if country in selected_codes
             ]
+            st.session_state["map_country_filter"] = selected_countries
 
-        def _clear_map_country_filter() -> None:
-            st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
-            st.session_state["map_country_filter"] = []
-            st.session_state["map_country_picker"] = []
+            stored_sensor_selection = set(st.session_state.get("map_sensor_filter", []))
 
-        # Popover flotante: permanece cerrado mientras se navega por el mapa
-        # y se cierra de forma nativa al interactuar fuera de él.
-        with st.container(key="map_country_overlay"):
-            with st.popover(str(t("map.country_filter"))):
-                st.markdown(
-                    f"<div class='mlbx-country-menu-title'>{html.escape(str(t('map.country_filter')).upper())}</div>",
-                    unsafe_allow_html=True,
-                )
-                country_selection = st.multiselect(
-                    t("map.country_filter"),
-                    options=country_options,
-                    key="map_country_picker",
-                    placeholder=str(t("map.country_search")),
-                    format_func=country_display_name,
-                    label_visibility="collapsed",
-                    on_change=_handle_map_country_selection_change,
-                    args=("map_country_picker",),
-                )
-                st.button(
-                    t("map.country_clear"),
-                    key="map_country_clear_btn",
-                    on_click=_clear_map_country_filter,
-                    width="stretch",
-                )
-        selected_codes = {
-            coerce_str(country, upper=True)
-            for country in country_selection
-            if coerce_str(country, upper=True)
-        }
-        selected_countries = [country for country in country_options if country in selected_codes]
-        st.session_state["map_country_filter"] = selected_countries
+            def _query_flag(name: str) -> bool:
+                raw_value = st.query_params.get(name, "")
+                if isinstance(raw_value, list):
+                    raw_value = raw_value[0] if raw_value else ""
+                return str(raw_value).strip().lower() in {
+                    "1", "true", "yes", "si", "sí",
+                }
 
-        provider_overlay_bg = "rgba(13,17,24,0.96)" if dark else "rgba(255,255,255,0.97)"
-        provider_overlay_border = "rgba(255,255,255,0.14)" if dark else "rgba(15,18,25,0.14)"
-        provider_overlay_shadow = "0 10px 24px rgba(0,0,0,0.28)" if dark else "0 10px 24px rgba(0,0,0,0.12)"
-        provider_overlay_hover_bg = "rgba(33,40,54,0.98)" if dark else "rgba(236,239,243,0.98)"
-        provider_overlay_icon_stroke = "%23f4f7fb" if dark else "%23242933"
-        country_badge_css = (
-            f"""
-            .st-key-map_country_overlay [data-testid="stPopoverButton"]::after {{
-                content: "{len(selected_countries)}";
-                position: absolute;
-                top: -5px;
-                right: -5px;
-                min-width: 17px;
-                height: 17px;
-                padding: 0 4px;
-                border-radius: 999px;
-                background: #ff5a54;
-                color: #fff;
-                font: 700 10px/17px system-ui, -apple-system, "Segoe UI", sans-serif;
-                text-align: center;
-            }}
-            """
-            if selected_countries else ""
-        )
-        st.markdown(
-            f"""
-            <style>
-            .st-key-map_country_overlay {{
-                position: relative;
-                height: 0;
-                overflow: visible;
-                z-index: 61;
-            }}
-            /* PyDeck tarda unas décimas en montar el canvas. Retrasamos solo
-               la pintura; los controles conservan siempre sus eventos para
-               no depender de :has() ni del estado interno de Streamlit. */
-            .st-key-map_country_overlay,
-            .st-key-map_sensor_overlay {{
-                animation: mlbxMapControlIn 0.2s ease 0.55s both;
-            }}
-            @keyframes mlbxMapControlIn {{
-                from {{ opacity: 0; }}
-                to {{ opacity: 1; }}
-            }}
-            .st-key-map_country_overlay [data-testid="stPopover"] {{
-                position: absolute;
-                left: 5px;
-                top: 70px;
-                width: auto;
-            }}
-            .st-key-map_country_overlay [data-testid="stPopoverButton"] {{
-                position: relative;
-                width: 40px;
-                height: 40px;
-                min-height: 40px;
-                padding: 0;
-                border-radius: 12px;
-                background: {provider_overlay_bg} !important;
-                border: 1px solid {provider_overlay_border} !important;
-                box-shadow: {provider_overlay_shadow};
-                justify-content: center;
-            }}
-            .st-key-map_country_overlay [data-testid="stPopoverButton"]:hover,
-            .st-key-map_country_overlay [data-testid="stPopoverButton"]:active {{
-                background: {provider_overlay_hover_bg} !important;
-            }}
-            .st-key-map_country_overlay [data-testid="stPopoverButton"] p,
-            .st-key-map_country_overlay [data-testid="stPopoverButton"] svg {{
-                display: none;
-            }}
-            .st-key-map_country_overlay [data-testid="stPopoverButton"]::before {{
-                content: "";
-                display: block;
-                width: 23px;
-                height: 23px;
-                background-repeat: no-repeat;
-                background-position: center;
-                background-size: 23px 23px;
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{provider_overlay_icon_stroke}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21M12 3c-2.5 2.5-3.8 5.5-3.8 9S9.5 18.5 12 21'/%3E%3C/svg%3E");
-            }}
-            {country_badge_css}
-            .st-key-map_country_clear_btn button {{
-                padding: 1px 8px;
-                min-height: 0;
-                font-size: 11px;
-            }}
-            .mlbx-country-menu-title {{
-                font: 700 11px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
-                color: var(--text);
-                margin-bottom: 4px;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                opacity: 0.82;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        def _clear_map_sensor_filter() -> None:
+            filter_state_queries = {
+                "map_historical_only": "map_historical",
+                "map_hide_historical_only": "map_hide_historical",
+                "map_hide_manual": "map_hide_manual",
+                "map_hide_pws": "map_hide_pws",
+            }
+            for state_key, query_key in filter_state_queries.items():
+                if state_key not in st.session_state:
+                    st.session_state[state_key] = _query_flag(query_key)
             for sensor_key in MAP_SENSOR_FILTER_OPTIONS:
-                st.session_state[f"map_sensor_chk_{sensor_key}"] = False
+                checkbox_key = f"map_sensor_chk_{sensor_key}"
+                if checkbox_key not in st.session_state:
+                    st.session_state[checkbox_key] = sensor_key in stored_sensor_selection
 
-        # Filtro de sensores: popover nativo flotando sobre el mapa (mismo
-        # diseño que el antiguo control inyectado: botón cuadrado bajo el
-        # zoom, badge rojo con el nº de filtros activos). Al ser un widget
-        # de Streamlit dentro del fragmento, marcar un checkbox re-filtra
-        # el mapa al instante sin recargar la página.
-        stored_sensor_selection = set(st.session_state.get("map_sensor_filter", []))
-        if "map_historical_only" not in st.session_state:
-            raw_historical_filter = st.query_params.get("map_historical", "")
-            if isinstance(raw_historical_filter, list):
-                raw_historical_filter = raw_historical_filter[0] if raw_historical_filter else ""
-            st.session_state["map_historical_only"] = str(raw_historical_filter).strip().lower() in {
-                "1", "true", "yes", "si", "sí",
-            }
-        if "map_hide_historical_only" not in st.session_state:
-            raw_hide_historical = st.query_params.get("map_hide_historical", "")
-            if isinstance(raw_hide_historical, list):
-                raw_hide_historical = raw_hide_historical[0] if raw_hide_historical else ""
-            st.session_state["map_hide_historical_only"] = str(raw_hide_historical).strip().lower() in {
-                "1", "true", "yes", "si", "sí",
-            }
-        if "map_hide_manual" not in st.session_state:
-            raw_hide_manual = st.query_params.get("map_hide_manual", "")
-            if isinstance(raw_hide_manual, list):
-                raw_hide_manual = raw_hide_manual[0] if raw_hide_manual else ""
-            st.session_state["map_hide_manual"] = str(raw_hide_manual).strip().lower() in {
-                "1", "true", "yes", "si", "sí",
-            }
-        for sensor_key in MAP_SENSOR_FILTER_OPTIONS:
-            chk_key = f"map_sensor_chk_{sensor_key}"
-            if chk_key not in st.session_state:
-                st.session_state[chk_key] = sensor_key in stored_sensor_selection
+            def _clear_map_sensor_filter() -> None:
+                for sensor_key in MAP_SENSOR_FILTER_OPTIONS:
+                    st.session_state[f"map_sensor_chk_{sensor_key}"] = False
 
-        with st.container(key="map_sensor_overlay"):
-            with st.popover(
-                str(t("map.sensor_filter")),
-            ):
-                st.caption(t("map.sensor_filter_caption"))
-                historical_only = st.toggle(
-                    t("map.historical_only"),
-                    key="map_historical_only",
-                )
-                hide_historical_only = st.toggle(
-                    t("map.hide_historical_only"),
-                    key="map_hide_historical_only",
-                    help=t("map.hide_historical_only_help"),
-                )
-                hide_manual = st.toggle(
-                    t("map.hide_manual"),
-                    key="map_hide_manual",
-                    help=t("map.hide_manual_help"),
-                )
-                st.divider()
-                selected_sensor_list = [
-                    sensor_key
-                    for sensor_key in MAP_SENSOR_FILTER_OPTIONS
-                    if st.checkbox(
-                        str(t(f"map.sensors.{sensor_key}")),
-                        key=f"map_sensor_chk_{sensor_key}",
+            with st.container(key="map_sensor_overlay"):
+                with st.popover(str(t("map.sensor_filter"))):
+                    st.caption(t("map.sensor_filter_caption"))
+                    historical_only = st.toggle(
+                        t("map.historical_only"), key="map_historical_only",
                     )
-                ]
-                st.button(
-                    t("map.sensor_filter_clear"),
-                    key="map_sensor_filter_clear_btn",
-                    on_click=_clear_map_sensor_filter,
-                )
-        st.session_state["map_sensor_filter"] = selected_sensor_list
-        # Mantener la URL compartible: actualiza la query string sin
-        # recargar (al contrario que el antiguo location.assign).
-        try:
-            if selected_sensor_list:
-                st.query_params["map_sensors"] = ",".join(sorted(selected_sensor_list))
-            elif "map_sensors" in st.query_params:
-                del st.query_params["map_sensors"]
-            if st.session_state.get("map_historical_only"):
-                st.query_params["map_historical"] = "1"
-            elif "map_historical" in st.query_params:
-                del st.query_params["map_historical"]
-            if st.session_state.get("map_hide_historical_only"):
-                st.query_params["map_hide_historical"] = "1"
-            elif "map_hide_historical" in st.query_params:
-                del st.query_params["map_hide_historical"]
-            if st.session_state.get("map_hide_manual"):
-                st.query_params["map_hide_manual"] = "1"
-            elif "map_hide_manual" in st.query_params:
-                del st.query_params["map_hide_manual"]
-        except Exception:
-            pass
+                    hide_historical_only = st.toggle(
+                        t("map.hide_historical_only"),
+                        key="map_hide_historical_only",
+                        help=t("map.hide_historical_only_help"),
+                    )
+                    hide_manual = st.toggle(
+                        t("map.hide_manual"),
+                        key="map_hide_manual",
+                        help=t("map.hide_manual_help"),
+                    )
+                    hide_pws = st.toggle(
+                        t("map.hide_pws"),
+                        key="map_hide_pws",
+                        help=t("map.hide_pws_help"),
+                    )
+                    st.divider()
+                    selected_sensor_list = [
+                        sensor_key
+                        for sensor_key in MAP_SENSOR_FILTER_OPTIONS
+                        if st.checkbox(
+                            str(t(f"map.sensors.{sensor_key}")),
+                            key=f"map_sensor_chk_{sensor_key}",
+                        )
+                    ]
+                    st.button(
+                        t("map.sensor_filter_clear"),
+                        key="map_sensor_filter_clear_btn",
+                        on_click=_clear_map_sensor_filter,
+                    )
+            st.session_state["map_sensor_filter"] = selected_sensor_list
+            selected_sensors = set(selected_sensor_list)
 
-        # CSS del overlay: contenedor de altura 0 (no desplaza el layout) y
-        # botón absoluto sobre la esquina superior derecha del mapa, justo
-        # bajo los controles de zoom de MapLibre (38px + márgenes).
-        overlay_bg = "rgba(13,17,24,0.98)" if dark else "rgba(255,255,255,0.98)"
-        overlay_hover_bg = "rgba(33,40,54,0.98)" if dark else "rgba(236,239,243,0.98)"
-        overlay_border = "rgba(255,255,255,0.14)" if dark else "rgba(15,18,25,0.14)"
-        overlay_hover_border = "rgba(255,255,255,0.28)" if dark else "rgba(15,18,25,0.26)"
-        overlay_shadow = "0 10px 24px rgba(0,0,0,0.28)" if dark else "0 10px 24px rgba(0,0,0,0.12)"
-        overlay_icon_stroke = "%23f4f7fb" if dark else "%23242933"
-        active_count = (
-            len(selected_sensor_list)
-            + (1 if st.session_state.get("map_historical_only") else 0)
-            + (1 if st.session_state.get("map_hide_historical_only") else 0)
-            + (1 if st.session_state.get("map_hide_manual") else 0)
-        )
-        badge_css = (
-            f"""
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::after {{
-                content: "{active_count}";
-                position: absolute;
-                top: -5px;
-                right: -5px;
-                min-width: 17px;
-                height: 17px;
-                padding: 0 4px;
-                border-radius: 999px;
-                background: #ff5a54;
-                color: #fff;
-                font: 700 10px/17px system-ui, -apple-system, "Segoe UI", sans-serif;
-                text-align: center;
-            }}
-            """
-            if active_count else ""
-        )
+            active_filter_count = (
+                len(selected_sensor_list)
+                + int(historical_only)
+                + int(hide_historical_only)
+                + int(hide_manual)
+                + int(hide_pws)
+            )
+            control_bg = "rgba(13,17,24,0.98)" if dark else "rgba(255,255,255,0.98)"
+            control_border = "rgba(255,255,255,0.14)" if dark else "rgba(15,18,25,0.14)"
+            control_icon = "%23f4f7fb" if dark else "%23242933"
+            st.markdown(
+                f"""
+                <style>
+                .st-key-map_country_overlay,
+                .st-key-map_sensor_overlay {{
+                    position: relative;
+                    height: 0;
+                    overflow: visible;
+                    z-index: 61;
+                }}
+                .st-key-map_country_overlay [data-testid="stPopover"] {{
+                    position: absolute;
+                    left: 1.5px;
+                    top: 119.5px;
+                    width: auto;
+                }}
+                .st-key-map_sensor_overlay [data-testid="stPopover"] {{
+                    position: absolute;
+                    right: 2px;
+                    top: 190px;
+                    width: auto;
+                }}
+                .st-key-map_country_overlay [data-testid="stPopoverButton"],
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"] {{
+                    position: relative;
+                    width: 40px;
+                    height: 40px;
+                    min-height: 40px;
+                    padding: 0;
+                    border-radius: 12px;
+                    background: {control_bg} !important;
+                    border: 1px solid {control_border} !important;
+                    justify-content: center;
+                }}
+                .st-key-map_country_overlay [data-testid="stPopoverButton"] p,
+                .st-key-map_country_overlay [data-testid="stPopoverButton"] svg,
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"] p,
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"] svg {{
+                    display: none;
+                }}
+                .st-key-map_country_overlay [data-testid="stPopoverButton"]::before,
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::before {{
+                    content: "";
+                    display: block;
+                    width: 23px;
+                    height: 23px;
+                    background-repeat: no-repeat;
+                    background-position: center;
+                    background-size: 23px 23px;
+                }}
+                .st-key-map_country_overlay [data-testid="stPopoverButton"]::before {{
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{control_icon}' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21M12 3c-2.5 2.5-3.8 5.5-3.8 9S9.5 18.5 12 21'/%3E%3C/svg%3E");
+                }}
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::before {{
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{control_icon}' stroke-width='2.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16l-6.4 7.2v5.3l-3.2 1.7v-7L4 5z'/%3E%3C/svg%3E");
+                }}
+                .st-key-map_country_overlay [data-testid="stPopoverButton"]::after {{
+                    content: "{len(selected_countries)}";
+                    display: {"block" if selected_countries else "none"};
+                }}
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::after {{
+                    content: "{active_filter_count}";
+                    display: {"block" if active_filter_count else "none"};
+                }}
+                .st-key-map_country_overlay [data-testid="stPopoverButton"]::after,
+                .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::after {{
+                    position: absolute;
+                    top: -5px;
+                    right: -5px;
+                    min-width: 17px;
+                    height: 17px;
+                    padding: 0 4px;
+                    border-radius: 999px;
+                    background: #ff5a54;
+                    color: #fff;
+                    font: 700 10px/17px system-ui, sans-serif;
+                    text-align: center;
+                }}
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            try:
+                query_values = {
+                    "map_sensors": ",".join(sorted(selected_sensor_list)),
+                    "map_historical": "1" if historical_only else "",
+                    "map_hide_historical": "1" if hide_historical_only else "",
+                    "map_hide_manual": "1" if hide_manual else "",
+                    "map_hide_pws": "1" if hide_pws else "",
+                }
+                for query_key, query_value in query_values.items():
+                    if query_value:
+                        st.query_params[query_key] = query_value
+                    elif query_key in st.query_params:
+                        del st.query_params[query_key]
+            except Exception:
+                pass
+        else:
+            # Los mapas de valores son globales y no se subordinan a los
+            # filtros de Estaciones. El estado se conserva para volver a él.
+            selected_countries = list(
+                automatic_map_countries_for_center(search_lat, search_lon)
+            )
+            selected_sensors: set[str] = set()
+            historical_only = False
+            hide_historical_only = False
+            hide_manual = False
+            hide_pws = False
+
+        # Una sola instancia del mapa: puntos o uno de los campos escalares.
+        # Las tabs se renderizan después de los overlays de altura cero para
+        # quedar pegadas al borde superior del mapa.
         st.markdown(
-            f"""
-            <style>
-            .st-key-map_sensor_overlay {{
+            """
+            <style data-mlbx-layout-hidden="map-view-tabs">
+            [data-testid="stMain"] [data-testid="stElementContainer"][data-stale="true"] {
+                opacity: 1 !important;
+                transition: none !important;
+            }
+            .st-key-map_view_mode {
                 position: relative;
-                height: 0;
-                overflow: visible;
-                z-index: 60;
-            }}
-            /* Colocación idéntica al control original: alineado con el
-               grupo de zoom de MapLibre (margen 10px, 2 botones de 38px
-               → termina a ~88px) y un hueco de ~14px por debajo. */
-            .st-key-map_sensor_overlay [data-testid="stPopover"] {{
-                position: absolute;
-                right: 2px;
-                top: 138px;
-                width: auto;
-            }}
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"] {{
-                position: relative;
-                width: 40px;
-                height: 40px;
-                min-height: 40px;
-                padding: 0;
-                border-radius: 12px;
-                background: {overlay_bg} !important;
-                border: 1px solid {overlay_border} !important;
-                box-shadow: {overlay_shadow};
-                justify-content: center;
-                transition: background 0.12s ease, border-color 0.12s ease;
-            }}
-            /* Sombreado al pasar el ratón / pulsar, igual que los botones de
-               zoom +/- de MapLibre. */
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"]:hover {{
-                background: {overlay_hover_bg} !important;
-                border-color: {overlay_hover_border} !important;
-            }}
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"]:active {{
-                background: {overlay_hover_bg} !important;
-                border-color: {overlay_hover_border} !important;
-            }}
-            /* Oculta el texto del label y el chevron; el embudo se dibuja
-               localmente para no depender del font Material en producción. */
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"] p,
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"] svg {{
-                display: none;
-            }}
-            .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::before {{
-                content: "";
-                display: block;
-                width: 23px;
-                height: 23px;
-                background-repeat: no-repeat;
-                background-position: center;
-                background-size: 23px 23px;
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{overlay_icon_stroke}' stroke-width='2.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16l-6.4 7.2v5.3l-3.2 1.7v-7L4 5z'/%3E%3C/svg%3E");
-            }}
-            {badge_css}
+                z-index: 5;
+                margin-top: 0 !important;
+                margin-bottom: -1rem !important;
+            }
+            .st-key-map_view_mode [data-testid="stRadio"] {
+                margin-bottom: 0 !important;
+            }
+            .st-key-map_view_mode div[role="radiogroup"] {
+                gap: 0 !important;
+                flex-wrap: wrap;
+            }
+            .st-key-map_view_mode div[role="radiogroup"] > label:not(:first-child)::after {
+                content: "Beta";
+                display: inline-flex;
+                align-items: center;
+                margin-left: 0.35rem;
+                padding: 0.12rem 0.35rem;
+                border: 1px solid rgba(255, 75, 75, 0.42);
+                border-radius: 999px;
+                background: rgba(255, 75, 75, 0.10);
+                color: #ff4b4b;
+                font-size: 0.64rem;
+                font-weight: 600;
+                line-height: 1;
+                letter-spacing: 0.02em;
+            }
             </style>
             """,
             unsafe_allow_html=True,
         )
+        view_mode = st.radio(
+            t("map.view_mode"),
+            options=["stations", "temperature", "wind", "precipitation"],
+            format_func=lambda mode: t(f"map.view_{mode}"),
+            key="map_view_mode",
+            label_visibility="collapsed",
+            horizontal=True,
+            index=0,
+        )
+        show_temp_field = view_mode == "temperature"
+        show_wind_field = view_mode == "wind"
+        show_precip_field = view_mode == "precipitation"
+        show_scalar_field = show_temp_field or show_wind_field or show_precip_field
 
-        selected_sensors = {
-            sensor_key
-            for sensor_key in st.session_state.get("map_sensor_filter", [])
-            if sensor_key in MAP_SENSOR_FILTER_OPTIONS
-        }
-        historical_only = bool(st.session_state.get("map_historical_only", False))
-        hide_historical_only = bool(st.session_state.get("map_hide_historical_only", False))
         effective_provider_ids = sorted(provider_filter)
 
         nearest = []
@@ -1185,11 +1714,14 @@ def render_map_tab(ctx):
                     ),
                 )
 
-            for pws_provider in PWS_MAP_PROVIDERS:
-                if pws_provider in provider_filter:
-                    _extend_unique_candidates(
-                        nearest, _load_pws_candidates(pws_provider, selected_countries),
-                    )
+            # Con "ocultar particulares" activo ni siquiera se cargan los
+            # catálogos PWS (Netatmo/Windy): son los lotes más pesados.
+            if not hide_pws:
+                for pws_provider in PWS_MAP_PROVIDERS:
+                    if pws_provider in provider_filter:
+                        _extend_unique_candidates(
+                            nearest, _load_pws_candidates(pws_provider, selected_countries),
+                        )
 
             iem_countries = [
                 country for country in selected_countries
@@ -1215,6 +1747,8 @@ def render_map_tab(ctx):
                 nearest = [s for s in nearest if not bool(s.get("is_historical_only", False))]
             if hide_manual:
                 nearest = [s for s in nearest if not bool(s.get("manual", False))]
+            if hide_pws:
+                nearest = [s for s in nearest if s["provider_id"] not in PWS_MAP_PROVIDERS]
             nearest = [
                 station
                 for station in nearest
@@ -1228,7 +1762,7 @@ def render_map_tab(ctx):
 
         metric_col1.metric(t("map.visible_stations"), visible_station_count)
         metric_col2.metric(t("map.providers"), visible_provider_count)
-        if not nearest:
+        if not nearest and not show_scalar_field:
             if selected_countries:
                 st.warning(t("map.no_stations"))
             map_view_state = _map_session_view_state(search_lat, search_lon, 7.0)
@@ -1242,6 +1776,7 @@ def render_map_tab(ctx):
                 ("empty", map_style, round(search_lat, 6), round(search_lon, 6)),
             )
             deck = pdk.Deck(
+                views=_map_deck_views(pdk),
                 map_style=map_style,
                 initial_view_state=pdk.ViewState(
                     latitude=float(frozen_view["latitude"]),
@@ -1301,6 +1836,54 @@ def render_map_tab(ctx):
             def _set_provider_autoconnect_from_map(selected_station: dict) -> bool:
                 return persist_provider_autoconnect_target(selected_station)
 
+            def _field_label_to_selected_station(row: dict) -> dict:
+                """Ficha de estación desde una etiqueta meteorológica: los
+                metadatos completos (tz, sensores, conectable…) salen del
+                catálogo; la etiqueta aporta la lectura del día."""
+                provider_id = coerce_str(row.get("provider"), upper=True)
+                station_id = str(row.get("station_id") or "")
+                station: dict = {}
+                try:
+                    from server.services import stations as stations_svc
+
+                    station = stations_svc.get_station(provider_id, station_id) or {}
+                except Exception:
+                    station = {}
+                from providers.registry import PROVIDER_NAMES
+
+                latitude = safe_float(row.get("lat"), default=None)
+                longitude = safe_float(row.get("lon"), default=None)
+                return {
+                    "lat": latitude,
+                    "lon": longitude,
+                    "name": str(station.get("name") or row.get("name") or station_id),
+                    "provider": PROVIDER_NAMES.get(provider_id, provider_id),
+                    "provider_id": provider_id,
+                    "network": str(station.get("network") or ""),
+                    "station_id": station_id,
+                    "country": coerce_str(row.get("country"), upper=True),
+                    "connectable": bool(station.get("connectable", True)),
+                    "has_historical": bool(station.get("has_historical", False)),
+                    "is_historical_only": bool(station.get("is_historical_only", False)),
+                    "manual": bool(station.get("manual", False)),
+                    "distance_km": (
+                        float(haversine_distance(search_lat, search_lon, latitude, longitude))
+                        if latitude is not None and longitude is not None else None
+                    ),
+                    "locality": str(station.get("locality") or row.get("name") or ""),
+                    "elevation_m": station.get("elevation"),
+                    "station_tz": str(station.get("tz") or ""),
+                    "sensors": dict(station.get("sensors") or {}),
+                    "temp_current": row.get("t"),
+                    "temp_max": row.get("tmax"),
+                    "temp_min": row.get("tmin"),
+                    "temp_time": str(row.get("time") or ""),
+                    "wind_current": row.get("speed"),
+                    "wind_direction": row.get("direction"),
+                    "wind_gust": row.get("gust"),
+                    "precipitation_24h": row.get("amount"),
+                }
+
             zoom_reference = points[: min(len(points), 2000)]
             max_distance = max((p["distance_km"] for p in zoom_reference), default=250.0)
             map_view_state = _map_session_view_state(
@@ -1321,11 +1904,15 @@ def render_map_tab(ctx):
                     "lon": point["lon"],
                     "color": point["color"],
                     "radius": point["radius"],
-                    "name": point["name"],
-                    "provider": point["provider"],
-                    "station_id": point["station_id"],
-                    "distance_txt": point["distance_txt"],
-                    "alt_txt": point["alt_txt"],
+                    # HTML del tooltip precomputado: la plantilla del deck es
+                    # global y las capas (estaciones vs etiquetas de
+                    # temperatura) muestran contenidos distintos.
+                    "tooltip_html": (
+                        f"<b>{html.escape(str(point['name']))}</b><br/>"
+                        f"{html.escape(str(point['provider']))} · ID {html.escape(str(point['station_id']))}<br/>"
+                        f"Distancia: {html.escape(str(point['distance_txt']))}<br/>"
+                        f"Altitud: {html.escape(str(point['alt_txt']))}"
+                    ),
                 }
                 for index, point in enumerate(points)
             ]
@@ -1340,24 +1927,95 @@ def render_map_tab(ctx):
             map_tooltip_border = "1px solid rgba(255,255,255,0.10)" if dark else "1px solid rgba(15,18,25,0.12)"
             map_tooltip_shadow = "0 10px 24px rgba(0,0,0,0.28)" if dark else "0 10px 24px rgba(0,0,0,0.12)"
 
-            map_layers = [
-                pdk.Layer(
-                    "ScatterplotLayer",
-                    id="stations-layer",
-                    data=points_for_layer,
-                    pickable=True,
-                    auto_highlight=True,
-                    filled=True,
-                    stroked=True,
-                    get_position="[lon, lat]",
-                    get_fill_color="color",
-                    get_line_color=[16, 20, 28, 140],
-                    line_width_min_pixels=1,
-                    get_radius="radius",
-                    radius_min_pixels=4,
-                    radius_max_pixels=24,
-                ),
-            ]
+            map_layers = []
+            field_version = ""
+            field_labels: list[dict] = []
+            scalar_layer_tiles: list[dict] = []
+            if show_scalar_field:
+                # El snapshot se refresca como máximo una vez por minuto. Su
+                # versión real viene del RankingStore: si termina otro
+                # proveedor, se pide una nueva textura con TODAS las estaciones
+                # disponibles, sin esperar al siguiente bloque fijo de 10 min.
+                try:
+                    if show_temp_field:
+                        field_labels, field_version = _cached_current_temperature_snapshot()
+                    elif show_wind_field:
+                        field_labels, field_version = _cached_current_wind_snapshot()
+                    else:
+                        field_labels, field_version = _cached_precipitation_snapshot()
+                except Exception:
+                    field_labels = []
+                    field_version = f"fallback:{int(_time.time() // 600)}"
+                try:
+                    if show_temp_field:
+                        field_tiles = _prebuilt_field_tiles(
+                            "temperature",
+                            field_version,
+                            _TEMP_FIELD_PALETTE_VERSION,
+                            _TEMP_FIELD_ALGORITHM_VERSION,
+                            allow_previous_version=True,
+                        ) or _cached_temp_field_static_path(
+                            field_version,
+                            _TEMP_FIELD_PALETTE_VERSION,
+                            _TEMP_FIELD_ALGORITHM_VERSION,
+                        )
+                    elif show_wind_field:
+                        field_tiles = _prebuilt_field_tiles(
+                            "wind",
+                            field_version,
+                            _WIND_FIELD_PALETTE_VERSION,
+                            _WIND_FIELD_ALGORITHM_VERSION,
+                            allow_previous_version=True,
+                        ) or _cached_wind_field_static_path(
+                            field_version,
+                            _WIND_FIELD_PALETTE_VERSION,
+                            _WIND_FIELD_ALGORITHM_VERSION,
+                        )
+                    else:
+                        field_tiles = _prebuilt_field_tiles(
+                            "precipitation",
+                            field_version,
+                            _PRECIP_FIELD_PALETTE_VERSION,
+                            _PRECIP_FIELD_ALGORITHM_VERSION,
+                            allow_previous_version=True,
+                        ) or _cached_precipitation_field_static_path(
+                            field_version,
+                            _PRECIP_FIELD_PALETTE_VERSION,
+                            _PRECIP_FIELD_ALGORITHM_VERSION,
+                        )
+                except Exception:
+                    field_tiles = ()
+                    st.caption(t(
+                        "map.temp_field_unavailable" if show_temp_field else
+                        "map.wind_field_unavailable" if show_wind_field else
+                        "map.precip_field_unavailable"
+                    ))
+                scalar_layer_tiles = [
+                    {
+                        "url": f"{_page_origin()}/app/static/{field_name}",
+                        "bounds": list(field_bounds),
+                    }
+                    for field_name, field_bounds in field_tiles
+                ]
+            if not show_scalar_field:
+                map_layers.append(
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        id="stations-layer",
+                        data=points_for_layer,
+                        pickable=True,
+                        auto_highlight=True,
+                        filled=True,
+                        stroked=True,
+                        get_position="[lon, lat]",
+                        get_fill_color="color",
+                        get_line_color=[16, 20, 28, 140],
+                        line_width_min_pixels=1,
+                        get_radius="radius",
+                        radius_min_pixels=4,
+                        radius_max_pixels=24,
+                    )
+                )
             map_layers.append(
                 pdk.Layer(
                     "ScatterplotLayer",
@@ -1384,10 +2042,13 @@ def render_map_tab(ctx):
                 round(search_lat, 6),
                 round(search_lon, 6),
                 point_radius,
+                view_mode,
+                field_version,
                 hash(tuple((p["provider_id"], p.get("network", ""), p["station_id"]) for p in nearest)),
             )
             frozen_view = _deck_frozen_view_state(map_view_state, stations_signature)
             deck = pdk.Deck(
+                views=_map_deck_views(pdk),
                 map_style=map_style,
                 initial_view_state=pdk.ViewState(
                     latitude=float(frozen_view["latitude"]),
@@ -1397,7 +2058,9 @@ def render_map_tab(ctx):
                 ),
                 layers=map_layers,
                 tooltip={
-                    "html": "<b>{name}</b><br/>{provider} · ID {station_id}<br/>Distancia: {distance_txt}<br/>Altitud: {alt_txt}",
+                    # HTML precomputado por objeto: cada capa (estaciones /
+                    # etiquetas de temperatura) trae su propio contenido.
+                    "html": "{tooltip_html}",
                     "style": {
                         "backgroundColor": map_tooltip_bg,
                         "color": map_tooltip_text,
@@ -1411,14 +2074,49 @@ def render_map_tab(ctx):
             )
 
             deck_event = None
+            temperature_cluster_event = None
             try:
                 deck_event = _pydeck_chart_stretch(
                     deck,
                     key=f"map_chart_{theme_mode}",
                     height=900,
+                    selectable=not show_scalar_field,
                 )
             except Exception as map_err:
                 st.warning(f"No se pudo renderizar el mapa ({map_err}). Mostrando tabla de estaciones.")
+            if show_scalar_field:
+                temperature_cluster_event = render_temperature_clusters(
+                    field_labels,
+                    tiles=scalar_layer_tiles,
+                    dark=dark,
+                    mode=(
+                        "temperature" if show_temp_field else
+                        "wind" if show_wind_field else "precipitation"
+                    ),
+                    tooltip_labels=(
+                        {
+                            "current": t("map.temp_now"),
+                            "maximum": t("map.temp_max_short"),
+                            "minimum": t("map.temp_min_short"),
+                        }
+                        if show_temp_field else
+                        {
+                            "speed": t("map.wind_speed"),
+                            "gust": t("map.wind_gust"),
+                            "direction": t("map.wind_direction"),
+                        }
+                        if show_wind_field else
+                        {"amount": t("map.precip_24h")}
+                    ),
+                    key=f"field_clusters_{view_mode}_{theme_mode}",
+                )
+                st.markdown(
+                    _temperature_field_legend_html(t)
+                    if show_temp_field else
+                    _wind_field_legend_html(t) if show_wind_field else
+                    _precipitation_field_legend_html(t),
+                    unsafe_allow_html=True,
+                )
             st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
 
             selected_station = st.session_state.get("map_selected_station")
@@ -1444,6 +2142,44 @@ def render_map_tab(ctx):
                         selected_idx = selected_station.get("idx")
                         if isinstance(selected_idx, int) and 0 <= selected_idx < len(points):
                             selected_station = points[selected_idx]
+                    st.session_state["map_selected_station"] = dict(selected_station)
+            if isinstance(temperature_cluster_event, dict):
+                temp_idx = temperature_cluster_event.get("idx")
+                event_provider = coerce_str(
+                    temperature_cluster_event.get("provider"), upper=True,
+                )
+                event_station_id = str(
+                    temperature_cluster_event.get("station_id") or ""
+                )
+                if not (
+                    isinstance(temp_idx, int)
+                    and 0 <= temp_idx < len(field_labels)
+                    and (
+                        not event_provider
+                        or coerce_str(field_labels[temp_idx].get("provider"), upper=True)
+                        == event_provider
+                    )
+                    and (
+                        not event_station_id
+                        or str(field_labels[temp_idx].get("station_id") or "")
+                        == event_station_id
+                    )
+                ):
+                    temp_idx = next(
+                        (
+                            index
+                            for index, row in enumerate(field_labels)
+                            if coerce_str(row.get("provider"), upper=True) == event_provider
+                            and str(row.get("station_id") or "") == event_station_id
+                        ),
+                        None,
+                    )
+                if (
+                    temperature_cluster_event.get("type") == "station"
+                    and isinstance(temp_idx, int)
+                    and 0 <= temp_idx < len(field_labels)
+                ):
+                    selected_station = _field_label_to_selected_station(field_labels[temp_idx])
                     st.session_state["map_selected_station"] = dict(selected_station)
 
             st.markdown(f"#### {t('map.selected_station')}")

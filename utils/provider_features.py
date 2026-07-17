@@ -87,6 +87,48 @@ PROVIDER_FEATURES: dict[str, dict[str, Any]] = {
         "synoptic_source_key": "trends.sources.meteohub_synoptic",
         "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
     },
+    "IPMA": {
+        "historical_supported": False,
+        "today_trends_source_key": "trends.sources.ipma_today",
+        "synoptic_source_key": "trends.sources.ipma_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
+    "ECCC": {
+        "historical_supported": True,
+        # climate-daily arranca en 1840 para las series más antiguas.
+        "historical_min_year": 1840,
+        "historical_lookback_years": None,
+        "requires_api_key": False,
+        "series_start_provider_label": "ECCC",
+        "series_start_source": "ECCC",
+        "today_trends_source_key": "trends.sources.eccc_today",
+        "synoptic_source_key": "trends.sources.eccc_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
+    "SMHI": {
+        "historical_supported": True,
+        # El corrected-archive arranca en el siglo XVIII para las series
+        # más largas (Stockholm 1756); sin ventana de lookback.
+        "historical_min_year": 1756,
+        "historical_lookback_years": None,
+        "requires_api_key": False,
+        "today_trends_source_key": "trends.sources.smhi_today",
+        "synoptic_source_key": "trends.sources.smhi_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
+    "GEOSPHERE": {
+        "historical_supported": True,
+        # El archivo klima-v2 arranca en 1775 (Wien Hohe Warte); sin
+        # ventana de lookback: cada estación pinta desde su serie real.
+        "historical_min_year": 1775,
+        "historical_lookback_years": None,
+        "requires_api_key": False,
+        "series_start_provider_label": "GeoSphere",
+        "series_start_source": "geosphere",
+        "today_trends_source_key": "trends.sources.geosphere_today",
+        "synoptic_source_key": "trends.sources.geosphere_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
     "IEM": {
         "historical_supported": True,
         "historical_missing_key": "historical.errors.missing_iem_station",

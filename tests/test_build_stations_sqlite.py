@@ -2,6 +2,7 @@ import json
 import sqlite3
 
 from scripts.build_stations_sqlite import build_database
+from server.services import stations
 
 
 def test_build_unified_catalog_preserves_raw_data_and_provider_identity(tmp_path):
@@ -89,3 +90,54 @@ def test_build_catalog_without_iem_marks_metadata(tmp_path):
         assert connection.execute(
             "SELECT value FROM catalog_metadata WHERE key = 'contains_iem'"
         ).fetchone()[0] == "false"
+
+
+def test_build_catalog_hides_confirmed_crozet_iem_duplicate(tmp_path, monkeypatch):
+    meteofrance = tmp_path / "meteofrance.json"
+    iem = tmp_path / "iem.json"
+    target = tmp_path / "stations.sqlite"
+    meteofrance.write_text(json.dumps([{
+        "id_station": "98404004", "name": "CROZET", "lat": -46.4325,
+        "lon": 51.856667, "alt": 146,
+    }]), encoding="utf-8")
+    iem.write_text(json.dumps({"stations": [{
+        "id": "0-262-0-997", "name": "CROZET",
+        "network": "WMO_BUFR_SRF", "lat": -46.4325,
+        "lon": 51.8567, "elev": 146, "online": True,
+    }]}), encoding="utf-8")
+
+    build_database(
+        target,
+        provider_files={"METEOFRANCE": meteofrance, "IEM": iem},
+    )
+
+    with sqlite3.connect(target) as connection:
+        row = connection.execute(
+            """
+            SELECT hidden.provider, hidden.network_code, hidden.station_id,
+                   visibility.hidden, preferred.provider, preferred.station_id
+            FROM station_visibility_overrides visibility
+            JOIN stations hidden ON hidden.station_pk = visibility.station_pk
+            JOIN stations preferred
+              ON preferred.station_pk = visibility.preferred_station_pk
+            """
+        ).fetchone()
+    assert row == (
+        "IEM", "WMO_BUFR_SRF", "0-262-0-997", 1,
+        "METEOFRANCE", "98404004",
+    )
+
+    def _test_connect():
+        connection = sqlite3.connect(target)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    stations.hidden_station_identities.cache_clear()
+    monkeypatch.setattr(stations, "_connect", _test_connect)
+    try:
+        assert stations.is_station_hidden(
+            "IEM", "WMO_BUFR_SRF|0-262-0-997",
+        )
+        assert not stations.is_station_hidden("METEOFRANCE", "98404004")
+    finally:
+        stations.hidden_station_identities.cache_clear()

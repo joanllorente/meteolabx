@@ -4,6 +4,7 @@ Renderizado de cabecera y estado de conexión principal.
 
 from __future__ import annotations
 
+import html
 from typing import Any, Callable
 
 import streamlit as st
@@ -11,11 +12,24 @@ import streamlit as st
 from utils import html_clean
 
 
-def render_app_header(*, t, dark: bool, header_refresh_label: str, total_station_count: int) -> None:
+def render_app_header(
+    *,
+    t,
+    dark: bool,
+    app_version: str,
+    header_refresh_label: str,
+    total_station_count: int,
+) -> None:
+    safe_version = html.escape(str(app_version))
+    safe_whats_new = html.escape(str(t("footer.whats_new")))
     st.markdown(
         html_clean(f"""
         <div class="header">
-          <h1>MeteoLabx</h1>
+          <div class="header-title-row">
+            <h1>MeteoLabx</h1>
+            <button type="button" class="header-version" data-mlbx-open-whats-new
+                    aria-label="{safe_whats_new}" title="{safe_whats_new}">v{safe_version}</button>
+          </div>
           <div class="meta">
             {t("header.theme_label")}: {t(f"sidebar.theme.options.{'dark' if dark else 'light'}")} ·
             {t("header.refresh_label")}: {header_refresh_label}

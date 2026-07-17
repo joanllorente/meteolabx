@@ -37,6 +37,9 @@ from utils.storage import set_local_storage, set_stored_autoconnect_target
 from utils.helpers import coerce_str
 
 
+PWS_MEASUREMENT_NOTICE_PROVIDERS = frozenset({"NETATMO", "WINDY"})
+
+
 def _meteocat_locality(meta: dict[str, Any]) -> str:
     municipi = meta.get("municipi")
     if isinstance(municipi, dict):
@@ -174,6 +177,33 @@ PROVIDER_SPECS: dict[str, dict[str, Any]] = {
         "default_tz": "Europe/Rome",
         "locality_resolver": _meteohub_locality,
     },
+    "IPMA": {
+        "label": "IPMA",
+        "session_prefix": "ipma",
+        "station_id_keys": ("ipma_station_id", "provider_station_id"),
+        "station_id_upper": False,
+        "default_tz": "Europe/Lisbon",
+    },
+    "GEOSPHERE": {
+        "label": "GeoSphere",
+        "session_prefix": "geosphere",
+        "station_id_keys": ("geosphere_station_id", "provider_station_id"),
+        "station_id_upper": False,
+        "default_tz": "Europe/Vienna",
+    },
+    "SMHI": {
+        "label": "SMHI",
+        "session_prefix": "smhi",
+        "station_id_keys": ("smhi_station_id", "provider_station_id"),
+        "station_id_upper": False,
+        "default_tz": "Europe/Stockholm",
+    },
+    "ECCC": {
+        "label": "ECCC",
+        "session_prefix": "eccc",
+        "station_id_keys": ("eccc_station_id", "provider_station_id"),
+        "station_id_upper": False,
+    },
     "IEM": {
         "label": "IEM",
         "session_prefix": "iem",
@@ -304,6 +334,10 @@ PROVIDER_ERROR_KEYS = {
     "POEM": "poem_last_error",
     "METOFFICE": "metoffice_last_error",
     "METEOHUB_IT": "meteohub_last_error",
+    "IPMA": "ipma_last_error",
+    "GEOSPHERE": "geosphere_last_error",
+    "SMHI": "smhi_last_error",
+    "ECCC": "eccc_last_error",
     "WEATHERLINK": "weatherlink_last_error",
     "WINDY": "windy_last_error",
     "NETATMO": "netatmo_last_error",
@@ -753,19 +787,42 @@ def disable_provider_autoconnect(_toggle_prefix: str) -> None:
 
 
 def is_manual_iem_station(state: Any) -> bool:
-    """¿La estación conectada es MANUAL (observador humano vía IEM)?
+    """¿La estación conectada es MANUAL/convencional (dato diario)?
 
-    Las redes ``*_COOP`` (cooperativos del NWS, p.ej. ``NV_COOP|MOMN2``) y
-    ``*COCORAHS*`` (voluntarios CoCoRaHS con pluviómetro) solo publican
-    lecturas a mano una vez al día, sin datos en tiempo real ni serie horaria.
-    Sirve para ocultar avisos de "datos antiguos / serie no disponible" que
-    no aplican a estas estaciones. Mismo criterio que la columna ``manual``
+    Cubre las redes IEM ``*_COOP`` (cooperativos del NWS, p.ej.
+    ``NV_COOP|MOMN2``) y ``*COCORAHS*`` (voluntarios CoCoRaHS), y las
+    estaciones KLIMA de GeoSphere (red convencional austríaca, ids ``K…``).
+    Solo publican lecturas una vez al día, sin datos en tiempo real ni serie
+    horaria: sirve para ocultar avisos de "datos antiguos / serie no
+    disponible" que no aplican. Mismo criterio que la columna ``manual``
     del catálogo (scripts/build_stations_sqlite.py).
     """
-    if coerce_str(state.get(CONNECTION_TYPE, ""), upper=True) != "IEM":
+    provider = coerce_str(state.get(CONNECTION_TYPE, ""), upper=True)
+    station_id = str(state.get(PROVIDER_STATION_ID, "") or "").strip()
+    if provider == "GEOSPHERE":
+        return station_id[:1].upper() == "K" and station_id[1:].isdigit()
+    if provider == "SMHI":
+        from utils.station_metadata import smhi_station_is_manual
+
+        return smhi_station_is_manual(station_id)
+    if provider == "ECCC":
+        from utils.station_metadata import eccc_station_is_manual
+
+        return eccc_station_is_manual(station_id)
+    if provider != "IEM":
         return False
-    network = str(state.get(PROVIDER_STATION_ID, "") or "").split("|", 1)[0].strip().upper()
+    network = station_id.split("|", 1)[0].strip().upper()
     return network.endswith("_COOP") or "COCORAHS" in network
+
+
+def should_show_pws_measurement_notice(state: Any) -> bool:
+    """Muestra el aviso de calidad solo para Netatmo y Windy conectadas."""
+    try:
+        connected = bool(state.get(CONNECTED, False))
+        provider = coerce_str(state.get(CONNECTION_TYPE, ""), upper=True)
+    except Exception:
+        return False
+    return connected and provider in PWS_MEASUREMENT_NOTICE_PROVIDERS
 
 
 def resolve_provider_locality(provider_id: str, metadata: Any, fallback: str = "") -> str:

@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Temperature station clusters</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        const MAX_DEPTH = 8;
+        const MAX_VISITS = 3500;
+        const OVERLAY_ATTR = "data-mlbx-temperature-clusters";
+        const FIELD_ID_PREFIX = "mlbx-temperature-";
+        const INSTANCE_ID = Math.random().toString(36).slice(2);
+        const INSTANCE_CREATED_AT = Date.now() + Math.random();
+        const FIELD_SOURCE_PREFIX = FIELD_ID_PREFIX + INSTANCE_ID + "-source-";
+        const FIELD_LAYER_PREFIX = FIELD_ID_PREFIX + INSTANCE_ID + "-layer-";
+        const FIELD_OWNER_PROP = "__mlbxTemperatureFieldOwner";
+        const OVERLAY_OWNER_PROP = "__mlbxTemperatureOverlayOwner";
+        let points = [];
+        let tiles = [];
+        let dark = false;
+        let mode = "temperature";
+        let tooltipLabels = {
+          current: "Ahora",
+          maximum: "Máxima",
+          minimum: "Mínima",
+          speed: "Velocidad",
+          gust: "Racha",
+          direction: "Dirección",
+          amount: "Precipitación 24 h",
+        };
+        let map = null;
+        let mapContainer = null;
+        let overlayHost = null;
+        let overlay = null;
+        let tooltip = null;
+        let retryTimer = null;
+        let fieldRetryTimer = null;
+        let clusterSettleTimer = null;
+        let renderFrame = null;
+        let fieldFrame = null;
+        let interactionActive = false;
+        let attachedMap = null;
+        let installedTileCount = 0;
+        let installedFieldSignature = "";
+
+        function sendMessage(type, payload) {
+          if (!componentIsConnected()) return;
+          window.parent.postMessage(
+            Object.assign({ isStreamlitMessage: true, type: type }, payload || {}),
+            "*"
+          );
+        }
+
+        function setComponentValue(value) {
+          sendMessage("streamlit:setComponentValue", {
+            value: value,
+            dataType: "json",
+          });
+        }
+
+        function componentReady() {
+          sendMessage("streamlit:componentReady", { apiVersion: 1 });
+        }
+
+        function setFrameHeight(height) {
+          sendMessage("streamlit:setFrameHeight", { height: height });
+        }
+
+        function parentDocument() {
+          try {
+            return window.parent && window.parent.document;
+          } catch (_e) {
+            return null;
+          }
+        }
+
+        function componentIsConnected() {
+          try {
+            return Boolean(window.frameElement && window.frameElement.isConnected);
+          } catch (_e) {
+            return true;
+          }
+        }
+
+        function isMapObject(value) {
+          return Boolean(
+            value &&
+              typeof value === "object" &&
+              typeof value.project === "function" &&
+              typeof value.getZoom === "function" &&
+              typeof value.getCenter === "function"
+          );
+        }
+
+        function enqueue(queue, value, depth, viaDom) {
+          if (!value || typeof value !== "object") return;
+          if (value === window || value === window.parent) return;
+          if (value.nodeType === 9) return;
+          if (!viaDom && value.nodeType === 1) return;
+          queue.push({ value: value, depth: depth });
+        }
+
+        function mapFromObjectGraph(root) {
+          const queue = [];
+          const seen = new WeakSet();
+          enqueue(queue, root, 0, true);
+          let visits = 0;
+          while (queue.length && visits < MAX_VISITS) {
+            const item = queue.shift();
+            const value = item.value;
+            if (!value || typeof value !== "object" || seen.has(value)) continue;
+            seen.add(value);
+            visits += 1;
+            if (isMapObject(value)) return value;
+            if (item.depth >= MAX_DEPTH) continue;
+            let names = [];
+            try {
+              names = Object.getOwnPropertyNames(value);
+            } catch (_e) {
+              continue;
+            }
+            for (const name of names) {
+              if (name === "ownerDocument" || name === "parentNode") continue;
+              let child = null;
+              try {
+                child = value[name];
+              } catch (_e) {
+                continue;
+              }
+              enqueue(queue, child, item.depth + 1, name.indexOf("__react") === 0);
+            }
+          }
+          return null;
+        }
+
+        function findMap() {
+          const doc = parentDocument();
+          if (!doc) return null;
+          const roots = Array.from(
+            doc.querySelectorAll(
+              '[data-testid="stDeckGlJsonChart"] .maplibregl-map, ' +
+                '[data-testid="stDeckGlJsonChart"] .mapboxgl-map'
+            )
+          ).reverse();
+          for (const root of roots) {
+            const found = mapFromObjectGraph(root);
+            if (found) return { map: found, container: root };
+          }
+          return null;
+        }
+
+        function installStyles(doc) {
+          if (doc.getElementById("mlbx-temperature-cluster-styles-v5")) return;
+          const style = doc.createElement("style");
+          style.id = "mlbx-temperature-cluster-styles-v5";
+          style.textContent = `
+            [${OVERLAY_ATTR}] {
+              position: absolute;
+              inset: 0;
+              /* Por encima del canvas de picking de deck.gl. El contenedor no
+                 captura nada; solo los botones individuales reciben eventos. */
+              z-index: 20;
+              pointer-events: none;
+              overflow: hidden;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-cluster {
+              position: absolute;
+              transform: translate(-50%, -50%);
+              min-width: 31px;
+              height: 31px;
+              padding: 0 7px;
+              border-radius: 999px;
+              border: 2px solid var(--mlbx-temp-border);
+              background: var(--mlbx-temp-bg);
+              color: var(--mlbx-temp-fg);
+              box-shadow: 0 2px 8px rgba(0,0,0,.28);
+              font: 700 13px/27px system-ui, -apple-system, "Segoe UI", sans-serif;
+              text-align: center;
+              white-space: nowrap;
+              pointer-events: auto;
+              cursor: pointer;
+              user-select: none;
+              -webkit-user-select: none;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-cluster:hover {
+              transform: translate(-50%, -50%) scale(1.08);
+              z-index: 2;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-station {
+              /* Las estaciones individuales gestionan su tooltip y su clic
+                 sin una segunda capa de 15.000 puntos dentro de pydeck. */
+              pointer-events: auto;
+            }
+            [${OVERLAY_ATTR}] .mlbx-wind-station {
+              width: 34px;
+              min-width: 34px;
+              height: 34px;
+              padding: 0;
+              line-height: 30px;
+            }
+            [${OVERLAY_ATTR}] .mlbx-wind-arrow {
+              display: block;
+              width: 30px;
+              height: 30px;
+              font: 800 25px/29px system-ui, -apple-system, "Segoe UI Symbol", sans-serif;
+              text-align: center;
+              transform-origin: 50% 50%;
+            }
+            [${OVERLAY_ATTR}] .mlbx-wind-station .mlbx-temp-cluster-count {
+              position: absolute;
+              top: -7px;
+              right: -7px;
+              margin-left: 0;
+              vertical-align: 0;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-cluster-count {
+              display: inline-block;
+              min-width: 15px;
+              height: 15px;
+              margin-left: 3px;
+              padding: 0 3px;
+              border-radius: 999px;
+              background: #ff514c;
+              color: #fff;
+              font: 800 9px/15px system-ui, -apple-system, "Segoe UI", sans-serif;
+              vertical-align: 1px;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip {
+              position: absolute;
+              z-index: 20;
+              width: max-content;
+              min-width: 190px;
+              max-width: 290px;
+              padding: 10px 12px;
+              border: 1px solid var(--mlbx-tooltip-border);
+              border-radius: 10px;
+              background: var(--mlbx-tooltip-bg);
+              color: var(--mlbx-tooltip-fg);
+              box-shadow: 0 10px 24px rgba(0,0,0,.28);
+              font: 12px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+              pointer-events: none;
+              opacity: 0;
+              visibility: hidden;
+              transition: opacity 80ms ease;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip.is-visible {
+              opacity: 1;
+              visibility: visible;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip-title {
+              max-width: 260px;
+              margin-bottom: 2px;
+              overflow: hidden;
+              color: inherit;
+              font-size: 13px;
+              font-weight: 750;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip-meta {
+              margin-bottom: 8px;
+              opacity: .72;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip-temperatures {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 7px;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip-temperature {
+              min-width: 50px;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip-label {
+              display: block;
+              margin-bottom: 1px;
+              font-size: 10px;
+              opacity: .68;
+            }
+            [${OVERLAY_ATTR}] .mlbx-temp-tooltip-value {
+              display: block;
+              font-size: 12px;
+              font-weight: 750;
+              white-space: nowrap;
+            }
+          `;
+          doc.head.appendChild(style);
+        }
+
+        function detachMapListeners() {
+          if (!attachedMap || typeof attachedMap.off !== "function") {
+            attachedMap = null;
+            return;
+          }
+          try {
+            attachedMap.off("movestart", hideDuringMove);
+            attachedMap.off("zoomstart", hideDuringMove);
+            attachedMap.off("move", hideDuringMove);
+            attachedMap.off("moveend", showAfterMove);
+            attachedMap.off("zoomend", showAfterMove);
+            attachedMap.off("resize", scheduleRender);
+            attachedMap.off("styledata", scheduleFieldInstall);
+          } catch (_e) {}
+          attachedMap = null;
+        }
+
+        function attachMapListeners(nextMap) {
+          if (attachedMap === nextMap) return;
+          detachMapListeners();
+          if (!nextMap || typeof nextMap.on !== "function") return;
+          try {
+            nextMap.on("movestart", hideDuringMove);
+            nextMap.on("zoomstart", hideDuringMove);
+            nextMap.on("move", hideDuringMove);
+            nextMap.on("moveend", showAfterMove);
+            nextMap.on("zoomend", showAfterMove);
+            nextMap.on("resize", scheduleRender);
+            nextMap.on("styledata", scheduleFieldInstall);
+            attachedMap = nextMap;
+          } catch (_e) {}
+        }
+
+        function ensureOverlay() {
+          if (!componentIsConnected()) return false;
+          if (!mapContainer || !mapContainer.isConnected) return false;
+          const doc = parentDocument();
+          if (!doc) return false;
+          installStyles(doc);
+          const nextHost =
+            mapContainer.closest('[data-testid="stDeckGlJsonChart"]') ||
+            mapContainer;
+          if (!nextHost || !nextHost.isConnected) return false;
+          overlayHost = nextHost;
+          const currentOwner = overlayHost[OVERLAY_OWNER_PROP];
+          if (!currentOwner || currentOwner.id !== INSTANCE_ID) {
+            try {
+              if (currentOwner && currentOwner.node && currentOwner.node.isConnected) {
+                currentOwner.node.remove();
+              }
+            } catch (_e) {}
+            overlayHost[OVERLAY_OWNER_PROP] = {
+              id: INSTANCE_ID,
+              createdAt: INSTANCE_CREATED_AT,
+              node: null,
+            };
+          }
+          if (!overlay || !overlay.isConnected || overlay.parentElement !== overlayHost) {
+            overlay = doc.createElement("div");
+            overlay.setAttribute(OVERLAY_ATTR, INSTANCE_ID);
+            overlayHost.appendChild(overlay);
+            overlayHost[OVERLAY_OWNER_PROP].node = overlay;
+            tooltip = null;
+          }
+          return true;
+        }
+
+        function finite(value) {
+          const number = Number(value);
+          return Number.isFinite(number) ? number : null;
+        }
+
+        function normalizedTiles(rawTiles) {
+          if (!Array.isArray(rawTiles)) return [];
+          return rawTiles.flatMap(function (tile) {
+            if (!tile || typeof tile !== "object") return [];
+            const url = String(tile.url || "");
+            const bounds = Array.isArray(tile.bounds) ? tile.bounds.map(Number) : [];
+            if (
+              !url || bounds.length !== 4 ||
+              !bounds.every(Number.isFinite) ||
+              bounds[0] >= bounds[2] || bounds[1] >= bounds[3]
+            ) return [];
+            return [{ url: url, bounds: bounds }];
+          });
+        }
+
+        function removeTemperatureField() {
+          if (!map) return;
+          const count = Math.max(installedTileCount, tiles.length, 4);
+          for (let index = count - 1; index >= 0; index -= 1) {
+            const layerId = FIELD_LAYER_PREFIX + index;
+            const sourceId = FIELD_SOURCE_PREFIX + index;
+            try {
+              if (typeof map.getLayer === "function" && map.getLayer(layerId)) {
+                map.removeLayer(layerId);
+              }
+            } catch (_e) {}
+            try {
+              if (typeof map.getSource === "function" && map.getSource(sourceId)) {
+                map.removeSource(sourceId);
+              }
+            } catch (_e) {}
+          }
+          installedTileCount = 0;
+          installedFieldSignature = "";
+        }
+
+        function removeStaleTemperatureFields() {
+          if (!map || typeof map.getStyle !== "function") return;
+          let stale = [];
+          try {
+            const style = map.getStyle();
+            stale = (style && Array.isArray(style.layers) ? style.layers : [])
+              .filter(function (layer) {
+                return layer &&
+                  String(layer.id || "").indexOf(FIELD_ID_PREFIX) === 0 &&
+                  String(layer.id || "").indexOf(FIELD_LAYER_PREFIX) !== 0;
+              })
+              .map(function (layer) {
+                return { layerId: layer.id, sourceId: String(layer.source || "") };
+              });
+          } catch (_e) {
+            return;
+          }
+          stale.reverse().forEach(function (item) {
+            try {
+              if (map.getLayer(item.layerId)) map.removeLayer(item.layerId);
+            } catch (_e) {}
+            try {
+              if (item.sourceId && map.getSource(item.sourceId)) map.removeSource(item.sourceId);
+            } catch (_e) {}
+          });
+        }
+
+        function temperatureFieldBeforeLayerId() {
+          try {
+            const style = map.getStyle();
+            const layers = style && Array.isArray(style.layers) ? style.layers : [];
+            // El raster queda sobre los rellenos terrestres pero BAJO el agua
+            // vectorial del mapa base. CARTO vuelve a pintar mar, lagos y
+            // costas encima con su geometría nativa para cada nivel de zoom;
+            // así no ampliamos el borde alfa de una imagen mundial.
+            const waterFill = layers.find(function (layer) {
+              const sourceLayer = String(layer && layer["source-layer"] || "").toLowerCase();
+              const layerId = String(layer && layer.id || "").toLowerCase();
+              return layer && layer.type === "fill" &&
+                (sourceLayer === "water" || layerId === "water");
+            });
+            if (waterFill) return waterFill.id;
+
+            // Fallback para estilos de terceros sin una capa de agua
+            // identificable: conserva el orden anterior bajo las etiquetas.
+            const firstSymbol = layers.find(function (layer) {
+              return layer && layer.type === "symbol";
+            });
+            return firstSymbol ? firstSymbol.id : undefined;
+          } catch (_e) {
+            return undefined;
+          }
+        }
+
+        function installTemperatureField() {
+          fieldFrame = null;
+          if (!componentIsConnected()) return;
+          if (!map || !tiles.length) return;
+          const currentOwner = map[FIELD_OWNER_PROP];
+          map[FIELD_OWNER_PROP] = {
+            id: INSTANCE_ID,
+            createdAt: INSTANCE_CREATED_AT,
+          };
+          try {
+            if (typeof map.isStyleLoaded === "function" && !map.isStyleLoaded()) {
+              scheduleFieldRetry();
+              return;
+            }
+          } catch (_e) {
+            scheduleFieldRetry();
+            return;
+          }
+          const signature = JSON.stringify(tiles);
+          const alreadyInstalled =
+            signature === installedFieldSignature &&
+            tiles.every(function (_tile, index) {
+              try {
+                return Boolean(map.getLayer(FIELD_LAYER_PREFIX + index));
+              } catch (_e) {
+                return false;
+              }
+            });
+          if (alreadyInstalled) return;
+
+          removeStaleTemperatureFields();
+          removeTemperatureField();
+          const beforeId = temperatureFieldBeforeLayerId();
+          try {
+            tiles.forEach(function (tile, index) {
+              const sourceId = FIELD_SOURCE_PREFIX + index;
+              const layerId = FIELD_LAYER_PREFIX + index;
+              const west = tile.bounds[0];
+              const south = tile.bounds[1];
+              const east = tile.bounds[2];
+              const north = tile.bounds[3];
+              map.addSource(sourceId, {
+                type: "image",
+                url: tile.url,
+                coordinates: [
+                  [west, north],
+                  [east, north],
+                  [east, south],
+                  [west, south],
+                ],
+              });
+              map.addLayer(
+                {
+                  id: layerId,
+                  type: "raster",
+                  source: sourceId,
+                  paint: {
+                    "raster-opacity": 0.84,
+                    "raster-resampling": "linear",
+                    "raster-fade-duration": 0,
+                  },
+                },
+                beforeId
+              );
+            });
+            installedTileCount = tiles.length;
+            installedFieldSignature = signature;
+          } catch (_e) {
+            removeTemperatureField();
+            scheduleFieldRetry();
+          }
+        }
+
+        function scheduleFieldRetry() {
+          if (fieldRetryTimer !== null) return;
+          fieldRetryTimer = window.setTimeout(function () {
+            fieldRetryTimer = null;
+            scheduleFieldInstall();
+          }, 180);
+        }
+
+        function scheduleFieldInstall() {
+          if (fieldFrame !== null) return;
+          fieldFrame = window.requestAnimationFrame(installTemperatureField);
+        }
+
+        function colorForTemperature(value) {
+          const stops = [
+            [-20, [98, 22, 146]], [-10, [52, 122, 235]],
+            [0, [88, 176, 245]], [5, [130, 215, 235]],
+            [10, [110, 205, 125]], [15, [200, 225, 80]],
+            [20, [250, 210, 50]], [25, [248, 158, 38]],
+            [30, [238, 92, 28]], [35, [205, 32, 22]],
+            [40, [150, 8, 32]], [46, [96, 2, 58]],
+          ];
+          const t = Math.max(stops[0][0], Math.min(stops[stops.length - 1][0], value));
+          let left = stops[0];
+          let right = stops[stops.length - 1];
+          for (let i = 1; i < stops.length; i += 1) {
+            if (t <= stops[i][0]) {
+              left = stops[i - 1];
+              right = stops[i];
+              break;
+            }
+          }
+          const fraction = right[0] === left[0] ? 0 : (t - left[0]) / (right[0] - left[0]);
+          const rgb = left[1].map(function (channel, index) {
+            return Math.round(channel + fraction * (right[1][index] - channel));
+          });
+          return rgb;
+        }
+
+        function colorForPrecipitation(value) {
+          const stops = [
+            [0, [224, 238, 247]], [0.2, [183, 224, 240]],
+            [1, [116, 200, 225]], [2, [62, 169, 214]],
+            [5, [43, 126, 191]], [10, [42, 91, 166]],
+            [20, [81, 65, 155]], [50, [129, 48, 144]],
+            [100, [180, 36, 109]], [200, [111, 16, 73]],
+          ];
+          const amount = Math.max(0, Math.min(stops[stops.length - 1][0], Number(value) || 0));
+          let left = stops[0];
+          let right = stops[stops.length - 1];
+          for (let index = 1; index < stops.length; index += 1) {
+            if (amount <= stops[index][0]) {
+              left = stops[index - 1];
+              right = stops[index];
+              break;
+            }
+          }
+          const fraction = right[0] === left[0] ? 0 :
+            (amount - left[0]) / (right[0] - left[0]);
+          return left[1].map(function (channel, index) {
+            return Math.round(channel + fraction * (right[1][index] - channel));
+          });
+        }
+
+        function cardinalDirection(value) {
+          const direction = finite(value);
+          if (direction === null) return "—";
+          const labels = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+          return labels[Math.round((direction % 360) / 45) % 8];
+        }
+
+        function windDirectionText(value) {
+          const direction = finite(value);
+          if (direction === null) return "—";
+          const normalized = ((direction % 360) + 360) % 360;
+          return Math.round(normalized) + "° " + cardinalDirection(normalized);
+        }
+
+        function speedText(value) {
+          const number = finite(value);
+          return number === null ? "—" : number.toFixed(1) + " km/h";
+        }
+
+        function precipitationText(value) {
+          const number = finite(value);
+          if (number === null) return "—";
+          return (number < 10 ? number.toFixed(1) : Math.round(number).toString()) + " mm";
+        }
+
+        function meanWindDirection(cluster) {
+          let east = 0;
+          let north = 0;
+          cluster.forEach(function (item) {
+            const radians = Number(item.direction) * Math.PI / 180;
+            const weight = Math.max(1, Number(item.temp) || 0);
+            east += weight * Math.sin(radians);
+            north += weight * Math.cos(radians);
+          });
+          if (Math.abs(east) + Math.abs(north) < 1e-8) return 0;
+          return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+        }
+
+        function textColor(rgb) {
+          const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+          return luminance > 0.62 ? "#191b21" : "#ffffff";
+        }
+
+        function temperatureText(value) {
+          const number = finite(value);
+          return number === null ? "—" : number.toFixed(1) + " °C";
+        }
+
+        function ensureTooltip() {
+          if (!overlay || !overlay.isConnected) return null;
+          if (tooltip && tooltip.isConnected && tooltip.parentElement === overlay) {
+            return tooltip;
+          }
+          const doc = parentDocument();
+          if (!doc) return null;
+          tooltip = doc.createElement("div");
+          tooltip.className = "mlbx-temp-tooltip";
+          tooltip.style.setProperty(
+            "--mlbx-tooltip-bg",
+            dark ? "rgba(18,18,18,.96)" : "rgba(255,255,255,.97)"
+          );
+          tooltip.style.setProperty(
+            "--mlbx-tooltip-fg",
+            dark ? "rgba(255,255,255,.97)" : "rgba(15,18,25,.97)"
+          );
+          tooltip.style.setProperty(
+            "--mlbx-tooltip-border",
+            dark ? "rgba(255,255,255,.14)" : "rgba(15,18,25,.14)"
+          );
+          overlay.appendChild(tooltip);
+          return tooltip;
+        }
+
+        function addTooltipTemperature(doc, container, label, value) {
+          const column = doc.createElement("div");
+          column.className = "mlbx-temp-tooltip-temperature";
+          const labelNode = doc.createElement("span");
+          labelNode.className = "mlbx-temp-tooltip-label";
+          labelNode.textContent = String(label || "");
+          const valueNode = doc.createElement("span");
+          valueNode.className = "mlbx-temp-tooltip-value";
+          valueNode.textContent = temperatureText(value);
+          column.appendChild(labelNode);
+          column.appendChild(valueNode);
+          container.appendChild(column);
+        }
+
+        function addTooltipValue(doc, container, label, value) {
+          const column = doc.createElement("div");
+          column.className = "mlbx-temp-tooltip-temperature";
+          const labelNode = doc.createElement("span");
+          labelNode.className = "mlbx-temp-tooltip-label";
+          labelNode.textContent = String(label || "");
+          const valueNode = doc.createElement("span");
+          valueNode.className = "mlbx-temp-tooltip-value";
+          valueNode.textContent = String(value || "—");
+          column.appendChild(labelNode);
+          column.appendChild(valueNode);
+          container.appendChild(column);
+        }
+
+        function showStationTooltip(row, x, y) {
+          const node = ensureTooltip();
+          const doc = parentDocument();
+          if (!node || !doc || !mapContainer) return;
+          const title = doc.createElement("div");
+          title.className = "mlbx-temp-tooltip-title";
+          title.textContent = String(row.name || "Estación");
+          const meta = doc.createElement("div");
+          meta.className = "mlbx-temp-tooltip-meta";
+          meta.textContent = [row.provider, row.station_id].filter(Boolean).join(" · ");
+          const temperatures = doc.createElement("div");
+          temperatures.className = "mlbx-temp-tooltip-temperatures";
+          if (mode === "wind") {
+            addTooltipValue(doc, temperatures, tooltipLabels.speed, speedText(row.speed));
+            addTooltipValue(doc, temperatures, tooltipLabels.gust, speedText(row.gust));
+            addTooltipValue(
+              doc, temperatures, tooltipLabels.direction,
+              windDirectionText(row.direction)
+            );
+          } else if (mode === "precipitation") {
+            addTooltipValue(
+              doc, temperatures, tooltipLabels.amount,
+              precipitationText(row.amount)
+            );
+          } else {
+            addTooltipTemperature(doc, temperatures, tooltipLabels.current, row.t);
+            addTooltipTemperature(doc, temperatures, tooltipLabels.maximum, row.tmax);
+            addTooltipTemperature(doc, temperatures, tooltipLabels.minimum, row.tmin);
+          }
+          node.replaceChildren(title, meta, temperatures);
+          node.classList.add("is-visible");
+
+          const width = mapContainer.clientWidth;
+          const height = mapContainer.clientHeight;
+          const tooltipWidth = node.offsetWidth || 230;
+          const tooltipHeight = node.offsetHeight || 88;
+          const left = Math.max(8, Math.min(width - tooltipWidth - 8, x - tooltipWidth / 2));
+          let top = y - tooltipHeight - 20;
+          if (top < 8) top = Math.min(height - tooltipHeight - 8, y + 20);
+          node.style.left = left + "px";
+          node.style.top = Math.max(8, top) + "px";
+        }
+
+        function hideTooltip() {
+          if (tooltip && tooltip.isConnected) tooltip.classList.remove("is-visible");
+        }
+
+        function styleTemperatureButton(button, x, y, temperature) {
+          const rgb = colorForTemperature(temperature);
+          button.style.left = x + "px";
+          button.style.top = y + "px";
+          button.style.setProperty("--mlbx-temp-bg", `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.94)`);
+          button.style.setProperty("--mlbx-temp-fg", textColor(rgb));
+          button.style.setProperty(
+            "--mlbx-temp-border",
+            dark ? "rgba(255,255,255,.86)" : "rgba(30,33,40,.78)"
+          );
+        }
+
+        function styleWindButton(button, x, y, direction) {
+          button.style.left = x + "px";
+          button.style.top = y + "px";
+          button.style.setProperty(
+            "--mlbx-temp-bg",
+            dark ? "rgba(17,22,30,.88)" : "rgba(255,255,255,.88)"
+          );
+          button.style.setProperty(
+            "--mlbx-temp-fg",
+            dark ? "#ffffff" : "#151922"
+          );
+          button.style.setProperty(
+            "--mlbx-temp-border",
+            dark ? "rgba(255,255,255,.88)" : "rgba(25,29,38,.78)"
+          );
+          button.dataset.windDirection = String(direction);
+        }
+
+        function stylePrecipitationButton(button, x, y, amount) {
+          const rgb = colorForPrecipitation(amount);
+          button.style.left = x + "px";
+          button.style.top = y + "px";
+          button.style.setProperty("--mlbx-temp-bg", `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.94)`);
+          button.style.setProperty("--mlbx-temp-fg", textColor(rgb));
+          button.style.setProperty(
+            "--mlbx-temp-border",
+            dark ? "rgba(255,255,255,.86)" : "rgba(30,33,40,.78)"
+          );
+        }
+
+        function appendWindArrow(doc, button, direction) {
+          const arrow = doc.createElement("span");
+          arrow.className = "mlbx-wind-arrow";
+          arrow.textContent = "↑";
+          // La observación indica DE dónde viene el viento. La flecha muestra
+          // hacia dónde se desplaza el aire, por eso se suman 180 grados.
+          arrow.style.transform = "rotate(" + (Number(direction) + 180) + "deg)";
+          button.appendChild(arrow);
+        }
+
+        function emitStation(row) {
+          hideTooltip();
+          setComponentValue({
+            type: "station",
+            idx: Number(row.idx),
+            provider: String(row.provider || ""),
+            station_id: String(row.station_id || ""),
+            nonce: Date.now(),
+          });
+        }
+
+        function createStationButton(doc, item, x, y, spider) {
+          const row = item.point;
+          const button = doc.createElement("button");
+          button.type = "button";
+          button.className =
+            "mlbx-temp-cluster mlbx-temp-station" +
+            (mode === "wind" ? " mlbx-wind-station" : "") +
+            (spider ? " mlbx-temp-spider" : "");
+          if (mode === "wind") {
+            styleWindButton(button, x, y, item.direction);
+            appendWindArrow(doc, button, item.direction);
+            button.setAttribute(
+              "aria-label",
+              String(row.name || "Estación") + ", " + speedText(row.speed) +
+              ", " + windDirectionText(row.direction)
+            );
+          } else if (mode === "precipitation") {
+            stylePrecipitationButton(button, x, y, item.temp);
+            const amount = doc.createElement("span");
+            amount.textContent = precipitationText(row.amount);
+            button.appendChild(amount);
+            button.setAttribute(
+              "aria-label",
+              String(row.name || "Estación") + ", " + precipitationText(row.amount)
+            );
+          } else {
+            styleTemperatureButton(button, x, y, item.temp);
+            const temperature = doc.createElement("span");
+            temperature.textContent = Math.round(item.temp) + "°";
+            button.appendChild(temperature);
+            button.setAttribute(
+              "aria-label",
+              String(row.name || "Estación") + ", " + temperatureText(row.t)
+            );
+          }
+          button.addEventListener("mouseenter", function () {
+            showStationTooltip(row, x, y);
+          });
+          button.addEventListener("mouseleave", hideTooltip);
+          button.addEventListener("wheel", relayWheelToMap, { passive: false });
+          button.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            emitStation(row);
+          });
+          return button;
+        }
+
+        function relayWheelToMap(event) {
+          if (!mapContainer || !overlayHost) return;
+          event.preventDefault();
+          event.stopPropagation();
+
+          const doc = parentDocument();
+          if (!doc) return;
+          const source = event.currentTarget;
+          const previousPointerEvents = source && source.style
+            ? source.style.pointerEvents : "";
+          let underlying = null;
+          try {
+            // Encuentra el canvas que hay exactamente bajo la etiqueta sin
+            // perder el clic/hover normal que necesita ese botón.
+            if (source && source.style) source.style.pointerEvents = "none";
+            underlying = doc.elementFromPoint(event.clientX, event.clientY);
+          } catch (_e) {
+            underlying = null;
+          } finally {
+            if (source && source.style) {
+              source.style.pointerEvents = previousPointerEvents;
+            }
+          }
+          if (!underlying || underlying === source) {
+            underlying = overlayHost.querySelector("canvas");
+          }
+          if (!underlying) return;
+          try {
+            underlying.dispatchEvent(new WheelEvent("wheel", {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              view: doc.defaultView,
+              clientX: event.clientX,
+              clientY: event.clientY,
+              screenX: event.screenX,
+              screenY: event.screenY,
+              deltaX: event.deltaX,
+              deltaY: event.deltaY,
+              deltaZ: event.deltaZ,
+              deltaMode: event.deltaMode,
+              ctrlKey: event.ctrlKey,
+              shiftKey: event.shiftKey,
+              altKey: event.altKey,
+              metaKey: event.metaKey,
+            }));
+          } catch (_e) {}
+        }
+
+        function visiblePoint(point, width, height, geographicBounds) {
+          const lat = finite(point.lat);
+          const lon = finite(point.lon);
+          const temp = finite(
+            mode === "wind" ? point.speed :
+            mode === "precipitation" ? point.amount : point.t
+          );
+          const direction = finite(point.direction);
+          if (
+            lat === null || lon === null || temp === null
+            || (mode === "wind" && direction === null)
+          ) return null;
+          if (geographicBounds) {
+            if (
+              lat < geographicBounds.south - 1 ||
+              lat > geographicBounds.north + 1
+            ) return null;
+            const span = geographicBounds.east - geographicBounds.west;
+            if (span >= 0 && span < 350) {
+              if (lon < geographicBounds.west - 1 || lon > geographicBounds.east + 1) {
+                return null;
+              }
+            } else if (span < 0) {
+              // Viewport que cruza el antimeridiano: solo queda fuera la franja
+              // intermedia entre east y west.
+              if (lon < geographicBounds.west - 1 && lon > geographicBounds.east + 1) {
+                return null;
+              }
+            }
+          }
+          let projected = null;
+          try {
+            projected = map.project([lon, lat]);
+          } catch (_e) {
+            return null;
+          }
+          const x = finite(projected && projected.x);
+          const y = finite(projected && projected.y);
+          if (x === null || y === null || x < -45 || x > width + 45 || y < -45 || y > height + 45) {
+            return null;
+          }
+          return {
+            point: point, lat: lat, lon: lon, temp: temp,
+            direction: direction, x: x, y: y,
+          };
+        }
+
+        function clusterVisiblePoints(width, height) {
+          const zoom = finite(map && map.getZoom()) || 0;
+          const cellSize =
+            zoom < 5 ? 112 :
+            zoom < 8 ? 92 :
+            zoom < 11 ? 68 :
+            zoom < 14 ? 48 :
+            zoom < 16 ? 28 : 14;
+          let geographicBounds = null;
+          try {
+            const bounds = map.getBounds();
+            geographicBounds = {
+              west: Number(bounds.getWest()),
+              south: Number(bounds.getSouth()),
+              east: Number(bounds.getEast()),
+              north: Number(bounds.getNorth()),
+            };
+          } catch (_e) {}
+          const cells = new Map();
+          points.forEach(function (point) {
+            const visible = visiblePoint(point, width, height, geographicBounds);
+            if (!visible) return;
+            const key = Math.floor(visible.x / cellSize) + ":" + Math.floor(visible.y / cellSize);
+            if (!cells.has(key)) cells.set(key, []);
+            cells.get(key).push(visible);
+          });
+          return Array.from(cells.values());
+        }
+
+        function zoomIntoCluster(cluster) {
+          if (!map || !cluster.length) return;
+          const meanLon = cluster.reduce((sum, item) => sum + item.lon, 0) / cluster.length;
+          const meanLat = cluster.reduce((sum, item) => sum + item.lat, 0) / cluster.length;
+          const currentZoom = finite(map.getZoom()) || 0;
+          try {
+            map.easeTo({
+              center: [meanLon, meanLat],
+              zoom: Math.min(17, currentZoom + (cluster.length > 25 ? 2.5 : 2)),
+              duration: 320,
+            });
+          } catch (_e) {}
+        }
+
+        function renderClusters() {
+          renderFrame = null;
+          if (interactionActive) return;
+          if (!map || !mapContainer || !ensureOverlay()) return;
+          overlay.style.visibility = "visible";
+          const width = mapContainer.clientWidth;
+          const height = mapContainer.clientHeight;
+          if (!width || !height) return;
+          const doc = parentDocument();
+          const fragment = doc.createDocumentFragment();
+          const clusters = clusterVisiblePoints(width, height);
+          const zoom = finite(map.getZoom()) || 0;
+
+          clusters.forEach(function (cluster) {
+            const meanX = cluster.reduce((sum, item) => sum + item.x, 0) / cluster.length;
+            const meanY = cluster.reduce((sum, item) => sum + item.y, 0) / cluster.length;
+            const meanTemp = cluster.reduce((sum, item) => sum + item.temp, 0) / cluster.length;
+            const displayValue = mode === "precipitation"
+              ? Math.max.apply(null, cluster.map(function (item) { return item.temp; }))
+              : meanTemp;
+
+            // En el zoom máximo, estaciones distintas con coordenadas
+            // idénticas se abren radialmente para que todas sean clicables.
+            if (cluster.length > 1 && zoom >= 16) {
+              const radius = Math.max(25, Math.min(48, 8 * cluster.length));
+              cluster.forEach(function (item, index) {
+                const angle = -Math.PI / 2 + 2 * Math.PI * index / cluster.length;
+                fragment.appendChild(createStationButton(
+                  doc,
+                  item,
+                  meanX + Math.cos(angle) * radius,
+                  meanY + Math.sin(angle) * radius,
+                  true
+                ));
+              });
+              return;
+            }
+
+            const button = doc.createElement("button");
+            button.type = "button";
+            button.className = "mlbx-temp-cluster" +
+              (mode === "wind" ? " mlbx-wind-station" : "");
+            if (mode === "wind") {
+              const meanDirection = meanWindDirection(cluster);
+              styleWindButton(button, meanX, meanY, meanDirection);
+              appendWindArrow(doc, button, meanDirection);
+            } else if (mode === "precipitation") {
+              stylePrecipitationButton(button, meanX, meanY, displayValue);
+              const amount = doc.createElement("span");
+              amount.textContent = precipitationText(displayValue);
+              button.appendChild(amount);
+            } else {
+              styleTemperatureButton(button, meanX, meanY, displayValue);
+              const temperature = doc.createElement("span");
+              temperature.textContent = Math.round(displayValue) + "°";
+              button.appendChild(temperature);
+            }
+            if (cluster.length > 1) {
+              const count = doc.createElement("span");
+              count.className = "mlbx-temp-cluster-count";
+              count.textContent = String(cluster.length);
+              button.appendChild(count);
+              button.title = mode === "wind"
+                ? cluster.length + " estaciones · viento medio " + meanTemp.toFixed(1) + " km/h"
+                : mode === "precipitation"
+                ? cluster.length + " estaciones · máximo " + precipitationText(displayValue)
+                : cluster.length + " estaciones · temperatura media " + meanTemp.toFixed(1) + " °C";
+              button.addEventListener("click", function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                zoomIntoCluster(cluster);
+              });
+            } else {
+              fragment.appendChild(
+                createStationButton(doc, cluster[0], meanX, meanY, false)
+              );
+              return;
+            }
+            button.addEventListener("wheel", relayWheelToMap, { passive: false });
+            fragment.appendChild(button);
+          });
+
+          overlay.replaceChildren(fragment);
+          tooltip = null;
+          ensureTooltip();
+        }
+
+        function scheduleRender() {
+          if (interactionActive || renderFrame !== null) return;
+          renderFrame = window.requestAnimationFrame(renderClusters);
+        }
+
+        function hideDuringMove() {
+          interactionActive = true;
+          if (clusterSettleTimer !== null) {
+            window.clearTimeout(clusterSettleTimer);
+            clusterSettleTimer = null;
+          }
+          if (renderFrame !== null) {
+            window.cancelAnimationFrame(renderFrame);
+            renderFrame = null;
+          }
+          if (overlay && overlay.isConnected) overlay.style.visibility = "hidden";
+          scheduleClusterSettle();
+        }
+
+        function scheduleClusterSettle() {
+          if (clusterSettleTimer !== null) window.clearTimeout(clusterSettleTimer);
+          // Una rueda o trackpad genera muchos finales de zoom consecutivos.
+          // Esperamos a que el gesto se estabilice y proyectamos las estaciones
+          // una sola vez, en vez de reconstruir el DOM en cada pequeno paso.
+          clusterSettleTimer = window.setTimeout(function () {
+            clusterSettleTimer = null;
+            interactionActive = false;
+            scheduleRender();
+          }, 120);
+        }
+
+        function showAfterMove() {
+          scheduleClusterSettle();
+        }
+
+        function bindWhenReady() {
+          if (retryTimer) window.clearTimeout(retryTimer);
+          if (!componentIsConnected()) {
+            cleanup();
+            return;
+          }
+          const found = findMap();
+          if (!found) {
+            retryTimer = window.setTimeout(bindWhenReady, 250);
+            return;
+          }
+          map = found.map;
+          mapContainer = found.container;
+          attachMapListeners(map);
+          ensureOverlay();
+          scheduleFieldInstall();
+          scheduleRender();
+        }
+
+        function cleanup() {
+          if (retryTimer) window.clearTimeout(retryTimer);
+          retryTimer = null;
+          if (fieldRetryTimer) window.clearTimeout(fieldRetryTimer);
+          fieldRetryTimer = null;
+          if (clusterSettleTimer !== null) window.clearTimeout(clusterSettleTimer);
+          clusterSettleTimer = null;
+          interactionActive = false;
+          if (renderFrame !== null) window.cancelAnimationFrame(renderFrame);
+          renderFrame = null;
+          if (fieldFrame !== null) window.cancelAnimationFrame(fieldFrame);
+          fieldFrame = null;
+          if (!map || !map[FIELD_OWNER_PROP] || map[FIELD_OWNER_PROP].id === INSTANCE_ID) {
+            removeTemperatureField();
+            try {
+              if (map) delete map[FIELD_OWNER_PROP];
+            } catch (_e) {}
+          }
+          detachMapListeners();
+          if (
+            !overlayHost || !overlayHost[OVERLAY_OWNER_PROP] ||
+            overlayHost[OVERLAY_OWNER_PROP].id === INSTANCE_ID
+          ) {
+            if (overlay && overlay.isConnected) overlay.remove();
+            try {
+              if (overlayHost) delete overlayHost[OVERLAY_OWNER_PROP];
+            } catch (_e) {}
+          }
+          overlay = null;
+          overlayHost = null;
+          tooltip = null;
+          map = null;
+          mapContainer = null;
+        }
+
+        function onRender(event) {
+          const data = event.data;
+          if (!data || data.type !== "streamlit:render") return;
+          setFrameHeight(0);
+          points = Array.isArray(data.args && data.args.points) ? data.args.points : [];
+          tiles = normalizedTiles(data.args && data.args.tiles);
+          dark = Boolean(data.args && data.args.dark);
+          const requestedMode = String(data.args && data.args.mode || "temperature");
+          mode = requestedMode === "wind" || requestedMode === "precipitation"
+            ? requestedMode : "temperature";
+          const labels = data.args && data.args.tooltip_labels;
+          tooltipLabels = {
+            current: String((labels && labels.current) || "Ahora"),
+            maximum: String((labels && labels.maximum) || "Máxima"),
+            minimum: String((labels && labels.minimum) || "Mínima"),
+            speed: String((labels && labels.speed) || "Velocidad"),
+            gust: String((labels && labels.gust) || "Racha"),
+            direction: String((labels && labels.direction) || "Dirección"),
+            amount: String((labels && labels.amount) || "Precipitación 24 h"),
+          };
+          bindWhenReady();
+        }
+
+        window.addEventListener("message", onRender);
+        window.addEventListener("beforeunload", cleanup);
+        componentReady();
+        setFrameHeight(0);
+      })();
+    </script>
+  </body>
+</html>

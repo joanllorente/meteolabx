@@ -1,6 +1,22 @@
 from utils import provider_state
 
 
+def test_pws_measurement_notice_is_limited_to_connected_netatmo_and_windy():
+    for provider in ("NETATMO", "WINDY"):
+        assert provider_state.should_show_pws_measurement_notice(
+            {"connected": True, "connection_type": provider}
+        )
+
+    for provider in ("WU", "WEATHERLINK", "AEMET", "IEM"):
+        assert not provider_state.should_show_pws_measurement_notice(
+            {"connected": True, "connection_type": provider}
+        )
+
+    assert not provider_state.should_show_pws_measurement_notice(
+        {"connected": False, "connection_type": "NETATMO"}
+    )
+
+
 def test_display_provider_station_id_shortens_meteohub_composite_id():
     raw_id = "dpcn-lombardia|46.29690|10.50656|ponte-di-legno-case-pirli"
 

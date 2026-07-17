@@ -54,9 +54,14 @@
           const hostWin = window.parent || window;
           const mediaWin =
             hostWin && typeof hostWin.matchMedia === "function" ? hostWin : window;
+          const browserLanguages = Array.from(
+            window.navigator.languages || [window.navigator.language || ""]
+          ).filter(Boolean);
           return {
             tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
             vw: Math.round(hostWin.innerWidth || window.innerWidth || 0),
+            lang: browserLanguages[0] || "",
+            langs: browserLanguages,
             cs:
               mediaWin.matchMedia &&
               mediaWin.matchMedia("(prefers-color-scheme: dark)").matches

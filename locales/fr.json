@@ -52,7 +52,8 @@
     "hour": "Heure",
     "and": "et",
     "off": "Désactivé",
-    "on": "Activé"
+    "on": "Activé",
+    "close": "Fermer"
   },
   "meta": {
     "last_data": "Dernière donnée",
@@ -72,7 +73,8 @@
     "latitude_short": "Lat",
     "longitude_short": "Lon",
     "connect_prompt": "Connectez votre station depuis le panneau latéral ou explorez les stations proches.",
-    "manual_station": "ℹ️ Station manuelle du NWS : publie les max/min quotidiens une fois par jour. Pas de données en temps réel."
+    "manual_station": "ℹ️ Station manuelle/conventionnelle : publie ses valeurs une fois par jour. Pas de données en temps réel.",
+    "pws_measurement_notice": "Les stations météorologiques personnelles peuvent ne pas respecter les normes de mesure météorologique."
   },
   "favorites": {
     "title": "Favoris",
@@ -90,15 +92,6 @@
     "whats_new": "Nouveautés",
     "improvements_title": "Améliorations",
     "fixes_title": "Corrections",
-    "v127_improvements": [
-      "Nouveau fournisseur Windy PWS avec des stations météo amateurs ouvertes du monde entier.",
-      "Les stations Windy actives peuvent être explorées sur la carte, connectées et ajoutées aux favoris.",
-      "Les observations actuelles et les séries récentes Windy sont disponibles dans Observation et Tendances."
-    ],
-    "v127_fixes": [
-      "L'inventaire amateur reste séparé du catalogue des stations officielles.",
-      "La carte affiche par défaut uniquement les stations Windy avec des données récentes."
-    ],
     "improvements": [
       "Migration complète et fonctionnelle vers le mode FastAPI.",
       "Nouvel onglet Classement, avec des classements de température, de vent et de précipitations par pays et à l'échelle mondiale.",
@@ -116,6 +109,19 @@
       "Correction d'un problème qui empêchait de calculer correctement la tendance complète de pression.",
       "Correction d'une erreur qui faisait que les maximums et minimums de température d'AEMET et de MeteoGalicia n'affichaient pas la bonne valeur.",
       "Correction d'une erreur qui faisait que la rafale maximale de MeteoGalicia n'affichait pas la bonne valeur."
+    ],
+    "release_130_improvements": [
+      "Nouvelle carte mondiale de la température actuelle.",
+      "Nouvelle carte mondiale du vent et de sa direction.",
+      "Nouvelle carte mondiale des précipitations cumulées.",
+      "Nouveaux fournisseurs de stations météo personnelles : Netatmo et Windy.",
+      "Nouveaux fournisseurs officiels : IPMA (Portugal), GEOSPHERE (Autriche), SMHI (Suède) et ECCC (Canada).",
+      "Chargement initial du site jusqu’à 30 % plus rapide.",
+      "Nouvelle langue disponible : le portugais."
+    ],
+    "release_130_fixes": [
+      "MeteoLabX reconnaît désormais automatiquement la langue du navigateur.",
+      "La langue sélectionnée est mémorisée entre les visites."
     ],
     "previous_improvements": [
       "Ajout de deux nouveaux fournisseurs de données : Met Office et MeteoHub Italie.",
@@ -137,7 +143,52 @@
       "Correction d'une erreur qui empêchait de consulter l'historique de l'année en cours dans Weather Underground."
     ],
     "sources": "Sources",
-    "unaffiliated": "Non affilié"
+    "unaffiliated": "Non affilié",
+    "privacy": "Confidentialité",
+    "privacy_title": "Confidentialité et données d'utilisation",
+    "privacy_intro": "MeteoLabX ne nécessite ni inscription ni compte utilisateur et ne crée pas de profils personnels de ses visiteurs.",
+    "privacy_cookies_title": "Cookies et suivi",
+    "privacy_cookies": [
+      "MeteoLabX n'utilise pas de cookies publicitaires, de pixels de suivi ni de services externes d'analyse comme Google Analytics, et n'affiche pas de publicité.",
+      "L'application peut utiliser des cookies ou des mécanismes techniques strictement nécessaires à son fonctionnement et à sa sécurité. Ces mécanismes ne sont pas utilisés à des fins publicitaires ni pour suivre votre activité sur d'autres sites web ; ils ne nécessitent donc pas de consentement et vous ne verrez pas de bandeau de cookies."
+    ],
+    "privacy_browser_title": "Préférences enregistrées dans le navigateur",
+    "privacy_browser": [
+      "Pour vous éviter de configurer MeteoLabX à chaque visite, certaines préférences, comme les unités sélectionnées ou les stations favorites, sont enregistrées localement dans votre navigateur.",
+      "Les identifiants que vous saisissez pour des fournisseurs comme Weather Underground ou WeatherLink sont également stockés localement dans votre navigateur. Ils servent uniquement à effectuer les requêtes demandées et ne sont ni intégrés aux statistiques de MeteoLabX ni conservés dans sa base de données.",
+      "Vous pouvez supprimer ces informations à tout moment en effaçant les données de navigation associées à MeteoLabX."
+    ],
+    "privacy_log_title": "Journal technique des consultations",
+    "privacy_log_intro": "Pour savoir quelles stations sont consultées et vérifier que le service fonctionne correctement, MeteoLabX conserve un journal technique pouvant inclure :",
+    "privacy_log_items": [
+      "Le fournisseur, l'identifiant et le nom de la station consultée.",
+      "La date et l'heure de la consultation.",
+      "Si la consultation échoue, la catégorie de l'erreur, comme un délai d'attente dépassé, des identifiants refusés ou un échec de communication avec le fournisseur, et, le cas échéant, le code d'état HTTP."
+    ],
+    "privacy_log_notes": [
+      "Ce journal n'est lié à aucun compte utilisateur, identifiant de session ou profil du visiteur. MeteoLabX n'ajoute à ces statistiques ni l'adresse IP, ni la localisation du visiteur, ni ses identifiants, ni aucune information destinée à l'identifier.",
+      "Veuillez noter que l'identifiant ou le nom d'une station peut contenir des informations publiées par son propriétaire chez le fournisseur météorologique correspondant."
+    ],
+    "privacy_purpose_title": "Finalité du journal",
+    "privacy_purpose_intro": "Les informations sont utilisées exclusivement pour :",
+    "privacy_purpose_items": [
+      "Élaborer des statistiques internes sur l'utilisation des stations et des fournisseurs.",
+      "Détecter les erreurs et les problèmes de disponibilité.",
+      "Diagnostiquer les pannes et améliorer le fonctionnement de MeteoLabX."
+    ],
+    "privacy_purpose_note": "Elles ne sont pas utilisées à des fins publicitaires, de profilage personnel ou de suivi individuel des visiteurs.",
+    "privacy_infra_title": "Infrastructure et journaux de sécurité",
+    "privacy_infra": [
+      "Les prestataires utilisés pour héberger, protéger et distribuer MeteoLabX peuvent traiter temporairement des informations techniques, comme l'adresse IP, le navigateur utilisé et la date et l'heure d'accès, afin de fournir le service, de prévenir les abus et d'en garantir la sécurité.",
+      "Ces prestataires agissent exclusivement en tant que prestataires techniques d'infrastructure et ne reçoivent pas les données pour les utiliser à leurs propres fins publicitaires."
+    ],
+    "privacy_retention_title": "Conservation et accès",
+    "privacy_retention": [
+      "Les journaux techniques des consultations sont conservés de manière indéfinie tant que le service reste opérationnel.",
+      "Les journaux sont accessibles exclusivement à l'administrateur de MeteoLabX et aux prestataires techniques lorsque cela est nécessaire pour fournir ou protéger le service."
+    ],
+    "privacy_contact_title": "Contact",
+    "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à"
   },
   "cards": {
     "help_aria": "Aide pour {title}",
@@ -629,6 +680,14 @@
       "metoffice_synoptic": "Met Office Land Observations (48 h, échantillonnage 3 h)",
       "meteohub_today": "Observations récentes MeteoHub Italia ({minutes} min)",
       "meteohub_synoptic": "Observations récentes MeteoHub Italia (échantillonnage 3 h)",
+      "ipma_today": "Observations horaires IPMA ({minutes} min)",
+      "ipma_synoptic": "Observations horaires IPMA (dernières 24 h)",
+      "geosphere_today": "Observations 10 minutes GeoSphere ({minutes} min)",
+      "geosphere_synoptic": "Observations 10 minutes GeoSphere (échantillonnage 1 h)",
+      "smhi_today": "Observations horaires SMHI ({minutes} min)",
+      "smhi_synoptic": "Observations horaires SMHI",
+      "eccc_today": "Observations SWOB ECCC ({minutes} min)",
+      "eccc_synoptic": "Observations SWOB ECCC (échantillonnage 1 h)",
       "windy_today": "Observations récentes Windy PWS",
       "windy_synoptic": "Observations récentes Windy PWS (échantillonnage 3 h)",
       "netatmo_today": "Observations récentes Netatmo",
@@ -759,10 +818,30 @@
       "uv": "UV"
     },
     "hide_manual": "Masquer les stations manuelles",
+    "hide_pws": "Masquer les stations de particuliers",
+    "hide_pws_help": "Masque les stations météo personnelles (Netatmo et Windy PWS), ne laissant que les réseaux officiels.",
     "hide_manual_help": "Les stations manuelles (observateurs COOP/CoCoRaHS) publient un relevé manuel par jour, sans données en temps réel.",
     "station_type": "Type",
     "station_type_automatic": "Automatique",
-    "station_type_manual": "Manuelle"
+    "station_type_manual": "Manuelle",
+    "temp_field_legend": "Température actuelle (°C)",
+    "temp_field_unavailable": "La carte des températures n'est pas encore disponible (le classement collecte les données).",
+    "view_mode": "Vue de la carte",
+    "view_stations": "Stations",
+    "view_temperature": "Température",
+    "view_wind": "Vent",
+    "view_precipitation": "Précipitations 24 h",
+    "wind_field_legend": "Vitesse actuelle du vent (km/h)",
+    "wind_field_unavailable": "La carte du vent n’est pas encore disponible (le classement collecte des données).",
+    "wind_speed": "Vitesse",
+    "wind_gust": "Rafale",
+    "wind_direction": "Direction",
+    "precip_field_legend": "Précipitations cumulées au cours des dernières 24 h (mm)",
+    "precip_field_unavailable": "La carte des précipitations n’est pas encore disponible (24 heures d’échantillons fiables sont nécessaires).",
+    "precip_24h": "Dernières 24 h",
+    "temp_now": "Actuellement",
+    "temp_max_short": "Maximale",
+    "temp_min_short": "Minimale"
   },
   "station_selector": {
     "search_near_me": "📍 Trouver des stations près de moi",

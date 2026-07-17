@@ -328,6 +328,32 @@ def track_station_visit_via_api(provider: str, station_id: str, name: str = "") 
         pass
 
 
+def track_station_error_via_api(
+    provider: str,
+    station_id: str,
+    name: str = "",
+    *,
+    error_kind: str,
+    status_code: Optional[int] = None,
+) -> None:
+    """Registra un error de conexión a estación. Fire-and-forget, igual que
+    ``track_station_visit_via_api``: nunca debe romper el flujo de conexión."""
+    try:
+        requests.post(
+            f"{backend_url()}/v1/stats/error",
+            json={
+                "provider": str(provider or "").strip().upper(),
+                "station_id": str(station_id or "").strip(),
+                "name": str(name or "").strip(),
+                "error_kind": str(error_kind or "").strip().lower(),
+                "status_code": status_code,
+            },
+            timeout=2.0,
+        )
+    except Exception:
+        pass
+
+
 def fetch_usage_stats_via_api(password: str) -> Dict[str, Any]:
     """Visitas agregadas por estación (panel interno). Lanza BackendApiError
     ('unauthorized' si la contraseña no es correcta)."""
@@ -381,7 +407,8 @@ def _post_observation_request(endpoint: str, payload: Dict[str, Any]) -> Dict[st
 # =====================================================================
 #
 # Para los proveedores cuyo hook se construye entero desde el backend
-# (NWS, FROST, POEM, METEOHUB_IT, WEATHERLINK) no hace falta un trío de
+# (NWS, FROST, POEM, METEOHUB_IT, IPMA, GEOSPHERE, SMHI, WEATHERLINK) no
+# hace falta un trío de
 # funciones por proveedor: estas reciben el provider y, si
 # aplica, las credenciales per-user (WeatherLink).
 

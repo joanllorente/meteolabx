@@ -11,7 +11,11 @@ _map_viewport = components.declare_component(
 )
 
 
-def get_map_viewport(*, key: str = "map_viewport_sync") -> Optional[Dict[str, Any]]:
+def get_map_viewport(
+    *,
+    key: str = "map_viewport_sync",
+    enabled: bool = True,
+) -> Optional[Dict[str, Any]]:
     """Devuelve la última cámara real del mapa leída en el navegador."""
-    value = _map_viewport(key=key, default=None)
+    value = _map_viewport(key=key, enabled=bool(enabled), default=None)
     return value if isinstance(value, dict) else None

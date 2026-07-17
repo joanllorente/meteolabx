@@ -17,7 +17,7 @@ def get_browser_context(
     listen_viewport_changes: bool = False,
     key: str = "browser_context_sync",
 ) -> Optional[Dict[str, Any]]:
-    """Devuelve timezone, viewport y preferencia de color del navegador."""
+    """Devuelve idioma, zona horaria, viewport y tema del navegador."""
     value = _browser_context(
         listen_changes=bool(listen_changes),
         listen_viewport_changes=bool(listen_viewport_changes),

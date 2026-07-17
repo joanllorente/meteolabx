@@ -66,7 +66,7 @@ class _ProviderStationRequest(BaseModel):
     provider: Literal[
         "WU", "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS",
         "METEOFRANCE", "METOFFICE", "FROST", "POEM", "METEOHUB_IT",
-        "IEM", "WEATHERLINK", "WINDY", "NETATMO",
+        "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "WEATHERLINK", "WINDY", "NETATMO",
     ] = Field(
         default="WU",
         description=(
@@ -617,6 +617,14 @@ class StationInfo(BaseModel):
     is_historical_only: bool = Field(
         default=False,
         description="Indica si la estación está archivada: tiene histórico, pero no observación actual.",
+    )
+    manual: bool = Field(
+        default=False,
+        description=(
+            "Estación de observador MANUAL/convencional (IEM COOP/CoCoRaHS, "
+            "red KLIMA de GeoSphere): publica una lectura al día, sin datos "
+            "en tiempo real."
+        ),
     )
     sensors: Optional[Dict[str, bool]] = Field(
         default=None,

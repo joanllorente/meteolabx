@@ -89,6 +89,58 @@ def aemet_series_start(station_id: str) -> str | None:
     return start or None
 
 
+@lru_cache(maxsize=256)
+def smhi_station_is_manual(station_id: str) -> bool:
+    """¿Es una estación SMHI de la red MANUAL (dato diario)? Lee el flag
+    del inventario vía el sqlite (network_code='MANUAL')."""
+    raw = str(station_id or "").strip()
+    if not raw:
+        return False
+    payload = _sqlite_raw_station_payload("SMHI", raw, "MANUAL")
+    return bool(payload.get("manual"))
+
+
+@lru_cache(maxsize=256)
+def eccc_station_is_manual(station_id: str) -> bool:
+    """¿Es una estación ECCC de la red CLIMATE (dato diario)?"""
+    raw = str(station_id or "").strip()
+    if not raw:
+        return False
+    payload = _sqlite_raw_station_payload("ECCC", raw, "CLIMATE")
+    return bool(payload.get("manual"))
+
+
+def eccc_series_start(station_id: str) -> str | None:
+    """Inicio de la serie climática enlazada (campo del inventario)."""
+    raw = str(station_id or "").strip()
+    if not raw:
+        return None
+    for network in ("", "PARTNER", "CLIMATE"):
+        payload = _sqlite_raw_station_payload("ECCC", raw, network)
+        start = str(payload.get("series_first_date") or "").strip()
+        if start:
+            return start
+        if payload:
+            break
+    return None
+
+
+def geosphere_series_start(station_id: str) -> str | None:
+    """Inicio de la serie klima más antigua del sitio (campo del inventario)."""
+    raw = str(station_id or "").strip()
+    if not raw:
+        return None
+    network = "KLIMA" if raw[:1].upper() == "K" and raw[1:].isdigit() else ""
+    payload = _sqlite_raw_station_payload("GEOSPHERE", raw, network)
+    series = payload.get("klima_series")
+    starts = [
+        str(item.get("from") or "").strip()
+        for item in (series if isinstance(series, list) else [])
+        if isinstance(item, dict) and str(item.get("from") or "").strip()
+    ]
+    return min(starts) if starts else None
+
+
 def iem_series_start(station_id: str) -> str | None:
     raw = str(station_id or "").strip()
     if "|" not in raw:

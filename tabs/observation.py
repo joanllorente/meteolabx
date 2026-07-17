@@ -778,6 +778,10 @@ def render_observation_tab(ctx):
             step_minutes = max(30, series_step_minutes)
         elif connection_type == "AEMET":
             step_minutes = max(10, series_step_minutes)
+        elif connection_type == "SMHI":
+            # La serie llega MINUTAL: los gráficos se muestrean a 10 min
+            # (la rosa de viento sí usa todos los puntos).
+            step_minutes = 10
         else:
             step_minutes = 5
         connect_series_gaps = connection_type != "METEOCAT"
@@ -1106,6 +1110,12 @@ def render_observation_tab(ctx):
                     "dir": dir_vals,
                 }).sort_values("dt")
 
+                # Copia a resolución NATIVA (pre-muestreo) para la rosa de
+                # viento: el gráfico se muestrea a step_minutes, pero la
+                # rosa gana con todas las muestras que dé el proveedor.
+                df_wind_native = df_wind.copy()
+                df_wind_native["dt"] = pd.to_datetime(df_wind_native["dt"])
+
                 df_wind["dt"] = pd.to_datetime(df_wind["dt"]).dt.floor(f"{step_minutes}min")
                 df_wind = df_wind.groupby("dt", as_index=False).last()
 
@@ -1127,6 +1137,16 @@ def render_observation_tab(ctx):
                 if (vv_all_zero or wind_missing) and gust_has_signal:
                     df_wind_view["wind"] = float("nan")
                     st.caption(f"ℹ️ {t('observation.cards.charts.wind_no_mean')}")
+
+                # Vista a resolución nativa para la rosa (mismo rango y misma
+                # regla de "sin viento medio útil" que la vista del gráfico).
+                df_rose_view = df_wind_native[
+                    (df_wind_native["dt"] >= range_start) & (df_wind_native["dt"] < range_end)
+                ].copy()
+                if (vv_all_zero or wind_missing) and gust_has_signal:
+                    df_rose_view["wind"] = float("nan")
+                if df_rose_view.empty:
+                    df_rose_view = df_wind_view
 
                 s_wind = pd.Series(df_wind_view["wind"].values, index=pd.to_datetime(df_wind_view["dt"]))
                 s_gust = pd.Series(df_wind_view["gust"].values, index=pd.to_datetime(df_wind_view["dt"]))
@@ -1226,9 +1246,9 @@ def render_observation_tab(ctx):
 
                 # Rosa de viento 16 rumbos: excluir dirección cuando viento y racha son ambos 0.0
                 wind_rose_stats = _wind_rose_stats_cached(
-                    tuple(_safe_float(value) for value in df_wind_view["wind"].tolist()),
-                    tuple(_safe_float(value) for value in df_wind_view["gust"].tolist()),
-                    tuple(_safe_float(value) for value in df_wind_view["dir"].tolist()),
+                    tuple(_safe_float(value) for value in df_rose_view["wind"].tolist()),
+                    tuple(_safe_float(value) for value in df_rose_view["gust"].tolist()),
+                    tuple(_safe_float(value) for value in df_rose_view["dir"].tolist()),
                 )
                 sectors16 = wind_rose_stats["sectors16"]
                 counts = wind_rose_stats["counts"]

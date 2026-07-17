@@ -1,4 +1,8 @@
 from pathlib import Path
+from types import SimpleNamespace
+
+from utils import browser_sync
+from utils.state_keys import BROWSER_LANGUAGES
 
 
 def test_browser_sync_does_not_pollute_public_url_with_context_params():
@@ -33,3 +37,26 @@ def test_legacy_query_param_cleanup_still_present_in_pwa_iframe():
     assert '"_vw"' in source
     assert '"_cs"' in source
     assert '"_mlx_boot"' in source
+
+
+def test_browser_context_reports_and_hydrates_preferred_languages(monkeypatch):
+    frontend = Path("components/browser_context_frontend/index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "window.navigator.languages" in frontend
+    assert "langs: browserLanguages" in frontend
+
+    fake_st = SimpleNamespace(session_state={})
+    monkeypatch.setattr(browser_sync, "st", fake_st)
+
+    browser_sync.hydrate_browser_context_live(
+        lambda **_kwargs: {
+            "tz": "America/New_York",
+            "vw": 1440,
+            "cs": "light",
+            "lang": "en-US",
+            "langs": ["en-US", "es-US"],
+        }
+    )
+
+    assert fake_st.session_state[BROWSER_LANGUAGES] == ["en-US", "es-US"]

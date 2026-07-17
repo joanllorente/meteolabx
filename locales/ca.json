@@ -52,7 +52,8 @@
     "hour": "Hora",
     "and": "i",
     "off": "Desactivat",
-    "on": "Activat"
+    "on": "Activat",
+    "close": "Tancar"
   },
   "meta": {
     "last_data": "Última dada",
@@ -72,7 +73,8 @@
     "latitude_short": "Lat",
     "longitude_short": "Lon",
     "connect_prompt": "Connecta la teva estació des del panell lateral o explora estacions properes.",
-    "manual_station": "ℹ️ Estació NWS manual: informa de màximes/mínimes diàries un cop al dia. Sense dades en temps real."
+    "manual_station": "ℹ️ Estació manual/convencional: informa dels seus valors un cop al dia. Sense dades en temps real.",
+    "pws_measurement_notice": "Les estacions particulars poden no ajustar-se als estàndards de mesurament meteorològic."
   },
   "favorites": {
     "title": "Preferits",
@@ -90,15 +92,6 @@
     "whats_new": "Novetats",
     "improvements_title": "Millores",
     "fixes_title": "Correccions",
-    "v127_improvements": [
-      "Nou proveïdor Windy PWS amb estacions meteorològiques amateurs obertes de tot el món.",
-      "Les estacions Windy actives es poden explorar al mapa, connectar i afegir a preferits.",
-      "Observacions actuals i sèries recents de Windy disponibles a Observació i Tendències."
-    ],
-    "v127_fixes": [
-      "L'inventari amateur es manté separat del catàleg d'estacions oficials.",
-      "El mapa només mostra per defecte estacions Windy amb dades recents."
-    ],
     "improvements": [
       "Migració completa i funcional al mode FastAPI.",
       "Nova pestanya Rànquing, amb classificacions de temperatura, vent i precipitació per país i globals.",
@@ -116,6 +109,19 @@
       "Corregit un problema que impedia calcular correctament la tendència completa de la pressió.",
       "Corregit un error que feia que AEMET i MeteoGalicia mostressin màximes i mínimes de temperatura incorrectes.",
       "Corregit un error que feia que MeteoGalicia mostrés incorrectament els valors de ratxa màxima."
+    ],
+    "release_130_improvements": [
+      "Nou mapa mundial de la temperatura actual.",
+      "Nou mapa mundial de vent i direcció.",
+      "Nou mapa mundial de precipitació acumulada.",
+      "Nous proveïdors d’estacions particulars: Netatmo i Windy.",
+      "Nous proveïdors oficials: IPMA (Portugal), GEOSPHERE (Àustria), SMHI (Suècia) i ECCC (Canadà).",
+      "Càrrega inicial del web fins a un 30% més ràpida.",
+      "Nou idioma disponible: portuguès."
+    ],
+    "release_130_fixes": [
+      "Ara MeteoLabX reconeix automàticament l’idioma del navegador.",
+      "L’idioma seleccionat es recorda entre visites."
     ],
     "previous_improvements": [
       "S’han afegit dos nous proveïdors de dades: Met Office i MeteoHub Italy.",
@@ -137,7 +143,52 @@
       "Corregit un error que impedia consultar l’històric de l’any actual a Weather Underground."
     ],
     "sources": "Fonts",
-    "unaffiliated": "No afiliat"
+    "unaffiliated": "No afiliat",
+    "privacy": "Privacitat",
+    "privacy_title": "Privacitat i dades d'ús",
+    "privacy_intro": "MeteoLabX no requereix registre ni compte d'usuari i no crea perfils personals dels seus visitants.",
+    "privacy_cookies_title": "Galetes i seguiment",
+    "privacy_cookies": [
+      "MeteoLabX no utilitza galetes publicitàries, píxels de seguiment ni serveis externs d'analítica com Google Analytics, i no mostra publicitat.",
+      "L'aplicació pot utilitzar galetes o mecanismes tècnics estrictament necessaris per al seu funcionament i seguretat. Aquests mecanismes no s'utilitzen per a publicitat ni per seguir la teva activitat en altres llocs web, per la qual cosa no requereixen consentiment ni veuràs cap bàner de galetes."
+    ],
+    "privacy_browser_title": "Preferències desades al navegador",
+    "privacy_browser": [
+      "Per evitar que hagis de configurar MeteoLabX a cada visita, algunes preferències, com les unitats seleccionades o les estacions preferides, es desen localment al teu navegador.",
+      "Les credencials que introdueixis per a proveïdors com Weather Underground o WeatherLink també s'emmagatzemen localment al teu navegador. S'utilitzen únicament per fer les consultes sol·licitades i no s'incorporen a les estadístiques de MeteoLabX ni es conserven a la seva base de dades.",
+      "Pots eliminar aquesta informació en qualsevol moment esborrant les dades de navegació associades a MeteoLabX."
+    ],
+    "privacy_log_title": "Registre tècnic de consultes",
+    "privacy_log_intro": "Per saber quines estacions es consulten i comprovar que el servei funciona correctament, MeteoLabX desa un registre tècnic que pot incloure:",
+    "privacy_log_items": [
+      "El proveïdor, identificador i nom de l'estació consultada.",
+      "La data i hora de la consulta.",
+      "Si la consulta falla, la categoria de l'error produït, com ara temps d'espera esgotat, credencials rebutjades o error de comunicació amb el proveïdor, i, si escau, el codi d'estat HTTP."
+    ],
+    "privacy_log_notes": [
+      "Aquest registre no es vincula a cap compte d'usuari, identificador de sessió o perfil del visitant. MeteoLabX no incorpora a aquestes estadístiques l'adreça IP, la ubicació del visitant, les seves credencials ni informació destinada a identificar-lo.",
+      "Cal tenir en compte que l'identificador o el nom d'una estació pot contenir informació publicada pel seu propietari al proveïdor meteorològic corresponent."
+    ],
+    "privacy_purpose_title": "Finalitat del registre",
+    "privacy_purpose_intro": "La informació s'utilitza exclusivament per a:",
+    "privacy_purpose_items": [
+      "Elaborar estadístiques internes sobre l'ús de les estacions i proveïdors.",
+      "Detectar errors i problemes de disponibilitat.",
+      "Diagnosticar fallades i millorar el funcionament de MeteoLabX."
+    ],
+    "privacy_purpose_note": "No s'utilitza per a publicitat, elaboració de perfils personals ni seguiment individual dels visitants.",
+    "privacy_infra_title": "Infraestructura i registres de seguretat",
+    "privacy_infra": [
+      "Els proveïdors utilitzats per allotjar, protegir i distribuir MeteoLabX poden processar temporalment informació tècnica, com l'adreça IP, el navegador utilitzat i la data i hora d'accés, per prestar el servei, prevenir abusos i garantir-ne la seguretat.",
+      "Aquests proveïdors actuen exclusivament com a proveïdors tècnics d'infraestructura i no reben les dades per utilitzar-les amb finalitats publicitàries pròpies."
+    ],
+    "privacy_retention_title": "Conservació i accés",
+    "privacy_retention": [
+      "Els registres tècnics de consultes es conserven de manera indefinida mentre el servei estigui operatiu.",
+      "Els registres són accessibles exclusivament per a l'administrador de MeteoLabX i per als proveïdors tècnics quan sigui necessari per prestar o protegir el servei."
+    ],
+    "privacy_contact_title": "Contacte",
+    "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a"
   },
   "cards": {
     "help_aria": "Ajuda per a {title}",
@@ -623,6 +674,14 @@
       "metoffice_synoptic": "Met Office Land Observations (48 h, mostreig 3 h)",
       "meteohub_today": "Observacions recents MeteoHub Italia ({minutes} min)",
       "meteohub_synoptic": "Observacions recents MeteoHub Italia (mostreig 3 h)",
+      "ipma_today": "Observacions horàries IPMA ({minutes} min)",
+      "ipma_synoptic": "Observacions horàries IPMA (últimes 24 h)",
+      "geosphere_today": "Observacions 10-minutals GeoSphere ({minutes} min)",
+      "geosphere_synoptic": "Observacions 10-minutals GeoSphere (mostreig 1 h)",
+      "smhi_today": "Observacions horàries SMHI ({minutes} min)",
+      "smhi_synoptic": "Observacions horàries SMHI",
+      "eccc_today": "Observacions SWOB ECCC ({minutes} min)",
+      "eccc_synoptic": "Observacions SWOB ECCC (mostreig 1 h)",
       "windy_today": "Observacions recents de Windy PWS",
       "windy_synoptic": "Observacions recents de Windy PWS (mostreig 3 h)",
       "netatmo_today": "Observacions recents de Netatmo",
@@ -753,10 +812,30 @@
       "uv": "UV"
     },
     "hide_manual": "Amaga les estacions manuals",
+    "hide_pws": "Amaga les estacions de particulars",
+    "hide_pws_help": "Amaga les estacions meteorològiques personals (Netatmo i Windy PWS), deixant només les xarxes oficials.",
     "hide_manual_help": "Les estacions manuals (observadors COOP/CoCoRaHS) publiquen una lectura al dia presa a mà, sense dades en temps real.",
     "station_type": "Tipus",
     "station_type_automatic": "Automàtica",
-    "station_type_manual": "Manual"
+    "station_type_manual": "Manual",
+    "temp_field_legend": "Temperatura actual (°C)",
+    "temp_field_unavailable": "El mapa de temperatures encara no està disponible (el rànquing està recopilant dades).",
+    "view_mode": "Vista del mapa",
+    "view_stations": "Estacions",
+    "view_temperature": "Temperatura",
+    "view_wind": "Vent",
+    "view_precipitation": "Precipitació 24 h",
+    "wind_field_legend": "Velocitat actual del vent (km/h)",
+    "wind_field_unavailable": "El mapa de vent encara no està disponible (el rànquing està recopilant dades).",
+    "wind_speed": "Velocitat",
+    "wind_gust": "Ratxa",
+    "wind_direction": "Direcció",
+    "precip_field_legend": "Precipitació acumulada durant les últimes 24 h (mm)",
+    "precip_field_unavailable": "El mapa de precipitació encara no està disponible (calen 24 hores de mostres fiables).",
+    "precip_24h": "Últimes 24 h",
+    "temp_now": "Ara",
+    "temp_max_short": "Màxima",
+    "temp_min_short": "Mínima"
   },
   "station_selector": {
     "search_near_me": "📍 Troba estacions a prop meu",

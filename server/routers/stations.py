@@ -13,11 +13,14 @@ respuestas son cacheables por URL.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections import OrderedDict
 from typing import Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
 from server.schemas.errors import ErrorResponse, ProviderError
 from server.schemas.observation import StationInfo
@@ -36,6 +39,332 @@ from server.services.cache import AsyncTTLCache
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stations", tags=["stations"])
+
+# La interpolación mundial y su textura se calculan una vez por refresh del
+# ranking. Los parámetros de viewport se conservan por compatibilidad, pero el
+# frontend normal usa una única imagen mundial y no solicita nada al mover.
+_temperature_field_cache: Dict[str, object] = {
+    "data_key": None,
+    "grid": None,
+    "images": OrderedDict(),
+}
+_temperature_field_lock = asyncio.Lock()
+_TEMPERATURE_FIELD_VIEWPORT_CACHE_SIZE = 12
+_wind_field_cache: Dict[str, object] = {
+    "data_key": None,
+    "png": None,
+}
+_wind_field_lock = asyncio.Lock()
+_precipitation_field_cache: Dict[str, object] = {"data_key": None, "png": None}
+_precipitation_field_lock = asyncio.Lock()
+
+
+@router.get(
+    "/temperature-field.png",
+    summary="Campo mundial de temperatura interpolado (PNG RGBA)",
+    description=(
+        "Interpolación local/regional de las temperaturas instantáneas que "
+        "el refresh horario del ranking trae en bulk. "
+        "Transparente donde no hay estaciones cerca. Pensado para la capa "
+        "térmica del mapa; bounds: lon -180..180, lat -60..85."
+    ),
+    responses={404: {"model": ErrorResponse, "description": "El ranking aún no tiene datos."}},
+)
+async def get_temperature_field(
+    request: Request,
+    west: Optional[float] = Query(default=None, ge=-180.0, le=180.0),
+    south: Optional[float] = Query(default=None, ge=-60.0, le=85.0),
+    east: Optional[float] = Query(default=None, ge=-180.0, le=180.0),
+    north: Optional[float] = Query(default=None, ge=-60.0, le=85.0),
+    width: int = Query(default=1600, ge=256, le=2048),
+    height: int = Query(default=1000, ge=256, le=2048),
+) -> Response:
+    from server.services.temperature_field import (
+        COLOR_SCALE_VERSION,
+        FIELD_ALGORITHM_VERSION,
+        GLOBAL_RENDER_SIZE,
+        interpolate_grid,
+        render_global_grid_png,
+        render_grid_png,
+    )
+
+    store = getattr(request.app.state, "ranking_store", None)
+    points = store.current_temperature_points() if store is not None else []
+    if not points:
+        raise ProviderError(
+            "no_data", provider="RANKING",
+            detail="No hay temperaturas instantáneas todavía", status_code=404,
+        )
+    requested = (west, south, east, north)
+    if any(value is not None for value in requested) and not all(
+        value is not None for value in requested
+    ):
+        raise ProviderError(
+            "invalid_viewport",
+            provider="RANKING",
+            detail="west, south, east y north deben enviarse juntos",
+            status_code=400,
+        )
+    bounds = None
+    if all(value is not None for value in requested):
+        bounds = tuple(float(value) for value in requested)
+        if bounds[0] >= bounds[2] or bounds[1] >= bounds[3]:
+            raise ProviderError(
+                "invalid_viewport",
+                provider="RANKING",
+                detail="Los límites del viewport no son válidos",
+                status_code=400,
+            )
+
+    snapshot_key = store.updated_at.isoformat() if store.updated_at else str(len(points))
+    data_key = (
+        f"field-{FIELD_ALGORITHM_VERSION}:"
+        f"palette-{COLOR_SCALE_VERSION}:{snapshot_key}"
+    )
+    image_key = (
+        ("global", *GLOBAL_RENDER_SIZE)
+        if bounds is None
+        else (bounds, int(width), int(height))
+    )
+    async with _temperature_field_lock:
+        if _temperature_field_cache["data_key"] != data_key:
+            temp, mask = await asyncio.to_thread(
+                interpolate_grid,
+                points,
+            )
+            # El recorte vuelve a colorear la rejilla, pero no necesita dobles
+            # de 64 bits. Mantenerla compacta evita retener decenas de MB extra
+            # entre peticiones de distintos viewports.
+            _temperature_field_cache["grid"] = (
+                temp.astype("float32", copy=False),
+                mask.astype("float16", copy=False),
+            )
+            _temperature_field_cache["images"] = OrderedDict()
+            _temperature_field_cache["data_key"] = data_key
+
+        images = _temperature_field_cache["images"]
+        png = images.get(image_key)
+        if png is None:
+            temp, mask = _temperature_field_cache["grid"]
+            if bounds is None:
+                png = await asyncio.to_thread(render_global_grid_png, temp, mask)
+            else:
+                png = await asyncio.to_thread(
+                    render_grid_png,
+                    temp,
+                    mask,
+                    bounds=bounds,
+                    width=width,
+                    height=height,
+                )
+            images[image_key] = png
+            images.move_to_end(image_key)
+            while len(images) > _TEMPERATURE_FIELD_VIEWPORT_CACHE_SIZE:
+                images.popitem(last=False)
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@router.get(
+    "/current-temperatures",
+    summary="Temperatura instantánea por estación (para las etiquetas del mapa)",
+    response_model=Dict[str, object],
+)
+async def get_current_temperatures(request: Request) -> Dict[str, object]:
+    store = getattr(request.app.state, "ranking_store", None)
+    records = store.current_temperature_records() if store is not None else []
+    return {
+        "count": len(records),
+        "updated_at": (
+            store.updated_at.isoformat()
+            if store is not None and store.updated_at is not None
+            else None
+        ),
+        "points": [
+            {
+                "lat": rec.lat,
+                "lon": rec.lon,
+                "t": round(rec.tcur, 1),
+                "provider": rec.provider,
+                "station_id": rec.station_id,
+                "name": rec.name,
+                "tmax": rec.tmax,
+                "tmin": rec.tmin,
+                "time": rec.local_time,
+                "country": rec.country,
+            }
+            for rec in records
+        ],
+    }
+
+
+@router.get(
+    "/wind-field.png",
+    summary="Campo mundial de velocidad del viento interpolado (PNG RGBA)",
+    responses={404: {"model": ErrorResponse, "description": "Aún no hay viento reciente."}},
+)
+async def get_wind_field(request: Request) -> Response:
+    from server.services.temperature_field import (
+        GLOBAL_RENDER_SIZE,
+        interpolate_grid,
+        render_global_grid_png,
+    )
+    from server.services.wind_field import (
+        BAND_SIZE_KMH,
+        COLOR_SCALE_VERSION,
+        COLOR_STOPS,
+        FIELD_ALGORITHM_VERSION,
+    )
+
+    store = getattr(request.app.state, "ranking_store", None)
+    points = store.current_wind_points() if store is not None else []
+    if not points:
+        raise ProviderError(
+            "no_data", provider="RANKING",
+            detail="No hay vectores de viento recientes todavía", status_code=404,
+        )
+    snapshot_key = store.updated_at.isoformat() if store.updated_at else str(len(points))
+    data_key = (
+        f"wind-field-{FIELD_ALGORITHM_VERSION}:"
+        f"palette-{COLOR_SCALE_VERSION}:{snapshot_key}:{len(points)}"
+    )
+    async with _wind_field_lock:
+        if _wind_field_cache["data_key"] != data_key:
+            speed, mask = await asyncio.to_thread(interpolate_grid, points)
+            png = await asyncio.to_thread(
+                render_global_grid_png,
+                speed.astype("float32", copy=False),
+                mask.astype("float16", copy=False),
+                width=GLOBAL_RENDER_SIZE[0],
+                height=GLOBAL_RENDER_SIZE[1],
+                color_stops=COLOR_STOPS,
+                band_size=BAND_SIZE_KMH,
+            )
+            _wind_field_cache["data_key"] = data_key
+            _wind_field_cache["png"] = png
+        png = _wind_field_cache["png"]
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@router.get(
+    "/current-winds",
+    summary="Viento instantáneo por estación para el mapa",
+    response_model=Dict[str, object],
+)
+async def get_current_winds(request: Request) -> Dict[str, object]:
+    store = getattr(request.app.state, "ranking_store", None)
+    records = store.current_wind_records() if store is not None else []
+    return {
+        "count": len(records),
+        "updated_at": (
+            store.updated_at.isoformat()
+            if store is not None and store.updated_at is not None
+            else None
+        ),
+        "points": [
+            {
+                "lat": rec.lat,
+                "lon": rec.lon,
+                "speed": rec.wind,
+                "direction": rec.wind_dir,
+                "gust": rec.gust,
+                "provider": rec.provider,
+                "station_id": rec.station_id,
+                "name": rec.name,
+                "time": rec.local_time,
+                "country": rec.country,
+            }
+            for rec in records
+        ],
+    }
+
+
+@router.get(
+    "/precipitation-field.png",
+    summary="Precipitacion acumulada en las ultimas 24 h (PNG RGBA)",
+    responses={404: {"model": ErrorResponse, "description": "Aun no hay acumulados 24 h."}},
+)
+async def get_precipitation_field(request: Request) -> Response:
+    from server.services.precipitation_field import (
+        BAND_SIZE_MM,
+        COLOR_SCALE_VERSION,
+        COLOR_STOPS,
+        FIELD_ALGORITHM_VERSION,
+        interpolate_precipitation_grid,
+    )
+    from server.services.temperature_field import GLOBAL_RENDER_SIZE, render_global_grid_png
+
+    store = getattr(request.app.state, "ranking_store", None)
+    points = store.current_precipitation_points() if store is not None else []
+    if not points:
+        raise ProviderError(
+            "no_data", provider="RANKING",
+            detail="No hay acumulados moviles de 24 horas todavia", status_code=404,
+        )
+    snapshot_key = store.updated_at.isoformat() if store.updated_at else str(len(points))
+    data_key = (
+        f"precipitation-field-{FIELD_ALGORITHM_VERSION}:"
+        f"palette-{COLOR_SCALE_VERSION}:{snapshot_key}:{len(points)}"
+    )
+    async with _precipitation_field_lock:
+        if _precipitation_field_cache["data_key"] != data_key:
+            amount, mask = await asyncio.to_thread(interpolate_precipitation_grid, points)
+            png = await asyncio.to_thread(
+                render_global_grid_png,
+                amount.astype("float32", copy=False),
+                mask.astype("float16", copy=False),
+                width=GLOBAL_RENDER_SIZE[0],
+                height=GLOBAL_RENDER_SIZE[1],
+                color_stops=COLOR_STOPS,
+                band_size=BAND_SIZE_MM,
+                preserve_mask_alpha=True,
+            )
+            _precipitation_field_cache["data_key"] = data_key
+            _precipitation_field_cache["png"] = png
+        png = _precipitation_field_cache["png"]
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@router.get(
+    "/precipitations-24h",
+    summary="Precipitacion movil de 24 h por estacion",
+    response_model=Dict[str, object],
+)
+async def get_precipitations_24h(request: Request) -> Dict[str, object]:
+    store = getattr(request.app.state, "ranking_store", None)
+    records = store.current_precipitation_records() if store is not None else []
+    return {
+        "count": len(records),
+        "updated_at": (
+            store.updated_at.isoformat()
+            if store is not None and store.updated_at is not None else None
+        ),
+        "points": [
+            {
+                "lat": rec.lat,
+                "lon": rec.lon,
+                "amount": rec.rain_24h,
+                "observed_at": rec.rain_24h_at,
+                "provider": rec.provider,
+                "station_id": rec.station_id,
+                "name": rec.name,
+                "time": rec.local_time,
+                "country": rec.country,
+            }
+            for rec in records
+        ],
+    }
 
 
 @router.get(

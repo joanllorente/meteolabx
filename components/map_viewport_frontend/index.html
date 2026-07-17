@@ -27,6 +27,8 @@
         let wheelTimer = null;
         let pollTimer = null;
         let listenerAttached = false;
+        let scrollGuardAttached = false;
+        let enabled = true;
 
         function sendMessage(type, payload) {
           const message = Object.assign(
@@ -245,6 +247,7 @@
         }
 
         function emitViewport(reason, force) {
+          if (!enabled) return;
           const viewport = findViewport();
           if (!viewport) return;
           const key = payloadKey(viewport);
@@ -261,10 +264,53 @@
         }
 
         function scheduleWheelEmit() {
+          if (!enabled) return;
           if (wheelTimer) window.clearTimeout(wheelTimer);
           wheelTimer = window.setTimeout(function () {
             emitViewport("wheel", false);
           }, 350);
+        }
+
+        function mapChartForTarget(target) {
+          if (!target || typeof target.closest !== "function") return null;
+          try {
+            return target.closest('[data-testid="stDeckGlJsonChart"]');
+          } catch (_e) {
+            return null;
+          }
+        }
+
+        function guardMapWheel(event) {
+          if (!mapChartForTarget(event.target)) return;
+          // Safari convierte tanto la rueda como el pellizco del trackpad en
+          // WheelEvent. Si Deck/MapLibre tarda en reclamarlo, el scroll se
+          // encadena a la página. Cancelar la acción por defecto en captura no
+          // corta la propagación: el controlador del mapa aún recibe el gesto.
+          if (event.cancelable) event.preventDefault();
+          if (enabled) scheduleWheelEmit();
+        }
+
+        function attachScrollGuard() {
+          if (scrollGuardAttached) return;
+          const doc = parentDocument();
+          if (!doc) return;
+          scrollGuardAttached = true;
+          try {
+            doc.addEventListener("wheel", guardMapWheel, {
+              capture: true,
+              passive: false,
+            });
+          } catch (_e) {}
+        }
+
+        function detachScrollGuard() {
+          if (!scrollGuardAttached) return;
+          const doc = parentDocument();
+          scrollGuardAttached = false;
+          if (!doc) return;
+          try {
+            doc.removeEventListener("wheel", guardMapWheel, true);
+          } catch (_e) {}
         }
 
         function isFilterInteraction(target) {
@@ -278,36 +324,57 @@
         }
 
         function attachListeners() {
-          if (listenerAttached) return;
+          if (!enabled || listenerAttached) return;
           const doc = parentDocument();
           if (!doc) return;
           listenerAttached = true;
-          const captureBeforeFilterRerun = function (event) {
-            if (isFilterInteraction(event.target)) {
-              emitViewport("before_filter", true);
-            }
-          };
           try {
             doc.addEventListener("pointerdown", captureBeforeFilterRerun, true);
             doc.addEventListener("change", captureBeforeFilterRerun, true);
             doc.addEventListener("click", captureBeforeFilterRerun, true);
-            doc.addEventListener("pointerup", function () {
-              emitViewport("pointerup", false);
-            }, true);
-            doc.addEventListener("touchend", function () {
-              emitViewport("touchend", false);
-            }, true);
-            doc.addEventListener("keyup", function () {
-              emitViewport("keyup", false);
-            }, true);
-            doc.addEventListener("wheel", scheduleWheelEmit, {
-              capture: true,
-              passive: true,
-            });
+            doc.addEventListener("pointerup", emitPointerUp, true);
+            doc.addEventListener("touchend", emitTouchEnd, true);
+            doc.addEventListener("keyup", emitKeyUp, true);
           } catch (_e) {}
         }
 
+        function captureBeforeFilterRerun(event) {
+          if (enabled && isFilterInteraction(event.target)) {
+            emitViewport("before_filter", true);
+          }
+        }
+
+        function emitPointerUp() {
+          emitViewport("pointerup", false);
+        }
+
+        function emitTouchEnd() {
+          emitViewport("touchend", false);
+        }
+
+        function emitKeyUp() {
+          emitViewport("keyup", false);
+        }
+
+        function detachListeners() {
+          if (!listenerAttached) return;
+          const doc = parentDocument();
+          listenerAttached = false;
+          if (!doc) return;
+          try {
+            doc.removeEventListener("pointerdown", captureBeforeFilterRerun, true);
+            doc.removeEventListener("change", captureBeforeFilterRerun, true);
+            doc.removeEventListener("click", captureBeforeFilterRerun, true);
+            doc.removeEventListener("pointerup", emitPointerUp, true);
+            doc.removeEventListener("touchend", emitTouchEnd, true);
+            doc.removeEventListener("keyup", emitKeyUp, true);
+          } catch (_e) {}
+          if (wheelTimer) window.clearTimeout(wheelTimer);
+          wheelTimer = null;
+        }
+
         function startPolling() {
+          if (!enabled) return;
           if (pollTimer) window.clearInterval(pollTimer);
           let attempts = 0;
           pollTimer = window.setInterval(function () {
@@ -324,12 +391,25 @@
           const data = event.data;
           if (!data || data.type !== "streamlit:render") return;
           setFrameHeight(0);
-          attachListeners();
-          emitViewport("render", false);
-          startPolling();
+          enabled = !(data.args && data.args.enabled === false);
+          attachScrollGuard();
+          if (enabled) {
+            attachListeners();
+            emitViewport("render", false);
+            startPolling();
+          } else {
+            detachListeners();
+            if (pollTimer) window.clearInterval(pollTimer);
+            pollTimer = null;
+          }
         }
 
         window.addEventListener("message", onRender);
+        window.addEventListener("beforeunload", function () {
+          detachListeners();
+          detachScrollGuard();
+          if (pollTimer) window.clearInterval(pollTimer);
+        });
         componentReady();
         setFrameHeight(0);
       })();

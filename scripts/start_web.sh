@@ -15,13 +15,21 @@ STREAMLIT_PORT="${PORT:-8501}"
 BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8000"
 export METEOLABX_API_URL="${METEOLABX_API_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}}"
+if [ -n "${PYTHON_BIN:-}" ]; then
+  PYTHON="${PYTHON_BIN}"
+elif [ -x ".venv/bin/python" ]; then
+  PYTHON=".venv/bin/python"
+else
+  PYTHON="$(command -v python3)"
+fi
+echo "[start_web] Python: $("${PYTHON}" --version 2>&1) (${PYTHON})"
 
 # 0) Catálogos de estaciones: en el repo viajan SOLO comprimidos
 # (data/*.sqlite.gz; los .sqlite superan o rondan el límite de 100 MB de
 # GitHub y están en .gitignore). Descomprimir aquí hace el deploy
 # autosuficiente: sin este paso, el backend arranca sin catálogo y el
 # mapa/ranking/deep links quedan vacíos en producción.
-python3 - <<'PY'
+"${PYTHON}" - <<'PY'
 import gzip, os, shutil
 
 CATALOGS = (
@@ -40,7 +48,7 @@ for src, dst in CATALOGS:
 PY
 
 # 1) Backend FastAPI en segundo plano (interno).
-python3 -m uvicorn server.main:app \
+"${PYTHON}" -m uvicorn server.main:app \
   --host "${BACKEND_HOST}" \
   --port "${BACKEND_PORT}" &
 UVICORN_PID=$!
@@ -53,12 +61,12 @@ trap 'kill -TERM "${UVICORN_PID}" 2>/dev/null || true' EXIT
 # en cold starts de producción eso deja al navegador sin respuesta mientras
 # arrancan dos procesos Python. La UI puede pintar su estado inicial aunque la
 # API tarde unos segundos más; si el backend muere, el wait final reinicia todo.
-python3 scripts/patch_streamlit_index.py
+"${PYTHON}" scripts/patch_streamlit_index.py
 export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
 # fileWatcherType=none: en producción no hay recarga en caliente y, sin
 # watchdog instalado, Streamlit cae a un watcher por polling que consume
 # CPU de forma continua en la instancia compartida.
-streamlit run meteolabx.py \
+"${PYTHON}" -m streamlit run meteolabx.py \
   --server.port="${STREAMLIT_PORT}" \
   --server.address=0.0.0.0 \
   --server.headless=true \
@@ -68,7 +76,7 @@ STREAMLIT_PID=$!
 echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."
 (
   for _ in $(seq 1 30); do
-    if python3 -c "import urllib.request; urllib.request.urlopen('${METEOLABX_API_URL}/v1/health', timeout=2)" 2>/dev/null; then
+    if "${PYTHON}" -c "import urllib.request; urllib.request.urlopen('${METEOLABX_API_URL}/v1/health', timeout=2)" 2>/dev/null; then
       echo "✓ Backend FastAPI listo"
       exit 0
     fi

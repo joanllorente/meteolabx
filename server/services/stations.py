@@ -7,6 +7,7 @@ import logging
 import math
 import sqlite3
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -21,7 +22,7 @@ SENSOR_KEYS = (
 CONNECTABLE_PROVIDERS = (
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
     "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT",
-    "IEM", "WINDY", "NETATMO",
+    "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "WINDY", "NETATMO",
 )
 CATALOG_PROVIDERS = CONNECTABLE_PROVIDERS
 PWS_CATALOG_PROVIDERS = ("WINDY", "NETATMO")
@@ -41,6 +42,10 @@ PROVIDER_COUNTRIES = {
     "NWS": "US",
     "METOFFICE": "GB",
     "METEOHUB_IT": "IT",
+    "IPMA": "PT",
+    "GEOSPHERE": "AT",
+    "SMHI": "SE",
+    "ECCC": "CA",
 }
 
 HISTORICAL_PROVIDER_IDS = {"AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA"}
@@ -76,6 +81,48 @@ def _connect_pws() -> sqlite3.Connection:
     connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+@lru_cache(maxsize=1)
+def hidden_station_identities() -> frozenset[tuple[str, str]]:
+    """Identidades ocultas por decisiones de deduplicación del catálogo.
+
+    IEM necesita incluir la red en el identificador público para evitar
+    colisiones entre inventarios. El resultado se cachea porque también se
+    consulta al construir el campo térmico, que puede contener decenas de
+    miles de observaciones.
+    """
+    try:
+        with _connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT s.provider, s.network_code, s.station_id
+                FROM stations s
+                JOIN station_visibility_overrides svo USING(station_pk)
+                WHERE svo.hidden = 1
+                """
+            ).fetchall()
+    except (OSError, sqlite3.Error):
+        return frozenset()
+
+    identities: set[tuple[str, str]] = set()
+    for row in rows:
+        provider = str(row["provider"] or "").strip().upper()
+        station_id = str(row["station_id"] or "").strip()
+        network = str(row["network_code"] or "").strip()
+        if provider == "IEM" and network:
+            station_id = f"{network}|{station_id}"
+        identities.add((provider, station_id))
+    return frozenset(identities)
+
+
+def is_station_hidden(provider: Any, station_id: Any) -> bool:
+    """Indica si una identidad pública está oculta en el catálogo SQLite."""
+    identity = (
+        str(provider or "").strip().upper(),
+        str(station_id or "").strip(),
+    )
+    return identity in hidden_station_identities()
 
 
 def _pws_fresh_cutoff_iso(hours: int = 3) -> str:
@@ -422,11 +469,10 @@ def _computed_has_historical(provider: Any, network: Any) -> bool:
 
 
 def _is_historical_only(row: sqlite3.Row) -> bool:
-    return bool(
-        row["provider"] == "IEM"
-        and bool(row["has_historical"])
-        and row["online"] == 0
-    )
+    # Archivada = tiene histórico pero está offline, sea cual sea el
+    # proveedor (IEM, red KLIMA de GeoSphere…). ``online`` NULL (proveedor
+    # sin el flag) no cuenta como offline.
+    return bool(bool(row["has_historical"]) and row["online"] == 0)
 
 
 def _is_connectable(row: sqlite3.Row) -> bool:
@@ -569,7 +615,7 @@ def find_by_slug(provider: str, slug: str) -> Optional[Dict[str, Any]]:
 # IEM para no duplicar. EE.UU. NO está aquí: NWS no tiene endpoint bulk
 # (observaciones solo por estación), así que el ranking de EE.UU. lo cubre IEM.
 # (NWS se sigue usando para el MAPA, no para el ranking.)
-IEM_RANKING_EXCLUDE_COUNTRIES = ("ES", "FR", "NO", "IT")
+IEM_RANKING_EXCLUDE_COUNTRIES = ("ES", "FR", "NO", "IT", "PT", "AT", "SE", "CA")
 
 # Redes IEM que NO aportan al ranking (no se llaman, ahorrando peticiones):
 #   - COCORAHS: pluviómetros ciudadanos, sin termómetro, volumen enorme.
@@ -960,7 +1006,7 @@ def search_near(
     extra_where = "".join(f" AND {clause}" for clause in sensor_clauses)
     historical_clause = " AND s.has_historical = 1" if has_historical else ""
     historical_only_clause = (
-        " AND NOT (s.provider = 'IEM' AND s.has_historical = 1 AND s.online = 0)"
+        " AND NOT (s.has_historical = 1 AND COALESCE(s.online, 1) = 0)"
         if hide_historical_only else ""
     )
 
@@ -1047,7 +1093,7 @@ def search_catalog(
     extra_where = "".join(f" AND {clause}" for clause in sensor_clauses)
     historical_clause = " AND s.has_historical = 1" if has_historical else ""
     historical_only_clause = (
-        " AND NOT (s.provider = 'IEM' AND s.has_historical = 1 AND s.online = 0)"
+        " AND NOT (s.has_historical = 1 AND COALESCE(s.online, 1) = 0)"
         if hide_historical_only else ""
     )
     rows = []

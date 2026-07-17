@@ -23,6 +23,7 @@ _boot_mark("script start")
 import streamlit as st
 _boot_mark("import streamlit")
 import streamlit.components.v1 as components
+from functools import lru_cache
 from pathlib import Path as _Path
 _boot_mark("import streamlit.components / pathlib")
 
@@ -82,6 +83,7 @@ from components.web_injectors import (
     inject_pwa_metadata as _inject_pwa_metadata,
     inject_mobile_plotly_compactor as _inject_mobile_plotly_compactor,
     inject_live_age_updater as _inject_live_age_updater,
+    remove_boot_splash as _remove_boot_splash,
 )
 
 
@@ -109,6 +111,7 @@ from utils.storage import (
     flush_local_storage_writes,
     get_stored_autoconnect,
     get_stored_autoconnect_target,
+    local_storage_snapshot_ready,
 )
 from utils.provider_state import (
     apply_station_selection,
@@ -122,6 +125,7 @@ from utils.provider_state import (
     is_manual_iem_station,
     resolve_provider_locality,
     restore_connection_state_from_loading_payload,
+    should_show_pws_measurement_notice,
 )
 from utils.provider_features import get_provider_feature
 from utils.browser_sync import (
@@ -131,7 +135,7 @@ from utils.browser_sync import (
     sync_browser_context_early,
 )
 from utils.historical_dispatch import fetch_historical_dataset
-from utils.station_metadata import aemet_series_start, iem_series_start, meteocat_series_start, meteofrance_series_start
+from utils.station_metadata import aemet_series_start, eccc_series_start, geosphere_series_start, iem_series_start, meteocat_series_start, meteofrance_series_start
 from utils.station_slug import slugify as _station_slug
 from utils.series_state import (
     chart_series_has_backend_derivatives,
@@ -207,6 +211,9 @@ from components.browser_context import get_browser_context
 from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
+
+APP_VERSION = "1.3.0"
+
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
 # historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
 # que se importan bajo demanda mediante :func:`_get_tab_renderer`.
@@ -226,28 +233,34 @@ def _get_climograms_service():
     return climograms
 
 
+_TAB_MODULE_NAMES = {
+    "observation": "tabs.observation",
+    "trends": "tabs.trends",
+    "historical": "tabs.historical",
+    "map": "tabs.map",
+    "ranking": "tabs.ranking",
+}
 _TAB_MODULE_CACHE: dict[str, object] = {}
 
 
-def _get_tab_module():
-    """
-    Importa ``tabs`` bajo demanda y memoiza el módulo.
-
-    Las cuatro tabs (observation, trends, historical, map) suman ~2.770 líneas
-    y solo se renderiza una a la vez, así que cargarlas en arranque era un
-    coste innecesario para reruns que ni siquiera tocan la UI principal.
-    """
-    cached = _TAB_MODULE_CACHE.get("tabs")
+def _get_tab_module(tab_id: str):
+    """Importa y memoiza únicamente el módulo de la pestaña solicitada."""
+    module_name = _TAB_MODULE_NAMES.get(tab_id)
+    if module_name is None:
+        raise ValueError(f"Pestaña desconocida: {tab_id}")
+    cached = _TAB_MODULE_CACHE.get(tab_id)
     if cached is not None:
         return cached
-    import tabs as tabs_module
-    _TAB_MODULE_CACHE["tabs"] = tabs_module
-    return tabs_module
+    import importlib
+
+    tab_module = importlib.import_module(module_name)
+    _TAB_MODULE_CACHE[tab_id] = tab_module
+    return tab_module
 
 
 def build_observation_context(*args, **kwargs):
-    """Facade lazy hacia :func:`tabs.build_observation_context`."""
-    return _get_tab_module().build_observation_context(*args, **kwargs)
+    """Facade lazy hacia :func:`tabs.observation.build_observation_context`."""
+    return _get_tab_module("observation").build_observation_context(*args, **kwargs)
 
 
 def _get_provider_label(provider_id: str) -> str:
@@ -296,6 +309,14 @@ SERIES_START_LOADERS = {
     },
     "IEM": {
         "loader": iem_series_start,
+        "formatter": lambda value: datetime.fromisoformat(value).strftime("%d/%m/%Y"),
+    },
+    "GEOSPHERE": {
+        "loader": geosphere_series_start,
+        "formatter": lambda value: datetime.fromisoformat(value).strftime("%d/%m/%Y"),
+    },
+    "ECCC": {
+        "loader": eccc_series_start,
         "formatter": lambda value: datetime.fromisoformat(value).strftime("%d/%m/%Y"),
     },
 }
@@ -422,6 +443,34 @@ def _standard_provider_runtime_config() -> dict[str, dict]:
             "detail_prefix": "Detalle técnico MeteoHub Italia: ",
             "series_mode": "from_base",
         },
+        "IPMA": {
+            "fallback_key": "ipma_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de IPMA por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "ipma_last_error",
+            "detail_prefix": "Detalle técnico IPMA: ",
+            "series_mode": "from_base",
+        },
+        "GEOSPHERE": {
+            "fallback_key": "geosphere_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de GeoSphere por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "geosphere_last_error",
+            "detail_prefix": "Detalle técnico GeoSphere: ",
+            "series_mode": "from_base",
+        },
+        "SMHI": {
+            "fallback_key": "smhi_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de SMHI por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "smhi_last_error",
+            "detail_prefix": "Detalle técnico SMHI: ",
+            "series_mode": "from_base",
+        },
+        "ECCC": {
+            "fallback_key": "eccc_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de ECCC por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "eccc_last_error",
+            "detail_prefix": "Detalle técnico ECCC: ",
+            "series_mode": "from_base",
+        },
         "IEM": {
             "fallback_key": "iem_station_alt",
             "warning": "⚠️ No se pudieron obtener datos de IEM por ahora. Intenta de nuevo en unos minutos.",
@@ -519,6 +568,13 @@ def _process_standard_provider_connection(provider_id: str):
         )
         if getattr(exc, "detail", ""):
             detail = f"{detail}: {exc.detail}"
+        _track_connection_error(
+            provider_id,
+            _get_provider_station_id(provider_id),
+            str(st.session_state.get(PROVIDER_STATION_NAME, "") or ""),
+            error_kind=exc.kind,
+            status_code=exc.status_code,
+        )
         warning_message = _friendly_provider_warning(provider_id, config["warning"], detail)
         st.warning(warning_message)
         logger.warning("Backend %s /processed fallo: %s", provider_id, detail)
@@ -573,7 +629,13 @@ def _friendly_provider_warning(provider_id: str, generic_warning: str, detail: s
     if any(token in lowered for token in ("connection aborted", "failed to establish", "max retries exceeded", "name or service not known", "temporary failure", "network", "proxyerror", "ssLError".lower(), "no se pudo contactar")):
         return f"⚠️ No se pudo contactar con {provider_label} ahora mismo. Puede ser un problema temporal de red o del servicio."
 
-    if any(token in lowered for token in ("nodata", "no hay datos", "sin datos", "serie vacía", "series vigentes", "no devolvió datos", "does not satisfy", "satisfagan esos criterios", "no data", "empty series")):
+    if any(token in lowered for token in ("nodata", "no hay datos", "sin datos", "sin días publicados", "serie vacía", "series vigentes", "no devolvió datos", "does not satisfy", "satisfagan esos criterios", "no data", "empty series")):
+        if "sin días publicados" in lowered or "sin datos recientes" in lowered:
+            return (
+                f"⚠️ Estación de archivo de {provider_label}: no publica observación "
+                "reciente. Su valor está en la pestaña de Históricos, donde tiene "
+                "la serie completa."
+            )
         if coerce_str(provider_id, upper=True) == "IEM":
             import re
 
@@ -600,6 +662,27 @@ def _cancel_connection_loading() -> None:
     restore_connection_state_from_loading_payload(st.session_state.get(CONNECTION_LOADING))
     st.session_state.pop(CONNECTION_LOADING, None)
     clear_connection_loading_overlay()
+
+
+def _track_connection_error(
+    provider_id: str,
+    station_id: str,
+    name: str = "",
+    *,
+    error_kind: str,
+    status_code: Optional[int] = None,
+) -> None:
+    """Registra el fallo de conexión en las estadísticas internas
+    (fire-and-forget), simétrico a ``_track_station_visit``."""
+    try:
+        from utils.api_client import track_station_error_via_api
+
+        track_station_error_via_api(
+            provider_id, station_id, name,
+            error_kind=error_kind, status_code=status_code,
+        )
+    except Exception:
+        pass
 
 
 def _queue_wu_connection_error(kind: str, status_code: Optional[int] = None) -> str:
@@ -1064,6 +1147,7 @@ def _build_ranking_tab_context() -> dict:
         "t": t,
         "dark": dark,
         "apply_station_selection": apply_station_selection,
+        "boot_mark": _boot_mark,
     }
 
 
@@ -1101,8 +1185,8 @@ TAB_SLUG_TO_INTERNAL.update({
 # SQLite del backend). WU/WeatherLink son per-usuario y no se comparten así.
 DEEPLINK_PROVIDERS = {
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
-    "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IEM",
-    "WINDY", "NETATMO",
+    "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IPMA",
+    "GEOSPHERE", "SMHI", "ECCC", "IEM", "WINDY", "NETATMO",
 }
 
 
@@ -1225,6 +1309,7 @@ def _sync_shareable_url(active_tab: str) -> None:
 
 
 def _sync_active_tab_state() -> str:
+    boot_default_pending = bool(st.session_state.pop("_boot_default_tab_pending", False))
     pending_tab = st.session_state.get("_pending_active_tab")
     if isinstance(pending_tab, str):
         pending_tab = LEGACY_TAB_ALIASES.get(pending_tab, pending_tab)
@@ -1242,6 +1327,25 @@ def _sync_active_tab_state() -> str:
         # vacía con los datos en "—"). La autoconexión ya ha corrido en
         # render_sidebar() antes de esta función, así que CONNECTED es fiable.
         st.session_state["active_tab"] = "observation" if st.session_state.get(CONNECTED) else "ranking"
+
+    # En una apertura normal sin autoconexión, Ranking es la pantalla inicial
+    # autoritativa. La URL puede conservar durante unos milisegundos el slug de
+    # la pestaña visitada anteriormente (la propia app lo sincroniza), y si lo
+    # consumimos como un deeplink antes de que el widget termine de hidratarse
+    # podemos empezar a construir Mapa para descartarlo inmediatamente después.
+    # Los enlaces directos a estaciones (?e=...) y rank_connect sí conservan su
+    # navegación explícita.
+    if (
+        boot_default_pending
+        and not st.session_state.get(CONNECTED)
+        and not _query_param_value("e")
+        and not _query_param_value("rank_connect")
+    ):
+        stale_tab_slug = _query_param_value("tab").lower()
+        st.session_state["active_tab"] = "ranking"
+        if stale_tab_slug:
+            st.session_state["_deeplink_tab_consumed_slug"] = stale_tab_slug
+            st.session_state["_last_synced_tab_slug"] = stale_tab_slug
     return str(st.session_state.get("active_tab", TAB_OPTIONS[0]))
 
 
@@ -1513,7 +1617,13 @@ from utils.label_i18n import (  # noqa: E402
 )
 
 
-def _pydeck_chart_stretch(deck, key: str, height: int = 900):
+def _pydeck_chart_stretch(
+    deck,
+    key: str,
+    height: int = 900,
+    *,
+    selectable: bool = True,
+):
     """Renderiza pydeck de forma compatible entre versiones de Streamlit."""
     viewport_width = _browser_viewport_width()
     if 0 < viewport_width <= 520:
@@ -1521,6 +1631,17 @@ def _pydeck_chart_stretch(deck, key: str, height: int = 900):
     elif 0 < viewport_width <= 900:
         height = min(int(height), 540)
     try:
+        if not selectable:
+            # En el mapa termico las etiquetas HTML gestionan hover, clusters
+            # y clic. No activar la seleccion de pydeck evita reenviar una
+            # segunda copia de miles de estaciones y elimina el rerun del
+            # lienzo al pulsar sobre una etiqueta.
+            return st.pydeck_chart(
+                deck,
+                use_container_width=True,
+                height=int(height),
+                key=key,
+            )
         return st.pydeck_chart(
             deck, use_container_width=True, height=int(height), key=key,
             on_select="rerun", selection_mode="single-object",
@@ -1698,10 +1819,20 @@ hydrate_browser_context_live(get_browser_context)
 _boot_mark("hydrate_browser_context_live")
 theme_mode, dark = render_sidebar()
 _boot_mark("render_sidebar")
+# El bridge de localStorage fuerza un rerun cuando termina de hidratarse. No
+# montes el ranking ni ninguna otra pestaña en una ejecución que sabemos que se
+# va a descartar. El componente de almacenamiento ya ha quedado renderizado y
+# conserva intactas sus colas y claves persistentes.
+if not local_storage_snapshot_ready():
+    st.session_state["_boot_default_tab_pending"] = True
+    _boot_mark("waiting for local storage bootstrap")
+    st.stop()
+_remove_boot_splash()
+_boot_mark("remove boot splash")
 active_tab = _sync_active_tab_state()
 _boot_mark("_sync_active_tab_state")
 if st.query_params.get("rank_connect"):
-    _get_tab_module().handle_rank_connect_query(_build_ranking_tab_context())
+    _get_tab_module("ranking").handle_rank_connect_query(_build_ranking_tab_context())
     _boot_mark("handle_rank_connect_query")
 _handle_station_deeplink()
 _boot_mark("_handle_station_deeplink")
@@ -2480,6 +2611,141 @@ components.html(f"""
     host.addEventListener("pageshow", scheduleThemePaint, {{ passive: true }});
     doc.addEventListener("click", scheduleThemePaint, {{ passive: true }});
   }}
+
+  function storedWhatsNewVersion() {{
+    const fallback = "130";
+    try {{
+      const value = host.sessionStorage.getItem("mlbx-whats-new-version");
+      return /^(110|120|130)$/.test(String(value || "")) ? value : fallback;
+    }} catch (_e) {{
+      return /^(110|120|130)$/.test(String(host.__mlbxWhatsNewVersion || ""))
+        ? host.__mlbxWhatsNewVersion : fallback;
+    }}
+  }}
+
+  function applyWhatsNewVersion(version) {{
+    const selected = /^(110|120|130)$/.test(String(version || ""))
+      ? String(version) : "130";
+    host.__mlbxWhatsNewVersion = selected;
+    doc.querySelectorAll(".mlx-wn-dialog-content, .mlb-whats-new-panel").forEach((panel) => {{
+      if (!panel.querySelector(".mlx-wn-tabs")) return;
+      panel.querySelectorAll("[data-mlbx-whats-new-version]").forEach((button) => {{
+        const buttonVersion = button.getAttribute("data-mlbx-whats-new-version");
+        const active = buttonVersion === selected;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
+        button.onclick = (event) => {{
+          event.preventDefault();
+          selectWhatsNewVersion(buttonVersion);
+        }};
+      }});
+      panel.querySelectorAll(".mlx-wn-pane").forEach((pane) => {{
+        pane.classList.toggle("is-active", pane.classList.contains("mlx-wn-pane-" + selected));
+      }});
+    }});
+  }}
+
+  function selectWhatsNewVersion(version) {{
+    host.__mlbxWhatsNewVersion = version;
+    try {{
+      host.sessionStorage.setItem("mlbx-whats-new-version", version);
+    }} catch (_e) {{}}
+    applyWhatsNewVersion(version);
+  }}
+
+  function applyWhatsNewModalState() {{
+    const modal = doc.querySelector("[data-mlbx-whats-new-modal]");
+    const open = Boolean(host.__mlbxWhatsNewOpen);
+    if (!modal) return;
+    modal.classList.toggle("is-open", open);
+    modal.setAttribute("aria-hidden", open ? "false" : "true");
+    doc.documentElement.classList.toggle("mlbx-wn-modal-open", open);
+  }}
+
+  function openWhatsNewModal(trigger) {{
+    host.__mlbxWhatsNewOpen = true;
+    host.__mlbxWhatsNewTrigger = trigger || null;
+    applyWhatsNewVersion(storedWhatsNewVersion());
+    applyWhatsNewModalState();
+    host.requestAnimationFrame(() => {{
+      const closeButton = doc.querySelector(
+        "[data-mlbx-whats-new-modal] [data-mlbx-close-whats-new].mlx-wn-close"
+      );
+      if (closeButton) closeButton.focus({{ preventScroll: true }});
+    }});
+  }}
+
+  function closeWhatsNewModal() {{
+    host.__mlbxWhatsNewOpen = false;
+    applyWhatsNewModalState();
+    const trigger = host.__mlbxWhatsNewTrigger;
+    host.__mlbxWhatsNewTrigger = null;
+    if (trigger && trigger.isConnected && typeof trigger.focus === "function") {{
+      trigger.focus({{ preventScroll: true }});
+    }}
+  }}
+
+  function handleWhatsNewModalClick(event) {{
+    const target = event.target;
+    if (!target || typeof target.closest !== "function") return;
+    const versionTab = target.closest("[data-mlbx-whats-new-version]");
+    if (versionTab) {{
+      event.preventDefault();
+      selectWhatsNewVersion(versionTab.getAttribute("data-mlbx-whats-new-version"));
+      return;
+    }}
+    const opener = target.closest("[data-mlbx-open-whats-new]");
+    if (opener) {{
+      event.preventDefault();
+      openWhatsNewModal(opener);
+      return;
+    }}
+    if (target.closest("[data-mlbx-close-whats-new]")) {{
+      event.preventDefault();
+      closeWhatsNewModal();
+    }}
+  }}
+
+  function handleWhatsNewModalKeydown(event) {{
+    if (event.key === "Escape" && host.__mlbxWhatsNewOpen) {{
+      event.preventDefault();
+      closeWhatsNewModal();
+    }}
+  }}
+
+  function scheduleWhatsNewRestore() {{
+    if (host.__mlbxWhatsNewRaf) return;
+    host.__mlbxWhatsNewRaf = host.requestAnimationFrame(() => {{
+      host.__mlbxWhatsNewRaf = null;
+      applyWhatsNewVersion(storedWhatsNewVersion());
+      applyWhatsNewModalState();
+    }});
+  }}
+
+  // Streamlit conserva el documento padre entre reruns. Sustituimos siempre
+  // los handlers anteriores para que no sobrevivan callbacks de una versión
+  // antigua del frontend.
+  if (host.__mlbxWhatsNewTabsHandler) {{
+    doc.removeEventListener("click", host.__mlbxWhatsNewTabsHandler, true);
+  }}
+  host.__mlbxWhatsNewTabsHandler = null;
+
+  if (host.__mlbxWhatsNewModalClickHandler) {{
+    doc.removeEventListener("click", host.__mlbxWhatsNewModalClickHandler, true);
+  }}
+  if (host.__mlbxWhatsNewModalKeyHandler) {{
+    doc.removeEventListener("keydown", host.__mlbxWhatsNewModalKeyHandler, true);
+  }}
+  host.__mlbxWhatsNewModalClickHandler = handleWhatsNewModalClick;
+  host.__mlbxWhatsNewModalKeyHandler = handleWhatsNewModalKeydown;
+  doc.addEventListener("click", host.__mlbxWhatsNewModalClickHandler, true);
+  doc.addEventListener("keydown", host.__mlbxWhatsNewModalKeyHandler, true);
+  if (host.__mlbxWhatsNewObserver) host.__mlbxWhatsNewObserver.disconnect();
+  const observer = new host.MutationObserver(scheduleWhatsNewRestore);
+  observer.observe(doc.body, {{ childList: true, subtree: true }});
+  host.__mlbxWhatsNewObserver = observer;
+  scheduleWhatsNewRestore();
 }})();
 </script>
 """, height=0, width=0)
@@ -3022,6 +3288,40 @@ st.markdown(html_clean("""
     margin:0; 
     font-size:2.0rem; 
     color:var(--text); 
+  }
+  /* Streamlit añade un permalink con icono de cadena a los headings. En el
+     título principal estorba entre el nombre y la versión. */
+  .header h1 a{
+    display:none !important;
+  }
+  .header-title-row{
+    display:flex;
+    align-items:baseline;
+    gap:0.18rem;
+    min-width:0;
+  }
+  .header-version{
+    appearance:none;
+    -webkit-appearance:none;
+    margin:0;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    font:inherit;
+    font-size:0.72rem;
+    font-weight:750;
+    line-height:1;
+    cursor:pointer;
+    opacity:0.82;
+  }
+  .header-version:hover,
+  .header-version:focus-visible{
+    color:#2384ff;
+    opacity:1;
+    text-decoration:underline;
+    text-underline-offset:2px;
+    outline:none;
   }
   .header-sub{
     margin: 0;
@@ -3615,6 +3915,10 @@ def _provider_refresh_seconds() -> int:
         "NWS": 600,  # NWS suele actualizar en intervalo subhorario según estación
         "POEM": 300,  # POEM dispone de endpoints TR y series con mayor frecuencia
         "METOFFICE": 3600,  # Land Observations devuelve una serie horaria de 48 h
+        "IPMA": 3600,  # feed open-data global con actualización horaria
+        "GEOSPHERE": 600,  # dataset TAWES publica cada 10 minutos
+        "SMHI": 3600,  # metobs publica valores horarios
+        "ECCC": 600,  # SWOB publica minutal u horario según estación
         "WEATHERLINK": 60,  # WeatherLink current conditions; límite por defecto holgado
         "WINDY": 300,  # Windy PWS suele publicar cada 5-10 minutos
         "NETATMO": 600,  # Netatmo publica cada ~10 minutos
@@ -3627,26 +3931,38 @@ def _pressure_decimals_for_provider(provider_id: str) -> int:
     return 0 if str(provider_id).strip().upper() == "WU" else 1
 
 
+# Los catálogos SQLite solo cambian con un deploy (que reinicia el proceso),
+# así que el total se calcula una única vez por proceso.
+@lru_cache(maxsize=1)
 def _total_catalog_stations() -> int:
-    try:
-        mtime = int(PWS_STATIONS_DB_PATH.stat().st_mtime_ns)
-    except OSError:
-        return int(STATION_CATALOG_TOTAL)
-    return int(STATION_CATALOG_TOTAL) + _active_windy_station_count(mtime)
+    total = _visible_catalog_station_count()
+    if total <= 0:
+        total = int(STATION_CATALOG_TOTAL)
+    total += _sqlite_station_count(PWS_STATIONS_DB_PATH, "pws_online_stations")
+    total += _sqlite_station_count(NETATMO_PWS_STATIONS_DB_PATH, "netatmo_stations")
+    return total
 
 
-@st.cache_data(ttl=300, show_spinner=False)
-def _active_windy_station_count(_catalog_mtime: int) -> int:
+def _visible_catalog_station_count() -> int:
     try:
-        path = PWS_STATIONS_DB_PATH.resolve()
+        path = STATIONS_DB_PATH.resolve()
         with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
             return int(connection.execute(
                 """
-                SELECT COUNT(*) FROM pws_stations
-                WHERE last_observation_time >=
-                      strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 hours')
+                SELECT COUNT(*) FROM stations s
+                LEFT JOIN station_visibility_overrides v USING(station_pk)
+                WHERE COALESCE(v.hidden, 0) = 0
                 """
             ).fetchone()[0])
+    except (OSError, sqlite3.Error, TypeError):
+        return 0
+
+
+def _sqlite_station_count(db_path: _Path, table: str) -> int:
+    try:
+        path = db_path.resolve()
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
+            return int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
     except (OSError, sqlite3.Error, TypeError):
         return 0
 
@@ -3662,6 +3978,7 @@ _boot_mark("before render_app_header")
 render_app_header(
     t=t,
     dark=dark,
+    app_version=APP_VERSION,
     header_refresh_label=header_refresh_label,
     total_station_count=_total_catalog_stations(),
 )
@@ -3687,12 +4004,15 @@ has_connection_banner = render_connection_banner(
     ),
 )
 
-# Aviso para estaciones MANUALES (observadores cooperativos del NWS vía IEM,
-# redes ``*_COOP``): solo publican máx/mín una vez al día, sin datos en directo.
-if str(st.session_state.get(CONNECTION_TYPE, "")).strip().upper() == "IEM":
-    _conn_network = str(st.session_state.get(PROVIDER_STATION_ID, "") or "").split("|", 1)[0]
-    if _conn_network.upper().endswith("_COOP"):
-        st.info(t("header.manual_station"))
+# Aviso de calidad para las redes de estaciones particulares incluidas en el
+# mapa. Se limita expresamente a Netatmo y Windy PWS.
+if should_show_pws_measurement_notice(st.session_state):
+    st.info(t("header.pws_measurement_notice"))
+
+# Aviso para estaciones MANUALES/convencionales (COOP del NWS vía IEM,
+# red KLIMA de GeoSphere): publican una vez al día, sin datos en directo.
+if is_manual_iem_station(st.session_state):
+    st.info(t("header.manual_station"))
 
 if not has_connection_banner:
     st.markdown(
@@ -4014,6 +4334,10 @@ if (connected or loading_in_progress) and not runtime_snapshot:
             # construir el contexto del tab de observación.
             had_connection_loading = isinstance(st.session_state.get(CONNECTION_LOADING), dict)
             _cancel_connection_loading()
+            _track_connection_error(
+                "WU", station_id,
+                error_kind=api_error.kind, status_code=api_error.status_code,
+            )
             error_key = _queue_wu_connection_error(api_error.kind, api_error.status_code)
             if had_connection_loading:
                 st.rerun()
@@ -4231,10 +4555,10 @@ _sync_shareable_url(active_tab)
 # CONSTRUCCIÓN DE UI (SIEMPRE SE MUESTRA, CON O SIN DATOS)
 # ============================================================
 
-# Registra los templates de Plotly antes de pintar cualquier tab: algunas
-# (historical) referencian "meteolabx_light/dark" por nombre al construir la
-# figura, antes de pasar por _plotly_chart_stretch.
-_register_plotly_templates()
+# Ranking y Mapa no usan Plotly. Evitamos importar Plotly en esas aperturas;
+# Histórico sí necesita los templates antes de construir la primera figura.
+if active_tab in {"observation", "trends", "historical"}:
+    _register_plotly_templates()
 
 # Panel INTERNO de estadísticas (administración): sustituye a las pestañas
 # mientras está abierto. Se activa desde el formulario WU con el id especial
@@ -4248,7 +4572,7 @@ if st.session_state.get("internal_stats_open"):
 # TAB 1: OBSERVACIÓN
 _boot_mark(f"before tab render (active_tab={active_tab})")
 if active_tab == "observation":
-    _get_tab_module().render_observation_tab(_build_observation_tab_context())
+    _get_tab_module("observation").render_observation_tab(_build_observation_tab_context())
     _boot_mark("after render_observation_tab")
 
 # ============================================================
@@ -4256,7 +4580,7 @@ if active_tab == "observation":
 # ============================================================
 
 elif active_tab == "trends":
-    _get_tab_module().render_trends_tab(_build_trends_tab_context())
+    _get_tab_module("trends").render_trends_tab(_build_trends_tab_context())
     _boot_mark("after render_trends_tab")
 
 # ============================================================
@@ -4264,7 +4588,7 @@ elif active_tab == "trends":
 # ============================================================
 
 elif active_tab == "historical":
-    _get_tab_module().render_historical_tab(_build_historical_tab_context())
+    _get_tab_module("historical").render_historical_tab(_build_historical_tab_context())
     _boot_mark("after render_historical_tab")
 
 # ============================================================
@@ -4272,7 +4596,7 @@ elif active_tab == "historical":
 # ============================================================
 
 elif active_tab == "map":
-    _get_tab_module().render_map_tab(_build_map_tab_context())
+    _get_tab_module("map").render_map_tab(_build_map_tab_context())
     _boot_mark("after render_map_tab")
 
 # ============================================================
@@ -4280,7 +4604,10 @@ elif active_tab == "map":
 # ============================================================
 
 elif active_tab == "ranking":
-    _get_tab_module().render_ranking_tab(_build_ranking_tab_context())
+    _boot_mark("before ranking module import")
+    ranking_module = _get_tab_module("ranking")
+    _boot_mark("after ranking module import")
+    ranking_module.render_ranking_tab(_build_ranking_tab_context())
     _boot_mark("after render_ranking_tab")
 
 # ============================================================
@@ -4298,34 +4625,89 @@ if st.session_state.get(CONNECTED, False):
 # FOOTER
 # ============================================================
 
-APP_VERSION = "1.2.7"
-
-
 def _whats_new_footer_html() -> str:
-    """HTML desplegable de novedades en el propio footer."""
+    """Contenido del modal de novedades."""
     def _section(title: str, key: str) -> str:
-        items = "".join(f"<li>{html.escape(str(item))}</li>" for item in t_list(key))
+        values = t_list(key)
+        if not values:
+            return ""
+        items = "".join(f"<li>{html.escape(str(item))}</li>" for item in values)
         return (
             f"<div class='mlx-wn-title'>{html.escape(str(title))}</div>"
             f"<ul class='mlx-wn-list'>{items}</ul>"
         )
 
-    def _release(version: str, improvements_key: str, fixes_key: str) -> str:
+    def _release(improvements_key: str, fixes_key: str) -> str:
         return (
-            f"<div class='mlx-wn-version'>{html.escape(str(version))}</div>"
-            + _section(t("footer.improvements_title"), improvements_key)
+            _section(t("footer.improvements_title"), improvements_key)
             + _section(t("footer.fixes_title"), fixes_key)
         )
 
+    # Botones de pestaña controlados en el documento padre. Esto evita que los
+    # reruns de Streamlit restauren el radio marcado por defecto.
     return (
-        _release("1.2.7", "footer.v127_improvements", "footer.v127_fixes")
-        + _release("1.2.0", "footer.improvements", "footer.fixes")
-        + _release("1.1.0", "footer.previous_improvements", "footer.previous_fixes")
+        "<div class='mlx-wn-tabs' role='tablist'>"
+        "<button type='button' class='mlx-wn-tab' role='tab' "
+        "data-mlbx-whats-new-version='110'>1.1.0</button>"
+        "<button type='button' class='mlx-wn-tab' role='tab' "
+        "data-mlbx-whats-new-version='120'>1.2.0</button>"
+        "<button type='button' class='mlx-wn-tab is-active' role='tab' "
+        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.0</button>"
+        "</div>"
+        "<div class='mlx-wn-pane mlx-wn-pane-110'>"
+        + _release("footer.previous_improvements", "footer.previous_fixes")
+        + "</div>"
+        "<div class='mlx-wn-pane mlx-wn-pane-120'>"
+        + _release("footer.improvements", "footer.fixes")
+        + "</div>"
+        "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
+        + _release("footer.release_130_improvements", "footer.release_130_fixes")
+        + "</div>"
     )
 
 
-# Pie de página: línea superior con la versión (a la izquierda) y, justo al
-# lado, un desplegable "Novedades" que se abre en la propia página.
+PRIVACY_CONTACT_EMAIL = "meteolabx@gmail.com"
+
+
+def _privacy_footer_html() -> str:
+    """HTML desplegable de privacidad en el footer, simétrico a Novedades."""
+    def _paragraphs(key: str) -> str:
+        return "".join(
+            f"<p class='mlx-wn-par'>{html.escape(str(par))}</p>" for par in t_list(key)
+        )
+
+    def _items(key: str) -> str:
+        items = "".join(f"<li>{html.escape(str(item))}</li>" for item in t_list(key))
+        return f"<ul class='mlx-wn-list'>{items}</ul>"
+
+    def _title(key: str) -> str:
+        return f"<div class='mlx-wn-title'>{html.escape(str(t(key)))}</div>"
+
+    return (
+        f"<div class='mlx-wn-version'>{html.escape(str(t('footer.privacy_title')))}</div>"
+        f"<p class='mlx-wn-par'>{html.escape(str(t('footer.privacy_intro')))}</p>"
+        + _title("footer.privacy_cookies_title") + _paragraphs("footer.privacy_cookies")
+        + _title("footer.privacy_browser_title") + _paragraphs("footer.privacy_browser")
+        + _title("footer.privacy_log_title")
+        + f"<p class='mlx-wn-par'>{html.escape(str(t('footer.privacy_log_intro')))}</p>"
+        + _items("footer.privacy_log_items")
+        + _paragraphs("footer.privacy_log_notes")
+        + _title("footer.privacy_purpose_title")
+        + f"<p class='mlx-wn-par'>{html.escape(str(t('footer.privacy_purpose_intro')))}</p>"
+        + _items("footer.privacy_purpose_items")
+        + f"<p class='mlx-wn-par'>{html.escape(str(t('footer.privacy_purpose_note')))}</p>"
+        + _title("footer.privacy_infra_title") + _paragraphs("footer.privacy_infra")
+        + _title("footer.privacy_retention_title") + _paragraphs("footer.privacy_retention")
+        + _title("footer.privacy_contact_title")
+        + (
+            f"<p class='mlx-wn-par'>{html.escape(str(t('footer.privacy_contact')))} "
+            f"<a href='mailto:{PRIVACY_CONTACT_EMAIL}'>{PRIVACY_CONTACT_EMAIL}</a>.</p>"
+        )
+    )
+
+
+# Pie de página: la versión y el botón Novedades abren el mismo modal que la
+# versión discreta de la cabecera. Privacidad conserva su panel desplegable.
 st.markdown(
     html_clean(
         f"<style>"
@@ -4343,27 +4725,102 @@ st.markdown(
         "border:0 !important;outline:0 !important;box-shadow:none !important;}"
         ".mlb-whats-new summary::-webkit-details-marker{display:none;}"
         ".mlb-whats-new summary:hover{color:#1366d6 !important;}"
+        ".mlb-footer-action{appearance:none;-webkit-appearance:none;margin:0;padding:0;"
+        "border:0;background:transparent;cursor:pointer;list-style:none;"
+        "color:#2384ff !important;text-decoration:underline !important;"
+        "text-decoration-thickness:1.5px !important;text-underline-offset:2px !important;"
+        "font:inherit;font-weight:700 !important;font-size:0.92rem !important;line-height:1.25;}"
+        ".mlb-footer-action:hover,.mlb-footer-action:focus-visible{color:#1366d6 !important;"
+        "outline:none;}"
         ".mlb-whats-new-panel{margin-top:0.85rem;width:min(820px, calc(100vw - 3rem));"
         "padding:1rem 1.15rem 1.05rem;border-radius:10px;"
-        "background:rgba(219, 235, 255, 0.96);border:1px solid rgba(51, 126, 215, 0.22);"
-        "color:rgba(24, 35, 56, 0.96);box-shadow:0 12px 28px rgba(41, 83, 145, 0.12);}"
+        "background:var(--panel);border:1px solid var(--border);"
+        "color:var(--text) !important;box-shadow:var(--shadow);backdrop-filter:blur(16px);}"
+        ".mlb-whats-new-panel p,.mlb-whats-new-panel li,"
+        ".mlb-whats-new-panel .mlx-wn-title,.mlb-whats-new-panel .mlx-wn-version,"
+        ".mlx-wn-dialog-content p,.mlx-wn-dialog-content li,"
+        ".mlx-wn-dialog-content .mlx-wn-title,.mlx-wn-dialog-content .mlx-wn-version"
+        "{color:var(--text) !important;}"
+        ".mlb-whats-new-panel a{color:#2384ff !important;}"
+        "html.mlbx-wn-modal-open,html.mlbx-wn-modal-open body{overflow:hidden !important;}"
+        ".mlx-wn-modal{position:fixed;inset:0;z-index:1000002;display:none;"
+        "align-items:center;justify-content:center;padding:1rem;}"
+        ".mlx-wn-modal.is-open{display:flex;}"
+        ".mlx-wn-backdrop{position:absolute;inset:0;background:rgba(4,7,12,0.68);"
+        "backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);}"
+        ".mlx-wn-dialog{position:relative;z-index:1;width:min(860px,calc(100vw - 2rem));"
+        "max-height:min(82vh,760px);overflow-y:auto;border-radius:18px;"
+        "background:var(--panel);border:1px solid var(--border);color:var(--text);"
+        "box-shadow:0 26px 80px rgba(0,0,0,0.45);backdrop-filter:blur(20px);"
+        "-webkit-backdrop-filter:blur(20px);overscroll-behavior:contain;}"
+        ".mlx-wn-dialog-head{position:sticky;top:0;z-index:2;display:flex;"
+        "align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.15rem 0.75rem;"
+        "background:var(--panel);border-bottom:1px solid var(--border);"
+        "backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}"
+        ".mlx-wn-dialog-title{font-size:1.08rem;font-weight:900;color:var(--text);}"
+        ".mlx-wn-close{appearance:none;-webkit-appearance:none;display:grid;place-items:center;"
+        "width:2rem;height:2rem;flex:0 0 2rem;margin:0;padding:0;border-radius:999px;"
+        "border:1px solid var(--border);background:var(--accent);color:var(--text);"
+        "font-size:1.45rem;font-weight:500;line-height:1;cursor:pointer;}"
+        ".mlx-wn-close:hover,.mlx-wn-close:focus-visible{background:#2384ff;color:#fff;"
+        "border-color:#2384ff;outline:none;}"
+        ".mlx-wn-dialog-content{padding:1rem 1.15rem 1.2rem;color:var(--text);}"
         ".mlx-wn-version{font-weight:900;font-size:1.04rem;margin:0.1rem 0 0.45rem;}"
-        ".mlx-wn-version:not(:first-child){margin-top:1rem;padding-top:0.9rem;"
-        "border-top:1px solid rgba(51, 126, 215, 0.22);}"
+        ".mlx-wn-tabs{display:flex;gap:0.45rem;margin:0 0 0.85rem;}"
+        ".mlx-wn-tab{appearance:none;-webkit-appearance:none;cursor:pointer;"
+        "padding:0.22rem 0.85rem;border-radius:999px;"
+        "border:1px solid var(--border);font-weight:700;font-size:0.88rem;"
+        "color:#2384ff;background:var(--accent);line-height:1.4;}"
+        ".mlx-wn-tab:hover{background:var(--accent);}"
+        ".mlx-wn-tab:focus-visible{outline:2px solid #2384ff;outline-offset:2px;}"
+        ".mlx-wn-tab.is-active"
+        "{background:#2384ff;color:#fff;border-color:#2384ff;}"
+        ".mlx-wn-pane{display:none;}"
+        ".mlx-wn-pane.is-active{display:block;}"
         ".mlx-wn-title{font-weight:800;font-size:1rem;margin:0.15rem 0 0.28rem;}"
         ".mlx-wn-title:not(:first-child){margin-top:0.75rem;}"
         ".mlx-wn-list{margin:0;padding-left:1.25rem;}"
         ".mlx-wn-list li{margin:0.18rem 0;line-height:1.45;font-size:0.9rem;}"
+        ".mlx-wn-par{margin:0.3rem 0;line-height:1.45;font-size:0.9rem;}"
         ".mlb-footer-bottom{margin-top:0.4rem;font-size:0.86rem;"
         "color:var(--muted);opacity:0.92;}"
+        ".mlb-x-link{margin-left:auto;display:inline-flex;align-items:center;"
+        "align-self:center;color:var(--muted);opacity:0.85;}"
+        ".mlb-x-link svg{width:0.95rem;height:0.95rem;fill:currentColor;display:block;}"
+        ".mlb-x-link:hover{color:#2384ff;opacity:1;}"
+        "@media(max-width:600px){.mlx-wn-modal{align-items:flex-start;padding:0.65rem;}"
+        ".mlx-wn-dialog{width:calc(100vw - 1.3rem);max-height:calc(100dvh - 1.3rem);"
+        "border-radius:15px;}.mlx-wn-dialog-head{padding:0.85rem 0.9rem 0.7rem;}"
+        ".mlx-wn-dialog-content{padding:0.85rem 0.9rem 1rem;}}"
         "</style>"
         "<div class='mlb-footsep'></div>"
         "<div class='mlb-footer-head'>"
         f"<span class='mlb-version'>MeteoLabX · {t('footer.version', version=APP_VERSION)}</span>"
+        "<button type='button' class='mlb-footer-action' data-mlbx-open-whats-new>"
+        f"{html.escape(str(t('footer.whats_new')))}</button>"
         "<details class='mlb-whats-new'>"
-        f"<summary>{html.escape(str(t('footer.whats_new')))}</summary>"
-        f"<div class='mlb-whats-new-panel'>{_whats_new_footer_html()}</div>"
+        f"<summary>{html.escape(str(t('footer.privacy')))}</summary>"
+        f"<div class='mlb-whats-new-panel'>{_privacy_footer_html()}</div>"
         "</details>"
+        "<a class='mlb-x-link' href='https://x.com/meteolabx' target='_blank' "
+        "rel='noopener noreferrer' aria-label='MeteoLabX en X' title='@meteolabx'>"
+        "<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' role='img'>"
+        "<path d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817"
+        "L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231Zm-1.161 17.52"
+        "h1.833L7.084 4.126H5.117Z'/></svg></a>"
+        "</div>"
+        "<div class='mlx-wn-modal' data-mlbx-whats-new-modal aria-hidden='true'>"
+        "<div class='mlx-wn-backdrop' data-mlbx-close-whats-new></div>"
+        "<section class='mlx-wn-dialog' role='dialog' aria-modal='true' "
+        "aria-labelledby='mlx-whats-new-title'>"
+        "<div class='mlx-wn-dialog-head'>"
+        f"<div class='mlx-wn-dialog-title' id='mlx-whats-new-title'>{html.escape(str(t('footer.whats_new')))}</div>"
+        "<button type='button' class='mlx-wn-close' data-mlbx-close-whats-new "
+        f"aria-label='{html.escape(str(t('common.close')), quote=True)}' "
+        f"title='{html.escape(str(t('common.close')), quote=True)}'>×</button>"
+        "</div>"
+        f"<div class='mlx-wn-dialog-content'>{_whats_new_footer_html()}</div>"
+        "</section>"
         "</div>"
     ),
     unsafe_allow_html=True,
@@ -4373,7 +4830,7 @@ st.markdown(
     html_clean(
         "<div class='mlb-footer-bottom'>%s: WU · WeatherLink · Windy PWS · AEMET · Meteocat · "
         "Euskalmet · Frost · Meteo-France · MeteoGalicia · NWS · POEM · Met Office · "
-        "MeteoHub Italia · IEM · %s · © 2026</div>"
+        "MeteoHub Italia · IPMA · GeoSphere · SMHI · ECCC · IEM · %s · © 2026</div>"
         % (t("footer.sources"), t("footer.unaffiliated"))
     ),
     unsafe_allow_html=True,

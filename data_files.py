@@ -22,11 +22,20 @@ NWS_STATIONS_PATH = DATA_DIR / "data_estaciones_nws.json"
 POEM_STATIONS_PATH = DATA_DIR / "data_estaciones_poem.json"
 METOFFICE_STATIONS_PATH = DATA_DIR / "data_estaciones_metoffice.json"
 METEOHUB_IT_STATIONS_PATH = DATA_DIR / "data_estaciones_meteohub_it.json"
+IPMA_STATIONS_PATH = DATA_DIR / "data_estaciones_ipma.json"
+GEOSPHERE_STATIONS_PATH = DATA_DIR / "data_estaciones_geosphere.json"
+SMHI_STATIONS_PATH = DATA_DIR / "data_estaciones_smhi.json"
+ECCC_STATIONS_PATH = DATA_DIR / "data_estaciones_eccc.json"
 
 # Fronteras de países (Natural Earth 1:50m, ISO_A2_EH) para resolver el país
 # de una estación por sus coordenadas (point-in-polygon). Usado para colocar en
 # su país real las estaciones IEM/WMO que vienen sin código de país.
 COUNTRY_BORDERS_PATH = DATA_DIR / "ne_50m_admin_0_countries.geojson"
+# Costa Natural Earth 1:10m (polígonos de tierra, comprimidos). El campo de
+# temperatura la usa como máscara visual: la geometría 1:50m anterior es
+# adecuada para resolver países, pero demasiado simplificada al ampliar islas
+# como Mallorca o Ibiza.
+LAND_BORDERS_HIGH_RES_PATH = DATA_DIR / "ne_10m_land.geojson.gz"
 
 EUSKALMET_SENSORS_PATH = DATA_DIR / "data_sensors_euskalmet.json"
 EUSKALMET_SENSOR_MAP_PATH = DATA_DIR / "data_station_sensor_map_euskalmet.json"
@@ -42,9 +51,14 @@ STATION_CATALOG_PATHS = [
     POEM_STATIONS_PATH,
     METOFFICE_STATIONS_PATH,
     METEOHUB_IT_STATIONS_PATH,
+    IPMA_STATIONS_PATH,
+    GEOSPHERE_STATIONS_PATH,
+    SMHI_STATIONS_PATH,
+    ECCC_STATIONS_PATH,
 ]
 
-# Conteo visible del SQLite unificado: estaciones conectables + estaciones IEM
-# de inventario. Los duplicados ocultos por station_visibility_overrides no
-# cuentan.
-STATION_CATALOG_TOTAL = 245313
+# Valor de respaldo del conteo visible del SQLite unificado (conectables +
+# IEM de inventario, sin duplicados ocultos). Solo se usa si stations.sqlite
+# no está disponible; el contador de la cabecera lo calcula en vivo desde los
+# SQLite (catálogo unificado + Windy online + Netatmo).
+STATION_CATALOG_TOTAL = 230824

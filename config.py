@@ -31,6 +31,7 @@ LS_WEATHERLINK_Z = "meteolabx_weatherlink_z"
 LS_WEATHERLINK_STATION = "meteolabx_weatherlink_station"
 LS_UNIT_PREFERENCES = "meteolabx_unit_preferences"
 LS_FAVORITES = "meteolabx_favorites"
+LS_LANGUAGE = "meteolabx_language"
 
 # ============================================================
 # CACHE

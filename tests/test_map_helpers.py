@@ -1,4 +1,29 @@
+from pathlib import Path
+
 from tabs import map as map_tab
+from utils import geo
+
+
+def test_map_region_helpers_share_the_lightweight_geo_implementation():
+    assert map_tab.is_iberia_map_center is geo.is_iberia_map_center
+    assert map_tab.is_france_map_center is geo.is_france_map_center
+    assert map_tab.is_italy_map_center is geo.is_italy_map_center
+    assert map_tab.is_norway_map_center is geo.is_norway_map_center
+
+
+def test_precipitation_label_rows_keep_zero_and_station_identity():
+    rows = map_tab._precipitation_label_rows([
+        {
+            "lat": 41.4, "lon": 2.1, "amount": 0.0,
+            "provider": "METEOCAT", "station_id": "X1", "name": "Test",
+        },
+    ])
+
+    assert rows == [{
+        "lat": 41.4, "lon": 2.1, "amount": 0.0,
+        "observed_at": None, "time": "", "provider": "METEOCAT",
+        "station_id": "X1", "name": "Test", "country": "", "idx": 0,
+    }]
 
 
 def test_split_map_provider_options_for_iberia_keeps_regional_providers_near():
@@ -37,11 +62,12 @@ def test_provider_is_near_center_matches_country_regions():
 
 
 def test_iem_map_fallback_policy_excludes_official_countries_and_us():
-    for country in ("ES", "FR", "IT", "NO", "US"):
+    # Países con proveedor dedicado en el mapa: sin fallback IEM.
+    for country in ("ES", "FR", "IT", "NO", "US", "PT", "AT", "SE", "CA"):
         assert map_tab.country_uses_iem_map_fallback(country) is False
 
     assert map_tab.country_uses_iem_map_fallback("GB") is True
-    assert map_tab.country_uses_iem_map_fallback("PT") is True
+    assert map_tab.country_uses_iem_map_fallback("DE") is True
 
 
 def test_provider_country_filter_keeps_official_country_scope():
@@ -76,6 +102,35 @@ def test_map_country_default_only_applies_before_filter_is_initialized():
     assert map_tab.map_country_default_enabled("ES", ("ES",), False) is True
     assert map_tab.map_country_default_enabled("ES", ("ES",), True) is False
     assert map_tab.map_country_default_enabled("GB", ("ES",), False) is False
+
+
+def test_map_country_scope_is_automatic_for_value_maps(monkeypatch):
+    assert map_tab.automatic_map_countries_for_center(41.3710, 2.1280) == ("ES", "PT")
+
+    from server.services import stations
+
+    monkeypatch.setattr(stations, "country_for_point", lambda lat, lon: "DE")
+    assert map_tab.automatic_map_countries_for_center(52.52, 13.405) == ("DE",)
+
+
+def test_map_filter_popovers_are_limited_to_station_mode():
+    source = Path(map_tab.__file__).read_text(encoding="utf-8")
+
+    assert map_tab.map_filter_controls_visible("stations") is True
+    assert map_tab.map_filter_controls_visible("temperature") is False
+    assert map_tab.map_filter_controls_visible("wind") is False
+    assert map_tab.map_filter_controls_visible("precipitation") is False
+    assert 'st.container(key="map_country_overlay")' in source
+    assert 'st.container(key="map_sensor_overlay")' in source
+    assert "if map_filter_controls_visible(view_mode):" in source
+    assert 'st.session_state["map_sensor_filter"] = []' not in source
+    assert source.index('st.container(key="map_sensor_overlay")') < source.index(
+        'view_mode = st.radio('
+    )
+    assert 'left: 1.5px;' in source
+    assert 'top: 119.5px;' in source
+    assert 'top: 190px;' in source
+    assert "if not nearest and not show_scalar_field:" in source
 
 
 def test_country_multiselect_callback_normalizes_filter_state(monkeypatch):

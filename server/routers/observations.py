@@ -49,9 +49,12 @@ from server.schemas.observation import (
 )
 from server.services import (
     aemet,
+    eccc,
     euskalmet,
     frost,
+    geosphere,
     iem,
+    ipma,
     meteocat,
     meteofrance,
     meteogalicia,
@@ -60,6 +63,7 @@ from server.services import (
     netatmo,
     nws,
     poem,
+    smhi,
     stations,
     weatherlink,
     windy,
@@ -482,6 +486,38 @@ def _resolve_provider_fetchers(
             poem_secret or "public",
             lambda: poem.fetch_current(body.station_id, client=http, settings=settings),
             lambda: poem.fetch_today_series(body.station_id, client=http, settings=settings),
+        )
+
+    if body.provider == "IPMA":
+        # API pública; feed global de 24 h filtrado por estación.
+        return (
+            "public",
+            lambda: ipma.fetch_current(body.station_id, client=http),
+            lambda: ipma.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "GEOSPHERE":
+        # API pública; dataset TAWES de 10 minutos.
+        return (
+            "public",
+            lambda: geosphere.fetch_current(body.station_id, client=http),
+            lambda: geosphere.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "SMHI":
+        # API pública; un recurso por parámetro, en paralelo.
+        return (
+            "public",
+            lambda: smhi.fetch_current(body.station_id, client=http),
+            lambda: smhi.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "ECCC":
+        # API pública (OGC API Features); SWOB minutal u horario.
+        return (
+            "public",
+            lambda: eccc.fetch_current(body.station_id, client=http),
+            lambda: eccc.fetch_today_series(body.station_id, client=http),
         )
 
     if body.provider == "FROST":
@@ -1266,6 +1302,32 @@ def _resolve_recent_fetcher(
         return (
             "public",
             lambda: iem.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "IPMA":
+        # Feed público de 24 h: la serie reciente devuelve esa ventana
+        # completa (ya horaria); days_back no puede ampliarla.
+        return (
+            "public",
+            lambda: ipma.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "GEOSPHERE":
+        return (
+            "public",
+            lambda: geosphere.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "SMHI":
+        return (
+            "public",
+            lambda: smhi.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "ECCC":
+        return (
+            "public",
+            lambda: eccc.fetch_recent_series(body.station_id, days_back=days, client=http),
         )
 
     if body.provider == "WEATHERLINK":

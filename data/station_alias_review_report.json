@@ -6,34 +6,44 @@
     "short_station_ids_are_evidence": false,
     "observation_comparison": "pending for probable and ambiguous candidates"
   },
-  "candidates": 13195,
+  "candidates": 12963,
   "classifications": {
-    "ambiguous": 2445,
-    "probable": 3403,
-    "secure": 7347
+    "ambiguous": 2443,
+    "probable": 3360,
+    "secure": 7160
   },
   "providers": {
-    "AEMET": 230,
+    "AEMET": 228,
     "EUSKALMET": 1,
-    "FROST": 410,
-    "METEOFRANCE": 219,
+    "FROST": 182,
+    "METEOFRANCE": 217,
     "METEOGALICIA": 1,
     "METEOHUB_IT": 15,
     "METOFFICE": 29,
     "NWS": 12287,
     "POEM": 3
   },
-  "geographically_incompatible_pairs_rejected": 7,
+  "geographically_incompatible_pairs_rejected": 8618,
   "geographic_rejections_by_provider_country": {
+    "ECCC:(MISSING)": 1,
+    "ECCC:CA": 5642,
+    "ECCC:UN": 1642,
+    "ECCC:US": 366,
+    "GEOSPHERE:AT": 35,
+    "GEOSPHERE:UN": 296,
+    "IPMA:PT": 13,
+    "IPMA:UN": 57,
     "METEOFRANCE:AN": 1,
     "METEOFRANCE:ES": 1,
     "METEOFRANCE:GY": 1,
     "METEOFRANCE:NN": 1,
     "METEOFRANCE:WS": 1,
     "METEOHUB_IT:CH": 1,
-    "POEM:GI": 1
+    "POEM:GI": 1,
+    "SMHI:SE": 107,
+    "SMHI:UN": 452
   },
-  "iem_stations_with_multiple_original_candidates": 384,
+  "iem_stations_with_multiple_original_candidates": 334,
   "examples": {
     "secure": [
       {
@@ -602,41 +612,41 @@
       },
       {
         "classification": "ambiguous",
-        "distance_m": 241.4,
-        "name_similarity": 0.125,
-        "elevation_delta_m": 1.0,
+        "distance_m": 147.3,
+        "name_similarity": 0.167,
+        "elevation_delta_m": 147.0,
         "shared_identifiers": [],
         "source": {
           "provider": "FROST",
           "network": "",
-          "station_id": "SN52530",
-          "name": "HELLISØY FYR"
+          "station_id": "SN57400",
+          "name": "HAFSTAD I FØRDE"
         },
         "iem": {
-          "network": "WMO_BUFR_SRF",
-          "station_id": "0-578-0-307",
-          "name": "FEDJE",
-          "country": "UN"
+          "network": "NO__ASOS",
+          "station_id": "ENBL",
+          "name": "BRINGELAND",
+          "country": "NO"
         },
         "observation_comparison": null
       },
       {
         "classification": "ambiguous",
-        "distance_m": 288.5,
+        "distance_m": 0.0,
         "name_similarity": 0.167,
-        "elevation_delta_m": 4.0,
+        "elevation_delta_m": 0.0,
         "shared_identifiers": [],
         "source": {
           "provider": "FROST",
           "network": "",
-          "station_id": "SN55702",
-          "name": "FV424 HAUKÅSEN"
+          "station_id": "SN60990",
+          "name": "VIGRA"
         },
         "iem": {
-          "network": "WMO_BUFR_SRF",
-          "station_id": "0-578-0-347",
-          "name": "SOGNDAL AP",
-          "country": "UN"
+          "network": "NO__ASOS",
+          "station_id": "ENAL",
+          "name": "Alesund",
+          "country": "NO"
         },
         "observation_comparison": null
       }

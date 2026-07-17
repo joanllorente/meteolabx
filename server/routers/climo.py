@@ -33,7 +33,8 @@ router = APIRouter(prefix="/climo", tags=["climo"])
 
 # Proveedores con datos históricos/climogramas.
 CLIMO_PROVIDERS = (
-    "WU", "AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA", "FROST", "WEATHERLINK", "IEM",
+    "WU", "AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA", "FROST",
+    "WEATHERLINK", "IEM", "GEOSPHERE", "SMHI", "ECCC",
 )
 
 
@@ -91,6 +92,39 @@ async def _run_async_port(
             body.station_id,
             body.api_key or "",
             body.api_secret or "",
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
+    if body.provider == "GEOSPHERE":
+        from server.services import geosphere_climo
+
+        dataset = await geosphere_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
+    if body.provider == "ECCC":
+        from server.services import eccc_climo
+
+        dataset = await eccc_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
+    if body.provider == "SMHI":
+        from server.services import smhi_climo
+
+        dataset = await smhi_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
             summary_mode=body.summary_mode,
             periods=[(p.start, p.end) for p in body.periods],
             selected_years=[int(y) for y in body.selected_years],

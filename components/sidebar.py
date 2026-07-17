@@ -18,11 +18,13 @@ from config import (
     LS_WU_CALIBRATIONS,
     LS_UNIT_PREFERENCES,
     LS_FAVORITES,
+    LS_LANGUAGE,
 )
 from utils.i18n import (
     get_language_label,
     get_supported_languages,
     init_language,
+    match_supported_browser_language,
     set_language,
     t,
 )
@@ -60,7 +62,7 @@ from utils.provider_state import (
     clear_provider_autoconnect_widget_state,
     disconnect_active_station,
 )
-from utils.state_keys import AUTOCONNECT_ATTEMPTED, CONNECTION_LOADING
+from utils.state_keys import AUTOCONNECT_ATTEMPTED, BROWSER_LANGUAGES, CONNECTION_LOADING
 from local_storage_bridge import sync_local_storage
 
 
@@ -78,6 +80,7 @@ LOCAL_STORAGE_BOOTSTRAP_KEYS = [
     LS_WU_CALIBRATIONS,
     LS_UNIT_PREFERENCES,
     LS_FAVORITES,
+    LS_LANGUAGE,
 ]
 
 WU_STATION_INPUT_KEY = "wu_input_station"
@@ -722,6 +725,35 @@ def render_sidebar(_local_storage_unused=None):
         st.session_state["active_z"] = _normalized_active_z
         _sync_wu_input_widgets_from_active(overwrite_if_pristine=True)
 
+    supported_languages = get_supported_languages()
+    try:
+        requested_lang = str(st.query_params.get("lang", "")).strip().lower()
+    except Exception:
+        requested_lang = ""
+
+    # La sesión de Streamlit desaparece al cerrar la pestaña. Hidratamos una
+    # vez el idioma desde localStorage antes de crear el selector para que una
+    # nueva sesión recupere la última elección del navegador. Un ``?lang=``
+    # explícito sigue teniendo prioridad sobre la preferencia guardada.
+    if storage_ready and not bool(st.session_state.get("_mlx_language_storage_hydrated", False)):
+        stored_lang = coerce_str(get_local_storage_value(LS_LANGUAGE), lower=True)
+        raw_browser_languages = st.session_state.get(BROWSER_LANGUAGES, [])
+        browser_lang = match_supported_browser_language(raw_browser_languages)
+        if requested_lang in supported_languages:
+            st.session_state["lang"] = requested_lang
+            st.session_state["lang_selector"] = requested_lang
+        elif stored_lang in supported_languages:
+            st.session_state["lang"] = stored_lang
+            st.session_state["lang_selector"] = stored_lang
+        elif browser_lang in supported_languages:
+            st.session_state["lang"] = browser_lang
+            st.session_state["lang_selector"] = browser_lang
+        # Si el componente del navegador todavía no ha respondido, dejamos la
+        # hidratación pendiente: su respuesta provocará otro rerun y entonces
+        # podremos aplicar el idioma detectado sin una carrera de arranque.
+        if requested_lang or stored_lang or raw_browser_languages:
+            st.session_state["_mlx_language_storage_hydrated"] = True
+
     current_lang = init_language()
     saved_unit_preferences = get_stored_unit_preferences()
     for category, default_value in DEFAULT_UNIT_PREFERENCES.items():
@@ -774,10 +806,19 @@ def render_sidebar(_local_storage_unused=None):
     # Idioma + tema
     st.sidebar.title(t("sidebar.settings_title"))
 
-    supported_languages = get_supported_languages()
+    def _persist_language(language: str) -> str:
+        normalized = set_language(language)
+        set_local_storage(LS_LANGUAGE, normalized, "save")
+        return normalized
+
+    def _handle_language_selector_change() -> None:
+        selected = coerce_str(st.session_state.get("lang_selector", ""), lower=True)
+        if selected in supported_languages:
+            _persist_language(selected)
+
     selector_lang = str(st.session_state.get("lang_selector", "")).strip().lower()
     if selector_lang in supported_languages and selector_lang != current_lang:
-        current_lang = set_language(selector_lang)
+        current_lang = _persist_language(selector_lang)
     elif selector_lang not in supported_languages:
         st.session_state["lang_selector"] = current_lang
 
@@ -786,9 +827,10 @@ def render_sidebar(_local_storage_unused=None):
         supported_languages,
         format_func=get_language_label,
         key="lang_selector",
+        on_change=_handle_language_selector_change,
     )
     if selected_lang != current_lang:
-        set_language(selected_lang)
+        _persist_language(selected_lang)
         st.rerun()
 
     def _handle_theme_selector_change() -> None:

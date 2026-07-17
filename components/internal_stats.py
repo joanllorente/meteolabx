@@ -63,25 +63,28 @@ def render_internal_stats() -> None:
         return
 
     totals = data.get("totals", {})
-    c1, c2, c3, c4, c5 = st.columns(5)
+    error_totals = totals.get("errors", {}) or {}
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Hoy (24 h)", totals.get("d1", 0))
     c2.metric("7 días", totals.get("d7", 0))
     c3.metric("30 días", totals.get("d30", 0))
     c4.metric("Total", totals.get("total", 0))
     c5.metric("Estaciones distintas", totals.get("stations", 0))
+    c6.metric("Errores (30 d)", error_totals.get("d30", 0))
 
     stations = data.get("stations", [])
     if not stations:
         st.info(
             "Sin visitas registradas todavía. Se registra una visita cada vez "
             "que alguien se conecta a una estación (selector, mapa, ranking, "
-            "deep link o autoconexión)."
+            "deep link o autoconexión), y un error cada vez que una conexión "
+            "falla."
         )
         return
 
     st.caption(
-        "Conexiones por estación. Ordenable pulsando en las cabeceras; "
-        "por defecto, por total descendente."
+        "Conexiones y errores por estación. Ordenable pulsando en las "
+        "cabeceras; por defecto, por total de conexiones descendente."
     )
     rows = [
         {
@@ -93,7 +96,35 @@ def render_internal_stats() -> None:
             "30 días": s.get("d30", 0),
             "Total": s.get("total", 0),
             "Última visita": _fmt_epoch(s.get("last_epoch", 0)),
+            "Err 30 d": (s.get("errors") or {}).get("d30", 0),
+            "Err total": (s.get("errors") or {}).get("total", 0),
+            "Último error": (
+                f"{(s.get('errors') or {}).get('last_kind', '')} · "
+                f"{_fmt_epoch((s.get('errors') or {}).get('last_epoch', 0))}"
+                if (s.get("errors") or {}).get("total", 0)
+                else "—"
+            ),
         }
         for s in stations
     ]
     st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    error_kinds = data.get("error_kinds", [])
+    if error_kinds:
+        st.markdown("### ⚠️ Errores de conexión por tipo")
+        st.caption(
+            "Categorías de error registradas al fallar una conexión "
+            "(timeout, unauthorized, network, notfound…)."
+        )
+        st.dataframe(
+            [
+                {
+                    "Tipo": k.get("kind", ""),
+                    "30 días": k.get("d30", 0),
+                    "Total": k.get("total", 0),
+                }
+                for k in error_kinds
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )

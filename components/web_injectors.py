@@ -158,6 +158,27 @@ def inject_pwa_metadata() -> None:
     )
 
 
+def remove_boot_splash() -> None:
+    """Retira el splash estático solo tras completar la hidratación fiable."""
+    components.html(
+        """
+        <script>
+        (function () {
+          try {
+            const doc = window.parent && window.parent.document ? window.parent.document : document;
+            const splash = doc.getElementById("mlx-boot-splash");
+            if (!splash) return;
+            splash.classList.add("mlx-leaving");
+            window.setTimeout(function () { splash.remove(); }, 190);
+          } catch (_e) {}
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
 def inject_mobile_plotly_compactor() -> None:
     """Compacta gráficos Plotly solo en viewports pequeños desde el DOM padre."""
     components.html(

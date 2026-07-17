@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 import streamlit as st
 
@@ -17,6 +17,7 @@ SUPPORTED_LANGUAGES = {
     "en": "English",
     "fr": "Français",
     "it": "Italiano",
+    "pt": "Português",
 }
 
 _LOCALES_DIR = Path(__file__).resolve().parent.parent / "locales"
@@ -105,6 +106,27 @@ def get_supported_languages() -> list[str]:
 
 def get_language_label(lang: str) -> str:
     return SUPPORTED_LANGUAGES.get(_normalize_lang(lang), SUPPORTED_LANGUAGES[DEFAULT_LANG])
+
+
+def match_supported_browser_language(languages: Iterable[str] | str | None) -> Optional[str]:
+    """Devuelve el primer idioma del navegador que admite la interfaz.
+
+    Los navegadores suelen comunicar etiquetas regionales como ``en-US`` o
+    ``pt-BR``; la interfaz utiliza catálogos por idioma base (``en`` y ``pt``).
+    """
+    if isinstance(languages, str):
+        candidates = [languages]
+    else:
+        try:
+            candidates = list(languages or [])
+        except TypeError:
+            candidates = []
+    for candidate in candidates:
+        normalized = str(candidate or "").strip().lower().replace("_", "-")
+        base = normalized.split("-", 1)[0]
+        if base in SUPPORTED_LANGUAGES:
+            return base
+    return None
 
 
 def t(key: str, default: Optional[str] = None, **kwargs: Any) -> str:

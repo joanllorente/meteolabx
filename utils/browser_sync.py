@@ -12,7 +12,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from utils import html_clean
-from utils.state_keys import BROWSER_COLOR_SCHEME, BROWSER_TZ, BROWSER_VIEWPORT_WIDTH
+from utils.state_keys import (
+    BROWSER_COLOR_SCHEME,
+    BROWSER_LANGUAGES,
+    BROWSER_TZ,
+    BROWSER_VIEWPORT_WIDTH,
+)
 
 
 def sync_browser_context_early() -> None:
@@ -45,14 +50,23 @@ def hydrate_browser_context_live(get_browser_context) -> None:
     if color_scheme in ("dark", "light") and st.session_state.get(BROWSER_COLOR_SCHEME) != color_scheme:
         st.session_state[BROWSER_COLOR_SCHEME] = color_scheme
 
+    raw_languages = value.get("langs")
+    if not isinstance(raw_languages, list):
+        raw_languages = [value.get("lang", "")]
+    languages = [
+        str(language).strip()
+        for language in raw_languages
+        if str(language or "").strip()
+    ]
+    if languages and st.session_state.get(BROWSER_LANGUAGES) != languages:
+        st.session_state[BROWSER_LANGUAGES] = languages
+
     try:
         viewport_width = int(value.get("vw", 0) or 0)
     except Exception:
         viewport_width = 0
     if viewport_width and st.session_state.get(BROWSER_VIEWPORT_WIDTH) != viewport_width:
         st.session_state[BROWSER_VIEWPORT_WIDTH] = viewport_width
-
-
 def render_connection_loading_overlay(payload: Optional[dict], *, title_text: str, dark: bool = True) -> None:
     info = payload if isinstance(payload, dict) else {}
     provider = html.escape(str(info.get("provider", "Estación") or "Estación"))

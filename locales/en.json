@@ -52,7 +52,8 @@
     "hour": "Time",
     "and": "and",
     "off": "Off",
-    "on": "On"
+    "on": "On",
+    "close": "Close"
   },
   "meta": {
     "last_data": "Last data",
@@ -72,7 +73,8 @@
     "latitude_short": "Lat",
     "longitude_short": "Lon",
     "connect_prompt": "Connect your station from the side panel or explore nearby stations.",
-    "manual_station": "ℹ️ Manual NWS station: reports daily max/min once a day. No real-time data."
+    "manual_station": "ℹ️ Manual/conventional station: reports its values once a day. No real-time data.",
+    "pws_measurement_notice": "Personal weather stations may not comply with meteorological measurement standards."
   },
   "favorites": {
     "title": "Favorites",
@@ -90,15 +92,6 @@
     "whats_new": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
-    "v127_improvements": [
-      "New Windy PWS provider with open amateur weather stations worldwide.",
-      "Active Windy stations can be explored on the map, connected and saved as favourites.",
-      "Windy current observations and recent series are available in Observation and Trends."
-    ],
-    "v127_fixes": [
-      "The amateur inventory is kept separate from the official station catalogue.",
-      "The map only shows Windy stations with recent data by default."
-    ],
     "improvements": [
       "Complete, functional migration to FastAPI mode.",
       "New Ranking tab, with temperature, wind and precipitation rankings by country and globally.",
@@ -116,6 +109,19 @@
       "Fixed an issue that prevented the full pressure trend from being calculated correctly.",
       "Fixed an error that caused AEMET and MeteoGalicia temperature highs and lows to show incorrect values.",
       "Fixed an error that caused MeteoGalicia maximum gust values to show incorrectly."
+    ],
+    "release_130_improvements": [
+      "New worldwide map of current temperature.",
+      "New worldwide map of wind speed and direction.",
+      "New worldwide map of accumulated precipitation.",
+      "New personal weather station providers: Netatmo and Windy.",
+      "New official providers: IPMA (Portugal), GEOSPHERE (Austria), SMHI (Sweden), and ECCC (Canada).",
+      "Up to 30% faster initial website loading.",
+      "New language available: Portuguese."
+    ],
+    "release_130_fixes": [
+      "MeteoLabX now automatically recognizes the browser language.",
+      "The selected language is remembered between visits."
     ],
     "previous_improvements": [
       "Two new data providers added: Met Office and MeteoHub Italy.",
@@ -137,7 +143,52 @@
       "Fixed an error that prevented querying the current year's history in Weather Underground."
     ],
     "sources": "Sources",
-    "unaffiliated": "Not affiliated"
+    "unaffiliated": "Not affiliated",
+    "privacy": "Privacy",
+    "privacy_title": "Privacy and usage data",
+    "privacy_intro": "MeteoLabX does not require registration or a user account, and it does not build personal profiles of its visitors.",
+    "privacy_cookies_title": "Cookies and tracking",
+    "privacy_cookies": [
+      "MeteoLabX does not use advertising cookies, tracking pixels or external analytics services such as Google Analytics, and it does not display advertising.",
+      "The application may use cookies or technical mechanisms that are strictly necessary for its operation and security. These mechanisms are not used for advertising or to track your activity on other websites, so they do not require consent and you will not see a cookie banner."
+    ],
+    "privacy_browser_title": "Preferences stored in your browser",
+    "privacy_browser": [
+      "So that you do not have to configure MeteoLabX on every visit, some preferences, such as the selected units or your favourite stations, are stored locally in your browser.",
+      "The credentials you enter for providers such as Weather Underground or WeatherLink are also stored locally in your browser. They are used exclusively to perform the requests you make and are not added to MeteoLabX's statistics or kept in its database.",
+      "You can remove this information at any time by clearing the browsing data associated with MeteoLabX."
+    ],
+    "privacy_log_title": "Technical query log",
+    "privacy_log_intro": "To know which stations are being consulted and to check that the service is working correctly, MeteoLabX keeps a technical log that may include:",
+    "privacy_log_items": [
+      "The provider, identifier and name of the station consulted.",
+      "The date and time of the query.",
+      "If the query fails, the category of the error, such as a timeout, rejected credentials or a communication failure with the provider, and, where applicable, the HTTP status code."
+    ],
+    "privacy_log_notes": [
+      "This log is not linked to any user account, session identifier or visitor profile. MeteoLabX does not add the visitor's IP address, location, credentials or any information intended to identify them to these statistics.",
+      "Please note that a station's identifier or name may contain information published by its owner on the corresponding weather provider."
+    ],
+    "privacy_purpose_title": "Purpose of the log",
+    "privacy_purpose_intro": "The information is used exclusively to:",
+    "privacy_purpose_items": [
+      "Produce internal statistics on the use of stations and providers.",
+      "Detect errors and availability problems.",
+      "Diagnose failures and improve how MeteoLabX works."
+    ],
+    "privacy_purpose_note": "It is not used for advertising, personal profiling or individual tracking of visitors.",
+    "privacy_infra_title": "Infrastructure and security logs",
+    "privacy_infra": [
+      "The providers used to host, protect and deliver MeteoLabX may temporarily process technical information, such as the IP address, the browser used and the date and time of access, in order to provide the service, prevent abuse and guarantee its security.",
+      "These providers act exclusively as technical infrastructure providers and do not receive the data to use it for their own advertising purposes."
+    ],
+    "privacy_retention_title": "Retention and access",
+    "privacy_retention": [
+      "The technical query logs are kept indefinitely for as long as the service remains in operation.",
+      "The logs are accessible exclusively to the MeteoLabX administrator and to the technical providers when necessary to provide or protect the service."
+    ],
+    "privacy_contact_title": "Contact",
+    "privacy_contact": "For any question about privacy or about how this information is handled, you can write to"
   },
   "cards": {
     "help_aria": "Help for {title}",
@@ -623,6 +674,14 @@
       "metoffice_synoptic": "Met Office Land Observations (48 h, 3 h sampling)",
       "meteohub_today": "MeteoHub Italia recent observations ({minutes} min)",
       "meteohub_synoptic": "MeteoHub Italia recent observations (3 h sampling)",
+      "ipma_today": "IPMA hourly observations ({minutes} min)",
+      "ipma_synoptic": "IPMA hourly observations (last 24 h)",
+      "geosphere_today": "GeoSphere 10-minute observations ({minutes} min)",
+      "geosphere_synoptic": "GeoSphere 10-minute observations (1 h sampling)",
+      "smhi_today": "SMHI hourly observations ({minutes} min)",
+      "smhi_synoptic": "SMHI hourly observations",
+      "eccc_today": "ECCC SWOB observations ({minutes} min)",
+      "eccc_synoptic": "ECCC SWOB observations (1 h sampling)",
       "windy_today": "Windy PWS recent observations",
       "windy_synoptic": "Windy PWS recent observations (3 h sampling)",
       "netatmo_today": "Netatmo recent observations",
@@ -754,10 +813,30 @@
       "uv": "UV"
     },
     "hide_manual": "Hide manual stations",
+    "hide_pws": "Hide personal weather stations",
+    "hide_pws_help": "Hides personal weather stations (Netatmo and Windy PWS), leaving only official networks.",
     "hide_manual_help": "Manual stations (COOP/CoCoRaHS observers) publish one hand-taken reading per day, with no real-time data.",
     "station_type": "Type",
     "station_type_automatic": "Automatic",
-    "station_type_manual": "Manual"
+    "station_type_manual": "Manual",
+    "temp_field_legend": "Current temperature (°C)",
+    "temp_field_unavailable": "The temperature map is not available yet (the ranking is still collecting data).",
+    "view_mode": "Map view",
+    "view_stations": "Stations",
+    "view_temperature": "Temperature",
+    "view_wind": "Wind",
+    "view_precipitation": "Precipitation 24 h",
+    "wind_field_legend": "Current wind speed (km/h)",
+    "wind_field_unavailable": "The wind map is not available yet (the ranking is still collecting data).",
+    "wind_speed": "Speed",
+    "wind_gust": "Gust",
+    "wind_direction": "Direction",
+    "precip_field_legend": "Accumulated precipitation over the last 24 hours (mm)",
+    "precip_field_unavailable": "The precipitation map is not available yet (24 hours of reliable samples are required).",
+    "precip_24h": "Last 24 h",
+    "temp_now": "Now",
+    "temp_max_short": "Maximum",
+    "temp_min_short": "Minimum"
   },
   "station_selector": {
     "search_near_me": "📍 Find stations near me",

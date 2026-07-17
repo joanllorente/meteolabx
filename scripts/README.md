@@ -1,9 +1,35 @@
 Scripts auxiliares de mantenimiento del proyecto.
 
+## Runtime local
+
+El proyecto fija Python en `.python-version` y el entorno local vive en
+`.venv`. Los lanzadores seleccionan automáticamente `.venv/bin/python`, aunque
+el `python3` global de macOS siga apuntando al Python incluido con Xcode.
+
+```bash
+./scripts/run_server.sh   # FastAPI, puerto 8000
+./scripts/run_app.sh      # Streamlit, puerto 8501
+```
+
+Para ejecutar comandos manuales con el mismo runtime:
+
+```bash
+source .venv/bin/activate
+python --version
+```
+
+También se puede usar `.venv/bin/python` directamente. Ejecutar `python3` sin
+activar el entorno depende del `PATH` de la terminal y no aplica por sí solo
+el contenido de `.python-version`.
+
 Incluye generadores manuales de inventarios y mapas locales:
 
 - `build_aemet_inventory.py`
 - `build_frost_inventory.py`
+- `build_geosphere_inventory.py`
+- `build_ipma_inventory.py`
+- `build_smhi_inventory.py`
+- `build_eccc_inventory.py`
 - `build_metoffice_inventory.py`
 - `build_meteohub_inventory.py`
 - `build_euskalmet_sensor_map.py`

@@ -22,6 +22,7 @@ Meteo-France pierde las horas previas del día → degradación aceptable.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -47,7 +48,13 @@ PROVIDER_TZ = {
     "METEOGALICIA": "Europe/Madrid",
     "METEOFRANCE": "Europe/Paris",
     "METEOHUB_IT": "Europe/Rome",
+    "IPMA": "Europe/Lisbon",
+    "GEOSPHERE": "Europe/Vienna",
+    "SMHI": "Europe/Stockholm",
     "FROST": "Europe/Oslo",
+    # Canadá cruza 6 husos: UTC como clave de bucket; cada estación aporta
+    # su día local (como IEM).
+    "ECCC": "UTC",
     # IEM mezcla 204 husos: usamos UTC como clave de "día" del bucket; cada
     # estación trae su propio día local en ``currents.json`` (campo agregado).
     "IEM": "UTC",
@@ -64,7 +71,11 @@ PROVIDER_FIXED_COUNTRY = {
     "POEM": "ES",
     "METEOFRANCE": "FR",
     "METEOHUB_IT": "IT",
+    "IPMA": "PT",
+    "GEOSPHERE": "AT",
+    "SMHI": "SE",
     "FROST": "NO",
+    "ECCC": "CA",
 }
 
 # País → proveedor nacional para el "ranking del país del usuario".
@@ -73,6 +84,10 @@ COUNTRY_PROVIDER = {
     "ES": "AEMET",
     "FR": "METEOFRANCE",
     "IT": "METEOHUB_IT",
+    "PT": "IPMA",
+    "AT": "GEOSPHERE",
+    "SE": "SMHI",
+    "CA": "ECCC",
 }
 
 MG_BASE = "https://servizos.meteogalicia.gal/mgrss/observacion"
@@ -93,6 +108,24 @@ class StationDaily:
     tmin: Optional[float] = None
     gust: Optional[float] = None
     rain: Optional[float] = None
+    # Precipitacion acumulada en una ventana movil REAL de 24 horas. No se
+    # rellena a partir del total civil de ``rain``: solo cuando el bulk trae
+    # muestras horarias suficientes para reconstruir [ahora-24h, ahora].
+    rain_24h: Optional[float] = None
+    rain_24h_at: Optional[int] = None
+    # Temperatura ACTUAL (última lectura), para el mapa de temperaturas.
+    # No participa en el ranking; solo la aportan los adaptadores cuyo bulk
+    # trae la instantánea (IEM, AEMET, Meteo-France).
+    tcur: Optional[float] = None
+    # Epoch UTC de esa instantánea: el mapa descarta lecturas viejas (una
+    # estación parada de madrugada pintaría frío nocturno a mediodía).
+    tcur_at: Optional[int] = None
+    # Viento medio ACTUAL en km/h y dirección meteorológica de procedencia
+    # (0°=N, 90°=E). La flecha del mapa usa un tamaño fijo; la velocidad se
+    # representa únicamente mediante el campo de color.
+    wind: Optional[float] = None
+    wind_dir: Optional[float] = None
+    wind_at: Optional[int] = None
     # ISO2 del país de la estación. Para proveedores de un solo país lo
     # estampa el store; IEM (multi-país) lo trae por estación. Permite el
     # "ranking del país del usuario" filtrando por país en vez de por proveedor.
@@ -173,7 +206,12 @@ def _parse_mg_day(dia: dict) -> List[StationDaily]:
 
 
 def _station_has_data(r: StationDaily) -> bool:
-    return any(r.value(m) is not None for m in METRICS)
+    return (
+        r.tcur is not None
+        or (r.wind is not None and r.wind_dir is not None)
+        or r.rain_24h is not None
+        or any(r.value(m) is not None for m in METRICS)
+    )
 
 
 def parse_meteogalicia_daily(payload: dict) -> List[StationDaily]:
@@ -219,7 +257,34 @@ async def fetch_meteogalicia_daily(
             timeout=timeout_s,
         )
         resp.raise_for_status()
-        return parse_meteogalicia_daily(resp.json())
+        records = parse_meteogalicia_daily(resp.json())
+
+        # Instantánea 10-minutal en bulk (1 llamada extra, todas las
+        # estaciones): el feed diario no trae lectura actual y sin ella las
+        # estaciones gallegas quedan fuera del mapa de temperaturas.
+        try:
+            from server.services import meteogalicia as mg
+
+            payload = await mg._get_json(client, mg.TENMIN_ENDPOINT, {}, timeout_s=timeout_s)
+            items = mg._extract_items(
+                payload, keys=["listUltimos10min", "listaUltimos10min", "ultimos10min"],
+            )
+            instant: Dict[str, Tuple[int, float]] = {}
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                sid = str(item.get("idEstacion") or "").strip()
+                epoch = mg._instant_epoch(item)
+                temp = mg._extract_measures(item.get("listaMedidas", [])).get("temp")
+                if sid and epoch and temp is not None and temp == temp:
+                    instant[sid] = (int(epoch), float(temp))
+            for rec in records:
+                held = instant.get(rec.station_id)
+                if held:
+                    rec.tcur_at, rec.tcur = held[0], round(held[1], 1)
+        except Exception as exc:
+            logger.warning("ranking: instantánea MeteoGalicia no disponible (%s)", type(exc).__name__)
+        return records
     finally:
         if owns:
             await client.aclose()
@@ -231,6 +296,48 @@ async def fetch_meteogalicia_daily(
 MC_BASE = "https://api.meteo.cat/xema/v1"
 # Variables XEMA: Tmáx=40, Tmín=42, lluvia=35, ráfaga (ratxa màx 10m, m/s)=50.
 _MC_VAR = {"tmax": 40, "tmin": 42, "rain": 35, "gust": 50}
+# Variable 32 = temperatura semihoraria: su última lectura es la instantánea
+# para el mapa de temperaturas (una 5ª llamada por ciclo).
+_MC_TCUR_VAR = 32
+_MC_WIND_VAR = 30
+_MC_WIND_DIR_VAR = 31
+
+
+async def _mc_fetch_instant(
+    client: httpx.AsyncClient, api_key: str, day, timeout_s: float,
+    var_code: int = _MC_TCUR_VAR,
+) -> Dict[str, Tuple[int, float]]:
+    """Última lectura de una variable por estación → {codi: (epoch, valor)}."""
+    url = f"{MC_BASE}/variables/mesurades/{var_code}/{day.year:04d}/{day.month:02d}/{day.day:02d}"
+    resp = await client.get(
+        url, headers={"x-api-key": api_key, "Accept": "application/json"}, timeout=timeout_s
+    )
+    if resp.status_code in (400, 404):
+        return {}
+    resp.raise_for_status()
+    data = resp.json()
+    out: Dict[str, Tuple[int, float]] = {}
+    for st in data if isinstance(data, list) else []:
+        codi = str(st.get("codi", "")).strip().upper()
+        if not codi:
+            continue
+        best: Optional[Tuple[int, float]] = None
+        for var in st.get("variables", []) or []:
+            for lec in var.get("lectures", []) or []:
+                value = _num(lec.get("valor"))
+                if value is None:
+                    continue
+                try:
+                    epoch = int(datetime.fromisoformat(
+                        str(lec.get("data") or "").replace("Z", "+00:00")
+                    ).timestamp())
+                except ValueError:
+                    continue
+                if best is None or epoch > best[0]:
+                    best = (epoch, value)
+        if best:
+            out[codi] = best
+    return out
 
 
 async def _mc_fetch_variable(
@@ -267,12 +374,58 @@ async def _mc_fetch_variable(
     return out
 
 
-def _mc_build_records(raw: Dict[str, Dict[str, List[float]]]) -> List[StationDaily]:
+async def _mc_fetch_variable_samples(
+    client: httpx.AsyncClient, api_key: str, var_code: int, day, timeout_s: float,
+) -> Dict[str, List[Tuple[int, float]]]:
+    """Como ``_mc_fetch_variable``, conservando el epoch de cada lectura."""
+    url = f"{MC_BASE}/variables/mesurades/{var_code}/{day.year:04d}/{day.month:02d}/{day.day:02d}"
+    resp = await client.get(
+        url, headers={"x-api-key": api_key, "Accept": "application/json"}, timeout=timeout_s,
+    )
+    if resp.status_code in (400, 404):
+        return {}
+    resp.raise_for_status()
+    data = resp.json()
+    out: Dict[str, List[Tuple[int, float]]] = {}
+    for station in data if isinstance(data, list) else []:
+        codi = str(station.get("codi", "")).strip().upper()
+        if not codi:
+            continue
+        samples: List[Tuple[int, float]] = []
+        for variable in station.get("variables", []) or []:
+            for reading in variable.get("lectures", []) or []:
+                value = _num(reading.get("valor"))
+                try:
+                    epoch = int(datetime.fromisoformat(
+                        str(reading.get("data") or "").replace("Z", "+00:00")
+                    ).timestamp())
+                except ValueError:
+                    continue
+                if value is not None:
+                    samples.append((epoch, value))
+        if samples:
+            out[codi] = sorted(samples)
+    return out
+
+
+def _mc_build_records(
+    raw: Dict[str, Dict[str, List[float]]],
+    instant: Optional[Dict[str, Tuple[int, float]]] = None,
+    wind_instant: Optional[Dict[str, Tuple[int, float]]] = None,
+    direction_instant: Optional[Dict[str, Tuple[int, float]]] = None,
+    rain_24h: Optional[Dict[str, Tuple[float, int]]] = None,
+) -> List[StationDaily]:
     from server.services import meteocat
 
+    instant = instant or {}
+    wind_instant = wind_instant or {}
+    direction_instant = direction_instant or {}
+    rain_24h = rain_24h or {}
     codis = set()
     for m in METRICS:
         codis |= set(raw.get(m, {}).keys())
+    codis |= set(instant.keys())
+    codis |= set(wind_instant.keys()) & set(direction_instant.keys())
     catalog = meteocat._load_station_catalog()
     out: List[StationDaily] = []
     for codi in codis:
@@ -284,6 +437,12 @@ def _mc_build_records(raw: Dict[str, Dict[str, List[float]]]) -> List[StationDai
         tmin_vals = raw.get("tmin", {}).get(codi)
         rain_vals = raw.get("rain", {}).get(codi)
         gust_vals = raw.get("gust", {}).get(codi)
+        wind_sample = wind_instant.get(codi)
+        direction_sample = direction_instant.get(codi)
+        has_current_wind = bool(
+            wind_sample and direction_sample
+            and abs(int(wind_sample[0]) - int(direction_sample[0])) <= 3600
+        )
         out.append(
             StationDaily(
                 provider="METEOCAT",
@@ -295,7 +454,14 @@ def _mc_build_records(raw: Dict[str, Dict[str, List[float]]]) -> List[StationDai
                 tmax=round(max(tmax_vals), 1) if tmax_vals else None,
                 tmin=round(min(tmin_vals), 1) if tmin_vals else None,
                 rain=round(sum(rain_vals), 1) if rain_vals else None,
+                rain_24h=(round(rain_24h[codi][0], 1) if codi in rain_24h else None),
+                rain_24h_at=(rain_24h[codi][1] if codi in rain_24h else None),
                 gust=_daily_gust_max_from_series([v * 3.6 for v in gust_vals]) if gust_vals else None,
+                tcur=round(instant[codi][1], 1) if codi in instant else None,
+                tcur_at=instant[codi][0] if codi in instant else None,
+                wind=round(float(wind_sample[1]) * 3.6, 1) if has_current_wind else None,
+                wind_dir=float(direction_sample[1]) % 360.0 if has_current_wind else None,
+                wind_at=max(int(wind_sample[0]), int(direction_sample[0])) if has_current_wind else None,
             )
         )
     return out
@@ -319,8 +485,51 @@ async def fetch_meteocat_daily(
         async def _day(day) -> List[StationDaily]:
             raw = {}
             for metric, var in _MC_VAR.items():
-                raw[metric] = await _mc_fetch_variable(client, api_key, var, day, timeout_s)
-            return _mc_build_records(raw)
+                if metric == "rain":
+                    samples = await _mc_fetch_variable_samples(
+                        client, api_key, var, day, timeout_s,
+                    )
+                    raw[metric] = {
+                        sid: [value for _epoch, value in rows]
+                        for sid, rows in samples.items()
+                    }
+                else:
+                    raw[metric] = await _mc_fetch_variable(client, api_key, var, day, timeout_s)
+            try:
+                instant = await _mc_fetch_instant(client, api_key, day, timeout_s)
+                wind_instant, direction_instant = await asyncio.gather(
+                    _mc_fetch_instant(
+                        client, api_key, day, timeout_s, _MC_WIND_VAR,
+                    ),
+                    _mc_fetch_instant(
+                        client, api_key, day, timeout_s, _MC_WIND_DIR_VAR,
+                    ),
+                )
+            except Exception as exc:
+                logger.warning("ranking: instantánea Meteocat no disponible (%s)", type(exc).__name__)
+                instant = {}
+                wind_instant = {}
+                direction_instant = {}
+            rolling: Dict[str, Tuple[float, int]] = {}
+            if day == today:
+                yesterday_samples = await _mc_fetch_variable_samples(
+                    client, api_key, _MC_VAR["rain"], today - timedelta(days=1), timeout_s,
+                )
+                cutoff = int(datetime.now(tz).timestamp()) - 24 * 3600
+                for sid in set(samples) | set(yesterday_samples):
+                    rows = [
+                        item
+                        for item in yesterday_samples.get(sid, []) + samples.get(sid, [])
+                        if item[0] >= cutoff
+                    ]
+                    if rows:
+                        rolling[sid] = (
+                            sum(max(0.0, value) for _epoch, value in rows),
+                            max(epoch for epoch, _value in rows),
+                        )
+            return _mc_build_records(
+                raw, instant, wind_instant, direction_instant, rolling,
+            )
 
         recs = await _day(today)
         if sum(1 for r in recs if _station_has_data(r)) < 15:
@@ -345,7 +554,7 @@ def _mh_networks() -> List[str]:
     return sorted({str(r.get("network")) for r in rows if r.get("network")})
 
 
-def _mh_parse_station(st: dict) -> Optional[StationDaily]:
+def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Optional[StationDaily]:
     from server.services import meteohub as mh
 
     stat = st.get("stat", {}) if isinstance(st, dict) else {}
@@ -355,8 +564,38 @@ def _mh_parse_station(st: dict) -> Optional[StationDaily]:
         if isinstance(det, dict) and det.get("var") == "B01019":
             name = str(det.get("val") or "").strip()
     aligned = mh._align_series(mh._products_by_code(st))
-    temps = [t for t in aligned["temps"] if t == t]
-    precs = [p for p in aligned["precips"] if p == p]
+    daily_pairs = [
+        (epoch, temp, precip)
+        for epoch, temp, precip in zip(
+            aligned["epochs"], aligned["temps"], aligned["precips"],
+        )
+        if day_start_epoch is None or int(epoch) >= int(day_start_epoch)
+    ]
+    temps = [temp for _epoch, temp, _precip in daily_pairs if temp == temp]
+    precs = [precip for _epoch, _temp, precip in daily_pairs if precip == precip]
+    rolling_precip = [
+        (int(epoch), float(precip))
+        for epoch, precip in zip(aligned["epochs"], aligned["precips"])
+        if precip == precip
+    ]
+    # Instantánea: última muestra válida de la serie del día (para el mapa
+    # de temperaturas; el filtro de frescura descarta estaciones paradas).
+    tcur = tcur_at = None
+    for epoch, value in zip(reversed(aligned["epochs"]), reversed(aligned["temps"])):
+        if value == value:
+            tcur, tcur_at = round(float(value), 1), int(epoch)
+            break
+    wind = wind_dir = wind_at = None
+    for epoch, speed, direction in zip(
+        reversed(aligned["epochs"]),
+        reversed(aligned["winds"]),
+        reversed(aligned["wind_dirs"]),
+    ):
+        if speed == speed and direction == direction:
+            wind = round(float(speed), 1)
+            wind_dir = float(direction) % 360.0
+            wind_at = int(epoch)
+            break
     sid = f"{net}|{lat}|{lon}|{name}".lower()
     return StationDaily(
         provider="METEOHUB_IT",
@@ -369,6 +608,16 @@ def _mh_parse_station(st: dict) -> Optional[StationDaily]:
         tmin=round(min(temps), 1) if temps else None,
         gust=None,  # MeteoHub no reporta ráfaga
         rain=round(sum(precs), 1) if precs else None,
+        rain_24h=(
+            round(sum(max(0.0, value) for _epoch, value in rolling_precip), 1)
+            if rolling_precip else None
+        ),
+        rain_24h_at=max((epoch for epoch, _value in rolling_precip), default=None),
+        tcur=tcur,
+        tcur_at=tcur_at,
+        wind=wind,
+        wind_dir=wind_dir,
+        wind_at=wind_at,
     )
 
 
@@ -387,7 +636,8 @@ async def fetch_meteohub_daily(
     from server.services import meteohub as mh
 
     now = datetime.now(tz=mh.STATION_TZ)
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = now - timedelta(hours=24)
     # Query ligera: solo temperatura (B12101) y lluvia (B13011) — las únicas
     # que usa el ranking — en vez de las 6 productos de _build_query. Reduce
     # mucho el tamaño de respuesta (25 redes) y el tiempo del ciclo.
@@ -423,7 +673,9 @@ async def fetch_meteohub_daily(
                     return []
                 recs = []
                 for st in data:
-                    rec = _mh_parse_station(st)
+                    rec = _mh_parse_station(
+                        st, day_start_epoch=int(day_start.timestamp()),
+                    )
                     if rec and rec.station_id and _station_has_data(rec):
                         recs.append(rec)
                 return recs
@@ -437,6 +689,580 @@ async def fetch_meteohub_daily(
     finally:
         if owns:
             await client.aclose()
+
+
+# ----------------------------------------------------------------------
+# Adaptador: IPMA (Portugal, directo; bulk nativo)
+# ----------------------------------------------------------------------
+# `observations.json` trae las últimas 24 h de TODA la red en una llamada.
+# Tmáx/Tmín se reducen de las medias horarias (IPMA no publica extremos →
+# quedan ligeramente recortados frente a un extremo minutal). Sin ráfaga.
+# Nombre/coordenadas/huso desde el catálogo local; cada estación usa SU huso
+# (continente/Madeira/Azores) para decidir el día en curso.
+def _ipma_catalog() -> Dict[str, dict]:
+    from data_files import IPMA_STATIONS_PATH
+
+    payload = json.load(open(IPMA_STATIONS_PATH, encoding="utf-8"))
+    rows = payload.get("stations", payload) if isinstance(payload, dict) else payload
+    return {str(r.get("id")): r for r in rows if isinstance(r, dict) and r.get("id")}
+
+
+async def fetch_ipma_daily(
+    *,
+    client: Optional[httpx.AsyncClient] = None,
+    timeout_s: float = 60.0,
+    now: Optional[datetime] = None,
+) -> List[StationDaily]:
+    """Estaciones portuguesas del día en curso (1 llamada, feed de 24 h).
+    De madrugada el día local aún tiene pocas horas pobladas: si menos de 15
+    estaciones traen datos se mantiene el día anterior (mismo criterio que
+    Meteocat/MeteoGalicia) para no publicar un ranking vacío."""
+    from server.services import ipma as ip
+
+    owns = client is None
+    if owns:
+        client = httpx.AsyncClient(timeout=timeout_s)
+    try:
+        payload = await ip._get_json(client, ip.OBSERVATIONS_URL, timeout_s=timeout_s)
+    finally:
+        if owns:
+            await client.aclose()
+    if not isinstance(payload, dict):
+        return []
+
+    from domain.parsing.common import parse_epoch
+
+    # station_id → [(epoch, temp, precip, viento km/h, dirección)] con el
+    # centinela -99.0 ya convertido a None.
+    samples: Dict[str, List[Tuple[
+        int, Optional[float], Optional[float], Optional[float], Optional[float],
+    ]]] = {}
+    for timestamp, readings in payload.items():
+        if not isinstance(readings, dict):
+            continue
+        epoch = parse_epoch(timestamp)
+        if epoch is None:
+            continue
+        for sid, reading in readings.items():
+            if not isinstance(reading, dict):
+                continue
+            temp = _num(reading.get("temperatura"))
+            prec = _num(reading.get("precAcumulada"))
+            wind = _num(reading.get("intensidadeVentoKM"))
+            if wind is None:
+                wind_ms = _num(reading.get("intensidadeVento"))
+                wind = wind_ms * 3.6 if wind_ms is not None else None
+            wind_dir_raw = ip._wind_dir_deg(reading.get("idDireccVento"))
+            wind_dir = float(wind_dir_raw) if wind_dir_raw == wind_dir_raw else None
+            if temp is not None and temp <= -99.0:
+                temp = None
+            if prec is not None and prec <= -99.0:
+                prec = None
+            if wind is not None and wind <= -99.0:
+                wind = None
+            if temp is None and prec is None and wind is None:
+                continue
+            samples.setdefault(str(sid), []).append(
+                (int(epoch), temp, prec, wind, wind_dir),
+            )
+
+    catalog = _ipma_catalog()
+    now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+
+    def _build(day_offset: int) -> List[StationDaily]:
+        recs: List[StationDaily] = []
+        for sid, rows in samples.items():
+            rows = sorted(rows)  # el feed no garantiza orden temporal
+            meta = catalog.get(sid, {})
+            try:
+                tz = ZoneInfo(str(meta.get("tz") or PROVIDER_TZ["IPMA"]))
+            except Exception:
+                tz = ZoneInfo(PROVIDER_TZ["IPMA"])
+            day_local = (now_utc.astimezone(tz) - timedelta(days=day_offset)).date()
+            day_rows = [
+                row for row in rows
+                if datetime.fromtimestamp(row[0], tz=timezone.utc).astimezone(tz).date() == day_local
+            ]
+            temps = [t for _, t, _, _, _ in day_rows if t is not None]
+            precs = [p for _, _, p, _, _ in day_rows if p is not None]
+            tcur = tcur_at = None
+            for epoch, temp, _, _, _ in sorted(rows, reverse=True):
+                if temp is not None:
+                    tcur, tcur_at = round(float(temp), 1), int(epoch)
+                    break
+            wind = wind_dir = wind_at = None
+            for epoch, _, _, speed, direction in sorted(rows, reverse=True):
+                if speed is not None and direction is not None:
+                    wind = round(float(speed), 1)
+                    wind_dir = float(direction) % 360.0
+                    wind_at = int(epoch)
+                    break
+            local_time = ""
+            if day_rows:
+                local_time = (
+                    datetime.fromtimestamp(day_rows[-1][0], tz=timezone.utc)
+                    .astimezone(tz).strftime("%H:%M")
+                )
+            rec = StationDaily(
+                provider="IPMA",
+                station_id=sid,
+                name=str(meta.get("name") or sid).strip(),
+                locality=str(meta.get("region") or "").strip(),
+                lat=_num(meta.get("lat")),
+                lon=_num(meta.get("lon")),
+                tmax=round(max(temps), 1) if temps else None,
+                tmin=round(min(temps), 1) if temps else None,
+                gust=None,  # IPMA no reporta ráfaga
+                rain=round(sum(precs), 1) if precs else None,
+                rain_24h=round(sum(
+                    max(0.0, float(prec))
+                    for epoch, _temp, prec, _wind, _direction in rows
+                    if prec is not None and epoch >= int(now_utc.timestamp()) - 24 * 3600
+                ), 1) if any(
+                    prec is not None and epoch >= int(now_utc.timestamp()) - 24 * 3600
+                    for epoch, _temp, prec, _wind, _direction in rows
+                ) else None,
+                rain_24h_at=max(
+                    (
+                        epoch for epoch, _temp, prec, _wind, _direction in rows
+                        if prec is not None and epoch >= int(now_utc.timestamp()) - 24 * 3600
+                    ),
+                    default=None,
+                ),
+                tcur=tcur,
+                tcur_at=tcur_at,
+                wind=wind,
+                wind_dir=wind_dir,
+                wind_at=wind_at,
+                local_date=day_local.isoformat(),
+                local_time=local_time,
+            )
+            if _station_has_data(rec):
+                recs.append(rec)
+        return recs
+
+    recs = _build(0)
+    if sum(1 for r in recs if r.tmax is not None or r.rain is not None) < 15:
+        recs = _build(1)
+    return recs
+
+
+# ----------------------------------------------------------------------
+# Adaptador: GeoSphere Austria (directo; bulk nativo)
+# ----------------------------------------------------------------------
+# El Data Hub acepta todas las estaciones en una llamada. Se piden los
+# extremos POR BLOQUE de 10 min (TLMAX/TLMIN/FFX): el agregado diario es el
+# extremo real medido, no el de medias. RR es el acumulado de cada bloque.
+def _gs_station_ids() -> List[str]:
+    """Solo la red TAWES (10 min): las estaciones KLIMA (``manual``, ids
+    ``K…``) son de dato diario y el dataset 10-minutal las rechaza con 400."""
+    from data_files import GEOSPHERE_STATIONS_PATH
+
+    payload = json.load(open(GEOSPHERE_STATIONS_PATH, encoding="utf-8"))
+    rows = payload.get("stations", payload) if isinstance(payload, dict) else payload
+    return [
+        str(r.get("id")) for r in rows
+        if isinstance(r, dict) and r.get("id") and not r.get("manual")
+    ]
+
+
+def _gs_catalog() -> Dict[str, dict]:
+    from data_files import GEOSPHERE_STATIONS_PATH
+
+    payload = json.load(open(GEOSPHERE_STATIONS_PATH, encoding="utf-8"))
+    rows = payload.get("stations", payload) if isinstance(payload, dict) else payload
+    return {str(r.get("id")): r for r in rows if isinstance(r, dict) and r.get("id")}
+
+
+async def fetch_geosphere_daily(
+    *,
+    client: Optional[httpx.AsyncClient] = None,
+    timeout_s: float = 90.0,
+    now: Optional[datetime] = None,
+) -> List[StationDaily]:
+    """Estaciones austríacas del día en curso (1 llamada bulk de 10 min).
+    De madrugada, si menos de 15 estaciones traen datos aún, se mantiene el
+    día anterior (mismo criterio que Meteocat/MeteoGalicia/IPMA)."""
+    from server.services import geosphere as gs
+
+    tz = ZoneInfo(PROVIDER_TZ["GEOSPHERE"])
+    now_local = (now or datetime.now(tz)).astimezone(tz)
+    station_ids = _gs_station_ids()
+    if not station_ids:
+        return []
+
+    async def _day(day_offset: int) -> List[StationDaily]:
+        day_local = (now_local - timedelta(days=day_offset)).date()
+        day_start = datetime(day_local.year, day_local.month, day_local.day, tzinfo=tz)
+        # La consulta principal abarca 24 h exactas. Los extremos/ranking se
+        # filtran despues al dia local; RR conserva la ventana completa.
+        start = now_local - timedelta(hours=24) if day_offset == 0 else day_start
+        end = now_local if day_offset == 0 else min(now_local, day_start + timedelta(days=1))
+        payload = await gs._get_json(
+            client,
+            gs.DATASET_URL,
+            {
+                "parameters": "TL,TLMAX,TLMIN,FF,DD,FFX,RR",
+                "station_ids": ",".join(station_ids),
+                "start": gs._to_iso_minute(start),
+                "end": gs._to_iso_minute(end),
+            },
+            timeout_s=timeout_s,
+        )
+        timestamps = payload.get("timestamps") if isinstance(payload, dict) else None
+        features = payload.get("features") if isinstance(payload, dict) else None
+        if not isinstance(timestamps, list) or not isinstance(features, list):
+            return []
+        from domain.parsing.common import parse_epoch
+
+        epochs = [parse_epoch(ts) for ts in timestamps]
+        catalog = _gs_catalog()
+        recs: List[StationDaily] = []
+        for feature in features:
+            properties = feature.get("properties") if isinstance(feature, dict) else None
+            if not isinstance(properties, dict):
+                continue
+            sid = str(properties.get("station") or "").strip()
+            parameters = properties.get("parameters")
+            if not sid or not isinstance(parameters, dict):
+                continue
+
+            def _series(name: str) -> List[Optional[float]]:
+                block = parameters.get(name)
+                values = block.get("data") if isinstance(block, dict) else None
+                return [_num(v) for v in values] if isinstance(values, list) else []
+
+            def _series_for_day(name: str) -> List[Optional[float]]:
+                values = _series(name)
+                return [
+                    value
+                    for index, value in enumerate(values)
+                    if (
+                        index < len(epochs)
+                        and epochs[index] is not None
+                        and datetime.fromtimestamp(
+                            epochs[index], tz=timezone.utc,
+                        ).astimezone(tz).date() == day_local
+                    )
+                ]
+
+            tl = _series("TL")
+            day_tl = _series_for_day("TL")
+            tlmax = [v for v in _series_for_day("TLMAX") if v is not None] or [v for v in day_tl if v is not None]
+            tlmin = [v for v in _series_for_day("TLMIN") if v is not None] or [v for v in day_tl if v is not None]
+            gusts_kmh = [v * 3.6 for v in _series_for_day("FFX") if v is not None]
+            precs = [max(0.0, v) for v in _series_for_day("RR") if v is not None]
+            rolling_precs = [max(0.0, v) for v in _series("RR") if v is not None]
+            wind_series = _series("FF")
+            direction_series = _series("DD")
+            tcur = tcur_at = None
+            for idx in range(len(tl) - 1, -1, -1):
+                if tl[idx] is not None and idx < len(epochs) and epochs[idx] is not None:
+                    tcur, tcur_at = round(float(tl[idx]), 1), int(epochs[idx])
+                    break
+            wind = wind_dir = wind_at = None
+            for idx in range(min(len(wind_series), len(direction_series), len(epochs)) - 1, -1, -1):
+                if (
+                    wind_series[idx] is not None
+                    and direction_series[idx] is not None
+                    and epochs[idx] is not None
+                ):
+                    wind = round(float(wind_series[idx]) * 3.6, 1)
+                    wind_dir = float(direction_series[idx]) % 360.0
+                    wind_at = int(epochs[idx])
+                    break
+            meta = catalog.get(sid, {})
+            rec = StationDaily(
+                provider="GEOSPHERE",
+                station_id=sid,
+                name=str(meta.get("name") or sid).strip(),
+                locality=str(meta.get("region") or "").strip(),
+                lat=_num(meta.get("lat")),
+                lon=_num(meta.get("lon")),
+                tmax=round(max(tlmax), 1) if tlmax else None,
+                tmin=round(min(tlmin), 1) if tlmin else None,
+                gust=round(_daily_gust_max_from_series(gusts_kmh), 1) if gusts_kmh else None,
+                rain=round(sum(precs), 1) if precs else None,
+                rain_24h=(
+                    round(sum(rolling_precs), 1)
+                    if day_offset == 0 and rolling_precs else None
+                ),
+                rain_24h_at=(
+                    max((int(epoch) for epoch in epochs if epoch is not None), default=None)
+                    if day_offset == 0 and rolling_precs else None
+                ),
+                tcur=tcur,
+                tcur_at=tcur_at,
+                wind=wind,
+                wind_dir=wind_dir,
+                wind_at=wind_at,
+                local_date=day_local.isoformat(),
+                local_time=(
+                    datetime.fromtimestamp(tcur_at, tz=timezone.utc).astimezone(tz).strftime("%H:%M")
+                    if tcur_at else ""
+                ),
+            )
+            if _station_has_data(rec):
+                recs.append(rec)
+        return recs
+
+    owns = client is None
+    if owns:
+        client = httpx.AsyncClient(timeout=timeout_s)
+    try:
+        recs = await _day(0)
+        if sum(1 for r in recs if r.tmax is not None or r.rain is not None) < 15:
+            recs = await _day(1)
+        return recs
+    finally:
+        if owns:
+            await client.aclose()
+
+
+# ----------------------------------------------------------------------
+# Adaptador: SMHI (Suecia, ACUMULABLE; bulk de la última hora)
+# ----------------------------------------------------------------------
+# ``station-set/all/period/latest-hour`` devuelve TODA la red de un
+# parámetro en una llamada (3 por ciclo: temperatura, racha, lluvia 1 h).
+# SMHI no ofrece backfill bulk del día, así que los extremos se ACUMULAN
+# hora a hora en el store (como Meteo-France); la persistencia a disco
+# cubre los reinicios. La temperatura es instantánea horaria → los
+# extremos diarios quedan ligeramente recortados (como IPMA).
+def _smhi_catalog() -> Dict[str, dict]:
+    from data_files import SMHI_STATIONS_PATH
+
+    payload = json.load(open(SMHI_STATIONS_PATH, encoding="utf-8"))
+    rows = payload.get("stations", payload) if isinstance(payload, dict) else payload
+    return {str(r.get("id")): r for r in rows if isinstance(r, dict) and r.get("id")}
+
+
+async def fetch_smhi_records(
+    store: "RankingStore",
+    *,
+    client: httpx.AsyncClient,
+    timeout_s: float = 60.0,
+    now: Optional[datetime] = None,
+) -> List[StationDaily]:
+    """ACUMULABLE: 3 llamadas bulk (temp/racha/lluvia de la última hora),
+    upsert por hora en el store y reducción a agregados diarios."""
+    import asyncio
+
+    from server.services import smhi as sm
+
+    tz = ZoneInfo(PROVIDER_TZ["SMHI"])
+
+    async def _bulk(parameter: str) -> Dict[str, Tuple[int, float]]:
+        url = (
+            f"{sm.BASE_URL}/parameter/{parameter}"
+            "/station-set/all/period/latest-hour/data.json"
+        )
+        payload = await sm._get_json(client, url, timeout_s=timeout_s)
+        out: Dict[str, Tuple[int, float]] = {}
+        for station in payload.get("station", []) if isinstance(payload, dict) else []:
+            if not isinstance(station, dict):
+                continue
+            sid = str(station.get("key") or "").strip()
+            values = station.get("value") or []
+            if not sid or not isinstance(values, list) or not values:
+                continue
+            item = values[-1]
+            value = _num(item.get("value")) if isinstance(item, dict) else None
+            try:
+                epoch = int(item.get("date")) // 1000
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if value is not None:
+                out[sid] = (epoch, value)
+        return out
+
+    async def _rain_bulk() -> Dict[str, List[Tuple[int, float]]]:
+        url = (
+            f"{sm.BASE_URL}/parameter/{sm.P_RAIN}"
+            "/station-set/all/period/latest-day/data.json"
+        )
+        payload = await sm._get_json(client, url, timeout_s=timeout_s)
+        out: Dict[str, List[Tuple[int, float]]] = {}
+        for station in payload.get("station", []) if isinstance(payload, dict) else []:
+            if not isinstance(station, dict):
+                continue
+            sid = str(station.get("key") or "").strip()
+            if not sid:
+                continue
+            samples: List[Tuple[int, float]] = []
+            for item in station.get("value") or []:
+                value = _num(item.get("value")) if isinstance(item, dict) else None
+                try:
+                    epoch = int(item.get("date")) // 1000
+                except (TypeError, ValueError, AttributeError):
+                    continue
+                if value is not None:
+                    samples.append((epoch, max(0.0, value)))
+            if samples:
+                out[sid] = sorted(samples)
+        return out
+
+    temps, winds, directions, gusts, rain_series = await asyncio.gather(
+        _bulk(sm.P_TEMP), _bulk(sm.P_WIND), _bulk(sm.P_DIR),
+        _bulk(sm.P_GUST), _rain_bulk(),
+    )
+
+    catalog = _smhi_catalog()
+    for sid in set(temps) | set(winds) | set(directions) | set(gusts) | set(rain_series):
+        meta = catalog.get(sid, {})
+        epoch = (
+            temps.get(sid) or winds.get(sid) or directions.get(sid)
+            or gusts.get(sid) or (rain_series.get(sid) or [(None, None)])[-1]
+        )[0]
+        local_dt = datetime.fromtimestamp(epoch, tz=timezone.utc).astimezone(tz)
+        temp = temps.get(sid, (None, None))[1]
+        gust_ms = gusts.get(sid, (None, None))[1]
+        wind_ms = winds.get(sid, (None, None))[1]
+        wind_dir = directions.get(sid, (None, None))[1]
+        wind_epoch = (winds.get(sid) or directions.get(sid) or (None, None))[0]
+        store.upsert_hourly(
+            "SMHI",
+            sid,
+            day=local_dt.date().isoformat(),
+            hour_key=local_dt.strftime("%Y-%m-%dT%H"),
+            name=str(meta.get("name") or sid).strip(),
+            locality="",
+            lat=_num(meta.get("lat")),
+            lon=_num(meta.get("lon")),
+            values={
+                "tmax": temp,
+                "tmin": temp,
+                "gust": round(gust_ms * 3.6, 1) if gust_ms is not None else None,
+                "tcur": temp,
+                "tcur_at": epoch,
+                "wind": round(wind_ms * 3.6, 1) if wind_ms is not None else None,
+                "wind_dir": float(wind_dir) % 360.0 if wind_dir is not None else None,
+                "wind_at": wind_epoch,
+            },
+        )
+        for rain_epoch, rain_value in rain_series.get(sid, []):
+            rain_local = datetime.fromtimestamp(
+                rain_epoch, tz=timezone.utc,
+            ).astimezone(tz)
+            store.upsert_hourly(
+                "SMHI",
+                sid,
+                day=rain_local.date().isoformat(),
+                hour_key=rain_local.strftime("%Y-%m-%dT%H"),
+                name=str(meta.get("name") or sid).strip(),
+                locality="",
+                lat=_num(meta.get("lat")),
+                lon=_num(meta.get("lon")),
+                values={"rain": rain_value, "rain_at": rain_epoch},
+            )
+    return store.reduce_accumulable_records("SMHI", now=now)
+
+
+# ----------------------------------------------------------------------
+# Adaptador: ECCC (Canadá, ACUMULABLE; bulk de la hora en punto)
+# ----------------------------------------------------------------------
+# swob-realtime no tiene "última obs por estación", pero casi toda la red
+# reporta a la hora en punto: la ventana [H:00, H:10) captura la obs de
+# ~99,9% de las estaciones de la hora (medido: 1283 distintas/hora, 12
+# fuera de los 6 primeros minutos, casi todas en :06-:08) con ~5k items,
+# bajo el límite de 10k. Los extremos se ACUMULAN hora a hora (como SMHI).
+# Canadá cruza 6 husos → el día de cada estación usa SU tz del catálogo.
+def _eccc_catalog() -> Dict[str, dict]:
+    from data_files import ECCC_STATIONS_PATH
+
+    payload = json.load(open(ECCC_STATIONS_PATH, encoding="utf-8"))
+    rows = payload.get("stations", payload) if isinstance(payload, dict) else payload
+    return {str(r.get("id")): r for r in rows if isinstance(r, dict) and r.get("id")}
+
+
+async def fetch_eccc_records(
+    store: "RankingStore",
+    *,
+    client: httpx.AsyncClient,
+    timeout_s: float = 90.0,
+    now: Optional[datetime] = None,
+) -> List[StationDaily]:
+    """ACUMULABLE: 1 llamada bulk por ciclo (ventana de la última hora en
+    punto), upsert por hora local de cada estación y reducción diaria."""
+    from server.services import eccc as ec
+
+    now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+    top = now_utc.replace(minute=0, second=0, microsecond=0)
+    if (now_utc - top).total_seconds() < 600:
+        top -= timedelta(hours=1)
+
+    payload = await ec._get_json(
+        client,
+        ec.SWOB_URL,
+        {
+            "f": "json",
+            "datetime": (
+                top.strftime("%Y-%m-%dT%H:%M:%SZ")
+                + "/"
+                + (top + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            ),
+            "limit": 10000,
+            "properties": (
+                "obs_date_tm,msc_id-value,air_temp,"
+                "max_air_temp_pst1hr,min_air_temp_pst1hr,"
+                "max_wnd_spd_10m_pst1hr,pcpn_amt_pst1hr"
+            ),
+        },
+        timeout_s=timeout_s,
+    )
+
+    # Última obs de la ventana por estación.
+    latest: Dict[str, Dict[str, Any]] = {}
+    for feature in (payload.get("features") or []) if isinstance(payload, dict) else []:
+        props = feature.get("properties") if isinstance(feature, dict) else None
+        if not isinstance(props, dict):
+            continue
+        sid = str(props.get("msc_id-value") or "").strip()
+        from domain.parsing.common import parse_epoch
+
+        epoch = parse_epoch(props.get("obs_date_tm"))
+        if not sid or epoch is None:
+            continue
+        current = latest.get(sid)
+        if current is None or epoch >= current["epoch"]:
+            latest[sid] = {"epoch": int(epoch), **props}
+
+    catalog = _eccc_catalog()
+    for sid, props in latest.items():
+        meta = catalog.get(sid)
+        if not meta:
+            continue
+        try:
+            tz = ZoneInfo(str(meta.get("tz") or "America/Toronto"))
+        except Exception:
+            tz = timezone.utc
+        local_dt = datetime.fromtimestamp(props["epoch"], tz=timezone.utc).astimezone(tz)
+        temp = _num(props.get("air_temp"))
+        # Extremos horarios EXPLÍCITOS → máx/mín diario exacto; la
+        # instantánea es solo la red de seguridad.
+        temp_high = _num(props.get("max_air_temp_pst1hr"))
+        temp_low = _num(props.get("min_air_temp_pst1hr"))
+        gust = _num(props.get("max_wnd_spd_10m_pst1hr"))  # SWOB ya da km/h
+        rain = _num(props.get("pcpn_amt_pst1hr"))
+        store.upsert_hourly(
+            "ECCC",
+            sid,
+            day=local_dt.date().isoformat(),
+            hour_key=local_dt.strftime("%Y-%m-%dT%H"),
+            name=str(meta.get("name") or sid).strip(),
+            locality=str(meta.get("region") or "").strip(),
+            lat=_num(meta.get("lat")),
+            lon=_num(meta.get("lon")),
+            values={
+                "tmax": temp_high if temp_high is not None else temp,
+                "tmin": temp_low if temp_low is not None else temp,
+                "gust": gust,
+                "rain": max(0.0, rain) if rain is not None else None,
+                "rain_at": props["epoch"] if rain is not None else None,
+                "tcur": temp,
+                "tcur_at": props["epoch"],
+            },
+        )
+    return store.reduce_accumulable_records("ECCC", now=now)
 
 
 # ----------------------------------------------------------------------
@@ -468,22 +1294,36 @@ async def fetch_meteofrance_records(
     tz = ZoneInfo(PROVIDER_TZ["METEOFRANCE"])
     now_local = (now or datetime.now(tz)).astimezone(tz)
     day = now_local.date().isoformat()
-    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    # El ranking diario sigue reduciendo por fecha local, pero conservamos
+    # tambien las horas de las ultimas 24 h para el mapa de precipitacion.
+    start_local = (now_local - timedelta(hours=24)).replace(
+        minute=0, second=0, microsecond=0,
+    )
     # Meteo-France publica normalmente el paquete horario sobre H+10 min.
     # Intentamos la hora actual; si aún no existe, quedará como missing y se
     # reintentará en el siguiente ciclo.
     latest = now_local.replace(minute=0, second=0, microsecond=0)
 
     # Horas necesarias del día (hour_key UTC → date param UTC).
-    needed: Dict[str, str] = {}
+    needed: Dict[str, Tuple[str, str]] = {}
     h = start_local
     while h <= latest:
         utc = h.astimezone(timezone.utc)
-        needed[utc.strftime("%Y-%m-%dT%H")] = utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        needed[utc.strftime("%Y-%m-%dT%H")] = (
+            utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            h.date().isoformat(),
+        )
         h += timedelta(hours=1)
 
-    existing = store.accumulated_hours("METEOFRANCE", day)
-    missing = {hk: ds for hk, ds in needed.items() if hk not in existing}
+    existing_by_day = {
+        local_day: store.accumulated_hours("METEOFRANCE", local_day)
+        for _date_str, local_day in needed.values()
+    }
+    missing = {
+        hk: (date_str, local_day)
+        for hk, (date_str, local_day) in needed.items()
+        if hk not in existing_by_day.get(local_day, set())
+    }
 
     if missing:
         catalog = {
@@ -494,7 +1334,7 @@ async def fetch_meteofrance_records(
         headers = {"apikey": api_key, "Accept": "*/*"}
         sem = asyncio.Semaphore(8)
 
-        async def _fetch_hour(hour_key: str, date_str: str):
+        async def _fetch_hour(hour_key: str, date_str: str, local_day: str):
             async with sem:
                 try:
                     resp = await client.get(
@@ -503,15 +1343,18 @@ async def fetch_meteofrance_records(
                         headers=headers, timeout=60.0, follow_redirects=True,
                     )
                     if resp.status_code != 200:
-                        return (hour_key, [])
+                        return (hour_key, local_day, [])
                     data = resp.json()
-                    return (hour_key, data if isinstance(data, list) else [])
+                    return (hour_key, local_day, data if isinstance(data, list) else [])
                 except Exception as exc:
                     logger.warning("ranking: fallo hora Meteo-France %s (%s)", date_str, type(exc).__name__)
-                    return (hour_key, [])
+                    return (hour_key, local_day, [])
 
-        results = await asyncio.gather(*[_fetch_hour(hk, ds) for hk, ds in missing.items()])
-        for hour_key, hour_data in results:
+        results = await asyncio.gather(*[
+            _fetch_hour(hk, date_str, local_day)
+            for hk, (date_str, local_day) in missing.items()
+        ])
+        for hour_key, observation_day, hour_data in results:
             for rec in hour_data:
                 if not isinstance(rec, dict):
                     continue
@@ -521,10 +1364,16 @@ async def fetch_meteofrance_records(
                 gust_ms = _num(rec.get("raf"))
                 if gust_ms is None:
                     gust_ms = _num(rec.get("fxy"))
+                wind_ms = _num(rec.get("ff"))
+                wind_dir = _num(rec.get("dd"))
+                observation_epoch = int(
+                    datetime.strptime(hour_key, "%Y-%m-%dT%H")
+                    .replace(tzinfo=timezone.utc).timestamp()
+                )
                 station = catalog.get(sid, {})
                 store.upsert_hourly(
                     "METEOFRANCE", sid,
-                    day=day, hour_key=hour_key,
+                    day=observation_day, hour_key=hour_key,
                     name=str(station.get("name", "") or sid).strip(),
                     locality="",
                     lat=_clean(station.get("lat") if station else rec.get("lat")),
@@ -534,6 +1383,13 @@ async def fetch_meteofrance_records(
                         "tmin": _k_to_c(rec.get("tn")),
                         "gust": _ms_to_kmh(gust_ms),
                         "rain": _num(rec.get("rr1")),
+                        "rain_at": observation_epoch if _num(rec.get("rr1")) is not None else None,
+                        "tcur": _k_to_c(rec.get("t")),
+                        # hour_key es UTC ("%Y-%m-%dT%H"): epoch de esa hora.
+                        "tcur_at": observation_epoch,
+                        "wind": _ms_to_kmh(wind_ms),
+                        "wind_dir": wind_dir % 360.0 if wind_dir is not None else None,
+                        "wind_at": observation_epoch,
                     },
                 )
 
@@ -550,7 +1406,8 @@ async def fetch_meteofrance_records(
 FROST_BASE = "https://frost.met.no"
 FROST_BATCH = 150
 FROST_ELEMENTS = (
-    "air_temperature,max(wind_speed_of_gust PT1H),sum(precipitation_amount PT1H)"
+    "air_temperature,wind_speed,wind_from_direction,"
+    "max(wind_speed_of_gust PT1H),sum(precipitation_amount PT1H)"
 )
 
 
@@ -583,10 +1440,12 @@ async def fetch_frost_daily(
     tz = ZoneInfo(PROVIDER_TZ["FROST"])
     now_local = datetime.now(tz)
     start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    rolling_start = now_local - timedelta(hours=24)
     ref = (
-        f"{start_local.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}/"
+        f"{rolling_start.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}/"
         f"{now_local.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
     )
+    day_start_epoch = int(start_local.timestamp())
     sources = _frost_official_sources()
     batches = [sources[i:i + FROST_BATCH] for i in range(0, len(sources), FROST_BATCH)]
     auth = (client_id, client_secret or "")
@@ -612,18 +1471,50 @@ async def fetch_frost_daily(
                     sid = str(item.get("sourceId", "")).split(":")[0]
                     if not sid:
                         continue
-                    agg = local.setdefault(sid, {"temps": [], "gusts": [], "rains": []})
+                    agg = local.setdefault(
+                        sid, {
+                            "temps": [], "gusts": [], "rains": [], "rolling_rains": [],
+                            "rain_at": -1,
+                            "t_last": None, "t_at": -1,
+                            "wind_last": None, "wind_dir_last": None, "wind_at": -1,
+                        },
+                    )
+                    try:
+                        rt_epoch = int(datetime.fromisoformat(
+                            str(item.get("referenceTime") or "").replace("Z", "+00:00")
+                        ).timestamp())
+                    except ValueError:
+                        rt_epoch = -1
+                    item_wind = item_direction = None
                     for obs in item.get("observations", []) or []:
                         el = str(obs.get("elementId", ""))
                         v = _num(obs.get("value"))
                         if v is None:
                             continue
                         if el == "air_temperature":
-                            agg["temps"].append(v)
+                            if rt_epoch >= day_start_epoch:
+                                agg["temps"].append(v)
+                            if rt_epoch > agg["t_at"]:
+                                agg["t_last"], agg["t_at"] = v, rt_epoch
                         elif el.startswith("max(wind_speed_of_gust"):
-                            agg["gusts"].append(v)
+                            if rt_epoch >= day_start_epoch:
+                                agg["gusts"].append(v)
                         elif el.startswith("sum(precipitation_amount"):
-                            agg["rains"].append(v)
+                            agg["rolling_rains"].append(v)
+                            agg["rain_at"] = max(agg["rain_at"], rt_epoch)
+                            if rt_epoch >= day_start_epoch:
+                                agg["rains"].append(v)
+                        elif el == "wind_speed":
+                            item_wind = v
+                        elif el == "wind_from_direction":
+                            item_direction = v
+                    if (
+                        item_wind is not None and item_direction is not None
+                        and rt_epoch > agg["wind_at"]
+                    ):
+                        agg["wind_last"] = item_wind
+                        agg["wind_dir_last"] = item_direction
+                        agg["wind_at"] = rt_epoch
                 return local
             except Exception as exc:
                 logger.warning("ranking: fallo batch Frost (%s)", type(exc).__name__)
@@ -638,10 +1529,25 @@ async def fetch_frost_daily(
     merged: Dict[str, dict] = {}
     for local in results:
         for sid, agg in local.items():
-            m = merged.setdefault(sid, {"temps": [], "gusts": [], "rains": []})
+            m = merged.setdefault(
+                sid, {
+                    "temps": [], "gusts": [], "rains": [], "rolling_rains": [],
+                    "rain_at": -1,
+                    "t_last": None, "t_at": -1,
+                    "wind_last": None, "wind_dir_last": None, "wind_at": -1,
+                },
+            )
             m["temps"].extend(agg["temps"])
             m["gusts"].extend(agg["gusts"])
             m["rains"].extend(agg["rains"])
+            m["rolling_rains"].extend(agg["rolling_rains"])
+            m["rain_at"] = max(m["rain_at"], agg.get("rain_at", -1))
+            if agg.get("t_at", -1) > m["t_at"]:
+                m["t_last"], m["t_at"] = agg.get("t_last"), agg.get("t_at", -1)
+            if agg.get("wind_at", -1) > m["wind_at"]:
+                m["wind_last"] = agg.get("wind_last")
+                m["wind_dir_last"] = agg.get("wind_dir_last")
+                m["wind_at"] = agg.get("wind_at", -1)
 
     out: List[StationDaily] = []
     for sid, agg in merged.items():
@@ -658,6 +1564,19 @@ async def fetch_frost_daily(
                 tmin=round(min(agg["temps"]), 1) if agg["temps"] else None,
                 gust=_ms_to_kmh(max(agg["gusts"])) if agg["gusts"] else None,
                 rain=round(sum(agg["rains"]), 1) if agg["rains"] else None,
+                rain_24h=(
+                    round(sum(max(0.0, value) for value in agg["rolling_rains"]), 1)
+                    if agg["rolling_rains"] else None
+                ),
+                rain_24h_at=agg["rain_at"] if agg["rain_at"] > 0 else None,
+                tcur=round(agg["t_last"], 1) if agg["t_last"] is not None else None,
+                tcur_at=agg["t_at"] if agg["t_at"] > 0 else None,
+                wind=_ms_to_kmh(agg["wind_last"]),
+                wind_dir=(
+                    float(agg["wind_dir_last"]) % 360.0
+                    if agg["wind_dir_last"] is not None else None
+                ),
+                wind_at=agg["wind_at"] if agg["wind_at"] > 0 else None,
             )
         )
     return out
@@ -749,6 +1668,8 @@ async def fetch_aemet_records(
         ta = _clean(aemet._parse_num(aemet._field(rec, "ta", "TA")))
         tamax = _clean(aemet._parse_num(aemet._field(rec, "tamax", "TAMAX")))
         tamin = _clean(aemet._parse_num(aemet._field(rec, "tamin", "TAMIN")))
+        wind_kmh = _clean(aemet._ms_to_kmh(aemet._field(rec, "vv", "VV")))
+        wind_dir = _clean(aemet._parse_wind_dir_deg(aemet._field(rec, "dv", "DV")))
         store.upsert_hourly(
             "AEMET", idema,
             day=local.date().isoformat(),
@@ -762,6 +1683,12 @@ async def fetch_aemet_records(
                 "tmin": tamin if tamin is not None else ta,
                 "gust": _clean(aemet._ms_to_kmh(aemet._field(rec, "vmax", "VMAX"))),
                 "rain": _clean(aemet._parse_num(aemet._field(rec, "prec", "PREC"))),
+                "rain_at": epoch,
+                "tcur": ta,
+                "tcur_at": epoch,
+                "wind": wind_kmh,
+                "wind_dir": wind_dir % 360.0 if wind_dir is not None else None,
+                "wind_at": epoch,
             },
         )
     return store.reduce_accumulable_records("AEMET", now=now)
@@ -952,13 +1879,26 @@ def _parse_iem_network(
             continue
 
         local_valid = str(row.get("local_valid") or "")
+        tcur = _f_to_c_num(row.get("tmpf"))
+        wind = _knots_to_kmh_num(row.get("sknt"))
+        wind_dir = _num(row.get("drct"))
         tmax, tmin, gust = _clean_iem_extremes(
             _f_to_c_num(row.get("max_tmpf")),
             _f_to_c_num(row.get("min_tmpf")),
             _knots_to_kmh_num(row.get("max_gust")),
             _num(row.get("lat")),
-            _f_to_c_num(row.get("tmpf")),
+            tcur,
         )
+        # Plausibilidad física de la instantánea (sensores rotos de IEM).
+        if tcur is not None and not (_TMIN_FLOOR_POLAR_C <= tcur <= _WORLD_TMAX_RECORD_C):
+            tcur = None
+        tcur_at = None
+        try:
+            tcur_at = int(datetime.fromisoformat(
+                str(row.get("utc_valid") or "").replace("Z", "+00:00")
+            ).timestamp())
+        except ValueError:
+            pass
         rec = StationDaily(
             provider="IEM",
             # id interno = network|station (igual que el resto del backend IEM).
@@ -971,6 +1911,11 @@ def _parse_iem_network(
             tmin=tmin,
             gust=gust,
             rain=None if drop_rain else _inch_to_mm_num(row.get("pday")),
+            tcur=tcur,
+            tcur_at=tcur_at,
+            wind=wind,
+            wind_dir=wind_dir % 360.0 if wind_dir is not None else None,
+            wind_at=tcur_at,
             country=rec_country,
             # Día local de la estación (clave de bucket) y hora local (display).
             local_date=str(row.get("local_date") or "").strip(),
@@ -983,6 +1928,7 @@ def _parse_iem_network(
 
 async def fetch_iem_daily(
     *,
+    store: Optional["RankingStore"] = None,
     client: Optional[httpx.AsyncClient] = None,
     timeout_s: float = 25.0,
 ) -> List[StationDaily]:
@@ -1014,6 +1960,33 @@ async def fetch_iem_daily(
             except (httpx.HTTPError, ValueError) as exc:
                 logger.info("ranking IEM: red %s falló (%s)", network, type(exc).__name__)
                 return []
+            if store is not None and _IEM_NO_RAIN_NETWORK_TOKEN not in network:
+                for row in rows:
+                    station = str(row.get("station") or "").strip()
+                    station_id = f"{network}|{station}"
+                    if not station or not station_countries.get(station_id):
+                        continue
+                    rain_hour = _inch_to_mm_num(row.get("phour"))
+                    try:
+                        observed_at = int(datetime.fromisoformat(
+                            str(row.get("utc_valid") or "").replace("Z", "+00:00")
+                        ).timestamp())
+                    except ValueError:
+                        continue
+                    local_valid = str(row.get("local_valid") or "")
+                    local_day = str(row.get("local_date") or "").strip()
+                    if rain_hour is None or not local_day:
+                        continue
+                    store.upsert_hourly(
+                        "IEM", station_id,
+                        day=local_day,
+                        hour_key=(local_valid[:13] if len(local_valid) >= 13 else str(observed_at // 3600)),
+                        name=str(row.get("name") or station).strip(),
+                        locality=str(row.get("state") or "").strip(),
+                        lat=_num(row.get("lat")),
+                        lon=_num(row.get("lon")),
+                        values={"rain": rain_hour, "rain_at": observed_at},
+                    )
             return _parse_iem_network(network, rows, station_countries)
 
     try:
@@ -1025,6 +1998,12 @@ async def fetch_iem_daily(
     records: List[StationDaily] = []
     for chunk in chunks:
         records.extend(chunk)
+    if store is not None:
+        rolling = store.rolling_rain_24h_by_station("IEM")
+        for record in records:
+            held = rolling.get(record.station_id)
+            if held is not None:
+                record.rain_24h, record.rain_24h_at = held
     return records
 
 
@@ -1266,7 +2245,10 @@ class RankingStore:
         st["meta"] = {"name": name, "locality": locality, "lat": lat, "lon": lon}
         # Upsert por hora: re-poll de la misma hora la sobrescribe (la suma de
         # lluvia no se duplica al solaparse ventanas).
-        st["hours"][hour_key] = values
+        # Distintos bulks del mismo proveedor pueden completar una misma hora
+        # por separado (p. ej. SMHI: lluvia latest-day + viento latest-hour).
+        # Mezclar evita que el segundo borre la lluvia ya almacenada.
+        st["hours"].setdefault(hour_key, {}).update(values)
 
     def accumulated_hours(self, provider: str, day: str) -> set:
         """Horas ya almacenadas para (proveedor, día) — para pedir solo las
@@ -1276,17 +2258,65 @@ class RankingStore:
             hours.update(st.get("hours", {}).keys())
         return hours
 
+    def rolling_rain_24h_by_station(
+        self, provider: str, *, now: Optional[datetime] = None,
+    ) -> Dict[str, Tuple[float, int]]:
+        """Suma muestras horarias de [ahora-24 h, ahora] con cobertura real.
+
+        Se exige un arco de al menos 20 h entre la primera y la ultima muestra
+        para no presentar un arranque parcial como si fueran 24 horas.
+        """
+        now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+        days = sorted(
+            {day for hour_provider, day in self._hourly if hour_provider == provider},
+            reverse=True,
+        )
+        for old_day in days[self._KEEP_DAYS:]:
+            self._hourly.pop((provider, old_day), None)
+        cutoff = int(now_utc.timestamp()) - 24 * 3600
+        totals: Dict[str, Tuple[float, int]] = {}
+        spans: Dict[str, Tuple[int, int]] = {}
+        for (hour_provider, _hour_day), station_rows in self._hourly.items():
+            if hour_provider != provider:
+                continue
+            for sid, station_row in station_rows.items():
+                for values in (station_row.get("hours") or {}).values():
+                    value = _num(values.get("rain"))
+                    try:
+                        observed_at = int(values.get("rain_at"))
+                    except (TypeError, ValueError):
+                        continue
+                    if value is None or not (
+                        cutoff <= observed_at <= int(now_utc.timestamp()) + 3600
+                    ):
+                        continue
+                    total, latest = totals.get(sid, (0.0, 0))
+                    totals[sid] = (total + max(0.0, value), max(latest, observed_at))
+                    earliest, span_latest = spans.get(sid, (observed_at, observed_at))
+                    spans[sid] = (min(earliest, observed_at), max(span_latest, observed_at))
+        return {
+            sid: (round(total, 1), latest)
+            for sid, (total, latest) in totals.items()
+            if sid in spans and spans[sid][1] - spans[sid][0] >= 20 * 3600
+        }
+
     def reduce_accumulable_records(
         self, provider: str, *, now: Optional[datetime] = None
     ) -> List[StationDaily]:
         """Reduce las horas acumuladas a registros diarios y los DEVUELVE (sin
         publicarlos; el commit del ciclo los escribe). Mantiene hoy+ayer; de
         madrugada (hoy aún flojo) sirve ayer, como los directos."""
-        today = self.local_day(provider, now)
+        now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+        today = self.local_day(provider, now_utc)
         yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
         keep = {today, yesterday}
         for k in [k for k in self._hourly if k[0] == provider and k[1] not in keep]:
             self._hourly.pop(k, None)
+
+        # Ventana movil independiente de los dias civiles. Cada muestra
+        # horaria guarda ``rain_at`` en epoch UTC, por lo que funciona tambien
+        # cuando la ventana cruza medianoche o un cambio horario.
+        rolling_rain = self.rolling_rain_24h_by_station(provider, now=now_utc)
 
         day_records: Dict[str, List[StationDaily]] = {}
         for day in (today, yesterday):
@@ -1297,7 +2327,27 @@ class RankingStore:
                 tns = [h["tmin"] for h in hours if h.get("tmin") is not None]
                 gus = [h["gust"] for h in hours if h.get("gust") is not None]
                 rns = [h["rain"] for h in hours if h.get("rain") is not None]
+                # Instantánea de la HORA MÁS RECIENTE que la traiga (para el
+                # mapa de temperaturas; no participa en los extremos).
+                tcs = [
+                    (st["hours"][hour_key].get("tcur"), st["hours"][hour_key].get("tcur_at"))
+                    for hour_key in sorted(st["hours"])
+                    if st["hours"][hour_key].get("tcur") is not None
+                ]
+                winds = [
+                    (
+                        st["hours"][hour_key].get("wind"),
+                        st["hours"][hour_key].get("wind_dir"),
+                        st["hours"][hour_key].get("wind_at"),
+                    )
+                    for hour_key in sorted(st["hours"])
+                    if (
+                        st["hours"][hour_key].get("wind") is not None
+                        and st["hours"][hour_key].get("wind_dir") is not None
+                    )
+                ]
                 meta = st["meta"]
+                rain_24h = rolling_rain.get(sid)
                 recs.append(
                     StationDaily(
                         provider=provider,
@@ -1310,10 +2360,160 @@ class RankingStore:
                         tmin=round(min(tns), 1) if tns else None,
                         gust=_daily_gust_max_from_series(gus) if gus else None,
                         rain=round(sum(rns), 1) if rns else None,
+                        rain_24h=(
+                            round(rain_24h[0], 1)
+                            if rain_24h is not None else None
+                        ),
+                        rain_24h_at=(
+                            rain_24h[1]
+                            if rain_24h is not None else None
+                        ),
+                        tcur=round(tcs[-1][0], 1) if tcs else None,
+                        tcur_at=tcs[-1][1] if tcs else None,
+                        wind=round(winds[-1][0], 1) if winds else None,
+                        wind_dir=float(winds[-1][1]) % 360.0 if winds else None,
+                        wind_at=winds[-1][2] if winds else None,
                     )
                 )
             day_records[day] = recs
         return _pick_best_day(day_records)
+
+    def current_temperature_points(
+        self, *, max_age_s: int = 7200, now: Optional[datetime] = None,
+    ) -> List[Tuple[float, float, float]]:
+        """``(lat, lon, tcur)`` de las estaciones con instantánea RECIENTE
+        (≤ ``max_age_s``), del día más reciente de cada proveedor. Una lectura
+        colgada de hace horas pintaría frío nocturno a mediodía, así que las
+        viejas (o sin timestamp) se descartan. El margen de 2 h absorbe la
+        cadena real de retrasos —obs publicada con 30-90 min de demora
+        (AEMET/SYNOP) más el ciclo horario del refresh del ranking—; con 1 h
+        el mapa se vaciaba hacia el final de cada ciclo. Alimenta el campo de
+        temperatura del mapa; no interviene en el ranking."""
+        return [
+            (float(rec.lat), float(rec.lon), float(rec.tcur))
+            for rec in self.current_temperature_records(max_age_s=max_age_s, now=now)
+        ]
+
+    def current_temperature_records(
+        self, *, max_age_s: int = 7200, now: Optional[datetime] = None,
+    ) -> List[StationDaily]:
+        """Registros con instantánea RECIENTE (≤ ``max_age_s``). Se miran
+        TODOS los buckets de día, no solo el más reciente: IEM agrupa por
+        fecha local de cada estación, así que al atardecer UTC conviven
+        "hoy" (Asia/Oceanía, ya en el día siguiente) y "ayer" (América/
+        Europa); quedarse solo con el día más nuevo vaciaba medio planeta.
+        La frescura real la garantiza el cutoff sobre ``tcur_at``; si una
+        estación aparece en dos buckets gana su lectura más reciente."""
+        from server.services.stations import is_station_hidden
+
+        cutoff = int((now or datetime.now(tz=timezone.utc)).timestamp()) - max(60, int(max_age_s))
+        freshest: Dict[Tuple[str, str], StationDaily] = {}
+        for (provider, _day), stations in self._daily.items():
+            for sid, rec in stations.items():
+                if is_station_hidden(provider, sid):
+                    continue
+                if rec.tcur is None or rec.lat is None or rec.lon is None:
+                    continue
+                if rec.tcur_at is None or int(rec.tcur_at) < cutoff:
+                    continue
+                key = (provider, sid)
+                held = freshest.get(key)
+                if held is None or int(rec.tcur_at) > int(held.tcur_at or 0):
+                    freshest[key] = rec
+        return list(freshest.values())
+
+    def current_wind_points(
+        self, *, max_age_s: int = 7200, now: Optional[datetime] = None,
+    ) -> List[Tuple[float, float, float]]:
+        """``(lat, lon, km/h)`` de estaciones con vector de viento reciente."""
+        return [
+            (float(rec.lat), float(rec.lon), float(rec.wind))
+            for rec in self.current_wind_records(max_age_s=max_age_s, now=now)
+        ]
+
+    def current_wind_records(
+        self, *, max_age_s: int = 7200, now: Optional[datetime] = None,
+    ) -> List[StationDaily]:
+        """Último vector válido por estación, sin duplicados ocultos.
+
+        ``wind_dir`` es la procedencia meteorológica en grados; el frontend
+        gira la flecha 180° para mostrar hacia dónde se desplaza el aire.
+        """
+        from server.services.stations import is_station_hidden
+
+        cutoff = int((now or datetime.now(tz=timezone.utc)).timestamp()) - max(
+            60, int(max_age_s),
+        )
+        freshest: Dict[Tuple[str, str], StationDaily] = {}
+        for (provider, _day), station_rows in self._daily.items():
+            for sid, rec in station_rows.items():
+                if is_station_hidden(provider, sid):
+                    continue
+                if rec.lat is None or rec.lon is None:
+                    continue
+                if rec.wind is None or rec.wind_dir is None or rec.wind_at is None:
+                    continue
+                try:
+                    speed = float(rec.wind)
+                    direction = float(rec.wind_dir)
+                    observed_at = int(rec.wind_at)
+                except (TypeError, ValueError):
+                    continue
+                if not (
+                    math.isfinite(speed) and math.isfinite(direction)
+                    and 0.0 <= speed <= 450.0 and observed_at >= cutoff
+                ):
+                    continue
+                rec.wind = round(speed, 1)
+                rec.wind_dir = direction % 360.0
+                key = (provider, sid)
+                held = freshest.get(key)
+                if held is None or observed_at > int(held.wind_at or 0):
+                    freshest[key] = rec
+        return list(freshest.values())
+
+    def current_precipitation_points(
+        self, *, max_age_s: int = 10800, now: Optional[datetime] = None,
+    ) -> List[Tuple[float, float, float]]:
+        """``(lat, lon, mm)`` de acumulados moviles reales de 24 horas."""
+        return [
+            (float(rec.lat), float(rec.lon), float(rec.rain_24h))
+            for rec in self.current_precipitation_records(max_age_s=max_age_s, now=now)
+        ]
+
+    def current_precipitation_records(
+        self, *, max_age_s: int = 10800, now: Optional[datetime] = None,
+    ) -> List[StationDaily]:
+        """Ultimo acumulado 24 h reciente de cada estacion.
+
+        ``rain`` (dia civil) no se usa como fallback: una lectura de las 15:00
+        solo acumula 15 horas y no es comparable con una ventana movil.
+        """
+        from server.services.stations import is_station_hidden
+
+        cutoff = int((now or datetime.now(tz=timezone.utc)).timestamp()) - max(60, int(max_age_s))
+        freshest: Dict[Tuple[str, str], StationDaily] = {}
+        for (provider, _day), station_rows in self._daily.items():
+            for sid, rec in station_rows.items():
+                if is_station_hidden(provider, sid):
+                    continue
+                if rec.lat is None or rec.lon is None or rec.rain_24h is None:
+                    continue
+                try:
+                    amount = float(rec.rain_24h)
+                    observed_at = int(rec.rain_24h_at or 0)
+                except (TypeError, ValueError):
+                    continue
+                if not math.isfinite(amount) or not (0.0 <= amount <= _WORLD_RAIN_RECORD_MM):
+                    continue
+                if observed_at < cutoff:
+                    continue
+                rec.rain_24h = round(amount, 1)
+                key = (provider, sid)
+                held = freshest.get(key)
+                if held is None or observed_at > int(held.rain_24h_at or 0):
+                    freshest[key] = rec
+        return list(freshest.values())
 
     def commit(self, staged: Dict[str, List[StationDaily]], *, now: Optional[datetime] = None) -> None:
         """Publica ATÓMICAMENTE los resultados de un ciclo. Síncrono → ninguna
@@ -1511,12 +2711,20 @@ async def refresh_once(
         tasks["AEMET"] = fetch_aemet_records(store, aemet_key, client=client)
     if _want("METEOHUB_IT"):
         tasks["METEOHUB_IT"] = fetch_meteohub_daily(client=client)
+    if _want("IPMA"):
+        tasks["IPMA"] = fetch_ipma_daily(client=client)
+    if _want("GEOSPHERE"):
+        tasks["GEOSPHERE"] = fetch_geosphere_daily(client=client)
+    if _want("SMHI"):
+        tasks["SMHI"] = fetch_smhi_records(store, client=client)
+    if _want("ECCC"):
+        tasks["ECCC"] = fetch_eccc_records(store, client=client)
     if frost_id and _want("FROST"):
         tasks["FROST"] = fetch_frost_daily(frost_id, frost_secret, client=client)
     if mf_key and _want("METEOFRANCE"):
         tasks["METEOFRANCE"] = fetch_meteofrance_records(store, mf_key, client=client)
     if _want("IEM"):
-        tasks["IEM"] = fetch_iem_daily(client=client)
+        tasks["IEM"] = fetch_iem_daily(store=store, client=client)
 
     async def _run(provider: str, coro):
         """Envuelve el fetch para devolver ``(proveedor, resultado|excepción)``,
@@ -1625,10 +2833,31 @@ async def refresh_loop(
                 "ranking: no se pudo guardar el snapshot en %s", state_path, exc_info=True,
             )
 
+    async def _prebuild_map_fields() -> None:
+        """Mueve el coste de los mapas al job horario, nunca al visitante."""
+        try:
+            from server.services.map_field_assets import build_map_field_assets
+
+            await asyncio.to_thread(build_map_field_assets, store)
+        except Exception:
+            # El ranking sigue siendo válido aunque falle una textura. El
+            # frontend conserva su fallback bajo demanda y el próximo ciclo
+            # vuelve a intentarlo.
+            logger.warning(
+                "ranking: no se pudieron pregenerar los mapas de valores",
+                exc_info=True,
+            )
+
+    # Si se restauró un snapshot del Volume, publica sus texturas antes de
+    # iniciar llamadas a proveedores. Así un redeploy tampoco deja al primer
+    # visitante pagando la generación mientras termina el refresco inmediato.
+    await _prebuild_map_fields()
+
     # Ciclo inmediato al arrancar: el ranking no debe salir vacío hasta el :05.
     pending = await refresh_once(store, client=client, settings=settings)
     _register_attempt(set(failure_counts) | pending, pending)
     await _persist()
+    await _prebuild_map_fields()
     next_full = _next_aligned_run(offset_min)
 
     while True:
@@ -1638,6 +2867,7 @@ async def refresh_loop(
             pending = await refresh_once(store, client=client, settings=settings)  # completo
             _register_attempt(set(failure_counts) | pending, pending)
             await _persist()
+            await _prebuild_map_fields()
             next_full = _next_aligned_run(offset_min)
             continue
         if pending:
@@ -1654,6 +2884,7 @@ async def refresh_loop(
                 _register_attempt(due, failed_again)
                 pending = (pending - due) | failed_again
                 await _persist()
+                await _prebuild_map_fields()
                 continue
             next_due = min(
                 (next_retry_at[p] for p in pending if p in next_retry_at),

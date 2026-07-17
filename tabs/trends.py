@@ -104,6 +104,10 @@ def _load_today_trends_source(
         "FROST",
         "POEM",
         "METEOHUB_IT",
+        "IPMA",
+        "GEOSPHERE",
+        "SMHI",
+        "ECCC",
         "IEM",
         "WEATHERLINK",
     }

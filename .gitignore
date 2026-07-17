@@ -22,3 +22,7 @@ data/usage_stats.sqlite
 data/netatmo_tile_cache/
 data/netatmo_pws_stations_world.sqlite
 data/netatmo_pws_stations.sqlite
+static/temperature_field_*.png
+static/wind_field_*.png
+static/precipitation_field_*.png
+static/map_field_assets.json

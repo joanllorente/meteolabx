@@ -8,6 +8,7 @@ import json
 import os
 import sqlite3
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 DEFAULT_OUTPUT = DATA / "stations.sqlite"
+
+# Duplicados físicos confirmados manualmente. Se conservan en el inventario
+# normalizado para mantener trazabilidad, pero la copia agregada queda oculta
+# frente a la fuente nacional canónica. Esta lista se aplica en cada rebuild.
+MANUAL_VISIBILITY_OVERRIDES = (
+    {
+        "hidden": ("IEM", "WMO_BUFR_SRF", "0-262-0-997"),
+        "preferred": ("METEOFRANCE", "", "98404004"),
+        "reason": "confirmed_duplicate_prefer_meteofrance",
+    },
+)
 SCHEMA_VERSION = "2"
 
 PROVIDER_FILES = {
@@ -28,6 +40,10 @@ PROVIDER_FILES = {
     "METOFFICE": DATA / "data_estaciones_metoffice.json",
     "NWS": DATA / "data_estaciones_nws.json",
     "POEM": DATA / "data_estaciones_poem.json",
+    "IPMA": DATA / "data_estaciones_ipma.json",
+    "GEOSPHERE": DATA / "data_estaciones_geosphere.json",
+    "SMHI": DATA / "data_estaciones_smhi.json",
+    "ECCC": DATA / "data_estaciones_eccc.json",
     "IEM": DATA / "data_estaciones_iem.json",
 }
 
@@ -202,7 +218,8 @@ DEFAULT_TIMEZONES = {
     "FROST": "Europe/Oslo", "METEOCAT": "Europe/Madrid",
     "METEOFRANCE": "Europe/Paris", "METEOGALICIA": "Europe/Madrid",
     "METEOHUB_IT": "Europe/Rome", "METOFFICE": "Europe/London",
-    "POEM": "Europe/Madrid",
+    "POEM": "Europe/Madrid", "IPMA": "Europe/Lisbon",
+    "GEOSPHERE": "Europe/Vienna", "SMHI": "Europe/Stockholm",
 }
 SENSOR_KEYS = (
     "thermometer", "hygrometer", "barometer", "anemometer",
@@ -282,16 +299,65 @@ def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] |
     locality = _nested_name(locality)
     online_raw = _first(row, "online", "active_now")
     online = int(bool(online_raw)) if online_raw is not None else None
+    # Flags por fila (GEOSPHERE marca histórico/manual estación a estación)
+    # además de los criterios por proveedor/red.
     has_historical = int(
         provider in HISTORICAL_PROVIDER_IDS
         or (provider == "IEM" and _iem_network_has_historical(network))
+        or bool(row.get("has_historical"))
     )
-    manual = int(provider == "IEM" and _iem_network_is_manual(network))
+    manual = int(
+        (provider == "IEM" and _iem_network_is_manual(network))
+        or bool(row.get("manual"))
+    )
     return (
         provider, network, station_id, str(name or station_id).strip(), latitude,
         longitude, elevation, timezone, _nested_name(country), region, locality, online,
         has_historical, manual,
     )
+
+
+def apply_manual_visibility_overrides(connection: sqlite3.Connection) -> int:
+    """Oculta duplicados confirmados y enlaza su estación canónica."""
+    changed = 0
+    updated_at = datetime.now(timezone.utc).isoformat()
+    for decision in MANUAL_VISIBILITY_OVERRIDES:
+        hidden_provider, hidden_network, hidden_station_id = decision["hidden"]
+        preferred_provider, preferred_network, preferred_station_id = decision["preferred"]
+        hidden = connection.execute(
+            """
+            SELECT station_pk FROM stations
+            WHERE provider = ? AND network_code = ? AND station_id = ?
+            LIMIT 1
+            """,
+            (hidden_provider, hidden_network, hidden_station_id),
+        ).fetchone()
+        preferred = connection.execute(
+            """
+            SELECT station_pk FROM stations
+            WHERE provider = ? AND network_code = ? AND station_id = ?
+            LIMIT 1
+            """,
+            (preferred_provider, preferred_network, preferred_station_id),
+        ).fetchone()
+        if hidden is None or preferred is None:
+            continue
+        connection.execute(
+            """
+            INSERT INTO station_visibility_overrides(
+                station_pk, hidden, reason, preferred_station_pk,
+                source_alias_pk, updated_at
+            ) VALUES (?, 1, ?, ?, NULL, ?)
+            ON CONFLICT(station_pk) DO UPDATE SET
+                hidden = 1,
+                reason = excluded.reason,
+                preferred_station_pk = excluded.preferred_station_pk,
+                updated_at = excluded.updated_at
+            """,
+            (hidden[0], decision["reason"], preferred[0], updated_at),
+        )
+        changed += 1
+    return changed
 
 
 def build_database(
@@ -395,6 +461,7 @@ def build_database(
                             ),
                         )
 
+            apply_manual_visibility_overrides(connection)
             connection.commit()
             connection.execute(
                 """

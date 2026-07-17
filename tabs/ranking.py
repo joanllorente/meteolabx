@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
-from tabs.map import (
+from utils.geo import (
     is_france_map_center,
     is_iberia_map_center,
     is_italy_map_center,
@@ -514,12 +514,19 @@ def render_ranking_tab(ctx) -> None:
     t = ctx["t"]
     dark = bool(ctx.get("dark", True))
     apply_station_selection = ctx.get("apply_station_selection")
+    boot_mark = ctx.get("boot_mark")
+
+    def mark(label: str) -> None:
+        if callable(boot_mark):
+            boot_mark(f"ranking: {label}")
 
     border = "rgba(255,255,255,0.10)" if dark else "rgba(15,18,25,0.10)"
     st.markdown(
         f"<style>:root {{ --mlbx-rank-border: {border}; }}</style>" + _RANKING_CSS,
         unsafe_allow_html=True,
     )
+    section_title(t("ranking.section_title"))
+    mark("shell rendered")
 
     # Datos (cacheados). Cada sección muestra UNA fecha local (sin mezclar
     # husos); el día se elige con las flechas ◀▶ (state en session_state).
@@ -532,14 +539,11 @@ def render_ranking_tab(ctx) -> None:
     today_local = _user_today_iso()
     st.session_state.setdefault("ranking_global_day", today_local)
     st.session_state.setdefault("ranking_country_day", today_local)
-    g_exclude = "AQ" if st.session_state.get("ranking_no_antarctica") else None
-    gdata = _cached_ranking(
-        None, 10, st.session_state.get("ranking_global_day"), g_exclude, _order_param("global")
-    )
     lat = _safe_float(st.session_state.get("map_search_lat"), 40.4168)
     lon = _safe_float(st.session_state.get("map_search_lon"), -3.7038)
     available = _cached_ranking_countries()
     options = _country_options(available, _resolve_user_country(lat, lon))
+    mark("country list ready")
     # Default del selector de país = país detectado (lo fija antes de instanciar
     # el widget; si el usuario ya eligió otro, se respeta).
     if options and st.session_state.get("ranking_country") not in options:
@@ -549,12 +553,9 @@ def render_ranking_tab(ctx) -> None:
     cdata = _cached_country_ranking(
         selected, 10, st.session_state.get("ranking_country_day"), _order_param("country")
     )
+    mark("country data ready")
 
-    # Clic en un nombre del ranking → conectar (antes de renderizar).
-    _handle_rank_connect(cdata, gdata, apply_station_selection=apply_station_selection)
-
-    section_title(t("ranking.section_title"))
-    updated = _updated_caption(gdata, t)
+    updated = _updated_caption(cdata, t)
     if updated:
         st.caption(f":material/schedule: {updated}")
 
@@ -582,12 +583,23 @@ def render_ranking_tab(ctx) -> None:
         )
     else:
         st.info(t("ranking.no_country"))
+    mark("country rendered")
 
     st.divider()
 
     # --- Sección global ---
     st.markdown(f"#### {t('ranking.global_title')}")
     st.toggle(t("ranking.exclude_antarctica"), key="ranking_no_antarctica")
+    g_exclude = "AQ" if st.session_state.get("ranking_no_antarctica") else None
+    gdata = _cached_ranking(
+        None, 10, st.session_state.get("ranking_global_day"), g_exclude, _order_param("global")
+    )
+    mark("global data ready")
+
+    # Clic en un nombre del ranking → conectar. En el flujo normal la query ya
+    # se procesa antes de entrar a la pestaña; se conserva aquí como respaldo.
+    _handle_rank_connect(cdata, gdata, apply_station_selection=apply_station_selection)
+
     _render_day_nav(gdata, "ranking_global_day")
     _render_section(
         gdata, t,
@@ -600,3 +612,4 @@ def render_ranking_tab(ctx) -> None:
     providers = gdata.get("providers", []) if isinstance(gdata, dict) else []
     if providers:
         st.caption(t("ranking.providers_note", providers=", ".join(providers)))
+    mark("global rendered")

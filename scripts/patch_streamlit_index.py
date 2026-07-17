@@ -71,6 +71,8 @@ SITE_NOSCRIPT = (
 
 START_MARKER = "<!-- MLX-PWA-START -->"
 END_MARKER = "<!-- MLX-PWA-END -->"
+SPLASH_START_MARKER = "<!-- MLX-SPLASH-START -->"
+SPLASH_END_MARKER = "<!-- MLX-SPLASH-END -->"
 
 
 def _build_block() -> str:
@@ -131,6 +133,44 @@ def _build_block() -> str:
     {END_MARKER}"""
 
 
+def _build_splash() -> str:
+    """Splash fijo que cubre únicamente la hidratación inicial de Streamlit."""
+    return f"""{SPLASH_START_MARKER}
+    <style>
+      #mlx-boot-splash {{
+        position: fixed; inset: 0; z-index: 2147483000;
+        display: flex; align-items: center; justify-content: center;
+        background: #0e1117; color: rgba(255,255,255,.94);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        transition: opacity .18s ease;
+      }}
+      #mlx-boot-splash.mlx-leaving {{ opacity: 0; pointer-events: none; }}
+      #mlx-boot-splash .mlx-splash-card {{ text-align: center; padding: 24px; }}
+      #mlx-boot-splash img {{ width: 64px; height: 64px; border-radius: 16px; }}
+      #mlx-boot-splash strong {{ display: block; margin-top: 12px; font-size: 1.18rem; }}
+      #mlx-boot-splash span {{ display: block; margin-top: 5px; font-size: .82rem; opacity: .62; }}
+      #mlx-boot-splash .mlx-splash-spinner {{
+        width: 24px; height: 24px; margin: 16px auto 0; border-radius: 50%;
+        border: 2px solid rgba(255,255,255,.18); border-top-color: #5da8ff;
+        animation: mlx-splash-spin .75s linear infinite;
+      }}
+      @keyframes mlx-splash-spin {{ to {{ transform: rotate(360deg); }} }}
+      @media (prefers-color-scheme: light) {{
+        #mlx-boot-splash {{ background: #f7f9fc; color: rgba(15,18,25,.94); }}
+        #mlx-boot-splash .mlx-splash-spinner {{ border-color: rgba(15,18,25,.14); border-top-color: #2384ff; }}
+      }}
+    </style>
+    <div id="mlx-boot-splash" role="status" aria-live="polite">
+      <div class="mlx-splash-card">
+        <img src="./icon-192-pwa.png?v={ASSET_VERSION}" alt="" />
+        <strong>MeteoLabX</strong>
+        <span>Cargando datos meteorológicos…</span>
+        <div class="mlx-splash-spinner" aria-hidden="true"></div>
+      </div>
+    </div>
+    {SPLASH_END_MARKER}"""
+
+
 def _find_index_html() -> Path:
     import streamlit
 
@@ -187,6 +227,20 @@ def patch(index_path: Path) -> bool:
         if "</head>" not in html:
             raise ValueError("No se encontró </head> en index.html")
         html = html.replace("</head>", f"    {block}\n  </head>", 1)
+
+    splash = _build_splash()
+    existing_splash = re.compile(
+        re.escape(SPLASH_START_MARKER) + r".*?" + re.escape(SPLASH_END_MARKER),
+        flags=re.DOTALL,
+    )
+    if existing_splash.search(html):
+        html = existing_splash.sub(splash, html)
+    else:
+        body_match = re.search(r"<body(?:\s[^>]*)?>", html, flags=re.IGNORECASE)
+        if not body_match:
+            raise ValueError("No se encontró <body> en index.html")
+        insert_at = body_match.end()
+        html = html[:insert_at] + "\n    " + splash + html[insert_at:]
 
     if html == original:
         return False

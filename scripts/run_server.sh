@@ -12,6 +12,13 @@ cd "$(dirname "$0")/.."
 
 PORT="${PORT:-8000}"
 HOST="${HOST:-127.0.0.1}"
+if [ -n "${PYTHON_BIN:-}" ]; then
+  PYTHON="${PYTHON_BIN}"
+elif [ -x ".venv/bin/python" ]; then
+  PYTHON=".venv/bin/python"
+else
+  PYTHON="$(command -v python3)"
+fi
 
 # Mata cualquier instancia previa de uvicorn en el mismo puerto para
 # evitar "Address already in use" tras lanzamientos sucesivos.
@@ -31,11 +38,12 @@ export METEOLABX_DEBUG="${METEOLABX_DEBUG:-true}"
 export METEOLABX_LOG_LEVEL="${METEOLABX_LOG_LEVEL:-DEBUG}"
 
 echo "▶ MeteoLabX API en http://${HOST}:${PORT}"
+echo "  Python: $("${PYTHON}" --version 2>&1) (${PYTHON})"
 echo "  Docs: http://${HOST}:${PORT}/docs"
 echo "  Health: http://${HOST}:${PORT}/v1/health"
 echo ""
 
-exec python3 -m uvicorn server.main:app \
+exec "${PYTHON}" -m uvicorn server.main:app \
   --host "${HOST}" \
   --port "${PORT}" \
   --reload \

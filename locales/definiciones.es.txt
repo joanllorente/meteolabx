@@ -1,8 +1,8 @@
-- Temperatura: indica el estado de agitación de las partículas del aire. Es medida directamente por la estación con mediante un termistor.
+- Temperatura: indica el estado de agitación de las partículas del aire. La mide directamente la estación mediante un termistor.
 
-	- Feels like: es la  temperatura aparente calculada combinando T, humedad y viento. Utiliza Steadman 1984.
+	- Sensación térmica: temperatura aparente calculada combinando la temperatura, la humedad y el viento. Se calcula mediante el método de Steadman (1984).
 
-	- Heat Index: sensación de bochorno para calor; se calcula con temperatura y humedad (sin viento) cuando la temperatura es superior a 25ºC mediante regresión polinómica Rothfusz de 9 coeficientes.
+	- Heat Index: sensación de bochorno; se calcula con la temperatura y la humedad (sin viento) cuando la temperatura es superior a 25 °C mediante la regresión polinómica de Rothfusz de 9 coeficientes.
 
 ===============================================================================
 - Humedad relativa: indica qué porcentaje de saturación tiene el aire (depende de la temperatura). La mide un sensor capacitivo de polímero: la humedad cambia su capacitancia y la estación lo convierte a %HR.
@@ -45,10 +45,10 @@
 - Humedad absoluta : masa de vapor de agua por volumen de aire (g/m³). Se calcula a partir de la temperatura y la presión de vapor.
 
 ==============================================================================
-- Temperatura virtual (Tv): temperatura que debería tener el aire seco para tener la misma densidad que el aire húmedo. Se calcula a partir de T y la humedad.
+- Temperatura virtual (Tv): temperatura que debería tener el aire seco para tener la misma densidad que el aire húmedo. Se calcula a partir de la temperatura y la humedad.
 
 ==============================================================================
-- Temperatura equivalente (Te): temperatura que tendría una parcela si todo su vapor de agua condensara liberando calor latente y ese calor se usara para calentar la parcela (a presión constante). Se calcula a partir de T y la humedad.
+- Temperatura equivalente (Te): temperatura que tendría una parcela si todo su vapor de agua condensara liberando calor latente y ese calor se usara para calentar la parcela (a presión constante). Se calcula a partir de la temperatura y la humedad.
 
 ==============================================================================
 - Temperatura potencial (θ): temperatura que tendría una parcela si se llevara adiabáticamente hasta los 1000 hPa.
@@ -57,7 +57,7 @@
 - Densidad del aire (ρ): masa de aire por unidad de volumen (kg/m³). Se calcula mediante la ecuación de los gases ideales.
 
 ==============================================================================
-- Nivel de condensación por ascenso (LCL): altura a la que una parcela de aire, al ascender adiabáticamente, alcanza la saturación. Se calcula a partir de T y Td.
+- Nivel de condensación por ascenso (LCL): altura a la que una parcela de aire, al ascender adiabáticamente, alcanza la saturación. Se calcula a partir de la temperatura y el punto de rocío.
 
 ==============================================================================
 - Velocidad del sonido: velocidad a la que una onda de presión se transmite por el aire.
@@ -89,7 +89,7 @@
 	- Fototipo VI: habitualmente por encima de 10 SED.
 
 ==============================================================================
-- Evapotranspiración (ET): cantidad de agua que se pierde hacia la atmósfera por evaporación del suelo y transpiración de las plantas. Se calcula según el estándar internacional FAO-56 on el método de Penman–Monteith.
+- Evapotranspiración (ET): cantidad de agua que se pierde hacia la atmósfera por evaporación del suelo y transpiración de las plantas. Se calcula según el estándar internacional FAO-56 con el método de Penman–Monteith.
 
 ==============================================================================
 - Claridad del cielo: estimación de cuán despejado está el cielo. Se calcula comparando la radiación solar medida con la radiación esperada en cielo despejado (según hora/posición solar).
