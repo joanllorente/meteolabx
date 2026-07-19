@@ -58,6 +58,9 @@ PROVIDER_TZ = {
     # IEM mezcla 204 husos: usamos UTC como clave de "día" del bucket; cada
     # estación trae su propio día local en ``currents.json`` (campo agregado).
     "IEM": "UTC",
+    # AWS antárticas italianas: cada registro trae su día local nominal
+    # (huso solar por longitud); UTC solo como fallback.
+    "CLIMANTARTIDE": "UTC",
 }
 
 # País fijo (ISO2) de los proveedores de un solo país. El store lo estampa en
@@ -1742,41 +1745,12 @@ _WORLD_TMAX_RECORD_C = 59.0   # récord mundial 56,7°C + margen (clima cambiant
 # Sahel y de Death Valley se conserva.
 _TMAX_CEIL_TROPICAL_C = 50.0
 _MAX_DIURNAL_RANGE_C = 40.0   # salto diurno máx−mín imposible (real ≲30°C)
-# Diferencia ACTUAL−mín máxima coherente: un sitio realmente frío tiene la actual
-# fría (diferencia pequeña); actual templada + mín −12 (Meadows of Dan, Virginia
-# en junio, actual 17,8 / mín −12,8 = 30,6) es un pico roto de la mínima. Solo
-# afecta a mínimas de sitios CON la actual templada → nunca récords de frío.
-_MAX_TCUR_TMIN_GAP_C = 25.0
 _WORLD_GUST_RECORD_KMH = 420.0  # récord mundial 408 km/h (Barrow I.) + margen
-# Suelo de frío por latitud Y ESTACIÓN DEL AÑO (imposibilidad climatológica, no
-# "tope de récord"). En VERANO no-polar no se baja de ~−15°C (Francia/Sicilia/
-# Ohio en junio a −30/−42 = sensor roto); los trópicos nunca de ~−25°C; en
-# invierno continental puede llegar muy bajo (−60); zonas polares al récord
-# mundial (−89,2°C, Vostok). Así el frío real (Antártida −68, Patagonia −25 en
-# su invierno) se conserva y la basura de verano cae.
-_TMIN_FLOOR_SUMMER_C = -20.0
-_TMIN_FLOOR_TROPICAL_C = -25.0
-_TMIN_FLOOR_NONPOLAR_C = -60.0
-_TMIN_FLOOR_POLAR_SUMMER_C = -45.0  # Ártico/Antártida en SU verano (Groenlandia ~−30)
-_TMIN_FLOOR_POLAR_C = -92.0         # invierno polar (Vostok −89,2)
+# El lado FRÍO no se filtra: el suelo por latitud (``_tmin_floor``) anulaba
+# frío extremo REAL (IEM ya recorta a ~−73°C en BUFR y las bases antárticas de
+# meseta bajan de −80). Un sensor roto en frío es mucho más raro que en calor
+# y el coste de tragar un pico frío es menor que perder un récord real.
 _TROPICAL_LAT = 25.0
-_POLAR_LAT = 60.0
-
-
-def _tmin_floor(lat: Optional[float], month: Optional[int] = None) -> float:
-    if lat is None:
-        return _TMIN_FLOOR_NONPOLAR_C
-    if month is None:
-        month = datetime.now(tz=timezone.utc).month
-    a = abs(lat)
-    # ¿es verano en el hemisferio de la estación? (afecta a todas las bandas
-    # salvo trópicos, que no tienen estaciones marcadas).
-    summer = (5 <= month <= 9) if lat >= 0 else (month in (11, 12, 1, 2, 3))
-    if a >= _POLAR_LAT:
-        return _TMIN_FLOOR_POLAR_SUMMER_C if summer else _TMIN_FLOOR_POLAR_C
-    if a < _TROPICAL_LAT:
-        return _TMIN_FLOOR_TROPICAL_C
-    return _TMIN_FLOOR_SUMMER_C if summer else _TMIN_FLOOR_NONPOLAR_C
 
 
 def _tmax_ceiling(lat: Optional[float]) -> float:
@@ -1804,20 +1778,12 @@ def _clean_iem_extremes(
     if tcur is None:
         tmax = tmin = None
     else:
-        # 1) Mínima imposible PRIMERO (así un pico de mínima no arrastra luego la
-        #    máxima REAL por rango imposible). Dos señales:
-        #    - suelo por latitud (los trópicos no bajan de −25°C…);
-        #    - incoherencia con la ACTUAL: un sitio de verdad frío tiene la
-        #      temperatura actual fría; si la actual es templada y la mín −40
-        #      (Iowa/Ohio en junio), la mín es un pico roto. Un récord real
-        #      (Antártida −68 con actual −60) tiene poca diferencia → se conserva.
-        if tmin is not None and (
-            tmin < _tmin_floor(lat) or (tcur - tmin) > _MAX_TCUR_TMIN_GAP_C
-        ):
-            tmin = None
+        # 1) La mínima NO se filtra por frío (ver nota junto a _TROPICAL_LAT):
+        #    el suelo por latitud y la incoherencia con la actual anulaban
+        #    récords de frío reales (bases antárticas).
         # 2) Máxima imposible: por encima del techo por latitud (trópico ≤50°C,
-        #    récord mundial fuera), o un rango diurno imposible respecto a una
-        #    mínima ya saneada (pico de la máxima). El techo tropical pilla la
+        #    récord mundial fuera), o un rango diurno imposible respecto a la
+        #    mínima (pico de la máxima). El techo tropical pilla la
         #    estación de serie rota (Koh Kong 54°C a lat 11) que el récord
         #    mundial dejaba pasar.
         if tmax is not None:
@@ -1840,10 +1806,9 @@ def _sanitize_record_extremes(rec: StationDaily) -> None:
     (récords mundiales / rango / suelo por latitud), nunca comparación espacial
     con vecinas (eso mataba récords reales). Muta el registro in situ.
 
-    Los extras de IEM (sin-actual, incoherencia mín↔actual) ya se aplican en
-    `_parse_iem_network`; esto es la red de seguridad común a todos."""
-    if rec.tmin is not None and rec.tmin < _tmin_floor(rec.lat):
-        rec.tmin = None
+    Los extras de IEM (sin-actual) ya se aplican en `_parse_iem_network`; esto
+    es la red de seguridad común a todos. La mínima no se filtra por frío (los
+    suelos por latitud anulaban récords de frío reales)."""
     if rec.tmax is not None:
         if rec.tmax > _tmax_ceiling(rec.lat):
             rec.tmax = None
@@ -1870,6 +1835,9 @@ def _parse_iem_network(
         if not station:
             continue
         station_id = f"{network}|{station}"
+        # Base con fuente dedicada mejor (Climantartide) → fuera del ranking IEM.
+        if station_id in _IEM_SUPERSEDED_BY_CLIMANTARTIDE:
+            continue
 
         # País REAL por coordenadas (precalculado en el catálogo). Si la
         # estación no resuelve o cae en un país ya cubierto, se descarta (no
@@ -1890,7 +1858,8 @@ def _parse_iem_network(
             tcur,
         )
         # Plausibilidad física de la instantánea (sensores rotos de IEM).
-        if tcur is not None and not (_TMIN_FLOOR_POLAR_C <= tcur <= _WORLD_TMAX_RECORD_C):
+        # Solo techo de calor; el lado frío no se filtra (récords antárticos).
+        if tcur is not None and tcur > _WORLD_TMAX_RECORD_C:
             tcur = None
         tcur_at = None
         try:
@@ -2008,18 +1977,137 @@ async def fetch_iem_daily(
 
 
 # ----------------------------------------------------------------------
+# Climantartide (ENEA) — AWS italianas de la Antártida
+# ----------------------------------------------------------------------
+# El observatorio meteo-climatológico antártico italiano (climantartide.it)
+# publica en tiempo real la temperatura HORARIA de sus AWS (Concordia
+# incluida) vía un JSONP sin auth. Sustituye a IEM para estas bases: el
+# decodificador BUFR de IEM anula las temperaturas por debajo de ~−73,15°C
+# (suelo de 200 K), con lo que el frío extremo real de la meseta (Concordia
+# −84°C) llegaba en null. Solo temperatura; sin viento/presión/lluvia.
+CLIMANTARTIDE_REALTIME_ENDPOINT = "https://www.climantartide.it/realtime/graph/jsonp.php"
+# Nombre en el feed → (nombre para mostrar, paraje, lat, lon). Coordenadas de
+# las fichas de https://www.climantartide.it/strumenti/aws/.
+_CLIMANTARTIDE_STATIONS: Dict[str, Tuple[str, str, float, float]] = {
+    "Alessandra": ("Alessandra", "Cape King", -73.5861, 166.6211),
+    "Arelis": ("Arelis", "Cape Ross", -76.7150, 162.9700),
+    "Concordia": ("Concordia", "Dome C", -75.1000, 123.4000),
+    "Eneide": ("Eneide", "Terra Nova Bay", -74.6958, 164.0922),
+    "Giulia": ("Giulia", "Mid Point", -75.5361, 145.8589),
+    "Irene": ("Irene", "Sitry", -71.6525, 148.6556),
+    "Lola": ("Lola", "Tourmaline Plateau", -74.1350, 163.4306),
+    "Lucia": ("Lucia", "Larsen Glacier", -74.9506, 161.7719),
+    "Modesta": ("Modesta", "Priestley Névé", -73.6392, 160.6456),
+    "Paola": ("Paola", "Talos Dome", -72.8292, 159.1933),
+    "Rita": ("Rita", "Enigma Lake", -74.7250, 164.0331),
+    "Silvia": ("Silvia", "Cape Phillips", -73.0500, 169.6000),
+    "Sofiab": ("Sofiab", "David Glacier", -75.6117, 158.5906),
+    "Zoraida": ("Zoraida", "Priestley Glacier", -74.1600, 162.7392),
+}
+# Estaciones IEM redundantes con Climantartide (mismo emplazamiento): se
+# excluyen del ranking IEM para no duplicar el marcador. Solo Concordia
+# aparece en ambos catálogos.
+_IEM_SUPERSEDED_BY_CLIMANTARTIDE = {"WMO_BUFR_SRF|0-380-0-625"}
+
+
+def _climantartide_local_day(epoch_s: int, lon: float) -> str:
+    """Día local NOMINAL por longitud (huso solar, lon/15). Las bases usan
+    husos administrativos dispares (Concordia UTC+8, Terra Nova Bay hora NZ);
+    el huso solar aproxima el día real de la mínima sin una tabla por base."""
+    offset = timedelta(hours=round(lon / 15.0))
+    return (datetime.fromtimestamp(epoch_s, tz=timezone.utc) + offset).date().isoformat()
+
+
+async def fetch_climantartide_daily(
+    *,
+    client: Optional[httpx.AsyncClient] = None,
+    timeout_s: float = 30.0,
+) -> List[StationDaily]:
+    """Serie horaria de temperatura (última semana) de todas las AWS → un
+    registro por estación y día local presente en el feed. El día actual
+    trae además la instantánea (``tcur``/``tcur_at``) para el mapa."""
+    owns = client is None
+    if owns:
+        client = httpx.AsyncClient(timeout=timeout_s)
+    try:
+        resp = await client.get(
+            CLIMANTARTIDE_REALTIME_ENDPOINT, params={"caso": "real_allt"}
+        )
+        resp.raise_for_status()
+        raw = resp.text.strip()
+    finally:
+        if owns:
+            await client.aclose()
+
+    # El endpoint es JSONP: ``({...});`` incluso sin ``callback``.
+    start, end = raw.find("("), raw.rfind(")")
+    if start < 0 or end <= start:
+        raise ValueError("Climantartide: respuesta no JSONP")
+    payload = json.loads(raw[start + 1:end])
+    series = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(series, list):
+        raise ValueError("Climantartide: payload sin 'data'")
+
+    records: List[StationDaily] = []
+    for entry in series:
+        if not isinstance(entry, dict):
+            continue
+        meta = _CLIMANTARTIDE_STATIONS.get(str(entry.get("name") or "").strip())
+        if meta is None:
+            continue
+        name, locality, lat, lon = meta
+        points: List[Tuple[int, float]] = []
+        for point in entry.get("data") or []:
+            try:
+                ms, value = point
+            except (TypeError, ValueError):
+                continue
+            if value is None:
+                continue
+            try:
+                points.append((int(ms) // 1000, float(value)))
+            except (TypeError, ValueError):
+                continue
+        if not points:
+            continue
+        points.sort()
+        by_day: Dict[str, List[Tuple[int, float]]] = {}
+        for epoch_s, value in points:
+            by_day.setdefault(_climantartide_local_day(epoch_s, lon), []).append((epoch_s, value))
+        last_day = max(by_day)
+        last_epoch, last_value = points[-1]
+        for day, day_points in by_day.items():
+            temps = [value for _, value in day_points]
+            is_last = day == last_day
+            records.append(StationDaily(
+                provider="CLIMANTARTIDE",
+                # id = nombre del feed, igual que el station_id del catálogo.
+                station_id=name,
+                name=f"{name} ({locality})" if locality else name,
+                locality=locality,
+                lat=lat,
+                lon=lon,
+                tmax=max(temps),
+                tmin=min(temps),
+                tcur=last_value if is_last else None,
+                tcur_at=last_epoch if is_last else None,
+                country="AQ",
+                local_date=day,
+                local_time=(
+                    (datetime.fromtimestamp(last_epoch, tz=timezone.utc)
+                     + timedelta(hours=round(lon / 15.0))).strftime("%H:%M")
+                    if is_last else ""
+                ),
+            ))
+    return records
+
+
+# ----------------------------------------------------------------------
 # Store en memoria
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # Saneamiento de datos (redes heterogéneas → sensores rotos)
 # ----------------------------------------------------------------------
-# Rango físico plausible; fuera de esto → dato basura (se descarta).
-_HARD_BOUNDS = {
-    "tmax": (-60.0, 56.0),   # récord mundial ~56.7 °C
-    "tmin": (-70.0, 45.0),
-    "gust": (0.0, 360.0),
-    "rain": (0.0, 1000.0),   # mm/día
-}
 # Chequeo de coherencia espacial ONE-SIDED: solo en la dirección
 # "anómalamente alto" (Tmáx/ráfaga), donde un outlier es casi siempre un
 # sensor roto y la altitud no genera falsos positivos (la altura enfría,
@@ -2725,6 +2813,8 @@ async def refresh_once(
         tasks["METEOFRANCE"] = fetch_meteofrance_records(store, mf_key, client=client)
     if _want("IEM"):
         tasks["IEM"] = fetch_iem_daily(store=store, client=client)
+    if _want("CLIMANTARTIDE"):
+        tasks["CLIMANTARTIDE"] = fetch_climantartide_daily(client=client)
 
     async def _run(provider: str, coro):
         """Envuelve el fetch para devolver ``(proveedor, resultado|excepción)``,

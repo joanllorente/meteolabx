@@ -26,6 +26,7 @@ PROVIDER_NAMES = {
     "SMHI": "SMHI",
     "ECCC": "ECCC",
     "IEM": "IEM",
+    "CLIMANTARTIDE": "Climantartide",
     "WINDY": "Windy PWS",
     "NETATMO": "Netatmo",
 }

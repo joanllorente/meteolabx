@@ -26,6 +26,14 @@ MANUAL_VISIBILITY_OVERRIDES = (
         "preferred": ("METEOFRANCE", "", "98404004"),
         "reason": "confirmed_duplicate_prefer_meteofrance",
     },
+    # Concordia (Dome C): la copia BUFR de IEM llega con la temperatura
+    # anulada por debajo de −73,3°C (bounds_check de pyWWA); Climantartide
+    # es la fuente dedicada con el frío real.
+    {
+        "hidden": ("IEM", "WMO_BUFR_SRF", "0-380-0-625"),
+        "preferred": ("CLIMANTARTIDE", "", "Concordia"),
+        "reason": "confirmed_duplicate_prefer_climantartide",
+    },
 )
 SCHEMA_VERSION = "2"
 
@@ -45,6 +53,7 @@ PROVIDER_FILES = {
     "SMHI": DATA / "data_estaciones_smhi.json",
     "ECCC": DATA / "data_estaciones_eccc.json",
     "IEM": DATA / "data_estaciones_iem.json",
+    "CLIMANTARTIDE": DATA / "data_estaciones_climantartide.json",
 }
 
 LIST_KEYS = ("estaciones", "stations", "listaEstacionsMeteo")

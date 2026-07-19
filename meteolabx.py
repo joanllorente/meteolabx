@@ -212,7 +212,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
 # historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
@@ -478,6 +478,13 @@ def _standard_provider_runtime_config() -> dict[str, dict]:
             "detail_prefix": "Detalle técnico IEM: ",
             "series_mode": "from_base",
         },
+        "CLIMANTARTIDE": {
+            "fallback_key": "climantartide_station_alt",
+            "warning": "⚠️ No se pudieron obtener datos de Climantartide por ahora. Intenta de nuevo en unos minutos.",
+            "detail_key": "climantartide_last_error",
+            "detail_prefix": "Detalle técnico Climantartide: ",
+            "series_mode": "from_base",
+        },
         "WEATHERLINK": {
             "fallback_key": "weatherlink_station_alt",
             "warning": "⚠️ No se pudieron obtener datos de WeatherLink por ahora. Intenta de nuevo en unos minutos.",
@@ -500,6 +507,19 @@ def _standard_provider_runtime_config() -> dict[str, dict]:
             "series_mode": "from_base",
         },
     }
+
+
+# Umbral de "dato viejo" por proveedor. Las AWS antárticas de Climantartide
+# transmiten por satélite ARGOS y el feed publica con 1-3 h de retraso típico:
+# con el umbral global (70 min) el aviso saltaba con la estación viva.
+_PROVIDER_MAX_DATA_AGE_MINUTES = {
+    "CLIMANTARTIDE": 240,
+}
+
+
+def _max_data_age_minutes(provider_id: str) -> float:
+    key = str(provider_id or "").strip().upper()
+    return float(_PROVIDER_MAX_DATA_AGE_MINUTES.get(key, MAX_DATA_AGE_MINUTES))
 
 
 def _process_standard_provider_connection(provider_id: str):
@@ -537,7 +557,7 @@ def _process_standard_provider_connection(provider_id: str):
             provider_id,
             station_id,
             sun_tz_name=station_tz,
-            max_data_age_minutes=MAX_DATA_AGE_MINUTES,
+            max_data_age_minutes=_max_data_age_minutes(provider_id),
             station_elevation=user_elevation if user_elevation > 0 else None,
             **credentials,
         )
@@ -1745,7 +1765,7 @@ def process_standard_provider(
             or st.session_state.get("browser_tz")
             or ""
         ).strip(),
-        max_data_age_minutes=MAX_DATA_AGE_MINUTES,
+        max_data_age_minutes=_max_data_age_minutes(provider_name),
         series_override=dashboard.series,
         series_7d=dashboard.recent_series,
         owner_station_id=str(
@@ -3922,6 +3942,7 @@ def _provider_refresh_seconds() -> int:
         "WEATHERLINK": 60,  # WeatherLink current conditions; límite por defecto holgado
         "WINDY": 300,  # Windy PWS suele publicar cada 5-10 minutos
         "NETATMO": 600,  # Netatmo publica cada ~10 minutos
+        "CLIMANTARTIDE": 3600,  # feed de tiempo real con paso horario
         "WU": REFRESH_SECONDS,
     }
     return int(defaults.get(provider_id, REFRESH_SECONDS))
@@ -4652,7 +4673,7 @@ def _whats_new_footer_html() -> str:
         "<button type='button' class='mlx-wn-tab' role='tab' "
         "data-mlbx-whats-new-version='120'>1.2.0</button>"
         "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.0</button>"
+        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.1</button>"
         "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-110'>"
         + _release("footer.previous_improvements", "footer.previous_fixes")
@@ -4661,6 +4682,10 @@ def _whats_new_footer_html() -> str:
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
+        "<div class='mlx-wn-version'>1.3.1</div>"
+        + _section(t("footer.improvements_title"), "footer.release_131_improvements")
+        + "<hr class='mlx-wn-sep'>"
+        "<div class='mlx-wn-version'>1.3.0</div>"
         + _release("footer.release_130_improvements", "footer.release_130_fixes")
         + "</div>"
     )
@@ -4766,6 +4791,7 @@ st.markdown(
         "border-color:#2384ff;outline:none;}"
         ".mlx-wn-dialog-content{padding:1rem 1.15rem 1.2rem;color:var(--text);}"
         ".mlx-wn-version{font-weight:900;font-size:1.04rem;margin:0.1rem 0 0.45rem;}"
+        ".mlx-wn-sep{border:none;border-top:1px solid rgba(128,128,128,0.35);margin:0.8rem 0;}"
         ".mlx-wn-tabs{display:flex;gap:0.45rem;margin:0 0 0.85rem;}"
         ".mlx-wn-tab{appearance:none;-webkit-appearance:none;cursor:pointer;"
         "padding:0.22rem 0.85rem;border-radius:999px;"

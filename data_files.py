@@ -26,6 +26,7 @@ IPMA_STATIONS_PATH = DATA_DIR / "data_estaciones_ipma.json"
 GEOSPHERE_STATIONS_PATH = DATA_DIR / "data_estaciones_geosphere.json"
 SMHI_STATIONS_PATH = DATA_DIR / "data_estaciones_smhi.json"
 ECCC_STATIONS_PATH = DATA_DIR / "data_estaciones_eccc.json"
+CLIMANTARTIDE_STATIONS_PATH = DATA_DIR / "data_estaciones_climantartide.json"
 
 # Fronteras de países (Natural Earth 1:50m, ISO_A2_EH) para resolver el país
 # de una estación por sus coordenadas (point-in-polygon). Usado para colocar en
@@ -55,6 +56,7 @@ STATION_CATALOG_PATHS = [
     GEOSPHERE_STATIONS_PATH,
     SMHI_STATIONS_PATH,
     ECCC_STATIONS_PATH,
+    CLIMANTARTIDE_STATIONS_PATH,
 ]
 
 # Valor de respaldo del conteo visible del SQLite unificado (conectables +

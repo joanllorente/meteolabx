@@ -210,6 +210,12 @@ PROVIDER_SPECS: dict[str, dict[str, Any]] = {
         "station_id_keys": ("iem_station_id", "provider_station_id"),
         "station_id_upper": False,
     },
+    "CLIMANTARTIDE": {
+        "label": "Climantartide",
+        "session_prefix": "climantartide",
+        "station_id_keys": ("climantartide_station_id", "provider_station_id"),
+        "station_id_upper": False,
+    },
     "WINDY": {
         "label": "Windy PWS",
         "session_prefix": "windy",
@@ -239,6 +245,7 @@ PROVIDER_RUNTIME_PREFIXES = (
     "weatherlink_",
     "windy_",
     "netatmo_",
+    "climantartide_",
 )
 
 PROVIDER_AUTOCONNECT_WIDGET_PREFIXES = (
@@ -341,6 +348,7 @@ PROVIDER_ERROR_KEYS = {
     "WEATHERLINK": "weatherlink_last_error",
     "WINDY": "windy_last_error",
     "NETATMO": "netatmo_last_error",
+    "CLIMANTARTIDE": "climantartide_last_error",
 }
 
 

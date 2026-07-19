@@ -22,7 +22,8 @@ SENSOR_KEYS = (
 CONNECTABLE_PROVIDERS = (
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
     "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT",
-    "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "WINDY", "NETATMO",
+    "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE",
+    "WINDY", "NETATMO",
 )
 CATALOG_PROVIDERS = CONNECTABLE_PROVIDERS
 PWS_CATALOG_PROVIDERS = ("WINDY", "NETATMO")
@@ -46,6 +47,7 @@ PROVIDER_COUNTRIES = {
     "GEOSPHERE": "AT",
     "SMHI": "SE",
     "ECCC": "CA",
+    "CLIMANTARTIDE": "AQ",
 }
 
 HISTORICAL_PROVIDER_IDS = {"AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA"}
@@ -67,6 +69,30 @@ COUNTRY_CODE_ALIASES = {
 # centinela de red global (WMO) y ``AN`` son las Antillas Neerlandesas,
 # disueltas en 2010 en BQ/CW/SX → no existe alias 1:1, la isla decide.
 COUNTRY_CODES_RESOLVED_BY_COORDS = {"UN", "AN"}
+
+
+def _catalog_country(provider: Any, country: Any, latitude: Any) -> str:
+    """País efectivo para respuestas del catálogo.
+
+    Las estaciones antárticas de la red global WMO llegan con ``country=UN``.
+    El ranking ya las resuelve por point-in-polygon, pero los filtros SQL del
+    mapa necesitan una regla barata y determinista antes de devolver filas.
+    Todo punto al sur de 60° S pertenece al ámbito antártico (AQ).
+    """
+    provider_id = str(provider or "").strip().upper()
+    code = _normalize_country_code(country)
+    try:
+        lat = float(latitude)
+    except (TypeError, ValueError):
+        lat = None
+    if (
+        provider_id == "IEM"
+        and code in COUNTRY_CODES_RESOLVED_BY_COORDS
+        and lat is not None
+        and lat <= -60.0
+    ):
+        return "AQ"
+    return code
 
 
 def _connect() -> sqlite3.Connection:
@@ -487,7 +513,7 @@ def _record(row: sqlite3.Row) -> Dict[str, Any]:
         country_key = str(country or "").strip().upper()
         timezone_key = str(row["timezone"] or "").strip()
         country = IEM_COUNTRY_TIMEZONE_OVERRIDES.get((country_key, timezone_key), country)
-    country = _normalize_country_code(country)
+    country = _catalog_country(row["provider"], country, row["latitude"])
     return {
         "provider": row["provider"],
         "network": row["network_code"],
@@ -516,6 +542,14 @@ def _record(row: sqlite3.Row) -> Dict[str, Any]:
 
 def _effective_country_sql() -> str:
     raw_country = "UPPER(COALESCE(NULLIF(TRIM(s.country), ''), 'UNSPECIFIED'))"
+    # Las WMO globales usan ``UN`` aunque sus coordenadas sean antárticas.
+    # Resolver AQ aquí hace que country_counts/search_catalog/search_near
+    # coincidan con el point-in-polygon que ya usa el ranking.
+    antarctica_case = (
+        "WHEN s.provider = 'IEM' "
+        f"AND {raw_country} IN ('UN', 'AN') "
+        "AND s.latitude <= -60.0 THEN 'AQ'"
+    )
     iem_cases = " ".join(
         f"WHEN s.provider = 'IEM' AND UPPER(COALESCE(s.country, '')) = '{country}' "
         f"AND COALESCE(s.timezone, '') = '{timezone}' THEN '{override}'"
@@ -530,7 +564,7 @@ def _effective_country_sql() -> str:
         for source, target in sorted(COUNTRY_CODE_ALIASES.items())
     )
     return (
-        f"CASE {iem_cases} {cases} {alias_cases} "
+        f"CASE {antarctica_case} {iem_cases} {cases} {alias_cases} "
         f"ELSE {raw_country} END"
     )
 

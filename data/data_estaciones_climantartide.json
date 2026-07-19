@@ -1,0 +1,145 @@
+{
+  "metadata": {
+    "source": "https://www.climantartide.it (Osservatorio Meteo-Climatologico Antartico, ENEA)",
+    "notes": "AWS italianas de la Antártida presentes en el feed de tiempo real (realtime/graph/jsonp.php?caso=real_allt). Coordenadas y altitudes de las fichas de strumenti/aws. Solo temperatura en tiempo real.",
+    "generated": "2026-07-19"
+  },
+  "stations": [
+    {
+      "id": "Alessandra",
+      "name": "Alessandra (Cape King)",
+      "lat": -73.5861,
+      "lon": 166.6211,
+      "elev": 160,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "area": "Cape King"
+    },
+    {
+      "id": "Arelis",
+      "name": "Arelis (Cape Ross)",
+      "lat": -76.715,
+      "lon": 162.97,
+      "elev": 150,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "area": "Cape Ross"
+    },
+    {
+      "id": "Concordia",
+      "name": "Concordia (Dome C)",
+      "lat": -75.1,
+      "lon": 123.4,
+      "elev": 3230,
+      "tz": "Etc/GMT-8",
+      "country": "AQ",
+      "region": "Antarctic Plateau",
+      "online": true,
+      "wmo_id": "89625",
+      "area": "Dome C"
+    },
+    {
+      "id": "Eneide",
+      "name": "Eneide (Terra Nova Bay)",
+      "lat": -74.6958,
+      "lon": 164.0922,
+      "elev": 91,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": false,
+      "wmo_id": "89662",
+      "area": "Terra Nova Bay"
+    },
+    {
+      "id": "Lola",
+      "name": "Lola (Tourmaline Plateau)",
+      "lat": -74.135,
+      "lon": 163.4306,
+      "elev": 1621,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "area": "Tourmaline Plateau"
+    },
+    {
+      "id": "Modesta",
+      "name": "Modesta (Priestley Névé)",
+      "lat": -73.6392,
+      "lon": 160.6456,
+      "elev": 1924,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": false,
+      "wmo_id": "89659",
+      "area": "Priestley Névé"
+    },
+    {
+      "id": "Paola",
+      "name": "Paola (Talos Dome)",
+      "lat": -72.8292,
+      "lon": 159.1933,
+      "elev": 2370,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": false,
+      "area": "Talos Dome"
+    },
+    {
+      "id": "Rita",
+      "name": "Rita (Enigma Lake)",
+      "lat": -74.725,
+      "lon": 164.0331,
+      "elev": 268,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "area": "Enigma Lake"
+    },
+    {
+      "id": "Silvia",
+      "name": "Silvia (Cape Phillips)",
+      "lat": -73.05,
+      "lon": 169.6,
+      "elev": 568,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "wmo_id": "89661",
+      "area": "Cape Phillips"
+    },
+    {
+      "id": "Sofiab",
+      "name": "Sofiab (David Glacier)",
+      "lat": -75.6117,
+      "lon": 158.5906,
+      "elev": 1552,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "area": "David Glacier"
+    },
+    {
+      "id": "Zoraida",
+      "name": "Zoraida (Priestley Glacier)",
+      "lat": -74.16,
+      "lon": 162.7392,
+      "elev": 880,
+      "tz": "Etc/GMT-11",
+      "country": "AQ",
+      "region": "Victoria Land",
+      "online": true,
+      "area": "Priestley Glacier"
+    }
+  ]
+}

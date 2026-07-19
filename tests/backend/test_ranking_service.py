@@ -119,6 +119,73 @@ def test_tropical_tmax_ceiling_drops_broken_spikes_keeps_real_heat():
     assert _clean_iem_extremes(37.6, 10.9, None, 40.6, 12.4)[0] == 37.6
 
 
+def test_cold_minima_never_filtered():
+    """El lado FRÍO no se filtra en ningún saneador: el suelo por latitud
+    anulaba récords antárticos reales (Concordia −84°C, que IEM ya recorta
+    a ~−73 en BUFR y solo llega vía Climantartide)."""
+    from server.services.ranking import _clean_iem_extremes, _sanitize_record_extremes
+
+    # IEM: mínima antártica extrema con actual coherente → intacta.
+    assert _clean_iem_extremes(-77.9, -84.0, None, -75.1, -79.1)[1] == -84.0
+    # Incluso una mínima "sospechosa" en latitudes templadas se conserva.
+    assert _clean_iem_extremes(20.0, -40.0, None, 45.0, 18.0)[1] == -40.0
+
+    rec = StationDaily(
+        provider="CLIMANTARTIDE", station_id="Concordia",
+        name="Concordia (Dome C)", lat=-75.1, lon=123.4,
+        tmax=-77.9, tmin=-84.0, country="AQ", local_date="2026-07-19",
+    )
+    _sanitize_record_extremes(rec)
+    assert rec.tmin == -84.0
+
+
+def test_fetch_climantartide_daily_parses_jsonp_and_buckets_by_local_day():
+    """El feed JSONP de climantartide.it (temperatura horaria de las AWS
+    italianas) se trocea por día local nominal (huso solar por longitud):
+    Concordia (lon 123,4 → UTC+8) mete las 18Z del día D en el día D+1 local.
+    La instantánea (tcur) solo va en el último día."""
+    import asyncio
+
+    import httpx
+
+    from server.services.ranking import fetch_climantartide_daily
+
+    def _ms(iso: str) -> int:
+        return int(datetime.fromisoformat(iso + "+00:00").timestamp()) * 1000
+
+    payload = (
+        '({"par":{"Titleg":"Temperature"},"data":['
+        '{"name":"Concordia","data":[[%d,-78.9],[%d,-82.9],[%d,-84.0],[%d,-79.1]]},'
+        '{"name":"Desconocida","data":[[%d,-10.0]]},'
+        '{"name":"Modesta","data":[[%d,null]]}'
+        ']});'
+    ) % (
+        _ms("2026-07-18T06:00:00"), _ms("2026-07-18T12:00:00"),
+        _ms("2026-07-18T18:00:00"), _ms("2026-07-19T06:00:00"),
+        _ms("2026-07-19T06:00:00"), _ms("2026-07-19T06:00:00"),
+    )
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=payload)
+
+    async def _test():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0) as client:
+            return await fetch_climantartide_daily(client=client)
+
+    recs = asyncio.run(_test())
+    # Solo Concordia (la desconocida se ignora; Modesta sin puntos válidos).
+    assert {r.station_id for r in recs} == {"Concordia"}
+    by_day = {r.local_date: r for r in recs}
+    # 06Z y 12Z del 18 → día local 18; 18Z del 18 (02:00 local del 19) y
+    # 06Z del 19 → día local 19.
+    assert by_day["2026-07-18"].tmin == -82.9
+    assert by_day["2026-07-18"].tmax == -78.9
+    assert by_day["2026-07-18"].tcur is None
+    assert by_day["2026-07-19"].tmin == -84.0
+    assert by_day["2026-07-19"].tcur == -79.1
+    assert by_day["2026-07-19"].country == "AQ"
+
+
 def test_day_options_prefers_recent_day_with_reasonable_coverage():
     """La fecha principal debe ser la más reciente con cobertura razonable,
     no la más poblada: un día pasado COMPLETO ganaba siempre al día en curso

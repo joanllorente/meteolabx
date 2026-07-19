@@ -93,29 +93,30 @@ def test_fetch_current_parses_obhistory_units() -> None:
     assert not math.isnan(result["feels_like"])
 
 
-def test_plausible_temp_filters_impossible_tropical_cold() -> None:
-    """Sensor roto de IEM: la estación BUFR de Camboya (lat ~11) reportando
-    −39.7°C es imposible en los trópicos → se anula. El frío/calor REAL
-    (Ártico en invierno, Death Valley) y las latitudes sin dato se conservan."""
-    # Trópicos: −39.7°C imposible → NaN; 28°C plausible → intacto.
-    assert math.isnan(iem._plausible_temp_c(-39.7, 11.149))
+def test_plausible_temp_filters_impossible_heat_keeps_cold() -> None:
+    """Solo se filtra el CALOR imposible por latitud. El frío nunca se anula:
+    el suelo por latitud llegó a anular récords antárticos reales (Concordia
+    por debajo de −73°C)."""
+    # Trópicos: 54°C imposible → NaN; 28°C plausible → intacto.
+    assert math.isnan(iem._plausible_temp_c(54.0, 11.149))
     assert iem._plausible_temp_c(28.0, 11.149) == pytest.approx(28.0)
-    # Ártico en su invierno: −39.7°C es real → se conserva.
-    assert iem._plausible_temp_c(-39.7, 70.0) == pytest.approx(-39.7)
-    # Calor extremo real vs imposible.
+    # El frío NO se filtra, ni siquiera valores extremos en el trópico.
+    assert iem._plausible_temp_c(-39.7, 11.149) == pytest.approx(-39.7)
+    assert iem._plausible_temp_c(-84.1, -75.1) == pytest.approx(-84.1)
+    # Calor extremo real vs imposible (subtropical: techo récord mundial).
     assert iem._plausible_temp_c(54.0, 36.0) == pytest.approx(54.0)
     assert math.isnan(iem._plausible_temp_c(62.0, 36.0))
     # Sin latitud no hay con qué juzgar → no se filtra.
-    assert iem._plausible_temp_c(-39.7, None) == pytest.approx(-39.7)
+    assert iem._plausible_temp_c(62.0, None) == pytest.approx(62.0)
 
 
 def test_row_and_summary_drop_impossible_tropical_temps() -> None:
-    """El filtro se aplica a la actual, al punto de rocío y a los extremos ▲▼,
-    pero deja intactas las demás variables (humedad, viento…)."""
+    """El filtro (solo calor) se aplica a la actual, al punto de rocío y a los
+    extremos ▲▼, pero deja intactas las demás variables (humedad, viento…)."""
     def _c_to_f(c: float) -> float:
         return c * 9.0 / 5.0 + 32.0
 
-    row = {"tmpf": _c_to_f(-39.7), "dwpf": _c_to_f(-39.7), "relh": 100.0, "sknt": 6.0}
+    row = {"tmpf": _c_to_f(54.0), "dwpf": _c_to_f(54.0), "relh": 100.0, "sknt": 6.0}
     parsed = iem._row_to_values(row, 11.149)
     assert math.isnan(parsed["temp"])
     assert math.isnan(parsed["dewpt"])
@@ -123,9 +124,11 @@ def test_row_and_summary_drop_impossible_tropical_temps() -> None:
     assert parsed["wind"] == pytest.approx(6.0 * 1.852)
 
     extremes, _ = iem._daily_summary_from_current(
-        {"max_tmpf": _c_to_f(-39.7), "min_tmpf": _c_to_f(-39.8)}, 11.149
+        {"max_tmpf": _c_to_f(54.0), "min_tmpf": _c_to_f(-84.1)}, 11.149
     )
-    assert "temp_max" not in extremes and "temp_min" not in extremes
+    assert "temp_max" not in extremes
+    # El frío no se filtra: la mínima extrema se conserva.
+    assert extremes["temp_min"] == pytest.approx(-84.1, abs=0.1)
 
 
 def test_fetch_today_series_is_canonical() -> None:

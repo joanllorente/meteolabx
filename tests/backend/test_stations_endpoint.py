@@ -130,6 +130,7 @@ def test_country_counts_and_iem_country_filter() -> None:
     counts = stations.country_counts(providers=["IEM"])
     assert counts["US"] > 100000
     assert counts["ES"] > 0
+    assert counts["AQ"] >= 35
 
     nws_counts = stations.country_counts(providers=["NWS"])
     assert nws_counts["US"] > 30000
@@ -178,6 +179,27 @@ def test_country_counts_and_iem_country_filter() -> None:
     assert puerto_rico_record is not None
     assert puerto_rico_record["country"] == "PR"
     assert puerto_rico_record["has_historical"] is False
+
+    antarctica = stations.search_catalog(
+        providers=["IEM"], countries=["AQ"], limit=5000,
+    )
+    concordia_iem = next(
+        (
+            row for row in antarctica
+            if row["network"] == "WMO_BUFR_SRF"
+            and row["station_id"] == "0-380-0-625"
+        ),
+        None,
+    )
+    assert len(antarctica) >= 35
+    # La copia BUFR de IEM está oculta como duplicado confirmado: la fuente
+    # canónica de Concordia es Climantartide (IEM anula el frío < −73,3°C).
+    assert concordia_iem is None
+    concordia = stations.get_station("CLIMANTARTIDE", "Concordia")
+    assert concordia is not None
+    assert concordia["name"] == "Concordia (Dome C)"
+    assert concordia["country"] == "AQ"
+    assert concordia["connectable"] is True
 
     spain_results = stations.search_near(
         40.4, -3.7, radius_km=2000, countries=["ES"], limit=5000,

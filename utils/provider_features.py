@@ -149,6 +149,13 @@ PROVIDER_FEATURES: dict[str, dict[str, Any]] = {
         "synoptic_source_key": "trends.sources.weatherlink_synoptic",
         "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
     },
+    "CLIMANTARTIDE": {
+        "historical_supported": False,
+        "requires_api_key": False,
+        "today_trends_source_key": "trends.sources.climantartide_today",
+        "synoptic_source_key": "trends.sources.climantartide_synoptic",
+        "synoptic_coverage_note_key": "trends.notes.synoptic_insufficient_coverage",
+    },
     "WINDY": {
         "historical_supported": False,
         "today_trends_source_key": "trends.sources.windy_today",

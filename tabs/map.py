@@ -36,7 +36,7 @@ from utils.provider_state import display_provider_station_id
 # espacial) y el ranking ya lo usa por su lado. En EE.UU. el mapa muestra las
 # OFICIALES de NWS. IEM se mantiene como proveedor conectable (ranking/deep link)
 # pero no se ofrece como capa del mapa.
-ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IPMA", "GEOSPHERE", "SMHI", "ECCC", "WINDY", "NETATMO"]
+ALL_MAP_PROVIDER_OPTIONS = ["AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE", "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IPMA", "GEOSPHERE", "SMHI", "ECCC", "CLIMANTARTIDE", "WINDY", "NETATMO"]
 IEM_FALLBACK_MAP_PROVIDER = "IEM"
 WINDY_MAP_PROVIDER = "WINDY"
 NETATMO_MAP_PROVIDER = "NETATMO"
@@ -57,7 +57,8 @@ MAP_SENSOR_FILTER_OPTIONS = [
 MAP_AUTOCONNECT_CHANGED_KEY = "_map_provider_autoconnect_toggle_changed"
 MAP_AUTOCONNECT_SYNC_RERUN_KEY = "_map_provider_autoconnect_sync_rerun"
 MAP_COUNTRY_FILTER_INITIALIZED_KEY = "map_country_filter_initialized"
-MAP_COUNTRY_COUNTS_CACHE_VERSION = 2
+MAP_COUNTRY_COUNTS_CACHE_VERSION = 3
+MAP_IEM_COUNTRY_CACHE_VERSION = 2
 REGIONAL_CATALOG_SPECS = {
     "AEMET": {"lat": 40.4168, "lon": -3.7038, "max_results": 1200},
     "METEOCAT": {"lat": 41.6200, "lon": 1.7500, "max_results": 260},
@@ -73,6 +74,7 @@ REGIONAL_CATALOG_SPECS = {
     "GEOSPHERE": {"lat": 47.6000, "lon": 14.1000, "max_results": 600},
     "SMHI": {"lat": 62.0000, "lon": 15.0000, "max_results": 2400},
     "ECCC": {"lat": 56.0000, "lon": -96.0000, "max_results": 10300},
+    "CLIMANTARTIDE": {"lat": -74.5000, "lon": 160.0000, "max_results": 40},
 }
 MAP_PROVIDER_COUNTRIES = {
     "AEMET": {"ES"},
@@ -89,6 +91,7 @@ MAP_PROVIDER_COUNTRIES = {
     "GEOSPHERE": {"AT"},
     "SMHI": {"SE"},
     "ECCC": {"CA"},
+    "CLIMANTARTIDE": {"AQ"},
 }
 
 
@@ -891,6 +894,7 @@ PROVIDER_DISPLAY_NAMES = {
     "GEOSPHERE": "GeoSphere",
     "SMHI": "SMHI",
     "IEM": "IEM",
+    "CLIMANTARTIDE": "Climantartide",
 }
 
 
@@ -1238,6 +1242,7 @@ def render_map_tab(ctx):
         catalog_version = _map_catalog_cache_version(provider_ids)
         cache_key = (
             _map_cache_key(IEM_FALLBACK_MAP_PROVIDER, search_lat, search_lon, catalog_version),
+            MAP_IEM_COUNTRY_CACHE_VERSION,
             tuple(sorted(countries)),
             bool(historical_only),
             bool(hide_historical_only),

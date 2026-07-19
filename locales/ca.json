@@ -92,6 +92,9 @@
     "whats_new": "Novetats",
     "improvements_title": "Millores",
     "fixes_title": "Correccions",
+    "release_131_improvements": [
+      "Nou proveïdor Climantartide per a estacions de bases antàrtiques."
+    ],
     "improvements": [
       "Migració completa i funcional al mode FastAPI.",
       "Nova pestanya Rànquing, amb classificacions de temperatura, vent i precipitació per país i globals.",
@@ -686,6 +689,8 @@
       "windy_synoptic": "Observacions recents de Windy PWS (mostreig 3 h)",
       "netatmo_today": "Observacions recents de Netatmo",
       "netatmo_synoptic": "Observacions recents de Netatmo (mostreig 3 h)",
+      "climantartide_today": "Observacions horàries de Climantartide",
+      "climantartide_synoptic": "Observacions horàries de Climantartide (mostreig 1 h)",
       "euskalmet_synoptic": "Euskalmet (sense sèrie sinòptica setmanal disponible)",
       "generic_synoptic": "{provider} (sèrie horària genèrica)",
       "sampling_suffix_3h": "{source} (mostreig 3 h)"

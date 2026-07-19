@@ -92,6 +92,9 @@
     "whats_new": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
+    "release_131_improvements": [
+      "New Climantartide provider for Antarctic base stations."
+    ],
     "improvements": [
       "Complete, functional migration to FastAPI mode.",
       "New Ranking tab, with temperature, wind and precipitation rankings by country and globally.",
@@ -686,6 +689,8 @@
       "windy_synoptic": "Windy PWS recent observations (3 h sampling)",
       "netatmo_today": "Netatmo recent observations",
       "netatmo_synoptic": "Netatmo recent observations (3 h sampling)",
+      "climantartide_today": "Climantartide hourly observations",
+      "climantartide_synoptic": "Climantartide hourly observations (1 h sampling)",
       "euskalmet_synoptic": "Euskalmet (no weekly synoptic series available)",
       "generic_synoptic": "{provider} (generic hourly series)",
       "sampling_suffix_3h": "{source} (3 h sampling)"

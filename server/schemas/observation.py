@@ -66,7 +66,8 @@ class _ProviderStationRequest(BaseModel):
     provider: Literal[
         "WU", "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS",
         "METEOFRANCE", "METOFFICE", "FROST", "POEM", "METEOHUB_IT",
-        "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "WEATHERLINK", "WINDY", "NETATMO",
+        "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE",
+        "WEATHERLINK", "WINDY", "NETATMO",
     ] = Field(
         default="WU",
         description=(

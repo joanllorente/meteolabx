@@ -49,6 +49,7 @@ from server.schemas.observation import (
 )
 from server.services import (
     aemet,
+    climantartide,
     eccc,
     euskalmet,
     frost,
@@ -477,6 +478,15 @@ def _resolve_provider_fetchers(
             "public",
             lambda: iem.fetch_current(body.station_id, client=http),
             lambda: iem.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "CLIMANTARTIDE":
+        # API pública (JSONP bulk); solo temperatura, con fallback IEM
+        # para los extremos diarios de Concordia.
+        return (
+            "public",
+            lambda: climantartide.fetch_current(body.station_id, client=http),
+            lambda: climantartide.fetch_today_series(body.station_id, client=http),
         )
 
     if body.provider == "POEM":
@@ -1302,6 +1312,12 @@ def _resolve_recent_fetcher(
         return (
             "public",
             lambda: iem.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "CLIMANTARTIDE":
+        return (
+            "public",
+            lambda: climantartide.fetch_recent_series(body.station_id, days_back=days, client=http),
         )
 
     if body.provider == "IPMA":

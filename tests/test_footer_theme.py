@@ -38,9 +38,9 @@ def test_release_130_is_current_and_localized():
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "1.3.0"' in source
-    assert '__version__ = "1.3.0"' in server_source
-    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.0" in source
+    assert 'APP_VERSION = "1.3.1"' in source
+    assert '__version__ = "1.3.1"' in server_source
+    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.1" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
     assert 'sessionStorage.setItem("mlbx-whats-new-version", version)' in source
     assert 'button.classList.toggle("is-active", active);' in source
