@@ -38,9 +38,9 @@ def test_release_130_is_current_and_localized():
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "1.3.1"' in source
-    assert '__version__ = "1.3.1"' in server_source
-    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.1" in source
+    assert 'APP_VERSION = "1.3.2"' in source
+    assert '__version__ = "1.3.2"' in server_source
+    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.2" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
     assert 'sessionStorage.setItem("mlbx-whats-new-version", version)' in source
     assert 'button.classList.toggle("is-active", active);' in source
@@ -55,9 +55,18 @@ def test_release_130_is_current_and_localized():
         "it": "portoghese",
         "pt": "português",
     }
+    release_132_notes = {
+        "es": "Optimización en la conexión a estaciones Meteocat.",
+        "ca": "Optimització de la connexió a les estacions de Meteocat.",
+        "en": "Optimized connections to Meteocat stations.",
+        "fr": "Optimisation de la connexion aux stations Meteocat.",
+        "it": "Ottimizzazione della connessione alle stazioni Meteocat.",
+        "pt": "Otimização da ligação às estações Meteocat.",
+    }
     for language, portuguese_name in portuguese_names.items():
         payload = json.loads((root / "locales" / f"{language}.json").read_text())
         footer = payload["footer"]
+        assert footer["release_132_improvements"] == [release_132_notes[language]]
         assert len(footer["release_130_improvements"]) == 7
         assert portuguese_name in footer["release_130_improvements"][-1].lower()
         assert len(footer["release_130_fixes"]) == 2

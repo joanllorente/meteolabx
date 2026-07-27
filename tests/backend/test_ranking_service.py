@@ -336,6 +336,19 @@ def test_retry_backoff_escalates_after_four_failures():
     assert _retry_backoff_s(5, base_s=30.0) == 60.0
 
 
+def test_meteocat_refresh_runs_on_even_local_hours():
+    from datetime import datetime, timezone
+
+    from server.services.ranking import _meteocat_refresh_due
+
+    # En julio, 00:05 UTC son las 02:05 en Europe/Madrid.
+    assert _meteocat_refresh_due(datetime(2026, 7, 16, 0, 5, tzinfo=timezone.utc))
+    assert not _meteocat_refresh_due(
+        datetime(2026, 7, 16, 1, 5, tzinfo=timezone.utc),
+    )
+    assert _meteocat_refresh_due(datetime(2026, 7, 16, 2, 5, tzinfo=timezone.utc))
+
+
 # ----------------------------------------------------------------------
 # Adaptador IPMA (bulk de 24 h)
 # ----------------------------------------------------------------------

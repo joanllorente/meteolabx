@@ -63,6 +63,13 @@ PROVIDER_TZ = {
     "CLIMANTARTIDE": "UTC",
 }
 
+# Meteocat publica sus lecturas con cierto retraso y su API aplica un límite de
+# peticiones relativamente estricto. El ranking completo se consulta cada dos
+# horas (12 ciclos en un día normal), mientras los demás proveedores conservan
+# la cadencia horaria.
+METEOCAT_REFRESH_EVERY_HOURS = 2
+METEOCAT_MAP_MAX_AGE_S = 4 * 3600
+
 # País fijo (ISO2) de los proveedores de un solo país. El store lo estampa en
 # cada registro que no traiga ya su país, de modo que el filtro por país del
 # ranking funcione de forma uniforme. IEM NO está aquí: trae país por estación.
@@ -2472,11 +2479,11 @@ class RankingStore:
         """``(lat, lon, tcur)`` de las estaciones con instantánea RECIENTE
         (≤ ``max_age_s``), del día más reciente de cada proveedor. Una lectura
         colgada de hace horas pintaría frío nocturno a mediodía, así que las
-        viejas (o sin timestamp) se descartan. El margen de 2 h absorbe la
-        cadena real de retrasos —obs publicada con 30-90 min de demora
-        (AEMET/SYNOP) más el ciclo horario del refresh del ranking—; con 1 h
-        el mapa se vaciaba hacia el final de cada ciclo. Alimenta el campo de
-        temperatura del mapa; no interviene en el ranking."""
+        viejas (o sin timestamp) se descartan. El margen general de 2 h absorbe
+        la cadena real de retrasos —obs publicada con 30-90 min de demora más
+        el refresco horario—; Meteocat dispone de 4 h porque se consulta cada
+        dos horas. Alimenta el campo de temperatura del mapa; no interviene en
+        el ranking."""
         return [
             (float(rec.lat), float(rec.lon), float(rec.tcur))
             for rec in self.current_temperature_records(max_age_s=max_age_s, now=now)
@@ -2494,9 +2501,15 @@ class RankingStore:
         estación aparece en dos buckets gana su lectura más reciente."""
         from server.services.stations import is_station_hidden
 
-        cutoff = int((now or datetime.now(tz=timezone.utc)).timestamp()) - max(60, int(max_age_s))
+        now_epoch = int((now or datetime.now(tz=timezone.utc)).timestamp())
         freshest: Dict[Tuple[str, str], StationDaily] = {}
         for (provider, _day), stations in self._daily.items():
+            provider_max_age_s = (
+                max(int(max_age_s), METEOCAT_MAP_MAX_AGE_S)
+                if provider == "METEOCAT"
+                else int(max_age_s)
+            )
+            cutoff = now_epoch - max(60, provider_max_age_s)
             for sid, rec in stations.items():
                 if is_station_hidden(provider, sid):
                     continue
@@ -2529,11 +2542,15 @@ class RankingStore:
         """
         from server.services.stations import is_station_hidden
 
-        cutoff = int((now or datetime.now(tz=timezone.utc)).timestamp()) - max(
-            60, int(max_age_s),
-        )
+        now_epoch = int((now or datetime.now(tz=timezone.utc)).timestamp())
         freshest: Dict[Tuple[str, str], StationDaily] = {}
         for (provider, _day), station_rows in self._daily.items():
+            provider_max_age_s = (
+                max(int(max_age_s), METEOCAT_MAP_MAX_AGE_S)
+                if provider == "METEOCAT"
+                else int(max_age_s)
+            )
+            cutoff = now_epoch - max(60, provider_max_age_s)
             for sid, rec in station_rows.items():
                 if is_station_hidden(provider, sid):
                     continue
@@ -2579,9 +2596,15 @@ class RankingStore:
         """
         from server.services.stations import is_station_hidden
 
-        cutoff = int((now or datetime.now(tz=timezone.utc)).timestamp()) - max(60, int(max_age_s))
+        now_epoch = int((now or datetime.now(tz=timezone.utc)).timestamp())
         freshest: Dict[Tuple[str, str], StationDaily] = {}
         for (provider, _day), station_rows in self._daily.items():
+            provider_max_age_s = (
+                max(int(max_age_s), METEOCAT_MAP_MAX_AGE_S)
+                if provider == "METEOCAT"
+                else int(max_age_s)
+            )
+            cutoff = now_epoch - max(60, provider_max_age_s)
             for sid, rec in station_rows.items():
                 if is_station_hidden(provider, sid):
                     continue
@@ -2767,16 +2790,20 @@ async def refresh_once(
     client: httpx.AsyncClient,
     settings=None,
     only: Optional[set] = None,
+    skip: Optional[set] = None,
 ) -> set:
-    """Refresca proveedores y los PUBLICA (``store.commit``). ``only`` limita a
-    un subconjunto (para reintentar SOLO los que fallaron, sin re-llamar a los
-    que ya van bien). Un proveedor que falle (excepción) se omite del commit →
-    conserva su último dato bueno. Devuelve el conjunto de proveedores que
-    FALLARON este ciclo."""
+    """Refresca proveedores y los PUBLICA (``store.commit``).
+
+    ``only`` limita a un subconjunto (reintentos) y ``skip`` excluye los que no
+    corresponden en el ciclo programado. Un proveedor que falle se omite del
+    commit, conserva su último dato bueno y se devuelve como fallido.
+    """
     import asyncio
 
     def _want(provider: str) -> bool:
-        return only is None or provider in only
+        selected = only is None or provider in only
+        excluded = bool(skip and provider in skip)
+        return selected and not excluded
 
     mc_key = getattr(settings, "meteocat_api_key", "") if settings else ""
     aemet_key = getattr(settings, "aemet_api_key", "") if settings else ""
@@ -2870,6 +2897,20 @@ def _next_aligned_run(offset_min: int, now: Optional[datetime] = None) -> dateti
     return nxt
 
 
+def _meteocat_refresh_due(now: Optional[datetime] = None) -> bool:
+    """Indica si corresponde el ciclo de Meteocat de cada dos horas.
+
+    Se usan las horas pares de Europe/Madrid (00, 02, ..., 22), de modo que la
+    planificación resulte fácil de reconocer en los logs y siga el horario
+    local incluso cuando cambia entre CET y CEST.
+    """
+    instant = now or datetime.now(tz=timezone.utc)
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    local = instant.astimezone(ZoneInfo(PROVIDER_TZ["METEOCAT"]))
+    return local.hour % METEOCAT_REFRESH_EVERY_HOURS == 0
+
+
 async def refresh_loop(
     store: RankingStore,
     *,
@@ -2943,8 +2984,23 @@ async def refresh_loop(
     # visitante pagando la generación mientras termina el refresco inmediato.
     await _prebuild_map_fields()
 
+    def _scheduled_skip(now: Optional[datetime] = None) -> set:
+        # En el primer arranque sin snapshot se carga Meteocat inmediatamente,
+        # aunque sea una hora impar, para que el ranking no nazca vacío.
+        has_snapshot = "METEOCAT" in store.providers()
+        if _meteocat_refresh_due(now) or not has_snapshot:
+            return set()
+        return {"METEOCAT"}
+
     # Ciclo inmediato al arrancar: el ranking no debe salir vacío hasta el :05.
-    pending = await refresh_once(store, client=client, settings=settings)
+    # Meteocat respeta también aquí su cadencia de dos horas; si existe un
+    # snapshot restaurado seguirá visible hasta el siguiente ciclo par.
+    pending = await refresh_once(
+        store,
+        client=client,
+        settings=settings,
+        skip=_scheduled_skip(),
+    )
     _register_attempt(set(failure_counts) | pending, pending)
     await _persist()
     await _prebuild_map_fields()
@@ -2954,7 +3010,12 @@ async def refresh_loop(
         now = datetime.now(tz=timezone.utc)
         secs_to_full = (next_full - now).total_seconds()
         if secs_to_full <= 0:
-            pending = await refresh_once(store, client=client, settings=settings)  # completo
+            pending = await refresh_once(
+                store,
+                client=client,
+                settings=settings,
+                skip=_scheduled_skip(now),
+            )
             _register_attempt(set(failure_counts) | pending, pending)
             await _persist()
             await _prebuild_map_fields()

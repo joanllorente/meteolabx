@@ -92,6 +92,9 @@
     "whats_new": "Novedades",
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
+    "release_132_improvements": [
+      "Optimización en la conexión a estaciones Meteocat."
+    ],
     "release_131_improvements": [
       "Nuevo proveedor Climantartide para estaciones de bases antárticas."
     ],

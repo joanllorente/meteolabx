@@ -181,12 +181,18 @@ def _daily_extremes_from_ranking_store(
     store: ranking_svc.RankingStore | None,
     provider: str,
     station_id: str,
+    *,
+    current_day_only: bool = False,
 ) -> dict:
     if store is None:
         return {}
     record = store.station_daily(provider, station_id)
     if record is None:
         return {}
+    if current_day_only:
+        expected_day = store.local_day(str(provider or "").strip().upper())
+        if str(record.local_date or "") != expected_day:
+            return {}
     out = {
         "temp_max": record.tmax,
         "temp_min": record.tmin,
@@ -320,6 +326,58 @@ def _aemet_current_from_series(station_id: str, series: dict) -> dict:
         "lon": record.get("lon"),
         "elevation": record.get("elevation"),
         "station_name": str(record.get("name") or station_id),
+    }
+
+
+def _meteocat_current_from_series(station_id: str, series: dict) -> dict:
+    """Construye el current XEMA reutilizando la serie ya descargada.
+
+    El endpoint por estación/día devuelve todas las variables en una sola
+    respuesta. ``fetch_today_series`` ya la ha normalizado, así que volver a
+    ejecutar ``fetch_current`` duplicaría las dos consultas UTC del día local.
+    """
+    epochs = series.get("epochs", []) if isinstance(series, dict) else []
+    if not isinstance(epochs, list) or not epochs:
+        return {}
+
+    try:
+        latest_epoch = max(int(value) for value in epochs)
+    except (TypeError, ValueError):
+        return {}
+
+    def _latest(key: str) -> float:
+        values = series.get(key, [])
+        if not isinstance(values, list):
+            return float("nan")
+        for value in reversed(values):
+            number = _float_or_nan(value)
+            if not _is_nan_value(number):
+                return number
+        return float("nan")
+
+    record = stations.get_station("METEOCAT", station_id) or {}
+    dt_utc = datetime.fromtimestamp(latest_epoch, tz=timezone.utc)
+    return {
+        "Tc": _latest("temps"),
+        "RH": _latest("humidities"),
+        "p_hpa": _latest("pressures"),
+        "p_abs_hpa": _latest("pressures_abs"),
+        "Td": _latest("dewpts"),
+        "wind": _latest("winds"),
+        "gust": _latest("gusts"),
+        "wind_dir_deg": _latest("wind_dirs"),
+        "precip_rate": float("nan"),
+        "precip_total": _float_or_nan(series.get("precip_total")),
+        "solar_radiation": _latest("solar_radiations"),
+        "uv": _latest("uv_indexes"),
+        "epoch": latest_epoch,
+        "time_utc": dt_utc.isoformat(),
+        "time_local": dt_utc.astimezone(meteocat.CAT_TZ).isoformat(),
+        "lat": record.get("lat"),
+        "lon": record.get("lon"),
+        "elevation": record.get("elevation"),
+        "station_name": str(record.get("name") or station_id),
+        "daily_extremes": dict(series.get("daily_extremes") or {}),
     }
 
 
@@ -779,10 +837,11 @@ async def post_current_processed(
         ranking_store,
         body.provider,
         body.station_id,
+        current_day_only=(body.provider == "METEOCAT"),
     )
     use_ranking_extremes = bool(
         ranking_extremes
-        and body.provider in {"AEMET", "METEOGALICIA"}
+        and body.provider in {"AEMET", "METEOCAT", "METEOGALICIA"}
     )
     # Dispatch + validación per-proveedor (WU lleva api_key del cliente;
     # AEMET y Meteocat usan la del servidor).
@@ -793,55 +852,66 @@ async def post_current_processed(
         include_provider_daily_extremes=not use_ranking_extremes,
     )
 
-    # Lanzamos los dos fetches en paralelo, ambos pasando por sus
-    # cachés respectivos. ``current`` es obligatorio; ``series`` es
-    # best-effort para no degradar la respuesta si la serie falla
-    # puntualmente. Reusamos los mismos cachés que ``/current`` y
-    # ``/series/today``, así si un cliente ya los pidió por separado
-    # este endpoint hace hit.
+    # Meteocat es la excepción eficiente: su endpoint por estación/día ya
+    # contiene todas las variables. Descargamos SOLO la serie (dos fechas UTC
+    # para cubrir el día local) y construimos el current desde ella. Lanzar
+    # también ``fetch_current`` duplicaría exactamente esas dos llamadas.
     current_cache_kind = "current_no_daily_extremes" if use_ranking_extremes else "current"
     current_key = make_cache_key(body.provider, current_cache_kind, body.station_id, provider_cache_secret)
     series_key = make_cache_key(body.provider, "series_today", body.station_id, provider_cache_secret)
-    current_task = current_cache.get_or_fetch(current_key, current_fetcher)
-    series_task = series_cache.get_or_fetch(series_key, series_fetcher)
-    current_raw, series_result = await asyncio.gather(
-        current_task,
-        series_task,
-        return_exceptions=True,
-    )
 
-    # ``current`` falló: propagamos el ProviderError (FastAPI handler lo
-    # serializa). Si fuese otro tipo de excepción inesperada, también la
-    # propagamos para que aflore en logs.
-    if isinstance(current_raw, BaseException):
-        current_error = current_raw
-        if (
-            body.provider == "AEMET"
-            and not isinstance(series_result, BaseException)
-            and isinstance(series_result, dict)
-            and series_result.get("has_data")
-        ):
-            current_raw = _aemet_current_from_series(body.station_id, series_result)
-            if not current_raw:
-                raise current_error
-            logger.warning(
-                "AEMET current falló para station=%s (%s); usando último punto diezminutal",
-                body.station_id,
-                type(current_error).__name__,
-            )
-        else:
-            raise current_error
-
-    # ``series`` falló: nos quedamos con dict vacío. Logueamos a nivel
-    # info para tener trazabilidad sin alarmar.
-    if isinstance(series_result, BaseException):
-        logger.info(
-            "Series del día falló para %s station=%s (%s); usando serie vacía",
-            body.provider, body.station_id, type(series_result).__name__,
-        )
-        series_dict = {"epochs": [], "has_data": False}
-    else:
+    if body.provider == "METEOCAT":
+        series_result = await series_cache.get_or_fetch(series_key, series_fetcher)
         series_dict = series_result
+        current_raw = _meteocat_current_from_series(body.station_id, series_dict)
+        if not current_raw:
+            raise ProviderError(
+                "provider_no_current_data",
+                provider="METEOCAT",
+                detail=f"Meteocat no devolvió observaciones del día para {body.station_id}",
+                status_code=502,
+            )
+    else:
+        # Para el resto de proveedores current y serie siguen siendo fuentes
+        # distintas. Se lanzan en paralelo y pasan por sus cachés respectivas.
+        current_task = current_cache.get_or_fetch(current_key, current_fetcher)
+        series_task = series_cache.get_or_fetch(series_key, series_fetcher)
+        current_raw, series_result = await asyncio.gather(
+            current_task,
+            series_task,
+            return_exceptions=True,
+        )
+
+        # ``current`` falló: propagamos el ProviderError. AEMET puede
+        # reconstruirlo desde su serie diezminutal si esa rama sí respondió.
+        if isinstance(current_raw, BaseException):
+            current_error = current_raw
+            if (
+                body.provider == "AEMET"
+                and not isinstance(series_result, BaseException)
+                and isinstance(series_result, dict)
+                and series_result.get("has_data")
+            ):
+                current_raw = _aemet_current_from_series(body.station_id, series_result)
+                if not current_raw:
+                    raise current_error
+                logger.warning(
+                    "AEMET current falló para station=%s (%s); usando último punto diezminutal",
+                    body.station_id,
+                    type(current_error).__name__,
+                )
+            else:
+                raise current_error
+
+        # ``series`` es best-effort cuando current procede de otra fuente.
+        if isinstance(series_result, BaseException):
+            logger.info(
+                "Series del día falló para %s station=%s (%s); usando serie vacía",
+                body.provider, body.station_id, type(series_result).__name__,
+            )
+            series_dict = {"epochs": [], "has_data": False}
+        else:
+            series_dict = series_result
 
     # La caché contiene siempre datos crudos. Los offsets WU son personales
     # y se aplican sobre copias después del cache hit, antes del pipeline.
@@ -1116,13 +1186,21 @@ def _build_daily_extremes(
     if str(provider or "").strip().upper() == "METEOCAT":
         # Meteocat publica extremos diarios específicos: 40=Tx, 42=Tn,
         # 3=HRx y 44=HRn. La temperatura instantánea del gráfico (32) no
-        # es equivalente y nunca debe utilizarse como fallback.
+        # es equivalente y nunca debe utilizarse como fallback. El ranking
+        # horario tiene prioridad para Tx/Tn/racha; la propia serie conserva
+        # esos códigos oficiales como respaldo si falta el ranking del día.
+        def _official(key: str) -> float:
+            ranked = _float_or_nan(current_extremes.get(key))
+            if not _is_nan_value(ranked):
+                return ranked
+            return _float_or_nan(provider_extremes.get(key))
+
         return DailyExtremes(
-            temp_max=_none_if_nan(_float_or_nan(provider_extremes.get("temp_max"))),
-            temp_min=_none_if_nan(_float_or_nan(provider_extremes.get("temp_min"))),
-            rh_max=_none_if_nan(_float_or_nan(provider_extremes.get("rh_max"))),
-            rh_min=_none_if_nan(_float_or_nan(provider_extremes.get("rh_min"))),
-            gust_max=_none_if_nan(_float_or_nan(provider_extremes.get("gust_max"))),
+            temp_max=_none_if_nan(_official("temp_max")),
+            temp_min=_none_if_nan(_official("temp_min")),
+            rh_max=_none_if_nan(_official("rh_max")),
+            rh_min=_none_if_nan(_official("rh_min")),
+            gust_max=_none_if_nan(_official("gust_max")),
             precip_total=_none_if_nan(
                 current.get("precip_total")
                 if isinstance(current.get("precip_total"), (int, float))

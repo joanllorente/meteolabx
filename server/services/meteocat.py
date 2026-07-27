@@ -638,6 +638,7 @@ def _empty_today_series() -> Dict[str, Any]:
         "lat": float("nan"),
         "lon": float("nan"),
         "has_data": False,
+        "precip_total": float("nan"),
         "daily_extremes": {},
     }
 
@@ -703,6 +704,18 @@ def _normalize_today_series(station_id: str, var_map: VarMap) -> Dict[str, Any]:
     if not epochs:
         return _empty_today_series()
 
+    # La variable 35 son incrementos de precipitación por intervalo. Aunque
+    # no añadimos esos epochs a las gráficas canónicas (pueden tener una
+    # cadencia distinta), conservamos el total civil como metadata interna.
+    # ``/current/processed`` lo usa como respaldo si el ranking horario aún no
+    # contiene esta estación, sin hacer una segunda descarga a XEMA.
+    precip_values = [
+        max(0.0, value)
+        for _epoch, value in var_map.get(V_PRECIP, [])
+        if not _is_nan(value)
+    ]
+    precip_total = float(sum(precip_values)) if precip_values else float("nan")
+
     def _row(epoch: int, key: str) -> float:
         return joined[epoch].get(key, float("nan"))
 
@@ -741,6 +754,7 @@ def _normalize_today_series(station_id: str, var_map: VarMap) -> Dict[str, Any]:
         "lat": lat,
         "lon": lon,
         "has_data": True,
+        "precip_total": precip_total,
         # Extremos oficiales de Meteocat. No se derivan de la variable 32:
         # Tx/Tn incorporan los extremos del intervalo que el gráfico de T
         # instantánea no necesariamente alcanza a muestrear.

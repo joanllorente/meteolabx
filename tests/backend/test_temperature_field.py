@@ -385,6 +385,33 @@ def test_store_collects_only_fresh_complete_wind_vectors():
     assert store.current_wind_points(now=now) == [(40.0, -3.0, 18.5)]
 
 
+def test_meteocat_map_points_survive_two_hour_refresh_cadence():
+    from datetime import datetime, timezone
+
+    now = datetime.now(tz=timezone.utc)
+    observed_at = int(now.timestamp()) - 3 * 3600
+    store = ranking.RankingStore()
+    store.replace_daily("METEOCAT", [
+        ranking.StationDaily(
+            provider="METEOCAT", station_id="X1", name="Meteocat",
+            lat=41.5, lon=2.1, tcur=18.0, tcur_at=observed_at,
+            wind=12.0, wind_dir=90.0, wind_at=observed_at,
+            rain_24h=4.2, rain_24h_at=observed_at,
+            local_date=now.date().isoformat(),
+        ),
+        ranking.StationDaily(
+            provider="METEOCAT", station_id="X2", name="Meteocat antigua",
+            lat=42.0, lon=2.5, tcur=12.0,
+            tcur_at=int(now.timestamp()) - 5 * 3600,
+            local_date=now.date().isoformat(),
+        ),
+    ])
+
+    assert store.current_temperature_points(now=now) == [(41.5, 2.1, 18.0)]
+    assert store.current_wind_points(now=now) == [(41.5, 2.1, 12.0)]
+    assert store.current_precipitation_points(now=now) == [(41.5, 2.1, 4.2)]
+
+
 def test_store_rolling_rain_crosses_midnight_and_requires_full_coverage():
     from datetime import datetime, timedelta, timezone
     from zoneinfo import ZoneInfo

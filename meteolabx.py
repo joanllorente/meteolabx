@@ -212,7 +212,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
 # historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
@@ -4673,7 +4673,7 @@ def _whats_new_footer_html() -> str:
         "<button type='button' class='mlx-wn-tab' role='tab' "
         "data-mlbx-whats-new-version='120'>1.2.0</button>"
         "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.1</button>"
+        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.2</button>"
         "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-110'>"
         + _release("footer.previous_improvements", "footer.previous_fixes")
@@ -4682,6 +4682,9 @@ def _whats_new_footer_html() -> str:
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
+        "<div class='mlx-wn-version'>1.3.2</div>"
+        + _section(t("footer.improvements_title"), "footer.release_132_improvements")
+        + "<hr class='mlx-wn-sep'>"
         "<div class='mlx-wn-version'>1.3.1</div>"
         + _section(t("footer.improvements_title"), "footer.release_131_improvements")
         + "<hr class='mlx-wn-sep'>"
