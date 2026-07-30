@@ -2,9 +2,10 @@
 Router de estadísticas internas de uso.
 
 ``POST /v1/stats/visit`` lo llama el frontend en cada conexión a una
-estación y ``POST /v1/stats/error`` cuando una conexión falla (ambos
-fire-and-forget). ``GET /v1/stats/stations`` alimenta el panel
-interno y exige la contraseña de administración
+estación, ``POST /v1/stats/error`` cuando una conexión falla y
+``POST /v1/stats/section`` en las transiciones reales de navegación (todos
+fire-and-forget). ``GET /v1/stats/stations`` alimenta el panel interno y exige
+la contraseña de administración
 (``METEOLABX_STATS_ADMIN_PASSWORD``) en el header ``X-Stats-Password``.
 
 El backend no está expuesto públicamente (escucha en 127.0.0.1; solo el
@@ -16,7 +17,7 @@ from __future__ import annotations
 
 import hmac
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -54,6 +55,19 @@ class ConnectionErrorRequest(BaseModel):
     status_code: Optional[int] = Field(default=None, ge=100, le=599)
 
 
+class SectionVisitRequest(BaseModel):
+    section: Literal[
+        "observation",
+        "trends",
+        "historical",
+        "map.stations",
+        "map.temperature",
+        "map.wind",
+        "map.precipitation",
+        "ranking",
+    ]
+
+
 @router.post("/error", status_code=204, summary="Registrar un error de conexión a estación")
 def post_connection_error(
     body: ConnectionErrorRequest, settings: Settings = Depends(get_settings)
@@ -71,6 +85,19 @@ def post_connection_error(
         )
     except Exception:
         logger.warning("stats: no se pudo registrar el error de conexión", exc_info=True)
+    return Response(status_code=204)
+
+
+@router.post("/section", status_code=204, summary="Registrar entrada a una pestaña o mapa")
+def post_section_visit(
+    body: SectionVisitRequest, settings: Settings = Depends(get_settings)
+) -> Response:
+    from server.services import usage_stats
+
+    try:
+        usage_stats.record_section_visit(body.section, settings=settings)
+    except Exception:
+        logger.warning("stats: no se pudo registrar la sección", exc_info=True)
     return Response(status_code=204)
 
 

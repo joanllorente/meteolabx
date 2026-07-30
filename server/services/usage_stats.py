@@ -1,11 +1,12 @@
 """
-Estadísticas internas de uso: visitas (conexiones) por estación y errores
-de conexión.
+Estadísticas internas de uso: visitas (conexiones) por estación, errores de
+conexión y entradas a pestañas/mapas.
 
 Cada vez que un usuario se conecta a una estación (selector, mapa, ranking,
 deep link o autoconexión) el frontend registra una visita vía
 ``POST /v1/stats/visit``. Si la conexión falla, registra el error vía
 ``POST /v1/stats/error`` con la categoría (timeout, unauthorized, network…).
+Las entradas a secciones se registran mediante ``POST /v1/stats/section``.
 El panel interno (credenciales especiales en el formulario WU) las consulta
 agregadas por ventanas temporales.
 
@@ -48,7 +49,28 @@ CREATE TABLE IF NOT EXISTS station_errors (
 );
 CREATE INDEX IF NOT EXISTS idx_errors_station ON station_errors(provider, station_id);
 CREATE INDEX IF NOT EXISTS idx_errors_epoch ON station_errors(epoch);
+-- Eventos anónimos de navegación añadidos en v1.3.3. No guardan estación,
+-- usuario, IP ni identificador de sesión.
+CREATE TABLE IF NOT EXISTS section_visits (
+    section_visit_pk INTEGER PRIMARY KEY,
+    section TEXT NOT NULL,
+    epoch INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_section_visits_section ON section_visits(section);
+CREATE INDEX IF NOT EXISTS idx_section_visits_epoch ON section_visits(epoch);
 """
+
+TRACKED_SECTIONS = (
+    "observation",
+    "trends",
+    "historical",
+    "map.stations",
+    "map.temperature",
+    "map.wind",
+    "map.precipitation",
+    "ranking",
+)
+_TRACKED_SECTION_SET = frozenset(TRACKED_SECTIONS)
 
 # Ventanas del panel (etiqueta → segundos). "total" va aparte.
 WINDOWS = {
@@ -114,8 +136,20 @@ def record_error(
         )
 
 
+def record_section_visit(section: str, *, settings=None) -> None:
+    """Registra una transición a una sección conocida, sin datos personales."""
+    section = str(section or "").strip().lower()
+    if section not in _TRACKED_SECTION_SET:
+        return
+    with _connect(settings) as connection:
+        connection.execute(
+            "INSERT INTO section_visits(section, epoch) VALUES (?, ?)",
+            (section, int(time.time())),
+        )
+
+
 def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
-    """Visitas y errores agregados por estación en cada ventana + totales."""
+    """Conexiones, errores y secciones agregados por ventanas temporales."""
     now = int(time.time())
     with _connect(settings) as connection:
         connection.row_factory = sqlite3.Row
@@ -189,6 +223,19 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             """,
             (now - WINDOWS["d30"],),
         ).fetchall()
+        section_rows = connection.execute(
+            """
+            SELECT section,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM section_visits
+            GROUP BY section
+            """,
+            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+        ).fetchall()
 
     empty_errors = {"d1": 0, "d7": 0, "d30": 0, "total": 0, "last_epoch": 0, "last_kind": ""}
     stations_by_key: Dict[tuple, Dict[str, Any]] = {}
@@ -235,6 +282,34 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
         key=lambda s: (s["total"], s["last_epoch"]),
         reverse=True,
     )[: int(limit)]
+    sections_by_name = {
+        str(row["section"]): {
+            "section": str(row["section"]),
+            "d1": int(row["d1"] or 0),
+            "d7": int(row["d7"] or 0),
+            "d30": int(row["d30"] or 0),
+            "total": int(row["total"] or 0),
+            "last_epoch": int(row["last_epoch"] or 0),
+        }
+        for row in section_rows
+        if str(row["section"]) in _TRACKED_SECTION_SET
+    }
+    sections = [
+        sections_by_name.get(
+            section,
+            {
+                "section": section,
+                "d1": 0,
+                "d7": 0,
+                "d30": 0,
+                "total": 0,
+                "last_epoch": 0,
+            },
+        )
+        for section in TRACKED_SECTIONS
+    ]
+    sections.sort(key=lambda row: (row["total"], row["last_epoch"]), reverse=True)
+
     return {
         "stations": stations,
         "totals": {
@@ -258,4 +333,5 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             }
             for row in error_kind_rows
         ],
+        "sections": sections,
     }

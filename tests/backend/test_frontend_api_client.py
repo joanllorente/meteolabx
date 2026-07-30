@@ -138,6 +138,17 @@ def _mock_response(status: int, json_body: dict | None = None) -> MagicMock:
     return response
 
 
+def test_section_usage_client_posts_the_exact_visible_section() -> None:
+    from utils.api_client import track_section_visit_via_api
+
+    with patch("utils.api_client.requests.post", return_value=_mock_response(204)) as request:
+        track_section_visit_via_api(" MAP.TEMPERATURE ")
+
+    assert request.call_args.args[0].endswith("/v1/stats/section")
+    assert request.call_args.kwargs["json"] == {"section": "map.temperature"}
+    assert request.call_args.kwargs["timeout"] == 2.0
+
+
 # =====================================================================
 # Camino feliz: contrato canónico sin reinterpretación
 # =====================================================================

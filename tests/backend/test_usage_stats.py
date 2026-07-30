@@ -53,6 +53,31 @@ def test_visit_normalizes_and_ignores_empty(tmp_path):
     assert summary["stations"][0]["provider"] == "WU"
 
 
+def test_record_section_visits_and_summary_windows(tmp_path):
+    settings = _settings(tmp_path)
+    usage_stats.record_section_visit("map.stations", settings=settings)
+    usage_stats.record_section_visit("MAP.TEMPERATURE", settings=settings)
+    usage_stats.record_section_visit("ranking", settings=settings)
+    usage_stats.record_section_visit("unknown", settings=settings)  # ignorada
+
+    import sqlite3
+
+    with sqlite3.connect(settings.usage_stats_path) as connection:
+        connection.execute(
+            "INSERT INTO section_visits(section, epoch) VALUES (?, ?)",
+            ("map.stations", int(time.time()) - 40 * 24 * 3600),
+        )
+
+    summary = usage_stats.visit_summary(settings=settings)
+    by_section = {row["section"]: row for row in summary["sections"]}
+    assert by_section["map.stations"]["total"] == 2
+    assert by_section["map.stations"]["d30"] == 1
+    assert by_section["map.temperature"]["total"] == 1
+    assert by_section["ranking"]["total"] == 1
+    assert by_section["observation"]["total"] == 0
+    assert len(summary["sections"]) == len(usage_stats.TRACKED_SECTIONS)
+
+
 def test_record_error_and_summary(tmp_path):
     settings = _settings(tmp_path)
     usage_stats.record_visit("AEMET", "0076", "BARCELONA AEROPUERTO", settings=settings)
@@ -113,6 +138,11 @@ def test_error_table_added_without_wiping_existing_db(tmp_path):
     assert summary["stations"][0]["station_id"] == "0076"
     assert summary["stations"][0]["errors"]["last_kind"] == "network"
 
+    # La misma migración crea la tabla de navegación sin borrar las visitas.
+    usage_stats.record_section_visit("map.wind", settings=settings)
+    summary = usage_stats.visit_summary(settings=settings)
+    assert next(row for row in summary["sections"] if row["section"] == "map.wind")["total"] == 1
+
 
 @pytest.fixture()
 def stats_client(tmp_path, monkeypatch):
@@ -149,6 +179,13 @@ def test_stats_endpoints_roundtrip_and_auth(stats_client):
         },
     )
     assert err.status_code == 204
+    section = stats_client.post(
+        "/v1/stats/section", json={"section": "map.precipitation"},
+    )
+    assert section.status_code == 204
+    assert stats_client.post(
+        "/v1/stats/section", json={"section": "unknown"},
+    ).status_code == 422
     # status_code fuera de rango o error_kind vacío → 422 de validación.
     assert stats_client.post(
         "/v1/stats/error",
@@ -165,6 +202,8 @@ def test_stats_endpoints_roundtrip_and_auth(stats_client):
     assert payload["stations"][0]["station_id"] == "0076"
     assert payload["stations"][0]["errors"]["last_kind"] == "timeout"
     assert payload["error_kinds"][0]["kind"] == "timeout"
+    sections = {row["section"]: row for row in payload["sections"]}
+    assert sections["map.precipitation"]["total"] == 1
 
 
 def test_stats_disabled_without_password(tmp_path, monkeypatch):

@@ -18,6 +18,17 @@ STATS_ADMIN_STATION_ID = "statics_admin"
 SESSION_OPEN_KEY = "internal_stats_open"
 SESSION_PASSWORD_KEY = "internal_stats_password"
 
+SECTION_LABELS = {
+    "observation": "Observación",
+    "trends": "Tendencias",
+    "historical": "Histórico",
+    "map.stations": "Mapa · Estaciones",
+    "map.temperature": "Mapa · Temperatura",
+    "map.wind": "Mapa · Viento",
+    "map.precipitation": "Mapa · Precipitación",
+    "ranking": "Ranking",
+}
+
 
 def maybe_intercept_wu_connect(station_id: str, api_key: str) -> bool:
     """Si las credenciales WU son las del panel interno, lo abre en vez de
@@ -71,6 +82,32 @@ def render_internal_stats() -> None:
     c4.metric("Total", totals.get("total", 0))
     c5.metric("Estaciones distintas", totals.get("stations", 0))
     c6.metric("Errores (30 d)", error_totals.get("d30", 0))
+
+    sections = data.get("sections", [])
+    if sections:
+        st.markdown("### 🧭 Uso de pestañas y mapas")
+        st.caption(
+            "Entradas reales a cada sección; los refrescos internos no cuentan. "
+            "Observación, Tendencias e Histórico solo se registran con una "
+            "estación conectada. La apertura automática inicial de Ranking se omite."
+        )
+        st.dataframe(
+            [
+                {
+                    "Sección": SECTION_LABELS.get(
+                        row.get("section", ""), row.get("section", "")
+                    ),
+                    "Hoy (24 h)": row.get("d1", 0),
+                    "7 días": row.get("d7", 0),
+                    "30 días": row.get("d30", 0),
+                    "Total": row.get("total", 0),
+                    "Última entrada": _fmt_epoch(row.get("last_epoch", 0)),
+                }
+                for row in sections
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
 
     stations = data.get("stations", [])
     if not stations:

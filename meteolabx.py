@@ -191,6 +191,8 @@ from api.weather_underground import (
     fetch_wu_dashboard_session_cached,
 )
 from utils.api_errors import BackendApiError
+from utils.build_info import app_build_id
+from utils.usage_tracking import track_usage_section_transition
 _boot_mark("import api")
 from models.radiation import (
     sky_clarity_label, water_balance_label,
@@ -213,6 +215,7 @@ _boot_mark("import components.* (header/favs/browser)")
 
 
 APP_VERSION = "1.3.3"
+APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
 # historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
@@ -1161,6 +1164,7 @@ def _build_map_tab_context() -> dict:
         "_cached_map_search_nearby_stations": _cached_map_search_nearby_stations,
         "_map_catalog_cache_version": _map_catalog_cache_version,
         "_pydeck_chart_stretch": _pydeck_chart_stretch,
+        "track_usage_section": _track_usage_section,
     }
 
 
@@ -1183,6 +1187,19 @@ LEGACY_TAB_ALIASES = {
     "Mapa": "map",
     "Ranking": "ranking",
 }
+
+
+def _track_usage_section(active_tab_name: str, *, map_view_mode: str = "stations") -> bool:
+    """Cuenta transiciones reales de navegación, nunca reruns de Streamlit."""
+    from utils.api_client import track_section_visit_via_api
+
+    return track_usage_section_transition(
+        st.session_state,
+        active_tab=active_tab_name,
+        connected=bool(st.session_state.get(CONNECTED, False)),
+        map_view_mode=map_view_mode,
+        sender=track_section_visit_via_api,
+    )
 
 # Slugs de pestaña usados en la URL compartible (?tab=...). Canónicos en
 # español (el ejemplo del usuario: /drassanes/observacion); aceptamos también
@@ -4705,6 +4722,14 @@ if st.session_state.get("internal_stats_open"):
     render_internal_stats()
     st.stop()
 
+# Una entrada cuenta solo cuando cambia la sección visible. Para Mapa se usa
+# la vista concreta (Estaciones, Temperatura, Viento o Precipitación); el
+# fragmento del mapa vuelve a llamar a este control al cambiar sus propias tabs.
+_track_usage_section(
+    active_tab,
+    map_view_mode=str(st.session_state.get("map_view_mode", "stations")),
+)
+
 # Streamlit conserva el DOM anterior con ``data-stale=true`` mientras procesa
 # un cambio de widget. El mapa mantiene deliberadamente visibles SUS elementos
 # stale para que pan, zoom y filtros no parpadeen, pero esa regla también hacía
@@ -4812,7 +4837,8 @@ def _whats_new_footer_html() -> str:
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
-        "<div class='mlx-wn-version'>1.3.3</div>"
+        f"<div class='mlx-wn-version'>1.3.3 "
+        f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
         + _section(t("footer.improvements_title"), "footer.release_133_improvements")
         + "<hr class='mlx-wn-sep'>"
         "<div class='mlx-wn-version'>1.3.2</div>"
@@ -4927,6 +4953,10 @@ st.markdown(
         "border-color:#2384ff;outline:none;}"
         ".mlx-wn-dialog-content{padding:1rem 1.15rem 1.2rem;color:var(--text);}"
         ".mlx-wn-version{font-weight:900;font-size:1.04rem;margin:0.1rem 0 0.45rem;}"
+        ".mlx-wn-build{display:inline-flex;margin-left:0.45rem;padding:0.12rem 0.42rem;"
+        "border:1px solid var(--border);border-radius:999px;color:var(--muted);"
+        "font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.72rem;"
+        "font-weight:700;vertical-align:0.08rem;}"
         ".mlx-wn-sep{border:none;border-top:1px solid rgba(128,128,128,0.35);margin:0.8rem 0;}"
         ".mlx-wn-tabs{display:flex;gap:0.45rem;margin:0 0 0.85rem;}"
         ".mlx-wn-tab{appearance:none;-webkit-appearance:none;cursor:pointer;"

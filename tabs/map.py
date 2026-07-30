@@ -1171,6 +1171,7 @@ def render_map_tab(ctx):
     persist_provider_autoconnect_target = ctx["persist_provider_autoconnect_target"]
     _map_catalog_cache_version = ctx.get("_map_catalog_cache_version", lambda provider_ids: ())
     _pydeck_chart_stretch = ctx["_pydeck_chart_stretch"]
+    track_usage_section = ctx.get("track_usage_section")
     import pydeck as pdk
 
     section_title(t("map.section_title"))
@@ -1683,6 +1684,8 @@ def render_map_tab(ctx):
             horizontal=True,
             index=0,
         )
+        if callable(track_usage_section):
+            track_usage_section("map", map_view_mode=view_mode)
         show_temp_field = view_mode == "temperature"
         show_wind_field = view_mode == "wind"
         show_precip_field = view_mode == "precipitation"

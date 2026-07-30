@@ -355,9 +355,21 @@ def track_station_error_via_api(
         pass
 
 
+def track_section_visit_via_api(section: str) -> None:
+    """Registra una transición de navegación sin bloquear la interfaz si falla."""
+    try:
+        requests.post(
+            f"{backend_url()}/v1/stats/section",
+            json={"section": str(section or "").strip().lower()},
+            timeout=2.0,
+        )
+    except Exception:
+        pass
+
+
 def fetch_usage_stats_via_api(password: str) -> Dict[str, Any]:
-    """Visitas agregadas por estación (panel interno). Lanza BackendApiError
-    ('unauthorized' si la contraseña no es correcta)."""
+    """Estadísticas completas del panel interno. Lanza ``BackendApiError``
+    (``unauthorized`` si la contraseña no es correcta)."""
     url = f"{backend_url()}/v1/stats/stations"
     try:
         response = requests.get(

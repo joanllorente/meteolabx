@@ -39,8 +39,11 @@ def test_release_130_is_current_and_localized():
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
     assert 'APP_VERSION = "1.3.3"' in source
+    assert "APP_BUILD = app_build_id()" in source
     assert '__version__ = "1.3.3"' in server_source
     assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.3" in source
+    assert "Build {html.escape(APP_BUILD)}" in source
+    assert ".mlx-wn-build{" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
     assert 'sessionStorage.setItem("mlbx-whats-new-version", version)' in source
     assert 'button.classList.toggle("is-active", active);' in source
