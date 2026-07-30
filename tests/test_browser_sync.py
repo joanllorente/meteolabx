@@ -39,6 +39,14 @@ def test_legacy_query_param_cleanup_still_present_in_pwa_iframe():
     assert '"_mlx_boot"' in source
 
 
+def test_pwa_iframe_preconnects_map_style_and_tile_origins():
+    source = Path("components/web_injectors.py").read_text(encoding="utf-8")
+
+    assert 'upsertConnectionHint("preconnect", origin' in source
+    assert '"https://basemaps.cartocdn.com"' in source
+    assert '"https://tiles.basemaps.cartocdn.com"' in source
+
+
 def test_browser_context_reports_and_hydrates_preferred_languages(monkeypatch):
     frontend = Path("components/browser_context_frontend/index.html").read_text(
         encoding="utf-8"

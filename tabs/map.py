@@ -1,5 +1,6 @@
 import streamlit as st
 import colorsys
+import html as _html
 import time as _time
 from babel import Locale
 from pathlib import Path
@@ -103,6 +104,44 @@ def _cached_map_country_counts(
     from utils.api_client import fetch_station_countries_via_api
 
     return fetch_station_countries_via_api(list(provider_ids))
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _cached_map_station_batches(
+    lat: float,
+    lon: float,
+    batches: tuple[tuple[int, tuple[str, ...], tuple[str, ...], bool, bool], ...],
+    catalog_version: tuple[tuple[str, int], ...] = (),
+) -> tuple[list[StationCandidate], ...]:
+    """Carga lotes independientes del catálogo en paralelo y conserva orden.
+
+    Los límites continúan siendo por lote/proveedor (especialmente los 5000
+    de Windy y Netatmo), pero ya no pagamos sus tiempos de respuesta en serie.
+    ``catalog_version`` solo participa en la clave de caché.
+    """
+    del catalog_version
+    if not batches:
+        return ()
+
+    from concurrent.futures import ThreadPoolExecutor
+    from providers import search_nearby_stations
+
+    def _load(batch):
+        max_results, provider_ids, countries, has_historical, hide_historical_only = batch
+        return search_nearby_stations(
+            float(lat),
+            float(lon),
+            max_results=int(max_results),
+            provider_ids=list(provider_ids),
+            countries=list(countries),
+            has_historical=bool(has_historical),
+            hide_historical_only=bool(hide_historical_only),
+        )
+
+    if len(batches) == 1:
+        return (_load(batches[0]),)
+    with ThreadPoolExecutor(max_workers=min(4, len(batches))) as executor:
+        return tuple(executor.map(_load, batches))
 
 
 def _fallback_map_country_counts(provider_ids: tuple[str, ...]) -> dict[str, int]:
@@ -931,6 +970,29 @@ def country_color(country_code) -> list:
     return [int(red * 255), int(green * 255), int(blue * 255), 220]
 
 
+def station_point_layer_row(index: int, station: dict) -> dict:
+    """Payload compacto para DeckGL sin perder tooltip ni selección.
+
+    En el mapa ibérico viajan miles de filas por el WebSocket de Streamlit.
+    Claves largas, coordenadas con precisión submilimétrica y el HTML completo
+    repetido en cada punto añadían cientos de KB a cada primera apertura.
+    """
+    distance = safe_float(station.get("distance_km"), default=0.0)
+    elevation = safe_float(station.get("elevation_m"), default=0.0)
+    return {
+        "i": int(index),
+        # Cinco decimales conservan ~1 m de precisión, de sobra para el punto.
+        "y": round(float(station["lat"]), 5),
+        "x": round(float(station["lon"]), 5),
+        "c": country_color(station.get("country")),
+        "n": _html.escape(str(station.get("name") or "")),
+        "p": _html.escape(str(station.get("provider") or "")),
+        "s": _html.escape(str(station.get("station_id") or "")),
+        "d": f"{float(distance or 0.0):.1f} km",
+        "a": f"{float(elevation or 0.0):.0f} m",
+    }
+
+
 def station_matches_sensor_filter(station: dict, selected_sensors: set[str]) -> bool:
     if not selected_sensors:
         return True
@@ -1107,7 +1169,6 @@ def render_map_tab(ctx):
     apply_station_selection = ctx["apply_station_selection"]
     disable_provider_autoconnect = ctx["disable_provider_autoconnect"]
     persist_provider_autoconnect_target = ctx["persist_provider_autoconnect_target"]
-    _cached_map_search_nearby_stations = ctx["_cached_map_search_nearby_stations"]
     _map_catalog_cache_version = ctx.get("_map_catalog_cache_version", lambda provider_ids: ())
     _pydeck_chart_stretch = ctx["_pydeck_chart_stretch"]
     import pydeck as pdk
@@ -1163,7 +1224,7 @@ def render_map_tab(ctx):
             "has_historical": bool(metadata.get("has_historical", False)),
             "is_historical_only": bool(metadata.get("is_historical_only", False)),
             "manual": bool(metadata.get("manual", False)),
-            "distance_km": float(haversine_distance(search_lat, search_lon, candidate.lat, candidate.lon)),
+            "distance_km": float(candidate.distance_km),
             "locality": resolve_provider_locality(candidate.provider_id, metadata, candidate.name),
             "elevation_m": float(candidate.elevation_m),
             "station_tz": str(metadata.get("tz", "")).strip(),
@@ -1182,70 +1243,22 @@ def render_map_tab(ctx):
             target.append(candidate)
             seen.add(key)
 
-    def _load_regional_candidates_batch(
-        provider_ids: tuple[str, ...],
-        country_filter: list[str],
-        *,
-        historical_only: bool = False,
-        hide_historical_only: bool = False,
+    def _load_map_candidate_batches(
+        batches: tuple[tuple[int, tuple[str, ...], tuple[str, ...], bool, bool], ...],
     ) -> list[dict]:
-        if not provider_ids:
+        if not batches:
             return []
-        cache_store = st.session_state.setdefault("map_regional_rows_cache", {})
+        provider_ids = tuple(sorted({
+            provider_id
+            for _limit, batch_providers, _countries, _historical, _hide_historical in batches
+            for provider_id in batch_providers
+        }))
         catalog_version = _map_catalog_cache_version(provider_ids)
+        cache_store = st.session_state.setdefault("map_candidate_rows_cache", {})
         cache_key = (
-            _map_cache_key(
-                "REGIONAL:" + ",".join(provider_ids),
-                search_lat,
-                search_lon,
-                catalog_version,
-            ),
-            tuple(sorted(country_filter)),
-            bool(historical_only),
-            bool(hide_historical_only),
-        )
-        cached_rows = cache_store.get(cache_key)
-        if (
-            isinstance(cached_rows, list)
-            and all(isinstance(row, dict) and "sensors" in row for row in cached_rows)
-        ):
-            return [dict(row) for row in cached_rows]
-        regional_candidates = _cached_map_search_nearby_stations(
-            float(search_lat),
-            float(search_lon),
-            regional_catalog_result_limit(provider_ids),
-            provider_ids,
-            tuple(sorted(country_filter)),
-            catalog_version,
-            bool(historical_only),
-            bool(hide_historical_only),
-        )
-        rows = [_candidate_to_map_row(candidate) for candidate in regional_candidates]
-        rows.sort(key=lambda row: (row["provider_id"], row["station_id"].casefold()))
-        # No se cachean resultados vacíos: pueden venir de un backend caído
-        # y dejarían el mapa en blanco toda la sesión.
-        if rows:
-            cache_store[cache_key] = [dict(row) for row in rows]
-        return rows
-
-    def _load_iem_country_candidates(
-        country_filter: list[str],
-        *,
-        historical_only: bool = False,
-        hide_historical_only: bool = False,
-    ) -> list[dict]:
-        countries = [coerce_str(country, upper=True) for country in country_filter if coerce_str(country, upper=True)]
-        if not countries:
-            return []
-        cache_store = st.session_state.setdefault("map_iem_country_rows_cache", {})
-        provider_ids = (IEM_FALLBACK_MAP_PROVIDER,)
-        catalog_version = _map_catalog_cache_version(provider_ids)
-        cache_key = (
-            _map_cache_key(IEM_FALLBACK_MAP_PROVIDER, search_lat, search_lon, catalog_version),
+            _map_cache_key("BATCH:" + ",".join(provider_ids), search_lat, search_lon, catalog_version),
             MAP_IEM_COUNTRY_CACHE_VERSION,
-            tuple(sorted(countries)),
-            bool(historical_only),
-            bool(hide_historical_only),
+            batches,
         )
         cached_rows = cache_store.get(cache_key)
         if (
@@ -1253,45 +1266,20 @@ def render_map_tab(ctx):
             and all(isinstance(row, dict) and "sensors" in row for row in cached_rows)
         ):
             return [dict(row) for row in cached_rows]
-        candidates = _cached_map_search_nearby_stations(
-            float(search_lat),
-            float(search_lon),
-            5000,
-            provider_ids,
-            tuple(sorted(countries)),
-            catalog_version,
-            bool(historical_only),
-            bool(hide_historical_only),
-        )
-        rows = [_candidate_to_map_row(candidate) for candidate in candidates]
-        rows.sort(key=lambda row: (row["provider_id"], row["station_id"].casefold()))
-        if rows:
-            cache_store[cache_key] = [dict(row) for row in rows]
-        return rows
 
-    def _load_pws_candidates(pws_provider: str, country_filter: list[str]) -> list[dict]:
-        provider_ids = (pws_provider,)
-        catalog_version = _map_catalog_cache_version(provider_ids)
-        cache_store = st.session_state.setdefault("map_pws_rows_cache", {})
-        cache_key = (
-            _map_cache_key(pws_provider, search_lat, search_lon, catalog_version),
-            tuple(sorted(country_filter)),
-        )
-        cached_rows = cache_store.get(cache_key)
-        if isinstance(cached_rows, list):
-            return [dict(row) for row in cached_rows]
-        candidates = _cached_map_search_nearby_stations(
+        rows: list[dict] = []
+        for candidates in _cached_map_station_batches(
             float(search_lat),
             float(search_lon),
-            5000,
-            provider_ids,
-            tuple(sorted(country_filter)),
+            batches,
             catalog_version,
-            False,
-            False,
-        )
-        rows = [_candidate_to_map_row(candidate) for candidate in candidates]
+        ):
+            _extend_unique_candidates(
+                rows,
+                [_candidate_to_map_row(candidate) for candidate in candidates],
+            )
         rows.sort(key=lambda row: (row["provider_id"], row["station_id"].casefold()))
+        # Un fallo temporal de backend no debe fijar un mapa vacío en sesión.
         if rows:
             cache_store[cache_key] = [dict(row) for row in rows]
         return rows
@@ -1704,19 +1692,22 @@ def render_map_tab(ctx):
 
         nearest = []
         if effective_provider_ids and selected_countries:
+            catalog_batches: list[
+                tuple[int, tuple[str, ...], tuple[str, ...], bool, bool]
+            ] = []
             regional_batches = regional_provider_batches(
                 effective_provider_ids,
                 selected_countries,
             )
             for regional_country, regional_provider_ids in regional_batches:
-                _extend_unique_candidates(
-                    nearest,
-                    _load_regional_candidates_batch(
+                catalog_batches.append(
+                    (
+                        regional_catalog_result_limit(regional_provider_ids),
                         regional_provider_ids,
-                        [regional_country],
-                        historical_only=historical_only,
-                        hide_historical_only=hide_historical_only,
-                    ),
+                        (regional_country,),
+                        bool(historical_only),
+                        bool(hide_historical_only),
+                    )
                 )
 
             # Con "ocultar particulares" activo ni siquiera se cargan los
@@ -1724,8 +1715,14 @@ def render_map_tab(ctx):
             if not hide_pws:
                 for pws_provider in PWS_MAP_PROVIDERS:
                     if pws_provider in provider_filter:
-                        _extend_unique_candidates(
-                            nearest, _load_pws_candidates(pws_provider, selected_countries),
+                        catalog_batches.append(
+                            (
+                                5000,
+                                (pws_provider,),
+                                tuple(sorted(selected_countries)),
+                                False,
+                                False,
+                            )
                         )
 
             iem_countries = [
@@ -1733,14 +1730,17 @@ def render_map_tab(ctx):
                 if country_uses_iem_map_fallback(country)
             ]
             if iem_countries:
-                _extend_unique_candidates(
-                    nearest,
-                    _load_iem_country_candidates(
-                        iem_countries,
-                        historical_only=historical_only,
-                        hide_historical_only=hide_historical_only,
-                    ),
+                catalog_batches.append(
+                    (
+                        5000,
+                        (IEM_FALLBACK_MAP_PROVIDER,),
+                        tuple(sorted(iem_countries)),
+                        bool(historical_only),
+                        bool(hide_historical_only),
+                    )
                 )
+
+            nearest = _load_map_candidate_batches(tuple(catalog_batches))
 
             allowed_result_providers = set(provider_filter)
             if any(country_uses_iem_map_fallback(country) for country in selected_countries):
@@ -1816,16 +1816,9 @@ def render_map_tab(ctx):
                 st.warning(f"No se pudo renderizar el mapa ({map_err}).")
         else:
             point_radius = 70 if visible_station_count > 20000 else 95 if visible_station_count > 10000 else 120 if visible_station_count > 4000 else 140 if visible_station_count > 1800 else 160 if visible_station_count > 900 else 170
-            points = [
-                {
-                    **station,
-                    "distance_txt": f"{float(station['distance_km']):.1f} km",
-                    "alt_txt": f"{float(station['elevation_m']):.0f} m",
-                    "color": country_color(station.get("country")),
-                    "radius": point_radius,
-                }
-                for station in nearest
-            ]
+            # ``nearest`` ya contiene la fila completa que necesita la ficha.
+            # Evita copiar además sensors/tz/locality para cada punto.
+            points = nearest
 
             def _connect_station_from_map(selected_station: dict) -> bool:
                 if not apply_station_selection(
@@ -1903,22 +1896,7 @@ def render_map_tab(ctx):
             # de estaciones (p. ej. NWS) son varios MB por render. El clic
             # devuelve ``idx`` y la fila completa se resuelve en Python.
             points_for_layer = [
-                {
-                    "idx": index,
-                    "lat": point["lat"],
-                    "lon": point["lon"],
-                    "color": point["color"],
-                    "radius": point["radius"],
-                    # HTML del tooltip precomputado: la plantilla del deck es
-                    # global y las capas (estaciones vs etiquetas de
-                    # temperatura) muestran contenidos distintos.
-                    "tooltip_html": (
-                        f"<b>{html.escape(str(point['name']))}</b><br/>"
-                        f"{html.escape(str(point['provider']))} · ID {html.escape(str(point['station_id']))}<br/>"
-                        f"Distancia: {html.escape(str(point['distance_txt']))}<br/>"
-                        f"Altitud: {html.escape(str(point['alt_txt']))}"
-                    ),
-                }
+                station_point_layer_row(index, point)
                 for index, point in enumerate(points)
             ]
 
@@ -2012,11 +1990,11 @@ def render_map_tab(ctx):
                         auto_highlight=True,
                         filled=True,
                         stroked=True,
-                        get_position="[lon, lat]",
-                        get_fill_color="color",
+                        get_position="[x, y]",
+                        get_fill_color="c",
                         get_line_color=[16, 20, 28, 140],
                         line_width_min_pixels=1,
-                        get_radius="radius",
+                        get_radius=point_radius,
                         radius_min_pixels=4,
                         radius_max_pixels=24,
                     )
@@ -2063,9 +2041,12 @@ def render_map_tab(ctx):
                 ),
                 layers=map_layers,
                 tooltip={
-                    # HTML precomputado por objeto: cada capa (estaciones /
-                    # etiquetas de temperatura) trae su propio contenido.
-                    "html": "{tooltip_html}",
+                    # La plantilla viaja una vez; cada punto solo aporta los
+                    # cinco valores compactos y ya escapados.
+                    "html": (
+                        "<b>{n}</b><br/>{p} · ID {s}<br/>"
+                        "Distancia: {d}<br/>Altitud: {a}"
+                    ),
                     "style": {
                         "backgroundColor": map_tooltip_bg,
                         "color": map_tooltip_text,
@@ -2144,7 +2125,7 @@ def render_map_tab(ctx):
                     # El objeto del deck es la versión recortada; recupera la
                     # fila completa (sensors, tz, connectable…) por índice.
                     if isinstance(selected_station, dict):
-                        selected_idx = selected_station.get("idx")
+                        selected_idx = selected_station.get("i")
                         if isinstance(selected_idx, int) and 0 <= selected_idx < len(points):
                             selected_station = points[selected_idx]
                     st.session_state["map_selected_station"] = dict(selected_station)

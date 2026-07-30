@@ -92,6 +92,9 @@
     "whats_new": "Novedades",
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
+    "release_133_improvements": [
+      "Navegación entre pestañas más fluida y carga del mapa optimizada."
+    ],
     "release_132_improvements": [
       "Optimización en la conexión a estaciones Meteocat."
     ],

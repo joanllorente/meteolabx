@@ -92,6 +92,9 @@
     "whats_new": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
+    "release_133_improvements": [
+      "Smoother tab navigation and optimized map loading."
+    ],
     "release_132_improvements": [
       "Optimized connections to Meteocat stations."
     ],

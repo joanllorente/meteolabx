@@ -82,6 +82,27 @@ def test_plotly_is_not_registered_for_ranking_or_map():
     assert 'if active_tab in {"observation", "trends", "historical"}:' in source
 
 
+def test_tab_switch_hides_previous_panel_immediately_and_then_its_stale_dom():
+    source = (ROOT / "meteolabx.py").read_text(encoding="utf-8")
+
+    assert 'with st.container(key="primary_tab_navigation"):' in source
+    assert "data-mlbx-tab-switching" in source
+    assert "scheduleTabSwitch" in source
+    assert "doc.addEventListener('change', scheduleTabSwitch, true)" in source
+    assert "if (!input.isConnected || !input.checked) return" in source
+    assert "root.dataset.mlbxNextTab = nextTab" in source
+    assert "doc.removeEventListener(\n          'pointerdown'" in source
+    assert "finishWhenReady" in source
+    assert "root.removeAttribute('data-mlbx-tab-switching')" in source
+    assert 'with st.container(key=f"tab_content_{active_tab}"):' in source
+    assert 'data-mlbx-tab-transition' in source
+    assert 'if _tab_id == active_tab:' in source
+    assert '.{_tab_class}' in source
+    assert ':has([data-testid="stElementContainer"][data-stale="true"])' in source
+    assert '[data-stale="true"]:has(.{_tab_class})' in source
+    assert "display:none !important;visibility:hidden !important" in source
+
+
 def test_main_keeps_browser_context_separate_from_sensitive_storage():
     source = (ROOT / "meteolabx.py").read_text(encoding="utf-8")
     assert "hydrate_browser_context_live(get_browser_context)" in source

@@ -240,6 +240,7 @@ _ERROR_CODE_TO_ERROR_KIND: Mapping[str, str] = {
     "provider_network_error": "network",
     "provider_http_error": "http",
     "provider_bad_response": "badjson",
+    "provider_no_data": "nodata",
     "provider_no_current_data": "nodata",
 }
 

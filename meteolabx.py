@@ -212,7 +212,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.3.3"
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
 # historical, map suman ~2.770 líneas). Solo se renderiza una por rerun, así
@@ -667,7 +667,10 @@ def _friendly_provider_warning(provider_id: str, generic_warning: str, detail: s
                     f"pero tiene histórico disponible entre {start_txt} y {end_txt}."
                 )
             return "⚠️ IEM tiene esta estación en el archivo histórico, pero no hay observación actual disponible para mostrar ahora."
-        return f"⚠️ {provider_label} no está devolviendo datos utilizables para esa estación en este momento."
+        return (
+            f"⚠️ {provider_label} no está publicando observaciones actuales "
+            "para esa estación. Prueba de nuevo más tarde o selecciona otra estación."
+        )
 
     if any(token in lowered for token in ("404", "not found", "station_id vacío", "falta station_id", "falta id_station", "endpoint")):
         return f"⚠️ {provider_label} no encuentra esa estación o no tiene un endpoint válido ahora mismo."
@@ -4499,15 +4502,127 @@ st.markdown(f"""
 
 tab_options = TAB_OPTIONS
 
-# Radio buttons estilizados como tabs con underline
-active_tab = st.radio(
-    "Navegación",
-    tab_options,
-    horizontal=True,
-    format_func=lambda tab_id: t(f"tabs.{tab_id}"),
-    key="active_tab",
-    label_visibility="collapsed"
+# El CSS basado en ``data-stale`` de más abajo entra en acción cuando ya ha
+# empezado el rerun. En conexiones lentas queda una ventana entre el clic y
+# esa marca en la que el panel anterior todavía es visible. Este guard vive en
+# el documento padre y oculta el panel actual en cuanto el radio confirma el
+# cambio; solo lo libera cuando el contenedor de la nueva pestaña ya existe.
+components.html(
+    f"""
+    <script>
+    (function() {{
+      const host = window.parent || window;
+      const doc = host.document;
+      const root = doc.documentElement;
+      const activeTab = {active_tab!r};
+      const tabIds = {TAB_OPTIONS!r};
+      const navigationSelector =
+        '.st-key-primary_tab_navigation div[role="radiogroup"]';
+      const styleId = 'mlbx-primary-tab-transition-guard';
+
+      let style = doc.getElementById(styleId);
+      if (!style) {{
+        style = doc.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          html[data-mlbx-tab-switching="true"]
+          [data-testid="stMainBlockContainer"] [class*="st-key-tab_content_"] {{
+            display: none !important;
+            visibility: hidden !important;
+          }}
+        `;
+        doc.head.appendChild(style);
+      }}
+
+      function scheduleTabSwitch(event) {{
+        const target = event.target instanceof host.Element ? event.target : null;
+        const input = target && target.matches(
+          navigationSelector + ' input[type="radio"]'
+        ) ? target : null;
+        if (!input || !input.checked) return;
+        const label = input.closest('label');
+        const group = label.closest(navigationSelector);
+        const labels = Array.from(group.querySelectorAll(':scope > label'));
+        const nextIndex = labels.indexOf(label);
+        const nextTab = tabIds[nextIndex];
+        if (!nextTab || nextTab === activeTab) return;
+
+        // Espera al final del evento para que React/Streamlit registre primero
+        // la selección. Si Safari no llegó a marcar el radio, no ocultamos nada.
+        host.setTimeout(() => {{
+          if (!input.isConnected || !input.checked) return;
+          root.dataset.mlbxTabSwitching = 'true';
+          root.dataset.mlbxNextTab = nextTab;
+        }}, 0);
+      }}
+
+      // Retira el listener de la versión anterior (pointerdown/click), incluso
+      // durante el hot reload, para que no pueda tragarse el primer clic.
+      if (host.__mlbxPrimaryTabTransitionHandler) {{
+        doc.removeEventListener(
+          'pointerdown', host.__mlbxPrimaryTabTransitionHandler, true
+        );
+        doc.removeEventListener('click', host.__mlbxPrimaryTabTransitionHandler, true);
+        host.__mlbxPrimaryTabTransitionHandler = null;
+      }}
+      if (host.__mlbxPrimaryTabChangeHandler) {{
+        doc.removeEventListener('change', host.__mlbxPrimaryTabChangeHandler, true);
+      }}
+      host.__mlbxPrimaryTabChangeHandler = scheduleTabSwitch;
+      doc.addEventListener('change', scheduleTabSwitch, true);
+
+      if (host.__mlbxPrimaryTabTransitionObserver) {{
+        host.__mlbxPrimaryTabTransitionObserver.disconnect();
+        host.__mlbxPrimaryTabTransitionObserver = null;
+      }}
+
+      function finishWhenReady() {{
+        if (root.dataset.mlbxTabSwitching !== 'true') return true;
+        if (root.dataset.mlbxNextTab !== activeTab) return false;
+        const panel = doc.querySelector('.st-key-tab_content_' + activeTab);
+        if (!panel || panel.matches('[data-stale="true"]') ||
+            panel.querySelector('[data-stale="true"]')) return false;
+        host.requestAnimationFrame(() => host.requestAnimationFrame(() => {{
+          root.removeAttribute('data-mlbx-tab-switching');
+          root.removeAttribute('data-mlbx-next-tab');
+          if (host.__mlbxPrimaryTabTransitionObserver) {{
+            host.__mlbxPrimaryTabTransitionObserver.disconnect();
+            host.__mlbxPrimaryTabTransitionObserver = null;
+          }}
+        }}));
+        return true;
+      }}
+
+      if (!finishWhenReady() && host.MutationObserver && doc.body) {{
+        host.__mlbxPrimaryTabTransitionObserver = new host.MutationObserver(
+          finishWhenReady
+        );
+        host.__mlbxPrimaryTabTransitionObserver.observe(doc.body, {{
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['data-stale'],
+        }});
+      }}
+    }})();
+    </script>
+    """,
+    height=0,
+    width=0,
 )
+
+# Radio buttons estilizados como tabs con underline. La clave del contenedor
+# permite que el guard anterior distinga esta navegación de los radios internos
+# de Mapa, Histórico, etc.
+with st.container(key="primary_tab_navigation"):
+    active_tab = st.radio(
+        "Navegación",
+        tab_options,
+        horizontal=True,
+        format_func=lambda tab_id: t(f"tabs.{tab_id}"),
+        key="active_tab",
+        label_visibility="collapsed"
+    )
 
 
 def _weatherlink_station_label(station: dict) -> str:
@@ -4590,46 +4705,61 @@ if st.session_state.get("internal_stats_open"):
     render_internal_stats()
     st.stop()
 
-# TAB 1: OBSERVACIÓN
-_boot_mark(f"before tab render (active_tab={active_tab})")
-if active_tab == "observation":
-    _get_tab_module("observation").render_observation_tab(_build_observation_tab_context())
-    _boot_mark("after render_observation_tab")
+# Streamlit conserva el DOM anterior con ``data-stale=true`` mientras procesa
+# un cambio de widget. El mapa mantiene deliberadamente visibles SUS elementos
+# stale para que pan, zoom y filtros no parpadeen, pero esa regla también hacía
+# visible durante segundos el Ranking anterior al navegar Ranking → Mapa.
+# Cada pestaña vive ahora en un contenedor identificable y, en cada ejecución,
+# ocultamos solo los contenedores stale de las otras pestañas. El contenido
+# stale de la pestaña activa sigue disponible para reruns internos.
+_stale_tab_content_selectors = []
+for _tab_id in TAB_OPTIONS:
+    if _tab_id == active_tab:
+        continue
+    _tab_class = f"st-key-tab_content_{_tab_id}"
+    _stale_tab_content_selectors.extend((
+        f'[data-testid="stMainBlockContainer"] .{_tab_class}'
+        f':has([data-testid="stElementContainer"][data-stale="true"])',
+        f'[data-testid="stMainBlockContainer"] '
+        f'[data-testid="stElementContainer"][data-stale="true"].{_tab_class}',
+        f'[data-testid="stMainBlockContainer"] '
+        f'[data-testid="stElementContainer"][data-stale="true"]:has(.{_tab_class})',
+        f'[data-testid="stMainBlockContainer"] '
+        f'[data-testid="stElementContainer"][data-stale="true"] .{_tab_class}',
+    ))
+st.markdown(
+    "<style data-mlbx-tab-transition>"
+    + ",".join(_stale_tab_content_selectors)
+    + "{display:none !important;visibility:hidden !important;}"
+    + "</style>",
+    unsafe_allow_html=True,
+)
 
-# ============================================================
-# TAB 2: TENDENCIAS
-# ============================================================
 
-elif active_tab == "trends":
-    _get_tab_module("trends").render_trends_tab(_build_trends_tab_context())
-    _boot_mark("after render_trends_tab")
+def _render_active_tab(tab_id: str) -> None:
+    _boot_mark(f"before tab render (active_tab={tab_id})")
+    if tab_id == "observation":
+        _get_tab_module("observation").render_observation_tab(_build_observation_tab_context())
+        _boot_mark("after render_observation_tab")
+    elif tab_id == "trends":
+        _get_tab_module("trends").render_trends_tab(_build_trends_tab_context())
+        _boot_mark("after render_trends_tab")
+    elif tab_id == "historical":
+        _get_tab_module("historical").render_historical_tab(_build_historical_tab_context())
+        _boot_mark("after render_historical_tab")
+    elif tab_id == "map":
+        _get_tab_module("map").render_map_tab(_build_map_tab_context())
+        _boot_mark("after render_map_tab")
+    elif tab_id == "ranking":
+        _boot_mark("before ranking module import")
+        ranking_module = _get_tab_module("ranking")
+        _boot_mark("after ranking module import")
+        ranking_module.render_ranking_tab(_build_ranking_tab_context())
+        _boot_mark("after render_ranking_tab")
 
-# ============================================================
-# TAB 3: HISTORICO
-# ============================================================
 
-elif active_tab == "historical":
-    _get_tab_module("historical").render_historical_tab(_build_historical_tab_context())
-    _boot_mark("after render_historical_tab")
-
-# ============================================================
-# TAB 4: MAPA
-# ============================================================
-
-elif active_tab == "map":
-    _get_tab_module("map").render_map_tab(_build_map_tab_context())
-    _boot_mark("after render_map_tab")
-
-# ============================================================
-# TAB 5: RANKING
-# ============================================================
-
-elif active_tab == "ranking":
-    _boot_mark("before ranking module import")
-    ranking_module = _get_tab_module("ranking")
-    _boot_mark("after ranking module import")
-    ranking_module.render_ranking_tab(_build_ranking_tab_context())
-    _boot_mark("after render_ranking_tab")
+with st.container(key=f"tab_content_{active_tab}"):
+    _render_active_tab(active_tab)
 
 # ============================================================
 # AUTOREFRESH SOLO EN OBSERVACIÓN
@@ -4673,7 +4803,7 @@ def _whats_new_footer_html() -> str:
         "<button type='button' class='mlx-wn-tab' role='tab' "
         "data-mlbx-whats-new-version='120'>1.2.0</button>"
         "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.2</button>"
+        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.3</button>"
         "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-110'>"
         + _release("footer.previous_improvements", "footer.previous_fixes")
@@ -4682,6 +4812,9 @@ def _whats_new_footer_html() -> str:
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
+        "<div class='mlx-wn-version'>1.3.3</div>"
+        + _section(t("footer.improvements_title"), "footer.release_133_improvements")
+        + "<hr class='mlx-wn-sep'>"
         "<div class='mlx-wn-version'>1.3.2</div>"
         + _section(t("footer.improvements_title"), "footer.release_132_improvements")
         + "<hr class='mlx-wn-sep'>"

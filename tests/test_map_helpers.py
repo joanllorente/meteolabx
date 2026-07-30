@@ -98,6 +98,33 @@ def test_regional_provider_batch_excludes_unselected_official_countries():
     )
 
 
+def test_cached_map_batches_preserve_each_provider_limit_and_result_order(monkeypatch):
+    import providers
+
+    calls = []
+
+    def fake_search(lat, lon, **kwargs):
+        calls.append((lat, lon, kwargs))
+        return [tuple(kwargs["provider_ids"]), kwargs["max_results"]]
+
+    monkeypatch.setattr(providers, "search_nearby_stations", fake_search)
+    map_tab._cached_map_station_batches.clear()
+    batches = (
+        (1960, ("AEMET", "METEOCAT"), ("ES",), False, False),
+        (5000, ("NETATMO",), ("ES", "PT"), False, False),
+    )
+
+    result = map_tab._cached_map_station_batches(
+        40.4168, -3.7038, batches, (("TEST", 1),),
+    )
+
+    assert result[0] == [("AEMET", "METEOCAT"), 1960]
+    assert result[1] == [("NETATMO",), 5000]
+    assert sorted(call[2]["max_results"] for call in calls) == [1960, 5000]
+    assert sorted(tuple(call[2]["countries"]) for call in calls) == [("ES",), ("ES", "PT")]
+    map_tab._cached_map_station_batches.clear()
+
+
 def test_map_country_default_only_applies_before_filter_is_initialized():
     assert map_tab.map_country_default_enabled("ES", ("ES",), False) is True
     assert map_tab.map_country_default_enabled("ES", ("ES",), True) is False
@@ -162,6 +189,42 @@ def test_country_colors_are_distinct_and_rgba():
     assert tn_color != [180, 180, 180, 190]
     assert len(tn_color) == 4
     assert all(0 <= channel <= 255 for channel in tn_color)
+
+
+def test_station_point_payload_is_compact_safe_and_keeps_selection_identity():
+    row = map_tab.station_point_layer_row(7, {
+        "lat": 41.123456789,
+        "lon": 2.987654321,
+        "name": "A <B>",
+        "provider": "P&W",
+        "station_id": 'ID"7',
+        "country": "ES",
+        "distance_km": 12.34,
+        "elevation_m": 456.7,
+    })
+
+    assert row == {
+        "i": 7,
+        "y": 41.12346,
+        "x": 2.98765,
+        "c": map_tab.COUNTRY_COLORS["ES"],
+        "n": "A &lt;B&gt;",
+        "p": "P&amp;W",
+        "s": "ID&quot;7",
+        "d": "12.3 km",
+        "a": "457 m",
+    }
+
+
+def test_station_layer_uses_compact_accessors_and_constant_radius():
+    source = Path(map_tab.__file__).read_text(encoding="utf-8")
+
+    assert 'get_position="[x, y]"' in source
+    assert 'get_fill_color="c"' in source
+    assert "get_radius=point_radius" in source
+    assert '"html": (\n                        "<b>{n}</b>' in source
+    assert 'selected_station.get("i")' in source
+    assert '"tooltip_html"' not in source
 
 
 def test_map_country_counts_fallback_uses_local_inventory():

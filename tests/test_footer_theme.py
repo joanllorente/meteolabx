@@ -38,9 +38,9 @@ def test_release_130_is_current_and_localized():
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "1.3.2"' in source
-    assert '__version__ = "1.3.2"' in server_source
-    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.2" in source
+    assert 'APP_VERSION = "1.3.3"' in source
+    assert '__version__ = "1.3.3"' in server_source
+    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.3" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
     assert 'sessionStorage.setItem("mlbx-whats-new-version", version)' in source
     assert 'button.classList.toggle("is-active", active);' in source
@@ -63,9 +63,18 @@ def test_release_130_is_current_and_localized():
         "it": "Ottimizzazione della connessione alle stazioni Meteocat.",
         "pt": "Otimização da ligação às estações Meteocat.",
     }
+    release_133_notes = {
+        "es": "Navegación entre pestañas más fluida y carga del mapa optimizada.",
+        "ca": "Navegació entre pestanyes més fluida i càrrega del mapa optimitzada.",
+        "en": "Smoother tab navigation and optimized map loading.",
+        "fr": "Navigation plus fluide entre les onglets et chargement de la carte optimisé.",
+        "it": "Navigazione più fluida tra le schede e caricamento della mappa ottimizzato.",
+        "pt": "Navegação mais fluida entre separadores e carregamento do mapa otimizado.",
+    }
     for language, portuguese_name in portuguese_names.items():
         payload = json.loads((root / "locales" / f"{language}.json").read_text())
         footer = payload["footer"]
+        assert footer["release_133_improvements"] == [release_133_notes[language]]
         assert footer["release_132_improvements"] == [release_132_notes[language]]
         assert len(footer["release_130_improvements"]) == 7
         assert portuguese_name in footer["release_130_improvements"][-1].lower()

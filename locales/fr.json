@@ -92,6 +92,9 @@
     "whats_new": "Nouveautés",
     "improvements_title": "Améliorations",
     "fixes_title": "Corrections",
+    "release_133_improvements": [
+      "Navigation plus fluide entre les onglets et chargement de la carte optimisé."
+    ],
     "release_132_improvements": [
       "Optimisation de la connexion aux stations Meteocat."
     ],

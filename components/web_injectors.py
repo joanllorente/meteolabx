@@ -109,12 +109,34 @@ def inject_pwa_metadata() -> None:
               el.setAttribute("href", href);
             }}
 
+            function upsertConnectionHint(rel, href, attrs) {{
+              let el = head.querySelector(`link[rel="${{rel}}"][href="${{href}}"]`);
+              if (!el) {{
+                el = doc.createElement("link");
+                el.setAttribute("rel", rel);
+                el.setAttribute("href", href);
+                head.appendChild(el);
+              }}
+              Object.keys(attrs || {{}}).forEach((key) => el.setAttribute(key, attrs[key]));
+            }}
+
             upsertMeta("viewport", "width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes");
             upsertMeta("mobile-web-app-capable", "yes");
             upsertMeta("apple-mobile-web-app-capable", "yes");
             upsertMeta("apple-mobile-web-app-status-bar-style", "black-translucent");
             upsertMeta("apple-mobile-web-app-title", "MeteoLabX");
             upsertMeta("theme-color", "#2384ff");
+
+            // El mapa se abre bajo demanda, pero podemos resolver DNS/TLS
+            // durante el tiempo que el usuario pasa en Ranking. CARTO sirve
+            // el estilo y los tiles desde estos dos orígenes.
+            [
+              "https://basemaps.cartocdn.com",
+              "https://tiles.basemaps.cartocdn.com",
+            ].forEach((origin) => {{
+              upsertConnectionHint("dns-prefetch", origin);
+              upsertConnectionHint("preconnect", origin, {{ crossorigin: "" }});
+            }});
 
             // Borrar TODOS los <link rel="icon"> y rel="shortcut icon" /
             // rel="apple-touch-icon" que ya pinte Streamlit por defecto.

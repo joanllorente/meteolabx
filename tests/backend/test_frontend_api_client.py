@@ -201,6 +201,7 @@ def test_via_api_does_not_invent_missing_numeric_fields() -> None:
         (502, "provider_network_error", "network"),
         (502, "provider_http_error", "http"),
         (502, "provider_bad_response", "badjson"),
+        (404, "provider_no_data", "nodata"),
         (502, "provider_no_current_data", "nodata"),
     ],
 )
