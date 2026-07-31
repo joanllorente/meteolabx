@@ -62,7 +62,12 @@ from utils.provider_state import (
     clear_provider_autoconnect_widget_state,
     disconnect_active_station,
 )
-from utils.state_keys import AUTOCONNECT_ATTEMPTED, BROWSER_LANGUAGES, CONNECTION_LOADING
+from utils.state_keys import (
+    AUTOCONNECT_ATTEMPTED,
+    BROWSER_LANGUAGES,
+    CONNECTION_LOADING,
+    PENDING_ACTIVE_TAB,
+)
 from local_storage_bridge import sync_local_storage
 
 
@@ -1550,6 +1555,7 @@ def render_sidebar(_local_storage_unused=None):
     if disconnect_clicked:
         disconnect_active_station()
 
+    manual_connection_succeeded = False
     if connect_clicked:
         if connection_source == "WEATHERLINK":
             api_key = str(st.session_state.get("weatherlink_api_key", "")).strip()
@@ -1625,6 +1631,7 @@ def render_sidebar(_local_storage_unused=None):
                             stations,
                             connected=True,
                         ):
+                            manual_connection_succeeded = True
                             st.session_state["weatherlink_selected_station_id"] = str(
                                 selected_station.get("station_id") or selected_station.get("station_id_uuid") or ""
                             ).strip()
@@ -1663,11 +1670,15 @@ def render_sidebar(_local_storage_unused=None):
                                 )
                             )
                         else:
-                            apply_wu_station_state(station, api_key, z_raw, connected=True)
+                            manual_connection_succeeded = apply_wu_station_state(
+                                station, api_key, z_raw, connected=True
+                            )
                     except Exception:
                         st.sidebar.error(t("sidebar.messages.altitude_invalid"))
                 else:  # Sin altitud manual, confiar en la API
-                    apply_wu_station_state(station, api_key, "", connected=True)
+                    manual_connection_succeeded = apply_wu_station_state(
+                        station, api_key, "", connected=True
+                    )
 
                 if (
                     st.session_state.get("connected")
@@ -1689,6 +1700,11 @@ def render_sidebar(_local_storage_unused=None):
                         }
                     )
                     st.session_state[AUTOCONNECT_ATTEMPTED] = True
+
+    # La sidebar se renderiza antes de resolver la pestaña activa, de modo que
+    # esta petición se consume en el mismo ciclo y evita quedarse en Mapa.
+    if manual_connection_succeeded:
+        st.session_state[PENDING_ACTIVE_TAB] = "observation"
 
     if connection_caption and connection_caption != "sidebar.connection.caption":
         st.sidebar.caption(connection_caption)

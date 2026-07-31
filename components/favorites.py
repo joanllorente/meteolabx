@@ -11,6 +11,7 @@ from typing import Any
 import streamlit as st
 
 from utils.favorites import favorite_key, get_stored_favorites, remove_favorite
+from utils.state_keys import PENDING_ACTIVE_TAB
 from utils.provider_state import (
     apply_provider_station_state,
     apply_weatherlink_station_state,
@@ -331,6 +332,7 @@ def render_favorites_bar(*, t, dark: bool) -> None:
                                 st.error(t("favorites.remove_error"))
                     if st.button(t("favorites.connect"), key=f"favorite_connect_{key_hash}", width="stretch"):
                         if _connect_favorite(favorite):
+                            st.session_state[PENDING_ACTIVE_TAB] = "observation"
                             st.rerun()
                         else:
                             st.error(t("favorites.connect_error"))

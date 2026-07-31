@@ -448,6 +448,7 @@ def render_station_selector():
                             station,
                             connected=True,
                             show_results=False,
+                            pending_active_tab="observation",
                             clear_runtime_cache=True,
                             clear_search_coords=True,
                         )
@@ -479,5 +480,4 @@ def render_station_selector():
                             st.error(t("favorites.save_error"))
 
                 st.markdown("---")
-
 
