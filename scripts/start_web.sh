@@ -62,6 +62,12 @@ trap 'kill -TERM "${UVICORN_PID}" 2>/dev/null || true' EXIT
 # arrancan dos procesos Python. La UI puede pintar su estado inicial aunque la
 # API tarde unos segundos más; si el backend muere, el wait final reinicia todo.
 "${PYTHON}" scripts/patch_streamlit_index.py
+# Paginas SEO estaticas: directorio e indices de estaciones publicas. Se
+# escriben en el mismo directorio del paquete Streamlit que sirve el frontend,
+# por lo que las URLs limpias funcionan sin proxy ni proceso adicional.
+if ! "${PYTHON}" scripts/build_seo_pages.py; then
+  echo "[start_web] AVISO: no se pudieron generar las paginas SEO; la app interactiva continuara disponible" >&2
+fi
 export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
 # fileWatcherType=none: en producción no hay recarga en caliente y, sin
 # watchdog instalado, Streamlit cae a un watcher por polling que consume
