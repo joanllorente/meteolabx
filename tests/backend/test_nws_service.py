@@ -30,8 +30,11 @@ TZ = ZoneInfo("America/Chicago")
 NOW_LOCAL = datetime(2026, 6, 10, 12, 0, tzinfo=TZ)
 
 
-def _q(value, unit):
-    return {"value": value, "unitCode": unit}
+def _q(value, unit, quality=None):
+    out = {"value": value, "unitCode": unit}
+    if quality is not None:
+        out["qualityControl"] = quality
+    return out
 
 
 def _feature(hour: int, minute: int = 0, **props) -> dict:
@@ -153,6 +156,21 @@ def test_parse_feature_derives_missing_pressure() -> None:
     )
     assert row["p_msl_hpa"] == pytest.approx(1015.0)
     assert row["p_abs_hpa"] == pytest.approx(1015.0 / math.exp(ELEVATION / 8000.0))
+
+
+def test_parse_feature_discards_questioned_or_rejected_madis_values() -> None:
+    row = nws._parse_feature(
+        _feature(
+            10,
+            temperature=_q(99.0, "wmoUnit:degC", "Q"),
+            windSpeed=_q(10.0, "wmoUnit:km_h-1", "V"),
+            precipitationLastHour=_q(999.0, "wmoUnit:mm", "X"),
+        ),
+        elevation_m=ELEVATION,
+    )
+    assert math.isnan(row["temp_c"])
+    assert row["wind_kmh"] == pytest.approx(10.0)
+    assert math.isnan(row["precip_last_mm"])
 
 
 # =====================================================================

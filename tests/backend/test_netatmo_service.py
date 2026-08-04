@@ -119,10 +119,13 @@ def _client(public_status: int = 200):
 
 
 @pytest.fixture(autouse=True)
-def _fresh_token_cache():
+def _fresh_token_cache(monkeypatch):
     _reset_token_cache()
+    netatmo._INACTIVE_UNTIL.clear()
+    monkeypatch.setattr(netatmo, "_UPSTREAM_RETRY_DELAY_S", 0.0)
     yield
     _reset_token_cache()
+    netatmo._INACTIVE_UNTIL.clear()
 
 
 @pytest.fixture
@@ -208,6 +211,124 @@ def test_fetch_observations_merges_modules(_catalog_station):
     assert payload["rows"][1]["p_hpa"] == pytest.approx(1013.0)
     assert client._captured["tokens"] == 1
     assert sorted(client._captured["measure_modules"]) == sorted(MEASURES.keys())
+
+
+def test_public_station_search_expands_bbox_until_station_is_found(_catalog_station):
+    captured = {"public_widths": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/oauth2/token" in url:
+            return httpx.Response(200, json={"access_token": "at", "expires_in": 10800})
+        if "/api/getpublicdata" in url:
+            width = float(request.url.params["lat_ne"]) - float(request.url.params["lat_sw"])
+            captured["public_widths"].append(width)
+            body = [PUBLIC_ROW] if len(captured["public_widths"]) == 3 else []
+            return httpx.Response(200, json={"status": "ok", "body": body})
+        if "/api/getmeasure" in url:
+            return httpx.Response(200, json={"status": "ok", "body": []})
+        return httpx.Response(404)
+
+    payload = _run(netatmo.fetch_observations(
+        STATION_ID, "cid", "csecret", "rtoken",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    ))
+    assert payload["public"]["_id"] == STATION_ID
+    assert captured["public_widths"] == pytest.approx([0.002, 0.005, 0.01])
+
+
+def test_public_503_is_retried_once(_catalog_station):
+    captured = {"public_calls": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/oauth2/token" in url:
+            return httpx.Response(200, json={"access_token": "at", "expires_in": 10800})
+        if "/api/getpublicdata" in url:
+            captured["public_calls"] += 1
+            if captured["public_calls"] == 1:
+                return httpx.Response(503, json={"error": {"message": "unavailable"}})
+            return httpx.Response(200, json={"status": "ok", "body": [PUBLIC_ROW]})
+        if "/api/getmeasure" in url:
+            return httpx.Response(200, json={"status": "ok", "body": []})
+        return httpx.Response(404)
+
+    payload = _run(netatmo.fetch_observations(
+        STATION_ID, "cid", "csecret", "rtoken",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    ))
+    assert payload["public"]["_id"] == STATION_ID
+    assert captured["public_calls"] == 2
+
+
+def test_missing_public_station_is_cached_as_inactive(_catalog_station):
+    captured = {"public_calls": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/oauth2/token" in url:
+            return httpx.Response(200, json={"access_token": "at", "expires_in": 10800})
+        if "/api/getpublicdata" in url:
+            captured["public_calls"] += 1
+            return httpx.Response(200, json={"status": "ok", "body": []})
+        return httpx.Response(404)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    for _ in range(2):
+        with pytest.raises(ProviderError) as excinfo:
+            _run(netatmo.fetch_observations(
+                STATION_ID, "cid", "csecret", "rtoken", client=client,
+            ))
+        assert excinfo.value.error_code == "provider_no_data"
+    assert captured["public_calls"] == len(netatmo._BBOX_DELTAS_DEG)
+    assert netatmo.is_temporarily_inactive(STATION_ID) is True
+
+
+def test_getmeasure_failure_keeps_public_current_available(_catalog_station):
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/oauth2/token" in url:
+            return httpx.Response(200, json={"access_token": "at", "expires_in": 10800})
+        if "/api/getpublicdata" in url:
+            return httpx.Response(200, json={"status": "ok", "body": [PUBLIC_ROW]})
+        if "/api/getmeasure" in url:
+            return httpx.Response(503, json={"error": {"message": "unavailable"}})
+        return httpx.Response(404)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    payload = _run(netatmo.fetch_observations(
+        STATION_ID, "cid", "csecret", "rtoken", client=client,
+    ))
+
+    assert payload["rows"] == []
+    current = netatmo.current_from_payload(payload, now=NOW, tz_name="UTC")
+    series = netatmo.today_series_from_payload(payload, now=NOW, tz_name="UTC")
+    assert current["Tc"] == pytest.approx(22.0)
+    assert current["epoch"] == EPOCH_2
+    assert series["has_data"] is False
+
+
+def test_getmeasure_unauthorized_still_retries_and_fails(_catalog_station):
+    captured = {"tokens": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/oauth2/token" in url:
+            captured["tokens"] += 1
+            return httpx.Response(200, json={"access_token": "at", "expires_in": 10800})
+        if "/api/getpublicdata" in url:
+            return httpx.Response(200, json={"status": "ok", "body": [PUBLIC_ROW]})
+        if "/api/getmeasure" in url:
+            return httpx.Response(401, json={"error": {"message": "unauthorized"}})
+        return httpx.Response(404)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    with pytest.raises(ProviderError) as excinfo:
+        _run(netatmo.fetch_observations(
+            STATION_ID, "cid", "csecret", "rtoken", client=client,
+        ))
+    assert excinfo.value.error_code == "provider_unauthorized"
+    assert captured["tokens"] == 2
 
 
 def test_access_token_is_cached_between_calls(_catalog_station):

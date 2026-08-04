@@ -21,8 +21,8 @@ Particularidades:
 3. **Medidas heterogéneas**: cada instante trae ``listaMedidas`` con
    códigos/nombres variados (TA_AVG_1.5m, VV_MAX_10m…). El scoring de
    ``_measure_kind_score`` (clonado del legacy) elige la mejor medida
-   por tipo y descarta valores invalidados (códigos 3 y 9) o centinela
-   (≤ -9999).
+   por tipo y descarta valores sospechosos o invalidados (códigos 2,
+   3 y 9), además de los centinela (≤ -9999).
 
 4. **Unidades**: viento puede llegar en m/s o km/h según la medida; se
    normaliza a km/h mirando el campo ``unidade``. La presión es
@@ -197,11 +197,11 @@ def _extract_measures(lista_medidas: Any) -> Dict[str, float]:
         if not isinstance(measure, dict):
             continue
 
+        if not _validation_acceptable(measure):
+            continue
         validation = measure.get("lnCodigoValidacion")
         try:
             validation_int = int(validation)
-            if validation_int in (3, 9):  # invalidado / sospechoso
-                continue
         except Exception:
             validation_int = None
 
@@ -231,6 +231,21 @@ def _extract_measures(lista_medidas: Any) -> Dict[str, float]:
         else:
             out[kind] = value
     return out
+
+
+def _validation_acceptable(measure: Dict[str, Any]) -> bool:
+    """Acepta dato sin validar (0), válido (1) o interpolado válido (5).
+
+    MeteoGalicia marca 2 como sospechoso, 3 como erróneo y 9 como no
+    registrado; esos valores se descartan en todas las rutas.
+    """
+    validation = measure.get("lnCodigoValidacion")
+    if validation in (None, ""):
+        return True
+    try:
+        return int(validation) in (0, 1, 5)
+    except (TypeError, ValueError):
+        return False
 
 
 # =====================================================================
@@ -608,6 +623,8 @@ async def _fetch_daily_extremes_by_station(
         }
         def _daily_value(code: str, *, wind: bool = False) -> float:
             measure = by_code.get(code, {})
+            if not _validation_acceptable(measure):
+                return float("nan")
             value = _safe_float(measure.get("valor"))
             if _is_nan(value) or value <= -9990:
                 return float("nan")

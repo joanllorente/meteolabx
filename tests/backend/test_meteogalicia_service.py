@@ -160,6 +160,7 @@ def test_measure_scoring_prefers_avg_and_discards_invalidated() -> None:
     measures = meteogalicia._extract_measures([
         _measure("TA_MAX_1.5m", 25.0),
         _measure("TA_AVG_1.5m", 21.0),
+        _measure("TA_AVG_1.5m", 98.0, validation=2),  # sospechosa
         _measure("TA_AVG_1.5m", 99.0, validation=3),  # invalidada
         _measure("PP_SUM_1.5m", -9999.0),              # centinela
     ])

@@ -174,8 +174,7 @@ def _parse_values(payload: Any) -> Dict[int, float]:
     for item in payload.get("value") or []:
         if not isinstance(item, dict):
             continue
-        quality = str(item.get("quality") or "").strip().upper()
-        if quality and quality not in ("G", "Y"):
+        if not _quality_acceptable(item):
             continue
         value = _safe_float(item.get("value"))
         raw_epoch = item.get("date", item.get("to", item.get("from")))
@@ -186,6 +185,16 @@ def _parse_values(payload: Any) -> Dict[int, float]:
         if not _is_nan(value):
             out[epoch] = value
     return out
+
+
+def _quality_acceptable(item: Dict[str, Any]) -> bool:
+    """Acepta valores aprobados (G), preliminares (Y) o sin etiqueta.
+
+    SMHI usa R para lecturas de calidad rechazada; esas no deben entrar en
+    observación, series ni agregados del ranking.
+    """
+    quality = str(item.get("quality") or "").strip().upper()
+    return not quality or quality in ("G", "Y")
 
 
 async def _fetch_parameters(

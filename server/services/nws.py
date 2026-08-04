@@ -69,8 +69,22 @@ def _safe_float(value: Any, default: float = float("nan")) -> float:
         return default
 
 
+def _quality_acceptable(raw: Any) -> bool:
+    """Acepta MADIS sin QC o que no esté cuestionada/rechazada.
+
+    X = errónea, Q = cuestionada y B = mala por intervención subjetiva.
+    Z (preliminar), C/S/V (niveles superados), G (buena) y T se conservan.
+    """
+    if not isinstance(raw, dict):
+        return True
+    quality = str(raw.get("qualityControl") or "").strip().upper()
+    return not quality or quality in {"Z", "C", "S", "V", "G", "T"}
+
+
 def _measure_value(raw: Any) -> Tuple[float, str]:
     if isinstance(raw, dict):
+        if not _quality_acceptable(raw):
+            return float("nan"), str(raw.get("unitCode", "")).strip()
         return _safe_float(raw.get("value")), str(raw.get("unitCode", "")).strip()
     return _safe_float(raw), ""
 

@@ -131,6 +131,16 @@ def _safe_float(value: Any, default: float = float("nan")) -> float:
         return default
 
 
+def _reading_acceptable(reading: Dict[str, Any]) -> bool:
+    """Acepta XEMA válida (V), pendiente (T) o aún sin validar (vacío).
+
+    Una lectura con estado N es inválida según Meteocat. Cualquier código
+    explícito desconocido también se descarta de forma conservadora.
+    """
+    status = str(reading.get("estat") or "").strip().upper()
+    return status in ("", "T", "V")
+
+
 def _ms_to_kmh(value: float) -> float:
     return float("nan") if _is_nan(value) else value * 3.6
 
@@ -329,6 +339,8 @@ def _parse_day_payload(payload: Any) -> VarMap:
         for reading in readings if isinstance(readings, list) else []:
             if not isinstance(reading, dict):
                 continue
+            if not _reading_acceptable(reading):
+                continue
             epoch = _parse_measurement_epoch(reading.get("data"))
             if epoch is None:
                 continue
@@ -464,6 +476,8 @@ async def _fetch_latest_values(
             best_value, best_epoch = float("nan"), None
             for reading in readings if isinstance(readings, list) else []:
                 if not isinstance(reading, dict):
+                    continue
+                if not _reading_acceptable(reading):
                     continue
                 epoch = _parse_measurement_epoch(reading.get("data"))
                 if epoch is None:

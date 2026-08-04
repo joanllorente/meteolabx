@@ -40,6 +40,10 @@ METRICS = ("tmax", "tmin", "gust", "rain")
 METRIC_REDUCER = {"tmax": "max", "tmin": "min", "gust": "max", "rain": "sum"}
 # Orden del ranking: Tmín asciende (la más baja primero), el resto desciende.
 METRIC_DESC = {"tmax": True, "tmin": False, "gust": True, "rain": True}
+_QUALITY_FILTER_SCHEMA = 1
+_QUALITY_FILTER_PROVIDERS = frozenset({
+    "ECCC", "SMHI", "FROST", "METEOGALICIA", "METEOCAT",
+})
 
 # Huso local por proveedor: define el "día en curso" del ranking.
 PROVIDER_TZ = {
@@ -193,6 +197,8 @@ def _k_to_c(value) -> Optional[float]:
 
 
 def _parse_mg_day(dia: dict) -> List[StationDaily]:
+    from server.services import meteogalicia as mg
+
     estaciones = dia.get("listaEstacions", []) if isinstance(dia, dict) else []
     out: List[StationDaily] = []
     for est in estaciones:
@@ -200,15 +206,21 @@ def _parse_mg_day(dia: dict) -> List[StationDaily]:
             continue
         measures = est.get("listaMedidas", []) or []
         by_code = {str(m.get("codigoParametro", "")): m for m in measures if isinstance(m, dict)}
+        def _value(code: str) -> Optional[float]:
+            measure = by_code.get(code, {})
+            if not mg._validation_acceptable(measure):
+                return None
+            return _num(measure.get("valor"))
+
         rec = StationDaily(
             provider="METEOGALICIA",
             station_id=str(est.get("idEstacion", "")).strip(),
             name=str(est.get("estacion", "")).strip(),
             locality=str(est.get("concello", "")).strip(),
-            tmax=_num(by_code.get(_MG_CODE["tmax"], {}).get("valor")),
-            tmin=_num(by_code.get(_MG_CODE["tmin"], {}).get("valor")),
-            rain=_num(by_code.get(_MG_CODE["rain"], {}).get("valor")),
-            gust=_ms_to_kmh(_num(by_code.get(_MG_CODE["gust"], {}).get("valor"))),
+            tmax=_value(_MG_CODE["tmax"]),
+            tmin=_value(_MG_CODE["tmin"]),
+            rain=_value(_MG_CODE["rain"]),
+            gust=_ms_to_kmh(_value(_MG_CODE["gust"])),
         )
         if rec.station_id:
             out.append(rec)
@@ -318,6 +330,8 @@ async def _mc_fetch_instant(
     var_code: int = _MC_TCUR_VAR,
 ) -> Dict[str, Tuple[int, float]]:
     """Última lectura de una variable por estación → {codi: (epoch, valor)}."""
+    from server.services import meteocat as mc
+
     url = f"{MC_BASE}/variables/mesurades/{var_code}/{day.year:04d}/{day.month:02d}/{day.day:02d}"
     resp = await client.get(
         url, headers={"x-api-key": api_key, "Accept": "application/json"}, timeout=timeout_s
@@ -334,6 +348,8 @@ async def _mc_fetch_instant(
         best: Optional[Tuple[int, float]] = None
         for var in st.get("variables", []) or []:
             for lec in var.get("lectures", []) or []:
+                if not mc._reading_acceptable(lec):
+                    continue
                 value = _num(lec.get("valor"))
                 if value is None:
                     continue
@@ -355,6 +371,8 @@ async def _mc_fetch_variable(
 ) -> Dict[str, List[float]]:
     """``/variables/mesurades/{var}/{Y}/{M}/{D}`` (todas las estaciones) →
     {codi_estacion: [valores semihorarios]}."""
+    from server.services import meteocat as mc
+
     url = f"{MC_BASE}/variables/mesurades/{var_code}/{day.year:04d}/{day.month:02d}/{day.day:02d}"
     resp = await client.get(
         url, headers={"x-api-key": api_key, "Accept": "application/json"}, timeout=timeout_s
@@ -376,6 +394,8 @@ async def _mc_fetch_variable(
         vals: List[float] = []
         for var in st.get("variables", []) or []:
             for lec in var.get("lectures", []) or []:
+                if not mc._reading_acceptable(lec):
+                    continue
                 v = _num(lec.get("valor"))
                 if v is not None:
                     vals.append(v)
@@ -388,6 +408,8 @@ async def _mc_fetch_variable_samples(
     client: httpx.AsyncClient, api_key: str, var_code: int, day, timeout_s: float,
 ) -> Dict[str, List[Tuple[int, float]]]:
     """Como ``_mc_fetch_variable``, conservando el epoch de cada lectura."""
+    from server.services import meteocat as mc
+
     url = f"{MC_BASE}/variables/mesurades/{var_code}/{day.year:04d}/{day.month:02d}/{day.day:02d}"
     resp = await client.get(
         url, headers={"x-api-key": api_key, "Accept": "application/json"}, timeout=timeout_s,
@@ -404,6 +426,8 @@ async def _mc_fetch_variable_samples(
         samples: List[Tuple[int, float]] = []
         for variable in station.get("variables", []) or []:
             for reading in variable.get("lectures", []) or []:
+                if not mc._reading_acceptable(reading):
+                    continue
                 value = _num(reading.get("valor"))
                 try:
                     epoch = int(datetime.fromisoformat(
@@ -1076,6 +1100,8 @@ async def fetch_smhi_records(
             if not sid or not isinstance(values, list) or not values:
                 continue
             item = values[-1]
+            if not isinstance(item, dict) or not sm._quality_acceptable(item):
+                continue
             value = _num(item.get("value")) if isinstance(item, dict) else None
             try:
                 epoch = int(item.get("date")) // 1000
@@ -1100,6 +1126,8 @@ async def fetch_smhi_records(
                 continue
             samples: List[Tuple[int, float]] = []
             for item in station.get("value") or []:
+                if not isinstance(item, dict) or not sm._quality_acceptable(item):
+                    continue
                 value = _num(item.get("value")) if isinstance(item, dict) else None
                 try:
                     epoch = int(item.get("date")) // 1000
@@ -1212,9 +1240,12 @@ async def fetch_eccc_records(
             ),
             "limit": 10000,
             "properties": (
-                "obs_date_tm,msc_id-value,air_temp,"
-                "max_air_temp_pst1hr,min_air_temp_pst1hr,"
-                "max_wnd_spd_10m_pst1hr,pcpn_amt_pst1hr"
+                "obs_date_tm,msc_id-value,air_temp,air_temp-qa,"
+                "max_air_temp_pst1hr,max_air_temp_pst1hr-qa,"
+                "min_air_temp_pst1hr,min_air_temp_pst1hr-qa,"
+                "max_wnd_spd_10m_pst1hr,max_wnd_spd_10m_pst1hr-qa,"
+                "pcpn_amt_pst1hr,"
+                "pcpn_amt_pst1hr-qa"
             ),
         },
         timeout_s=timeout_s,
@@ -1246,13 +1277,33 @@ async def fetch_eccc_records(
         except Exception:
             tz = timezone.utc
         local_dt = datetime.fromtimestamp(props["epoch"], tz=timezone.utc).astimezone(tz)
-        temp = _num(props.get("air_temp"))
+        temp = (
+            _num(props.get("air_temp"))
+            if ec._qa_acceptable(props, "air_temp")
+            else None
+        )
         # Extremos horarios EXPLÍCITOS → máx/mín diario exacto; la
         # instantánea es solo la red de seguridad.
-        temp_high = _num(props.get("max_air_temp_pst1hr"))
-        temp_low = _num(props.get("min_air_temp_pst1hr"))
-        gust = _num(props.get("max_wnd_spd_10m_pst1hr"))  # SWOB ya da km/h
-        rain = _num(props.get("pcpn_amt_pst1hr"))
+        temp_high = (
+            _num(props.get("max_air_temp_pst1hr"))
+            if ec._qa_acceptable(props, "max_air_temp_pst1hr")
+            else None
+        )
+        temp_low = (
+            _num(props.get("min_air_temp_pst1hr"))
+            if ec._qa_acceptable(props, "min_air_temp_pst1hr")
+            else None
+        )
+        gust = (
+            _num(props.get("max_wnd_spd_10m_pst1hr"))
+            if ec._qa_acceptable(props, "max_wnd_spd_10m_pst1hr")
+            else None
+        )  # SWOB ya da km/h
+        rain = (
+            _num(props.get("pcpn_amt_pst1hr"))
+            if ec._qa_acceptable(props, "pcpn_amt_pst1hr")
+            else None
+        )
         store.upsert_hourly(
             "ECCC",
             sid,
@@ -1497,6 +1548,8 @@ async def fetch_frost_daily(
                         rt_epoch = -1
                     item_wind = item_direction = None
                     for obs in item.get("observations", []) or []:
+                        if not frost._quality_acceptable(obs):
+                            continue
                         el = str(obs.get("elementId", ""))
                         v = _num(obs.get("value"))
                         if v is None:
@@ -2201,6 +2254,7 @@ class RankingStore:
 
         payload = {
             "version": self._STATE_VERSION,
+            "quality_filter_schema": _QUALITY_FILTER_SCHEMA,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             # Las claves tupla (proveedor, día) no son serializables en JSON:
             # se aplanan a listas [proveedor, día, estaciones].
@@ -2260,6 +2314,8 @@ class RankingStore:
 
         self._daily = daily
         self._hourly = hourly
+        if payload.get("quality_filter_schema") != _QUALITY_FILTER_SCHEMA:
+            self._discard_legacy_quality_state()
         raw_updated = payload.get("updated_at")
         try:
             self.updated_at = datetime.fromisoformat(raw_updated) if raw_updated else None
@@ -2272,6 +2328,25 @@ class RankingStore:
             path, len(self._daily), len(self._hourly),
         )
         return True
+
+    def _discard_legacy_quality_state(self) -> None:
+        """Descarta agregados anteriores a los filtros QA por proveedor.
+
+        El snapshot antiguo no conservaba las etiquetas originales, así que no
+        puede separar a posteriori valores válidos y erróneos. Esta migración
+        se ejecuta una sola vez; el siguiente snapshot lleva su versión QA.
+        """
+        daily_keys = [key for key in self._daily if key[0] in _QUALITY_FILTER_PROVIDERS]
+        hourly_keys = [key for key in self._hourly if key[0] in _QUALITY_FILTER_PROVIDERS]
+        for key in daily_keys:
+            self._daily.pop(key, None)
+        for key in hourly_keys:
+            self._hourly.pop(key, None)
+        if daily_keys or hourly_keys:
+            logger.warning(
+                "ranking: descartado snapshot antiguo sin QA · %d diarios, %d horarios",
+                len(daily_keys), len(hourly_keys),
+            )
 
     @staticmethod
     def local_day(provider: str, now: Optional[datetime] = None) -> str:

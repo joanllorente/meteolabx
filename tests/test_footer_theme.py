@@ -33,15 +33,15 @@ def test_whats_new_uses_one_modal_opened_from_header_and_footer():
     assert ".header h1 a{" in source
 
 
-def test_release_130_is_current_and_localized():
+def test_release_134_is_current_and_localized():
     root = Path(__file__).resolve().parents[1]
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "1.3.3"' in source
+    assert 'APP_VERSION = "1.3.4"' in source
     assert "APP_BUILD = app_build_id()" in source
-    assert '__version__ = "1.3.3"' in server_source
-    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.3" in source
+    assert '__version__ = "1.3.4"' in server_source
+    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.4" in source
     assert "Build {html.escape(APP_BUILD)}" in source
     assert ".mlx-wn-build{" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
@@ -74,9 +74,27 @@ def test_release_130_is_current_and_localized():
         "it": "Navigazione più fluida tra le schede e caricamento della mappa ottimizzato.",
         "pt": "Navegação mais fluida entre separadores e carregamento do mapa otimizado.",
     }
+    release_134_notes = {
+        "es": "Añadido control de calidad de las observaciones para ECCC, SMHI, Frost, MeteoGalicia, Meteocat y NWS.",
+        "ca": "Afegit el control de qualitat de les observacions per a ECCC, SMHI, Frost, MeteoGalicia, Meteocat i NWS.",
+        "en": "Added observation quality control for ECCC, SMHI, Frost, MeteoGalicia, Meteocat, and NWS.",
+        "fr": "Ajout du contrôle qualité des observations pour ECCC, SMHI, Frost, MeteoGalicia, Meteocat et NWS.",
+        "it": "Aggiunto il controllo qualità delle osservazioni per ECCC, SMHI, Frost, MeteoGalicia, Meteocat e NWS.",
+        "pt": "Adicionado o controlo de qualidade das observações para ECCC, SMHI, Frost, MeteoGalicia, Meteocat e NWS.",
+    }
+    release_134_fixes = {
+        "es": "Corregidos los problemas de conexión de las estaciones NETATMO.",
+        "ca": "Corregits els problemes de connexió de les estacions NETATMO.",
+        "en": "Fixed NETATMO station connection issues.",
+        "fr": "Correction des problèmes de connexion aux stations NETATMO.",
+        "it": "Corretti i problemi di connessione alle stazioni NETATMO.",
+        "pt": "Corrigidos os problemas de ligação às estações NETATMO.",
+    }
     for language, portuguese_name in portuguese_names.items():
         payload = json.loads((root / "locales" / f"{language}.json").read_text())
         footer = payload["footer"]
+        assert footer["release_134_improvements"] == [release_134_notes[language]]
+        assert footer["release_134_fixes"] == [release_134_fixes[language]]
         assert footer["release_133_improvements"] == [release_133_notes[language]]
         assert footer["release_132_improvements"] == [release_132_notes[language]]
         assert len(footer["release_130_improvements"]) == 7

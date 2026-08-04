@@ -58,6 +58,26 @@ def test_windy_uses_separate_pws_catalog(monkeypatch) -> None:
     assert all(row["provider"] == "WINDY" for row in nearby)
 
 
+def test_netatmo_temporarily_inactive_station_is_hidden_from_map(monkeypatch) -> None:
+    from server.services import netatmo
+
+    station_id = "70:ee:50:b5:09:dc"
+    netatmo._INACTIVE_UNTIL.clear()
+    try:
+        visible = stations.search_near(
+            37.6001, -0.9866, radius_km=1, providers=["NETATMO"], limit=50,
+        )
+        assert any(row["station_id"] == station_id for row in visible)
+
+        netatmo._mark_temporarily_inactive(station_id)
+        hidden = stations.search_near(
+            37.6001, -0.9866, radius_km=1, providers=["NETATMO"], limit=50,
+        )
+        assert all(row["station_id"] != station_id for row in hidden)
+    finally:
+        netatmo._INACTIVE_UNTIL.clear()
+
+
 def test_windy_country_counts_come_from_separate_pws_catalog(monkeypatch) -> None:
     monkeypatch.setattr(stations, "_pws_fresh_cutoff_iso", lambda hours=3: "1900-01-01T00:00:00Z")
 

@@ -268,6 +268,64 @@ def test_fetch_smhi_records_accumulates_hourly_bulk():
     assert rec.gust == pytest.approx(36.0)  # máx del día
     assert rec.tcur == pytest.approx(27.1)
 
+    # Una hora explícitamente roja no debe contaminar ningún agregado.
+    epoch3 = int(now.replace(hour=15).timestamp()) * 1000
+    payloads["1"] = {"station": [{"key": "98230", "value": [{"date": epoch3, "value": "99", "quality": "R"}]}]}
+    payloads["7"] = {"station": [{"key": "98230", "value": [{"date": epoch3, "value": "99", "quality": "R"}]}]}
+    payloads["21"] = {"station": [{"key": "98230", "value": [{"date": epoch3, "value": "99", "quality": "R"}]}]}
+    recs = asyncio.run(_test(store))
+    rec = recs[0]
+    assert rec.tmax == pytest.approx(27.1)
+    assert rec.rain == pytest.approx(0.5)
+    assert rec.gust == pytest.approx(36.0)
+
+
+def test_meteogalicia_ranking_discards_suspicious_and_erroneous_values():
+    from server.services.ranking import _parse_mg_day
+
+    def measure(code, value, validation):
+        return {
+            "codigoParametro": code, "valor": value,
+            "lnCodigoValidacion": validation,
+        }
+
+    rows = _parse_mg_day({"listaEstacions": [{
+        "idEstacion": "10045", "estacion": "Mabegondo",
+        "listaMedidas": [
+            measure("TA_MAX_1.5m", 99.0, 2),
+            measure("TA_MIN_1.5m", 10.0, 1),
+            measure("PP_SUM_1.5m", 999.0, 3),
+            measure("VV_MAX_10m", 12.0, 5),
+        ],
+    }]})
+    assert len(rows) == 1
+    assert rows[0].tmax is None
+    assert rows[0].tmin == pytest.approx(10.0)
+    assert rows[0].rain is None
+    assert rows[0].gust == pytest.approx(43.2)
+
+
+def test_meteocat_ranking_discards_invalid_reading_state():
+    import asyncio
+    import httpx
+    from datetime import date
+    from server.services.ranking import _mc_fetch_variable
+
+    payload = [{
+        "codi": "C6",
+        "variables": [{"lectures": [
+            {"valor": 21.0, "estat": "V"},
+            {"valor": 99.0, "estat": "N"},
+        ]}],
+    }]
+
+    async def _test():
+        transport = httpx.MockTransport(lambda _request: httpx.Response(200, json=payload))
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await _mc_fetch_variable(client, "K", 32, date(2026, 6, 10), 5.0)
+
+    assert asyncio.run(_test()) == {"C6": [21.0]}
+
 
 def test_eccc_hourly_precipitation_enters_rolling_24h_flow():
     import asyncio
@@ -278,18 +336,30 @@ def test_eccc_hourly_precipitation_enters_rolling_24h_flow():
     from server.services.ranking import RankingStore, fetch_eccc_records
 
     station_id = "1012475"  # DISCOVERY ISLAND, catalogo ECCC local
-    current = {"epoch": 0}
+    current = {"epoch": 0, "rain_qa": 100}
 
-    def handler(_request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx.Request) -> httpx.Response:
+        properties = request.url.params["properties"]
+        assert "pcpn_amt_pst1hr-qa" in properties
+        assert "air_temp-qa" in properties
+        assert "max_wnd_spd_10m_pst1hr-qa" in properties
         observed = datetime.fromtimestamp(current["epoch"], tz=timezone.utc)
+        bad = current["rain_qa"] == 0
         return httpx.Response(200, json={
             "features": [{
                 "properties": {
                     "obs_date_tm": observed.isoformat().replace("+00:00", "Z"),
                     "msc_id-value": station_id,
-                    "air_temp": 12.0,
-                    "max_wnd_spd_10m_pst1hr": 25.0,
+                    "air_temp": 99.0 if bad else 12.0,
+                    "air_temp-qa": current["rain_qa"],
+                    "max_air_temp_pst1hr": 99.0 if bad else 12.0,
+                    "max_air_temp_pst1hr-qa": current["rain_qa"],
+                    "min_air_temp_pst1hr": -99.0 if bad else 12.0,
+                    "min_air_temp_pst1hr-qa": current["rain_qa"],
+                    "max_wnd_spd_10m_pst1hr": 999.0 if bad else 25.0,
+                    "max_wnd_spd_10m_pst1hr-qa": current["rain_qa"],
                     "pcpn_amt_pst1hr": 0.5,
+                    "pcpn_amt_pst1hr-qa": current["rain_qa"],
                 },
             }],
         })
@@ -304,6 +374,7 @@ def test_eccc_hourly_precipitation_enters_rolling_24h_flow():
             for offset in range(24):
                 now = start + timedelta(hours=offset)
                 current["epoch"] = int(now.replace(minute=0).timestamp())
+                current["rain_qa"] = 0 if offset == 5 else 100
                 records = await fetch_eccc_records(store, client=client, now=now)
         return store, records, start + timedelta(hours=23)
 
@@ -312,11 +383,14 @@ def test_eccc_hourly_precipitation_enters_rolling_24h_flow():
     assert records
     record = next(rec for rec in records if rec.station_id == station_id)
     assert record.country in ("", "CA")  # el commit del scheduler estampa CA
-    assert record.rain_24h == pytest.approx(12.0)
+    assert record.tmax == pytest.approx(12.0)
+    assert record.tmin == pytest.approx(12.0)
+    assert record.gust == pytest.approx(25.0)
+    assert record.rain_24h == pytest.approx(11.5)
     assert record.rain_24h_at == int(now.replace(minute=0).timestamp())
     store.commit({"ECCC": records}, now=now)
     assert store.current_precipitation_points(now=now) == [
-        (pytest.approx(48.4246), pytest.approx(-123.225833), pytest.approx(12.0)),
+        (pytest.approx(48.4246), pytest.approx(-123.225833), pytest.approx(11.5)),
     ]
 
 

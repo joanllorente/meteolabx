@@ -180,6 +180,21 @@ def _quality_rank(obs: Dict[str, Any]) -> int:
     return max(0, 10 - quality)
 
 
+def _quality_acceptable(obs: Dict[str, Any]) -> bool:
+    """Acepta calidad Frost 0/1 (controlada, incluida corrección válida).
+
+    La ausencia de código se conserva por compatibilidad con series antiguas;
+    los códigos explícitos 2/4/5/6/7 no son suficientemente fiables para UI.
+    """
+    quality = obs.get("qualityCode")
+    if quality in (None, ""):
+        return True
+    try:
+        return int(quality) in (0, 1)
+    except (TypeError, ValueError):
+        return False
+
+
 def _candidate_score(obs: Dict[str, Any], canonical: str) -> Tuple[int, int, int]:
     return (
         _resolution_rank(str(obs.get("timeResolution", "")), canonical),
@@ -192,6 +207,7 @@ def _choose_observation(observations: List[Dict[str, Any]], canonical: str) -> O
     candidates = [
         obs for obs in observations
         if _CANONICAL_BY_ELEMENT.get(str(obs.get("elementId", "")).strip()) == canonical
+        and _quality_acceptable(obs)
     ]
     if not candidates:
         return None

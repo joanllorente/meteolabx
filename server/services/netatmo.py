@@ -15,6 +15,7 @@ payload único.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import time
 from datetime import datetime, timedelta, timezone
@@ -27,12 +28,18 @@ from server.schemas.errors import ProviderError
 
 
 PROVIDER = "NETATMO"
+logger = logging.getLogger(__name__)
 TOKEN_URL = "https://api.netatmo.com/oauth2/token"
 PUBLIC_DATA_URL = "https://api.netatmo.com/api/getpublicdata"
 GET_MEASURE_URL = "https://api.netatmo.com/api/getmeasure"
 
-# Radio del bbox alrededor de la estación para reencontrarla en getpublicdata.
-_BBOX_DELTA_DEG = 0.05
+# Radios progresivos alrededor de las coordenadas guardadas. Netatmo puede
+# devolver 503 cuando getpublicdata abarca demasiadas estaciones, sobre todo en
+# ciudades densas; empezamos en ~200 m de ancho y ampliamos solo si hace falta.
+_BBOX_DELTAS_DEG = (0.001, 0.0025, 0.005)
+_UPSTREAM_503_RETRIES = 1
+_UPSTREAM_RETRY_DELAY_S = 0.25
+_INACTIVE_TTL_S = 12 * 60 * 60
 _MEASURE_SCALE = "30min"
 
 # Token de acceso cacheado en memoria del proceso. Netatmo puede rotar el
@@ -41,6 +48,7 @@ _MEASURE_SCALE = "30min"
 # normalmente sigue siendo válido porque Netatmo solo rota al expirar).
 _TOKEN_STATE: Dict[str, Any] = {"key": None, "access_token": "", "expires_at": 0.0, "refresh_token": ""}
 _TOKEN_LOCK = asyncio.Lock()
+_INACTIVE_UNTIL: Dict[str, float] = {}
 
 
 def _safe_float(value: Any) -> float:
@@ -184,6 +192,98 @@ async def _api_get(
     if not isinstance(payload, dict) or payload.get("status") != "ok":
         raise ProviderError("provider_bad_response", provider=PROVIDER, status_code=502)
     return payload.get("body")
+
+
+def _inactive_key(station_id: str) -> str:
+    return str(station_id or "").strip().lower()
+
+
+def is_temporarily_inactive(station_id: str) -> bool:
+    """Si la estación dejó de aparecer en getpublicdata durante 12 horas."""
+    key = _inactive_key(station_id)
+    expires_at = _INACTIVE_UNTIL.get(key, 0.0)
+    if expires_at > time.time():
+        return True
+    if expires_at:
+        _INACTIVE_UNTIL.pop(key, None)
+    return False
+
+
+def temporarily_inactive_station_ids() -> frozenset[str]:
+    """Snapshot de IDs inactivos para filtrar catálogos sin llamadas por fila."""
+    now = time.time()
+    expired = [key for key, expires_at in _INACTIVE_UNTIL.items() if expires_at <= now]
+    for key in expired:
+        _INACTIVE_UNTIL.pop(key, None)
+    return frozenset(_INACTIVE_UNTIL)
+
+
+def _mark_temporarily_inactive(station_id: str) -> None:
+    key = _inactive_key(station_id)
+    if key:
+        _INACTIVE_UNTIL[key] = time.time() + _INACTIVE_TTL_S
+
+
+def _mark_active(station_id: str) -> None:
+    _INACTIVE_UNTIL.pop(_inactive_key(station_id), None)
+
+
+def _is_503(exc: ProviderError) -> bool:
+    return (
+        exc.error_code == "provider_http_error"
+        and str(exc.detail or "").strip() == "Netatmo HTTP 503"
+    )
+
+
+async def _api_get_with_503_retry(
+    url: str,
+    params: Dict[str, Any],
+    access_token: str,
+    *,
+    client: httpx.AsyncClient,
+    timeout_s: float,
+) -> Any:
+    for attempt in range(_UPSTREAM_503_RETRIES + 1):
+        try:
+            return await _api_get(
+                url, params, access_token, client=client, timeout_s=timeout_s,
+            )
+        except ProviderError as exc:
+            if not _is_503(exc) or attempt >= _UPSTREAM_503_RETRIES:
+                raise
+            await asyncio.sleep(_UPSTREAM_RETRY_DELAY_S * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
+async def _fetch_public_station(
+    station_id: str,
+    lat: float,
+    lon: float,
+    access_token: str,
+    *,
+    client: httpx.AsyncClient,
+    timeout_s: float,
+) -> Dict[str, Any]:
+    for delta in _BBOX_DELTAS_DEG:
+        body = await _api_get_with_503_retry(
+            PUBLIC_DATA_URL,
+            {
+                "lat_sw": lat - delta, "lon_sw": lon - delta,
+                "lat_ne": lat + delta, "lon_ne": lon + delta,
+                "filter": "false",
+            },
+            access_token, client=client, timeout_s=timeout_s,
+        )
+        public_row = _find_public_row(body, station_id)
+        if public_row is not None:
+            _mark_active(station_id)
+            return public_row
+
+    _mark_temporarily_inactive(station_id)
+    raise ProviderError(
+        "provider_no_data", provider=PROVIDER,
+        detail="Netatmo station is not currently publishing", status_code=404,
+    )
 
 
 def _find_public_row(body: Any, station_id: str) -> Optional[Dict[str, Any]]:
@@ -395,45 +495,54 @@ async def fetch_observations(
     station = stations.get_station(PROVIDER, station_key)
     if not station:
         raise ProviderError("station_not_found", provider=PROVIDER, status_code=404)
+    if is_temporarily_inactive(station_key):
+        raise ProviderError(
+            "provider_no_data", provider=PROVIDER,
+            detail="Netatmo station is not currently publishing", status_code=404,
+        )
     lat = _safe_float(station.get("lat"))
     lon = _safe_float(station.get("lon"))
     elevation = _safe_float(station.get("elevation"))
 
     async def _fetch_all(access_token: str) -> tuple[Dict[str, Any], Dict[int, Dict[str, Any]]]:
-        body = await _api_get(
-            PUBLIC_DATA_URL,
-            {
-                "lat_sw": lat - _BBOX_DELTA_DEG, "lon_sw": lon - _BBOX_DELTA_DEG,
-                "lat_ne": lat + _BBOX_DELTA_DEG, "lon_ne": lon + _BBOX_DELTA_DEG,
-                "filter": "false",
-            },
-            access_token, client=client, timeout_s=timeout_s,
+        public_row = await _fetch_public_station(
+            station_key, lat, lon, access_token,
+            client=client, timeout_s=timeout_s,
         )
-        public_row = _find_public_row(body, station_key)
-        if public_row is None:
-            raise ProviderError(
-                "provider_no_data", provider=PROVIDER,
-                detail="Netatmo station is not currently publishing", status_code=404,
-            )
 
         now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         date_begin = int((now_utc - timedelta(days=max(1, min(7, int(days_back))))).timestamp())
         raw_rows: Dict[int, Dict[str, Any]] = {}
         for step in _module_plan(public_row, station_key):
-            measure_body = await _api_get(
-                GET_MEASURE_URL,
-                {
-                    "device_id": station_key,
-                    "module_id": step["module_id"],
-                    "scale": _MEASURE_SCALE,
-                    "type": step["type"],
-                    "date_begin": date_begin,
-                    "date_end": int(now_utc.timestamp()),
-                    "optimize": "true",
-                    "real_time": "false",
-                },
-                access_token, client=client, timeout_s=timeout_s,
-            )
+            try:
+                measure_body = await _api_get_with_503_retry(
+                    GET_MEASURE_URL,
+                    {
+                        "device_id": station_key,
+                        "module_id": step["module_id"],
+                        "scale": _MEASURE_SCALE,
+                        "type": step["type"],
+                        "date_begin": date_begin,
+                        "date_end": int(now_utc.timestamp()),
+                        "optimize": "true",
+                        "real_time": "false",
+                    },
+                    access_token, client=client, timeout_s=timeout_s,
+                )
+            except ProviderError as exc:
+                if exc.error_code == "provider_unauthorized":
+                    # La capa exterior renueva el token y reintenta toda la
+                    # operación una vez. No ocultar un fallo de autenticación.
+                    raise
+                # getpublicdata ya proporcionó una observación actual válida.
+                # El histórico es complementario y su indisponibilidad no debe
+                # impedir conectar la estación.
+                logger.warning(
+                    "NETATMO getmeasure no disponible para station=%s module=%s (%s); "
+                    "continuando solo con la lectura actual",
+                    station_key, step["module_id"], exc.error_code,
+                )
+                continue
             _merge_measure(raw_rows, step["fields"], _measure_points(measure_body))
         return public_row, raw_rows
 

@@ -96,6 +96,48 @@ def test_fetch_current_canonical() -> None:
     assert current["station_name"] == "BANCROFT AUTO"
 
 
+def test_fetch_current_ignores_precipitation_flagged_as_error() -> None:
+    payload = _swob_payload()
+    payload["features"][0]["properties"]["pcpn_amt_pst1hr-qa"] = 0
+    payload["features"][2]["properties"]["pcpn_amt_pst1hr-qa"] = 100
+
+    async def _test():
+        async with _client(payload=payload) as client:
+            current = await eccc.fetch_current(STATION, client=client, now=NOW_LOCAL)
+            return current, client._captured["params"]  # type: ignore[attr-defined]
+
+    current, params = _run(_test())
+    assert "pcpn_amt_pst1hr-qa" in params["properties"]
+    assert current["precip_total"] == pytest.approx(0.2)
+
+
+def test_fetch_current_ignores_temperature_and_wind_flagged_as_error() -> None:
+    payload = _swob_payload()
+    first = payload["features"][0]["properties"]
+    middle = payload["features"][1]["properties"]
+    last = payload["features"][2]["properties"]
+    for field in (
+        "air_temp", "avg_wnd_spd_10m_pst10mts",
+        "avg_wnd_dir_10m_pst10mts", "max_wnd_spd_10m_pst1hr",
+    ):
+        first[f"{field}-qa"] = 100
+        last[f"{field}-qa"] = 0
+    for field in (
+        "air_temp", "avg_wnd_spd_10m_pst2mts", "avg_wnd_dir_10m_pst2mts",
+    ):
+        middle[f"{field}-qa"] = 0
+
+    async def _test():
+        async with _client(payload=payload) as client:
+            return await eccc.fetch_current(STATION, client=client, now=NOW_LOCAL)
+
+    current = _run(_test())
+    assert current["Tc"] == pytest.approx(21.0)
+    assert current["wind"] == pytest.approx(10.0)
+    assert current["wind_dir_deg"] == pytest.approx(180.0)
+    assert current["gust"] == pytest.approx(25.0)
+
+
 def test_fetch_today_series_samples_ten_minutes() -> None:
     async def _test():
         async with _client() as client:

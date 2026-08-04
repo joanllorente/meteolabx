@@ -130,6 +130,16 @@ def test_choose_observation_prefers_better_resolution_and_level() -> None:
     assert chosen["value"] == pytest.approx(21.0)  # PT1M + nivel 2 m
 
 
+def test_choose_observation_discards_explicit_bad_quality() -> None:
+    observations = [
+        {**_obs("air_temperature", 21.0, level=2.0, quality=0), "_reference_epoch": 100},
+        {**_obs("air_temperature", 99.0, level=2.0, quality=7), "_reference_epoch": 100},
+    ]
+    chosen = frost._choose_observation(observations, "temp_c")
+    assert chosen["value"] == pytest.approx(21.0)
+    assert frost._choose_observation([observations[1]], "temp_c") is None
+
+
 def test_precip_total_counter_mode() -> None:
     # Contador creciente: total = último - primero
     assert frost._precip_total([1.0, 2.5, 4.0], []) == pytest.approx(3.0)

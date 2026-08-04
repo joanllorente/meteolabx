@@ -50,16 +50,21 @@ CLIMATE_DAILY_URL = f"{BASE_URL}/collections/climate-daily/items"
 USER_AGENT = "MeteoLabX/1.0 (+https://meteolabx.com)"
 
 SWOB_PROPERTIES = ",".join((
-    "obs_date_tm", "msc_id-value", "air_temp", "rel_hum", "stn_pres",
-    "avg_wnd_spd_10m_pst10mts", "avg_wnd_dir_10m_pst10mts",
-    "avg_wnd_spd_10m_pst2mts", "avg_wnd_dir_10m_pst2mts",
-    "avg_wnd_spd_10m_pst1hr", "avg_wnd_dir_10m_pst1hr",
-    "max_wnd_spd_10m_pst1hr", "pcpn_amt_pst1hr",
+    "obs_date_tm", "msc_id-value", "air_temp", "air_temp-qa", "rel_hum", "stn_pres",
+    "avg_wnd_spd_10m_pst10mts", "avg_wnd_spd_10m_pst10mts-qa",
+    "avg_wnd_dir_10m_pst10mts", "avg_wnd_dir_10m_pst10mts-qa",
+    "avg_wnd_spd_10m_pst2mts", "avg_wnd_spd_10m_pst2mts-qa",
+    "avg_wnd_dir_10m_pst2mts", "avg_wnd_dir_10m_pst2mts-qa",
+    "avg_wnd_spd_10m_pst1hr", "avg_wnd_spd_10m_pst1hr-qa",
+    "avg_wnd_dir_10m_pst1hr", "avg_wnd_dir_10m_pst1hr-qa",
+    "max_wnd_spd_10m_pst1hr", "max_wnd_spd_10m_pst1hr-qa",
+    "pcpn_amt_pst1hr", "pcpn_amt_pst1hr-qa",
     # Extremos horarios EXPLÍCITOS (los publica ~95% de la red): el
     # máx/mín diario sale de ellos, exacto, no de las instantáneas.
-    "max_air_temp_pst1hr", "min_air_temp_pst1hr",
+    "max_air_temp_pst1hr", "max_air_temp_pst1hr-qa",
+    "min_air_temp_pst1hr", "min_air_temp_pst1hr-qa",
 ))
-TREND_PROPERTIES = "obs_date_tm,air_temp,rel_hum,stn_pres"
+TREND_PROPERTIES = "obs_date_tm,air_temp,air_temp-qa,rel_hum,stn_pres"
 
 
 def _is_nan(value: float) -> bool:
@@ -73,6 +78,27 @@ def _safe_float(value: Any, default: float = float("nan")) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _qa_acceptable(row: Dict[str, Any], field: str) -> bool:
+    """Acepta un valor SWOB sin QA explícita o validado con QA=100.
+
+    ECCC usa cualquier otra bandera explícita para datos suprimidos, ausentes,
+    erróneos, dudosos, sospechosos o inconsistentes; no deben agregarse.
+    """
+    qa = row.get(f"{field}-qa")
+    if qa is None:
+        return True
+    try:
+        return float(qa) == 100.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _observed_float(row: Dict[str, Any], field: str) -> float:
+    if not _qa_acceptable(row, field):
+        return float("nan")
+    return _safe_float(row.get(field))
 
 
 # =====================================================================
@@ -174,7 +200,7 @@ def _swob_rows(payload: Any) -> List[Dict[str, Any]]:
 
 def _first_field(row: Dict[str, Any], *names: str) -> float:
     for name in names:
-        value = _safe_float(row.get(name))
+        value = _observed_float(row, name)
         if not _is_nan(value):
             return value
     return float("nan")
@@ -411,7 +437,7 @@ async def fetch_current(
                 return value
         return float("nan")
 
-    temp = _last(lambda r: _safe_float(r.get("air_temp")))
+    temp = _last(lambda r: _observed_float(r, "air_temp"))
     epoch = int(rows[-1]["epoch"])
     dt_utc = datetime.fromtimestamp(epoch, tz=timezone.utc)
 
@@ -421,6 +447,7 @@ async def fetch_current(
         _safe_float(item.get("pcpn_amt_pst1hr"))
         for item in rows
         if int(item["epoch"]) % 3600 == 0 and int(item["epoch"]) >= day_start_epoch
+        and _qa_acceptable(item, "pcpn_amt_pst1hr")
         and not _is_nan(_safe_float(item.get("pcpn_amt_pst1hr")))
     ]
 
@@ -436,7 +463,7 @@ async def fetch_current(
     ]
     gust_highs = [
         v for item in rows
-        if not _is_nan(v := _safe_float(item.get("max_wnd_spd_10m_pst1hr")))
+        if not _is_nan(v := _observed_float(item, "max_wnd_spd_10m_pst1hr"))
     ]
     daily_extremes: Dict[str, float] = {}
     if temp_highs:
@@ -453,7 +480,7 @@ async def fetch_current(
         "p_hpa": _msl_from_station(p_abs, elevation),
         "p_abs_hpa": p_abs,
         "wind": _last(_wind_speed),   # SWOB ya reporta km/h
-        "gust": _last(lambda r: _safe_float(r.get("max_wnd_spd_10m_pst1hr"))),
+        "gust": _last(lambda r: _observed_float(r, "max_wnd_spd_10m_pst1hr")),
         "wind_dir_deg": _last(_wind_dir),
         "Td": float("nan"),
         "feels_like": float("nan"),
@@ -539,14 +566,14 @@ async def fetch_today_series(
 
     return {
         "epochs": [int(by_slot[slot]["epoch"]) for slot in slots],
-        "temps": _col(lambda r: _safe_float(r.get("air_temp"))),
+        "temps": _col(lambda r: _observed_float(r, "air_temp")),
         "humidities": _col(lambda r: _safe_float(r.get("rel_hum"))),
         "dewpts": [float("nan")] * len(slots),
         "pressures": _col(lambda r: _msl_from_station(_safe_float(r.get("stn_pres")), elevation)),
         "uv_indexes": [float("nan")] * len(slots),
         "solar_radiations": [float("nan")] * len(slots),
         "winds": _col(_wind_speed),
-        "gusts": _col(lambda r: _safe_float(r.get("max_wnd_spd_10m_pst1hr"))),
+        "gusts": _col(lambda r: _observed_float(r, "max_wnd_spd_10m_pst1hr")),
         "wind_dirs": _col(_wind_dir),
         "lat": _safe_float(row.get("lat")),
         "lon": _safe_float(row.get("lon")),
@@ -598,7 +625,7 @@ async def fetch_recent_series(
     buckets = sorted(by_hour)
     return {
         "epochs": buckets,
-        "temps": [_safe_float(by_hour[b].get("air_temp")) for b in buckets],
+        "temps": [_observed_float(by_hour[b], "air_temp") for b in buckets],
         "humidities": [_safe_float(by_hour[b].get("rel_hum")) for b in buckets],
         "pressures": [
             _msl_from_station(_safe_float(by_hour[b].get("stn_pres")), elevation)

@@ -92,6 +92,12 @@
     "whats_new": "Nouveautés",
     "improvements_title": "Améliorations",
     "fixes_title": "Corrections",
+    "release_134_improvements": [
+      "Ajout du contrôle qualité des observations pour ECCC, SMHI, Frost, MeteoGalicia, Meteocat et NWS."
+    ],
+    "release_134_fixes": [
+      "Correction des problèmes de connexion aux stations NETATMO."
+    ],
     "release_133_improvements": [
       "Navigation plus fluide entre les onglets et chargement de la carte optimisé."
     ],

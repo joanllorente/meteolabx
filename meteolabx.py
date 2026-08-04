@@ -214,7 +214,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.3.3"
+APP_VERSION = "1.3.4"
 APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
@@ -4828,7 +4828,7 @@ def _whats_new_footer_html() -> str:
         "<button type='button' class='mlx-wn-tab' role='tab' "
         "data-mlbx-whats-new-version='120'>1.2.0</button>"
         "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.3</button>"
+        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.4</button>"
         "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-110'>"
         + _release("footer.previous_improvements", "footer.previous_fixes")
@@ -4837,8 +4837,11 @@ def _whats_new_footer_html() -> str:
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
-        f"<div class='mlx-wn-version'>1.3.3 "
+        f"<div class='mlx-wn-version'>1.3.4 "
         f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
+        + _release("footer.release_134_improvements", "footer.release_134_fixes")
+        + "<hr class='mlx-wn-sep'>"
+        "<div class='mlx-wn-version'>1.3.3</div>"
         + _section(t("footer.improvements_title"), "footer.release_133_improvements")
         + "<hr class='mlx-wn-sep'>"
         "<div class='mlx-wn-version'>1.3.2</div>"

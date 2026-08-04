@@ -10,6 +10,7 @@ pública: no tiene i18n ni enlaces desde la UI.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 
 import streamlit as st
 
@@ -47,6 +48,18 @@ def _fmt_epoch(epoch: int) -> str:
         return datetime.fromtimestamp(int(epoch)).astimezone().strftime("%d %b %H:%M")
     except Exception:
         return "—"
+
+
+def _datetime_from_epoch(epoch: int) -> Optional[datetime]:
+    """Timestamp local para que Streamlit ordene por fecha, no por texto."""
+    if not epoch:
+        return None
+    try:
+        # Streamlit ordena correctamente datetime; se elimina tzinfo después
+        # de convertir a la zona local para conservar el formato mostrado.
+        return datetime.fromtimestamp(int(epoch)).astimezone().replace(tzinfo=None)
+    except Exception:
+        return None
 
 
 def render_internal_stats() -> None:
@@ -101,12 +114,17 @@ def render_internal_stats() -> None:
                     "7 días": row.get("d7", 0),
                     "30 días": row.get("d30", 0),
                     "Total": row.get("total", 0),
-                    "Última entrada": _fmt_epoch(row.get("last_epoch", 0)),
+                    "Última entrada": _datetime_from_epoch(row.get("last_epoch", 0)),
                 }
                 for row in sections
             ],
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "Última entrada": st.column_config.DatetimeColumn(
+                    "Última entrada", format="DD MMM HH:mm"
+                ),
+            },
         )
 
     stations = data.get("stations", [])
@@ -132,7 +150,7 @@ def render_internal_stats() -> None:
             "7 días": s.get("d7", 0),
             "30 días": s.get("d30", 0),
             "Total": s.get("total", 0),
-            "Última visita": _fmt_epoch(s.get("last_epoch", 0)),
+            "Última visita": _datetime_from_epoch(s.get("last_epoch", 0)),
             "Err 30 d": (s.get("errors") or {}).get("d30", 0),
             "Err total": (s.get("errors") or {}).get("total", 0),
             "Último error": (
@@ -144,7 +162,16 @@ def render_internal_stats() -> None:
         }
         for s in stations
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(
+        rows,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Última visita": st.column_config.DatetimeColumn(
+                "Última visita", format="DD MMM HH:mm"
+            ),
+        },
+    )
 
     error_kinds = data.get("error_kinds", [])
     if error_kinds:

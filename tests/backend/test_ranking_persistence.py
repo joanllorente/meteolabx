@@ -118,6 +118,7 @@ def test_load_ignores_unknown_station_fields(tmp_path):
         json.dump(
             {
                 "version": 1,
+                "quality_filter_schema": 1,
                 "updated_at": None,
                 "daily": [["METEOGALICIA", "2026-07-02", {"10045": record}]],
                 "hourly": [],
@@ -135,3 +136,46 @@ def test_save_is_atomic_leaves_no_tmp(tmp_path):
     _populated_store().save_to_disk(path)
     leftovers = [p.name for p in tmp_path.iterdir()]
     assert leftovers == ["ranking_state.json.gz"]
+
+
+def test_load_discards_legacy_provider_state_without_quality_schema(tmp_path):
+    import gzip
+    import json
+
+    path = str(tmp_path / "ranking_state.json.gz")
+    original = RankingStore()
+    day = "2026-08-04"
+    original.replace_daily(
+        "ECCC",
+        [
+            StationDaily(
+                provider="ECCC", station_id="6016528", name="Pickle Lake",
+                lat=51.4464, lon=-90.2142, rain=1000.0,
+            )
+        ],
+        now=datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc),
+    )
+    common = {
+        "day": day, "name": "Pickle Lake", "locality": "ON",
+        "lat": 51.4464, "lon": -90.2142,
+    }
+    original.upsert_hourly(
+        "ECCC", "6016528", hour_key=f"{day}T05", values={"rain": 336.3},
+        **common,
+    )
+    original.upsert_hourly(
+        "AEMET", "1437P", hour_key=f"{day}T06", values={"rain": 0.0},
+        **{**common, "name": "EVC_NOIA", "locality": ""},
+    )
+    original.save_to_disk(path)
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    payload.pop("quality_filter_schema")
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+
+    restored = RankingStore()
+    assert restored.load_from_disk(path) is True
+    assert restored.accumulated_hours("ECCC", day) == set()
+    assert restored.top("rain", providers=["ECCC"], day=day, limit=5) == []
+    assert restored.accumulated_hours("AEMET", day) == {f"{day}T06"}

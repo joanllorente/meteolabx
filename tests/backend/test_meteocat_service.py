@@ -136,6 +136,21 @@ def test_meteocat_service_does_not_import_streamlit() -> None:
     assert "from streamlit" not in source
 
 
+def test_parse_day_payload_discards_invalid_reading_state() -> None:
+    payload = [{
+        "codi": STATION,
+        "variables": [{
+            "codi": 32,
+            "lectures": [
+                {"data": "2026-06-10T10:00", "valor": 21.0, "estat": "V"},
+                {"data": "2026-06-10T10:30", "valor": 99.0, "estat": "N"},
+            ],
+        }],
+    }]
+    rows = meteocat._parse_day_payload(payload)[32]
+    assert [value for _epoch, value in rows] == [pytest.approx(21.0)]
+
+
 # =====================================================================
 # Helpers
 # =====================================================================

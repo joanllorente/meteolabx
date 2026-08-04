@@ -349,6 +349,13 @@ def _netatmo_record(row: sqlite3.Row) -> Dict[str, Any]:
     }
 
 
+def _netatmo_inactive_ids() -> frozenset[str]:
+    # Import diferido: netatmo importa este módulo al conectar una estación.
+    from server.services import netatmo
+
+    return netatmo.temporarily_inactive_station_ids()
+
+
 def _netatmo_get_station(station_id: str) -> Optional[Dict[str, Any]]:
     if not Path(data_files.NETATMO_PWS_STATIONS_DB_PATH).exists():
         return None
@@ -417,8 +424,11 @@ def _netatmo_search_near(
                 *country_parameters,
             ),
         ).fetchall()
+    inactive_ids = _netatmo_inactive_ids()
     results = []
     for row in rows:
+        if str(row["station_id"]).lower() in inactive_ids:
+            continue
         distance = _haversine_km(float(lat), float(lon), row["latitude"], row["longitude"])
         if distance > radius_km:
             continue
@@ -454,8 +464,11 @@ def _netatmo_search_catalog(
             wanted_countries,
         ).fetchall()
     has_distance = lat is not None and lon is not None
+    inactive_ids = _netatmo_inactive_ids()
     results = []
     for row in rows:
+        if str(row["station_id"]).lower() in inactive_ids:
+            continue
         record = _netatmo_record(row)
         if not _pws_matches_sensors(record, sensors):
             continue
