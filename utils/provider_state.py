@@ -40,6 +40,42 @@ from utils.helpers import coerce_str
 PWS_MEASUREMENT_NOTICE_PROVIDERS = frozenset({"NETATMO", "WINDY"})
 
 
+def runtime_snapshot_matches_connection(
+    snapshot: Any,
+    provider_id: str,
+    station_id: str,
+) -> bool:
+    """Comprueba que una instantánea pertenece a la conexión visible."""
+    if not isinstance(snapshot, dict) or not snapshot:
+        return False
+    return (
+        coerce_str(snapshot.get("_provider_id"), upper=True)
+        == coerce_str(provider_id, upper=True)
+        and str(snapshot.get("_station_id") or "").strip()
+        == str(station_id or "").strip()
+    )
+
+
+def runtime_snapshot_is_fresh(
+    snapshot: Any,
+    provider_id: str,
+    station_id: str,
+    *,
+    max_age_s: float,
+    now: float | None = None,
+) -> bool:
+    """Indica si puede reutilizarse sin refrescar la observación actual."""
+    if not runtime_snapshot_matches_connection(snapshot, provider_id, station_id):
+        return False
+    try:
+        captured_at = float(snapshot.get("_captured_at") or 0.0)
+        current_time = float(time.time() if now is None else now)
+        age_s = current_time - captured_at
+    except (TypeError, ValueError):
+        return False
+    return captured_at > 0.0 and -5.0 <= age_s <= max(0.0, float(max_age_s))
+
+
 def _meteocat_locality(meta: dict[str, Any]) -> str:
     municipi = meta.get("municipi")
     if isinstance(municipi, dict):
@@ -299,6 +335,7 @@ WU_CACHE_KEYS = (
     "chart_et0",
     "chart_balance",
     "last_update_time",
+    "_runtime_snapshot",
 )
 
 CONNECTION_SNAPSHOT_BASE_KEYS = (

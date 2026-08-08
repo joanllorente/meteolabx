@@ -40,7 +40,7 @@ def test_observation_precip_frame_hidden_when_today_total_is_zero():
     assert frame is None
 
 
-def test_observation_precip_frame_uses_positive_today_records_only():
+def test_observation_precip_frame_keeps_zero_before_rain_and_stops_at_last_observation():
     day_start = datetime(2026, 6, 1)
     epochs = [
         int((day_start - timedelta(minutes=5)).timestamp()),
@@ -60,7 +60,9 @@ def test_observation_precip_frame_uses_positive_today_records_only():
     )
 
     assert frame is not None
-    assert frame["precip_mm"].tolist() == [1.4]
+    assert frame["precip_mm"].tolist() == [0.0, 1.4]
+    assert frame.iloc[0]["dt"] == day_start + timedelta(hours=1)
+    assert frame.iloc[-1]["dt"] == day_start + timedelta(hours=2)
 
 
 def test_observation_precip_frame_falls_back_to_today_total_without_series():
@@ -80,8 +82,10 @@ def test_observation_precip_frame_falls_back_to_today_total_without_series():
     )
 
     assert frame is not None
-    assert frame["precip_mm"].tolist() == [10.0]
-    assert frame["precip_display"].tolist() == [10.0]
+    assert frame["precip_mm"].tolist() == [0.0, 10.0]
+    assert frame["precip_display"].tolist() == [0.0, 10.0]
+    assert frame.iloc[0]["dt"] == day_start + timedelta(hours=11, minutes=55)
+    assert frame.iloc[-1]["dt"] == day_start + timedelta(hours=12)
 
 
 def test_observation_precip_frame_renders_backend_accumulation():
@@ -104,7 +108,7 @@ def test_observation_precip_frame_renders_backend_accumulation():
     )
 
     assert frame is not None
-    assert frame["precip_display"].tolist() == [0.2, 0.5, 0.5]
+    assert frame["precip_display"].tolist() == [0.0, 0.2, 0.5, 0.5]
 
 
 def test_observation_precip_frame_preserves_canonical_daily_accumulation():
@@ -129,6 +133,30 @@ def test_observation_precip_frame_preserves_canonical_daily_accumulation():
     assert frame is not None
     display = frame["precip_display"].tolist()
     assert display == sorted(display), "el acumulado del día no es monótono"
+    assert display == [0.0, 0.5, 0.8, 2.3, 7.4]
+
+
+def test_observation_precip_frame_single_hourly_record_stops_at_observation():
+    day_start = datetime(2026, 6, 1)
+    rain_dt = day_start + timedelta(hours=14)
+
+    frame = observation._prepare_observation_precip_frame(
+        [int(rain_dt.timestamp())],
+        [2.6],
+        day_start=day_start,
+        day_end=day_start + timedelta(days=1),
+        step_minutes=60,
+        convert_precip=lambda value, _unit: value,
+        precip_unit_pref="mm",
+        precip_total_today=2.6,
+    )
+
+    assert frame is not None
+    assert frame["dt"].tolist() == [
+        day_start + timedelta(hours=13),
+        rain_dt,
+    ]
+    assert frame["precip_mm"].tolist() == [0.0, 2.6]
 
 
 def test_wet_bulb_risk_thresholds():

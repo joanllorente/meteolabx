@@ -107,7 +107,6 @@ WEATHERLINK_INPUT_KEYS = (
     WEATHERLINK_ALTITUDE_INPUT_KEY,
     WEATHERLINK_FAVORITE_NAME_INPUT_KEY,
 )
-_LOCAL_STORAGE_READY_RERUN_KEY = "_mlx_local_storage_ready_rerun_done"
 
 
 def _wu_target_station_id(target) -> str:
@@ -276,7 +275,6 @@ def render_sidebar(_local_storage_unused=None):
         set_stored_wu_station_calibration,
     )
 
-    storage_was_ready = local_storage_snapshot_ready()
     bootstrap_writes = consume_local_storage_writes()
     storage_payload = sync_local_storage(
         keys=LOCAL_STORAGE_BOOTSTRAP_KEYS,
@@ -285,19 +283,10 @@ def render_sidebar(_local_storage_unused=None):
     )
     if isinstance(storage_payload, dict) and storage_payload.get("ready"):
         hydrate_local_storage_snapshot(storage_payload.get("values"))
-        # Cuando el snapshot de localStorage acaba de quedar listo, forzamos UN
-        # rerun (guardado por _LOCAL_STORAGE_READY_RERUN_KEY) para que los widgets
-        # de la sidebar (tema, fuente, credenciales) reflejen los valores
-        # guardados sin esperar al primer click del usuario. Antes esto solo se
-        # hacía si había conexión guardada, así que sin ella la sidebar salía sin
-        # marcar hasta el primer click (que se "comía" el rerun de hidratación).
-        if (
-            not storage_was_ready
-            and not bool(st.session_state.get(_LOCAL_STORAGE_READY_RERUN_KEY, False))
-            and hasattr(st, "rerun")
-        ):
-            st.session_state[_LOCAL_STORAGE_READY_RERUN_KEY] = True
-            st.rerun()
+        # El componente responde al inicio del script, antes de crear los
+        # widgets que dependen de sus valores. Podemos continuar en ESTE mismo
+        # ciclo con el snapshot ya hidratado; forzar aquí otro rerun añadía una
+        # ejecución completa al arranque sin aportar estado nuevo.
     storage_ready = local_storage_snapshot_ready()
     for _bad_input_key in ("active_station", "active_key", "active_z", *WU_INPUT_KEYS, *WEATHERLINK_INPUT_KEYS):
         if str(st.session_state.get(_bad_input_key, "")).strip() == "[object Object]":

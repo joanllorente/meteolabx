@@ -17,7 +17,7 @@ from server.services.temperature_field import (
 )
 
 
-FIELD_ALGORITHM_VERSION = 3
+FIELD_ALGORITHM_VERSION = 4
 COLOR_SCALE_VERSION = 1
 
 # La lluvia es mucho mas local que la temperatura. El campo de fondo une

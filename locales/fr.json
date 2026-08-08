@@ -92,6 +92,15 @@
     "whats_new": "Nouveautés",
     "improvements_title": "Améliorations",
     "fixes_title": "Corrections",
+    "release_135_improvements": [
+      "Amélioration de l’interpolation de la carte mondiale des températures.",
+      "Démarrage plus stable et plus rapide.",
+      "Navigation entre les onglets optimisée sur les appareils mobiles."
+    ],
+    "release_135_fixes": [
+      "Correction d’un problème visuel sur la carte des stations.",
+      "Correction d’une erreur empêchant le graphique des précipitations d’afficher correctement les données cumulées."
+    ],
     "release_134_improvements": [
       "Ajout du contrôle qualité des observations pour ECCC, SMHI, Frost, MeteoGalicia, Meteocat et NWS."
     ],

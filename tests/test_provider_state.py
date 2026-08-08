@@ -17,6 +17,27 @@ def test_pws_measurement_notice_is_limited_to_connected_netatmo_and_windy():
     )
 
 
+def test_runtime_snapshot_is_reused_only_for_same_station_while_fresh():
+    snapshot = {
+        "_provider_id": "AEMET",
+        "_station_id": "3195",
+        "_captured_at": 1_000.0,
+    }
+
+    assert provider_state.runtime_snapshot_is_fresh(
+        snapshot, "aemet", "3195", max_age_s=120, now=1_119.0,
+    )
+    assert not provider_state.runtime_snapshot_is_fresh(
+        snapshot, "AEMET", "3195", max_age_s=120, now=1_121.0,
+    )
+    assert not provider_state.runtime_snapshot_is_fresh(
+        snapshot, "AEMET", "3129", max_age_s=120, now=1_010.0,
+    )
+    assert not provider_state.runtime_snapshot_is_fresh(
+        snapshot, "METEOCAT", "3195", max_age_s=120, now=1_010.0,
+    )
+
+
 def test_display_provider_station_id_shortens_meteohub_composite_id():
     raw_id = "dpcn-lombardia|46.29690|10.50656|ponte-di-legno-case-pirli"
 

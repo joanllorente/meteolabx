@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from typing import Iterable, Sequence, Tuple
+
+import numpy as np
 
 
-FIELD_ALGORITHM_VERSION = 1
+FIELD_ALGORITHM_VERSION = 2
 COLOR_SCALE_VERSION = 1
 
 # Velocidad media (km/h) → RGB. El azul representa calma; la transición hasta
@@ -26,3 +28,26 @@ COLOR_STOPS: Sequence[Tuple[float, Tuple[int, int, int]]] = (
 
 # Bandas de 2 km/h: suavizan el ruido entre estaciones sin borrar gradientes.
 BAND_SIZE_KMH = 2.0
+
+
+def interpolate_wind_grid(
+    points: Iterable[Tuple[float, float, float]],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Mantiene el perfil espacial original del viento.
+
+    La temperatura usa desde la versión 6 un alcance mayor y conserva parte
+    de los extremos aislados. Esos parámetros no son apropiados para el viento,
+    que es más local y racheado, por lo que se fijan aquí explícitamente.
+    """
+    from server.services.temperature_field import interpolate_grid
+
+    return interpolate_grid(
+        points,
+        medium_influence_cells=36,
+        medium_sigma_cells=10.0,
+        local_influence_cells=10,
+        local_sigma_cells=1.5,
+        local_single_station_share=0.0,
+        regional_mean_shift_limit=0.0,
+        density_adaptive=False,
+    )

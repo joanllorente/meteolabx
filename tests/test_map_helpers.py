@@ -157,6 +157,9 @@ def test_map_filter_popovers_are_limited_to_station_mode():
     assert 'left: 1.5px;' in source
     assert 'top: 119.5px;' in source
     assert 'top: 190px;' in source
+    assert '@media (max-width: 640px)' in source
+    assert 'top: 159.5px;' in source
+    assert 'top: 230px;' in source
     assert "if not nearest and not show_scalar_field:" in source
 
 

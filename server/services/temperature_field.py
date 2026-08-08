@@ -1,12 +1,12 @@
 """Campo mundial de temperatura local/regional renderizado como PNG RGBA.
 
-Combina tres gaussianas normalizadas: una local que conserva los extremos de
-las estaciones próximas, otra intermedia que une grupos dispersos y una
-regional que rellena zonas de baja densidad. Antes de interpolar, las lecturas
-se agregan espacialmente para que la densidad de una red no deforme el campo.
-Las instantáneas proceden del refresh horario del ranking. Las celdas sin
-ninguna estación cercana quedan transparentes, así los océanos y los desiertos
-sin datos no se inventan valores.
+Combina gaussianas normalizadas adaptadas a la densidad: una escala corta en
+redes densas, otra más amplia para unir estaciones dispersas, una local para
+extremos coherentes y una regional que rellena huecos. Antes de interpolar, las
+lecturas se agregan espacialmente para que la densidad de una red no deforme el
+campo. Las instantáneas proceden del refresh horario del ranking. Las celdas
+sin ninguna estación cercana quedan transparentes, así los océanos y los
+desiertos sin datos no se inventan valores.
 """
 
 from __future__ import annotations
@@ -34,15 +34,47 @@ INFLUENCE_CELLS = 100
 SPATIAL_AGGREGATION_CELLS = 4
 LOCAL_SPATIAL_AGGREGATION_CELLS = 1
 LOCAL_INFLUENCE_CELLS = 10
-MEDIUM_INFLUENCE_CELLS = 36
+# El campo intermedio debe poder enlazar estaciones coherentes separadas varios
+# cientos de kilómetros (Sáhara, Australia, oeste de EE. UU.). Con el alcance
+# anterior (~110 km efectivos) los extremos formaban "ojos" aislados aunque
+# pertenecieran a una misma masa de aire cálida.
+MEDIUM_INFLUENCE_CELLS = 60
 KERNEL_SIGMA_LOCAL = 1.5       # ~17 km
-KERNEL_SIGMA_MEDIUM = 10.0     # ~110 km
+STRONG_LOCAL_INFLUENCE_CELLS = 60
+KERNEL_SIGMA_STRONG_LOCAL = 15.0  # ~165 km
+KERNEL_SIGMA_MEDIUM = 18.0     # ~200 km
+# En redes densas se recupera la escala anterior: evita el aspecto lavado y
+# conserva gradientes regionales sin dibujar la huella de cada estación.
+DENSE_MEDIUM_INFLUENCE_CELLS = 36
+KERNEL_SIGMA_DENSE_MEDIUM = 10.0  # ~110 km
+DENSE_SUPPORT_START_WEIGHT = 4.0
+DENSE_SUPPORT_FULL_WEIGHT = 10.0
 KERNEL_SIGMA_REGIONAL = 40.0   # ~450 km
 REGIONAL_KERNEL_GAIN = 0.01
 # Una estación aislada matiza el campo intermedio, pero no debe crear un punto
 # de color saturado. El detalle fino gana peso progresivamente y solo domina
 # donde existe una red local densa.
-LOCAL_SINGLE_STATION_SHARE = 0.0
+# Solo una anomalía local FUERTE puede aportar detalle sin el respaldo de una
+# red densa. Su kernel es suficientemente ancho para formar una zona térmica,
+# no un lunar del tamaño de una estación.
+LOCAL_SINGLE_STATION_SHARE = 0.50
+LOCAL_SINGLE_ANOMALY_FLOOR_C = 2.0
+LOCAL_SINGLE_ANOMALY_FULL_C = 4.0
+# En una red con muchas estaciones, diferencias de 2--4 °C son normales y no
+# deben dibujar una diana por sensor. El umbral sube con la densidad regional;
+# así solo extremos realmente grandes conservan una firma individual.
+DENSE_SINGLE_ANOMALY_FLOOR_C = 5.0
+DENSE_SINGLE_ANOMALY_FULL_C = 8.0
+# La envolvente por una única estación queda reservada a valores absolutos
+# excepcionales. El resto, aunque se aparte mucho de sus vecinas por altitud o
+# microclima, lo resuelve el campo robusto conjunto y no deja círculos.
+SINGLE_STATION_HOT_EXTREME_C = 40.0
+SINGLE_STATION_COLD_EXTREME_C = -30.0
+STRONG_LOCAL_DENSE_RETENTION = 0.18
+# La mediana protege cada bloque regional frente a errores, pero puede borrar
+# extremos reales. Se desplaza hacia la media como máximo 3 °C: suficiente para
+# representar Furnace Creek sin permitir que una lectura domine todo el bloque.
+REGIONAL_MEAN_SHIFT_LIMIT_C = 3.0
 LOCAL_DENSE_WEIGHT = 4.0
 LOCAL_COHERENCE_FLOOR = 0.50
 LOCAL_ANOMALY_FLOOR_C = 0.75
@@ -50,7 +82,7 @@ LOCAL_ANOMALY_FULL_C = 2.00
 MEDIUM_CONFIDENCE_WEIGHT = 1.0
 # Peso mínimo para pintar una celda (~ninguna estación a menos de ~600 km).
 MIN_WEIGHT = 0.003
-FIELD_ALGORITHM_VERSION = 5
+FIELD_ALGORITHM_VERSION = 10
 
 # Rampa de color estilo mapa sinóptico clásico (°C → RGB).
 COLOR_SCALE_VERSION = 2
@@ -77,6 +109,10 @@ FIELD_ALPHA = 255
 VIEWPORT_MASK_SUPERSAMPLE = 2
 VIEWPORT_MIN_SIZE = 256
 VIEWPORT_MAX_SIZE = 2048
+# Natural Earth y el mapa base pueden diferir unos pocos píxeles al ampliar
+# la textura mundial. Este solape mínimo desplaza el borde dentado al mar para
+# que nunca quede visible tierra adentro.
+COAST_SEA_OVERLAP_PIXELS = 1
 # Una sola textura mundial, suficientemente densa para que la costa 1:10m no
 # se deshaga al acercar el mapa. Se genera una vez por actualización y nunca
 # durante pan/zoom.
@@ -200,6 +236,30 @@ def _add_kernel(
     value_sum[row_0:row_1, col_0:col_1] += window * value
 
 
+def _add_max_kernel(
+    field: np.ndarray,
+    kernel: np.ndarray,
+    *,
+    row: int,
+    col: int,
+    value: float,
+    radius_cells: int,
+) -> None:
+    """Extiende una magnitud conservando la envolvente máxima por celda."""
+    rows, cols = field.shape
+    size = 2 * radius_cells + 1
+    row_0 = max(0, row - radius_cells)
+    row_1 = min(rows, row + radius_cells + 1)
+    col_0 = max(0, col - radius_cells)
+    col_1 = min(cols, col + radius_cells + 1)
+    window = kernel[
+        row_0 - (row - radius_cells): size - ((row + radius_cells + 1) - row_1),
+        col_0 - (col - radius_cells): size - ((col + radius_cells + 1) - col_1),
+    ]
+    target = field[row_0:row_1, col_0:col_1]
+    np.maximum(target, window * float(value), out=target)
+
+
 def _smoothstep(values: np.ndarray) -> np.ndarray:
     """Transición 0..1 continua, con pendiente nula en ambos extremos."""
     clipped = np.clip(values, 0.0, 1.0)
@@ -211,13 +271,16 @@ def _aggregate_station_points(
     *,
     cell_deg: float,
     block_size_cells: Optional[int] = None,
+    mean_shift_limit: float = 0.0,
 ) -> list[tuple[int, int, float]]:
     """Resume espacialmente las estaciones conservando todas las lecturas.
 
-    La temperatura representativa es la mediana de cada bloque y la posición,
-    la media de las celdas de sus estaciones. La confianza posterior depende
-    de cuántos bloques distintos rodean el píxel, no de cuántos proveedores
-    duplican una misma ubicación.
+    La temperatura representativa parte de la mediana de cada bloque. Si
+    ``mean_shift_limit`` es positivo, se acerca a la media sin alejarse de la
+    mediana más de ese límite: conserva extremos reales sin perder robustez.
+    La posición es la media de las celdas de sus estaciones. La confianza
+    posterior depende de cuántos bloques distintos rodean el píxel, no de
+    cuántos proveedores duplican una misma ubicación.
     """
     _lat_min, lon_min, lat_max, _lon_max = FIELD_BBOX
     rows, cols = _grid_shape(cell_deg)
@@ -244,10 +307,19 @@ def _aggregate_station_points(
     aggregated: list[tuple[int, int, float]] = []
     for row_sum, col_sum, temperatures in bins.values():
         count = len(temperatures)
+        median = float(np.median(temperatures))
+        representative = median
+        shift_limit = max(0.0, float(mean_shift_limit))
+        if shift_limit > 0.0 and count > 1:
+            representative += float(np.clip(
+                float(np.mean(temperatures)) - median,
+                -shift_limit,
+                shift_limit,
+            ))
         aggregated.append((
             int(round(row_sum / count)),
             int(round(col_sum / count)),
-            float(np.median(temperatures)),
+            representative,
         ))
     return aggregated
 
@@ -257,11 +329,18 @@ def interpolate_grid(
     *,
     cell_deg: float = CELL_DEG,
     radius_cells: int = INFLUENCE_CELLS,
+    medium_influence_cells: Optional[int] = None,
+    medium_sigma_cells: Optional[float] = None,
+    local_influence_cells: Optional[int] = None,
+    local_sigma_cells: Optional[float] = None,
+    local_single_station_share: Optional[float] = None,
+    regional_mean_shift_limit: float = REGIONAL_MEAN_SHIFT_LIMIT_C,
+    density_adaptive: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Interpola ``(lat, lon, temp)`` con campos local y regional.
+    """Interpola ``(lat, lon, temp)`` con escalas adaptadas a la densidad.
 
-    Ambos campos se normalizan por separado y se mezclan según el soporte
-    local. Devuelve ``(temp, mask)`` con la fila 0 en el norte.
+    Los campos se normalizan por separado y se mezclan según el soporte local.
+    Devuelve ``(temp, mask)`` con la fila 0 en el norte.
     """
     _lat_min, lon_min, lat_max, _lon_max = FIELD_BBOX
     rows, cols = _grid_shape(cell_deg)
@@ -274,15 +353,42 @@ def interpolate_grid(
     local_abs_weight = np.zeros((rows, cols), dtype=np.float32)
     local_abs_value = np.zeros((rows, cols), dtype=np.float32)
     regional_radius = max(1, int(radius_cells))
-    medium_radius = min(MEDIUM_INFLUENCE_CELLS, regional_radius)
-    local_radius = min(LOCAL_INFLUENCE_CELLS, regional_radius)
+    configured_medium_radius = (
+        MEDIUM_INFLUENCE_CELLS
+        if medium_influence_cells is None
+        else max(1, int(medium_influence_cells))
+    )
+    configured_medium_sigma = (
+        KERNEL_SIGMA_MEDIUM
+        if medium_sigma_cells is None
+        else max(0.1, float(medium_sigma_cells))
+    )
+    configured_local_radius = (
+        LOCAL_INFLUENCE_CELLS
+        if local_influence_cells is None
+        else max(1, int(local_influence_cells))
+    )
+    configured_local_sigma = (
+        KERNEL_SIGMA_LOCAL
+        if local_sigma_cells is None
+        else max(0.1, float(local_sigma_cells))
+    )
+    configured_single_share = np.float32(np.clip(
+        LOCAL_SINGLE_STATION_SHARE
+        if local_single_station_share is None
+        else float(local_single_station_share),
+        0.0,
+        1.0,
+    ))
+    medium_radius = min(configured_medium_radius, regional_radius)
+    local_radius = min(configured_local_radius, regional_radius)
     regional_kernel = _gaussian_kernel(
         regional_radius,
         KERNEL_SIGMA_REGIONAL,
         gain=REGIONAL_KERNEL_GAIN,
     )
-    medium_kernel = _gaussian_kernel(medium_radius, KERNEL_SIGMA_MEDIUM)
-    local_kernel = _gaussian_kernel(local_radius, KERNEL_SIGMA_LOCAL)
+    medium_kernel = _gaussian_kernel(medium_radius, configured_medium_sigma)
+    local_kernel = _gaussian_kernel(local_radius, configured_local_sigma)
 
     # Materializar una vez: el campo regional/intermedio y el detalle local
     # parten de las mismas observaciones, pero con agregaciones distintas.
@@ -291,6 +397,16 @@ def interpolate_grid(
         source_points,
         cell_deg=cell_deg,
         block_size_cells=SPATIAL_AGGREGATION_CELLS,
+        mean_shift_limit=regional_mean_shift_limit,
+    )
+    dense_regional_points = (
+        _aggregate_station_points(
+            source_points,
+            cell_deg=cell_deg,
+            block_size_cells=SPATIAL_AGGREGATION_CELLS,
+        )
+        if density_adaptive and regional_mean_shift_limit > 0.0
+        else regional_points
     )
     local_points = _aggregate_station_points(
         source_points,
@@ -331,10 +447,74 @@ def interpolate_grid(
     medium_confidence = _smoothstep(
         medium_weight / np.float32(MEDIUM_CONFIDENCE_WEIGHT),
     )
-    medium_base = (
+    sparse_medium_base = (
         medium_confidence * medium_temp
         + (1.0 - medium_confidence) * regional_temp
     )
+    density_confidence = np.zeros_like(sparse_medium_base, dtype=np.float32)
+
+    if density_adaptive and dense_regional_points:
+        # Reutilizar los buffers evita retener otras dos rejillas mundiales.
+        # El peso del kernel corto mide densidad ESPACIAL (bloques próximos),
+        # no el número de proveedores duplicados en una misma coordenada.
+        medium_weight.fill(0.0)
+        medium_value.fill(0.0)
+        dense_radius = min(DENSE_MEDIUM_INFLUENCE_CELLS, regional_radius)
+        dense_kernel = _gaussian_kernel(
+            dense_radius,
+            KERNEL_SIGMA_DENSE_MEDIUM,
+        )
+        for row, col, station_temp in dense_regional_points:
+            _add_kernel(
+                medium_weight,
+                medium_value,
+                dense_kernel,
+                row=row,
+                col=col,
+                value=station_temp,
+                radius_cells=dense_radius,
+            )
+        dense_temp = np.divide(
+            medium_value,
+            np.maximum(medium_weight, np.float32(1e-9)),
+        )
+        dense_medium_confidence = _smoothstep(
+            medium_weight / np.float32(MEDIUM_CONFIDENCE_WEIGHT),
+        )
+        dense_medium_base = (
+            dense_medium_confidence * dense_temp
+            + (1.0 - dense_medium_confidence) * regional_temp
+        )
+        # La densidad se mide con la agregación fina (0,1°), no con los bloques
+        # regionales de 0,4°. Así una red realmente densa recupera el campo
+        # corto aunque todas sus estaciones caigan dentro de un mismo bloque;
+        # dos o tres estaciones aisladas siguen usando el campo amplio.
+        local_abs_weight.fill(0.0)
+        local_abs_value.fill(0.0)
+        for row, col, _station_temp in local_points:
+            _add_kernel(
+                local_abs_weight,
+                local_abs_value,
+                dense_kernel,
+                row=row,
+                col=col,
+                value=0.0,
+                radius_cells=dense_radius,
+            )
+        density_confidence = _smoothstep(
+            (local_abs_weight - np.float32(DENSE_SUPPORT_START_WEIGHT))
+            / np.float32(
+                DENSE_SUPPORT_FULL_WEIGHT - DENSE_SUPPORT_START_WEIGHT
+            ),
+        )
+        medium_base = (
+            density_confidence * dense_medium_base
+            + (1.0 - density_confidence) * sparse_medium_base
+        )
+        local_abs_weight.fill(0.0)
+        local_abs_value.fill(0.0)
+    else:
+        medium_base = sparse_medium_base
 
     # El detalle local se interpola como ANOMALÍA respecto al campo
     # intermedio, no como otra temperatura absoluta. Esto conserva máximos y
@@ -381,20 +561,97 @@ def interpolate_grid(
         (np.abs(local_anomaly) - np.float32(LOCAL_ANOMALY_FLOOR_C))
         / np.float32(LOCAL_ANOMALY_FULL_C - LOCAL_ANOMALY_FLOOR_C),
     )
-    single_station_support = (
-        np.clip(local_weight, 0.0, 1.0)
-        * np.float32(LOCAL_SINGLE_STATION_SHARE)
-    )
     dense_support = _smoothstep(
         (local_weight - 1.0) / np.float32(LOCAL_DENSE_WEIGHT - 1.0),
     )
-    local_confidence = np.clip(
-        single_station_support
-        + (1.0 - np.float32(LOCAL_SINGLE_STATION_SHARE)) * dense_support,
-        0.0,
-        1.0,
-    ) * coherence_confidence * amplitude_confidence
-    temp = medium_base + local_confidence * local_anomaly
+    # Primero se conserva exactamente el detalle corto anterior cuando varias
+    # estaciones próximas respaldan la anomalía.
+    dense_local_confidence = (
+        dense_support * amplitude_confidence * coherence_confidence
+    )
+    temp = medium_base + dense_local_confidence * local_anomaly
+
+    if configured_single_share > 0.0 and local_points:
+        # Después se añade un campo DISTINTO, más ancho, solo para anomalías
+        # fuertes sin respaldo local. Al no usar el kernel fino, un extremo
+        # válido forma una zona suave en vez de un lunar por estación.
+        local_value.fill(0.0)
+        local_abs_value.fill(0.0)
+        strong_radius = min(STRONG_LOCAL_INFLUENCE_CELLS, regional_radius)
+        strong_kernel = _gaussian_kernel(
+            strong_radius,
+            KERNEL_SIGMA_STRONG_LOCAL,
+        )
+        for row, col, station_temp in local_points:
+            anomaly = float(station_temp) - float(medium_base[row, col])
+            if (
+                (anomaly > 0.0 and station_temp < SINGLE_STATION_HOT_EXTREME_C)
+                or (
+                    anomaly < 0.0
+                    and station_temp > SINGLE_STATION_COLD_EXTREME_C
+                )
+            ):
+                continue
+            magnitude = abs(anomaly)
+            point_density = (
+                float(density_confidence[row, col])
+                if density_adaptive
+                else 0.0
+            )
+            anomaly_floor = (
+                LOCAL_SINGLE_ANOMALY_FLOOR_C
+                + point_density
+                * (
+                    DENSE_SINGLE_ANOMALY_FLOOR_C
+                    - LOCAL_SINGLE_ANOMALY_FLOOR_C
+                )
+            )
+            anomaly_full = (
+                LOCAL_SINGLE_ANOMALY_FULL_C
+                + point_density
+                * (
+                    DENSE_SINGLE_ANOMALY_FULL_C
+                    - LOCAL_SINGLE_ANOMALY_FULL_C
+                )
+            )
+            strength = float(np.clip(
+                (magnitude - anomaly_floor)
+                / (anomaly_full - anomaly_floor),
+                0.0,
+                1.0,
+            ))
+            strength = strength * strength * (3.0 - 2.0 * strength)
+            effective = magnitude * strength
+            if effective <= 0.0:
+                continue
+            _add_max_kernel(
+                local_value if anomaly > 0.0 else local_abs_value,
+                strong_kernel,
+                row=row,
+                col=col,
+                value=effective,
+                radius_cells=strong_radius,
+            )
+        # Las envolventes cálida y fría se compensan donde se solapan. Un
+        # extremo no desaparece por el simple hecho de compartir bloque con
+        # varias estaciones normales, como ocurría con la media.
+        strong_anomaly = local_value - local_abs_value
+        # Si el kernel corto detecta varias estaciones muy próximas, ya existe
+        # detalle local fiable y la envolvente ancha se reduce. La transición
+        # cuadrática conserva los extremos en densidades medias; solo una red
+        # realmente densa llega al suelo de retención y evita que el extremo
+        # invada observaciones cercanas de signo contrario.
+        strong_dense_retention = (
+            1.0
+            - (1.0 - np.float32(STRONG_LOCAL_DENSE_RETENTION))
+            * dense_support
+            * dense_support
+        )
+        strong_local_confidence = (
+            configured_single_share
+            * strong_dense_retention
+        )
+        temp = temp + strong_local_confidence * strong_anomaly
     return temp, mask
 
 
@@ -554,6 +811,19 @@ def _viewport_land_mask(
     return image
 
 
+def _expand_land_mask_into_water(
+    image: "Image.Image",
+    pixels: int = COAST_SEA_OVERLAP_PIXELS,
+) -> "Image.Image":
+    """Extiende la tierra lo justo para ocultar diferencias entre costas."""
+    from PIL import ImageFilter
+
+    pixels = max(0, int(pixels))
+    if pixels == 0:
+        return image
+    return image.filter(ImageFilter.MaxFilter(pixels * 2 + 1))
+
+
 def _validated_viewport(
     bounds: MapBounds,
     width: int,
@@ -635,7 +905,9 @@ def render_grid_png(
         )
         alpha = ImageChops.multiply(
             support,
-            _viewport_land_mask(bounds, width, height),
+            _expand_land_mask_into_water(
+                _viewport_land_mask(bounds, width, height),
+            ),
         )
         image = Image.merge("RGBA", (*rgb.split(), alpha))
         rgba = _to_mercator_rows(
@@ -690,13 +962,15 @@ def render_global_grid_png(
     )
     alpha = ImageChops.multiply(
         support,
-        _viewport_land_mask(
-            (-180.0, -60.0, 180.0, 85.0),
-            width,
-            height,
-            # A 7200 px ya hay subpixel suficiente; x2 duplicaría más de
-            # 80 millones de píxeles solo para la máscara temporal.
-            supersample=1,
+        _expand_land_mask_into_water(
+            _viewport_land_mask(
+                (-180.0, -60.0, 180.0, 85.0),
+                width,
+                height,
+                # A 7200 px ya hay subpixel suficiente; x2 duplicaría más de
+                # 80 millones de píxeles solo para la máscara temporal.
+                supersample=1,
+            ),
         ),
     )
     image = Image.merge("RGBA", (*rgb.split(), alpha))

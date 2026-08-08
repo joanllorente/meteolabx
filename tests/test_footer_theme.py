@@ -33,15 +33,15 @@ def test_whats_new_uses_one_modal_opened_from_header_and_footer():
     assert ".header h1 a{" in source
 
 
-def test_release_134_is_current_and_localized():
+def test_release_135_is_current_and_localized():
     root = Path(__file__).resolve().parents[1]
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "1.3.4"' in source
+    assert 'APP_VERSION = "1.3.5"' in source
     assert "APP_BUILD = app_build_id()" in source
-    assert '__version__ = "1.3.4"' in server_source
-    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.4" in source
+    assert '__version__ = "1.3.5"' in server_source
+    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.5" in source
     assert "Build {html.escape(APP_BUILD)}" in source
     assert ".mlx-wn-build{" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
@@ -90,9 +90,69 @@ def test_release_134_is_current_and_localized():
         "it": "Corretti i problemi di connessione alle stazioni NETATMO.",
         "pt": "Corrigidos os problemas de ligação às estações NETATMO.",
     }
+    release_135_notes = {
+        "es": [
+            "Mejorada la interpolación del mapa global de temperatura.",
+            "Arranque más estable y rápido.",
+            "Navegación entre pestañas optimizada en dispositivos móviles.",
+        ],
+        "ca": [
+            "Millorada la interpolació del mapa global de temperatura.",
+            "Arrencada més estable i ràpida.",
+            "Navegació entre pestanyes optimitzada en dispositius mòbils.",
+        ],
+        "en": [
+            "Improved interpolation on the global temperature map.",
+            "More stable and faster startup.",
+            "Optimized tab navigation on mobile devices.",
+        ],
+        "fr": [
+            "Amélioration de l’interpolation de la carte mondiale des températures.",
+            "Démarrage plus stable et plus rapide.",
+            "Navigation entre les onglets optimisée sur les appareils mobiles.",
+        ],
+        "it": [
+            "Migliorata l'interpolazione della mappa globale delle temperature.",
+            "Avvio più stabile e veloce.",
+            "Navigazione tra le schede ottimizzata sui dispositivi mobili.",
+        ],
+        "pt": [
+            "Melhorada a interpolação do mapa global de temperatura.",
+            "Arranque mais estável e rápido.",
+            "Navegação entre separadores otimizada em dispositivos móveis.",
+        ],
+    }
+    release_135_fixes = {
+        "es": [
+            "Corregido un problema visual en el mapa de estaciones.",
+            "Corregido un error que impedía que el gráfico de precipitación representara correctamente los datos acumulados.",
+        ],
+        "ca": [
+            "Corregit un problema visual al mapa d'estacions.",
+            "Corregit un error que impedia que el gràfic de precipitació representés correctament les dades acumulades.",
+        ],
+        "en": [
+            "Fixed a visual issue on the station map.",
+            "Fixed an issue that prevented the precipitation chart from correctly displaying accumulated data.",
+        ],
+        "fr": [
+            "Correction d’un problème visuel sur la carte des stations.",
+            "Correction d’une erreur empêchant le graphique des précipitations d’afficher correctement les données cumulées.",
+        ],
+        "it": [
+            "Corretto un problema visivo nella mappa delle stazioni.",
+            "Corretto un errore che impediva al grafico delle precipitazioni di mostrare correttamente i dati accumulati.",
+        ],
+        "pt": [
+            "Corrigido um problema visual no mapa de estações.",
+            "Corrigido um erro que impedia o gráfico de precipitação de apresentar corretamente os dados acumulados.",
+        ],
+    }
     for language, portuguese_name in portuguese_names.items():
         payload = json.loads((root / "locales" / f"{language}.json").read_text())
         footer = payload["footer"]
+        assert footer["release_135_improvements"] == release_135_notes[language]
+        assert footer["release_135_fixes"] == release_135_fixes[language]
         assert footer["release_134_improvements"] == [release_134_notes[language]]
         assert footer["release_134_fixes"] == [release_134_fixes[language]]
         assert footer["release_133_improvements"] == [release_133_notes[language]]

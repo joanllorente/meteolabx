@@ -209,7 +209,6 @@ async def get_current_temperatures(request: Request) -> Dict[str, object]:
 async def get_wind_field(request: Request) -> Response:
     from server.services.temperature_field import (
         GLOBAL_RENDER_SIZE,
-        interpolate_grid,
         render_global_grid_png,
     )
     from server.services.wind_field import (
@@ -217,6 +216,7 @@ async def get_wind_field(request: Request) -> Response:
         COLOR_SCALE_VERSION,
         COLOR_STOPS,
         FIELD_ALGORITHM_VERSION,
+        interpolate_wind_grid,
     )
 
     store = getattr(request.app.state, "ranking_store", None)
@@ -233,7 +233,7 @@ async def get_wind_field(request: Request) -> Response:
     )
     async with _wind_field_lock:
         if _wind_field_cache["data_key"] != data_key:
-            speed, mask = await asyncio.to_thread(interpolate_grid, points)
+            speed, mask = await asyncio.to_thread(interpolate_wind_grid, points)
             png = await asyncio.to_thread(
                 render_global_grid_png,
                 speed.astype("float32", copy=False),

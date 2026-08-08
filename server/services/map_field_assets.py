@@ -29,6 +29,8 @@ logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
 STATIC_DIR = Path(__file__).resolve().parents[2] / "static"
 MANIFEST_PATH = STATIC_DIR / "map_field_assets.json"
 MANIFEST_VERSION = 1
+MAP_FIXTURE_VERSION = 1
+MAP_FIXTURE_PATH_ENV = "METEOLABX_MAP_FIXTURE_PATH"
 FIELD_BOUNDS = (-180.0, -60.0, 180.0, 85.0)
 HALF_BOUNDS = (
     (-180.0, -60.0, 0.0, 85.0),
@@ -49,10 +51,14 @@ def _temperature_png(points: Iterable[tuple[float, float, float]]) -> bytes:
 
 
 def _wind_png(points: Iterable[tuple[float, float, float]]) -> bytes:
-    from server.services.temperature_field import interpolate_grid, render_global_grid_png
-    from server.services.wind_field import BAND_SIZE_KMH, COLOR_STOPS
+    from server.services.temperature_field import render_global_grid_png
+    from server.services.wind_field import (
+        BAND_SIZE_KMH,
+        COLOR_STOPS,
+        interpolate_wind_grid,
+    )
 
-    values, mask = interpolate_grid(points)
+    values, mask = interpolate_wind_grid(points)
     return render_global_grid_png(
         values.astype("float32", copy=False),
         mask.astype("float16", copy=False),
@@ -240,6 +246,8 @@ def build_map_field_assets(store: Any) -> dict[str, Any]:
         previous = _read_manifest()
         previous_fields = previous.get("fields") if isinstance(previous.get("fields"), dict) else {}
         fields: dict[str, Any] = dict(previous_fields)
+        fixture_path = str(os.environ.get(MAP_FIXTURE_PATH_ENV, "") or "").strip()
+        fixture_fields: dict[str, Any] = {}
         started = time.perf_counter()
 
         for spec in _mode_specs(store):
@@ -247,15 +255,25 @@ def build_map_field_assets(store: Any) -> dict[str, Any]:
             algorithm = int(spec["algorithm"])
             palette = int(spec["palette"])
             existing = fields.get(mode)
-            if _asset_is_ready(
+            asset_ready = _asset_is_ready(
                 existing,
                 version=version,
                 algorithm=algorithm,
                 palette=palette,
-            ):
+            )
+            if asset_ready and not fixture_path:
                 continue
 
             points = list(spec["points"]())
+            if fixture_path:
+                fixture_fields[mode] = {
+                    "algorithm": algorithm,
+                    "palette": palette,
+                    "point_count": len(points),
+                    "points": points,
+                }
+            if asset_ready:
+                continue
             if not points:
                 logger.info(
                     "🗺️ Mapa %s sin datos · se conserva la versión anterior",
@@ -286,6 +304,22 @@ def build_map_field_assets(store: Any) -> dict[str, Any]:
                 spec.get("label", mode),
                 f"{len(points):,}".replace(",", "."),
                 time.perf_counter() - mode_started,
+            )
+
+        if fixture_path:
+            fixture = {
+                "fixture_version": MAP_FIXTURE_VERSION,
+                "updated_at": version,
+                "fields": fixture_fields,
+            }
+            fixture_target = Path(fixture_path).expanduser()
+            _atomic_json_write(fixture_target, fixture)
+            logger.info(
+                "🧪 Datos de mapas guardados en %s · temperatura %s · viento %s · precipitación %s",
+                fixture_target,
+                f"{fixture_fields.get('temperature', {}).get('point_count', 0):,}".replace(",", "."),
+                f"{fixture_fields.get('wind', {}).get('point_count', 0):,}".replace(",", "."),
+                f"{fixture_fields.get('precipitation', {}).get('point_count', 0):,}".replace(",", "."),
             )
 
         manifest = {

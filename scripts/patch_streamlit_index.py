@@ -99,6 +99,86 @@ def _build_block() -> str:
     )
     return f"""{START_MARKER}
     <title>{SITE_TITLE}</title>
+    <style id="mlx-critical-layout">
+      /*
+       * Estas reglas estructurales también existen en la hoja de estilos de
+       * la app, pero allí llegan como un delta de Streamlit. Aplicarlas desde
+       * el HTML inicial evita que el contenedor principal cambie de posición
+       * tras el primer paint (la principal fuente de CLS observada en RUM).
+       */
+      html, body, #root {{ min-height: 100%; }}
+      [data-testid="stAppViewContainer"] {{ min-height: 100vh; }}
+      [data-testid="stMainBlockContainer"],
+      .block-container {{
+        box-sizing: border-box;
+        padding-top: 8.5rem !important;
+        max-width: 1200px;
+      }}
+      .header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0 0 0.1rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }}
+      .header-title-row {{
+        display: flex;
+        align-items: baseline;
+        gap: 0.18rem;
+        min-width: 0;
+      }}
+      .header h1 {{
+        margin: 0;
+        font-size: 2rem;
+      }}
+      .header h1 a {{ display: none !important; }}
+      .header-version {{
+        color: rgba(127,127,127,.92);
+        font-size: 0.72rem;
+        font-weight: 750;
+        line-height: 1;
+      }}
+      [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] >
+      [data-testid="stElementContainer"][height="0px"],
+      [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] >
+      [data-testid="stElementContainer"].st-key-browser_context_sync,
+      [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] >
+      [data-testid="stElementContainer"].st-key-mlx_local_storage_bootstrap {{
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }}
+      .mlx-bootstrap-shell {{
+        min-height: min(28rem, 58vh);
+        padding-top: 0.35rem;
+      }}
+      .mlx-bootstrap-shell-line {{
+        height: 0.82rem;
+        margin: 0 0 0.78rem;
+        border-radius: 999px;
+        background: rgba(127,127,127,.16);
+        overflow: hidden;
+      }}
+      .mlx-bootstrap-shell-line::after {{
+        content: "";
+        display: block;
+        width: 38%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(127,127,127,.2), transparent);
+        animation: mlx-bootstrap-shimmer 1.15s ease-in-out infinite;
+      }}
+      @keyframes mlx-bootstrap-shimmer {{
+        from {{ transform: translateX(-120%); }}
+        to {{ transform: translateX(360%); }}
+      }}
+      @media (prefers-reduced-motion: reduce) {{
+        .mlx-bootstrap-shell-line::after {{ animation: none; }}
+      }}
+    </style>
     <link rel="icon" type="image/png" sizes="32x32" href="{b}/favicon-32x32.png?v={v}" />
     <link rel="icon" type="image/png" sizes="16x16" href="{b}/favicon-16x16.png?v={v}" />
     <link rel="shortcut icon" type="image/png" href="{b}/favicon.png?v={v}" />

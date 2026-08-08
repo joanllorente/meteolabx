@@ -188,7 +188,7 @@ _TEMP_FIELD_LEGEND_TICKS = (-20, -10, 0, 10, 20, 30, 40)
 
 _TEMP_FIELD_BOUNDS = (-180.0, -60.0, 180.0, 85.0)
 _TEMP_FIELD_PALETTE_VERSION = 2
-_TEMP_FIELD_ALGORITHM_VERSION = 5
+_TEMP_FIELD_ALGORITHM_VERSION = 10
 
 _WIND_FIELD_LEGEND_STOPS = (
     (0, "#53a7e7"), (5, "#43c4cf"), (10, "#48c992"),
@@ -198,7 +198,7 @@ _WIND_FIELD_LEGEND_STOPS = (
 )
 _WIND_FIELD_LEGEND_TICKS = (0, 10, 20, 40, 60, 80, 110, 150)
 _WIND_FIELD_PALETTE_VERSION = 1
-_WIND_FIELD_ALGORITHM_VERSION = 1
+_WIND_FIELD_ALGORITHM_VERSION = 2
 
 _PRECIP_FIELD_LEGEND_STOPS = (
     (0, "#e0eef7"), (0.2, "#b7e0f0"), (1, "#74c8e1"),
@@ -208,7 +208,7 @@ _PRECIP_FIELD_LEGEND_STOPS = (
 )
 _PRECIP_FIELD_LEGEND_TICKS = (0, 1, 2, 5, 10, 20, 50, 100, 200)
 _PRECIP_FIELD_PALETTE_VERSION = 1
-_PRECIP_FIELD_ALGORITHM_VERSION = 3
+_PRECIP_FIELD_ALGORITHM_VERSION = 4
 
 _MAP_FIELD_STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 _MAP_FIELD_MANIFEST_PATH = _MAP_FIELD_STATIC_DIR / "map_field_assets.json"
@@ -1544,6 +1544,16 @@ def render_map_tab(ctx):
                     right: 2px;
                     top: 190px;
                     width: auto;
+                }}
+                @media (max-width: 640px) {{
+                    /* En móvil las cuatro pestañas ocupan dos filas. El mapa
+                       baja una fila, así que el globo debe acompañarlo. */
+                    .st-key-map_country_overlay [data-testid="stPopover"] {{
+                        top: 159.5px;
+                    }}
+                    .st-key-map_sensor_overlay [data-testid="stPopover"] {{
+                        top: 230px;
+                    }}
                 }}
                 .st-key-map_country_overlay [data-testid="stPopoverButton"],
                 .st-key-map_sensor_overlay [data-testid="stPopoverButton"] {{

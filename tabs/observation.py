@@ -156,6 +156,49 @@ def _prepare_observation_precip_frame(
 
     import pandas as pd
 
+    def finalize_frame(frame):
+        if frame is None or frame.empty:
+            return None
+
+        result = frame.copy()
+        result["dt"] = pd.to_datetime(result["dt"], errors="coerce")
+        result["precip_mm"] = pd.to_numeric(result["precip_mm"], errors="coerce").clip(lower=0)
+        result = result.dropna(subset=["dt", "precip_mm"]).sort_values("dt").reset_index(drop=True)
+        if result.empty:
+            return None
+
+        positive_positions = result.index[result["precip_mm"] > 0.0].tolist()
+        if not positive_positions:
+            return None
+
+        first_positive = positive_positions[0]
+        if first_positive > 0:
+            # Para una acumulada solo hace falta conservar el cero
+            # inmediatamente anterior a la primera lluvia del día.
+            result = result.iloc[first_positive - 1 :].reset_index(drop=True)
+        else:
+            first_dt = result.iloc[0]["dt"]
+            anchor_dt = max(pd.Timestamp(day_start), first_dt - pd.Timedelta(minutes=max(1, int(step_minutes))))
+            result = pd.concat(
+                [
+                    pd.DataFrame({"dt": [anchor_dt], "precip_mm": [0.0]}),
+                    result,
+                ],
+                ignore_index=True,
+            )
+
+        # El acumulado diario no puede disminuir. La serie termina en la
+        # última observación disponible: el eje puede abarcar todo el día,
+        # pero no prolongamos el dato hacia horas que aún no han ocurrido.
+        result["precip_mm"] = result["precip_mm"].cummax()
+
+        result["precip_display"] = result["precip_mm"].apply(
+            lambda value: convert_precip(value, precip_unit_pref)
+        )
+        result["precip_display"] = pd.to_numeric(result["precip_display"], errors="coerce")
+        result = result.dropna(subset=["precip_display"])
+        return result if not result.empty else None
+
     def fallback_frame():
         if not (precip_total_value == precip_total_value and precip_total_value > 0.0):
             return None
@@ -168,12 +211,13 @@ def _prepare_observation_precip_frame(
         display_float = _safe_float(display_value)
         if display_float != display_float or display_float <= 0.0:
             return None
-        return pd.DataFrame(
-            {
-                "dt": [dt],
-                "precip_mm": [precip_total_value],
-                "precip_display": [display_float],
-            }
+        return finalize_frame(
+            pd.DataFrame(
+                {
+                    "dt": [dt],
+                    "precip_mm": [precip_total_value],
+                }
+            )
         )
 
     epoch_list = list(epochs or [])
@@ -203,13 +247,8 @@ def _prepare_observation_precip_frame(
     if frame.empty:
         return fallback_frame()
 
-    frame["precip_display"] = frame["precip_mm"].apply(
-        lambda value: convert_precip(value, precip_unit_pref)
-    )
-    frame = frame[pd.to_numeric(frame["precip_display"], errors="coerce") > 0.0]
-    if frame.empty:
-        return fallback_frame()
-    return frame
+    finalized = finalize_frame(frame)
+    return finalized if finalized is not None else fallback_frame()
 
 
 @st.cache_data(show_spinner=False)
@@ -1028,12 +1067,10 @@ def render_observation_tab(ctx):
                     y=y_precip.values,
                     mode="lines+markers" if len(df_precip) < 8 else "lines",
                     name=t("observation.cards.charts.precipitation_line"),
-                    # El acumulado es una función escalón: cuando no hay nueva
-                    # lluvia (o falta el dato) se mantiene el valor anterior
-                    # (tramo horizontal) y solo sube al llegar una medida mayor
-                    # (salto vertical). Así un hueco no se dibuja como lluvia
-                    # continua, sino como acumulado constante.
-                    line=dict(color="rgb(80, 162, 255)", width=2.8, shape="hv"),
+                    # Une linealmente todas las observaciones, incluido el cero
+                    # previo a la primera lluvia. La traza acaba en el último
+                    # dato real y no se proyecta hasta el final del día.
+                    line=dict(color="rgb(80, 162, 255)", width=2.8, shape="linear"),
                     marker=dict(size=5, color="rgb(80, 162, 255)"),
                     fill="tozeroy",
                     fillcolor="rgba(80, 162, 255, 0.16)",

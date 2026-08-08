@@ -41,6 +41,39 @@ def render_app_header(
     )
 
 
+def render_bootstrap_shell(*, t, app_version: str) -> None:
+    """Pinta una estructura estable mientras llega el snapshot del navegador.
+
+    No decide qué pestaña ni qué estación se abrirán: eso sigue ocurriendo solo
+    cuando ``localStorage`` es autoritativo. Su función es ofrecer un primer
+    contenido útil y reservar el espacio principal en vez de mantener un
+    splash a pantalla completa durante toda la hidratación.
+    """
+    safe_version = html.escape(str(app_version))
+    loading_text = html.escape(str(t("sidebar.connection.loading_saved")))
+    if loading_text == "sidebar.connection.loading_saved":
+        loading_text = "Cargando…"
+    st.markdown(
+        html_clean(
+            f"""
+            <div class="header">
+              <div class="header-title-row">
+                <h1>MeteoLabx</h1>
+                <span class="header-version" aria-hidden="true">v{safe_version}</span>
+              </div>
+            </div>
+            <div class="mlx-bootstrap-shell" role="status" aria-live="polite"
+                 aria-label="{loading_text}">
+              <div class="mlx-bootstrap-shell-line" style="width:46%;"></div>
+              <div class="mlx-bootstrap-shell-line" style="width:72%;"></div>
+              <div class="mlx-bootstrap-shell-line" style="width:61%;"></div>
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def render_connection_banner(
     *,
     t,

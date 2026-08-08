@@ -125,6 +125,8 @@ from utils.provider_state import (
     is_manual_iem_station,
     resolve_provider_locality,
     restore_connection_state_from_loading_payload,
+    runtime_snapshot_is_fresh,
+    runtime_snapshot_matches_connection,
     should_show_pws_measurement_notice,
 )
 from utils.provider_features import get_provider_feature
@@ -206,7 +208,11 @@ from components import (
     wind_dir_text, render_sidebar
 )
 _boot_mark("import components (card/grid/sidebar)")
-from components.app_header import render_app_header, render_connection_banner
+from components.app_header import (
+    render_app_header,
+    render_bootstrap_shell,
+    render_connection_banner,
+)
 from components.favorites import render_favorites_bar
 
 from components.browser_context import get_browser_context
@@ -214,7 +220,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.3.4"
+APP_VERSION = "1.3.5"
 APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
@@ -1390,6 +1396,10 @@ def _sync_active_tab_state() -> str:
 
 
 def _store_runtime_snapshot(**payload) -> None:
+    provider_id = coerce_str(st.session_state.get(CONNECTION_TYPE), upper=True)
+    payload["_captured_at"] = time.time()
+    payload["_provider_id"] = provider_id
+    payload["_station_id"] = _get_provider_station_id(provider_id)
     st.session_state["_runtime_snapshot"] = dict(payload)
 
 
@@ -1865,6 +1875,11 @@ _boot_mark("render_sidebar")
 # conserva intactas sus colas y claves persistentes.
 if not local_storage_snapshot_ready():
     st.session_state["_boot_default_tab_pending"] = True
+    render_bootstrap_shell(t=t, app_version=APP_VERSION)
+    # La estructura anterior ya es estable y no contiene una decisión de
+    # estación/pestaña. Retiramos el splash global para que sea el primer
+    # contenido útil mientras el bridge termina la hidratación.
+    _remove_boot_splash()
     _boot_mark("waiting for local storage bootstrap")
     st.stop()
 _remove_boot_splash()
@@ -4153,8 +4168,40 @@ chart_epochs = []
 chart_temps = []
 has_chart_data = False
 
-skip_live_refresh = bool(connected and active_tab in {"trends", "historical", "map", "ranking"})
-runtime_snapshot = _load_runtime_snapshot() if skip_live_refresh else {}
+snapshot_candidate = _load_runtime_snapshot() if connected else {}
+snapshot_provider_id = coerce_str(
+    st.session_state.get(CONNECTION_TYPE), upper=True,
+)
+snapshot_station_id = _get_provider_station_id(snapshot_provider_id)
+snapshot_matches_connection = runtime_snapshot_matches_connection(
+    snapshot_candidate,
+    snapshot_provider_id,
+    snapshot_station_id,
+)
+skip_live_refresh = bool(
+    connected and active_tab in {"trends", "historical", "map", "ranking"}
+)
+# Al volver rápidamente a Observación no se repite la petición al proveedor.
+# La ventana es deliberadamente corta: acelera la navegación sin posponer el
+# autorefresco normal de la estación.
+observation_snapshot_max_age_s = min(_provider_refresh_seconds(), 120)
+reuse_observation_snapshot = bool(
+    connected
+    and not loading_in_progress
+    and active_tab == "observation"
+    and runtime_snapshot_is_fresh(
+        snapshot_candidate,
+        snapshot_provider_id,
+        snapshot_station_id,
+        max_age_s=observation_snapshot_max_age_s,
+    )
+)
+runtime_snapshot = (
+    snapshot_candidate
+    if (skip_live_refresh and snapshot_matches_connection)
+    or reuse_observation_snapshot
+    else {}
+)
 if runtime_snapshot:
     base = dict(runtime_snapshot.get("base", base))
     daily_extremes = dict(runtime_snapshot.get("daily_extremes") or {})
@@ -4405,7 +4452,7 @@ if st.session_state.get(CONNECTION_LOADING) and _has_live_connection_payload(bas
     st.rerun()
 
 
-if connected and int(base.get("epoch", 0) or 0) > 0:
+if connected and not runtime_snapshot and int(base.get("epoch", 0) or 0) > 0:
     _store_runtime_snapshot(
         base=base,
         derivatives=current_derivatives,
@@ -4547,6 +4594,24 @@ components.html(
             display: none !important;
             visibility: hidden !important;
           }}
+          html[data-mlbx-tab-switching="true"] body::after {{
+            content: "";
+            position: fixed;
+            left: 50%;
+            top: 52%;
+            width: 28px;
+            height: 28px;
+            margin: -14px 0 0 -14px;
+            border: 3px solid rgba(127, 127, 127, 0.25);
+            border-top-color: #ff4b4b;
+            border-radius: 50%;
+            z-index: 100000;
+            pointer-events: none;
+            animation: mlbx-primary-tab-spin 0.7s linear infinite;
+          }}
+          @keyframes mlbx-primary-tab-spin {{
+            to {{ transform: rotate(360deg); }}
+          }}
         `;
         doc.head.appendChild(style);
       }}
@@ -4596,9 +4661,23 @@ components.html(
       function finishWhenReady() {{
         if (root.dataset.mlbxTabSwitching !== 'true') return true;
         if (root.dataset.mlbxNextTab !== activeTab) return false;
-        const panel = doc.querySelector('.st-key-tab_content_' + activeTab);
-        if (!panel || panel.matches('[data-stale="true"]') ||
-            panel.querySelector('[data-stale="true"]')) return false;
+        const panels = Array.from(
+          doc.querySelectorAll('.st-key-tab_content_' + activeTab)
+        );
+        const panel = panels.find(
+          candidate => !candidate.matches('[data-stale="true"]')
+        );
+        if (!panel) return false;
+
+        // Streamlit va sustituyendo los bloques stale de arriba abajo. No es
+        // necesario esperar a que terminen todos los Plotly del final: en
+        // cuanto llega el primer bloque nuevo ya podemos enseñar la pestaña.
+        // Los bloques antiguos de la pestaña anterior siguen ocultos por el
+        // CSS específico de ``data-stale`` que se inyecta en cada ejecución.
+        const freshElement = Array.from(
+          panel.querySelectorAll('[data-testid="stElementContainer"]')
+        ).find(element => !element.matches('[data-stale="true"]'));
+        if (!freshElement) return false;
         host.requestAnimationFrame(() => host.requestAnimationFrame(() => {{
           root.removeAttribute('data-mlbx-tab-switching');
           root.removeAttribute('data-mlbx-next-tab');
@@ -4828,7 +4907,7 @@ def _whats_new_footer_html() -> str:
         "<button type='button' class='mlx-wn-tab' role='tab' "
         "data-mlbx-whats-new-version='120'>1.2.0</button>"
         "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.4</button>"
+        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.5</button>"
         "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-110'>"
         + _release("footer.previous_improvements", "footer.previous_fixes")
@@ -4837,8 +4916,11 @@ def _whats_new_footer_html() -> str:
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
-        f"<div class='mlx-wn-version'>1.3.4 "
+        f"<div class='mlx-wn-version'>1.3.5 "
         f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
+        + _release("footer.release_135_improvements", "footer.release_135_fixes")
+        + "<hr class='mlx-wn-sep'>"
+        "<div class='mlx-wn-version'>1.3.4</div>"
         + _release("footer.release_134_improvements", "footer.release_134_fixes")
         + "<hr class='mlx-wn-sep'>"
         "<div class='mlx-wn-version'>1.3.3</div>"

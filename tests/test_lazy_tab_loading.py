@@ -60,6 +60,8 @@ def test_main_waits_for_storage_before_resolving_active_tab():
     active_tab_pos = source.index("active_tab = _sync_active_tab_state()", sidebar_pos)
     assert sidebar_pos < storage_gate_pos < active_tab_pos
     assert "st.stop()" in source[storage_gate_pos:active_tab_pos]
+    assert "render_bootstrap_shell" in source[storage_gate_pos:active_tab_pos]
+    assert "_remove_boot_splash()" in source[storage_gate_pos:active_tab_pos]
 
 
 def test_cold_boot_without_autoconnect_forces_ranking_before_tab_render():
@@ -93,6 +95,9 @@ def test_tab_switch_hides_previous_panel_immediately_and_then_its_stale_dom():
     assert "root.dataset.mlbxNextTab = nextTab" in source
     assert "doc.removeEventListener(\n          'pointerdown'" in source
     assert "finishWhenReady" in source
+    assert "mlbx-primary-tab-spin" in source
+    assert "const freshElement" in source
+    assert "panel.querySelectorAll('[data-testid=\"stElementContainer\"]')" in source
     assert "root.removeAttribute('data-mlbx-tab-switching')" in source
     assert 'with st.container(key=f"tab_content_{active_tab}"):' in source
     assert 'data-mlbx-tab-transition' in source

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from pathlib import Path
 
 from components import sidebar
 from config import (
@@ -15,6 +16,9 @@ from config import (
 from utils import provider_state, storage
 from utils.state_keys import AUTOCONNECT_ATTEMPTED
 from utils.units import DEFAULT_UNIT_PREFERENCES
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class _ColumnStub:
@@ -129,6 +133,16 @@ def test_sidebar_defers_wu_controls_until_local_storage_snapshot_ready(monkeypat
     assert "text_input" not in call_names
     assert "toggle" not in call_names
     assert "button" not in call_names
+
+
+def test_sidebar_continues_same_run_when_storage_snapshot_arrives():
+    source = (ROOT / "components" / "sidebar.py").read_text(encoding="utf-8")
+    hydrate_pos = source.index("hydrate_local_storage_snapshot(storage_payload.get")
+    storage_ready_pos = source.index("storage_ready = local_storage_snapshot_ready()", hydrate_pos)
+    hydration_block = source[hydrate_pos:storage_ready_pos]
+
+    assert "st.rerun()" not in hydration_block
+    assert "continuar en ESTE mismo" in hydration_block
 
 
 def test_sidebar_ignores_stale_wu_toggle_callback_during_bootstrap(monkeypatch):
@@ -396,7 +410,7 @@ def test_sidebar_wu_forget_pending_disconnects_and_clears_runtime_caches(monkeyp
         assert key not in session_state
 
 
-def test_sidebar_reruns_once_when_local_storage_snapshot_arrives(monkeypatch):
+def test_sidebar_continues_when_local_storage_snapshot_arrives(monkeypatch):
     session_state = {}
     fake_sidebar = _SidebarStub(session_state)
     rerun_called = {"count": 0}
@@ -429,14 +443,12 @@ def test_sidebar_reruns_once_when_local_storage_snapshot_arrives(monkeypatch):
     monkeypatch.setattr(sidebar, "hydrate_local_storage_snapshot", storage.hydrate_local_storage_snapshot)
     monkeypatch.setattr(storage, "st", fake_st)
 
-    try:
-        sidebar.render_sidebar()
-    except RuntimeError as exc:
-        if "rerun_called" not in str(exc):
-            raise
+    sidebar.render_sidebar()
 
-    assert rerun_called["count"] == 1
-    assert session_state["_mlx_local_storage_ready_rerun_done"] is True
+    assert rerun_called["count"] == 0
+    assert session_state["_mlx_local_storage_snapshot_ready"] is True
+    assert session_state[sidebar.WEATHERLINK_API_KEY_INPUT_KEY] == "weatherlink-key"
+    assert session_state[sidebar.WEATHERLINK_API_SECRET_INPUT_KEY] == "weatherlink-secret"
 
 
 def test_sidebar_keeps_user_edited_wu_widgets_while_connected(monkeypatch):

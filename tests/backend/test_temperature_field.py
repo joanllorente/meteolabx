@@ -17,6 +17,7 @@ from server.services.temperature_field import (
     LOCAL_SPATIAL_AGGREGATION_CELLS,
     SPATIAL_AGGREGATION_CELLS,
     _aggregate_station_points,
+    _expand_land_mask_into_water,
     colorize,
     interpolate_grid,
     render_field_png,
@@ -85,7 +86,7 @@ def test_dense_distant_network_cannot_dilute_local_hotspot():
         (40.0, -3.0, 39.0),
         (40.0, -3.0, 40.0),
     ]
-    distant_cool = [(40.0, 27.0, 18.0)] * 500
+    distant_cool = [(40.0, 87.0, 18.0)] * 500
 
     temp, mask = interpolate_grid(
         local_hot + distant_cool,
@@ -172,7 +173,84 @@ def test_isolated_local_extreme_cannot_create_dense_network_rash():
     row = int((FIELD_BBOX[2] - 32.0) / CELL_DEG)
     col = int((4.0 - FIELD_BBOX[1]) / CELL_DEG)
 
-    assert 34.0 < temp[row, col] < 38.0
+    # El extremo se conserva como una región amplia y moderada: no alcanza los
+    # 45 °C de la estación ni queda borrado por las cuatro lecturas de 34 °C.
+    assert 38.0 < temp[row, col] < 42.0
+
+
+def test_moderate_outlier_in_normal_network_does_not_draw_a_bullseye():
+    points = [
+        (
+            40.0 + row * 0.3,
+            -4.0 + col * 0.3,
+            34.0 if row == 2 and col == 2 else 30.0,
+        )
+        for row in range(5)
+        for col in range(5)
+    ]
+
+    temp, _mask = interpolate_grid(points)
+    center_row = int((FIELD_BBOX[2] - 40.6) / CELL_DEG)
+    center_col = int((-3.4 - FIELD_BBOX[1]) / CELL_DEG)
+    nearby_col = center_col + 3
+
+    # Cuatro grados de microclima o altitud no crean una diana individual.
+    assert temp[center_row, center_col] - temp[center_row, nearby_col] < 0.75
+
+
+def test_isolated_legitimate_extreme_keeps_a_moderated_background_signature():
+    # Tres estaciones caen en el mismo bloque regional de 0,4°. La mediana
+    # protege el campo frente a valores espurios, pero la estación extrema no
+    # debe desaparecer por completo (caso Furnace Creek).
+    points = [
+        (40.05, -3.05, 44.0),
+        (40.35, -3.05, 36.0),
+        (40.05, -2.75, 36.0),
+    ]
+
+    temp, _mask = interpolate_grid(points)
+    row = int((FIELD_BBOX[2] - 40.05) / CELL_DEG)
+    col = int((-3.05 - FIELD_BBOX[1]) / CELL_DEG)
+
+    # Se ve una señal cálida clara y amplia, moderada respecto a los 44 °C.
+    assert 38.5 < temp[row, col] < 42.0
+
+
+def test_dense_network_does_not_draw_station_sized_temperature_spots():
+    # Alternar pequeñas anomalías en una red densa reproduce los lunares que
+    # aparecían por toda Europa y EE. UU. El detalle incoherente debe cancelarse.
+    points = [
+        (40.0 + row * 0.1, -4.0 + col * 0.1, 27.0 + ((row + col) % 2) * 6.0)
+        for row in range(8)
+        for col in range(8)
+    ]
+
+    temp, _mask = interpolate_grid(points)
+    row = int((FIELD_BBOX[2] - 40.35) / CELL_DEG)
+    col = int((-3.65 - FIELD_BBOX[1]) / CELL_DEG)
+    window = temp[row - 4:row + 5, col - 4:col + 5]
+
+    # El campo puede tener gradiente, pero no saltos puntuales de varios grados.
+    assert float(np.max(window) - np.min(window)) < 1.5
+
+
+def test_sparse_hot_extremes_form_a_continuous_regional_corridor():
+    # Dos núcleos cálidos separados ~660 km entre una red regional más fresca:
+    # el campo no debe dibujar dos ojos desconectados sobre fondo frío.
+    cool = [
+        (lat, lon, 33.0)
+        for lat in (22.0, 26.0, 30.0, 34.0, 38.0)
+        for lon in (-10.0, -6.0, 6.0, 10.0)
+    ]
+    points = cool + [(28.0, 0.0, 46.0), (34.0, 0.0, 42.0)]
+
+    temp, _mask = interpolate_grid(points)
+    peak_row = int((FIELD_BBOX[2] - 28.0) / CELL_DEG)
+    middle_row = int((FIELD_BBOX[2] - 31.0) / CELL_DEG)
+    col = int((0.0 - FIELD_BBOX[1]) / CELL_DEG)
+
+    assert temp[middle_row, col] > 39.0
+    assert temp[peak_row, col] - temp[middle_row, col] < 5.0
 
 
 def test_sparse_hot_group_uses_medium_scale_between_stations():
@@ -206,12 +284,26 @@ def test_colorize_alpha_and_gradient():
 
 
 def test_temperature_color_scale_starts_at_minus_twenty_with_purple():
-    assert FIELD_ALGORITHM_VERSION == 5
+    assert FIELD_ALGORITHM_VERSION == 10
     assert COLOR_SCALE_VERSION == 2
     assert COLOR_STOPS[0] == (-20.0, (98, 22, 146))
     rgba = colorize(np.array([[-50.0, -20.0]]), np.array([[True, True]]))
     assert tuple(rgba[0, 0, :3]) == (98, 22, 146)
     assert tuple(rgba[0, 1, :3]) == (98, 22, 146)
+
+
+def test_land_mask_extends_one_pixel_into_water():
+    source = Image.new("L", (5, 5), 0)
+    source.putpixel((2, 2), 255)
+
+    expanded = _expand_land_mask_into_water(source)
+
+    assert all(
+        expanded.getpixel((x, y)) == 255
+        for x in range(1, 4)
+        for y in range(1, 4)
+    )
+    assert expanded.getpixel((0, 0)) == 0
 
 
 def test_render_field_png_returns_png_bytes():

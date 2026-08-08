@@ -55,6 +55,45 @@ def test_ranking_build_publishes_and_reuses_split_map_assets(tmp_path, monkeypat
     assert second == json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
+def test_ranking_build_can_capture_complete_offline_map_fixture(tmp_path, monkeypatch):
+    manifest_path = tmp_path / "map_field_assets.json"
+    fixture_path = tmp_path / "map_fixture.json"
+    monkeypatch.setattr(map_field_assets, "STATIC_DIR", tmp_path)
+    monkeypatch.setattr(map_field_assets, "MANIFEST_PATH", manifest_path)
+    monkeypatch.setenv(map_field_assets.MAP_FIXTURE_PATH_ENV, str(fixture_path))
+
+    points_by_mode = {
+        "temperature": [(40.0, -3.0, 31.5)],
+        "wind": [(40.0, -3.0, 42.0)],
+        "precipitation": [(40.0, -3.0, 12.0)],
+    }
+    specs = tuple(
+        {
+            "mode": mode,
+            "prefix": f"{mode}_field",
+            "identity_prefix": f"{mode}-field",
+            "algorithm": 1,
+            "palette": 2,
+            "points": lambda mode=mode: points_by_mode[mode],
+            "renderer": lambda points: _tiny_png(),
+        }
+        for mode in points_by_mode
+    )
+    monkeypatch.setattr(map_field_assets, "_mode_specs", lambda store: specs)
+
+    class Store:
+        updated_at = datetime(2026, 8, 6, 20, 30, tzinfo=timezone.utc)
+
+    map_field_assets.build_map_field_assets(Store())
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    assert fixture["fixture_version"] == 1
+    assert fixture["updated_at"] == Store.updated_at.isoformat()
+    assert fixture["fields"]["temperature"]["points"] == [[40.0, -3.0, 31.5]]
+    assert fixture["fields"]["wind"]["points"] == [[40.0, -3.0, 42.0]]
+    assert fixture["fields"]["precipitation"]["points"] == [[40.0, -3.0, 12.0]]
+
+
 def test_streamlit_uses_prebuilt_tiles_for_matching_snapshot(tmp_path, monkeypatch):
     version = "2026-07-16T20:30:00+00:00"
     filenames = ("temperature_field_test_0.png", "temperature_field_test_1.png")

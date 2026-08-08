@@ -141,7 +141,7 @@ def test_temperature_legend_and_clusters_start_at_minus_twenty():
     assert map_tab._TEMP_FIELD_LEGEND_STOPS[0] == (-20, "#621692")
     assert map_tab._TEMP_FIELD_LEGEND_TICKS[0] == -20
     assert map_tab._TEMP_FIELD_PALETTE_VERSION == 2
-    assert map_tab._TEMP_FIELD_ALGORITHM_VERSION == 5
+    assert map_tab._TEMP_FIELD_ALGORITHM_VERSION == 10
     assert "[-20, [98, 22, 146]]" in frontend
     assert "[-45, [98, 22, 146]]" not in frontend
 

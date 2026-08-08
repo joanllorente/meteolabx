@@ -92,6 +92,15 @@
     "whats_new": "Novedades",
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
+    "release_135_improvements": [
+      "Mejorada la interpolación del mapa global de temperatura.",
+      "Arranque más estable y rápido.",
+      "Navegación entre pestañas optimizada en dispositivos móviles."
+    ],
+    "release_135_fixes": [
+      "Corregido un problema visual en el mapa de estaciones.",
+      "Corregido un error que impedía que el gráfico de precipitación representara correctamente los datos acumulados."
+    ],
     "release_134_improvements": [
       "Añadido control de calidad de las observaciones para ECCC, SMHI, Frost, MeteoGalicia, Meteocat y NWS."
     ],
