@@ -1232,7 +1232,7 @@ TAB_SLUG_TO_INTERNAL.update({
 DEEPLINK_PROVIDERS = {
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
     "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT", "IPMA",
-    "GEOSPHERE", "SMHI", "ECCC", "IEM", "WINDY", "NETATMO",
+    "GEOSPHERE", "SMHI", "ECCC", "CLIMANTARTIDE", "IEM", "WINDY", "NETATMO",
 }
 
 
@@ -1257,6 +1257,9 @@ def _handle_station_deeplink() -> None:
     reprocesar el mismo link y permite navegar libremente después.
     """
     raw_e = _query_param_value("e")
+    target_station_id = _query_param_value("sid")
+    opened_from_seo = _query_param_value("from").lower() == "seo"
+    deeplink_key = f"{raw_e}|{target_station_id}" if target_station_id else raw_e
     target_tab_slug = _query_param_value("tab").lower()
     target_tab = _resolve_deeplink_tab()
 
@@ -1279,9 +1282,9 @@ def _handle_station_deeplink() -> None:
             st.rerun()
         return
 
-    if st.session_state.get("_deeplink_consumed") == raw_e:
+    if st.session_state.get("_deeplink_consumed") == deeplink_key:
         return
-    st.session_state["_deeplink_consumed"] = raw_e
+    st.session_state["_deeplink_consumed"] = deeplink_key
 
     provider, _, slug = raw_e.partition("~")
     provider = provider.strip().upper()
@@ -1289,10 +1292,36 @@ def _handle_station_deeplink() -> None:
     if provider not in DEEPLINK_PROVIDERS or not slug:
         return
 
+    # ``from=seo`` solo está en el CTA de las fichas. Registra el clic antes
+    # de resolver la estación para no perderlo si la fuente oficial falla.
+    # Se elimina enseguida para que recargar o compartir la URL no lo repita.
+    seo_click_recorded = bool(opened_from_seo and target_station_id)
+    if seo_click_recorded:
+        try:
+            from utils.api_client import track_seo_panel_click_via_api
+
+            track_seo_panel_click_via_api(
+                provider,
+                target_station_id,
+                slug.replace("-", " ").title(),
+                language=_query_param_value("lang"),
+            )
+        except Exception:
+            pass
+    if opened_from_seo and "from" in st.query_params:
+        del st.query_params["from"]
+
     # Ya conectado a esa estación: no reconectes, solo ajusta la pestaña.
     current_provider = str(st.session_state.get(CONNECTION_TYPE, "")).strip().upper()
     current_slug = _station_slug(st.session_state.get(PROVIDER_STATION_NAME, ""))
-    if st.session_state.get(CONNECTED) and current_provider == provider and current_slug == slug:
+    current_station_id = str(st.session_state.get(PROVIDER_STATION_ID, "")).strip()
+    exact_station_matches = not target_station_id or current_station_id == target_station_id
+    if (
+        st.session_state.get(CONNECTED)
+        and current_provider == provider
+        and current_slug == slug
+        and exact_station_matches
+    ):
         if (
             target_tab
             and st.session_state.get("active_tab") != target_tab
@@ -1304,13 +1333,20 @@ def _handle_station_deeplink() -> None:
         return
 
     try:
-        from utils.api_client import fetch_station_by_slug_via_api
-        record = fetch_station_by_slug_via_api(provider, slug)
+        from utils.api_client import fetch_station_by_id_via_api, fetch_station_by_slug_via_api
+        record = (
+            fetch_station_by_id_via_api(provider, target_station_id)
+            if target_station_id
+            else fetch_station_by_slug_via_api(provider, slug)
+        )
     except BackendApiError as exc:
         logger.info(
             "Deep link %s~%s no resoluble (%s)", provider, slug, getattr(exc, "kind", exc)
         )
         return
+
+    if seo_click_recorded:
+        st.session_state["_suppress_next_station_visit"] = True
 
     apply_station_selection(
         {
@@ -1347,11 +1383,20 @@ def _sync_shareable_url(active_tab: str) -> None:
     connected = bool(st.session_state.get(CONNECTED))
     if connected and provider in DEEPLINK_PROVIDERS and slug:
         desired_e = f"{provider}~{slug}"
+        desired_sid = str(st.session_state.get(PROVIDER_STATION_ID, "")).strip()
         if _query_param_value("e") != desired_e:
             st.query_params["e"] = desired_e
-            st.session_state["_deeplink_consumed"] = desired_e
+        if desired_sid and _query_param_value("sid") != desired_sid:
+            st.query_params["sid"] = desired_sid
+        elif not desired_sid and "sid" in st.query_params:
+            del st.query_params["sid"]
+        st.session_state["_deeplink_consumed"] = (
+            f"{desired_e}|{desired_sid}" if desired_sid else desired_e
+        )
     elif "e" in st.query_params:
         del st.query_params["e"]
+        if "sid" in st.query_params:
+            del st.query_params["sid"]
 
 
 def _sync_active_tab_state() -> str:

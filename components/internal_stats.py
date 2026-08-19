@@ -96,6 +96,26 @@ def render_internal_stats() -> None:
     c5.metric("Estaciones distintas", totals.get("stations", 0))
     c6.metric("Errores (30 d)", error_totals.get("d30", 0))
 
+    sources = totals.get("sources", {}) or {}
+    app_source = sources.get("app", {}) or {}
+    seo_source = sources.get("seo", {}) or {}
+    legacy_source = sources.get("legacy", {}) or {}
+    panel_clicks = totals.get("panel_clicks", {}) or {}
+    st.markdown("### 🔎 Origen de las conexiones")
+    st.caption(
+        "La ficha SEO cuenta cuando carga los datos de una estación. "
+        "Abrir panel completo se registra aparte y no duplica la conexión."
+    )
+    origin_1, origin_2, origin_3, origin_4 = st.columns(4)
+    origin_1.metric("Web MeteoLabX · 30 días", app_source.get("d30", 0))
+    origin_1.caption(f"{app_source.get('total', 0)} desde el inicio")
+    origin_2.metric("Fichas SEO · 30 días", seo_source.get("d30", 0))
+    origin_2.caption(f"{seo_source.get('total', 0)} desde el inicio")
+    origin_3.metric("Panel completo desde SEO · 30 días", panel_clicks.get("d30", 0))
+    origin_3.caption(f"{panel_clicks.get('total', 0)} desde el inicio")
+    origin_4.metric("Anteriores sin origen · 30 días", legacy_source.get("d30", 0))
+    origin_4.caption(f"{legacy_source.get('total', 0)} desde el inicio")
+
     sections = data.get("sections", [])
     if sections:
         st.markdown("### 🧭 Uso de pestañas y mapas")
@@ -150,6 +170,14 @@ def render_internal_stats() -> None:
             "7 días": s.get("d7", 0),
             "30 días": s.get("d30", 0),
             "Total": s.get("total", 0),
+            "Web 30 d": s.get("app_d30", 0),
+            "Web total": s.get("app_total", 0),
+            "Ficha SEO 30 d": s.get("seo_d30", 0),
+            "Ficha SEO total": s.get("seo_total", 0),
+            "Sin origen 30 d": s.get("legacy_d30", 0),
+            "Sin origen total": s.get("legacy_total", 0),
+            "Panel completo 30 d": (s.get("panel_clicks") or {}).get("d30", 0),
+            "Panel completo total": (s.get("panel_clicks") or {}).get("total", 0),
             "Última visita": _datetime_from_epoch(s.get("last_epoch", 0)),
             "Err 30 d": (s.get("errors") or {}).get("d30", 0),
             "Err total": (s.get("errors") or {}).get("total", 0),

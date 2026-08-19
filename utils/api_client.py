@@ -139,6 +139,15 @@ def fetch_station_by_slug_via_api(provider: str, slug: str) -> Dict[str, Any]:
     )
 
 
+def fetch_station_by_id_via_api(provider: str, station_id: str) -> Dict[str, Any]:
+    """Resolve an exact catalog station for unambiguous shared links."""
+    import urllib.parse as _urllib
+
+    provider_token = _urllib.quote(str(provider or "").strip().upper(), safe="")
+    station_token = _urllib.quote(str(station_id or "").strip(), safe="")
+    return _request_json("GET", f"/v1/stations/{provider_token}/{station_token}")
+
+
 def fetch_station_countries_via_api(provider_ids: Optional[list[str]] = None) -> Dict[str, int]:
     """Return station country counts from the canonical FastAPI catalog."""
     providers = ",".join(
@@ -312,7 +321,13 @@ def _request_json(
 # Estadísticas internas de uso
 # =====================================================================
 
-def track_station_visit_via_api(provider: str, station_id: str, name: str = "") -> None:
+def track_station_visit_via_api(
+    provider: str,
+    station_id: str,
+    name: str = "",
+    *,
+    source: str = "app",
+) -> None:
     """Registra una conexión a estación. Fire-and-forget: cualquier fallo se
     traga en silencio — las estadísticas nunca deben romper una conexión."""
     try:
@@ -322,6 +337,30 @@ def track_station_visit_via_api(provider: str, station_id: str, name: str = "") 
                 "provider": str(provider or "").strip().upper(),
                 "station_id": str(station_id or "").strip(),
                 "name": str(name or "").strip(),
+                "source": "seo" if str(source or "").strip().lower() == "seo" else "app",
+            },
+            timeout=2.0,
+        )
+    except Exception:
+        pass
+
+
+def track_seo_panel_click_via_api(
+    provider: str,
+    station_id: str,
+    name: str = "",
+    *,
+    language: str = "",
+) -> None:
+    """Registra que una ficha SEO abrió el panel completo."""
+    try:
+        requests.post(
+            f"{backend_url()}/v1/stats/panel-click",
+            json={
+                "provider": str(provider or "").strip().upper(),
+                "station_id": str(station_id or "").strip(),
+                "name": str(name or "").strip(),
+                "language": str(language or "").strip().lower(),
             },
             timeout=2.0,
         )

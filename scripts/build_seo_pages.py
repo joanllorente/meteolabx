@@ -7,19 +7,21 @@ se sirvan como HTML completo, sin ejecutar JavaScript ni abrir una sesión de
 Streamlit. Cada página publica canonical propio, alternates ``hreflang`` para
 los seis idiomas de la aplicación y datos estructurados localizados.
 
-La primera fase se limita deliberadamente a redes públicas españolas. La lista
-puede ampliarse mediante ``METEOLABX_SEO_PROVIDERS`` o ``--providers`` cuando
-haya contenido suficiente para evitar páginas de poco valor.
+El catálogo incluye redes públicas españolas e internacionales. Las estaciones
+marcadas como inactivas se excluyen para evitar páginas de poco valor, al igual
+que las redes IEM, Windy y Netatmo, que no forman parte del catálogo SEO.
 """
 
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 import hashlib
 import html
 import json
 import math
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -45,14 +47,73 @@ DEFAULT_PROVIDERS = (
     "EUSKALMET",
     "METEOGALICIA",
     "POEM",
+    "METEOFRANCE",
+    "FROST",
+    "NWS",
+    "METOFFICE",
+    "METEOHUB_IT",
+    "IPMA",
+    "GEOSPHERE",
+    "SMHI",
+    "ECCC",
+    "CLIMANTARTIDE",
 )
+EXCLUDED_SEO_PROVIDERS = frozenset({"IEM", "NETATMO", "WINDY"})
 PROVIDER_LABELS = {
     "AEMET": "AEMET",
     "METEOCAT": "Meteocat",
     "EUSKALMET": "Euskalmet",
     "METEOGALICIA": "MeteoGalicia",
     "POEM": "Puertos del Estado",
+    "METEOFRANCE": "Météo-France",
+    "FROST": "Frost (MET Norway)",
+    "NWS": "National Weather Service",
+    "METOFFICE": "Met Office",
+    "METEOHUB_IT": "MeteoHub Italia",
+    "IPMA": "IPMA",
+    "GEOSPHERE": "GeoSphere Austria",
+    "SMHI": "SMHI",
+    "ECCC": "Environment Canada",
+    "CLIMANTARTIDE": "ClimAntartide",
 }
+PROVIDER_COUNTRIES = {
+    "AEMET": "ES", "METEOCAT": "ES", "EUSKALMET": "ES",
+    "METEOGALICIA": "ES", "POEM": "ES", "METEOFRANCE": "FR",
+    "FROST": "NO", "NWS": "US", "METOFFICE": "GB",
+    "METEOHUB_IT": "IT", "IPMA": "PT", "GEOSPHERE": "AT",
+    "SMHI": "SE", "ECCC": "CA", "CLIMANTARTIDE": "AQ",
+}
+LANGUAGES_BY_COUNTRY = {
+    "ES": ("es", "ca", "en", "fr", "it", "pt"),
+    "FR": ("fr", "en", "es"),
+    "CA": ("en", "fr", "es"),
+    "IT": ("it", "en", "es"),
+    "PT": ("pt", "en", "es"),
+    "US": ("en", "es"),
+    "GB": ("en", "es"),
+    "NO": ("en", "es"),
+    "AT": ("en", "es"),
+    "SE": ("en", "es"),
+    "AQ": ("en", "es"),
+}
+SITEMAP_URL_LIMIT = 50_000
+SEO_STYLESHEET = """
+:root{color-scheme:dark;--bg:#0e1117;--card:#171b24;--line:#2a3240;--text:#f5f7fb;--muted:#a9b4c4;--blue:#5da8ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.58}a{color:var(--blue)}
+header,main,footer{width:min(1040px,calc(100% - 32px));margin:auto}header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 0}.brand{color:var(--text);text-decoration:none;font-size:1.25rem;font-weight:800}.header-links{display:flex;align-items:center;gap:18px}.header-links>a{text-decoration:none}.languages{display:flex;gap:3px;padding-left:8px;border-left:1px solid var(--line)}.languages a{padding:2px 5px;color:var(--muted);font-size:.75rem;text-decoration:none}.languages a[aria-current=page]{color:var(--text);font-weight:800}
+.breadcrumbs{color:var(--muted);font-size:.9rem;margin:18px 0}.breadcrumbs a{color:var(--muted)}h1{line-height:1.14;font-size:clamp(2rem,5vw,3.25rem);margin:.35em 0}h2{margin-top:2rem;line-height:1.25}.lede{color:var(--muted);font-size:1.12rem;max-width:760px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:24px 0}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}.label{display:block;color:var(--muted);font-size:.82rem;margin-bottom:3px}.value{font-weight:700}.cta{display:inline-block;padding:12px 18px;border-radius:12px;background:#2384ff;color:#fff;font-weight:750;text-decoration:none;margin:10px 0}.cta.secondary{background:transparent;color:var(--blue);border:1px solid var(--line)}.actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 8px}
+.live-panel{margin:24px 0 34px}.observation-status{color:var(--muted);margin:12px 0;min-height:1.4em}.observation-status.error{color:#ef7373}.observation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}.observation-card{min-height:132px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px}.observation-card .obs-label{color:var(--muted);font-size:.78rem;font-weight:750;letter-spacing:.035em;text-transform:uppercase}.observation-card .obs-value{display:block;margin-top:7px;font-size:1.65rem;line-height:1.15;font-weight:800}.observation-card .obs-detail{color:var(--muted);font-size:.84rem;line-height:1.38;margin-top:9px}.observation-card .obs-extremes{color:var(--text);font-size:.8rem;font-weight:650;margin-top:8px}.observation-loader{position:fixed;left:-10000px;top:0;width:1280px;height:1200px;border:0;opacity:.01;pointer-events:none}.fallback{color:var(--muted);font-size:.9rem}ul.links{padding-left:1.2rem;columns:2;column-gap:32px}ul.links li{break-inside:avoid;margin:.5rem 0}footer{color:var(--muted);border-top:1px solid var(--line);margin-top:52px;padding:26px 0 42px;font-size:.9rem}
+@media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f7f9fc;--card:#fff;--line:#dbe2ec;--text:#101620;--muted:#596779;--blue:#176fce}}@media(max-width:760px){.header-links>a{display:none}ul.links{columns:1}.observation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.actions .cta{width:100%;text-align:center}}@media(max-width:430px){.observation-grid{grid-template-columns:1fr}}
+""".strip()
+SEO_OBSERVATION_SCRIPT = r"""
+document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('.live-panel').forEach(section=>{
+const frame=section.querySelector('.observation-loader'),status=section.querySelector('[data-observation-status]'),slots=Array.from(section.querySelectorAll('[data-observation-slot]'));
+const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
+const syncObservation=()=>{try{const doc=frame.contentDocument;if(!doc)return false;const grid=Array.from(doc.querySelectorAll('.grid.grid-3')).find(item=>item.querySelectorAll(':scope > .card .card-value').length>=6);if(!grid){const alert=doc.querySelector('[data-testid="stAlert"]');if(alert){status.textContent=clean(alert.innerText).slice(0,260);status.classList.add('error')}return false}
+Array.from(grid.querySelectorAll(':scope > .card')).slice(0,6).forEach((source,index)=>{const target=slots[index];if(!target)return;const value=clean(source.querySelector('.card-value')?.innerText),detail=clean(source.querySelector('.subtitle')?.innerText),unit=clean(source.querySelector('.unit')?.innerText),side=clean(source.querySelector('.side-col')?.innerText),extremes=side.replace(',','.').match(/-?\d+(?:\.\d+)?/g)||[],current=value.replace(',','.').match(/-?\d+(?:\.\d+)?/);if(current&&extremes.length){const number=Number(current[0]);if(Number.isFinite(number)&&number>Number(extremes[0]))extremes[0]=current[0];if(extremes.length>=2&&Number.isFinite(number)&&number<Number(extremes[1]))extremes[1]=current[0]}target.querySelector('.obs-value').textContent=value&&!value.startsWith('—')?value:'—';target.querySelector('.obs-detail').textContent=detail;const withUnit=number=>unit?`${number} ${unit}`:number;target.querySelector('.obs-extremes').textContent=extremes.length>=2?`${section.dataset.maximumLabel} ${withUnit(extremes[0])} · ${section.dataset.minimumLabel} ${withUnit(extremes[1])}`:extremes.length===1?`${section.dataset.maximumLabel} ${withUnit(extremes[0])}`:''});
+const meta=doc.querySelector('.meta .mlbx-live-age')?.closest('.meta');status.textContent=clean(meta?.innerText)||section.dataset.updatedLabel;status.classList.remove('error');return true}catch(error){return false}};
+frame.addEventListener('load',syncObservation);let attempts=0;const timer=window.setInterval(()=>{attempts+=1;if(syncObservation()||attempts>=120)window.clearInterval(timer)},250);window.setInterval(syncObservation,60000);syncObservation()}));
+""".strip()
 SENSOR_KEYS = (
     "thermometer",
     "hygrometer",
@@ -91,6 +152,10 @@ class StationPage:
     def provider_label(self) -> str:
         return PROVIDER_LABELS.get(self.provider, self.provider)
 
+    @property
+    def language_codes(self) -> tuple[str, ...]:
+        return LANGUAGES_BY_COUNTRY.get(self.country, ("en", "es"))
+
     def path(self, language: LanguageSpec) -> str:
         return (
             f"/{language.code}/{language.directory_slug}/"
@@ -101,6 +166,11 @@ class StationPage:
         return f"{SITE_URL}{self.path(language)}"
 
     def location_label(self, language: LanguageSpec) -> str:
+        localized = STATION_LOCATION_NAMES.get(
+            (self.provider.upper(), self.station_id.upper()), {}
+        ).get(language.code)
+        if localized:
+            return localized
         parts: list[str] = []
         for value in (
             self.locality,
@@ -112,17 +182,37 @@ class StationPage:
                 parts.append(clean)
         return ", ".join(parts)
 
-    def app_url(self, language: LanguageSpec, *, tab: str = "observacion") -> str:
+    def app_url(
+        self,
+        language: LanguageSpec,
+        *,
+        tab: str = "observacion",
+        from_seo: bool = False,
+    ) -> str:
         # ``lang`` se consume una sola vez por la app y luego se limpia de la
         # barra de direcciones; ``e`` mantiene el deep link existente.
-        query = urlencode(
-            {
+        params = {
                 "e": f"{self.provider}~{slugify(self.name)}",
+                "sid": self.station_id,
                 "tab": tab,
                 "lang": language.code,
             }
-        )
+        if from_seo:
+            params["from"] = "seo"
+        query = urlencode(params)
         return f"{SITE_URL}/?{query}"
+
+    def embedded_app_path(self, language: LanguageSpec) -> str:
+        query = urlencode(
+            {
+                "e": f"{self.provider}~{slugify(self.name)}",
+                "sid": self.station_id,
+                "tab": "observacion",
+                "lang": language.code,
+                "embed": "seo",
+            }
+        )
+        return f"/?{query}"
 
 
 @dataclass(frozen=True)
@@ -151,6 +241,18 @@ CITIES = (
     CityPage("a-coruna", "A Coruña", 43.3623, -8.4115, 20.0),
     CityPage("vigo", "Vigo", 42.2406, -8.7207, 20.0),
     CityPage("palma", "Palma", 39.5696, 2.6502, 25.0),
+    CityPage("paris", "Paris", 48.8566, 2.3522, 30.0),
+    CityPage("london", "London", 51.5074, -0.1278, 35.0),
+    CityPage("rome", "Roma", 41.9028, 12.4964, 30.0),
+    CityPage("lisbon", "Lisboa", 38.7223, -9.1393, 30.0),
+    CityPage("oslo", "Oslo", 59.9139, 10.7522, 30.0),
+    CityPage("stockholm", "Stockholm", 59.3293, 18.0686, 30.0),
+    CityPage("vienna", "Wien", 48.2082, 16.3738, 30.0),
+    CityPage("new-york", "New York", 40.7128, -74.0060, 40.0),
+    CityPage("washington-dc", "Washington, D.C.", 38.9072, -77.0369, 40.0),
+    CityPage("toronto", "Toronto", 43.6532, -79.3832, 40.0),
+    CityPage("montreal", "Montréal", 45.5017, -73.5673, 40.0),
+    CityPage("vancouver", "Vancouver", 49.2827, -123.1207, 40.0),
 )
 
 STATION_SEARCH_NAMES: dict[tuple[str, str], dict[str, str]] = {
@@ -160,6 +262,24 @@ STATION_SEARCH_NAMES: dict[tuple[str, str], dict[str, str]] = {
         "fr": "Observatoire Fabra",
         "it": "Osservatorio Fabra",
         "pt": "Observatório Fabra",
+    },
+    ("METEOFRANCE", "75107005"): {
+        "es": "Torre Eiffel, París",
+        "ca": "Torre Eiffel, París",
+        "en": "Eiffel Tower, Paris",
+        "fr": "Tour Eiffel, Paris",
+        "it": "Torre Eiffel, Parigi",
+        "pt": "Torre Eiffel, Paris",
+    },
+}
+STATION_LOCATION_NAMES: dict[tuple[str, str], dict[str, str]] = {
+    ("METEOFRANCE", "75107005"): {
+        "es": "París, Francia",
+        "ca": "París, França",
+        "en": "Paris, France",
+        "fr": "Paris, France",
+        "it": "Parigi, Francia",
+        "pt": "Paris, França",
     },
 }
 
@@ -203,7 +323,8 @@ def _parse_providers(raw: str | None) -> tuple[str, ...]:
         for token in str(raw or "").split(",")
         if token.strip()
     )
-    return providers or DEFAULT_PROVIDERS
+    selected = providers or DEFAULT_PROVIDERS
+    return tuple(provider for provider in selected if provider not in EXCLUDED_SEO_PROVIDERS)
 
 
 def _display_name(value: object) -> str:
@@ -244,6 +365,11 @@ def _unique_url_slugs(rows: Sequence[sqlite3.Row]) -> dict[int, str]:
 def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]:
     if not database.is_file():
         raise FileNotFoundError(f"No existe el catálogo SQLite: {database}")
+    providers = tuple(
+        str(provider).strip().upper()
+        for provider in providers
+        if str(provider).strip().upper() not in EXCLUDED_SEO_PROVIDERS
+    )
     if not providers:
         return []
 
@@ -251,7 +377,7 @@ def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]
     query = f"""
         SELECT s.station_pk, s.provider, s.network_code, s.station_id, s.name,
                s.latitude, s.longitude, s.elevation_m, s.timezone, s.country,
-               s.region, s.locality, s.has_historical,
+               s.region, s.locality, s.has_historical, s.online,
                ss.thermometer, ss.hygrometer, ss.barometer, ss.anemometer,
                ss.wind_vane, ss.rain_gauge, ss.pyranometer, ss.uv
         FROM stations s
@@ -259,6 +385,7 @@ def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]
         LEFT JOIN station_visibility_overrides svo USING(station_pk)
         WHERE s.provider IN ({placeholders})
           AND COALESCE(svo.hidden, 0) = 0
+          AND COALESCE(s.online, 1) = 1
           AND s.name IS NOT NULL AND TRIM(s.name) <> ''
           AND s.latitude IS NOT NULL AND s.longitude IS NOT NULL
         ORDER BY s.provider, s.name COLLATE NOCASE, s.station_id COLLATE NOCASE
@@ -282,7 +409,7 @@ def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]
             longitude=float(row["longitude"]),
             elevation_m=float(row["elevation_m"]) if row["elevation_m"] is not None else None,
             timezone=str(row["timezone"] or ""),
-            country=str(row["country"] or "ES").upper(),
+            country=str(row["country"] or PROVIDER_COUNTRIES.get(str(row["provider"]), "")).upper(),
             region=str(row["region"] or ""),
             locality=str(row["locality"] or ""),
             has_historical=bool(row["has_historical"]),
@@ -316,6 +443,61 @@ def _nearest_stations(
         results.append((candidate, distance))
     results.sort(key=lambda item: (item[1], item[0].name.casefold()))
     return results[:limit]
+
+
+def _nearest_station_map(
+    stations: Sequence[StationPage],
+    *,
+    limit: int = 6,
+) -> dict[int, list[tuple[StationPage, float]]]:
+    """Find nearby stations with a spatial grid instead of an O(n²) scan."""
+    buckets: dict[tuple[int, int], list[StationPage]] = defaultdict(list)
+    for station in stations:
+        if station.latitude is None or station.longitude is None:
+            continue
+        buckets[(math.floor(station.latitude), math.floor(station.longitude))].append(station)
+
+    result: dict[int, list[tuple[StationPage, float]]] = {}
+    for station in stations:
+        if station.latitude is None or station.longitude is None:
+            result[station.station_pk] = []
+            continue
+        origin_lat = math.floor(station.latitude)
+        origin_lon = math.floor(station.longitude)
+        candidates: dict[int, StationPage] = {}
+        for ring in range(0, 4):
+            for lat_cell in range(origin_lat - ring, origin_lat + ring + 1):
+                if lat_cell < -90 or lat_cell > 90:
+                    continue
+                for lon_cell in range(origin_lon - ring, origin_lon + ring + 1):
+                    if ring and (
+                        lat_cell not in {origin_lat - ring, origin_lat + ring}
+                        and lon_cell not in {origin_lon - ring, origin_lon + ring}
+                    ):
+                        continue
+                    wrapped_lon = ((lon_cell + 180) % 360) - 180
+                    for candidate in buckets.get((lat_cell, wrapped_lon), ()):
+                        if candidate.station_pk != station.station_pk:
+                            candidates[candidate.station_pk] = candidate
+            if len(candidates) >= limit:
+                break
+
+        distances = [
+            (
+                candidate,
+                _distance_km(
+                    station.latitude,
+                    station.longitude,
+                    candidate.latitude,
+                    candidate.longitude,
+                ),
+            )
+            for candidate in candidates.values()
+            if candidate.latitude is not None and candidate.longitude is not None
+        ]
+        distances.sort(key=lambda item: (item[1], item[0].name.casefold()))
+        result[station.station_pk] = distances[:limit]
+    return result
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -362,13 +544,19 @@ def _station_alternates(station: StationPage) -> dict[str, str]:
     return {
         code: station.canonical_url(language)
         for code, language in LANGUAGES.items()
+        if code in station.language_codes
     }
 
 
-def _provider_alternates(provider: str) -> dict[str, str]:
+def _provider_alternates(
+    provider: str,
+    stations: Sequence[StationPage],
+) -> dict[str, str]:
+    available_codes = {code for station in stations for code in station.language_codes}
     return {
         code: f"{SITE_URL}{_provider_path(provider, language)}"
         for code, language in LANGUAGES.items()
+        if code in available_codes
     }
 
 
@@ -379,17 +567,33 @@ def _directory_alternates() -> dict[str, str]:
     }
 
 
-def _city_alternates(city: CityPage) -> dict[str, str]:
+def _city_alternates(
+    city: CityPage,
+    matches: Sequence[tuple[StationPage, float]],
+) -> dict[str, str]:
+    available_codes = {
+        code for station, _distance in matches for code in station.language_codes
+    }
     return {
         code: city.canonical_url(language)
         for code, language in LANGUAGES.items()
+        if code in available_codes
     }
 
 
-def _city_directory_alternates() -> dict[str, str]:
+def _city_directory_alternates(
+    city_matches: Mapping[CityPage, Sequence[tuple[StationPage, float]]],
+) -> dict[str, str]:
+    available_codes = {
+        code
+        for matches in city_matches.values()
+        for station, _distance in matches
+        for code in station.language_codes
+    }
     return {
         code: f"{SITE_URL}{_city_directory_path(language)}"
         for code, language in LANGUAGES.items()
+        if code in available_codes
     }
 
 
@@ -419,7 +623,7 @@ def _language_navigation(
     return '<div class="languages" aria-label="Language">' + "".join(links) + "</div>"
 
 
-def _page_shell(
+def _page_shell_inline_legacy(
     *,
     language: LanguageSpec,
     title: str,
@@ -491,12 +695,35 @@ def _page_shell(
     .value {{ font-weight:700; }}
     .cta {{ display:inline-block; padding:12px 18px; border-radius:12px; background:#2384ff;
       color:white; font-weight:750; text-decoration:none; margin:10px 0; }}
+    .cta.secondary {{ background:transparent; color:var(--blue); border:1px solid var(--line); }}
+    .actions {{ display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 8px; }}
+    .live-panel {{ margin:24px 0 34px; }}
+    .observation-status {{ color:var(--muted); margin:12px 0; min-height:1.4em; }}
+    .observation-status.error {{ color:#ef7373; }}
+    .observation-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px;
+      margin:18px 0; }}
+    .observation-card {{ min-height:132px; background:var(--card); border:1px solid var(--line);
+      border-radius:16px; padding:17px; }}
+    .observation-card .obs-label {{ color:var(--muted); font-size:.78rem; font-weight:750;
+      letter-spacing:.035em; text-transform:uppercase; }}
+    .observation-card .obs-value {{ display:block; margin-top:7px; font-size:1.65rem;
+      line-height:1.15; font-weight:800; }}
+    .observation-card .obs-detail {{ color:var(--muted); font-size:.84rem; line-height:1.38;
+      margin-top:9px; }}
+    .observation-card .obs-extremes {{ color:var(--text); font-size:.8rem; font-weight:650;
+      margin-top:8px; }}
+    .observation-loader {{ position:fixed; left:-10000px; top:0; width:1280px; height:1200px;
+      border:0; opacity:.01; pointer-events:none; }}
+    .fallback {{ color:var(--muted); font-size:.9rem; }}
     ul.links {{ padding-left:1.2rem; columns:2; column-gap:32px; }}
     ul.links li {{ break-inside:avoid; margin:.5rem 0; }}
     footer {{ color:var(--muted); border-top:1px solid var(--line); margin-top:52px; padding:26px 0 42px; font-size:.9rem; }}
     @media (prefers-color-scheme:light) {{ :root {{ color-scheme:light; --bg:#f7f9fc;
       --card:#fff; --line:#dbe2ec; --text:#101620; --muted:#596779; --blue:#176fce; }} }}
-    @media (max-width:760px) {{ .header-links>a {{ display:none; }} ul.links {{ columns:1; }} }}
+    @media (max-width:760px) {{ .header-links>a {{ display:none; }} ul.links {{ columns:1; }}
+      .observation-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+      .actions .cta {{ width:100%; text-align:center; }} }}
+    @media (max-width:430px) {{ .observation-grid {{ grid-template-columns:1fr; }} }}
   </style>
 </head>
 <body>
@@ -511,6 +738,41 @@ def _page_shell(
 </body>
 </html>
 """
+
+
+def _page_shell(
+    *,
+    language: LanguageSpec,
+    title: str,
+    description: str,
+    canonical_url: str,
+    alternates: Mapping[str, str],
+    body: str,
+    structured_data: Sequence[object],
+) -> str:
+    safe_title = html.escape(title)
+    safe_description = html.escape(description, quote=True)
+    safe_canonical = html.escape(canonical_url, quote=True)
+    json_ld = "".join(
+        f'<script type="application/ld+json">{_json_script(item)}</script>'
+        for item in structured_data
+    )
+    return f"""<!doctype html><html lang="{language.code}"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{safe_title}</title><meta name="description" content="{safe_description}">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="{safe_canonical}">{_alternate_tags(alternates)}
+<link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png">
+<link rel="stylesheet" href="/seo-pages.css?v=1">
+<meta property="og:type" content="website"><meta property="og:site_name" content="MeteoLabX">
+<meta property="og:locale" content="{language.og_locale}"><meta property="og:url" content="{safe_canonical}">
+<meta property="og:title" content="{safe_title}"><meta property="og:description" content="{safe_description}">
+<meta property="og:image" content="{SITE_URL}/og-image.png?v=12"><meta name="twitter:card" content="summary_large_image">
+{json_ld}<script src="/seo-observation.js?v=1" defer></script></head><body><header><a class="brand" href="/">MeteoLabX</a><div class="header-links">
+<a href="{_city_directory_path(language)}">{html.escape(language.t('cities'))}</a>
+<a href="{_directory_path(language)}">{html.escape(language.t('stations'))}</a>
+<a href="/">{html.escape(language.t('panel'))}</a>{_language_navigation(language, alternates)}</div></header>
+<main>{body}</main><footer>{html.escape(language.t('footer'))}</footer></body></html>"""
 
 
 def _station_html(
@@ -538,6 +800,25 @@ def _station_html(
     sensors = ", ".join(language.sensors[key] for key in station.sensor_keys)
     sensors = sensors or language.t("sensor_unknown")
     history = language.t("available" if station.has_historical else "current_only")
+    panel_url = station.app_url(language, from_seo=True)
+    embedded_url = station.embedded_app_path(language)
+    observation_labels = (
+        language.t("obs_temperature"),
+        language.t("obs_humidity"),
+        language.t("obs_dew_point"),
+        language.t("obs_pressure"),
+        language.t("obs_wind"),
+        language.t("obs_precipitation"),
+    )
+    observation_cards = "".join(
+        f"""<div class="observation-card" data-observation-slot="{index}">
+          <span class="obs-label">{html.escape(label)}</span>
+          <span class="obs-value">—</span>
+          <div class="obs-detail"></div>
+          <div class="obs-extremes"></div>
+        </div>"""
+        for index, label in enumerate(observation_labels)
+    )
     history_section = ""
     if station.has_historical:
         history_section = f"""
@@ -559,9 +840,100 @@ def _station_html(
     <p class="label">{html.escape(language.t('station_type'))} · {html.escape(station.provider_label)}</p>
     <h1>{html.escape(station.name)}</h1>
     <p class="lede">{html.escape(language.t('station_lede', name=search_name, provider=station.provider_label, location=location))}</p>
-    <section aria-labelledby="current"><h2 id="current">{html.escape(language.t('current_title', name=search_name))}</h2>
-      <p>{html.escape(language.t('current_text', name=search_name))}</p>
-      <a class="cta" href="{html.escape(station.app_url(language), quote=True)}">{html.escape(language.t('cta'))}</a></section>
+    <section class="live-panel" aria-label="{html.escape(language.t('current_title', name=search_name), quote=True)}"
+      data-maximum-label="{html.escape(language.t('maximum'), quote=True)}"
+      data-minimum-label="{html.escape(language.t('minimum'), quote=True)}"
+      data-updated-label="{html.escape(language.t('observation_updated'), quote=True)}">
+      <div class="observation-status" data-observation-status>{html.escape(language.t('live_panel_loading'))}</div>
+      <div class="observation-grid" aria-live="polite">
+        {observation_cards}
+      </div>
+      <iframe class="observation-loader" src="{html.escape(embedded_url, quote=True)}"
+        title="" tabindex="-1" aria-hidden="true" loading="eager"
+        referrerpolicy="same-origin"></iframe>
+      <script>
+      (() => {{
+        const section = document.currentScript.closest('.live-panel');
+        const frame = section.querySelector('.observation-loader');
+        const status = section.querySelector('[data-observation-status]');
+        const slots = Array.from(section.querySelectorAll('[data-observation-slot]'));
+        const maximumLabel = {json.dumps(language.t('maximum'), ensure_ascii=False)};
+        const minimumLabel = {json.dumps(language.t('minimum'), ensure_ascii=False)};
+
+        const clean = value => String(value || '').replace(/\\s+/g, ' ').trim();
+
+        const syncObservation = () => {{
+          try {{
+            const doc = frame.contentDocument;
+            if (!doc) return false;
+            const primaryGrid = Array.from(doc.querySelectorAll('.grid.grid-3')).find(
+              grid => grid.querySelectorAll(':scope > .card .card-value').length >= 6
+            );
+            if (!primaryGrid) {{
+              const alert = doc.querySelector('[data-testid="stAlert"]');
+              if (alert) {{
+                status.textContent = clean(alert.innerText).slice(0, 260);
+                status.classList.add('error');
+              }}
+              return false;
+            }}
+
+            const sourceCards = Array.from(primaryGrid.querySelectorAll(':scope > .card')).slice(0, 6);
+            sourceCards.forEach((source, index) => {{
+              const target = slots[index];
+              if (!target) return;
+              const value = clean(source.querySelector('.card-value')?.innerText);
+              const detail = clean(source.querySelector('.subtitle')?.innerText);
+              const unit = clean(source.querySelector('.unit')?.innerText);
+              const side = clean(source.querySelector('.side-col')?.innerText);
+              const extremes = side.replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/g) || [];
+              const currentMatch = value.replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/);
+              if (currentMatch && extremes.length) {{
+                const currentNumber = Number(currentMatch[0]);
+                if (Number.isFinite(currentNumber) && currentNumber > Number(extremes[0])) {{
+                  extremes[0] = currentMatch[0];
+                }}
+                if (extremes.length >= 2 && Number.isFinite(currentNumber) && currentNumber < Number(extremes[1])) {{
+                  extremes[1] = currentMatch[0];
+                }}
+              }}
+              target.querySelector('.obs-value').textContent = value && !value.startsWith('—') ? value : '—';
+              target.querySelector('.obs-detail').textContent = detail;
+              const withUnit = number => unit ? `${{number}} ${{unit}}` : number;
+              let extremesText = '';
+              if (extremes.length >= 2) {{
+                extremesText = `${{maximumLabel}} ${{withUnit(extremes[0])}} · ${{minimumLabel}} ${{withUnit(extremes[1])}}`;
+              }} else if (extremes.length === 1) {{
+                extremesText = `${{maximumLabel}} ${{withUnit(extremes[0])}}`;
+              }}
+              target.querySelector('.obs-extremes').textContent = extremesText;
+            }});
+
+            const meta = doc.querySelector('.meta .mlbx-live-age')?.closest('.meta');
+            status.textContent = clean(meta?.innerText) || {json.dumps(language.t('observation_updated'), ensure_ascii=False)};
+            status.classList.remove('error');
+
+            return true;
+          }} catch (error) {{
+            return false;
+          }}
+        }};
+
+        frame.addEventListener('load', syncObservation);
+        let attempts = 0;
+        const initialTimer = window.setInterval(() => {{
+          attempts += 1;
+          if (syncObservation() || attempts >= 120) window.clearInterval(initialTimer);
+        }}, 250);
+        window.setInterval(syncObservation, 60000);
+        syncObservation();
+      }})();
+      </script>
+      <div class="actions">
+        <a class="cta" href="{html.escape(panel_url, quote=True)}" target="_top">{html.escape(language.t('open_full_panel'))}</a>
+      </div>
+      <noscript><p><a href="{html.escape(panel_url, quote=True)}">{html.escape(language.t('open_full_panel'))}</a></p></noscript>
+    </section>
     <section aria-labelledby="profile"><h2 id="profile">{html.escape(language.t('station_sheet'))}</h2><div class="grid">
       <div class="card"><span class="label">{html.escape(language.t('network'))}</span><span class="value">{html.escape(station.provider_label)}</span></div>
       <div class="card"><span class="label">{html.escape(language.t('identifier'))}</span><span class="value">{html.escape(station.station_id)}</span></div>
@@ -575,6 +947,7 @@ def _station_html(
     {history_section}
     <section aria-labelledby="nearby"><h2 id="nearby">{html.escape(language.t('nearby'))}</h2><ul class="links">{nearby_items}</ul></section>
     """
+    body = re.sub(r"\s*<script>\s*\(\(\) => \{.*?</script>", "", body, flags=re.DOTALL)
     breadcrumb = {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
@@ -611,7 +984,7 @@ def _provider_index_html(
 ) -> str:
     label = PROVIDER_LABELS.get(provider, provider)
     canonical = f"{SITE_URL}{_provider_path(provider, language)}"
-    alternates = _provider_alternates(provider)
+    alternates = _provider_alternates(provider, stations)
     title = language.t("provider_title", provider=label)
     description = language.t(
         "provider_description", count=len(stations), provider=label
@@ -675,7 +1048,7 @@ def _city_html(
     )
     networks = ", ".join(provider_names)
     canonical = city.canonical_url(language)
-    alternates = _city_alternates(city)
+    alternates = _city_alternates(city, matches)
     city_directory_path = _city_directory_path(language)
     title = language.t("city_title", city=city.name)
     description = language.t(
@@ -746,7 +1119,7 @@ def _city_directory_html(
     language: LanguageSpec,
 ) -> str:
     canonical = f"{SITE_URL}{_city_directory_path(language)}"
-    alternates = _city_directory_alternates()
+    alternates = _city_directory_alternates(city_matches)
     cards = "".join(
         f'<article class="card"><span class="label">{html.escape(language.t("city_indexed", count=len(matches)))}</span>'
         f'<h2><a href="{html.escape(city.path(language), quote=True)}">{html.escape(city.name)}</a></h2></article>'
@@ -811,22 +1184,70 @@ def _sitemap(alternate_groups: Sequence[Mapping[str, str]]) -> str:
     )
 
 
+def _plain_sitemap(urls: Sequence[str]) -> str:
+    entries = "\n".join(
+        f"  <url><loc>{xml_escape(url)}</loc></url>" for url in urls
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n</urlset>\n"
+    )
+
+
+def _sitemap_index(names: Sequence[str]) -> str:
+    entries = "\n".join(
+        f"  <sitemap><loc>{SITE_URL}/{xml_escape(name)}</loc></sitemap>"
+        for name in names
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n</sitemapindex>\n"
+    )
+
+
+def _write_sitemaps(
+    output: Path,
+    alternate_groups: Sequence[Mapping[str, str]],
+) -> int:
+    sitemap_url_count = 1 + sum(len(group) for group in alternate_groups)
+    for stale in output.glob("sitemap-*.xml"):
+        stale.unlink()
+    if sitemap_url_count <= SITEMAP_URL_LIMIT:
+        _write_text(output / "sitemap.xml", _sitemap(alternate_groups))
+        return sitemap_url_count
+
+    urls = [f"{SITE_URL}/"]
+    urls.extend(url for group in alternate_groups for url in group.values())
+    names: list[str] = []
+    for index, offset in enumerate(range(0, len(urls), SITEMAP_URL_LIMIT), start=1):
+        name = f"sitemap-{index}.xml"
+        names.append(name)
+        _write_text(
+            output / name,
+            _plain_sitemap(urls[offset : offset + SITEMAP_URL_LIMIT]),
+        )
+    _write_text(output / "sitemap.xml", _sitemap_index(names))
+    return sitemap_url_count
+
+
 def build_pages(
     *,
     database: Path,
     output: Path,
     providers: Sequence[str] = DEFAULT_PROVIDERS,
 ) -> dict[str, int]:
+    output.mkdir(parents=True, exist_ok=True)
+    _write_text(output / "seo-pages.css", SEO_STYLESHEET + "\n")
+    _write_text(output / "seo-observation.js", SEO_OBSERVATION_SCRIPT + "\n")
     stations = load_stations(database, providers)
     by_provider = {
         provider: [station for station in stations if station.provider == provider]
         for provider in providers
     }
     by_provider = {provider: rows for provider, rows in by_provider.items() if rows}
-    nearby_by_station = {
-        station.station_pk: _nearest_stations(station, stations)
-        for station in stations
-    }
+    nearby_by_station = _nearest_station_map(stations)
     city_matches = {
         city: matches
         for city in CITIES
@@ -834,6 +1255,26 @@ def build_pages(
     }
 
     for language in LANGUAGES.values():
+        localized_by_provider = {
+            provider: [
+                station
+                for station in provider_stations
+                if language.code in station.language_codes
+            ]
+            for provider, provider_stations in by_provider.items()
+        }
+        localized_by_provider = {
+            provider: rows for provider, rows in localized_by_provider.items() if rows
+        }
+        localized_city_matches = {
+            city: [
+                item for item in matches if language.code in item[0].language_codes
+            ]
+            for city, matches in city_matches.items()
+        }
+        localized_city_matches = {
+            city: matches for city, matches in localized_city_matches.items() if matches
+        }
         generated_root = output / language.code / language.directory_slug
         if generated_root.exists():
             shutil.rmtree(generated_root)
@@ -844,19 +1285,19 @@ def build_pages(
         city_root.mkdir(parents=True, exist_ok=True)
         _write_text(
             output / language.code / f"{language.directory_slug}.html",
-            _directory_html(by_provider, language),
+            _directory_html(localized_by_provider, language),
         )
-        if city_matches:
+        if localized_city_matches:
             _write_text(
                 output / language.code / f"{language.city_slug}.html",
-                _city_directory_html(city_matches, language),
+                _city_directory_html(localized_city_matches, language),
             )
-            for city, matches in city_matches.items():
+            for city, matches in localized_city_matches.items():
                 _write_text(
                     city_root / f"{city.slug}.html",
                     _city_html(city, matches, language),
                 )
-        for provider, provider_stations in by_provider.items():
+        for provider, provider_stations in localized_by_provider.items():
             provider_root = generated_root / slugify(provider)
             _write_text(
                 generated_root / f"{slugify(provider)}.html",
@@ -868,23 +1309,31 @@ def build_pages(
                     _station_html(
                         station,
                         language,
-                        nearby_by_station[station.station_pk],
+                        [
+                            item
+                            for item in nearby_by_station[station.station_pk]
+                            if language.code in item[0].language_codes
+                        ],
                     ),
                 )
 
     alternate_groups: list[Mapping[str, str]] = [_directory_alternates()]
-    alternate_groups.extend(_provider_alternates(provider) for provider in by_provider)
+    alternate_groups.extend(
+        _provider_alternates(provider, provider_stations)
+        for provider, provider_stations in by_provider.items()
+    )
     alternate_groups.extend(_station_alternates(station) for station in stations)
     if city_matches:
-        alternate_groups.append(_city_directory_alternates())
-        alternate_groups.extend(_city_alternates(city) for city in city_matches)
-    sitemap_url_count = 1 + len(alternate_groups) * len(LANGUAGES)
-    _write_text(output / "sitemap.xml", _sitemap(alternate_groups))
+        alternate_groups.append(_city_directory_alternates(city_matches))
+        alternate_groups.extend(
+            _city_alternates(city, matches) for city, matches in city_matches.items()
+        )
+    sitemap_url_count = _write_sitemaps(output, alternate_groups)
     _write_text(
         output / "robots.txt",
         "User-agent: *\nAllow: /\n\nSitemap: https://www.meteolabx.com/sitemap.xml\n",
     )
-    localized_pages = len(alternate_groups) * len(LANGUAGES)
+    localized_pages = sum(len(group) for group in alternate_groups)
     return {
         "stations": len(stations),
         "providers": len(by_provider),

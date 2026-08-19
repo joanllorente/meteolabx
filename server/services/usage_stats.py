@@ -1,12 +1,15 @@
 """
-Estadísticas internas de uso: visitas (conexiones) por estación, errores de
-conexión y entradas a pestañas/mapas.
+Estadísticas internas de uso: visitas (conexiones) por estación y origen,
+aperturas del panel completo desde fichas SEO, errores de conexión y entradas
+a pestañas/mapas.
 
 Cada vez que un usuario se conecta a una estación (selector, mapa, ranking,
 deep link o autoconexión) el frontend registra una visita vía
 ``POST /v1/stats/visit``. Si la conexión falla, registra el error vía
 ``POST /v1/stats/error`` con la categoría (timeout, unauthorized, network…).
-Las entradas a secciones se registran mediante ``POST /v1/stats/section``.
+Las fichas SEO se distinguen de la web normal y sus aperturas del panel se
+registran mediante ``POST /v1/stats/panel-click``. Las entradas a secciones se
+registran mediante ``POST /v1/stats/section``.
 El panel interno (credenciales especiales en el formulario WU) las consulta
 agregadas por ventanas temporales.
 
@@ -32,6 +35,7 @@ CREATE TABLE IF NOT EXISTS station_visits (
     provider TEXT NOT NULL,
     station_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'app',
     epoch INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_visits_station ON station_visits(provider, station_id);
@@ -58,6 +62,16 @@ CREATE TABLE IF NOT EXISTS section_visits (
 );
 CREATE INDEX IF NOT EXISTS idx_section_visits_section ON section_visits(section);
 CREATE INDEX IF NOT EXISTS idx_section_visits_epoch ON section_visits(epoch);
+CREATE TABLE IF NOT EXISTS seo_panel_clicks (
+    click_pk INTEGER PRIMARY KEY,
+    provider TEXT NOT NULL,
+    station_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    language TEXT NOT NULL DEFAULT '',
+    epoch INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_seo_clicks_station ON seo_panel_clicks(provider, station_id);
+CREATE INDEX IF NOT EXISTS idx_seo_clicks_epoch ON seo_panel_clicks(epoch);
 """
 
 TRACKED_SECTIONS = (
@@ -95,18 +109,60 @@ def _connect(settings=None) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
     connection.executescript(_SCHEMA)
+    visit_columns = {
+        str(row[1]) for row in connection.execute("PRAGMA table_info(station_visits)")
+    }
+    if "source" not in visit_columns:
+        connection.execute(
+            "ALTER TABLE station_visits ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'"
+        )
     return connection
 
 
-def record_visit(provider: str, station_id: str, name: str = "", *, settings=None) -> None:
+def record_visit(
+    provider: str,
+    station_id: str,
+    name: str = "",
+    *,
+    source: str = "app",
+    settings=None,
+) -> None:
+    provider = str(provider or "").strip().upper()
+    station_id = str(station_id or "").strip()
+    if not provider or not station_id:
+        return
+    source = str(source or "").strip().lower()
+    source = source if source in {"app", "seo"} else "app"
+    with _connect(settings) as connection:
+        connection.execute(
+            "INSERT INTO station_visits(provider, station_id, name, source, epoch) VALUES (?, ?, ?, ?, ?)",
+            (provider, station_id, str(name or "").strip()[:120], source, int(time.time())),
+        )
+
+
+def record_seo_panel_click(
+    provider: str,
+    station_id: str,
+    name: str = "",
+    *,
+    language: str = "",
+    settings=None,
+) -> None:
     provider = str(provider or "").strip().upper()
     station_id = str(station_id or "").strip()
     if not provider or not station_id:
         return
     with _connect(settings) as connection:
         connection.execute(
-            "INSERT INTO station_visits(provider, station_id, name, epoch) VALUES (?, ?, ?, ?)",
-            (provider, station_id, str(name or "").strip()[:120], int(time.time())),
+            "INSERT INTO seo_panel_clicks(provider, station_id, name, language, epoch)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                provider,
+                station_id,
+                str(name or "").strip()[:120],
+                str(language or "").strip().lower()[:8],
+                int(time.time()),
+            ),
         )
 
 
@@ -164,13 +220,22 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   SUM(CASE WHEN source = 'app' THEN 1 ELSE 0 END) AS app_total,
+                   SUM(CASE WHEN source = 'app' AND epoch >= ? THEN 1 ELSE 0 END) AS app_d30,
+                   SUM(CASE WHEN source = 'seo' THEN 1 ELSE 0 END) AS seo_total,
+                   SUM(CASE WHEN source = 'seo' AND epoch >= ? THEN 1 ELSE 0 END) AS seo_d30,
+                   SUM(CASE WHEN source = 'legacy' THEN 1 ELSE 0 END) AS legacy_total,
+                   SUM(CASE WHEN source = 'legacy' AND epoch >= ? THEN 1 ELSE 0 END) AS legacy_d30,
                    MAX(epoch) AS last_epoch
             FROM station_visits v
             GROUP BY provider, station_id
             ORDER BY total DESC, last_epoch DESC
             LIMIT {int(limit)}
             """,
-            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+            (
+                now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"],
+                now - WINDOWS["d30"], now - WINDOWS["d30"], now - WINDOWS["d30"],
+            ),
         ).fetchall()
         totals_row = connection.execute(
             """
@@ -178,10 +243,19 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   SUM(CASE WHEN source = 'app' THEN 1 ELSE 0 END) AS app_total,
+                   SUM(CASE WHEN source = 'app' AND epoch >= ? THEN 1 ELSE 0 END) AS app_d30,
+                   SUM(CASE WHEN source = 'seo' THEN 1 ELSE 0 END) AS seo_total,
+                   SUM(CASE WHEN source = 'seo' AND epoch >= ? THEN 1 ELSE 0 END) AS seo_d30,
+                   SUM(CASE WHEN source = 'legacy' THEN 1 ELSE 0 END) AS legacy_total,
+                   SUM(CASE WHEN source = 'legacy' AND epoch >= ? THEN 1 ELSE 0 END) AS legacy_d30,
                    COUNT(DISTINCT provider || '|' || station_id) AS stations
             FROM station_visits
             """,
-            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+            (
+                now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"],
+                now - WINDOWS["d30"], now - WINDOWS["d30"], now - WINDOWS["d30"],
+            ),
         ).fetchone()
         error_rows = connection.execute(
             """
@@ -236,6 +310,32 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             """,
             (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
         ).fetchall()
+        panel_click_rows = connection.execute(
+            """
+            SELECT provider, station_id,
+                   (SELECT c2.name FROM seo_panel_clicks c2
+                    WHERE c2.provider = c.provider AND c2.station_id = c.station_id
+                      AND c2.name <> '' ORDER BY c2.epoch DESC LIMIT 1) AS name,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM seo_panel_clicks c
+            GROUP BY provider, station_id
+            """,
+            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+        ).fetchall()
+        panel_click_totals_row = connection.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM seo_panel_clicks
+            """,
+            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+        ).fetchone()
 
     empty_errors = {"d1": 0, "d7": 0, "d30": 0, "total": 0, "last_epoch": 0, "last_kind": ""}
     stations_by_key: Dict[tuple, Dict[str, Any]] = {}
@@ -248,8 +348,15 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             "d7": int(row["d7"] or 0),
             "d30": int(row["d30"] or 0),
             "total": int(row["total"] or 0),
+            "app_total": int(row["app_total"] or 0),
+            "app_d30": int(row["app_d30"] or 0),
+            "seo_total": int(row["seo_total"] or 0),
+            "seo_d30": int(row["seo_d30"] or 0),
+            "legacy_total": int(row["legacy_total"] or 0),
+            "legacy_d30": int(row["legacy_d30"] or 0),
             "last_epoch": int(row["last_epoch"] or 0),
             "errors": dict(empty_errors),
+            "panel_clicks": {"d1": 0, "d7": 0, "d30": 0, "total": 0, "last_epoch": 0},
         }
     for row in error_rows:
         key = (row["provider"], row["station_id"])
@@ -265,8 +372,15 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
                 "d7": 0,
                 "d30": 0,
                 "total": 0,
+                "app_total": 0,
+                "app_d30": 0,
+                "seo_total": 0,
+                "seo_d30": 0,
+                "legacy_total": 0,
+                "legacy_d30": 0,
                 "last_epoch": 0,
                 "errors": dict(empty_errors),
+                "panel_clicks": {"d1": 0, "d7": 0, "d30": 0, "total": 0, "last_epoch": 0},
             }
         station["errors"] = {
             "d1": int(row["d1"] or 0),
@@ -275,6 +389,28 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             "total": int(row["total"] or 0),
             "last_epoch": int(row["last_epoch"] or 0),
             "last_kind": str(row["last_kind"] or ""),
+        }
+    for row in panel_click_rows:
+        key = (row["provider"], row["station_id"])
+        station = stations_by_key.get(key)
+        if station is None:
+            station = stations_by_key[key] = {
+                "provider": row["provider"],
+                "station_id": row["station_id"],
+                "name": row["name"] or row["station_id"],
+                "d1": 0, "d7": 0, "d30": 0, "total": 0,
+                "app_total": 0, "app_d30": 0, "seo_total": 0, "seo_d30": 0,
+                "legacy_total": 0, "legacy_d30": 0,
+                "last_epoch": 0,
+                "errors": dict(empty_errors),
+                "panel_clicks": {},
+            }
+        station["panel_clicks"] = {
+            "d1": int(row["d1"] or 0),
+            "d7": int(row["d7"] or 0),
+            "d30": int(row["d30"] or 0),
+            "total": int(row["total"] or 0),
+            "last_epoch": int(row["last_epoch"] or 0),
         }
 
     stations: List[Dict[str, Any]] = sorted(
@@ -318,6 +454,26 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             "d30": int(totals_row["d30"] or 0),
             "total": int(totals_row["total"] or 0),
             "stations": int(totals_row["stations"] or 0),
+            "sources": {
+                "app": {
+                    "d30": int(totals_row["app_d30"] or 0),
+                    "total": int(totals_row["app_total"] or 0),
+                },
+                "seo": {
+                    "d30": int(totals_row["seo_d30"] or 0),
+                    "total": int(totals_row["seo_total"] or 0),
+                },
+                "legacy": {
+                    "d30": int(totals_row["legacy_d30"] or 0),
+                    "total": int(totals_row["legacy_total"] or 0),
+                },
+            },
+            "panel_clicks": {
+                "d1": int(panel_click_totals_row["d1"] or 0),
+                "d7": int(panel_click_totals_row["d7"] or 0),
+                "d30": int(panel_click_totals_row["d30"] or 0),
+                "total": int(panel_click_totals_row["total"] or 0),
+            },
             "errors": {
                 "d1": int(error_totals_row["d1"] or 0),
                 "d7": int(error_totals_row["d7"] or 0),

@@ -91,6 +91,19 @@ def test_station_countries_client_calls_fastapi() -> None:
     assert result == {"US": 10, "ES": 2}
 
 
+def test_station_by_id_client_encodes_international_identifiers() -> None:
+    from utils.api_client import fetch_station_by_id_via_api
+
+    body = {"provider": "METEOHUB_IT", "station_id": "network|station"}
+    with patch("utils.api_client.requests.get", return_value=_mock_response(200, body)) as request:
+        result = fetch_station_by_id_via_api("meteohub_it", "network|station")
+
+    assert request.call_args.args[0].endswith(
+        "/v1/stations/METEOHUB_IT/network%7Cstation"
+    )
+    assert result == body
+
+
 def test_station_catalog_client_passes_country_filters() -> None:
     from utils.api_client import fetch_station_catalog_via_api
 
@@ -146,6 +159,42 @@ def test_section_usage_client_posts_the_exact_visible_section() -> None:
 
     assert request.call_args.args[0].endswith("/v1/stats/section")
     assert request.call_args.kwargs["json"] == {"section": "map.temperature"}
+    assert request.call_args.kwargs["timeout"] == 2.0
+
+
+def test_station_usage_client_sends_the_connection_origin() -> None:
+    from utils.api_client import track_station_visit_via_api
+
+    with patch("utils.api_client.requests.post", return_value=_mock_response(204)) as request:
+        track_station_visit_via_api(
+            "meteocat", "D5", "Observatori Fabra", source="seo"
+        )
+
+    assert request.call_args.args[0].endswith("/v1/stats/visit")
+    assert request.call_args.kwargs["json"] == {
+        "provider": "METEOCAT",
+        "station_id": "D5",
+        "name": "Observatori Fabra",
+        "source": "seo",
+    }
+    assert request.call_args.kwargs["timeout"] == 2.0
+
+
+def test_seo_panel_click_client_posts_station_and_language() -> None:
+    from utils.api_client import track_seo_panel_click_via_api
+
+    with patch("utils.api_client.requests.post", return_value=_mock_response(204)) as request:
+        track_seo_panel_click_via_api(
+            "meteocat", "D5", "Observatori Fabra", language="ES"
+        )
+
+    assert request.call_args.args[0].endswith("/v1/stats/panel-click")
+    assert request.call_args.kwargs["json"] == {
+        "provider": "METEOCAT",
+        "station_id": "D5",
+        "name": "Observatori Fabra",
+        "language": "es",
+    }
     assert request.call_args.kwargs["timeout"] == 2.0
 
 

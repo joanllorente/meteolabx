@@ -1,11 +1,12 @@
 """
 Router de estadísticas internas de uso.
 
-``POST /v1/stats/visit`` lo llama el frontend en cada conexión a una
-estación, ``POST /v1/stats/error`` cuando una conexión falla y
-``POST /v1/stats/section`` en las transiciones reales de navegación (todos
-fire-and-forget). ``GET /v1/stats/stations`` alimenta el panel interno y exige
-la contraseña de administración
+``POST /v1/stats/visit`` lo llama el frontend en cada conexión a una estación
+e indica si procede de la web o de una ficha SEO. ``POST
+/v1/stats/panel-click`` registra que esa ficha ha abierto el panel completo,
+``POST /v1/stats/error`` registra fallos y ``POST /v1/stats/section`` las
+transiciones reales de navegación (todos fire-and-forget). ``GET
+/v1/stats/stations`` alimenta el panel interno y exige la contraseña de administración
 (``METEOLABX_STATS_ADMIN_PASSWORD``) en el header ``X-Stats-Password``.
 
 El backend no está expuesto públicamente (escucha en 127.0.0.1; solo el
@@ -33,6 +34,7 @@ class VisitRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=32)
     station_id: str = Field(min_length=1, max_length=128)
     name: str = Field(default="", max_length=200)
+    source: Literal["app", "seo"] = "app"
 
 
 @router.post("/visit", status_code=204, summary="Registrar una conexión a estación")
@@ -40,7 +42,10 @@ def post_visit(body: VisitRequest, settings: Settings = Depends(get_settings)) -
     from server.services import usage_stats
 
     try:
-        usage_stats.record_visit(body.provider, body.station_id, body.name, settings=settings)
+        usage_stats.record_visit(
+            body.provider, body.station_id, body.name,
+            source=body.source, settings=settings,
+        )
     except Exception:
         # Las estadísticas nunca deben tumbar una conexión: log y a seguir.
         logger.warning("stats: no se pudo registrar la visita", exc_info=True)
@@ -66,6 +71,13 @@ class SectionVisitRequest(BaseModel):
         "map.precipitation",
         "ranking",
     ]
+
+
+class SeoPanelClickRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+    station_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(default="", max_length=200)
+    language: str = Field(default="", max_length=8)
 
 
 @router.post("/error", status_code=204, summary="Registrar un error de conexión a estación")
@@ -98,6 +110,25 @@ def post_section_visit(
         usage_stats.record_section_visit(body.section, settings=settings)
     except Exception:
         logger.warning("stats: no se pudo registrar la sección", exc_info=True)
+    return Response(status_code=204)
+
+
+@router.post("/panel-click", status_code=204, summary="Registrar apertura del panel desde una ficha SEO")
+def post_seo_panel_click(
+    body: SeoPanelClickRequest, settings: Settings = Depends(get_settings)
+) -> Response:
+    from server.services import usage_stats
+
+    try:
+        usage_stats.record_seo_panel_click(
+            body.provider,
+            body.station_id,
+            body.name,
+            language=body.language,
+            settings=settings,
+        )
+    except Exception:
+        logger.warning("stats: no se pudo registrar el clic SEO", exc_info=True)
     return Response(status_code=204)
 
 

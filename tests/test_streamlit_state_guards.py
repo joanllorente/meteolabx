@@ -20,8 +20,12 @@ class GuardedSessionState(dict):
         return super().pop(key, default)
 
 
-def _patch_provider_state(monkeypatch, session_state):
-    monkeypatch.setattr(provider_state, "st", SimpleNamespace(session_state=session_state))
+def _patch_provider_state(monkeypatch, session_state, query_params=None):
+    monkeypatch.setattr(
+        provider_state,
+        "st",
+        SimpleNamespace(session_state=session_state, query_params=query_params or {}),
+    )
     monkeypatch.setattr(provider_state, "clear_provider_runtime_cache", lambda provider_id: None)
 
 
@@ -122,3 +126,35 @@ def test_disable_provider_autoconnect_does_not_mutate_rendered_toggle(monkeypatc
     assert session_state["provider_autoconnect_toggle_METEOCAT"] is True
     assert session_state[AUTOCONNECT_ATTEMPTED] is False
     assert calls
+
+
+def test_station_visit_tracks_normal_app_and_seo_embed_separately(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "utils.api_client.track_station_visit_via_api",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    _patch_provider_state(monkeypatch, {}, query_params={})
+    provider_state._track_station_visit("METEOCAT", "D5", "Observatori Fabra")
+
+    _patch_provider_state(monkeypatch, {}, query_params={"embed": "seo"})
+    provider_state._track_station_visit("METEOCAT", "D5", "Observatori Fabra")
+
+    assert calls[0][1]["source"] == "app"
+    assert calls[1][1]["source"] == "seo"
+
+
+def test_station_visit_can_be_suppressed_after_full_panel_click(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "utils.api_client.track_station_visit_via_api",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    session_state = {"_suppress_next_station_visit": True}
+    _patch_provider_state(monkeypatch, session_state, query_params={})
+
+    provider_state._track_station_visit("METEOCAT", "D5", "Observatori Fabra")
+
+    assert calls == []
+    assert "_suppress_next_station_visit" not in session_state

@@ -19,8 +19,13 @@ def _settings(tmp_path, password="admin"):
 def test_record_and_summary_windows(tmp_path):
     settings = _settings(tmp_path)
     usage_stats.record_visit("AEMET", "0076", "BARCELONA AEROPUERTO", settings=settings)
-    usage_stats.record_visit("AEMET", "0076", "BARCELONA AEROPUERTO", settings=settings)
+    usage_stats.record_visit(
+        "AEMET", "0076", "BARCELONA AEROPUERTO", source="seo", settings=settings
+    )
     usage_stats.record_visit("WU", "IMADRID1", "", settings=settings)
+    usage_stats.record_seo_panel_click(
+        "AEMET", "0076", "BARCELONA AEROPUERTO", language="es", settings=settings
+    )
 
     # Visita antigua (40 días): cuenta en total pero no en las ventanas.
     import sqlite3
@@ -35,11 +40,21 @@ def test_record_and_summary_windows(tmp_path):
     assert summary["totals"]["total"] == 4
     assert summary["totals"]["d30"] == 3
     assert summary["totals"]["stations"] == 2
+    assert summary["totals"]["sources"] == {
+        "app": {"d30": 2, "total": 3},
+        "seo": {"d30": 1, "total": 1},
+        "legacy": {"d30": 0, "total": 0},
+    }
+    assert summary["totals"]["panel_clicks"]["d30"] == 1
+    assert summary["totals"]["panel_clicks"]["total"] == 1
 
     top = summary["stations"][0]
     assert (top["provider"], top["station_id"]) == ("AEMET", "0076")
     assert top["total"] == 3
     assert top["d1"] == 2
+    assert top["app_total"] == 2
+    assert top["seo_total"] == 1
+    assert top["panel_clicks"]["total"] == 1
     assert top["name"] == "BARCELONA AEROPUERTO"
 
 
@@ -134,6 +149,10 @@ def test_error_table_added_without_wiping_existing_db(tmp_path):
     usage_stats.record_error("AEMET", "0076", error_kind="network", settings=settings)
     summary = usage_stats.visit_summary(settings=settings)
     assert summary["totals"]["total"] == 1  # la visita antigua sigue ahí
+    assert summary["totals"]["sources"]["app"]["total"] == 0
+    assert summary["totals"]["sources"]["seo"]["total"] == 0
+    assert summary["totals"]["sources"]["legacy"]["total"] == 1
+    assert summary["stations"][0]["legacy_total"] == 1
     assert summary["totals"]["errors"]["total"] == 1
     assert summary["stations"][0]["station_id"] == "0076"
     assert summary["stations"][0]["errors"]["last_kind"] == "network"
@@ -142,6 +161,10 @@ def test_error_table_added_without_wiping_existing_db(tmp_path):
     usage_stats.record_section_visit("map.wind", settings=settings)
     summary = usage_stats.visit_summary(settings=settings)
     assert next(row for row in summary["sections"] if row["section"] == "map.wind")["total"] == 1
+
+    with sqlite3.connect(settings.usage_stats_path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(station_visits)")}
+    assert "source" in columns
 
 
 @pytest.fixture()
@@ -159,9 +182,28 @@ def stats_client(tmp_path, monkeypatch):
 def test_stats_endpoints_roundtrip_and_auth(stats_client):
     ok = stats_client.post(
         "/v1/stats/visit",
-        json={"provider": "AEMET", "station_id": "0076", "name": "Barcelona Aeropuerto"},
+        json={
+            "provider": "AEMET",
+            "station_id": "0076",
+            "name": "Barcelona Aeropuerto",
+            "source": "seo",
+        },
     )
     assert ok.status_code == 204
+    click = stats_client.post(
+        "/v1/stats/panel-click",
+        json={
+            "provider": "AEMET",
+            "station_id": "0076",
+            "name": "Barcelona Aeropuerto",
+            "language": "es",
+        },
+    )
+    assert click.status_code == 204
+    assert stats_client.post(
+        "/v1/stats/visit",
+        json={"provider": "AEMET", "station_id": "0076", "source": "otra"},
+    ).status_code == 422
 
     # Sin contraseña o con contraseña mala → 401.
     assert stats_client.get("/v1/stats/stations").status_code == 401
@@ -198,8 +240,14 @@ def test_stats_endpoints_roundtrip_and_auth(stats_client):
     assert good.status_code == 200
     payload = good.json()
     assert payload["totals"]["total"] == 1
+    assert payload["totals"]["sources"]["seo"]["total"] == 1
+    assert payload["totals"]["sources"]["app"]["total"] == 0
+    assert payload["totals"]["sources"]["legacy"]["total"] == 0
+    assert payload["totals"]["panel_clicks"]["total"] == 1
     assert payload["totals"]["errors"]["total"] == 1
     assert payload["stations"][0]["station_id"] == "0076"
+    assert payload["stations"][0]["seo_total"] == 1
+    assert payload["stations"][0]["panel_clicks"]["total"] == 1
     assert payload["stations"][0]["errors"]["last_kind"] == "timeout"
     assert payload["error_kinds"][0]["kind"] == "timeout"
     sections = {row["section"]: row for row in payload["sections"]}

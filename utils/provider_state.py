@@ -561,10 +561,16 @@ def _track_station_visit(provider_id: str, station_id: str, name: str = "") -> N
     """Registra la conexión en las estadísticas internas (fire-and-forget).
     Cubre todas las vías de entrada: selector, mapa, ranking, deep links y
     autoconexión, porque se llama desde los ``apply_*_station_state``."""
+    if st.session_state.pop("_suppress_next_station_visit", False):
+        return
     try:
         from utils.api_client import track_station_visit_via_api
 
-        track_station_visit_via_api(provider_id, station_id, name)
+        raw_embed = st.query_params.get("embed", "")
+        if isinstance(raw_embed, list):
+            raw_embed = raw_embed[0] if raw_embed else ""
+        source = "seo" if str(raw_embed or "").strip().lower() == "seo" else "app"
+        track_station_visit_via_api(provider_id, station_id, name, source=source)
     except Exception:
         pass
 
