@@ -10,9 +10,11 @@ directorio. Registramos antes de ellas un handler muy pequeño que entrega el
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import re
 import sys
 
+from tornado.httpclient import AsyncHTTPClient, HTTPError, HTTPRequest
 from tornado.routing import PathMatches, Rule
 from tornado.web import RequestHandler
 
@@ -43,6 +45,42 @@ class ForecastIndexHandler(RequestHandler):
         self.set_header("Content-Length", str(self._index_path.stat().st_size))
 
 
+class ForecastApiProxyHandler(RequestHandler):
+    """Expone la API AROME interna bajo el mismo origen que el visor."""
+
+    async def _proxy(self) -> None:
+        backend = os.getenv("METEOLABX_API_URL", "http://127.0.0.1:8000").rstrip("/")
+        target = f"{backend}{self.request.uri}"
+        request = HTTPRequest(
+            target,
+            method=self.request.method,
+            headers={"Accept": self.request.headers.get("Accept", "*/*")},
+            request_timeout=180,
+            follow_redirects=False,
+        )
+        try:
+            response = await AsyncHTTPClient().fetch(request, raise_error=False)
+        except HTTPError as exc:
+            self.set_status(502)
+            self.finish({"detail": f"Forecast API no disponible: {exc}"})
+            return
+
+        self.set_status(response.code)
+        for header in ("Content-Type", "Content-Length", "Cache-Control", "ETag"):
+            if value := response.headers.get(header):
+                self.set_header(header, value)
+        if self.request.method == "HEAD":
+            self.finish()
+        else:
+            self.finish(response.body)
+
+    async def get(self) -> None:
+        await self._proxy()
+
+    async def head(self) -> None:
+        await self._proxy()
+
+
 def install_forecast_route() -> None:
     original_create_app = Server._create_app
 
@@ -56,9 +94,14 @@ def install_forecast_route() -> None:
             ForecastIndexHandler,
             {"index_path": str(index_path)},
         )
+        api_route = Rule(
+            PathMatches(re.compile(r"^/v1/forecast/arome(?:/.*)?$")),
+            ForecastApiProxyHandler,
+        )
         # ``wildcard_router`` contiene las rutas declaradas por Streamlit. La
         # entrada debe ir antes de su StaticFileHandler y de Add/RemoveSlash.
         app.wildcard_router.rules.insert(0, route)
+        app.wildcard_router.rules.insert(0, api_route)
         return app
 
     Server._create_app = create_app_with_forecast
