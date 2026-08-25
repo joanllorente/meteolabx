@@ -914,7 +914,7 @@ def main() -> int:
     parser.add_argument(
         "--heavy-workers",
         type=int,
-        default=int(os.getenv("METEOLABX_FORECAST_HEAVY_WORKERS", "2")),
+        default=int(os.getenv("METEOLABX_FORECAST_HEAVY_WORKERS", "1")),
         help="Máximo de perfiles convectivos simultáneos para limitar RAM y cuota API.",
     )
     parser.add_argument(

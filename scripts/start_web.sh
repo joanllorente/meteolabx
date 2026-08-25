@@ -70,7 +70,7 @@ UVICORN_PID=$!
   --watch \
   --isolate-tasks \
   --workers "${METEOLABX_FORECAST_WORKERS:-6}" \
-  --heavy-workers "${METEOLABX_FORECAST_HEAVY_WORKERS:-2}" \
+  --heavy-workers "${METEOLABX_FORECAST_HEAVY_WORKERS:-1}" \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
 FORECAST_WORKER_PID=$!
 
