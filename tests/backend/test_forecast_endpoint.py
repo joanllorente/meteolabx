@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+import gzip
 import json
 import struct
 
@@ -158,6 +159,9 @@ def test_forecast_grid_prefers_precomputed_frame(monkeypatch, tmp_path):
         )
     assert response.status_code == 200
     assert response.content == content
+    assert response.headers["content-encoding"] == "gzip"
+    assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert int(response.headers["content-length"]) == len(gzip.compress(content, compresslevel=5))
     assert response.headers["x-meteolabx-precomputed"] == "1"
 
 
@@ -189,6 +193,8 @@ def test_forecast_grid_prefers_persisted_native_frame(monkeypatch, tmp_path):
         )
     assert response.status_code == 200
     assert response.content == content
+    assert response.headers["content-encoding"] == "gzip"
+    assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
     assert response.headers["x-meteolabx-precomputed"] == "1"
 
 

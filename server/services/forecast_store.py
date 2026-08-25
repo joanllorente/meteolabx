@@ -284,8 +284,13 @@ def write_grid(store: ObjectStore, key: str, content: bytes) -> None:
     store.put(key, gzip.compress(content, compresslevel=5), "application/gzip")
 
 
+def read_compressed_grid(store: ObjectStore, key: str) -> bytes | None:
+    """Devuelve el gzip persistido sin inflarlo en el servidor web."""
+    return store.get(key)
+
+
 def read_grid(store: ObjectStore, key: str) -> bytes | None:
-    content = store.get(key)
+    content = read_compressed_grid(store, key)
     return gzip.decompress(content) if content is not None else None
 
 

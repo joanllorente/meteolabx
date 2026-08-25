@@ -10,7 +10,7 @@ const localBase = typeof window !== 'undefined' && ['127.0.0.1', 'localhost'].in
   ? (window.location.port === '5173' ? '' : `${window.location.protocol}//${window.location.hostname}:8000`)
   : '';
 const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
-const FORECAST_DATA_REVISION = 'forecast-fields-v13';
+const FORECAST_DATA_REVISION = 'forecast-fields-v14';
 
 async function getJson(path, { signal } = {}) {
   const response = await fetch(`${API_BASE}${path}`, {

@@ -392,7 +392,7 @@
           </aside>
         {/if}
 
-        {#if frameLoading}<div class="frame-state"><span class="spinner"></span><strong>Calculando {product.short}</strong><small>La primera carga puede tardar unos segundos.</small></div>{/if}
+        {#if frameLoading}<div class="frame-state"><span class="spinner"></span><strong>Cargando {product.short}</strong><small>Descargando el mapa ya calculado…</small></div>{/if}
         {#if framePending}<div class="frame-state"><span class="spinner"></span><strong>Calculando {product.short}</strong><small>AROME ya ha publicado esta hora. MeteoLabX la añadirá automáticamente al terminar el worker.</small></div>{/if}
         {#if frameError}<div class="frame-state error"><strong>No se pudo cargar el mapa real</strong><small>{frameError}</small><button type="button" onclick={() => (hourIndex = Math.max(0, hourIndex - 1))}>Probar la hora anterior</button></div>{/if}
         {#if frameData}

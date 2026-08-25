@@ -21,6 +21,7 @@ from server.services.forecast_store import (
     new_manifest,
     register_run_slot,
     retained_manifests,
+    read_compressed_grid,
     read_grid,
     read_json,
     write_grid,
@@ -54,6 +55,10 @@ def test_local_store_roundtrips_compressed_grid_and_manifest(tmp_path: Path):
     store = LocalObjectStore(tmp_path)
     key = frame_key(RUN, "ship", H1)
     write_grid(store, key, _grid())
+    compressed = read_compressed_grid(store, key)
+    assert compressed is not None
+    assert compressed.startswith(b"\x1f\x8b")
+    assert compressed != _grid()
     restored = read_grid(store, key)
     assert restored == _grid()
     assert grid_metadata(restored)["maximum"] == 1.25

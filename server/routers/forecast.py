@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import gzip
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
@@ -15,7 +16,7 @@ from server.services.forecast_store import (
     frame_key,
     get_forecast_store,
     grid_metadata,
-    read_grid,
+    read_compressed_grid,
     read_json,
     retained_manifests,
     run_manifest_key,
@@ -41,6 +42,16 @@ def _token(settings: Settings) -> str:
 def _http_headers(headers: dict[str, str]) -> dict[str, str]:
     """Mantiene las cabeceras HTTP en ASCII; las unidades completas van en la rejilla."""
     return {key: str(value).replace("°", "deg ") for key, value in headers.items()}
+
+
+def _gzip_headers(headers: dict[str, str], *, immutable: bool) -> dict[str, str]:
+    cache_control = "public, max-age=31536000, immutable" if immutable else "public, max-age=900"
+    return _http_headers({
+        **headers,
+        "Content-Encoding": "gzip",
+        "Cache-Control": cache_control,
+        "Vary": "Accept-Encoding",
+    })
 
 
 @router.get("/progress", summary="Progreso de las pasadas AROME persistidas")
@@ -162,7 +173,7 @@ def get_grid(
     stored_run = run or (str(manifest.get("run")) if manifest else "")
     scope = str(manifest.get("calculation_scope", "model")) if manifest else "model"
     if stored_run and product in PERSISTED_FORECAST_PRODUCTS:
-        content = read_grid(
+        content = read_compressed_grid(
             store,
             frame_key(
                 stored_run,
@@ -174,18 +185,15 @@ def get_grid(
             ),
         )
         if content is not None:
-            metadata = grid_metadata(content)
             headers = {
-                "X-AROME-Run": str(metadata["run"]),
-                "X-AROME-Valid-Time": str(metadata["valid_time"]),
-                "X-AROME-Max": f"{float(metadata['maximum']):.3f}",
-                "X-AROME-Unit": str(metadata["unit"]),
+                "X-AROME-Run": stored_run,
+                "X-AROME-Valid-Time": valid_time,
                 "X-MeteoLabX-Precomputed": "1",
             }
             return Response(
                 content=content,
                 media_type="application/vnd.meteolabx.arome-grid",
-                    headers=_http_headers({**headers, "Cache-Control": "public, max-age=31536000, immutable"}),
+                headers=_gzip_headers(headers, immutable=True),
             )
     if settings.forecast_precomputed_only and product in PERSISTED_FORECAST_PRODUCTS and product != "wind-level":
         raise HTTPException(
@@ -215,7 +223,7 @@ def get_grid(
                 content,
             )
     return Response(
-        content=content,
+        content=gzip.compress(content, compresslevel=5),
         media_type="application/vnd.meteolabx.arome-grid",
-        headers=_http_headers({**headers, "Cache-Control": "public, max-age=900"}),
+        headers=_gzip_headers(headers, immutable=False),
     )

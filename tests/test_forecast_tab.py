@@ -130,7 +130,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
         encoding="utf-8"
     )
     assert "FORECAST_DATA_REVISION" in api
-    assert "forecast-fields-v13" in api
+    assert "forecast-fields-v14" in api
     assert "params.set('run', run)" in api
     production_start = (ROOT / "scripts" / "start_web.sh").read_text(encoding="utf-8")
     assert "-m scripts.forecast_worker" in production_start
