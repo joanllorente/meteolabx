@@ -489,6 +489,10 @@ def _run_isolated_job(job: ForecastJob, timeout_s: int) -> None:
                 "products": job.products,
                 "scope": job.scope,
                 "tier": job.tier,
+                # Sin esto el subproceso reconstruye el trabajo sin las horas
+                # que cubre, y el padre daría por publicadas horas que nadie
+                # ha calculado.
+                "valid_times": job.valid_times,
             },
         ),
         name=f"arome-{job.products[0]}-{job.valid_time[11:13]}",

@@ -587,3 +587,45 @@ def test_progress_total_grows_as_the_run_publishes_more_hours():
         inicial, {"ship": {"run": RUN, "valid_times": [H1, H2]}}
     )
     assert ampliado["ship"]["valid_times"] == [H1, H2]
+
+
+def test_isolated_job_payload_keeps_every_covered_hour(monkeypatch):
+    """El trabajo debe cruzar al subproceso con todas sus horas.
+
+    El padre marca como publicadas las horas de `covered_times`; si el hijo
+    recibe el trabajo sin ellas, calcula una sola y el manifiesto da por buenas
+    horas que no existen.
+    """
+    job = forecast_worker.ForecastJob(
+        RUN, H2, ("accumulated-precip",), "model", 1, (H1, H2)
+    )
+    capturado = {}
+
+    class FakeProcess:
+        def __init__(self, target, args, name):
+            capturado["payload"] = args[1]
+            self.exitcode = 0
+
+        def start(self): pass
+        def join(self, timeout=None): pass
+        def is_alive(self): return False
+
+    class FakeContext:
+        def Queue(self, maxsize=0):
+            class Q:
+                def get(self, timeout=None): return ("ok", "")
+                def close(self): pass
+            return Q()
+
+        def Process(self, target, args, name):
+            return FakeProcess(target, args, name)
+
+    monkeypatch.setattr(
+        forecast_worker.multiprocessing, "get_context", lambda _kind: FakeContext()
+    )
+    forecast_worker._run_isolated_job(job, 60)
+
+    payload = capturado["payload"]
+    assert payload["valid_times"] == (H1, H2)
+    # Y el trabajo reconstruido en el hijo debe ser equivalente al del padre.
+    assert forecast_worker.ForecastJob(**payload).covered_times == job.covered_times
