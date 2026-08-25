@@ -103,7 +103,8 @@ async def test_daily_periods_parses_aemet_quirks() -> None:
     assert day1["temp_mean"] == pytest.approx(21.4)     # coma decimal
     assert day1["wind_mean"] == pytest.approx(9.0)      # m/s → km/h
     assert day1["gust_max"] == pytest.approx(36.0)
-    assert day1["wind_dir_mean"] == pytest.approx(225.0)  # "SW" cardinal, no stdvv
+    assert math.isnan(day1["wind_dir_mean"])
+    assert day1["gust_dir_max"] == pytest.approx(225.0)  # "SW": dirección de la racha
     assert day1["precip_total"] == pytest.approx(0.0)   # 'Ip' = inapreciable
     assert day1["solar_hours"] == pytest.approx(11.2)
 
@@ -335,4 +336,5 @@ def test_endpoint_uses_async_service_not_frontend_dispatch() -> None:
     assert body["has_data"] is True
     df = pd.read_json(io.StringIO(body["dataset"]), orient="table")
     assert df["temp_mean"].iloc[0] == pytest.approx(21.4)
-    assert df["wind_dir_mean"].iloc[0] == pytest.approx(225.0)
+    assert math.isnan(df["wind_dir_mean"].iloc[0])
+    assert df["gust_dir_max"].iloc[0] == pytest.approx(225.0)

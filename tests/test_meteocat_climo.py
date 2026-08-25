@@ -18,6 +18,11 @@ def test_apply_and_finalize_climo_rows_normalizes_values():
         "wind_mean",
         {"value": 5.0, "date": "2025-01-01"},
     )
+    climo_parsing.apply_climo_metric_value(
+        rows["2025-01-01"],
+        "precip_rate_max",
+        {"value": 0.7, "date": "2025-01-15"},
+    )
     rows["2025-01-01"]["temp_max"] = 20.0
     rows["2025-01-01"]["temp_min"] = 10.0
     rows["2025-01-01"]["precip_total"] = -3.0
@@ -26,6 +31,7 @@ def test_apply_and_finalize_climo_rows_normalizes_values():
     row = frame.iloc[0]
 
     assert math.isclose(row["wind_mean"], 18.0, rel_tol=1e-6)
+    assert math.isclose(row["precip_rate_max"], 42.0, rel_tol=1e-6)
+    assert row["precip_rate_max_date"] == "2025-01-15"
     assert math.isclose(row["temp_mean"], 15.0, rel_tol=1e-6)
     assert row["precip_total"] == 0.0
-

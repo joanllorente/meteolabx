@@ -10,7 +10,19 @@
     "historical": "Històric",
     "info": "Aprèn",
     "map": "Mapa",
+    "forecast": "Predicció",
     "ranking": "Rànquing"
+  },
+  "forecast": {
+    "section_title": "Predicció",
+    "beta": "Beta",
+    "intro": "Prototip de predicció convectiva amb el model AROME.",
+    "model_description": "Estem preparant mapes d’alta resolució basats en les sortides d’AROME.",
+    "shear_title": "Cisallament",
+    "shear_description": "Cisallament vertical del vent per analitzar l’organització potencial de les tempestes.",
+    "ship_title": "SHIP",
+    "ship_description": "Significant Hail Parameter per identificar entorns favorables a calamarsa significativa.",
+    "status": "El prototip està en desenvolupament. Els mapes s’incorporaran aquí progressivament."
   },
   "ranking": {
     "section_title": "Rànquing d’estacions",
@@ -92,6 +104,14 @@
     "whats_new": "Novetats",
     "improvements_title": "Millores",
     "fixes_title": "Correccions",
+    "release_140_improvements": [
+      "Nova interfície basada en targetes per a la pestanya Històric.",
+      "S'afegeix nova informació sobre el vent a Històric.",
+      "Nova secció «Predicció numèrica» amb mapes propis per al model AROME."
+    ],
+    "release_140_fixes": [
+      "Corregit un error que impedia que es mostrés correctament l'acumulat als gràfics de precipitació."
+    ],
     "release_135_improvements": [
       "Millorada la interpolació del mapa global de temperatura.",
       "Arrencada més estable i ràpida.",
@@ -374,6 +394,46 @@
         "annual": "Anual"
       }
     },
+    "actions": {
+      "query": "Consultar l'històric"
+    },
+    "cards": {
+      "thermal_extremes": "Extrems tèrmics",
+      "mean_temp_extremes": "Extrems de temperatura mitjana",
+      "mean_temp_difference": "Diferència entre mitjanes",
+      "daily_temperature_extremes": "Extrems diaris",
+      "wind_extremes": "Extrems de vent",
+      "precip_extremes": "Extrems de precipitació",
+      "solar_extremes": "Extrems d'insolació",
+      "solar_irradiation_extremes": "Extrems d'irradiació solar",
+      "period_amplitude": "Amplitud del període",
+      "max_intensity": "Intensitat màxima",
+      "max_short": "Màx.",
+      "min_short": "Mín.",
+      "average_temperatures": "Temperatures mitjanes",
+      "wind_summary": "Vent",
+      "rain_summary": "Pluja",
+      "solar_summary": "Solar",
+      "characteristic_days": "Dies característics",
+      "summary_labels": {
+        "mean": "Mitjana",
+        "maximums": "Màximes",
+        "minimums": "Mínimes",
+        "stddev": "Desv. estàndard",
+        "predominant_direction": "Predominant",
+        "direction": "Direcció",
+        "windiest_day": "Dia més ventós",
+        "windiest_month": "Mes més ventós",
+        "accumulated": "Acumulada",
+        "rain_days": "Dies de pluja",
+        "irradiation_mean": "Irradiació mitjana",
+        "irradiance_mean": "Irradiància mitjana",
+        "sunshine_mean": "Insolació mitjana",
+        "tropical": "Tropicals",
+        "torrid": "Tòrrides",
+        "frost": "Gelada"
+      }
+    },
     "inputs": {
       "months": "Mes/os",
       "years": "Any/s"
@@ -472,6 +532,8 @@
       "max_precip_24h": "Precipitació màxima en 24 hores",
       "sunniest_year": "Any més assolellat",
       "least_sunny_year": "Any amb menys sol",
+      "highest_solar_irradiation_year": "Any amb més irradiació solar mitjana",
+      "lowest_solar_irradiation_year": "Any amb menys irradiació solar mitjana",
       "lowest_maximum": "Màxima més baixa",
       "highest_minimum": "Mínima més alta",
       "windiest_month": "Mes més ventós (vent mitjà)",
@@ -485,7 +547,9 @@
       "mean_wind": "Vent mitjà",
       "accumulated_precipitation": "Precipitació acumulada",
       "mean_precipitation": "Precipitació mitjana",
+      "rain_days": "Dies de pluja",
       "mean_solar_irradiance": "Irradiància solar mitjana",
+      "mean_daily_global_solar_irradiation": "Irradiació solar global diària mitjana",
       "mean_sunshine_hours": "Hores de sol mitjanes",
       "tropical_nights": "Nits tropicals (mín > 20 °C)",
       "frost_nights": "Nits de gelada (mín ≤ 0 °C)",
@@ -800,6 +864,7 @@
     "historical_only": "Mostra només estacions amb dades històriques",
     "hide_historical_only": "Amaga estacions històriques",
     "hide_historical_only_help": "Les estacions històriques ja no registren dades, però se’n pot consultar l’arxiu històric.",
+    "country_all": "Tot el món",
     "country_search": "Cerca país…",
     "country_clear": "Neteja filtre",
     "sensor_filter_clear": "Neteja",

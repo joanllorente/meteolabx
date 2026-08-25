@@ -33,15 +33,15 @@ def test_whats_new_uses_one_modal_opened_from_header_and_footer():
     assert ".header h1 a{" in source
 
 
-def test_release_135_is_current_and_localized():
+def test_release_140_is_current_and_localized():
     root = Path(__file__).resolve().parents[1]
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "1.3.5"' in source
+    assert 'APP_VERSION = "1.4.0"' in source
     assert "APP_BUILD = app_build_id()" in source
-    assert '__version__ = "1.3.5"' in server_source
-    assert "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.5" in source
+    assert '__version__ = "1.4.0"' in server_source
+    assert "data-mlbx-whats-new-version='140' aria-selected='true'>1.4.0" in source
     assert "Build {html.escape(APP_BUILD)}" in source
     assert ".mlx-wn-build{" in source
     assert 'const versionTab = target.closest("[data-mlbx-whats-new-version]")' in source
@@ -148,9 +148,51 @@ def test_release_135_is_current_and_localized():
             "Corrigido um erro que impedia o gráfico de precipitação de apresentar corretamente os dados acumulados.",
         ],
     }
+    release_140_notes = {
+        "es": [
+            "Nueva interfaz basada en tarjetas para la pestaña Histórico.",
+            "Se añade nueva información sobre el viento en Histórico.",
+            "Nueva sección «Predicción numérica» con mapas propios para el modelo AROME.",
+        ],
+        "ca": [
+            "Nova interfície basada en targetes per a la pestanya Històric.",
+            "S'afegeix nova informació sobre el vent a Històric.",
+            "Nova secció «Predicció numèrica» amb mapes propis per al model AROME.",
+        ],
+        "en": [
+            "New card-based interface for the Historical tab.",
+            "New wind information added to Historical.",
+            "New ‘Numerical forecast’ section with custom maps for the AROME model.",
+        ],
+        "fr": [
+            "Nouvelle interface basée sur des cartes pour l'onglet Historique.",
+            "Ajout de nouvelles informations sur le vent dans Historique.",
+            "Nouvelle section « Prévision numérique » avec des cartes propres au modèle AROME.",
+        ],
+        "it": [
+            "Nuova interfaccia basata su schede per la sezione Storico.",
+            "Aggiunte nuove informazioni sul vento in Storico.",
+            "Nuova sezione «Previsione numerica» con mappe dedicate al modello AROME.",
+        ],
+        "pt": [
+            "Nova interface baseada em cartões para o separador Histórico.",
+            "Adicionadas novas informações sobre o vento em Histórico.",
+            "Nova secção «Previsão numérica» com mapas próprios para o modelo AROME.",
+        ],
+    }
+    release_140_fixes = {
+        "es": "Corregido un error que impedía que se mostrara correctamente el acumulado en los gráficos de precipitación.",
+        "ca": "Corregit un error que impedia que es mostrés correctament l'acumulat als gràfics de precipitació.",
+        "en": "Fixed an issue that prevented accumulated values from being displayed correctly in precipitation charts.",
+        "fr": "Correction d'une erreur qui empêchait l'affichage correct du cumul dans les graphiques de précipitations.",
+        "it": "Corretto un errore che impediva la corretta visualizzazione dell'accumulo nei grafici delle precipitazioni.",
+        "pt": "Corrigido um erro que impedia a apresentação correta do acumulado nos gráficos de precipitação.",
+    }
     for language, portuguese_name in portuguese_names.items():
         payload = json.loads((root / "locales" / f"{language}.json").read_text())
         footer = payload["footer"]
+        assert footer["release_140_improvements"] == release_140_notes[language]
+        assert footer["release_140_fixes"] == [release_140_fixes[language]]
         assert footer["release_135_improvements"] == release_135_notes[language]
         assert footer["release_135_fixes"] == release_135_fixes[language]
         assert footer["release_134_improvements"] == [release_134_notes[language]]

@@ -24,6 +24,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
 import pandas as pd
+from domain.parsing.periods import merge_date_periods
+from server.services.climo_cache import get_or_fetch_climo_block
 
 from domain.parsing.geosphere_climo import (
     DAILY_PARAM_MAP,
@@ -71,18 +73,29 @@ async def _fetch_rows(
 ) -> List[Dict[str, Any]]:
     """Una petición al archivo produce filas parseadas; errores → []."""
     try:
-        response = await client.get(
-            url,
-            params={
-                "parameters": ",".join(param_map),
-                "station_ids": klima_id,
-                "start": start.isoformat(),
-                "end": end.isoformat(),
-            },
-            headers={"Accept": "application/json", "User-Agent": USER_AGENT},
+        async def _request_payload():
+            response = await client.get(
+                url,
+                params={
+                    "parameters": ",".join(param_map),
+                    "station_ids": klima_id,
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                },
+                headers={"Accept": "application/json", "User-Agent": USER_AGENT},
+            )
+            response.raise_for_status()
+            return response.json()
+
+        payload = await get_or_fetch_climo_block(
+            provider=PROVIDER,
+            kind=f"{url.rsplit('/', 1)[-1]}:{start.isoformat()}:{end.isoformat()}",
+            station_id=klima_id,
+            credential="public",
+            client=client,
+            end_date=end,
+            fetcher=_request_payload,
         )
-        response.raise_for_status()
-        payload = response.json()
     except Exception as exc:
         logger.warning(
             "Climo GeoSphere falló para %s (%s→%s): %s", klima_id, start, end, exc,
@@ -102,7 +115,7 @@ async def fetch_climo_daily_for_periods(
         return empty_climo_df()
     batches = await asyncio.gather(*(
         _fetch_rows(client, DAILY_URL, klima_id, start, end, param_map=DAILY_PARAM_MAP)
-        for start, end in periods
+        for start, end in merge_date_periods(periods)
     ))
     return rows_to_climo_df([row for batch in batches for row in batch])
 
@@ -140,11 +153,19 @@ async def fetch_climo_yearly_for_years(
     if not klima_id:
         return empty_climo_df()
     unique_years = sorted(set(int(y) for y in years))
-    batches = await asyncio.gather(*(
-        _fetch_monthly_rows(client, klima_id, yr) for yr in unique_years
-    ))
+    if not unique_years:
+        return empty_climo_df()
+    monthly_rows = await _fetch_rows(
+        client, MONTHLY_URL, klima_id,
+        date(unique_years[0], 1, 1), date(unique_years[-1], 12, 31),
+        param_map=MONTHLY_PARAM_MAP,
+    )
     yearly_rows: List[Dict[str, Any]] = []
-    for yr, monthly in zip(unique_years, batches):
+    for yr in unique_years:
+        monthly = [
+            row for row in monthly_rows
+            if pd.Timestamp(row["date"]).year == yr
+        ]
         row = aggregate_monthly_rows_to_year(yr, monthly)
         if row is not None:
             yearly_rows.append(row)

@@ -24,6 +24,7 @@ import httpx
 import pandas as pd
 
 from server.schemas.errors import ProviderError
+from server.services.climo_cache import get_or_fetch_climo_block
 from domain.parsing.frost_climo import (
     CLIMO_MONTHLY_ELEMENT_MAP,
     CLIMO_YEARLY_ELEMENT_MAP,
@@ -53,28 +54,42 @@ async def _request_json(
     client_id: str,
     client_secret: str,
 ) -> Any:
-    try:
-        response = await client.get(
-            f"{BASE_URL}{endpoint}",
-            params=params,
-            headers=HEADERS,
-            auth=(client_id, client_secret),
-        )
-    except httpx.TimeoutException as exc:
-        raise ProviderError("provider_timeout", provider=PROVIDER, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise ProviderError("provider_network", provider=PROVIDER, detail=str(exc)) from exc
-    if response.status_code >= 400:
-        raise ProviderError(
-            "provider_http_error",
-            provider=PROVIDER,
-            detail=f"HTTP {response.status_code} en {endpoint}",
-            status_code=502 if response.status_code >= 500 else 400,
-        )
-    try:
-        return response.json()
-    except ValueError as exc:
-        raise ProviderError("provider_bad_response", provider=PROVIDER, detail=str(exc)) from exc
+    async def _request():
+        try:
+            response = await client.get(
+                f"{BASE_URL}{endpoint}",
+                params=params,
+                headers=HEADERS,
+                auth=(client_id, client_secret),
+            )
+        except httpx.TimeoutException as exc:
+            raise ProviderError("provider_timeout", provider=PROVIDER, detail=str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderError("provider_network", provider=PROVIDER, detail=str(exc)) from exc
+        if response.status_code >= 400:
+            raise ProviderError(
+                "provider_http_error",
+                provider=PROVIDER,
+                detail=f"HTTP {response.status_code} en {endpoint}",
+                status_code=502 if response.status_code >= 500 else 400,
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise ProviderError("provider_bad_response", provider=PROVIDER, detail=str(exc)) from exc
+
+    station = str(params.get("sources") or "").strip().upper()
+    credential = f"{client_id}:{client_secret}"
+    kind = f"{endpoint}:{sorted((str(k), str(v)) for k, v in params.items())}"
+    return await get_or_fetch_climo_block(
+        provider=PROVIDER,
+        kind=kind,
+        station_id=station,
+        credential=credential,
+        client=client,
+        ttl_s=30 * 24 * 60 * 60,
+        fetcher=_request,
+    )
 
 
 async def _available_elements_by_period(

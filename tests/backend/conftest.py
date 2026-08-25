@@ -8,11 +8,17 @@ legacy; este conftest solo aporta lo del backend.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Callable, Dict, Optional
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
+# Debe fijarse antes de importar ``server.main``: el módulo crea una app y
+# carga Settings al importarse. Así ningún TestClient dispara por accidente el
+# ciclo completo del ranking ni consume cuotas reales de proveedores.
+os.environ["METEOLABX_RANKING_REFRESH_ENABLED"] = "false"
 
 from server.dependencies.http import get_http_client
 from server.main import create_app

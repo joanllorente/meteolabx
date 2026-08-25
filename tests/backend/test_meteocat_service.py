@@ -365,10 +365,25 @@ def test_fetch_today_series_normalizes_units() -> None:
     )
 
     assert result["has_data"] is True
-    # 2 epochs: 10:00 y 10:30. El de las 09:00 solo trae precip (codi
-    # 35), que no forma parte de la serie canónica, así que no aparece.
-    assert len(result["epochs"]) == 2
+    # El epoch de las 09:00 solo trae PPT, pero también debe conservarse:
+    # si no, el gráfico perdería todo intervalo que no coincida con otra
+    # variable meteorológica.
+    assert len(result["epochs"]) == 3
     assert result["epochs"] == sorted(result["epochs"])
+
+    precip_by_epoch = dict(zip(result["epochs"], result["precip_step_mm"]))
+    ep_0900 = int(datetime(2026, 6, 10, 9, 0, tzinfo=CAT_TZ).timestamp())
+    ep_1000 = int(datetime(2026, 6, 10, 10, 0, tzinfo=CAT_TZ).timestamp())
+    assert precip_by_epoch[ep_0900] == pytest.approx(0.2)
+    assert precip_by_epoch[ep_1000] == pytest.approx(0.1)
+    assert result["precip_total"] == pytest.approx(0.3)
+
+    from domain.trend_series import derive_trend_series
+
+    canonical = derive_trend_series(result, period="today")
+    canonical_by_epoch = dict(zip(canonical["epochs"], canonical["precips"]))
+    assert canonical_by_epoch[ep_0900] == pytest.approx(0.2)
+    assert canonical_by_epoch[ep_1000] == pytest.approx(0.3)
 
     # Último punto (10:30): todo presente
     assert result["temps"][-1] == pytest.approx(23.5)
@@ -384,10 +399,11 @@ def test_fetch_today_series_normalizes_units() -> None:
         "gust_max": pytest.approx(40.32),
     }
 
-    # Primer punto (10:00): sin lectura de presión → NaN en esa posición
-    assert result["temps"][0] == pytest.approx(22.0)
-    assert math.isnan(result["pressures"][0])
-    assert math.isnan(result["pressures_abs"][0])
+    # Punto de las 10:00: sin lectura de presión → NaN en esa posición.
+    idx_1000 = result["epochs"].index(ep_1000)
+    assert result["temps"][idx_1000] == pytest.approx(22.0)
+    assert math.isnan(result["pressures"][idx_1000])
+    assert math.isnan(result["pressures_abs"][idx_1000])
 
     # Dewpoint no se mide: NaN alineado
     assert all(math.isnan(v) for v in result["dewpts"])
@@ -415,7 +431,8 @@ def test_fetch_today_series_uses_previous_utc_day_when_today_returns_400() -> No
     )
 
     assert result["has_data"] is True
-    assert result["temps"] == [pytest.approx(22.0), pytest.approx(23.5)]
+    assert math.isnan(result["temps"][0])  # epoch exclusivo de precipitación
+    assert result["temps"][1:] == [pytest.approx(22.0), pytest.approx(23.5)]
 
 
 def test_meteocat_daily_extremes_never_fall_back_to_chart_series() -> None:

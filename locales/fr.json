@@ -10,7 +10,19 @@
     "historical": "Historique",
     "info": "Apprendre",
     "map": "Carte",
+    "forecast": "Prévision",
     "ranking": "Classement"
+  },
+  "forecast": {
+    "section_title": "Prévision",
+    "beta": "Beta",
+    "intro": "Prototype de prévision convective utilisant le modèle AROME.",
+    "model_description": "Nous préparons des cartes haute résolution basées sur les sorties du modèle AROME.",
+    "shear_title": "Cisaillement",
+    "shear_description": "Cisaillement vertical du vent pour évaluer l’organisation potentielle des orages.",
+    "ship_title": "SHIP",
+    "ship_description": "Significant Hail Parameter pour identifier les environnements favorables à la grosse grêle.",
+    "status": "Le prototype est en cours de développement. Les cartes seront ajoutées ici progressivement."
   },
   "ranking": {
     "section_title": "Classement des stations",
@@ -92,6 +104,14 @@
     "whats_new": "Nouveautés",
     "improvements_title": "Améliorations",
     "fixes_title": "Corrections",
+    "release_140_improvements": [
+      "Nouvelle interface basée sur des cartes pour l'onglet Historique.",
+      "Ajout de nouvelles informations sur le vent dans Historique.",
+      "Nouvelle section « Prévision numérique » avec des cartes propres au modèle AROME."
+    ],
+    "release_140_fixes": [
+      "Correction d'une erreur qui empêchait l'affichage correct du cumul dans les graphiques de précipitations."
+    ],
     "release_135_improvements": [
       "Amélioration de l’interpolation de la carte mondiale des températures.",
       "Démarrage plus stable et plus rapide.",
@@ -374,6 +394,46 @@
         "annual": "Annuel"
       }
     },
+    "actions": {
+      "query": "Consulter l'historique"
+    },
+    "cards": {
+      "thermal_extremes": "Extrêmes thermiques",
+      "mean_temp_extremes": "Extrêmes de température moyenne",
+      "mean_temp_difference": "Écart entre les moyennes",
+      "daily_temperature_extremes": "Extrêmes quotidiens",
+      "wind_extremes": "Extrêmes de vent",
+      "precip_extremes": "Extrêmes de précipitations",
+      "solar_extremes": "Extrêmes d'ensoleillement",
+      "solar_irradiation_extremes": "Extrêmes d'irradiation solaire",
+      "period_amplitude": "Amplitude de la période",
+      "max_intensity": "Intensité maximale",
+      "max_short": "Max.",
+      "min_short": "Min.",
+      "average_temperatures": "Températures moyennes",
+      "wind_summary": "Vent",
+      "rain_summary": "Pluie",
+      "solar_summary": "Solaire",
+      "characteristic_days": "Jours caractéristiques",
+      "summary_labels": {
+        "mean": "Moyenne",
+        "maximums": "Maximales",
+        "minimums": "Minimales",
+        "stddev": "Écart-type",
+        "predominant_direction": "Dominante",
+        "direction": "Direction",
+        "windiest_day": "Jour le plus venteux",
+        "windiest_month": "Mois le plus venteux",
+        "accumulated": "Cumulée",
+        "rain_days": "Jours de pluie",
+        "irradiation_mean": "Irradiation moyenne",
+        "irradiance_mean": "Irradiance moyenne",
+        "sunshine_mean": "Ensoleillement moyen",
+        "tropical": "Tropicales",
+        "torrid": "Torrides",
+        "frost": "Gel"
+      }
+    },
     "inputs": {
       "months": "Mois",
       "years": "Année(s)"
@@ -478,6 +538,8 @@
       "max_precip_24h": "Précipitation maximale en 24 heures",
       "sunniest_year": "Année la plus ensoleillée",
       "least_sunny_year": "Année la moins ensoleillée",
+      "highest_solar_irradiation_year": "Année avec l'irradiation solaire moyenne la plus élevée",
+      "lowest_solar_irradiation_year": "Année avec l'irradiation solaire moyenne la plus faible",
       "lowest_maximum": "Plus faible maximale",
       "highest_minimum": "Plus haute minimale",
       "windiest_month": "Mois le plus venteux (vent moyen)",
@@ -491,7 +553,9 @@
       "mean_wind": "Vent moyen",
       "accumulated_precipitation": "Précipitation cumulée",
       "mean_precipitation": "Précipitation moyenne",
+      "rain_days": "Jours de pluie",
       "mean_solar_irradiance": "Irradiance solaire moyenne",
+      "mean_daily_global_solar_irradiation": "Irradiation solaire globale quotidienne moyenne",
       "mean_sunshine_hours": "Heures d'ensoleillement (moyenne)",
       "tropical_nights": "Nuits tropicales (min > 20 °C)",
       "frost_nights": "Nuits de gel (min ≤ 0 °C)",
@@ -806,6 +870,7 @@
     "historical_only": "Afficher uniquement les stations avec historique",
     "hide_historical_only": "Masquer les stations historiques",
     "hide_historical_only_help": "Les stations historiques n'enregistrent plus de données, mais leur historique peut être consulté.",
+    "country_all": "Monde entier",
     "country_search": "Rechercher un pays…",
     "country_clear": "Effacer le filtre",
     "sensor_filter_clear": "Effacer",

@@ -19,6 +19,7 @@ Implementa la rama METEOCAT de ``/v1/climo/dataset`` de forma asíncrona.
 from __future__ import annotations
 
 import asyncio
+import calendar
 import logging
 from datetime import date
 from typing import Any, Dict, Optional, Sequence, Tuple
@@ -28,6 +29,7 @@ import pandas as pd
 
 from server.schemas.errors import ProviderError
 from server.services.meteocat import BASE_URL, _get_json, _require_api_key
+from server.services.climo_cache import get_or_fetch_climo_block
 from domain.parsing import meteocat_climo as P
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,23 @@ class _StatsClient:
     async def _safe_get(self, url: str, params: Dict[str, Any]) -> Any:
         """GET best-effort: 401 corta; otros errores → None (sin datos)."""
         try:
-            return await _get_json(self.client, url, self.api_key, params=params)
+            year = int(params.get("any")) if str(params.get("any", "")).isdigit() else None
+            month = int(params.get("mes")) if str(params.get("mes", "")).isdigit() else None
+            end_date = None
+            if year is not None and month is not None:
+                end_date = date(year, month, calendar.monthrange(year, month)[1])
+            elif year is not None:
+                end_date = date(year, 12, 31)
+            kind = f"{url.rsplit('/', 1)[-1]}:{sorted(params.items())}"
+            return await get_or_fetch_climo_block(
+                provider=PROVIDER,
+                kind=kind,
+                station_id=self.code,
+                credential=self.api_key,
+                client=self.client,
+                end_date=end_date,
+                fetcher=lambda: _get_json(self.client, url, self.api_key, params=params),
+            )
         except ProviderError as exc:
             if exc.error_code == "provider_unauthorized":
                 raise
@@ -140,11 +158,16 @@ async def fetch_daily_history_for_periods(
                     "date": day_txt, "epoch": float("nan"),
                     "temp_mean": float("nan"), "temp_max": float("nan"), "temp_min": float("nan"),
                     "wind_mean": float("nan"), "wind_dir_mean": float("nan"),
-                    "gust_max": float("nan"), "precip_total": float("nan"),
+                    "gust_max": float("nan"), "gust_dir_max": float("nan"),
+                    "precip_total": float("nan"),
+                    "precip_rate_max": float("nan"),
+                    "solar_mean": float("nan"),
                 })
                 value = float(raw_value)
                 if metric_name in P.CLIMO_WIND_METRICS and not P._is_nan(value):
                     value = P.ms_to_kmh(value)
+                elif metric_name == "precip_rate_max" and not P._is_nan(value):
+                    value *= 60.0
                 row[metric_name] = value
                 row["epoch"] = P.climo_epoch_from_label(day_txt)
 
@@ -157,13 +180,18 @@ async def fetch_daily_history_for_periods(
     for col in P.CLIMO_DAILY_SCHEMA:
         if col not in frame.columns:
             frame[col] = float("nan")
-    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total"]
+    numeric_cols = [
+        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean",
+        "wind_dir_mean", "gust_max", "gust_dir_max", "precip_total", "precip_rate_max",
+        "solar_mean",
+    ]
     for col in numeric_cols:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
     missing_mean = frame["temp_mean"].isna() & frame["temp_max"].notna() & frame["temp_min"].notna()
     if missing_mean.any():
         frame.loc[missing_mean, "temp_mean"] = (frame.loc[missing_mean, "temp_max"] + frame.loc[missing_mean, "temp_min"]) / 2.0
     frame["precip_total"] = frame["precip_total"].clip(lower=0)
+    frame["precip_rate_max"] = frame["precip_rate_max"].clip(lower=0)
     frame = frame.sort_values("date").reset_index(drop=True)
     mask = frame["date"].between(pd.to_datetime(start), pd.to_datetime(end))
     return frame.loc[mask].copy()[P.CLIMO_DAILY_SCHEMA]
@@ -322,6 +350,70 @@ def _extreme_windiest(wind_days: Dict[str, float]) -> Optional[Dict[str, str]]:
     return {"Valor": f"{float(s.max()) * 3.6:.1f} km/h", "Fecha": P.format_date_for_ui(str(s.idxmax()))}
 
 
+def _daily_extremes_from_frame(frame: pd.DataFrame) -> Dict[str, Dict[str, str]]:
+    """Calcula hitos desde una serie diaria ya descargada, sin repetir API."""
+    if frame.empty or "date" not in frame.columns:
+        return {}
+    dates = pd.to_datetime(frame["date"], errors="coerce")
+
+    def values(column: str) -> Dict[str, float]:
+        if column not in frame.columns:
+            return {}
+        numeric = pd.to_numeric(frame[column], errors="coerce")
+        return {
+            day.strftime("%Y-%m-%d"): float(value)
+            for day, value in zip(dates, numeric)
+            if not pd.isna(day) and not pd.isna(value)
+        }
+
+    tmax_days = values("temp_max")
+    tmin_days = values("temp_min")
+    # _extreme_windiest recibe los valores nativos en m/s; el frame común ya
+    # está en km/h, por lo que se divide antes de reutilizar el helper.
+    wind_days = {day: value / 3.6 for day, value in values("wind_mean").items()}
+    result: Dict[str, Dict[str, str]] = {}
+    if (extreme := _extreme_min_of_max(tmax_days)):
+        result["Mínima de máximas"] = extreme
+    if (extreme := _extreme_max_of_min(tmin_days)):
+        result["Máxima de mínimas"] = extreme
+    if tmin_days:
+        minima = pd.Series(tmin_days, dtype=float)
+        result["Noches tropicales (mín > 20 °C)"] = {
+            "Valor": f"{int((minima >= 20.0).sum())} noches", "Fecha": "—",
+        }
+        result["Noches tórridas (mín > 25 °C)"] = {
+            "Valor": f"{int((minima >= 25.0).sum())} noches", "Fecha": "—",
+        }
+    if (extreme := _extreme_windiest(wind_days)):
+        result["Día más ventoso (viento medio)"] = extreme
+    return result
+
+
+def _add_characteristic_counts(
+    frame: pd.DataFrame, extremes: Dict[str, Dict[str, str]],
+) -> pd.DataFrame:
+    """Conserva en las filas agregadas los recuentos derivados de mínimas diarias."""
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    metric_columns = {
+        "Noches tropicales (mín > 20 °C)": "tropical_nights",
+        "Noches tórridas (mín > 25 °C)": "torrid_nights",
+    }
+    for metric_name, column in metric_columns.items():
+        raw_value = str((extremes.get(metric_name) or {}).get("Valor", "")).split(" ", 1)[0]
+        try:
+            value = float(raw_value.replace(",", "."))
+        except (TypeError, ValueError):
+            continue
+        if column not in out.columns:
+            out[column] = float("nan")
+        out[column] = pd.to_numeric(out[column], errors="coerce")
+        out.loc[:, column] = float("nan")
+        out.loc[out.index[0], column] = value
+    return out
+
+
 async def fetch_daily_extremes_for_year(
     client: httpx.AsyncClient, station_code: str, api_key: str, year: int,
 ) -> Dict[str, Dict[str, str]]:
@@ -332,7 +424,7 @@ async def fetch_daily_extremes_for_year(
     stats = _StatsClient(client, code, api_key)
 
     tmax_days = await _daily_metric_for_months(stats, [P.STAT_TEMP_MAX], yy, [11, 12, 1, 2, 3, 4])
-    tmin_days = await _daily_metric_for_months(stats, [P.STAT_TEMP_MIN], yy, [5, 6, 7, 8, 9])
+    tmin_days = await _daily_metric_for_months(stats, [P.STAT_TEMP_MIN], yy, list(range(1, 13)))
     wind_days = await _daily_metric_for_months(stats, P.WIND_MEAN_DAILY_CANDIDATES, yy, list(range(1, 13)))
 
     result: Dict[str, Dict[str, str]] = {}
@@ -340,6 +432,10 @@ async def fetch_daily_extremes_for_year(
         result["Mínima de máximas"] = e
     if (e := _extreme_max_of_min(tmin_days)):
         result["Máxima de mínimas"] = e
+    if tmin_days:
+        s = pd.to_numeric(pd.Series(tmin_days, dtype=float), errors="coerce").dropna()
+        result["Noches tropicales (mín > 20 °C)"] = {"Valor": f"{int((s >= 20.0).sum())} noches", "Fecha": "—"}
+        result["Noches tórridas (mín > 25 °C)"] = {"Valor": f"{int((s >= 25.0).sum())} noches", "Fecha": "—"}
     if (e := _extreme_windiest(wind_days)):
         result["Día más ventoso (viento medio)"] = e
     return result
@@ -386,6 +482,29 @@ async def fetch_daily_extremes_for_periods(
         result["Noches tropicales (mín > 20 °C)"] = {"Valor": f"{int((s >= 20.0).sum())} noches", "Fecha": "—"}
         result["Noches tórridas (mín > 25 °C)"] = {"Valor": f"{int((s >= 25.0).sum())} noches", "Fecha": "—"}
     if (e := _extreme_windiest(wind_days)):
+        if chosen_wind is not None and wind_days:
+            wind_values = pd.to_numeric(pd.Series(wind_days, dtype=float), errors="coerce").dropna()
+            if not wind_values.empty:
+                winner_day = str(wind_values.idxmax())
+                try:
+                    winner_date = date.fromisoformat(winner_day)
+                except ValueError:
+                    winner_date = None
+                direction_code_by_wind_code = {
+                    P.STAT_WIND_MEAN_2: P.STAT_WIND_DIR_MEAN_2,
+                    P.STAT_WIND_MEAN_6: P.STAT_WIND_DIR_MEAN_6,
+                    P.STAT_WIND_MEAN_10: P.STAT_WIND_DIR_MEAN_10,
+                }
+                direction_code = direction_code_by_wind_code.get(int(chosen_wind))
+                if winner_date is not None and direction_code is not None:
+                    # Sólo se pide la dirección del mes que contiene el día
+                    # ganador: una llamada mensual adicional como máximo.
+                    direction_days = await stats.daily(
+                        direction_code, winner_date.year, winner_date.month
+                    )
+                    direction = P._safe_float(direction_days.get(winner_day))
+                    if not P._is_nan(direction):
+                        e["Dirección"] = f"{float(direction):.1f}"
         result["Día más ventoso (viento medio)"] = e
     return result
 
@@ -412,16 +531,21 @@ async def fetch_climo_dataset(
         return df, None
 
     if summary_mode == "annual" and len(years) == 1:
+        # El resumen mensual nativo ya contiene las métricas disponibles para
+        # el año. No se fuerzan decenas de consultas diarias únicamente para
+        # rellenar hitos ausentes del resumen anual de Meteocat.
         df = await fetch_monthly_history_for_year(client, station_code, api_key, years[0])
-        extremes = await fetch_daily_extremes_for_year(client, station_code, api_key, years[0])
-        return df, (extremes or None)
+        return df, None
 
     if summary_mode == "monthly":
         if len(periods) == 1:
             df = await fetch_daily_history_for_periods(client, station_code, api_key, periods)
+            extremes = _daily_extremes_from_frame(df)
         else:
             df = await fetch_monthly_history_for_periods(client, station_code, api_key, periods)
-        extremes = await fetch_daily_extremes_for_periods(client, station_code, api_key, periods)
+            extremes = await fetch_daily_extremes_for_periods(client, station_code, api_key, periods)
+        if len(periods) > 1:
+            df = _add_characteristic_counts(df, extremes)
         return df, (extremes or None)
 
     df = await fetch_daily_history_for_periods(client, station_code, api_key, periods)

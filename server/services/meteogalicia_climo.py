@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
 import pandas as pd
+from domain.parsing.periods import merge_date_periods
+from server.services.climo_cache import get_or_fetch_climo_block
 
 from domain.parsing.meteogalicia_climo import (
     DAILY_PARAM_MAP,
@@ -60,13 +62,24 @@ async def _fetch_rows(
 ) -> List[Dict[str, Any]]:
     """Una petición climo produce filas parseadas; los errores devuelven []."""
     try:
-        response = await client.get(
-            endpoint,
-            params=_climo_params(station_id, start, end),
-            headers={"Accept": "application/json"},
+        async def _request_payload():
+            response = await client.get(
+                endpoint,
+                params=_climo_params(station_id, start, end),
+                headers={"Accept": "application/json"},
+            )
+            response.raise_for_status()
+            return response.json()
+
+        payload = await get_or_fetch_climo_block(
+            provider=PROVIDER,
+            kind=f"{list_key}:{start.isoformat()}:{end.isoformat()}",
+            station_id=station_id,
+            credential="public",
+            client=client,
+            end_date=end,
+            fetcher=_request_payload,
         )
-        response.raise_for_status()
-        payload = response.json()
     except Exception as exc:
         logger.warning(
             "Climo MeteoGalicia %s falló para %s (%s→%s): %s",
@@ -90,7 +103,7 @@ async def fetch_climo_daily_for_periods(
             client, DAILY_ENDPOINT, station_id, start, end,
             list_key="listDatosDiarios", param_map=DAILY_PARAM_MAP,
         )
-        for start, end in periods
+        for start, end in merge_date_periods(periods)
     ))
     rows: List[Dict[str, Any]] = [row for batch in batches for row in batch]
     return rows_to_climo_df(rows)
@@ -124,11 +137,20 @@ async def fetch_climo_yearly_for_years(
 ) -> pd.DataFrame:
     """Modo Plurianual: mensuales de cada año agregados a nivel anual."""
     unique_years = sorted(set(int(y) for y in years))
-    batches = await asyncio.gather(*(
-        _fetch_monthly_rows(client, station_id, yr) for yr in unique_years
-    ))
+    if not unique_years:
+        return rows_to_climo_df([])
+    monthly_rows = await _fetch_rows(
+        client, MONTHLY_ENDPOINT, station_id,
+        date(unique_years[0], 1, 1), date(unique_years[-1], 12, 31),
+        list_key="listDatosMensuais", param_map=MONTHLY_PARAM_MAP,
+        month_start=True,
+    )
     yearly_rows: List[Dict[str, Any]] = []
-    for yr, monthly in zip(unique_years, batches):
+    for yr in unique_years:
+        monthly = [
+            row for row in monthly_rows
+            if pd.Timestamp(row["date"]).year == yr
+        ]
         row = aggregate_monthly_rows_to_year(yr, monthly)
         if row is not None:
             yearly_rows.append(row)

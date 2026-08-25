@@ -576,6 +576,8 @@ async def fetch_today_series(
         "solar_radiations": [
             _jm2_to_w_m2(_safe_float(row.get("solar_jm2")), 3600.0) for row in rows
         ],
+        # rr1/rr_per representan el intervalo horario, no el acumulado diario.
+        "precip_step_mm": _col("precip_mm"),
         "winds": _col("wind_kmh"),
         "gusts": _col("gust_kmh"),
         "wind_dirs": _col("wind_dir_deg"),

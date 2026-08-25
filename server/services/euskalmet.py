@@ -685,7 +685,10 @@ def _normalize_today_series(
     lat, lon, elevation, _name = _station_meta(station_id)
 
     all_epochs: set = set()
-    for key in ("temp", "rh", "pressure_abs", "pressure_msl", "wind", "gust", "wind_dir", "solar"):
+    for key in (
+        "temp", "rh", "pressure_abs", "pressure_msl", "wind", "gust",
+        "wind_dir", "solar", "precip",
+    ):
         all_epochs.update(ep for ep, _ in measures.get(key, []))
     epochs = sorted(all_epochs)
     if not epochs:
@@ -714,6 +717,7 @@ def _normalize_today_series(
         "pressures": pressures,
         "uv_indexes": [float("nan")] * len(epochs),
         "solar_radiations": [_at("solar", ep) for ep in epochs],
+        "precip_step_mm": [_at("precip", ep) for ep in epochs],
         "winds": [_ms_to_kmh(_at("wind", ep)) for ep in epochs],
         "gusts": [_ms_to_kmh(_at("gust", ep)) for ep in epochs],
         "wind_dirs": [_at("wind_dir", ep) for ep in epochs],

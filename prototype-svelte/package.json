@@ -1,0 +1,21 @@
+{
+  "name": "meteolabx-svelte-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "build:forecast": "vite build --config vite.forecast.config.js",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.25.0",
+    "katex": "^0.16.47",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "vite": "^7.0.0"
+  }
+}

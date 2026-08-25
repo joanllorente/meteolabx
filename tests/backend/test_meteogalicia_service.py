@@ -302,6 +302,7 @@ def test_fetch_today_series_filters_to_local_day_and_converts() -> None:
     assert result["winds"][0] == pytest.approx(10.8)
     assert math.isnan(result["winds"][1])
     assert result["uv_indexes"] == [pytest.approx(4.0), pytest.approx(4.4)]
+    assert result["precip_step_mm"] == pytest.approx([0.4, 0.2])
     assert result["lat"] == pytest.approx(43.241367)
 
 

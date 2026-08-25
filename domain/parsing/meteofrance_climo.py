@@ -24,6 +24,7 @@ _CLIMO_DAILY_COLS = [
     "wind_mean",
     "wind_dir_mean",
     "gust_max",
+    "gust_dir_max",
     "precip_total",
 ]
 
@@ -91,22 +92,29 @@ def _first_valid_number(*values: Any) -> float:
             return float(number)
     return float("nan")
 
-def _best_gust_with_date(
-    candidates: Sequence[Tuple[Any, Any]],
+def _best_gust_with_date_and_direction(
+    candidates: Sequence[Tuple[Any, Any, Any]],
     year: Optional[int] = None,
     month: Optional[int] = None,
     default_date: Optional[str] = None,
-) -> Tuple[float, Optional[str]]:
+) -> Tuple[float, Optional[str], float]:
     best_value = float("nan")
     best_date = default_date
-    for value_raw, date_raw in candidates:
+    best_direction = float("nan")
+    for value_raw, date_raw, direction_raw in candidates:
         value = _climo_num(value_raw)
         if pd.isna(value):
             continue
         if pd.isna(best_value) or float(value) > float(best_value):
             best_value = float(value)
             best_date = _climo_date_token_to_iso(date_raw, year, month) or default_date
-    return best_value, best_date
+            direction = _climo_num(direction_raw)
+            best_direction = (
+                float(direction) % 360.0
+                if not pd.isna(direction) and 0.0 <= float(direction) <= 360.0
+                else float("nan")
+            )
+    return best_value, best_date, best_direction
 
 def _parse_daily_climo_row(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     date_txt = _climo_date_token_to_iso(record.get("DATE"), None, None)
@@ -118,12 +126,12 @@ def _parse_daily_climo_row(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     epoch = float(ts.replace(tzinfo=timezone.utc).timestamp())
     precip_total = _climo_num(record.get("RR"))
-    gust_value, gust_date = _best_gust_with_date(
+    gust_value, gust_date, gust_direction = _best_gust_with_date_and_direction(
         [
-            (record.get("FXI"), date_txt),
-            (record.get("FXY"), date_txt),
-            (record.get("FXI2"), date_txt),
-            (record.get("FXI3S"), date_txt),
+            (record.get("FXI"), date_txt, record.get("DXI")),
+            (record.get("FXY"), date_txt, record.get("DXY")),
+            (record.get("FXI2"), date_txt, record.get("DXI2")),
+            (record.get("FXI3S"), date_txt, record.get("DXI3S")),
         ],
         default_date=date_txt,
     )
@@ -142,7 +150,9 @@ def _parse_daily_climo_row(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "temp_max": float(temp_max) if not pd.isna(temp_max) else float("nan"),
         "temp_min": float(temp_min) if not pd.isna(temp_min) else float("nan"),
         "wind_mean": _climo_num(record.get("FFM")),
+        "wind_dir_mean": float("nan"),
         "gust_max": gust_value,
+        "gust_dir_max": gust_direction,
         "precip_total": max(0.0, float(precip_total)) if not pd.isna(precip_total) else float("nan"),
         "solar_mean": float("nan"),
         "solar_hours": float("nan"),
@@ -170,11 +180,11 @@ def _parse_monthly_climo_row(record: Dict[str, Any]) -> Optional[Dict[str, Any]]
     ts = pd.Timestamp(date_txt)
     epoch = float(ts.replace(tzinfo=timezone.utc).timestamp())
     precip_total = _climo_num(record.get("RR"))
-    gust_value, gust_date = _best_gust_with_date(
+    gust_value, gust_date, gust_direction = _best_gust_with_date_and_direction(
         [
-            (record.get("FXIAB"), record.get("FXIDAT")),
-            (record.get("FXYAB"), record.get("FXYABDAT")),
-            (record.get("FXI3SAB"), record.get("FXI3SDAT")),
+            (record.get("FXIAB"), record.get("FXIDAT"), record.get("DXIAB")),
+            (record.get("FXYAB"), record.get("FXYABDAT"), record.get("DXYAB")),
+            (record.get("FXI3SAB"), record.get("FXI3SDAT"), record.get("DXI3SAB")),
         ],
         year=year,
         month=month,
@@ -190,7 +200,9 @@ def _parse_monthly_climo_row(record: Dict[str, Any]) -> Optional[Dict[str, Any]]
         "temp_max": _climo_num(record.get("TX")),
         "temp_min": _climo_num(record.get("TN")),
         "wind_mean": _climo_num(record.get("FFM")),
+        "wind_dir_mean": float("nan"),
         "gust_max": gust_value,
+        "gust_dir_max": gust_direction,
         "precip_total": max(0.0, float(precip_total)) if not pd.isna(precip_total) else float("nan"),
         "solar_mean": float("nan"),
         "solar_hours": float("nan"),
@@ -218,7 +230,7 @@ def _normalize_climo_rows(rows: List[Dict[str, Any]]) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = float("nan") if not col.endswith("_date") else None
     numeric_cols = [
-        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total",
+        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "gust_dir_max", "precip_total",
         "solar_mean", "solar_hours", "precip_max_24h", "rain_days", "temp_abs_max",
         "temp_abs_min", "tropical_nights", "frost_nights",
     ]
@@ -260,7 +272,9 @@ def _aggregate_yearly_from_monthly(monthly_df: pd.DataFrame) -> pd.DataFrame:
             "temp_max": float(pd.to_numeric(frame["temp_max"], errors="coerce").mean()),
             "temp_min": float(pd.to_numeric(frame["temp_min"], errors="coerce").mean()),
             "wind_mean": float(pd.to_numeric(frame["wind_mean"], errors="coerce").mean()),
+            "wind_dir_mean": float("nan"),
             "gust_max": float(pd.to_numeric(frame["gust_max"], errors="coerce").max()),
+            "gust_dir_max": float("nan"),
             "precip_total": float(pd.to_numeric(frame["precip_total"], errors="coerce").sum(min_count=1)),
             "solar_mean": float(pd.to_numeric(frame["solar_mean"], errors="coerce").mean()),
             "solar_hours": float(pd.to_numeric(frame["solar_hours"], errors="coerce").sum(min_count=1)),
@@ -287,6 +301,10 @@ def _aggregate_yearly_from_monthly(monthly_df: pd.DataFrame) -> pd.DataFrame:
                 continue
             idx = valid.idxmax() if mode == "max" else valid.idxmin()
             row[date_col] = frame.loc[idx, date_col]
+            if value_col == "gust_max" and "gust_dir_max" in frame.columns:
+                direction = pd.to_numeric(frame["gust_dir_max"], errors="coerce").loc[idx]
+                if not pd.isna(direction):
+                    row["gust_dir_max"] = float(direction)
         rows.append(row)
     return _normalize_climo_rows(rows)
 

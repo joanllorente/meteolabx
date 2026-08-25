@@ -187,6 +187,8 @@ def test_fetch_current_unauthorized_propagates() -> None:
 
 def test_fetch_today_series_merges_measures_by_epoch() -> None:
     responses = [
+        ("/PA05/measures/measuresForWater/precipitation/at/2026/06/10/00",
+         {"values": [0.3]}),
         ("/TA05/measures/measuresForAir/temperature/at/2026/06/10/01",
          {"values": [14.0, 14.2]}),
         ("/TA05/measures/measuresForAir/temperature/at/2026/06/10/02",
@@ -202,16 +204,18 @@ def test_fetch_today_series_merges_measures_by_epoch() -> None:
     )
 
     assert result["has_data"] is True
-    # Epochs: 01:00, 01:10, 02:00
-    assert len(result["epochs"]) == 3
-    assert result["temps"] == [
+    # Epochs: 00:00 (solo lluvia), 01:00, 01:10, 02:00.
+    assert len(result["epochs"]) == 4
+    assert math.isnan(result["temps"][0])
+    assert result["temps"][1:] == [
         pytest.approx(14.0), pytest.approx(14.2), pytest.approx(15.0),
     ]
+    assert result["precip_step_mm"][0] == pytest.approx(0.3)
     # Humedad solo en 02:00; huecos NaN alineados
     assert math.isnan(result["humidities"][0])
-    assert result["humidities"][2] == pytest.approx(80.0)
+    assert result["humidities"][3] == pytest.approx(80.0)
     # Presión MSL derivada de absoluta (elevación 0 → igual)
-    assert result["pressures"][2] == pytest.approx(1012.0)
+    assert result["pressures"][3] == pytest.approx(1012.0)
     assert result["lat"] == pytest.approx(43.3774903)
 
 

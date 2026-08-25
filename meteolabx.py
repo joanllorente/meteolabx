@@ -95,6 +95,7 @@ import math
 import logging
 import html
 import hashlib
+import json
 import sqlite3
 from typing import Optional
 from datetime import datetime
@@ -220,7 +221,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.3.5"
+APP_VERSION = "1.4.0"
 APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
@@ -247,6 +248,7 @@ _TAB_MODULE_NAMES = {
     "trends": "tabs.trends",
     "historical": "tabs.historical",
     "map": "tabs.map",
+    "forecast": "tabs.forecast",
     "ranking": "tabs.ranking",
 }
 _TAB_MODULE_CACHE: dict[str, object] = {}
@@ -1184,13 +1186,21 @@ def _build_ranking_tab_context() -> dict:
     }
 
 
-TAB_OPTIONS = ["observation", "trends", "historical", "map", "ranking"]
+def _build_forecast_tab_context() -> dict:
+    return {
+        "section_title": section_title,
+        "t": t,
+    }
+
+
+TAB_OPTIONS = ["observation", "trends", "historical", "map", "forecast", "ranking"]
 LEGACY_TAB_ALIASES = {
     "Observación": "observation",
     "Tendencias": "trends",
     "Climogramas": "historical",
     "Histórico": "historical",
     "Mapa": "map",
+    "Predicción": "forecast",
     "Ranking": "ranking",
 }
 
@@ -1215,6 +1225,7 @@ TAB_URL_SLUGS = {
     "trends": "tendencias",
     "historical": "historico",
     "map": "mapa",
+    "forecast": "prediccion",
     "ranking": "ranking",
 }
 TAB_SLUG_TO_INTERNAL = {slug: tab for tab, slug in TAB_URL_SLUGS.items()}
@@ -1225,6 +1236,8 @@ TAB_SLUG_TO_INTERNAL.update({
     "climogramas": "historical",
     "climograms": "historical",
     "map": "map",
+    "forecast": "forecast",
+    "pronostico": "forecast",
 })
 
 # Proveedores resolubles por slug de nombre (los que viven en el catálogo
@@ -2713,19 +2726,19 @@ components.html(f"""
   }}
 
   function storedWhatsNewVersion() {{
-    const fallback = "130";
+    const fallback = "140";
     try {{
       const value = host.sessionStorage.getItem("mlbx-whats-new-version");
-      return /^(110|120|130)$/.test(String(value || "")) ? value : fallback;
+      return /^(110|120|130|140)$/.test(String(value || "")) ? value : fallback;
     }} catch (_e) {{
-      return /^(110|120|130)$/.test(String(host.__mlbxWhatsNewVersion || ""))
+      return /^(110|120|130|140)$/.test(String(host.__mlbxWhatsNewVersion || ""))
         ? host.__mlbxWhatsNewVersion : fallback;
     }}
   }}
 
   function applyWhatsNewVersion(version) {{
-    const selected = /^(110|120|130)$/.test(String(version || ""))
-      ? String(version) : "130";
+    const selected = /^(110|120|130|140)$/.test(String(version || ""))
+      ? String(version) : "140";
     host.__mlbxWhatsNewVersion = selected;
     doc.querySelectorAll(".mlx-wn-dialog-content, .mlb-whats-new-panel").forEach((panel) => {{
       if (!panel.querySelector(".mlx-wn-tabs")) return;
@@ -3898,6 +3911,449 @@ st.markdown(html_clean("""
     image-rendering: auto;
     filter: none;
   }
+
+  /* Histórico: selector compacto y tarjetas de hitos de la v1.4.0 */
+  .historical-selector-anchor{
+    display: none;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor){
+    padding: 0.9rem 1rem 1rem;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  > div > [data-testid="stVerticalBlock"]{
+    gap: 0.35rem;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  [data-testid="stButtonGroup"],
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"]{
+    width: 100% !important;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"]{
+    background: var(--panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.75rem !important;
+    overflow: hidden !important;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"] > button{
+    flex: 1 1 50% !important;
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+    box-shadow: none !important;
+    font-weight: 650 !important;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"]
+  > button[data-testid="stBaseButton-segmented_controlActive"]{
+    background: #ff4b4b !important;
+    border-color: #ff4b4b !important;
+    color: #fff !important;
+    font-weight: 750 !important;
+  }
+
+  [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"]
+  > button[data-testid="stBaseButton-segmented_controlActive"] *{
+    color: #fff !important;
+  }
+
+  .historical-extremes-grid .card{
+    min-height: 142px;
+  }
+
+  .historical-extremes-grid .subtitle{
+    margin-top: 22px;
+    padding-right: 22px;
+  }
+
+  .historical-dual-card{
+    align-items: flex-start;
+  }
+
+  .historical-dual-content{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .historical-dual-values{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 9px;
+    padding: 0;
+  }
+
+  .historical-dual-stat{
+    min-width: 0;
+    padding: 0;
+  }
+
+  .historical-dual-stat + .historical-dual-stat{
+    border-left: 1px solid var(--border);
+    padding-left: 14px;
+  }
+
+  .historical-dual-label{
+    min-height: 1.05rem;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 750;
+    line-height: 1.15;
+    text-transform: uppercase;
+  }
+
+  .historical-dual-value{
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    color: var(--text);
+    font-size: 1.82rem;
+    font-weight: 750;
+    line-height: 1.05;
+    white-space: nowrap;
+  }
+
+  .historical-dual-arrow{
+    color: #ff575d;
+    font-size: 0.8rem;
+    transform: translateY(-2px);
+  }
+
+  .historical-dual-min .historical-dual-arrow{
+    color: #5794ff;
+  }
+
+  .historical-dual-unit{
+    margin-left: 2px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .historical-dual-date{
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .historical-dual-footer{
+    margin-top: 10px;
+    padding-right: 22px;
+    color: var(--muted);
+    font-size: 0.94rem;
+    line-height: 1.25;
+  }
+
+  .historical-dual-footer b,
+  .historical-dual-date b{
+    color: var(--text);
+  }
+
+  .historical-dual-details{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    margin-top: 7px;
+    padding-right: 22px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .historical-dual-details b{
+    color: var(--text);
+  }
+
+  .historical-wind-matrix-card{
+    align-items: flex-start;
+    min-height: 188px !important;
+  }
+
+  .historical-wind-matrix-content{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .historical-wind-matrix{
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    margin-top: 8px;
+  }
+
+  .historical-wind-matrix-cell{
+    min-width: 0;
+    padding: 5px 12px 7px 0;
+  }
+
+  .historical-wind-matrix-cell:nth-child(even){
+    border-left: 1px solid var(--border);
+    padding-left: 14px;
+    padding-right: 0;
+  }
+
+  .historical-wind-matrix-cell:nth-child(n+3){
+    border-top: 1px solid var(--border);
+    padding-top: 9px;
+  }
+
+  .historical-wind-matrix-label{
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.6rem;
+    font-weight: 750;
+    line-height: 1.12;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .historical-wind-matrix-value{
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 3px;
+    color: var(--text);
+    font-size: 1.28rem;
+    font-weight: 750;
+    line-height: 1.05;
+    white-space: nowrap;
+  }
+
+  .historical-wind-matrix-direction .historical-wind-matrix-value{
+    font-size: 1.38rem;
+  }
+
+  .historical-wind-matrix-unit{
+    color: var(--muted);
+    font-size: 0.66em;
+    font-weight: 700;
+  }
+
+  .historical-wind-matrix-meta{
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 0.66rem;
+    font-weight: 650;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .historical-summary-grid .card{
+    min-height: 158px;
+  }
+
+  .historical-summary-card{
+    align-items: flex-start;
+  }
+
+  .historical-summary-content{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .historical-summary-metrics{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 14px;
+    margin-top: 9px;
+  }
+
+  .historical-summary-items-1 .historical-summary-metrics{
+    grid-template-columns: 1fr;
+  }
+
+  .historical-summary-items-4 .historical-summary-metrics{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .historical-summary-items-4 .historical-summary-label{
+    font-size: 0.6rem;
+    white-space: nowrap;
+  }
+
+  .historical-summary-equal-columns .historical-summary-metric:first-child{
+    grid-column: auto;
+  }
+
+  .historical-summary-equal-columns .historical-summary-metric + .historical-summary-metric{
+    border-left: 1px solid var(--border);
+    padding-left: 14px;
+  }
+
+  .historical-summary-equal-columns .historical-summary-value,
+  .historical-summary-equal-columns .historical-summary-metric:first-child .historical-summary-value{
+    margin-top: 5px;
+    font-size: 1.55rem;
+    font-weight: 750;
+  }
+
+  .historical-summary-stack-last-unit .historical-summary-metric:last-child .historical-summary-value{
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .historical-summary-stack-last-unit .historical-summary-metric:last-child .historical-summary-unit{
+    font-size: 0.66rem;
+    line-height: 1.15;
+  }
+
+  .historical-summary-metric{
+    min-width: 0;
+  }
+
+  .historical-summary-metric:first-child{
+    grid-column: 1 / -1;
+  }
+
+  .historical-summary-label{
+    min-height: 1rem;
+    color: var(--muted);
+    font-size: 0.66rem;
+    font-weight: 750;
+    line-height: 1.15;
+    text-transform: uppercase;
+  }
+
+  .historical-summary-value{
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 2px;
+    color: var(--text);
+    font-size: 1.08rem;
+    font-weight: 720;
+    line-height: 1.08;
+    white-space: nowrap;
+  }
+
+  .historical-summary-metric:first-child .historical-summary-value{
+    margin-top: 3px;
+    font-size: 2rem;
+    font-weight: 750;
+  }
+
+  .historical-summary-unit{
+    color: var(--muted);
+    font-size: 0.72em;
+    font-weight: 700;
+  }
+
+  @media (max-width: 760px){
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+    [data-testid="stHorizontalBlock"]{
+      flex-wrap: wrap;
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{
+      flex: 1 1 calc(50% - 0.5rem) !important;
+      width: calc(50% - 0.5rem) !important;
+      min-width: 150px !important;
+    }
+  }
+
+  @media (max-width: 420px){
+    .historical-extremes-grid .card{
+      min-height: 134px;
+    }
+
+    .historical-dual-values{
+      gap: 9px;
+    }
+
+    .historical-dual-stat + .historical-dual-stat{
+      padding-left: 9px;
+    }
+
+    .historical-dual-value{
+      font-size: 1.48rem;
+    }
+
+    .historical-dual-date{
+      font-size: 0.66rem;
+    }
+
+    .historical-dual-label{
+      font-size: 0.62rem;
+    }
+
+    .historical-dual-footer{
+      margin-top: 8px;
+      font-size: 0.84rem;
+    }
+
+    .historical-dual-details{
+      grid-template-columns: 1fr;
+      font-size: 0.68rem;
+    }
+
+    .historical-wind-matrix-card{
+      min-height: 180px !important;
+    }
+
+    .historical-wind-matrix-cell:nth-child(even){
+      padding-left: 9px;
+    }
+
+    .historical-wind-matrix-label{
+      font-size: 0.54rem;
+    }
+
+    .historical-wind-matrix-value{
+      font-size: 1.12rem;
+    }
+
+    .historical-summary-grid .card{
+      min-height: 148px;
+    }
+
+    .historical-summary-items-4 .historical-summary-metrics{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .historical-summary-items-4 .historical-summary-metric:last-child{
+      grid-column: 1 / -1;
+    }
+
+    .historical-summary-metric:first-child .historical-summary-value{
+      font-size: 1.7rem;
+    }
+
+    .historical-summary-label{
+      font-size: 0.62rem;
+    }
+
+    .historical-summary-equal-columns .historical-summary-metric + .historical-summary-metric{
+      padding-left: 9px;
+    }
+
+    .historical-summary-equal-columns .historical-summary-value,
+    .historical-summary-equal-columns .historical-summary-metric:first-child .historical-summary-value{
+      font-size: 1.3rem;
+    }
+  }
+
+  @media (max-width: 360px){
+    [data-testid="stVerticalBlockBorderWrapper"]:has(.historical-selector-anchor)
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{
+      flex-basis: 100% !important;
+      width: 100% !important;
+    }
+  }
   
   /* Iconos más pequeños en móviles */
   @media (max-width: 600px){
@@ -4224,7 +4680,7 @@ snapshot_matches_connection = runtime_snapshot_matches_connection(
     snapshot_station_id,
 )
 skip_live_refresh = bool(
-    connected and active_tab in {"trends", "historical", "map", "ranking"}
+    connected and active_tab in {"trends", "historical", "map", "forecast", "ranking"}
 )
 # Al volver rápidamente a Observación no se repite la petición al proveedor.
 # La ventana es deliberadamente corta: acelera la navegación sin posponer el
@@ -4557,6 +5013,7 @@ if connected and int(base.get("epoch", 0) or 0) > 0:
 # CSS para ocultar círculos y estilizar como tabs (dinámico según tema)
 # DEBE IR ANTES del radio button para que se aplique correctamente
 tabs_color = "rgba(15, 18, 25, 0.92)" if not dark else "rgba(255, 255, 255, 0.92)"
+forecast_tab_position = TAB_OPTIONS.index("forecast") + 1
 
 # Añadir hash único al CSS para forzar regeneración
 import hashlib
@@ -4591,6 +5048,35 @@ st.markdown(f"""
 }}
 [data-testid="stMainBlockContainer"] div[role="radiogroup"] > label:has(input:checked) div[data-testid="stMarkdownContainer"] p {{
     color: #ff4b4b !important;
+}}
+/* Distintivo de la pestaña de predicción. */
+.st-key-primary_tab_navigation div[role="radiogroup"] > label:nth-child({forecast_tab_position})::after {{
+    content: "Beta";
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.35rem;
+    padding: 0.12rem 0.35rem;
+    border: 1px solid rgba(255, 75, 75, 0.42);
+    border-radius: 999px;
+    background: rgba(255, 75, 75, 0.10);
+    color: #ff4b4b;
+    font-size: 0.64rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+}}
+.st-key-primary_tab_navigation label.mlbx-forecast-external-tab {{
+    position: relative;
+}}
+.st-key-primary_tab_navigation a.mlbx-forecast-external-link {{
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border-radius: 8px;
+}}
+.st-key-primary_tab_navigation a.mlbx-forecast-external-link:focus-visible {{
+    outline: 2px solid #ff4b4b;
+    outline-offset: 2px;
 }}
 </style>
 
@@ -4706,6 +5192,15 @@ components.html(
       function finishWhenReady() {{
         if (root.dataset.mlbxTabSwitching !== 'true') return true;
         if (root.dataset.mlbxNextTab !== activeTab) return false;
+        // No enseñes todavía el panel nuevo mientras el DOM del anterior siga
+        // montado. En reruns costosos Streamlit puede crear el contenedor de
+        // Mapa mucho antes de retirar Ranking; liberar aquí el guard provocaba
+        // que ambos se solaparan durante varios segundos.
+        const foreignPanelStillMounted = tabIds.some(tabId =>
+          tabId !== activeTab &&
+          doc.querySelector('.st-key-tab_content_' + tabId)
+        );
+        if (foreignPanelStillMounted) return false;
         const panels = Array.from(
           doc.querySelectorAll('.st-key-tab_content_' + activeTab)
         );
@@ -4764,6 +5259,61 @@ with st.container(key="primary_tab_navigation"):
         key="active_tab",
         label_visibility="collapsed"
     )
+
+# Predicción vive en una aplicación Svelte independiente. Un enlace transparente
+# sobre su etiqueta conserva el aspecto de pestaña pero ofrece semántica real de
+# enlace (abrir en pestaña nueva, menú contextual, teclado) y evita un rerun de
+# Streamlit en la ventana actual.
+forecast_app_url = _os_boot.environ.get(
+    "METEOLABX_FORECAST_URL",
+    "/forecast",
+).strip()
+components.html(
+    f"""
+    <script>
+    (function() {{
+      const host = window.parent || window;
+      const doc = host.document;
+      const publicUrl = {json.dumps(forecast_app_url)};
+      const localForecastUrl = '/forecast/forecast.html?v=20260825-54';
+      const isLocal = ['localhost', '127.0.0.1'].includes(host.location.hostname);
+      const url = isLocal && publicUrl === '/forecast' ? localForecastUrl : publicUrl;
+      const forecastIndex = {TAB_OPTIONS.index("forecast")};
+      const selector = '.st-key-primary_tab_navigation div[role="radiogroup"]';
+
+      function installForecastLink() {{
+        const group = doc.querySelector(selector);
+        if (!group) return false;
+        const labels = Array.from(group.querySelectorAll(':scope > label'));
+        const label = labels[forecastIndex];
+        if (!label) return false;
+
+        label.classList.add('mlbx-forecast-external-tab');
+        let link = label.querySelector(':scope > a.mlbx-forecast-external-link');
+        if (!link) {{
+          link = doc.createElement('a');
+          link.className = 'mlbx-forecast-external-link';
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.setAttribute('aria-label', 'Abrir Predicción Beta en una pestaña nueva');
+          label.appendChild(link);
+        }}
+        link.href = url;
+        return true;
+      }}
+
+      if (!installForecastLink() && host.MutationObserver && doc.body) {{
+        const observer = new host.MutationObserver(() => {{
+          if (installForecastLink()) observer.disconnect();
+        }});
+        observer.observe(doc.body, {{ childList: true, subtree: true }});
+      }}
+    }})();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 
 
 def _weatherlink_station_label(station: dict) -> str:
@@ -4832,9 +5382,9 @@ _sync_shareable_url(active_tab)
 # CONSTRUCCIÓN DE UI (SIEMPRE SE MUESTRA, CON O SIN DATOS)
 # ============================================================
 
-# Ranking y Mapa no usan Plotly. Evitamos importar Plotly en esas aperturas;
-# Histórico sí necesita los templates antes de construir la primera figura.
-if active_tab in {"observation", "trends", "historical"}:
+# Ranking y Mapa no usan Plotly. Predicción e Histórico necesitan los templates
+# antes de construir su primera figura.
+if active_tab in {"observation", "trends", "historical", "forecast"}:
     _register_plotly_templates()
 
 # Panel INTERNO de estadísticas (administración): sustituye a las pestañas
@@ -4859,14 +5409,16 @@ _track_usage_section(
 # stale para que pan, zoom y filtros no parpadeen, pero esa regla también hacía
 # visible durante segundos el Ranking anterior al navegar Ranking → Mapa.
 # Cada pestaña vive ahora en un contenedor identificable y, en cada ejecución,
-# ocultamos solo los contenedores stale de las otras pestañas. El contenido
-# stale de la pestaña activa sigue disponible para reruns internos.
+# ocultamos cualquier contenedor de las otras pestañas, tenga ya ``data-stale``
+# o todavía no. El contenido stale de la pestaña activa sigue disponible para
+# reruns internos.
 _stale_tab_content_selectors = []
 for _tab_id in TAB_OPTIONS:
     if _tab_id == active_tab:
         continue
     _tab_class = f"st-key-tab_content_{_tab_id}"
     _stale_tab_content_selectors.extend((
+        f'[data-testid="stMainBlockContainer"] .{_tab_class}',
         f'[data-testid="stMainBlockContainer"] .{_tab_class}'
         f':has([data-testid="stElementContainer"][data-stale="true"])',
         f'[data-testid="stMainBlockContainer"] '
@@ -4899,6 +5451,9 @@ def _render_active_tab(tab_id: str) -> None:
     elif tab_id == "map":
         _get_tab_module("map").render_map_tab(_build_map_tab_context())
         _boot_mark("after render_map_tab")
+    elif tab_id == "forecast":
+        _get_tab_module("forecast").render_forecast_tab(_build_forecast_tab_context())
+        _boot_mark("after render_forecast_tab")
     elif tab_id == "ranking":
         _boot_mark("before ranking module import")
         ranking_module = _get_tab_module("ranking")
@@ -4951,8 +5506,10 @@ def _whats_new_footer_html() -> str:
         "data-mlbx-whats-new-version='110'>1.1.0</button>"
         "<button type='button' class='mlx-wn-tab' role='tab' "
         "data-mlbx-whats-new-version='120'>1.2.0</button>"
+        "<button type='button' class='mlx-wn-tab' role='tab' "
+        "data-mlbx-whats-new-version='130'>1.3.5</button>"
         "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='130' aria-selected='true'>1.3.5</button>"
+        "data-mlbx-whats-new-version='140' aria-selected='true'>1.4.0</button>"
         "</div>"
         "<div class='mlx-wn-pane mlx-wn-pane-110'>"
         + _release("footer.previous_improvements", "footer.previous_fixes")
@@ -4960,7 +5517,7 @@ def _whats_new_footer_html() -> str:
         "<div class='mlx-wn-pane mlx-wn-pane-120'>"
         + _release("footer.improvements", "footer.fixes")
         + "</div>"
-        "<div class='mlx-wn-pane mlx-wn-pane-130 is-active'>"
+        "<div class='mlx-wn-pane mlx-wn-pane-130'>"
         f"<div class='mlx-wn-version'>1.3.5 "
         f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
         + _release("footer.release_135_improvements", "footer.release_135_fixes")
@@ -4979,6 +5536,11 @@ def _whats_new_footer_html() -> str:
         + "<hr class='mlx-wn-sep'>"
         "<div class='mlx-wn-version'>1.3.0</div>"
         + _release("footer.release_130_improvements", "footer.release_130_fixes")
+        + "</div>"
+        "<div class='mlx-wn-pane mlx-wn-pane-140 is-active'>"
+        f"<div class='mlx-wn-version'>1.4.0 "
+        f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
+        + _release("footer.release_140_improvements", "footer.release_140_fixes")
         + "</div>"
     )
 

@@ -515,6 +515,7 @@ async def fetch_today_series(
         ],
         "uv_indexes": [float("nan")] * n,
         "solar_radiations": [float("nan")] * n,
+        "precip_step_mm": series["precips"],
         "winds": series["winds"],
         "gusts": [float("nan")] * n,
         "wind_dirs": series["wind_dirs"],

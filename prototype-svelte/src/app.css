@@ -1,0 +1,84 @@
+/* ── Tokens y base globales ──────────────────────────────────────────────── */
+:root {
+  --font: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, monospace;
+  --r-lg: 20px;
+  --r-md: 15px;
+  --r-sm: 10px;
+  /* Azul de marca MeteoLabx (isobaras / MLX) */
+  --accent: #3e8ed0;
+  --accent-ink: #04121f;
+}
+
+/* Tema oscuro (por defecto) — navy de marca */
+:root, .theme-dark {
+  --bg: #080d17;
+  --bg-grad-1: rgba(62, 142, 208, 0.07);
+  --bg-grad-2: rgba(62, 142, 208, 0.04);
+  --isobar: rgba(120, 165, 210, 0.06);
+  --panel: #0f1826;
+  --panel-2: #0c1420;
+  --card: #121d2e;
+  --card-hover: #17253a;
+  --rail: #0b1421;
+  --border: rgba(120, 160, 205, 0.13);
+  --border-2: rgba(120, 160, 205, 0.22);
+  --ink: #eaf1f9;
+  --ink-2: #a7b6c9;
+  --muted: #6f8095;
+  --muted-2: #4f5f74;
+  --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+  --chip-warn-bg: rgba(244, 187, 63, 0.16);
+  --chip-warn-fg: #f4c65b;
+  --chip-note-bg: rgba(120, 145, 175, 0.16);
+  --chip-note-fg: #a6b8cd;
+  --grid-line: rgba(120, 160, 205, 0.1);
+}
+
+.theme-light {
+  --bg: #eaeef4;
+  --bg-grad-1: rgba(62, 142, 208, 0.1);
+  --bg-grad-2: rgba(62, 142, 208, 0.06);
+  --isobar: rgba(40, 80, 130, 0.05);
+  --panel: #ffffff;
+  --panel-2: #f3f6fb;
+  --card: #ffffff;
+  --card-hover: #f5f8fc;
+  --rail: #ffffff;
+  --border: rgba(24, 52, 92, 0.1);
+  --border-2: rgba(24, 52, 92, 0.16);
+  --ink: #10203a;
+  --ink-2: #42546c;
+  --muted: #69798d;
+  --muted-2: #93a1b2;
+  --shadow: 0 20px 45px -24px rgba(24, 52, 92, 0.28);
+  --chip-warn-bg: rgba(214, 148, 20, 0.14);
+  --chip-warn-fg: #b47606;
+  --chip-note-bg: rgba(70, 100, 140, 0.12);
+  --chip-note-fg: #4c5e76;
+  --grid-line: rgba(24, 52, 92, 0.08);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+a { color: inherit; }
+h1, h2, h3, h4, p { margin: 0; }
+::selection { background: rgba(62, 142, 208, 0.32); }
+
+.tnum { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); }
+
+/* scrollbar */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 20px; }

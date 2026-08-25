@@ -231,6 +231,7 @@ async def _fetch_manual_current(
     client: httpx.AsyncClient,
     *,
     timeout_s: float,
+    now: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """Observación de una estación manual: el último día publicado."""
     series = await _fetch_parameters(
@@ -239,7 +240,8 @@ async def _fetch_manual_current(
     epochs = sorted(set().union(*(series[p].keys() for p in DAILY_PARAMETERS)))
     # Solo días recientes: una estación de archivo con meses de retraso no
     # debe presentarse como observación "actual".
-    cutoff = int(datetime.now(tz=timezone.utc).timestamp()) - 7 * 86400
+    now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+    cutoff = int(now_utc.timestamp()) - 7 * 86400
     epochs = [ep for ep in epochs if ep >= cutoff]
     if not epochs:
         raise ProviderError(
@@ -350,7 +352,7 @@ async def fetch_current(
     try:
         if _is_manual_station(row):
             return await _fetch_manual_current(
-                station_id, row, client, timeout_s=timeout_s,
+                station_id, row, client, timeout_s=timeout_s, now=now_local,
             )
         series = await _fetch_parameters(
             station_id,
@@ -489,7 +491,7 @@ async def fetch_today_series(
     try:
         series = await _fetch_parameters(
             station_id,
-            MINUTELY_PARAMETERS + (P_GUST, P_SOLAR),
+            MINUTELY_PARAMETERS + (P_GUST, P_RAIN, P_SOLAR),
             "latest-day", client, timeout_s=timeout_s,
         )
         # Fallback POR PARÁMETRO: cada estación publica un subconjunto
@@ -533,6 +535,8 @@ async def fetch_today_series(
         "pressures": _col(P_MSL),
         "uv_indexes": [float("nan")] * len(epochs),
         "solar_radiations": _col(P_SOLAR),
+        # Parámetro 7: suma de precipitación de la hora precedente.
+        "precip_step_mm": _col(P_RAIN),
         "winds": _col(P_WIND, convert=_kmh),
         "gusts": _col(P_GUST, convert=_kmh),
         "wind_dirs": _col(P_DIR),

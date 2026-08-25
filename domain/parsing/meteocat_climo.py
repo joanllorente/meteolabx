@@ -31,20 +31,32 @@ STAT_TEMP_MEAN     = 1000
 STAT_TEMP_MAX      = 1001
 STAT_TEMP_MIN      = 1002
 STAT_PRECIP        = 1300
+STAT_PRECIP_MAX_1MIN = 1302
+STAT_SOLAR_GLOBAL  = 1400
 STAT_WIND_MEAN_10  = 1503
 STAT_WIND_MEAN_6   = 1504
 STAT_WIND_MEAN_2   = 1505
+STAT_WIND_DIR_MEAN_10 = 1509
+STAT_WIND_DIR_MEAN_6  = 1510
+STAT_WIND_DIR_MEAN_2  = 1511
 STAT_GUST_MAX_10   = 1512
 STAT_GUST_MAX_6    = 1513
 STAT_GUST_MAX_2    = 1514
+STAT_GUST_DIR_10   = 1515
+STAT_GUST_DIR_6    = 1516
+STAT_GUST_DIR_2    = 1517
 
 CLIMO_STAT_CODES = {
     "temp_mean": [STAT_TEMP_MEAN],
     "temp_max": [STAT_TEMP_MAX],
     "temp_min": [STAT_TEMP_MIN],
     "wind_mean": [STAT_WIND_MEAN_2, STAT_WIND_MEAN_6, STAT_WIND_MEAN_10],
+    "wind_dir_mean": [STAT_WIND_DIR_MEAN_2, STAT_WIND_DIR_MEAN_6, STAT_WIND_DIR_MEAN_10],
     "gust_max": [STAT_GUST_MAX_2, STAT_GUST_MAX_6, STAT_GUST_MAX_10],
+    "gust_dir_max": [STAT_GUST_DIR_2, STAT_GUST_DIR_6, STAT_GUST_DIR_10],
     "precip_total": [STAT_PRECIP],
+    "precip_rate_max": [STAT_PRECIP_MAX_1MIN],
+    "solar_mean": [STAT_SOLAR_GLOBAL],
 }
 
 # Anuales — /variables/estadistics/anuals/{codiVariable}
@@ -53,24 +65,36 @@ STAT_AN_TEMP_ABS_MAX   = 3001
 STAT_AN_TEMP_ABS_MIN   = 3002
 STAT_AN_TEMP_MAX_MEAN  = 3003
 STAT_AN_TEMP_MIN_MEAN  = 3004
+STAT_AN_FROST_DAYS     = 3006
 STAT_AN_PRECIP_TOTAL   = 3300
+STAT_AN_PRECIP_MAX_1MIN = 3302
 STAT_AN_PRECIP_MAX_24H = 3303
 STAT_AN_RAIN_DAYS      = 3305
 STAT_AN_SOLAR_MEAN     = 3400
 STAT_AN_WIND_MEAN_10   = 3503
 STAT_AN_WIND_MEAN_6    = 3504
 STAT_AN_WIND_MEAN_2    = 3505
+STAT_AN_WIND_DIR_MEAN_10 = 3509
+STAT_AN_WIND_DIR_MEAN_6  = 3510
+STAT_AN_WIND_DIR_MEAN_2  = 3511
 STAT_AN_GUST_MAX_10    = 3512
 STAT_AN_GUST_MAX_6     = 3513
 STAT_AN_GUST_MAX_2     = 3514
+STAT_AN_GUST_DIR_10    = 3515
+STAT_AN_GUST_DIR_6     = 3516
+STAT_AN_GUST_DIR_2     = 3517
 
 ANNUAL_CLIMO_CODES = {
     "temp_mean": [STAT_AN_TEMP_MEAN],
     "temp_max": [STAT_AN_TEMP_MAX_MEAN],
     "temp_min": [STAT_AN_TEMP_MIN_MEAN],
+    "frost_nights": [STAT_AN_FROST_DAYS],
     "wind_mean": [STAT_AN_WIND_MEAN_2, STAT_AN_WIND_MEAN_6, STAT_AN_WIND_MEAN_10],
+    "wind_dir_mean": [STAT_AN_WIND_DIR_MEAN_2, STAT_AN_WIND_DIR_MEAN_6, STAT_AN_WIND_DIR_MEAN_10],
     "gust_max": [STAT_AN_GUST_MAX_2, STAT_AN_GUST_MAX_6, STAT_AN_GUST_MAX_10],
+    "gust_dir_max": [STAT_AN_GUST_DIR_2, STAT_AN_GUST_DIR_6, STAT_AN_GUST_DIR_10],
     "precip_total": [STAT_AN_PRECIP_TOTAL],
+    "precip_rate_max": [STAT_AN_PRECIP_MAX_1MIN],
     "solar_mean": [STAT_AN_SOLAR_MEAN],
     "precip_max_24h": [STAT_AN_PRECIP_MAX_24H],
     "rain_days": [STAT_AN_RAIN_DAYS],
@@ -84,24 +108,36 @@ STAT_MO_TEMP_ABS_MAX   = 2001
 STAT_MO_TEMP_ABS_MIN   = 2002
 STAT_MO_TEMP_MAX_MEAN  = 2003
 STAT_MO_TEMP_MIN_MEAN  = 2004
+STAT_MO_FROST_DAYS     = 2006
 STAT_MO_PRECIP_TOTAL   = 2300
+STAT_MO_PRECIP_MAX_1MIN = 2302
 STAT_MO_PRECIP_MAX_24H = 2303
 STAT_MO_RAIN_DAYS      = 2305
 STAT_MO_SOLAR_MEAN     = 2400
 STAT_MO_WIND_MEAN_10   = 2503
 STAT_MO_WIND_MEAN_6    = 2504
 STAT_MO_WIND_MEAN_2    = 2505
+STAT_MO_WIND_DIR_MEAN_10 = 2509
+STAT_MO_WIND_DIR_MEAN_6  = 2510
+STAT_MO_WIND_DIR_MEAN_2  = 2511
 STAT_MO_GUST_MAX_10    = 2512
 STAT_MO_GUST_MAX_6     = 2513
 STAT_MO_GUST_MAX_2     = 2514
+STAT_MO_GUST_DIR_10    = 2515
+STAT_MO_GUST_DIR_6     = 2516
+STAT_MO_GUST_DIR_2     = 2517
 
 MONTHLY_CLIMO_CODES = {
     "temp_mean": [STAT_MO_TEMP_MEAN],
     "temp_max": [STAT_MO_TEMP_MAX_MEAN],
     "temp_min": [STAT_MO_TEMP_MIN_MEAN],
+    "frost_nights": [STAT_MO_FROST_DAYS],
     "wind_mean": [STAT_MO_WIND_MEAN_2, STAT_MO_WIND_MEAN_6, STAT_MO_WIND_MEAN_10],
+    "wind_dir_mean": [STAT_MO_WIND_DIR_MEAN_2, STAT_MO_WIND_DIR_MEAN_6, STAT_MO_WIND_DIR_MEAN_10],
     "gust_max": [STAT_MO_GUST_MAX_2, STAT_MO_GUST_MAX_6, STAT_MO_GUST_MAX_10],
+    "gust_dir_max": [STAT_MO_GUST_DIR_2, STAT_MO_GUST_DIR_6, STAT_MO_GUST_DIR_10],
     "precip_total": [STAT_MO_PRECIP_TOTAL],
+    "precip_rate_max": [STAT_MO_PRECIP_MAX_1MIN],
     "solar_mean": [STAT_MO_SOLAR_MEAN],
     "precip_max_24h": [STAT_MO_PRECIP_MAX_24H],
     "rain_days": [STAT_MO_RAIN_DAYS],
@@ -121,11 +157,16 @@ CLIMO_DAILY_SCHEMA = [
     "wind_mean",
     "wind_dir_mean",
     "gust_max",
+    "gust_dir_max",
     "precip_total",
+    "precip_rate_max",
+    "solar_mean",
 ]
 
 CLIMO_ANNUAL_EXTRA_SCHEMA = [
-    "solar_mean",
+    "tropical_nights",
+    "torrid_nights",
+    "frost_nights",
     "precip_max_24h",
     "rain_days",
     "temp_abs_max",
@@ -134,6 +175,7 @@ CLIMO_ANNUAL_EXTRA_SCHEMA = [
     "temp_abs_min_date",
     "gust_abs_max_date",
     "precip_max_24h_date",
+    "precip_rate_max_date",
 ]
 
 CLIMO_WIND_METRICS = {"wind_mean", "gust_max"}
@@ -142,6 +184,7 @@ CLIMO_DATE_COLUMN_BY_METRIC = {
     "temp_abs_min": "temp_abs_min_date",
     "gust_max": "gust_abs_max_date",
     "precip_max_24h": "precip_max_24h_date",
+    "precip_rate_max": "precip_rate_max_date",
 }
 CLIMO_NUMERIC_COLUMNS = [
     "epoch",
@@ -151,8 +194,13 @@ CLIMO_NUMERIC_COLUMNS = [
     "wind_mean",
     "wind_dir_mean",
     "gust_max",
+    "gust_dir_max",
     "precip_total",
+    "precip_rate_max",
     "solar_mean",
+    "tropical_nights",
+    "torrid_nights",
+    "frost_nights",
     "precip_max_24h",
     "rain_days",
     "temp_abs_max",
@@ -275,8 +323,13 @@ def empty_climo_row(date_label: str, epoch: float) -> Dict[str, Any]:
         "wind_mean": float("nan"),
         "wind_dir_mean": float("nan"),
         "gust_max": float("nan"),
+        "gust_dir_max": float("nan"),
         "precip_total": float("nan"),
+        "precip_rate_max": float("nan"),
         "solar_mean": float("nan"),
+        "tropical_nights": float("nan"),
+        "torrid_nights": float("nan"),
+        "frost_nights": float("nan"),
         "precip_max_24h": float("nan"),
         "rain_days": float("nan"),
         "temp_abs_max": float("nan"),
@@ -285,6 +338,7 @@ def empty_climo_row(date_label: str, epoch: float) -> Dict[str, Any]:
         "temp_abs_min_date": None,
         "gust_abs_max_date": None,
         "precip_max_24h_date": None,
+        "precip_rate_max_date": None,
     }
 
 
@@ -320,6 +374,10 @@ def apply_climo_metric_value(row: Dict[str, Any], metric_name: str, payload: Dic
         return
     if metric_name in CLIMO_WIND_METRICS:
         value = ms_to_kmh(value)
+    elif metric_name == "precip_rate_max":
+        # Meteocat expresa PPTx1min como milímetros acumulados en un
+        # minuto. Se anualiza la tasa para el contrato común (mm/h).
+        value *= 60.0
     row[metric_name] = float(value)
     date_col = CLIMO_DATE_COLUMN_BY_METRIC.get(metric_name)
     if date_col:
@@ -342,8 +400,12 @@ def finalize_climo_frame(frame: pd.DataFrame, *, fill_temp_mean: bool = True) ->
             ) / 2.0
 
     frame["precip_total"] = frame["precip_total"].clip(lower=0)
+    frame["precip_rate_max"] = frame["precip_rate_max"].clip(lower=0)
     frame["precip_max_24h"] = frame["precip_max_24h"].clip(lower=0)
     frame["rain_days"] = frame["rain_days"].clip(lower=0)
+    frame["tropical_nights"] = frame["tropical_nights"].clip(lower=0)
+    frame["torrid_nights"] = frame["torrid_nights"].clip(lower=0)
+    frame["frost_nights"] = frame["frost_nights"].clip(lower=0)
     return frame.sort_values("date").reset_index(drop=True)[CLIMO_DAILY_SCHEMA + CLIMO_ANNUAL_EXTRA_SCHEMA]
 
 
@@ -416,7 +478,9 @@ def collect_stat_entries(payload: Any) -> List[Dict[str, Any]]:
 
 
 def _extract_annual_item_date(item: Dict[str, Any]) -> Optional[str]:
-    for key in ("data", "date", "dataExtrem", "data_extrem", "dataMax", "dataMin", "dataValor", "valorData"):
+    # La fecha del extremo debe prevalecer sobre la etiqueta del
+    # mes/año que identifica el registro agregado.
+    for key in ("dataExtrem", "data_extrem", "dataMax", "dataMin", "dataValor", "valorData", "date", "data"):
         if key in item:
             parsed = parse_stats_date(item.get(key))
             if parsed:

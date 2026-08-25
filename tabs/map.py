@@ -58,8 +58,11 @@ MAP_SENSOR_FILTER_OPTIONS = [
 MAP_AUTOCONNECT_CHANGED_KEY = "_map_provider_autoconnect_toggle_changed"
 MAP_AUTOCONNECT_SYNC_RERUN_KEY = "_map_provider_autoconnect_sync_rerun"
 MAP_COUNTRY_FILTER_INITIALIZED_KEY = "map_country_filter_initialized"
+MAP_ALL_COUNTRIES_OPTION = "__ALL_COUNTRIES__"
 MAP_COUNTRY_COUNTS_CACHE_VERSION = 3
 MAP_IEM_COUNTRY_CACHE_VERSION = 2
+MAP_GLOBAL_CATALOG_PREVIEW_LIMIT = 5000
+MAP_CATALOG_API_MAX_RESULTS = 250000
 REGIONAL_CATALOG_SPECS = {
     "AEMET": {"lat": 40.4168, "lon": -3.7038, "max_results": 1200},
     "METEOCAT": {"lat": 41.6200, "lon": 1.7500, "max_results": 260},
@@ -769,14 +772,88 @@ def map_country_default_enabled(
     return bool(code) and not filter_initialized and code in defaults
 
 
+def normalize_map_country_selection(
+    selection: list[str],
+    previous_selection: list[str] | None = None,
+) -> list[str]:
+    """Keep the worldwide option exclusive while allowing an easy switch.
+
+    Selecting "worldwide" replaces individual countries. If it was already
+    active and the user picks a country, that country replaces the worldwide
+    option instead.
+    """
+    selected = {
+        coerce_str(item, upper=True)
+        for item in selection
+        if coerce_str(item, upper=True)
+    }
+    if MAP_ALL_COUNTRIES_OPTION not in selected:
+        return sorted(selected, key=country_sort_key)
+
+    concrete_countries = selected - {MAP_ALL_COUNTRIES_OPTION}
+    if not concrete_countries:
+        return [MAP_ALL_COUNTRIES_OPTION]
+
+    previous = {
+        coerce_str(item, upper=True)
+        for item in (previous_selection or [])
+        if coerce_str(item, upper=True)
+    }
+    if MAP_ALL_COUNTRIES_OPTION in previous:
+        return sorted(concrete_countries, key=country_sort_key)
+    return [MAP_ALL_COUNTRIES_OPTION]
+
+
+def resolve_map_country_scope(
+    selection: list[str],
+    available_countries: list[str],
+) -> list[str]:
+    """Expand the worldwide picker value into every catalog country code."""
+    selected = {
+        coerce_str(item, upper=True)
+        for item in selection
+        if coerce_str(item, upper=True)
+    }
+    available = {
+        coerce_str(item, upper=True)
+        for item in available_countries
+        if coerce_str(item, upper=True)
+    }
+    if MAP_ALL_COUNTRIES_OPTION in selected:
+        return sorted(available)
+    return sorted(selected & available, key=country_sort_key)
+
+
+def map_provider_country_result_limit(
+    country_counts: dict[str, int],
+    selected_countries: list[str],
+    *,
+    fallback: int = MAP_GLOBAL_CATALOG_PREVIEW_LIMIT,
+) -> int:
+    """Return a complete per-country provider limit within the API ceiling."""
+    wanted = {
+        coerce_str(country, upper=True)
+        for country in selected_countries
+        if coerce_str(country, upper=True)
+    }
+    total = sum(
+        max(0, int(count))
+        for country, count in country_counts.items()
+        if coerce_str(country, upper=True) in wanted
+    )
+    if total <= 0:
+        return int(fallback)
+    return min(MAP_CATALOG_API_MAX_RESULTS, total)
+
+
 def _handle_map_country_selection_change(selection_key: str) -> None:
     st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
-    selected = [
-        coerce_str(item, upper=True)
-        for item in st.session_state.get(selection_key, [])
-        if coerce_str(item, upper=True)
-    ]
-    st.session_state["map_country_filter"] = sorted(set(selected), key=country_sort_key)
+    selected = normalize_map_country_selection(
+        list(st.session_state.get(selection_key, [])),
+        list(st.session_state.get("map_country_filter", [])),
+    )
+    st.session_state[selection_key] = selected
+    st.session_state["map_country_filter"] = selected
 
 
 def _sync_map_autoconnect_toggle(toggle_key: str, is_target_station: bool) -> bool:
@@ -1381,6 +1458,7 @@ def render_map_tab(ctx):
         show_scalar_field = show_temp_field or show_wind_field or show_precip_field
 
         if map_filter_controls_visible(view_mode):
+            worldwide_country_filter = False
             try:
                 country_counts = _cached_map_country_counts(
                     (), MAP_COUNTRY_COUNTS_CACHE_VERSION,
@@ -1395,6 +1473,12 @@ def render_map_tab(ctx):
                 )
                 if country and country not in {"UNSPECIFIED", "UN"}
             ]
+            all_world_country_codes = [
+                coerce_str(country, upper=True)
+                for country in country_counts
+                if coerce_str(country, upper=True)
+            ]
+            country_picker_options = [MAP_ALL_COUNTRIES_OPTION, *country_options]
             if not st.session_state.get(MAP_COUNTRY_FILTER_INITIALIZED_KEY, False):
                 defaults = set(default_map_countries_for_center(search_lat, search_lon))
                 initial_countries = [
@@ -1409,10 +1493,13 @@ def render_map_tab(ctx):
                     for country in st.session_state.get("map_country_filter", [])
                     if coerce_str(country, upper=True)
                 }
-                st.session_state["map_country_picker"] = [
-                    country for country in country_options
-                    if country in stored_countries
-                ]
+                if MAP_ALL_COUNTRIES_OPTION in stored_countries:
+                    st.session_state["map_country_picker"] = [MAP_ALL_COUNTRIES_OPTION]
+                else:
+                    st.session_state["map_country_picker"] = [
+                        country for country in country_options
+                        if country in stored_countries
+                    ]
 
             def _clear_map_country_filter() -> None:
                 st.session_state[MAP_COUNTRY_FILTER_INITIALIZED_KEY] = True
@@ -1423,10 +1510,14 @@ def render_map_tab(ctx):
                 with st.popover(str(t("map.country_filter"))):
                     country_selection = st.multiselect(
                         t("map.country_filter"),
-                        options=country_options,
+                        options=country_picker_options,
                         key="map_country_picker",
                         placeholder=str(t("map.country_search")),
-                        format_func=country_display_name,
+                        format_func=lambda country: (
+                            str(t("map.country_all"))
+                            if country == MAP_ALL_COUNTRIES_OPTION
+                            else country_display_name(country)
+                        ),
                         label_visibility="collapsed",
                         on_change=_handle_map_country_selection_change,
                         args=("map_country_picker",),
@@ -1437,15 +1528,23 @@ def render_map_tab(ctx):
                         on_click=_clear_map_country_filter,
                         width="stretch",
                     )
-            selected_codes = {
-                coerce_str(country, upper=True)
-                for country in country_selection
-                if coerce_str(country, upper=True)
-            }
-            selected_countries = [
-                country for country in country_options if country in selected_codes
-            ]
-            st.session_state["map_country_filter"] = selected_countries
+            normalized_country_selection = normalize_map_country_selection(
+                list(country_selection),
+                list(st.session_state.get("map_country_filter", [])),
+            )
+            selected_countries = resolve_map_country_scope(
+                normalized_country_selection,
+                all_world_country_codes,
+            )
+            st.session_state["map_country_filter"] = normalized_country_selection
+            worldwide_country_filter = (
+                MAP_ALL_COUNTRIES_OPTION in normalized_country_selection
+            )
+            country_filter_badge_count = (
+                1
+                if MAP_ALL_COUNTRIES_OPTION in normalized_country_selection
+                else len(selected_countries)
+            )
 
             stored_sensor_selection = set(st.session_state.get("map_sensor_filter", []))
 
@@ -1590,8 +1689,8 @@ def render_map_tab(ctx):
                     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='{control_icon}' stroke-width='2.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16l-6.4 7.2v5.3l-3.2 1.7v-7L4 5z'/%3E%3C/svg%3E");
                 }}
                 .st-key-map_country_overlay [data-testid="stPopoverButton"]::after {{
-                    content: "{len(selected_countries)}";
-                    display: {"block" if selected_countries else "none"};
+                    content: "{country_filter_badge_count}";
+                    display: {"block" if country_filter_badge_count else "none"};
                 }}
                 .st-key-map_sensor_overlay [data-testid="stPopoverButton"]::after {{
                     content: "{active_filter_count}";
@@ -1637,6 +1736,7 @@ def render_map_tab(ctx):
             selected_countries = list(
                 automatic_map_countries_for_center(search_lat, search_lon)
             )
+            worldwide_country_filter = False
             selected_sensors: set[str] = set()
             historical_only = False
             hide_historical_only = False
@@ -1649,7 +1749,8 @@ def render_map_tab(ctx):
         st.markdown(
             """
             <style data-mlbx-layout-hidden="map-view-tabs">
-            [data-testid="stMain"] [data-testid="stElementContainer"][data-stale="true"] {
+            .st-key-tab_content_map [data-testid="stElementContainer"][data-stale="true"],
+            [data-testid="stElementContainer"][data-stale="true"]:has(.st-key-tab_content_map) {
                 opacity: 1 !important;
                 transition: none !important;
             }
@@ -1728,9 +1829,23 @@ def render_map_tab(ctx):
             if not hide_pws:
                 for pws_provider in PWS_MAP_PROVIDERS:
                     if pws_provider in provider_filter:
+                        pws_limit = MAP_GLOBAL_CATALOG_PREVIEW_LIMIT
+                        if not worldwide_country_filter:
+                            try:
+                                pws_country_counts = _cached_map_country_counts(
+                                    (pws_provider,), MAP_COUNTRY_COUNTS_CACHE_VERSION,
+                                )
+                            except Exception:
+                                pws_country_counts = _fallback_map_country_counts(
+                                    (pws_provider,)
+                                )
+                            pws_limit = map_provider_country_result_limit(
+                                pws_country_counts,
+                                selected_countries,
+                            )
                         catalog_batches.append(
                             (
-                                5000,
+                                pws_limit,
                                 (pws_provider,),
                                 tuple(sorted(selected_countries)),
                                 False,
@@ -1743,9 +1858,24 @@ def render_map_tab(ctx):
                 if country_uses_iem_map_fallback(country)
             ]
             if iem_countries:
+                iem_limit = MAP_GLOBAL_CATALOG_PREVIEW_LIMIT
+                if not worldwide_country_filter:
+                    try:
+                        iem_country_counts = _cached_map_country_counts(
+                            (IEM_FALLBACK_MAP_PROVIDER,),
+                            MAP_COUNTRY_COUNTS_CACHE_VERSION,
+                        )
+                    except Exception:
+                        iem_country_counts = _fallback_map_country_counts(
+                            (IEM_FALLBACK_MAP_PROVIDER,)
+                        )
+                    iem_limit = map_provider_country_result_limit(
+                        iem_country_counts,
+                        iem_countries,
+                    )
                 catalog_batches.append(
                     (
-                        5000,
+                        iem_limit,
                         (IEM_FALLBACK_MAP_PROVIDER,),
                         tuple(sorted(iem_countries)),
                         bool(historical_only),

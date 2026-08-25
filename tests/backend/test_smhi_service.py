@@ -108,6 +108,8 @@ def test_fetch_today_series_canonical() -> None:
     assert len(series["epochs"]) == 2
     assert series["temps"] == pytest.approx([21.0, 23.4])
     assert series["winds"][1] == pytest.approx(10.8)
+    assert series["precip_step_mm"][0] == pytest.approx(0.4)
+    assert math.isnan(series["precip_step_mm"][1])
     assert math.isnan(series["pressures"][1])  # sin MSL a las 11
     assert all(math.isnan(v) for v in series["dewpts"])  # Td lo deriva la app
 

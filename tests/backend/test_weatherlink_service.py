@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from pathlib import Path
 
@@ -98,18 +98,24 @@ CLIMO_HISTORIC_PAYLOAD = {
                     "temp_last": 68.0,        # 20 °C
                     "wind_speed_avg": 5.0,    # mph → km/h
                     "wind_speed_hi": 12.0,
+                    "wind_dir_of_hi": 45.0,
                     "wind_dir_of_prevail": 90.0,
                     # El histórico real trae ``rainfall_mm`` = lluvia caída EN ese
                     # intervalo (incremento), no un acumulado → se SUMAN.
                     "rainfall_mm": 0.4,
+                    "rain_rate_hi_mm": 8.4,
+                    "solar_rad_avg": 500.0,
                 },
                 {
                     "ts": int(datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc).timestamp()),
                     "temp_last": 77.0,        # 25 °C
                     "wind_speed_avg": 10.0,
                     "wind_speed_hi": 20.0,
+                    "wind_dir_of_hi": 225.0,
                     "wind_dir_of_prevail": 180.0,
                     "rainfall_mm": 1.8,
+                    "rain_rate_hi_mm": 14.2,
+                    "solar_rad_avg": 700.0,
                 },
             ],
         }
@@ -221,6 +227,8 @@ def test_fetch_today_series_uses_station_window() -> None:
     assert result["has_data"] is True
     assert len(result["epochs"]) == 2
     assert result["temps"] == [pytest.approx(20.0), pytest.approx(22.0)]
+    assert "precip_step_mm" in result
+    assert "precips" not in result
     assert result["pressures"][1] == pytest.approx(29.92 * 33.8638866667)
     assert result["lat"] == pytest.approx(41.4)
 
@@ -255,8 +263,35 @@ def test_weatherlink_climo_daily_aggregates_historic_records() -> None:
     assert row["temp_min"] == pytest.approx(20.0)
     assert row["wind_mean"] == pytest.approx((5.0 + 10.0) * 1.609344 / 2.0)
     assert row["gust_max"] == pytest.approx(20.0 * 1.609344)
+    assert row["gust_dir_max"] == pytest.approx(225.0)
     # Suma de los incrementos por intervalo (0.4 + 1.8), no el máximo.
     assert row["precip_total"] == pytest.approx(2.2)
+    assert row["precip_rate_max"] == pytest.approx(14.2)
+    assert row["solar_mean"] == pytest.approx(600.0)
+
+
+def test_weatherlink_climo_reuses_closed_day_without_another_api_call() -> None:
+    from server.services.climo_cache import clear_climo_block_cache
+
+    clear_climo_block_cache()
+    client = _client(historic=CLIMO_HISTORIC_PAYLOAD)
+
+    async def _twice() -> None:
+        for _ in range(2):
+            frame = await weatherlink_climo.fetch_climo_daily_for_periods(
+                client,
+                STATION,
+                "KEY",
+                "SECRET",
+                [(date(2026, 6, 10), date(2026, 6, 10))],
+            )
+            assert len(frame) == 1
+        await client.aclose()
+
+    _run(_twice())
+    paths = client._captured["paths"]
+    assert sum(path.endswith("/stations") for path in paths) == 1
+    assert sum("/historic/" in path for path in paths) == 1
 
 
 def test_weatherlink_climo_forbidden_maps_to_unauthorized() -> None:

@@ -24,6 +24,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
 import pandas as pd
+from domain.parsing.periods import merge_date_periods
+from server.services.climo_cache import get_or_fetch_climo_block
 
 from domain.parsing.meteogalicia_climo import (  # assemblers genéricos
     aggregate_monthly_rows_to_year,
@@ -45,6 +47,7 @@ DAILY_FIELD_MAP = {
     "MIN_TEMPERATURE": "temp_min",
     "TOTAL_PRECIPITATION": "precip_total",
     "SPEED_MAX_GUST": "gust_max",  # ya en km/h
+    "DIRECTION_MAX_GUST": "gust_dir_max",
 }
 MONTHLY_FIELD_MAP = {
     "MEAN_TEMPERATURE": "temp_mean",
@@ -91,6 +94,8 @@ def _rows_from_features(payload: Any, field_map: Dict[str, str]) -> List[Dict[st
         for source, field in field_map.items():
             value = _safe_float(props.get(source))
             if value == value:
+                if field == "gust_dir_max" and 0.0 <= value <= 36.0 and float(value).is_integer():
+                    value = (value * 10.0) % 360.0
                 if field.startswith("precip") and value < 0.0:
                     value = 0.0
                 row[field] = value
@@ -114,19 +119,30 @@ async def _fetch_range(
 ) -> List[Dict[str, Any]]:
     """Un rango de fechas produce filas parseadas; los errores devuelven []."""
     try:
-        response = await client.get(
-            url,
-            params={
-                "f": "json",
-                "CLIMATE_IDENTIFIER": climate_id,
-                "datetime": f"{start.isoformat()}/{end.isoformat()}",
-                "limit": limit,
-            },
-            headers={"Accept": "application/json", "User-Agent": USER_AGENT},
-            timeout=90.0,
+        async def _request_payload():
+            response = await client.get(
+                url,
+                params={
+                    "f": "json",
+                    "CLIMATE_IDENTIFIER": climate_id,
+                    "datetime": f"{start.isoformat()}/{end.isoformat()}",
+                    "limit": limit,
+                },
+                headers={"Accept": "application/json", "User-Agent": USER_AGENT},
+                timeout=90.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
+        payload = await get_or_fetch_climo_block(
+            provider=PROVIDER,
+            kind=f"{url.rsplit('/', 1)[-1]}:{start.isoformat()}:{end.isoformat()}:{limit}",
+            station_id=climate_id,
+            credential="public",
+            client=client,
+            end_date=end,
+            fetcher=_request_payload,
         )
-        response.raise_for_status()
-        payload = response.json()
     except Exception as exc:
         logger.warning(
             "Climo ECCC falló para %s (%s→%s): %s", climate_id, start, end, exc,
@@ -146,7 +162,7 @@ async def fetch_climo_daily_for_periods(
         return empty_climo_df()
     batches = await asyncio.gather(*(
         _fetch_range(client, DAILY_URL, climate_id, start, end, field_map=DAILY_FIELD_MAP)
-        for start, end in periods
+        for start, end in merge_date_periods(periods)
     ))
     return rows_to_climo_df([row for batch in batches for row in batch])
 

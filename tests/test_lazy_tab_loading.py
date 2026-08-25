@@ -36,7 +36,7 @@ def test_importing_ranking_does_not_import_other_tabs():
     imported = _imported_tabs("import tabs.ranking")
     assert "tabs.ranking" in imported
     assert imported.isdisjoint(
-        {"tabs.observation", "tabs.trends", "tabs.historical", "tabs.map"}
+        {"tabs.observation", "tabs.trends", "tabs.historical", "tabs.map", "tabs.forecast"}
     )
 
 
@@ -51,6 +51,7 @@ def test_main_tab_loader_requires_the_requested_tab():
     assert [arg.arg for arg in loader.args.args] == ["tab_id"]
     assert '"ranking": "tabs.ranking"' in source
     assert '"map": "tabs.map"' in source
+    assert '"forecast": "tabs.forecast"' in source
 
 
 def test_main_waits_for_storage_before_resolving_active_tab():
@@ -79,9 +80,9 @@ def test_cold_boot_without_autoconnect_forces_ranking_before_tab_render():
     assert active_tab_sync_pos < tab_render_pos
 
 
-def test_plotly_is_not_registered_for_ranking_or_map():
+def test_plotly_is_registered_for_chart_tabs_including_forecast():
     source = (ROOT / "meteolabx.py").read_text(encoding="utf-8")
-    assert 'if active_tab in {"observation", "trends", "historical"}:' in source
+    assert 'if active_tab in {"observation", "trends", "historical", "forecast"}:' in source
 
 
 def test_tab_switch_hides_previous_panel_immediately_and_then_its_stale_dom():
@@ -95,6 +96,8 @@ def test_tab_switch_hides_previous_panel_immediately_and_then_its_stale_dom():
     assert "root.dataset.mlbxNextTab = nextTab" in source
     assert "doc.removeEventListener(\n          'pointerdown'" in source
     assert "finishWhenReady" in source
+    assert "foreignPanelStillMounted" in source
+    assert "doc.querySelector('.st-key-tab_content_' + tabId)" in source
     assert "mlbx-primary-tab-spin" in source
     assert "const freshElement" in source
     assert "panel.querySelectorAll('[data-testid=\"stElementContainer\"]')" in source
@@ -102,6 +105,7 @@ def test_tab_switch_hides_previous_panel_immediately_and_then_its_stale_dom():
     assert 'with st.container(key=f"tab_content_{active_tab}"):' in source
     assert 'data-mlbx-tab-transition' in source
     assert 'if _tab_id == active_tab:' in source
+    assert "f'[data-testid=\"stMainBlockContainer\"] .{_tab_class}'" in source
     assert '.{_tab_class}' in source
     assert ':has([data-testid="stElementContainer"][data-stale="true"])' in source
     assert '[data-stale="true"]:has(.{_tab_class})' in source

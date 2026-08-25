@@ -281,7 +281,7 @@ def test_post_today_series_response_has_no_nan_literals(app_factory) -> None:
     assert response.status_code == 200
     assert "NaN" not in response.text
     body = response.json()
-    assert body["dewpts"] == [None]
+    assert body["dewpts"][0] == pytest.approx(7.4290835645)
     assert body["solar_radiations"] == [None]
 
 

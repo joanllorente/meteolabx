@@ -11,6 +11,7 @@ datos). Los mocks deben rutear por URL para distinguir paso 1 de paso 2.
 from __future__ import annotations
 
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -478,16 +479,17 @@ async def test_ranking_aemet_uses_intra_hour_extremes() -> None:
     registro no trae extremos."""
     from server.services import ranking as ranking_svc
 
+    today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
     records = [
         {
             **REAL_AEMET_RECORD,
-            "fint": "2026-07-04T15:00:00+0000",
+            "fint": f"{today}T15:00:00+0000",
             "ta": "42.3", "tamax": "43.2", "tamin": "41.8",
         },
         # Registro sin extremos → cae a ta.
         {
             **REAL_AEMET_RECORD,
-            "fint": "2026-07-04T16:00:00+0000",
+            "fint": f"{today}T16:00:00+0000",
             "ta": "41.0", "tamax": None, "tamin": None,
         },
     ]

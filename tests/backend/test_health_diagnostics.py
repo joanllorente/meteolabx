@@ -91,9 +91,9 @@ def test_diagnostics_tracks_calls_cache_and_errors() -> None:
     assert diag["caches"]["current"]["misses"] == 2
     assert diag["caches"]["current"]["hits"] == 1
 
-    # Proveedores: 1 llamada real OK a METEOGALICIA
+    # MeteoGalicia realiza una llamada principal y otra opcional de extremos.
     mg = diag["providers"]["METEOGALICIA"]
-    assert mg["calls"] == 1
+    assert mg["calls"] == 2
     assert mg["errors"] == 0
     assert mg["last_ok_epoch"] is not None
 

@@ -138,25 +138,35 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.ranking_store = RankingStore()
     if ranking_state_path:
         app.state.ranking_store.load_from_disk(ranking_state_path)
-    ranking_task = asyncio.create_task(
-        refresh_loop(
-            app.state.ranking_store,
-            client=client,
-            settings=settings,
-            interval_s=float(getattr(settings, "ranking_refresh_interval_s", 1800.0)),
-            retry_interval_s=float(getattr(settings, "ranking_retry_interval_s", 60.0)),
-            state_path=ranking_state_path,
-        )
+    ranking_task: asyncio.Task[None] | None = None
+    app.state.ranking_refresh_enabled = bool(
+        getattr(settings, "ranking_refresh_enabled", True)
     )
+    if app.state.ranking_refresh_enabled:
+        ranking_task = asyncio.create_task(
+            refresh_loop(
+                app.state.ranking_store,
+                client=client,
+                settings=settings,
+                interval_s=float(getattr(settings, "ranking_refresh_interval_s", 1800.0)),
+                retry_interval_s=float(getattr(settings, "ranking_retry_interval_s", 60.0)),
+                state_path=ranking_state_path,
+            )
+        )
+    else:
+        logger.info(
+            "ranking: refresco automático desactivado; no se llamará a proveedores"
+        )
 
     try:
         yield
     finally:
-        ranking_task.cancel()
-        try:
-            await ranking_task
-        except asyncio.CancelledError:
-            pass
+        if ranking_task is not None:
+            ranking_task.cancel()
+            try:
+                await ranking_task
+            except asyncio.CancelledError:
+                pass
         # Último volcado antes de apagar: captura lo acumulado desde el
         # último ciclo (p. ej. horas de Meteo-France de los reintentos).
         if ranking_state_path:

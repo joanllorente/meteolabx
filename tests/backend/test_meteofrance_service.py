@@ -199,6 +199,7 @@ def test_fetch_today_series_hourly_fanout() -> None:
     assert result["pressures"][0] == pytest.approx(954.0 * math.exp(ELEVATION / 8000.0))
     # Hora 1 con viento 4 m/s
     assert result["winds"][1] == pytest.approx(14.4)
+    assert result["precip_step_mm"] == pytest.approx([0.4, 0.2, 0.0])
     assert result["lat"] == pytest.approx(46.278167)
     assert result["daily_extremes"] == {
         "temp_max": pytest.approx(21.4),

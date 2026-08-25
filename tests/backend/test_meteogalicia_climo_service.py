@@ -37,7 +37,9 @@ DAILY_PAYLOAD = {
                     _measure("TA_MIN_1.5m", 12.0),
                     _measure("PP_SUM_1.5m", 3.4),
                     _measure("VV_AVG_10m", 2.0),     # m/s → 7.2 km/h
+                    _measure("DVP_MODA_10m", 270.0),
                     _measure("VV_MAX_2m", 5.0),      # m/s → 18 km/h
+                    _measure("DV_CONDICION_2m", 225.0),
                     _measure("HSOL_SUM_1.5m", 9.1),
                 ],
             }],
@@ -71,6 +73,10 @@ MONTHLY_PAYLOAD = {
                     _measure("PP_SUM_1.5m", 120.0),
                     _measure("NDPP_RECUENTO_1.5m", 14.0),
                     _measure("NDX_RECUENTO_1.5m", 3.0),
+                    _measure("VV_AVG_10m", 2.0),
+                    _measure("DVP_MODA_10m", 270.0),
+                    _measure("VV_MAX_10m", 8.0),
+                    _measure("DV_CONDICION_10m", 225.0),
                 ],
             }],
         },
@@ -85,6 +91,10 @@ MONTHLY_PAYLOAD = {
                     _measure("PP_SUM_1.5m", 80.0),
                     _measure("NDPP_RECUENTO_1.5m", 10.0),
                     _measure("NDX_RECUENTO_1.5m", 1.0),
+                    _measure("VV_AVG_10m", 3.0),
+                    _measure("DVP_MODA_10m", 280.0),
+                    _measure("VV_MAX_10m", 6.0),
+                    _measure("DV_CONDICION_10m", 180.0),
                 ],
             }],
         },
@@ -123,6 +133,8 @@ async def test_daily_for_periods_parses_units_and_sentinels() -> None:
     # m/s → km/h, y 10m prioriza sobre 2m para el mismo campo
     assert row["wind_mean"] == pytest.approx(7.2)
     assert row["gust_max"] == pytest.approx(18.0)
+    assert row["wind_dir_mean"] == pytest.approx(270.0)
+    assert row["gust_dir_max"] == pytest.approx(225.0)
     assert row["solar_hours"] == pytest.approx(9.1)
 
     row2 = df.iloc[1]
@@ -144,6 +156,8 @@ async def test_monthly_for_year_canonicalizes_month_start() -> None:
     assert jan["temp_abs_max"] == pytest.approx(18.2)  # absoluta del mes
     assert jan["rain_days"] == pytest.approx(14.0)
     assert jan["frost_nights"] == pytest.approx(3.0)
+    assert jan["wind_dir_mean"] == pytest.approx(270.0)
+    assert jan["gust_dir_max"] == pytest.approx(225.0)
 
 
 @pytest.mark.asyncio
@@ -161,6 +175,8 @@ async def test_yearly_aggregates_monthly_rows() -> None:
     assert year_row["rain_days"] == pytest.approx(24.0)        # suma
     assert year_row["temp_abs_max"] == pytest.approx(21.0)     # máximo
     assert year_row["temp_abs_min"] == pytest.approx(-1.5)     # mínimo
+    assert year_row["wind_dir_mean"] == pytest.approx(270.0)
+    assert year_row["gust_dir_max"] == pytest.approx(225.0)
 
 
 @pytest.mark.asyncio
@@ -232,7 +248,17 @@ def test_endpoint_annual_single_year_hits_monthly() -> None:
 
 
 def test_endpoint_annual_multi_year_aggregates() -> None:
-    with _endpoint_client() as client:
+    two_year_payload = {
+        "listDatosMensuais": [
+            {**row, "data": row["data"].replace("2024-", "2023-")}
+            for row in MONTHLY_PAYLOAD["listDatosMensuais"]
+        ] + MONTHLY_PAYLOAD["listDatosMensuais"]
+    }
+    app = create_app()
+    app.dependency_overrides[get_http_client] = lambda: _mock_client(
+        monthly=two_year_payload,
+    )
+    with TestClient(app) as client:
         response = client.post(
             "/v1/climo/dataset",
             json={

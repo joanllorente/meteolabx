@@ -292,10 +292,12 @@ async def _fetch_climate_current(
     client: httpx.AsyncClient,
     *,
     timeout_s: float,
+    now: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     climate_id = str(row.get("climate_identifier") or station_id).strip()
     days = await _fetch_climate_days(climate_id, client, limit=10, timeout_s=timeout_s)
-    cutoff = (datetime.now(tz=timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+    cutoff = (now_utc - timedelta(days=7)).strftime("%Y-%m-%d")
     days = [
         d for d in days
         if str(d.get("LOCAL_DATE") or "")[:10] >= cutoff
@@ -314,7 +316,7 @@ async def _fetch_climate_current(
     latest = days[-1]
     tz = _station_tz(row)
     epoch = parse_epoch(str(latest.get("LOCAL_DATE") or "")[:10]) or int(
-        datetime.now(tz=timezone.utc).timestamp()
+        now_utc.timestamp()
     )
     dt_utc = datetime.fromtimestamp(epoch, tz=timezone.utc)
     rain = _safe_float(latest.get("TOTAL_PRECIPITATION"))
@@ -409,7 +411,7 @@ async def fetch_current(
     try:
         if _is_climate_station(row):
             return await _fetch_climate_current(
-                station_id, row, client, timeout_s=timeout_s,
+                station_id, row, client, timeout_s=timeout_s, now=now_local,
             )
         rows = await _fetch_swob_window(
             station_id, client,
@@ -556,8 +558,16 @@ async def fetch_today_series(
 
     # 1 punto/10 min: la última obs de cada bloque.
     by_slot: Dict[int, Dict[str, Any]] = {}
+    precip_by_slot: Dict[int, float] = {}
     for item in rows:
-        by_slot[(int(item["epoch"]) // 600) * 600] = item
+        slot = (int(item["epoch"]) // 600) * 600
+        by_slot[slot] = item
+        # La lectura de precipitación se publica en el corte horario. Si
+        # después llega otra observación dentro del mismo bloque de 10 min
+        # sin ese campo, no debemos borrar el intervalo de lluvia.
+        precip = _observed_float(item, "pcpn_amt_pst1hr")
+        if not _is_nan(precip):
+            precip_by_slot[slot] = precip
     slots = sorted(by_slot)
     elevation = _safe_float(row.get("elev"))
 
@@ -572,6 +582,7 @@ async def fetch_today_series(
         "pressures": _col(lambda r: _msl_from_station(_safe_float(r.get("stn_pres")), elevation)),
         "uv_indexes": [float("nan")] * len(slots),
         "solar_radiations": [float("nan")] * len(slots),
+        "precip_step_mm": [precip_by_slot.get(slot, float("nan")) for slot in slots],
         "winds": _col(_wind_speed),
         "gusts": _col(lambda r: _observed_float(r, "max_wnd_spd_10m_pst1hr")),
         "wind_dirs": _col(_wind_dir),

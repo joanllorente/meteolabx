@@ -17,7 +17,8 @@ import pandas as pd
 # Esquema de columnas del DataFrame devuelto (compatible con climograms.py).
 CLIMO_DAILY_COLS = [
     "date", "epoch", "temp_mean", "temp_max", "temp_min",
-    "wind_mean", "wind_dir_mean", "gust_max", "precip_total",
+    "wind_mean", "wind_dir_mean", "gust_max", "gust_dir_max",
+    "precip_total",
 ]
 CLIMO_EXTRA_COLS = [
     "solar_hours", "precip_max_24h", "rain_days",
@@ -36,6 +37,10 @@ DAILY_PARAM_MAP: Dict[str, Tuple[str, float]] = {
     "VV_AVG_2m":     ("wind_mean",    3.6),
     "VV_MAX_10m":    ("gust_max",     3.6),
     "VV_MAX_2m":     ("gust_max",     3.6),
+    "DVP_MODA_10m":  ("wind_dir_mean", 1.0),
+    "DVP_MODA_2m":   ("wind_dir_mean", 1.0),
+    "DV_CONDICION_10m": ("gust_dir_max", 1.0),
+    "DV_CONDICION_2m":  ("gust_dir_max", 1.0),
     "HSOL_SUM_1.5m": ("solar_hours",  1.0),
 }
 
@@ -52,6 +57,10 @@ MONTHLY_PARAM_MAP: Dict[str, Tuple[str, float]] = {
     "VV_AVG_2m":            ("wind_mean",      3.6),
     "VV_MAX_10m":           ("gust_max",       3.6),
     "VV_MAX_2m":            ("gust_max",       3.6),
+    "DVP_MODA_10m":         ("wind_dir_mean",  1.0),
+    "DVP_MODA_2m":          ("wind_dir_mean",  1.0),
+    "DV_CONDICION_10m":     ("gust_dir_max",   1.0),
+    "DV_CONDICION_2m":      ("gust_dir_max",   1.0),
     "HSOL_SUM_1.5m":        ("solar_hours",    1.0),
     "NDPP_RECUENTO_1.5m":   ("rain_days",      1.0),
     "NDX_RECUENTO_1.5m":    ("frost_nights",   1.0),   # días de helada
@@ -238,6 +247,17 @@ def aggregate_monthly_rows_to_year(year: int, monthly_rows: Sequence[Dict[str, A
             row[col] = float(mdf[col].mean(skipna=True))
         else:
             row[col] = float("nan")
+    # La dirección predominante mensual ya es una moda del proveedor.
+    # Para el año se escoge el sector de 16 rumbos más repetido, sin hacer
+    # una media aritmética de ángulos.
+    if "wind_dir_mean" in mdf.columns:
+        dirs = pd.to_numeric(mdf["wind_dir_mean"], errors="coerce").dropna()
+        if not dirs.empty:
+            sectors = (((dirs % 360.0) + 11.25) // 22.5).astype(int) % 16
+            winning_sector = int(sectors.value_counts().idxmax())
+            row["wind_dir_mean"] = winning_sector * 22.5
+        else:
+            row["wind_dir_mean"] = float("nan")
     # Sumas: precip_total, solar_hours, rain_days, frost_nights
     for col in ("precip_total", "solar_hours", "rain_days", "frost_nights"):
         if col in mdf.columns:
@@ -252,6 +272,17 @@ def aggregate_monthly_rows_to_year(year: int, monthly_rows: Sequence[Dict[str, A
             row[col] = float(s.max()) if len(s) > 0 else float("nan")
         else:
             row[col] = float("nan")
+    if "gust_max" in mdf.columns and "gust_dir_max" in mdf.columns:
+        gusts = pd.to_numeric(mdf["gust_max"], errors="coerce")
+        directions = pd.to_numeric(mdf["gust_dir_max"], errors="coerce")
+        valid_gusts = gusts.dropna()
+        if not valid_gusts.empty:
+            direction = directions.loc[valid_gusts.idxmax()]
+            row["gust_dir_max"] = (
+                float(direction) if not pd.isna(direction) else float("nan")
+            )
+        else:
+            row["gust_dir_max"] = float("nan")
     # Mínimo: temp_abs_min
     if "temp_abs_min" in mdf.columns:
         s = mdf["temp_abs_min"].dropna()

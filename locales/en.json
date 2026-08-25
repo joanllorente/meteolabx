@@ -10,7 +10,19 @@
     "historical": "History",
     "info": "Learn",
     "map": "Map",
+    "forecast": "Forecast",
     "ranking": "Ranking"
+  },
+  "forecast": {
+    "section_title": "Forecast",
+    "beta": "Beta",
+    "intro": "Convective forecasting prototype using the AROME model.",
+    "model_description": "We are preparing high-resolution maps based on AROME model output.",
+    "shear_title": "Wind shear",
+    "shear_description": "Vertical wind shear for assessing the potential organization of thunderstorms.",
+    "ship_title": "SHIP",
+    "ship_description": "Significant Hail Parameter for identifying environments favorable for significant hail.",
+    "status": "The prototype is under development. Maps will be added here progressively."
   },
   "ranking": {
     "section_title": "Station ranking",
@@ -92,6 +104,14 @@
     "whats_new": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
+    "release_140_improvements": [
+      "New card-based interface for the Historical tab.",
+      "New wind information added to Historical.",
+      "New ‘Numerical forecast’ section with custom maps for the AROME model."
+    ],
+    "release_140_fixes": [
+      "Fixed an issue that prevented accumulated values from being displayed correctly in precipitation charts."
+    ],
     "release_135_improvements": [
       "Improved interpolation on the global temperature map.",
       "More stable and faster startup.",
@@ -374,6 +394,46 @@
         "annual": "Annual"
       }
     },
+    "actions": {
+      "query": "Query history"
+    },
+    "cards": {
+      "thermal_extremes": "Thermal extremes",
+      "mean_temp_extremes": "Mean temperature extremes",
+      "mean_temp_difference": "Difference between means",
+      "daily_temperature_extremes": "Daily extremes",
+      "wind_extremes": "Wind extremes",
+      "precip_extremes": "Precipitation extremes",
+      "solar_extremes": "Sunshine extremes",
+      "solar_irradiation_extremes": "Solar irradiation extremes",
+      "period_amplitude": "Period temperature range",
+      "max_intensity": "Maximum intensity",
+      "max_short": "Max.",
+      "min_short": "Min.",
+      "average_temperatures": "Average temperatures",
+      "wind_summary": "Wind",
+      "rain_summary": "Rain",
+      "solar_summary": "Solar",
+      "characteristic_days": "Characteristic days",
+      "summary_labels": {
+        "mean": "Mean",
+        "maximums": "Maximums",
+        "minimums": "Minimums",
+        "stddev": "Std. deviation",
+        "predominant_direction": "Prevailing",
+        "direction": "Direction",
+        "windiest_day": "Windiest day",
+        "windiest_month": "Windiest month",
+        "accumulated": "Accumulated",
+        "rain_days": "Rainy days",
+        "irradiation_mean": "Mean irradiation",
+        "irradiance_mean": "Mean irradiance",
+        "sunshine_mean": "Mean sunshine",
+        "tropical": "Tropical",
+        "torrid": "Torrid",
+        "frost": "Frost"
+      }
+    },
     "inputs": {
       "months": "Month(s)",
       "years": "Year(s)"
@@ -472,6 +532,8 @@
       "max_precip_24h": "Maximum precipitation in 24 hours",
       "sunniest_year": "Sunniest year",
       "least_sunny_year": "Year with the least sunshine",
+      "highest_solar_irradiation_year": "Year with highest mean solar irradiation",
+      "lowest_solar_irradiation_year": "Year with lowest mean solar irradiation",
       "lowest_maximum": "Lowest maximum",
       "highest_minimum": "Highest minimum",
       "windiest_month": "Windiest month (mean wind)",
@@ -485,7 +547,9 @@
       "mean_wind": "Mean wind",
       "accumulated_precipitation": "Accumulated precipitation",
       "mean_precipitation": "Mean precipitation",
+      "rain_days": "Rainy days",
       "mean_solar_irradiance": "Mean solar irradiance",
+      "mean_daily_global_solar_irradiation": "Mean daily global solar irradiation",
       "mean_sunshine_hours": "Mean sunshine hours",
       "tropical_nights": "Tropical nights (min > 20 °C)",
       "frost_nights": "Frost nights (min ≤ 0 °C)",
@@ -801,6 +865,7 @@
     "hide_historical_only": "Hide historical stations",
     "hide_historical_only_help": "Historical stations no longer record data, but their historical archive can be consulted.",
     "country_filter": "Countries",
+    "country_all": "Worldwide",
     "country_search": "Search country…",
     "country_clear": "Clear filter",
     "sensor_filter_clear": "Clear",

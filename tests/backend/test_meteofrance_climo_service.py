@@ -19,15 +19,15 @@ from server.dependencies.http import get_http_client
 from server.main import create_app
 
 DAILY_CSV = (
-    "POSTE;DATE;RR;TN;TX;TM;FFM;FXI\n"
-    "01014002;20250601;0,4;12,5;27,0;19,8;2,5;15,0\n"
-    "01014002;20250602;12,0;21,0;26,0;;3,0;\n"
+    "POSTE;DATE;RR;TN;TX;TM;FFM;FXI;DXI\n"
+    "01014002;20250601;0,4;12,5;27,0;19,8;2,5;15,0;225\n"
+    "01014002;20250602;12,0;21,0;26,0;;3,0;;\n"
 )
 
 MONTHLY_CSV = (
-    "POSTE;DATE;RR;TM;TX;TN;TXAB;TXDAT;TNAB;TNDAT;RRAB;RRABDAT;NBJRR1;NBJGELEE;FXIAB;FXIDAT\n"
-    "01014002;202401;120,0;9,5;13,0;6,0;18,2;20240127;-1,5;20240103;25,0;20240115;14;3;21,1;20240107\n"
-    "01014002;202402;80,0;10,5;14,0;7,0;21,0;20240211;0,5;20240220;18,0;20240224;10;1;;\n"
+    "POSTE;DATE;RR;TM;TX;TN;TXAB;TXDAT;TNAB;TNDAT;RRAB;RRABDAT;NBJRR1;NBJGELEE;FXIAB;FXIDAT;DXIAB\n"
+    "01014002;202401;120,0;9,5;13,0;6,0;18,2;20240127;-1,5;20240103;25,0;20240115;14;3;21,1;20240107;270\n"
+    "01014002;202402;80,0;10,5;14,0;7,0;21,0;20240211;0,5;20240220;18,0;20240224;10;1;;;\n"
 )
 
 
@@ -77,6 +77,7 @@ async def test_daily_periods_polls_commande_and_parses_csv() -> None:
     assert day1["temp_mean"] == pytest.approx(19.8)   # coma decimal
     assert day1["precip_total"] == pytest.approx(0.4)
     assert day1["gust_max"] == pytest.approx(15.0)
+    assert day1["gust_dir_max"] == pytest.approx(225.0)
     day2 = df.iloc[1]
     assert day2["temp_mean"] == pytest.approx(23.5)   # sin TM → (TN+TX)/2
     assert day2["rain_days"] == pytest.approx(1.0)    # RR ≥ 1 mm
@@ -111,6 +112,7 @@ async def test_monthly_year_parses_absolute_extremes_with_dates() -> None:
     assert jan["rain_days"] == pytest.approx(14.0)
     assert jan["frost_nights"] == pytest.approx(3.0)
     assert jan["gust_max"] == pytest.approx(21.1)
+    assert jan["gust_dir_max"] == pytest.approx(270.0)
     assert jan["gust_abs_max_date"] == "2024-01-07"
 
 
@@ -128,6 +130,7 @@ async def test_yearly_aggregates_monthlies() -> None:
     assert row["temp_abs_min"] == pytest.approx(-1.5)    # mínimo
     assert row["frost_nights"] == pytest.approx(4.0)     # suma 3+1
     assert row["rain_days"] == pytest.approx(24.0)
+    assert row["gust_dir_max"] == pytest.approx(270.0)
 
 
 @pytest.mark.asyncio

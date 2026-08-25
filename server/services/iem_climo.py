@@ -14,6 +14,8 @@ import httpx
 import pandas as pd
 
 from domain.parsing.wu_climo import DAILY_SCHEMA, clip_period_tuples_to_today
+from domain.parsing.periods import merge_date_periods
+from server.services.climo_cache import get_or_fetch_climo_block
 from server.schemas.errors import ProviderError
 from server.services.iem import (
     PROVIDER,
@@ -74,15 +76,16 @@ def _sum(values: Sequence[Any]) -> float:
     return float(sum(valid)) if valid else float("nan")
 
 
-def _circular_mean_degrees(values: Sequence[Any]) -> float:
+def _predominant_direction_degrees(values: Sequence[Any]) -> float:
     valid = _valid_numbers(values)
     if not valid:
         return float("nan")
-    sin_sum = sum(math.sin(math.radians(value % 360.0)) for value in valid)
-    cos_sum = sum(math.cos(math.radians(value % 360.0)) for value in valid)
-    if sin_sum == 0.0 and cos_sum == 0.0:
-        return float("nan")
-    return float((math.degrees(math.atan2(sin_sum, cos_sum)) + 360.0) % 360.0)
+    counts: Dict[int, int] = {}
+    for value in valid:
+        sector = int((((value % 360.0) + 11.25) // 22.5)) % 16
+        counts[sector] = counts.get(sector, 0) + 1
+    winner = max(counts, key=counts.get)
+    return float(winner * 22.5)
 
 
 def _period_window(start: date, end: date, meta: Dict[str, Any]) -> Tuple[str, str]:
@@ -160,7 +163,7 @@ def _finalize_daily_rows(rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
 
 
 def _aggregate_daily(csv_text: str, meta: Dict[str, Any]) -> pd.DataFrame:
-    buckets: Dict[date, Dict[str, List[float] | int]] = {}
+    buckets: Dict[date, Dict[str, Any]] = {}
     for row in _csv_rows(csv_text):
         valid_dt = _parse_valid_datetime(row, meta)
         if valid_dt is None:
@@ -169,17 +172,24 @@ def _aggregate_daily(csv_text: str, meta: Dict[str, Any]) -> pd.DataFrame:
         day = valid_dt.date()
         bucket = buckets.setdefault(
             day,
-            {"epoch": [], "temp": [], "wind": [], "gust": [], "wind_dir": [], "precip": []},
+            {
+                "epoch": [], "temp": [], "wind": [], "gust": [],
+                "wind_dir": [], "gust_samples": [], "precip": [],
+            },
         )
         bucket["epoch"].append(float(valid_dt.timestamp()))
         for key, value in values.items():
             if not math.isnan(value):
                 bucket[key].append(value)
+        if not math.isnan(values["gust"]):
+            bucket["gust_samples"].append((values["gust"], values["wind_dir"]))
 
     daily_rows: List[Dict[str, Any]] = []
     for day, values in sorted(buckets.items()):
         temps = values["temp"]
         precip_values = values["precip"]
+        gust_samples = values["gust_samples"]
+        gust_dir_max = max(gust_samples, key=lambda sample: sample[0])[1] if gust_samples else float("nan")
         if not any(values[key] for key in ("temp", "wind", "gust", "wind_dir", "precip")):
             continue
         daily_rows.append(
@@ -190,8 +200,9 @@ def _aggregate_daily(csv_text: str, meta: Dict[str, Any]) -> pd.DataFrame:
                 "temp_max": _max(temps),
                 "temp_min": _min(temps),
                 "wind_mean": _mean(values["wind"]),
-                "wind_dir_mean": _circular_mean_degrees(values["wind_dir"]),
+                "wind_dir_mean": _predominant_direction_degrees(values["wind_dir"]),
                 "gust_max": _max(values["gust"]),
+                "gust_dir_max": gust_dir_max,
                 "precip_total": _sum(precip_values),
             }
         )
@@ -293,7 +304,9 @@ async def fetch_climo_daily_for_periods(
 ) -> pd.DataFrame:
     network, station = _station_parts(station_id)
     meta = _station_meta(station_id)
-    clipped_periods = clip_period_tuples_to_today(list(periods), today_date=today_date)
+    clipped_periods = merge_date_periods(
+        clip_period_tuples_to_today(list(periods), today_date=today_date)
+    )
     if not clipped_periods:
         return _empty_daily_dataframe()
 
@@ -301,13 +314,21 @@ async def fetch_climo_daily_for_periods(
     for index, (start, end) in enumerate(clipped_periods):
         if index > 0:
             await asyncio.sleep(_REQUEST_SPACING_S)
-        csv_text = await _fetch_period_csv(
-            client,
-            network=network,
-            station=station,
-            meta=meta,
-            start=start,
-            end=end,
+        csv_text = await get_or_fetch_climo_block(
+            provider="IEM",
+            kind=f"daily:{network}:{start.isoformat()}:{end.isoformat()}",
+            station_id=station,
+            credential="public",
+            client=client,
+            end_date=end,
+            fetcher=lambda start=start, end=end: _fetch_period_csv(
+                client,
+                network=network,
+                station=station,
+                meta=meta,
+                start=start,
+                end=end,
+            ),
         )
         chunk = _aggregate_daily(csv_text, meta)
         if not chunk.empty:

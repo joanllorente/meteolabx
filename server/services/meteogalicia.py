@@ -706,6 +706,8 @@ async def fetch_today_series(
         "pressures": [_absolute_to_msl(_at(ep, "pressure"), elevation) for ep in epochs],
         "uv_indexes": [_at(ep, "uv") for ep in epochs],
         "solar_radiations": [_at(ep, "solar") for ep in epochs],
+        # PP_SUM es precipitación del intervalo horario.
+        "precip_step_mm": [_at(ep, "precip") for ep in epochs],
         "winds": [_at(ep, "wind") for ep in epochs],
         "gusts": [_at(ep, "gust") for ep in epochs],
         "wind_dirs": [_at(ep, "wind_dir") for ep in epochs],

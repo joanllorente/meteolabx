@@ -11,6 +11,7 @@ METEOGALICIA, FROST). El antiguo dispatcher legacy en threadpool
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
@@ -36,6 +37,16 @@ CLIMO_PROVIDERS = (
     "WU", "AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA", "FROST",
     "WEATHERLINK", "IEM", "GEOSPHERE", "SMHI", "ECCC",
 )
+
+
+def _dataset_cache_ttl_s(body: ClimoDatasetRequest) -> float:
+    """Mantiene mucho tiempo las consultas cerradas y refresca la actual."""
+    requested_ends = [period.end for period in body.periods]
+    if body.selected_years:
+        requested_ends.extend(date(int(year), 12, 31) for year in body.selected_years)
+    if requested_ends and max(requested_ends) < date.today():
+        return 30 * 24 * 60 * 60
+    return 60 * 60
 
 
 def _serialize_dataset(dataset: Any) -> Optional[str]:
@@ -224,7 +235,8 @@ async def _fetch_dataset(
         "precip_total + extras por proveedor), serializado como JSON "
         "``orient='table'`` de pandas. Proveedores: "
         "``WU``, ``AEMET``, ``METEOCAT``, ``METEOFRANCE``, "
-        "``METEOGALICIA``, ``FROST``, ``WEATHERLINK`` e ``IEM``."
+        "``METEOGALICIA``, ``FROST``, ``WEATHERLINK``, ``IEM``, "
+        "``GEOSPHERE``, ``SMHI`` y ``ECCC``."
     ),
     responses={
         400: {"model": ErrorResponse, "description": "Proveedor sin datos históricos."},
@@ -261,7 +273,11 @@ async def post_climo_dataset(
         body.station_id,
         f"{body.api_key}:{body.api_secret}" if body.api_secret else body.api_key or "server",
     )
-    raw = await cache.get_or_fetch(key, lambda: _fetch_dataset(body, settings, client))
+    raw = await cache.get_or_fetch(
+        key,
+        lambda: _fetch_dataset(body, settings, client),
+        ttl_s=_dataset_cache_ttl_s(body),
+    )
     return ClimoDatasetResponse(**raw)
 
 

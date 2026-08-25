@@ -350,7 +350,8 @@ async def fetch_today_series(
         "winds": _col("winds"),
         "gusts": _col("gusts"),
         "wind_dirs": _col("wind_dirs"),
-        "precips": _col("precips"),
+        # El histórico de WeatherLink entrega rainfall_mm/in por intervalo.
+        "precip_step_mm": _col("precips"),
         "lat": _safe_float(
             (station_meta or {}).get("latitude", (station_meta or {}).get("lat")),
         ),

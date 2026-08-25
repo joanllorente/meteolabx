@@ -175,6 +175,44 @@ def test_country_multiselect_callback_normalizes_filter_state(monkeypatch):
     assert state["map_country_filter"] == ["ES", "FR"]
 
 
+def test_worldwide_country_selection_is_exclusive_and_expands_catalog_scope():
+    worldwide = map_tab.MAP_ALL_COUNTRIES_OPTION
+
+    assert map_tab.normalize_map_country_selection(
+        ["ES", worldwide], ["ES"],
+    ) == [worldwide]
+    assert map_tab.normalize_map_country_selection(
+        [worldwide, "fr"], [worldwide],
+    ) == ["FR"]
+    assert map_tab.resolve_map_country_scope(
+        [worldwide], ["ES", "FR", "UNSPECIFIED"],
+    ) == ["ES", "FR", "UNSPECIFIED"]
+
+
+def test_country_provider_limit_uses_complete_selected_inventory():
+    counts = {"ES": 4200, "FR": 7300, "DE": 12000}
+
+    assert map_tab.map_provider_country_result_limit(counts, ["ES"]) == 4200
+    assert map_tab.map_provider_country_result_limit(counts, ["ES", "FR"]) == 11500
+    assert map_tab.map_provider_country_result_limit({}, ["ES"]) == 5000
+    assert map_tab.map_provider_country_result_limit(
+        {"US": 300000}, ["US"],
+    ) == map_tab.MAP_CATALOG_API_MAX_RESULTS
+
+
+def test_country_multiselect_callback_keeps_worldwide_picker_value(monkeypatch):
+    import streamlit as st
+
+    worldwide = map_tab.MAP_ALL_COUNTRIES_OPTION
+    state = {"picker": ["ES", worldwide], "map_country_filter": ["ES"]}
+    monkeypatch.setattr(st, "session_state", state)
+
+    map_tab._handle_map_country_selection_change("picker")
+
+    assert state["picker"] == [worldwide]
+    assert state["map_country_filter"] == [worldwide]
+
+
 def test_legacy_country_codes_have_human_display_names():
     assert map_tab.country_display_name("AN") == "Antillas Neerlandesas"
     assert map_tab.country_display_name("KA") == "Islas Carolinas (Palau/Micronesia)"

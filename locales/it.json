@@ -10,7 +10,19 @@
     "historical": "Storico",
     "info": "Impara",
     "map": "Mappa",
+    "forecast": "Previsione",
     "ranking": "Classifica"
+  },
+  "forecast": {
+    "section_title": "Previsione",
+    "beta": "Beta",
+    "intro": "Prototipo di previsione convettiva con il modello AROME.",
+    "model_description": "Stiamo preparando mappe ad alta risoluzione basate sulle uscite del modello AROME.",
+    "shear_title": "Wind shear",
+    "shear_description": "Wind shear verticale per valutare la potenziale organizzazione dei temporali.",
+    "ship_title": "SHIP",
+    "ship_description": "Significant Hail Parameter per identificare ambienti favorevoli a grandine significativa.",
+    "status": "Il prototipo è in fase di sviluppo. Le mappe verranno aggiunte qui progressivamente."
   },
   "ranking": {
     "section_title": "Classifica delle stazioni",
@@ -92,6 +104,14 @@
     "whats_new": "Novità",
     "improvements_title": "Miglioramenti",
     "fixes_title": "Correzioni",
+    "release_140_improvements": [
+      "Nuova interfaccia basata su schede per la sezione Storico.",
+      "Aggiunte nuove informazioni sul vento in Storico.",
+      "Nuova sezione «Previsione numerica» con mappe dedicate al modello AROME."
+    ],
+    "release_140_fixes": [
+      "Corretto un errore che impediva la corretta visualizzazione dell'accumulo nei grafici delle precipitazioni."
+    ],
     "release_135_improvements": [
       "Migliorata l'interpolazione della mappa globale delle temperature.",
       "Avvio più stabile e veloce.",
@@ -374,6 +394,46 @@
         "annual": "Annuale"
       }
     },
+    "actions": {
+      "query": "Consulta storico"
+    },
+    "cards": {
+      "thermal_extremes": "Estremi termici",
+      "mean_temp_extremes": "Estremi della temperatura media",
+      "mean_temp_difference": "Differenza tra le medie",
+      "daily_temperature_extremes": "Estremi giornalieri",
+      "wind_extremes": "Estremi del vento",
+      "precip_extremes": "Estremi di precipitazione",
+      "solar_extremes": "Estremi di insolazione",
+      "solar_irradiation_extremes": "Estremi di irradiazione solare",
+      "period_amplitude": "Escursione del periodo",
+      "max_intensity": "Intensità massima",
+      "max_short": "Max",
+      "min_short": "Min",
+      "average_temperatures": "Temperature medie",
+      "wind_summary": "Vento",
+      "rain_summary": "Pioggia",
+      "solar_summary": "Solare",
+      "characteristic_days": "Giorni caratteristici",
+      "summary_labels": {
+        "mean": "Media",
+        "maximums": "Massime",
+        "minimums": "Minime",
+        "stddev": "Dev. standard",
+        "predominant_direction": "Prevalente",
+        "direction": "Direzione",
+        "windiest_day": "Giorno più ventoso",
+        "windiest_month": "Mese più ventoso",
+        "accumulated": "Accumulo",
+        "rain_days": "Giorni di pioggia",
+        "irradiation_mean": "Irradiazione media",
+        "irradiance_mean": "Irradianza media",
+        "sunshine_mean": "Insolazione media",
+        "tropical": "Tropicali",
+        "torrid": "Torride",
+        "frost": "Gelo"
+      }
+    },
     "inputs": {
       "months": "Mese/i",
       "years": "Anno/i"
@@ -472,6 +532,8 @@
       "max_precip_24h": "Precipitazione massima in 24 ore",
       "sunniest_year": "Anno più soleggiato",
       "least_sunny_year": "Anno con meno sole",
+      "highest_solar_irradiation_year": "Anno con la più alta irradiazione solare media",
+      "lowest_solar_irradiation_year": "Anno con la più bassa irradiazione solare media",
       "lowest_maximum": "Massima più bassa",
       "highest_minimum": "Minima più alta",
       "windiest_month": "Mese più ventoso (vento medio)",
@@ -485,7 +547,9 @@
       "mean_wind": "Vento medio",
       "accumulated_precipitation": "Precipitazione accumulata",
       "mean_precipitation": "Precipitazione media",
+      "rain_days": "Giorni di pioggia",
       "mean_solar_irradiance": "Irradianza solare media",
+      "mean_daily_global_solar_irradiation": "Irradiazione solare globale giornaliera media",
       "mean_sunshine_hours": "Ore di sole medie",
       "tropical_nights": "Notti tropicali (min > 20 °C)",
       "frost_nights": "Notti di gelo (min ≤ 0 °C)",
@@ -800,6 +864,7 @@
     "historical_only": "Mostra solo stazioni con dati storici",
     "hide_historical_only": "Nascondi stazioni storiche",
     "hide_historical_only_help": "Le stazioni storiche non registrano più dati, ma il loro archivio storico può essere consultato.",
+    "country_all": "Tutto il mondo",
     "country_search": "Cerca paese…",
     "country_clear": "Cancella filtro",
     "sensor_filter_clear": "Cancella",

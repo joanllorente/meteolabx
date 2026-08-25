@@ -64,6 +64,8 @@ METRIC_LABEL_KEYS = {
     "Precipitación máxima en 24 horas": "historical.metrics.max_precip_24h",
     "Año más soleado": "historical.metrics.sunniest_year",
     "Año con menos sol": "historical.metrics.least_sunny_year",
+    "Año con mayor irradiación solar media": "historical.metrics.highest_solar_irradiation_year",
+    "Año con menor irradiación solar media": "historical.metrics.lowest_solar_irradiation_year",
     "Mínima de máximas": "historical.metrics.lowest_maximum",
     "Máxima de mínimas": "historical.metrics.highest_minimum",
     "Mes más ventoso (viento medio)": "historical.metrics.windiest_month",
@@ -77,7 +79,9 @@ METRIC_LABEL_KEYS = {
     "Media de viento": "historical.metrics.mean_wind",
     "Precipitación acumulada": "historical.metrics.accumulated_precipitation",
     "Media de precipitación": "historical.metrics.mean_precipitation",
+    "Días de lluvia": "historical.metrics.rain_days",
     "Irradiancia solar media": "historical.metrics.mean_solar_irradiance",
+    "Irradiación solar global diaria media": "historical.metrics.mean_daily_global_solar_irradiation",
     "Horas de sol (media)": "historical.metrics.mean_sunshine_hours",
     "Noches tropicales (mín > 20 °C)": "historical.metrics.tropical_nights",
     "Noches de helada (mín ≤ 0 °C)": "historical.metrics.frost_nights",
@@ -265,16 +269,131 @@ def _extract_extreme(
     return float(series.loc[index]), day, override_used
 
 
+def _aggregate_daily_rows_for_annual_comparison(frame: pd.DataFrame) -> pd.DataFrame:
+    """Convierte históricos diarios (WU/IEM) en una fila comparable por año."""
+    yearly_rows: List[Dict[str, Any]] = []
+
+    def extreme(group: pd.DataFrame, candidates: Sequence[str], mode: Literal["max", "min"]):
+        for column in candidates:
+            if column not in group.columns:
+                continue
+            values = pd.to_numeric(group[column], errors="coerce").dropna()
+            if values.empty:
+                continue
+            index = values.idxmax() if mode == "max" else values.idxmin()
+            return float(values.loc[index]), index
+        return float("nan"), None
+
+    def occurrence_date(group: pd.DataFrame, index: Any, override_column: str) -> Any:
+        if index is None:
+            return pd.NaT
+        if override_column in group.columns:
+            override = pd.to_datetime(group.loc[index, override_column], errors="coerce")
+            if not pd.isna(override):
+                return override
+        return group.loc[index, "date"]
+
+    def direction_at(group: pd.DataFrame, index: Any, column: str) -> float:
+        if index is None or column not in group.columns:
+            return float("nan")
+        value = _safe_float(group.loc[index, column])
+        return float(value % 360.0) if pd.notna(value) else float("nan")
+
+    def predominant_direction(group: pd.DataFrame) -> float:
+        if "wind_dir_mean" not in group.columns:
+            return float("nan")
+        directions = pd.to_numeric(group["wind_dir_mean"], errors="coerce").dropna()
+        if directions.empty:
+            return float("nan")
+        sectors = (((directions % 360.0) + 11.25) // 22.5).astype(int) % 16
+        return float(int(sectors.value_counts().idxmax()) * 22.5)
+
+    for year, group in frame.groupby(frame["date"].dt.year, sort=True):
+        abs_max, abs_max_index = extreme(group, ("temp_abs_max", "temp_max"), "max")
+        abs_min, abs_min_index = extreme(group, ("temp_abs_min", "temp_min"), "min")
+        gust_max, gust_index = extreme(group, ("gust_max",), "max")
+        precip_max_24h, precip_24h_index = extreme(group, ("precip_max_24h", "precip_total"), "max")
+        precip_rate_max, precip_rate_index = extreme(group, ("precip_rate_max",), "max")
+
+        precip = pd.to_numeric(group.get("precip_total"), errors="coerce")
+        rain_days = (
+            pd.to_numeric(group["rain_days"], errors="coerce").sum(min_count=1)
+            if "rain_days" in group.columns and pd.to_numeric(group["rain_days"], errors="coerce").notna().any()
+            else float((precip >= 1.0).sum())
+        )
+        yearly_rows.append(
+            {
+                "date": pd.Timestamp(year=int(year), month=1, day=1),
+                "temp_mean": pd.to_numeric(group.get("temp_mean"), errors="coerce").mean(),
+                "temp_max": pd.to_numeric(group.get("temp_max"), errors="coerce").mean(),
+                "temp_min": pd.to_numeric(group.get("temp_min"), errors="coerce").mean(),
+                "wind_mean": pd.to_numeric(group.get("wind_mean"), errors="coerce").mean(),
+                "wind_dir_mean": predominant_direction(group),
+                "gust_max": gust_max,
+                "gust_dir_max": direction_at(group, gust_index, "gust_dir_max"),
+                "gust_abs_max_date": occurrence_date(group, gust_index, "gust_abs_max_date"),
+                "precip_total": precip.sum(min_count=1),
+                "precip_max_24h": precip_max_24h,
+                "precip_max_24h_date": occurrence_date(group, precip_24h_index, "precip_max_24h_date"),
+                "precip_rate_max": precip_rate_max,
+                "precip_rate_max_date": occurrence_date(group, precip_rate_index, "precip_rate_max_date"),
+                "rain_days": rain_days,
+                "solar_mean": (
+                    pd.to_numeric(group["solar_mean"], errors="coerce").mean()
+                    if "solar_mean" in group.columns
+                    else float("nan")
+                ),
+                "temp_abs_max": abs_max,
+                "temp_abs_max_date": occurrence_date(group, abs_max_index, "temp_abs_max_date"),
+                "temp_abs_min": abs_min,
+                "temp_abs_min_date": occurrence_date(group, abs_min_index, "temp_abs_min_date"),
+            }
+        )
+
+    return pd.DataFrame(yearly_rows)
+
+
 def build_extremes_table(
     daily_df: pd.DataFrame,
     overrides: Optional[Dict[str, Dict[str, str]]] = None,
     unit_preferences: Optional[Dict[str, str]] = None,
+    *,
+    summary_mode: Optional[str] = None,
+    period_count: Optional[int] = None,
+    include_daily_temperature_extremes: bool = False,
+    solar_metric_kind: str = "sunshine_hours",
 ) -> pd.DataFrame:
     if daily_df.empty:
         return pd.DataFrame(columns=_table_columns())
 
     frame = daily_df.copy()
     frame["date"] = pd.to_datetime(frame["date"]).dt.normalize()
+
+    annual_comparison = summary_mode == "annual" and int(period_count or 0) > 1
+    already_yearly = (
+        len(frame) > 0
+        and bool((frame["date"].dt.month == 1).all())
+        and bool((frame["date"].dt.day == 1).all())
+        and frame["date"].dt.year.nunique(dropna=True) == len(frame)
+    )
+    daily_temperature_extremes: List[Tuple[str, float, Any]] = []
+    if annual_comparison and include_daily_temperature_extremes and not already_yearly:
+        date_months = frame["date"].dt.month
+        cold_rows = frame.loc[date_months.isin([11, 12, 1, 2, 3, 4])]
+        warm_rows = frame.loc[date_months.isin([5, 6, 7, 8, 9])]
+        if cold_rows.empty:
+            cold_rows = frame
+        if warm_rows.empty:
+            warm_rows = frame
+        min_of_max_value, min_of_max_day, _ = _extract_extreme(cold_rows, "temp_max", "min")
+        max_of_min_value, max_of_min_day, _ = _extract_extreme(warm_rows, "temp_min", "max")
+        daily_temperature_extremes = [
+            ("Mínima de máximas", min_of_max_value, min_of_max_day),
+            ("Máxima de mínimas", max_of_min_value, max_of_min_day),
+        ]
+
+    if annual_comparison and not already_yearly:
+        frame = _aggregate_daily_rows_for_annual_comparison(frame)
 
     annual_marker_cols = ("temp_abs_max", "temp_abs_min", "rain_days", "solar_mean", "precip_max_24h")
     has_annual_markers = any(
@@ -293,6 +412,18 @@ def build_extremes_table(
 
     if is_annual_series:
         # ── Serie plurianual (una fila por año) ─────────────────────────────
+        solar_is_irradiation = solar_metric_kind in {"irradiation", "irradiance"}
+        solar_high_title = (
+            "Año con mayor irradiación solar media" if solar_is_irradiation else "Año más soleado"
+        )
+        solar_low_title = (
+            "Año con menor irradiación solar media" if solar_is_irradiation else "Año con menos sol"
+        )
+        solar_unit = (
+            "MJ/m²" if solar_metric_kind == "irradiation"
+            else "W/m²" if solar_metric_kind == "irradiance"
+            else "h"
+        )
         extreme_definitions = [
             ("Máxima absoluta", "temp_abs_max", "max", "°C", "temp_abs_max_date"),
             ("Mínima absoluta", "temp_abs_min", "min", "°C", "temp_abs_min_date"),
@@ -304,8 +435,8 @@ def build_extremes_table(
             ("Año más seco", "precip_total", "min", "mm"),
             ("Año con más días de lluvia", "rain_days", "max", t("historical.units.days")),
             ("Precipitación máxima en 24 horas", "precip_max_24h", "max", "mm", "precip_max_24h_date"),
-            ("Año más soleado", "solar_mean", "max", "h"),
-            ("Año con menos sol", "solar_mean", "min", "h"),
+            (solar_high_title, "solar_mean", "max", solar_unit),
+            (solar_low_title, "solar_mean", "min", solar_unit),
         ]
         for row_def in extreme_definitions:
             if len(row_def) == 4:
@@ -324,6 +455,15 @@ def build_extremes_table(
             else:
                 value_txt = _format_value(value, unit)
             rows.append(_table_row(title, value_txt, date_txt))
+
+        for title, value, day in daily_temperature_extremes:
+            rows.append(
+                _table_row(
+                    title,
+                    _format_temperature_value(value, unit_preferences),
+                    _format_date(day),
+                )
+            )
 
     else:
         # ── Datos no-anuales: mensuales agregados o diarios ─────────────────
@@ -414,6 +554,24 @@ def build_extremes_table(
             val, day, _ = _extract_extreme(frame, "wind_mean", "max")
             rows.append(_table_row("Día más ventoso (viento medio)", _format_wind_value(val, unit_preferences), _format_date(day)))
 
+            # Con varios bloques mensuales, el mismo histórico diario permite
+            # obtener también el mes más ventoso sin otra llamada al proveedor.
+            if int(period_count or 0) > 1:
+                monthly_wind = (
+                    frame.assign(_month=frame["date"].dt.to_period("M"))
+                    .groupby("_month", as_index=False)["wind_mean"]
+                    .mean()
+                )
+                monthly_wind["date"] = monthly_wind["_month"].dt.to_timestamp()
+                val, day, _ = _extract_extreme(monthly_wind, "wind_mean", "max")
+                rows.append(
+                    _table_row(
+                        "Mes más ventoso (viento medio)",
+                        _format_wind_value(val, unit_preferences),
+                        _format_date(day),
+                    )
+                )
+
             # 6. Racha máxima
             val, day, _ = _extract_extreme(frame, "gust_max", "max", date_override_col="gust_abs_max_date")
             rows.append(_table_row("Racha máxima", _format_wind_value(val, unit_preferences), _format_date(day)))
@@ -452,6 +610,8 @@ def build_extremes_table(
 def build_general_metrics_table(
     daily_df: pd.DataFrame,
     unit_preferences: Optional[Dict[str, str]] = None,
+    *,
+    solar_metric_kind: str = "sunshine_hours",
 ) -> pd.DataFrame:
     if daily_df.empty:
         return pd.DataFrame(columns=[_table_column_name("metric"), _table_column_name("value")])
@@ -478,6 +638,20 @@ def build_general_metrics_table(
     )
 
     unique_years = frame["date"].dt.year.nunique(dropna=True)
+    # Distinguir filas diarias, mensuales y anuales antes de calcular métricas
+    # que no se pueden reconstruir desde un total agregado.
+    _looks_yearly = (
+        len(frame) > 0
+        and bool((frame["date"].dt.month == 1).all())
+        and bool((frame["date"].dt.day == 1).all())
+        and unique_years == len(frame)
+    )
+    _is_monthly = (
+        len(frame) > 1
+        and bool((frame["date"].dt.day == 1).all())
+        and not _looks_yearly
+        and frame["date"].nunique(dropna=True) == len(frame)
+    )
 
     # Para "Media de precipitación" queremos la precipitación MENSUAL media
     # (cuánto llueve, en promedio, en uno de los meses seleccionados), NO la
@@ -490,6 +664,18 @@ def build_general_metrics_table(
     ).sum(min_count=1)
     mean_monthly_precip = monthly_precip_totals.mean()
 
+    rain_days_value = float("nan")
+    if "rain_days" in frame.columns:
+        native_rain_days = pd.to_numeric(frame["rain_days"], errors="coerce")
+        if native_rain_days.notna().any():
+            # Algunos resúmenes mensuales/anuales ya incluyen el contador con
+            # el umbral oficial del proveedor; conservarlo evita peticiones
+            # diarias adicionales.
+            rain_days_value = native_rain_days.sum(min_count=1)
+    if pd.isna(rain_days_value) and not _looks_yearly and not _is_monthly and precip_series.notna().any():
+        # En series diarias sin contador nativo, día con precipitación medible.
+        rain_days_value = float((precip_series > 0.1).sum())
+
     rows = [
         _table_row("Temperatura media", _format_temperature_value(temp_mean_series.mean(), unit_preferences, decimals=1), None),
         _table_row("Media de máximas", _format_temperature_value(temp_max_series.mean(), unit_preferences, decimals=1), None),
@@ -498,7 +684,7 @@ def build_general_metrics_table(
         _table_row("Media de viento", _format_wind_value(wind_mean_series.mean(), unit_preferences, decimals=1), None),
         _table_row("Precipitación acumulada", _format_precip_value(precip_series.sum(min_count=1), unit_preferences, decimals=1), None),
     ]
-    if int(unique_years) > 1:
+    if int(monthly_precip_totals.notna().sum()) > 1:
         rows.insert(
             5,
             _table_row(
@@ -507,35 +693,51 @@ def build_general_metrics_table(
                 None,
             ),
         )
+    if not pd.isna(rain_days_value):
+        rows.append(
+            _table_row(
+                "Días de lluvia",
+                f"{int(rain_days_value)} {t('historical.units.days')}",
+                None,
+            )
+        )
 
     # Solo añadir filas solares si hay datos reales (sin fallback a "—" vacío).
     if solar_mean_series.notna().any():
-        rows.append(_table_row("Irradiancia solar media", _format_value(solar_mean_series.mean(), "h", decimals=1), None))
+        if solar_metric_kind == "irradiation":
+            rows.append(
+                _table_row(
+                    "Irradiación solar global diaria media",
+                    _format_value(solar_mean_series.mean(), "MJ/m²", decimals=1),
+                    None,
+                )
+            )
+        elif solar_metric_kind == "irradiance":
+            rows.append(
+                _table_row(
+                    "Irradiancia solar media",
+                    _format_value(solar_mean_series.mean(), "W/m²", decimals=1),
+                    None,
+                )
+            )
+        else:
+            rows.append(_table_row("Horas de sol (media)", _format_value(solar_mean_series.mean(), "h", decimals=1), None))
     elif solar_hours_series.notna().any():
         # Endpoint diario AEMET: campo 'sol' = horas de sol del día
         rows.append(_table_row("Horas de sol (media)", _format_value(solar_hours_series.mean(), "h", decimals=1), None))
 
     # ── Noches tropicales / helada ─────────────────────────────────────────
     # Detectar si los datos son mensuales (día 1 de cada mes) o diarios.
-    _looks_yearly = (
-        len(frame) > 0
-        and bool((frame["date"].dt.month == 1).all())
-        and bool((frame["date"].dt.day == 1).all())
-        and frame["date"].dt.year.nunique(dropna=True) == len(frame)
-    )
-    _is_monthly = (
-        len(frame) > 1
-        and bool((frame["date"].dt.day == 1).all())
-        and not _looks_yearly
-        and frame["date"].nunique(dropna=True) == len(frame)
-    )
-
     if _is_monthly:
         # Datos mensuales: usar columnas nt_30 / nt_00 del proveedor (suma real de noches).
         if "tropical_nights" in frame.columns:
             tn_s = pd.to_numeric(frame["tropical_nights"], errors="coerce")
             if tn_s.notna().any():
                 rows.append(_table_row("Noches tropicales (mín > 20 °C)", f"{int(tn_s.sum(min_count=1))} {t('historical.units.nights')}", None))
+        if "torrid_nights" in frame.columns:
+            torrid_s = pd.to_numeric(frame["torrid_nights"], errors="coerce")
+            if torrid_s.notna().any():
+                rows.append(_table_row("Noches tórridas (mín > 25 °C)", f"{int(torrid_s.sum(min_count=1))} {t('historical.units.nights')}", None))
         if "frost_nights" in frame.columns:
             fn_s = pd.to_numeric(frame["frost_nights"], errors="coerce")
             if fn_s.notna().any():
@@ -547,8 +749,10 @@ def build_general_metrics_table(
             # Inclusivo en el umbral (definición AEMET/OMM): 20,0 cuenta.
             n_tropical = int((temp_min_series >= 20.0).sum())
             n_torrid = int((temp_min_series >= 25.0).sum())
+            n_frost = int((temp_min_series <= 0.0).sum())
             rows.append(_table_row("Noches tropicales (mín > 20 °C)", f"{n_tropical} {t('historical.units.nights')}", None))
             rows.append(_table_row("Noches tórridas (mín > 25 °C)", f"{n_torrid} {t('historical.units.nights')}", None))
+            rows.append(_table_row("Noches de helada (mín ≤ 0 °C)", f"{n_frost} {t('historical.units.nights')}", None))
 
     return pd.DataFrame(rows, columns=[_table_column_name("metric"), _table_column_name("value")])
 

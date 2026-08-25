@@ -41,6 +41,7 @@ def _daily_payload():
                     "MIN_TEMPERATURE": 17.2,
                     "TOTAL_PRECIPITATION": -0.5,  # traza → 0
                     "SPEED_MAX_GUST": 37.0,
+                    "DIRECTION_MAX_GUST": 27,
                 },
             },
             {
@@ -76,6 +77,7 @@ def test_fetch_climo_daily_dataset() -> None:
     assert len(df) == 2
     assert captured["params"]["CLIMATE_IDENTIFIER"] == "616I001"
     assert df.iloc[0]["gust_max"] == pytest.approx(37.0)
+    assert df.iloc[0]["gust_dir_max"] == pytest.approx(270.0)
     assert df.iloc[0]["precip_total"] == pytest.approx(0.0)  # traza saneada
     assert df.iloc[1]["temp_max"] == pytest.approx(31.9)
 

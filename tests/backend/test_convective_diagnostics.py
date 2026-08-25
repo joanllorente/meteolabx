@@ -1,0 +1,145 @@
+import numpy as np
+import pytest
+
+from server.services.convective_diagnostics import (
+    dewpoint_from_mixing_ratio_k,
+    downdraft_cape,
+    effective_bulk_wind_difference,
+    mixing_ratio_kgkg,
+    pressure_weighted_layer_mean,
+    significant_hail_parameter,
+    significant_hail_parameter_sharppy,
+)
+
+
+def test_effective_bulk_wind_difference_uses_half_storm_depth():
+    heights = np.asarray([0.0, 2_000.0, 4_000.0, 6_000.0, 8_000.0])[:, None, None]
+    u = (heights / 1_000.0) * 2.0
+    v = np.zeros_like(u)
+
+    magnitude, delta_u, delta_v = effective_bulk_wind_difference(
+        heights,
+        u,
+        v,
+        np.asarray([[2_000.0]]),
+        np.asarray([[10_000.0]]),
+    )
+
+    # Base 2 km; 50 % de la profundidad hasta EL 10 km -> techo 6 km.
+    assert magnitude.item() == 8.0
+    assert delta_u.item() == 8.0
+    assert delta_v.item() == 0.0
+
+
+def test_pressure_weighted_layer_mean_honors_lcl_and_el_boundaries():
+    pressure = np.asarray([1000.0, 800.0, 600.0, 400.0])[:, None, None]
+    # Campo lineal con la presión: la media exacta entre 900 y 500 hPa es 7.
+    values = (pressure / 100.0)
+
+    result = pressure_weighted_layer_mean(
+        pressure,
+        values,
+        np.asarray([[900.0]]),
+        np.asarray([[500.0]]),
+    )
+
+    assert result.item() == 7.0
+
+
+def test_ship_matches_sharppy_spc_base_equation():
+    result = significant_hail_parameter(
+        np.asarray([[2_000.0]]),
+        np.asarray([[12.0]]),
+        np.asarray([[7.0]]),
+        np.asarray([[-15.0]]),
+        np.asarray([[20.0]]),
+        np.asarray([[3_000.0]]),
+    )
+
+    assert result.item() == 1.2
+
+
+def test_ship_sharppy_adapter_matches_vectorized_formula():
+    arguments = (
+        np.asarray([[2_000.0]]),
+        np.asarray([[12.0]]),
+        np.asarray([[7.0]]),
+        np.asarray([[-15.0]]),
+        np.asarray([[20.0]]),
+        np.asarray([[3_000.0]]),
+    )
+
+    assert significant_hail_parameter_sharppy(*arguments).item() == pytest.approx(
+        significant_hail_parameter(*arguments).item(),
+        # thermo.temp_at_mixrat/mixratio de SHARPpy no son inversas exactas;
+        # la discrepancia esperada ronda el 0,7 % para 12 g/kg.
+        rel=0.01,
+    )
+
+
+def test_ship_applies_low_cape_lapse_rate_and_freezing_reductions():
+    result = significant_hail_parameter(
+        np.asarray([[650.0]]),
+        np.asarray([[12.0]]),
+        np.asarray([[2.9]]),
+        np.asarray([[-15.0]]),
+        np.asarray([[20.0]]),
+        np.asarray([[1_200.0]]),
+    )
+    base = 650.0 * 12.0 * 2.9 * 15.0 * 20.0 / 42_000_000.0
+
+    assert result.item() == base * (650.0 / 1_300.0) * (2.9 / 5.8) * (1_200.0 / 2_400.0)
+
+
+def test_dewpoint_and_mixing_ratio_are_inverse_operations():
+    pressure = np.asarray([[950.0]])
+    dewpoint = np.asarray([[288.15]])
+
+    recovered = dewpoint_from_mixing_ratio_k(
+        pressure,
+        mixing_ratio_kgkg(pressure, dewpoint),
+    )
+
+    assert np.allclose(recovered, dewpoint, atol=0.02)
+
+
+def test_dcape_is_nonnegative_for_a_dry_midlevel_profile():
+    pressure = np.asarray([1000.0, 850.0, 700.0, 500.0])[:, None, None]
+    temperature = np.asarray([303.0, 292.0, 280.0, 258.0])[:, None, None]
+    dewpoint = np.asarray([294.0, 280.0, 258.0, 238.0])[:, None, None]
+    height = np.asarray([0.0, 1_500.0, 3_100.0, 5_700.0])[:, None, None]
+
+    result = downdraft_cape(pressure, temperature, dewpoint, height)
+
+    assert np.isfinite(result.item())
+    assert result.item() >= 0.0
+
+
+def test_vectorized_dcape_tracks_sharppy_params_reference():
+    sharppy_profile = pytest.importorskip("sharppy.sharptab.profile")
+    sharppy_params = pytest.importorskip("sharppy.sharptab.params")
+    pressure_1d = np.asarray([1000.0, 850.0, 700.0, 500.0])
+    temperature_k_1d = np.asarray([303.0, 292.0, 280.0, 258.0])
+    dewpoint_k_1d = np.asarray([294.0, 280.0, 258.0, 238.0])
+    height_1d = np.asarray([0.0, 1_500.0, 3_100.0, 5_700.0])
+    profile = sharppy_profile.create_profile(
+        profile="default",
+        pres=pressure_1d,
+        hght=height_1d,
+        tmpc=temperature_k_1d - 273.15,
+        dwpc=dewpoint_k_1d - 273.15,
+        wspd=np.zeros(pressure_1d.size),
+        wdir=np.zeros(pressure_1d.size),
+        missing=-9999,
+        strictQC=False,
+    )
+    expected = float(sharppy_params.dcape(profile)[0])
+
+    actual = downdraft_cape(
+        pressure_1d[:, None, None],
+        temperature_k_1d[:, None, None],
+        dewpoint_k_1d[:, None, None],
+        height_1d[:, None, None],
+    ).item()
+
+    assert actual == pytest.approx(expected, rel=0.002)

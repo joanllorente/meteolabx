@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Arranque de producción: FastAPI (backend, interno) + Streamlit (frontend,
-# público) en un solo servicio.
+# Arranque de producción: FastAPI (backend, interno), Streamlit (frontend,
+# público) y el worker AROME persistente en un solo servicio.
 #
 # Railway enruta el tráfico HTTP al puerto $PORT → ahí escucha Streamlit.
 # FastAPI queda interno en 127.0.0.1:8000; el frontend lo consume vía
-# METEOLABX_API_URL (por defecto http://127.0.0.1:8000). Si cualquiera de
-# los dos procesos muere, el script sale con error y Railway reinicia el
-# servicio entero (restartPolicyType=ON_FAILURE).
+# METEOLABX_API_URL (por defecto http://127.0.0.1:8000). El worker y la web
+# comparten ${RAILWAY_VOLUME_MOUNT_PATH}/forecast. Si cualquiera de los tres
+# procesos muere, el script sale con error y Railway reinicia el servicio
+# entero (restartPolicyType=ON_FAILURE).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -23,6 +24,14 @@ else
   PYTHON="$(command -v python3)"
 fi
 echo "[start_web] Python: $("${PYTHON}" --version 2>&1) (${PYTHON})"
+
+# Railway inyecta RAILWAY_VOLUME_MOUNT_PATH cuando el volumen está conectado.
+# Fijar la ruta explícitamente evita que los frames terminen en el filesystem
+# efímero del contenedor. En local, forecast_store conserva su fallback propio.
+if [ -n "${RAILWAY_VOLUME_MOUNT_PATH:-}" ]; then
+  export METEOLABX_FORECAST_STORE_PATH="${METEOLABX_FORECAST_STORE_PATH:-${RAILWAY_VOLUME_MOUNT_PATH}/forecast}"
+  echo "[start_web] Almacén AROME persistente: ${METEOLABX_FORECAST_STORE_PATH}"
+fi
 
 # 0) Catálogos de estaciones: en el repo viajan SOLO comprimidos
 # (data/*.sqlite.gz; los .sqlite superan o rondan el límite de 100 MB de
@@ -53,15 +62,34 @@ PY
   --port "${BACKEND_PORT}" &
 UVICORN_PID=$!
 
-# Tumbar el backend si el script sale por cualquier motivo.
-trap 'kill -TERM "${UVICORN_PID}" 2>/dev/null || true' EXIT
+# 2) Worker AROME en segundo plano. Comprueba el catálogo cada cinco minutos,
+# completa solo los frames pendientes y conserva los cuatro turnos de RUN.
+"${PYTHON}" scripts/forecast_worker.py \
+  --watch \
+  --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-300}" &
+FORECAST_WORKER_PID=$!
 
-# 2) Frontend Streamlit en el puerto público.
+STREAMLIT_PID=""
+BACKEND_READY_PID=""
+cleanup() {
+  trap - EXIT TERM INT
+  for pid in "${BACKEND_READY_PID}" "${STREAMLIT_PID}" "${FORECAST_WORKER_PID}" "${UVICORN_PID}"; do
+    if [ -n "${pid}" ]; then
+      kill -TERM "${pid}" 2>/dev/null || true
+    fi
+  done
+  wait 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 0' TERM INT
+
+# 3) Frontend Streamlit en el puerto público.
 # No bloqueamos la exposición del frontend esperando al health del backend:
 # en cold starts de producción eso deja al navegador sin respuesta mientras
 # arrancan dos procesos Python. La UI puede pintar su estado inicial aunque la
 # API tarde unos segundos más; si el backend muere, el wait final reinicia todo.
 "${PYTHON}" scripts/patch_streamlit_index.py
+"${PYTHON}" scripts/install_forecast_frontend.py
 # Paginas SEO estaticas: directorio e indices de estaciones publicas. Se
 # escriben en el mismo directorio del paquete Streamlit que sirve el frontend,
 # por lo que las URLs limpias funcionan sin proxy ni proceso adicional.
@@ -72,7 +100,7 @@ export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
 # fileWatcherType=none: en producción no hay recarga en caliente y, sin
 # watchdog instalado, Streamlit cae a un watcher por polling que consume
 # CPU de forma continua en la instancia compartida.
-"${PYTHON}" -m streamlit run meteolabx.py \
+"${PYTHON}" scripts/run_streamlit.py meteolabx.py \
   --server.port="${STREAMLIT_PORT}" \
   --server.address=0.0.0.0 \
   --server.headless=true \
@@ -98,7 +126,7 @@ echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."
 ) &
 BACKEND_READY_PID=$!
 
-# Si cualquiera de los dos cae, salimos → Railway reinicia ambos.
-wait -n "${UVICORN_PID}" "${STREAMLIT_PID}"
-echo "✗ Un proceso (backend o frontend) terminó; reiniciando servicio" >&2
+# Si cualquiera de los tres cae, salimos → Railway reinicia el servicio.
+wait -n "${UVICORN_PID}" "${STREAMLIT_PID}" "${FORECAST_WORKER_PID}"
+echo "✗ Un proceso (backend, frontend o worker AROME) terminó; reiniciando servicio" >&2
 exit 1

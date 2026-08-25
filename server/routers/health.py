@@ -56,6 +56,7 @@ def _credentials_status(settings: Settings) -> dict:
         "AEMET": _key(settings.aemet_api_key),
         "METEOCAT": _key(settings.meteocat_api_key),
         "METEOFRANCE": _key(settings.meteofrance_api_key),
+        "AROME": _key(settings.arome_api_key),
         "METOFFICE": _key(settings.metoffice_api_key),
         "WINDY": _key(settings.windy_api_key),
         "FROST": "configured" if (

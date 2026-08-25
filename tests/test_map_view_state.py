@@ -236,7 +236,9 @@ def test_selected_station_card_does_not_repeat_temperatures():
 def test_map_fragment_does_not_dim_stale_content_during_selection():
     source = Path(map_tab.__file__).read_text(encoding="utf-8")
 
-    assert '[data-stale="true"]' in source
+    assert '.st-key-tab_content_map [data-testid="stElementContainer"]' in source
+    assert '[data-stale="true"]:has(.st-key-tab_content_map)' in source
+    assert '[data-testid="stMain"] [data-testid="stElementContainer"][data-stale="true"]' not in source
     assert "opacity: 1 !important" in source
     assert "transition: none !important" in source
 

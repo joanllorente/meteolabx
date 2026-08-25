@@ -333,6 +333,30 @@ async def _fetch_observation_rows(
     return [rows[ep] for ep in sorted(rows)]
 
 
+def _hourly_precip_steps(rows: List[Dict[str, float]]) -> List[float]:
+    """Convierte ``precipitationLastHour`` en intervalos no solapados.
+
+    Algunas estaciones publican varias observaciones por hora y repiten una
+    ventana móvil de 60 minutos. Sumarlas todas multiplicaría la lluvia;
+    conservamos solo la lectura válida más tardía de cada hora.
+    """
+    selected: Dict[int, tuple[int, int, float]] = {}
+    for index, row in enumerate(rows):
+        value = _safe_float(row.get("precip_last_mm"))
+        epoch = int(row.get("epoch") or 0)
+        if epoch <= 0 or _is_nan(value):
+            continue
+        bucket = epoch // 3600
+        current = selected.get(bucket)
+        if current is None or epoch >= current[0]:
+            selected[bucket] = (epoch, index, max(0.0, value))
+
+    steps = [float("nan")] * len(rows)
+    for _epoch, index, value in selected.values():
+        steps[index] = value
+    return steps
+
+
 # =====================================================================
 # API pública del servicio
 # =====================================================================
@@ -406,12 +430,9 @@ async def fetch_current(
                 return row_value
         return float("nan")
 
-    # Precipitación del día: suma de precipitationLastHour de las filas.
-    precip_vals = [
-        max(0.0, _safe_float(row.get("precip_last_mm")))
-        for row in rows
-        if not _is_nan(_safe_float(row.get("precip_last_mm")))
-    ]
+    # Una sola ventana de 60 min por hora; evita contar varias veces una
+    # precipitationLastHour repetida en observaciones subhorarias.
+    precip_vals = [value for value in _hourly_precip_steps(rows) if not _is_nan(value)]
     precip_total = float(sum(precip_vals)) if precip_vals else _value("precip_last_mm")
 
     epoch = int(current.get("epoch") or 0) or int(datetime.now(tz=timezone.utc).timestamp())
@@ -594,6 +615,7 @@ async def fetch_today_series(
         "pressures": _col("p_msl_hpa"),
         "uv_indexes": [float("nan")] * len(rows),
         "solar_radiations": [float("nan")] * len(rows),
+        "precip_step_mm": _hourly_precip_steps(rows),
         "winds": _col("wind_kmh"),
         "gusts": _col("gust_kmh"),
         "wind_dirs": _col("wind_dir_deg"),

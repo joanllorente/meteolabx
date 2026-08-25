@@ -17,7 +17,7 @@ fi
 echo "▶ MeteoLabX en http://127.0.0.1:${PORT}"
 echo "  Python: $("${PYTHON}" --version 2>&1) (${PYTHON})"
 
-exec "${PYTHON}" -m streamlit run meteolabx.py \
+exec "${PYTHON}" scripts/run_streamlit.py meteolabx.py \
   --server.port="${PORT}" \
   --server.address="${HOST}" \
   --server.headless=true

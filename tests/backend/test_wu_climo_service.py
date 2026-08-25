@@ -98,6 +98,34 @@ async def test_long_period_split_in_31_day_chunks() -> None:
 
 
 @pytest.mark.asyncio
+async def test_expanding_month_selection_reuses_closed_months() -> None:
+    from server.services.climo_cache import clear_climo_block_cache
+    from server.services.wu_climo import fetch_climo_daily_for_periods
+
+    clear_climo_block_cache()
+    record: dict = {}
+    async with _mock_client(record) as client:
+        await fetch_climo_daily_for_periods(
+            client, "IBARCE12345", "K",
+            [(date(2025, 1, 1), date(2025, 1, 31))],
+            today_date=date(2025, 7, 15),
+        )
+        await fetch_climo_daily_for_periods(
+            client, "IBARCE12345", "K",
+            [
+                (date(2025, 1, 1), date(2025, 1, 31)),
+                (date(2025, 2, 1), date(2025, 2, 28)),
+            ],
+            today_date=date(2025, 7, 15),
+        )
+
+    assert len(record["requests"]) == 2
+    assert [request.url.params["startDate"] for request in record["requests"]] == [
+        "20250101", "20250201",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_future_periods_clipped_to_today() -> None:
     from server.services.wu_climo import fetch_climo_daily_for_periods
 
@@ -144,6 +172,25 @@ async def test_http_error_chunk_degrades_to_empty() -> None:
             today_date=date(2025, 7, 1),
         )
     assert df.empty
+
+
+@pytest.mark.asyncio
+async def test_http_error_chunk_is_not_cached_as_empty_history() -> None:
+    from server.services.climo_cache import clear_climo_block_cache
+    from server.services.wu_climo import fetch_climo_daily_for_periods
+
+    clear_climo_block_cache()
+    record: dict = {}
+    async with _mock_client(record, status=502) as client:
+        for _ in range(2):
+            df = await fetch_climo_daily_for_periods(
+                client, "IBARCE12345", "K",
+                [(date(2025, 6, 1), date(2025, 6, 5))],
+                today_date=date(2025, 7, 1),
+            )
+            assert df.empty
+
+    assert len(record["requests"]) == 2
 
 
 def test_endpoint_uses_async_service_not_frontend_dispatch() -> None:

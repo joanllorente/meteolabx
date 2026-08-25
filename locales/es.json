@@ -10,7 +10,19 @@
     "historical": "Histórico",
     "info": "Divulgación",
     "map": "Mapa",
+    "forecast": "Predicción",
     "ranking": "Ranking"
+  },
+  "forecast": {
+    "section_title": "Predicción",
+    "beta": "Beta",
+    "intro": "Prototipo de predicción convectiva con el modelo AROME.",
+    "model_description": "Estamos preparando mapas de alta resolución basados en las salidas de AROME.",
+    "shear_title": "Cizalladura",
+    "shear_description": "Cizalladura vertical del viento para analizar la organización potencial de las tormentas.",
+    "ship_title": "SHIP",
+    "ship_description": "Significant Hail Parameter para identificar entornos favorables a granizo significativo.",
+    "status": "El prototipo está en desarrollo. Los mapas se incorporarán aquí progresivamente."
   },
   "ranking": {
     "section_title": "Ranking de estaciones",
@@ -92,6 +104,14 @@
     "whats_new": "Novedades",
     "improvements_title": "Mejoras",
     "fixes_title": "Correcciones",
+    "release_140_improvements": [
+      "Nueva interfaz basada en tarjetas para la pestaña Histórico.",
+      "Se añade nueva información sobre el viento en Histórico.",
+      "Nueva sección «Predicción numérica» con mapas propios para el modelo AROME."
+    ],
+    "release_140_fixes": [
+      "Corregido un error que impedía que se mostrara correctamente el acumulado en los gráficos de precipitación."
+    ],
     "release_135_improvements": [
       "Mejorada la interpolación del mapa global de temperatura.",
       "Arranque más estable y rápido.",
@@ -374,6 +394,46 @@
         "annual": "Anual"
       }
     },
+    "actions": {
+      "query": "Consultar histórico"
+    },
+    "cards": {
+      "thermal_extremes": "Extremos térmicos",
+      "mean_temp_extremes": "Extremos de temperatura media",
+      "mean_temp_difference": "Diferencia entre medias",
+      "daily_temperature_extremes": "Extremos diarios",
+      "wind_extremes": "Extremos de viento",
+      "precip_extremes": "Extremos de precipitación",
+      "solar_extremes": "Extremos de insolación",
+      "solar_irradiation_extremes": "Extremos de irradiación solar",
+      "period_amplitude": "Amplitud del periodo",
+      "max_intensity": "Intensidad máxima",
+      "max_short": "Máx.",
+      "min_short": "Mín.",
+      "average_temperatures": "Temperaturas medias",
+      "wind_summary": "Viento",
+      "rain_summary": "Lluvia",
+      "solar_summary": "Solar",
+      "characteristic_days": "Días característicos",
+      "summary_labels": {
+        "mean": "Media",
+        "maximums": "Máximas",
+        "minimums": "Mínimas",
+        "stddev": "Desv. estándar",
+        "predominant_direction": "Predominante",
+        "direction": "Dirección",
+        "windiest_day": "Día más ventoso",
+        "windiest_month": "Mes más ventoso",
+        "accumulated": "Acumulada",
+        "rain_days": "Días de lluvia",
+        "irradiation_mean": "Irradiación media",
+        "irradiance_mean": "Irradiancia media",
+        "sunshine_mean": "Insolación media",
+        "tropical": "Tropicales",
+        "torrid": "Tórridas",
+        "frost": "Helada"
+      }
+    },
     "inputs": {
       "months": "Mes(es)",
       "years": "Año(s)"
@@ -472,6 +532,8 @@
       "max_precip_24h": "Precipitación máxima en 24 horas",
       "sunniest_year": "Año más soleado",
       "least_sunny_year": "Año con menos sol",
+      "highest_solar_irradiation_year": "Año con mayor irradiación solar media",
+      "lowest_solar_irradiation_year": "Año con menor irradiación solar media",
       "lowest_maximum": "Mínima de máximas",
       "highest_minimum": "Máxima de mínimas",
       "windiest_month": "Mes más ventoso (viento medio)",
@@ -485,7 +547,9 @@
       "mean_wind": "Media de viento",
       "accumulated_precipitation": "Precipitación acumulada",
       "mean_precipitation": "Media de precipitación",
+      "rain_days": "Días de lluvia",
       "mean_solar_irradiance": "Irradiancia solar media",
+      "mean_daily_global_solar_irradiation": "Irradiación solar global diaria media",
       "mean_sunshine_hours": "Horas de sol (media)",
       "tropical_nights": "Noches tropicales (mín > 20 °C)",
       "frost_nights": "Noches de helada (mín ≤ 0 °C)",
@@ -801,6 +865,7 @@
     "hide_historical_only": "Ocultar estaciones históricas",
     "hide_historical_only_help": "Las estaciones históricas ya no registran datos pero puede consultarse el histórico.",
     "country_filter": "Países",
+    "country_all": "Todo el mundo",
     "country_search": "Buscar país…",
     "country_clear": "Limpiar filtro",
     "sensor_filter_clear": "Limpiar",

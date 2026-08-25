@@ -1,6 +1,9 @@
 import math
 
-from domain.parsing.aemet_climo import _aemet_daily_record_to_row
+from domain.parsing.aemet_climo import (
+    _aemet_daily_record_to_row,
+    _parse_aemet_gust_direction,
+)
 from domain.parsing.wu_climo import normalize_wu_daily_payload
 
 
@@ -19,6 +22,7 @@ def test_wu_daily_history_keeps_mean_wind_direction():
                         "winddirAvg": "SW",
                         "windgustHigh": 30.0,
                         "precipTotal": 1.2,
+                        "precipRate": 7.8,
                     },
                 }
             ]
@@ -27,9 +31,10 @@ def test_wu_daily_history_keeps_mean_wind_direction():
 
     assert "wind_dir_mean" in frame.columns
     assert frame.loc[0, "wind_dir_mean"] == 225.0
+    assert frame.loc[0, "precip_rate_max"] == 7.8
 
 
-def test_aemet_daily_history_keeps_wind_direction_if_present():
+def test_aemet_daily_history_keeps_gust_direction_separate_from_mean_direction():
     row = _aemet_daily_record_to_row(
         {
             "fecha": "2026-05-20",
@@ -45,4 +50,10 @@ def test_aemet_daily_history_keeps_wind_direction_if_present():
 
     assert row is not None
     assert math.isclose(row["wind_mean"], 10.8)
-    assert row["wind_dir_mean"] == 225.0
+    assert math.isnan(row["wind_dir_mean"])
+    assert row["gust_dir_max"] == 225.0
+
+
+def test_aemet_monthly_gust_direction_uses_tens_of_degrees_prefix():
+    assert _parse_aemet_gust_direction("27/21,1(07)") == 270.0
+    assert math.isnan(_parse_aemet_gust_direction("99/21,1(07)"))

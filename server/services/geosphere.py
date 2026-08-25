@@ -577,6 +577,8 @@ async def fetch_today_series(
         "pressures": _col("PRED"),
         "uv_indexes": [float("nan")] * len(rows),
         "solar_radiations": _col("GLOW"),
+        # RR de TAWES es la cantidad del intervalo de observación.
+        "precip_step_mm": _col("RR"),
         "winds": _col("FF", convert=_kmh),
         "gusts": _col("FFX", convert=_kmh),
         "wind_dirs": _col("DD"),

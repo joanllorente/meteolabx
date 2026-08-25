@@ -11,6 +11,7 @@ _LAZY_EXPORTS = {
     "render_trends_tab": ("tabs.trends", "render_trends_tab"),
     "render_historical_tab": ("tabs.historical", "render_historical_tab"),
     "render_map_tab": ("tabs.map", "render_map_tab"),
+    "render_forecast_tab": ("tabs.forecast", "render_forecast_tab"),
     "handle_rank_connect_query": ("tabs.ranking", "handle_rank_connect_query"),
     "render_ranking_tab": ("tabs.ranking", "render_ranking_tab"),
 }
@@ -31,6 +32,7 @@ __all__ = [
     "render_trends_tab",
     "render_historical_tab",
     "render_map_tab",
+    "render_forecast_tab",
     "handle_rank_connect_query",
     "render_ranking_tab",
 ]

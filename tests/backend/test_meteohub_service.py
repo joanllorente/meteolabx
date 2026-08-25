@@ -161,6 +161,7 @@ def test_fetch_today_series_canonical() -> None:
     assert result["has_data"] is True
     assert len(result["epochs"]) == 2
     assert result["temps"] == [pytest.approx(20.0), pytest.approx(22.0)]
+    assert result["precip_step_mm"] == pytest.approx([0.4, 0.2])
     # MSL por punto; primer punto sin presión → NaN
     assert math.isnan(result["pressures"][0])
     assert result["pressures"][1] == pytest.approx(995.0 * math.exp(165.0 / 8000.0))

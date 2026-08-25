@@ -58,6 +58,60 @@ def icon_svg(kind: str, uid: str, dark: bool = False) -> str:
         </svg>
         """)
 
+    if kind == "temp_cold":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#A8E6FF"/>
+              <stop offset="0.55" stop-color="#66B8FF"/>
+              <stop offset="1" stop-color="#5877F2"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})">
+            <path d="M15.5 34.5c0 5 4 9 9 9s9-4 9-9c0-2.8-1.3-5.3-3.5-6.9V17c0-4.3-2.5-7.8-5.5-7.8S19 12.7 19 17v10.6c-2.2 1.6-3.5 4.1-3.5 6.9z"
+                  fill="rgba(255,255,255,0.25)"/>
+            <path d="M24.5 12.7c1.3 0 2.3 1.9 2.3 4.3v15a5 5 0 1 1-4.6 0V17c0-2.4 1-4.3 2.3-4.3z"
+                  fill="rgba(255,255,255,0.92)"/>
+            <path d="M37.5 15v12.5M33.6 23.7l3.9 3.9 3.9-3.9"
+                  fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="2.8"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+        </svg>
+        """)
+
+    if kind == "temp_night":
+        return html_clean(f"""
+        <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="{g('bg')}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FFC87A"/>
+              <stop offset="0.52" stop-color="#FF8B78"/>
+              <stop offset="1" stop-color="#B983E8"/>
+            </linearGradient>
+            <filter id="{g('shadow')}" x="-40%" y="-40%" width="180%" height="180%">
+              <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="{glow2}" flood-opacity="0.35"/>
+            </filter>
+            <mask id="{g('moon')}">
+              <rect width="54" height="54" fill="black"/>
+              <circle cx="20.5" cy="27" r="12.5" fill="white"/>
+              <circle cx="26" cy="21.5" r="12.5" fill="black"/>
+            </mask>
+          </defs>
+          <rect x="1.5" y="1.5" rx="18" ry="18" width="51" height="51" fill="url(#{g('bg')})" opacity="0.95"/>
+          <g filter="url(#{g('shadow')})">
+            <circle cx="20.5" cy="27" r="12.5" fill="rgba(255,255,255,0.92)"
+                    mask="url(#{g('moon')})"/>
+            <path d="M38 16.5c1.45 0 2.6 1.9 2.6 4.25v10.1a5.7 5.7 0 1 1-5.2 0v-10.1c0-2.35 1.15-4.25 2.6-4.25z"
+                  fill="rgba(255,255,255,0.94)"/>
+          </g>
+        </svg>
+        """)
+
     if kind == "dew":
         return html_clean(f"""
         <svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">

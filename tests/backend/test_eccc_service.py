@@ -150,6 +150,9 @@ def test_fetch_today_series_samples_ten_minutes() -> None:
     assert series["temps"] == pytest.approx([21.2, 24.9])
     # Fallback de viento: a las 10:05 no hay pst10mts → usa pst2mts.
     assert series["winds"][0] == pytest.approx(12.0)
+    # La obs de las 10:05 sustituye la meteorología de las 10:00, pero no
+    # debe borrar el corte horario de precipitación de ese mismo bloque.
+    assert series["precip_step_mm"] == pytest.approx([0.4, 0.2])
     assert all(math.isnan(v) for v in series["dewpts"])  # Td lo deriva la app
 
 

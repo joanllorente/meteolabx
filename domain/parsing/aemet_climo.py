@@ -33,6 +33,7 @@ CLIMO_DAILY_SCHEMA = [
     "wind_mean",
     "wind_dir_mean",
     "gust_max",
+    "gust_dir_max",
     "precip_total",
 ]
 
@@ -224,6 +225,29 @@ def _parse_wind_dir_deg(value) -> float:
     return cardinal_16.get(s_norm, float("nan"))
 
 
+def _parse_aemet_direction_code(value) -> float:
+    """Dirección AEMET: códigos numéricos en decenas de grado o cardinal."""
+    direction = _parse_wind_dir_deg(value)
+    if direction != direction:
+        return direction
+    raw = str(value or "").strip().replace(",", ".")
+    try:
+        numeric = float(raw)
+    except (TypeError, ValueError):
+        return direction
+    if 0.0 <= numeric <= 36.0 and numeric.is_integer():
+        return (numeric * 10.0) % 360.0
+    return direction
+
+
+def _parse_aemet_gust_direction(value) -> float:
+    raw = str(value or "").strip()
+    if "/" not in raw:
+        return float("nan")
+    prefix = raw.split("/", 1)[0].strip()
+    return _parse_aemet_direction_code(prefix)
+
+
 def _empty_climo_dataframe(include_extras: bool = True) -> pd.DataFrame:
     columns = CLIMO_DAILY_SCHEMA + (CLIMO_EXTRA_SCHEMA if include_extras else [])
     return pd.DataFrame(columns=columns)
@@ -289,7 +313,9 @@ def _aemet_daily_record_to_row(record: Dict[str, Any]) -> Optional[Dict[str, Any
     temp_max = _aemet_climo_num(record, ["tmax", "TMAX", "tamax", "TAMAX"], ["tmax", "tamax"])
     temp_min = _aemet_climo_num(record, ["tmin", "TMIN", "tamin", "TAMIN"], ["tmin", "tamin"])
     wind_mean = _aemet_climo_num(record, ["velmedia", "VELMEDIA", "vv", "VV"], ["velmedia", "vv", "viento"])
-    wind_dir_mean = _parse_wind_dir_deg(
+    # En valores climatológicos diarios, ``dir`` es la dirección de la
+    # racha máxima, no una dirección media/predominante del día.
+    gust_dir_max = _parse_aemet_direction_code(
         _aemet_first_by_patterns(
             record,
             ["dir", "DIR", "dv", "DV", "dd", "DD", "dir_viento", "direccion_viento", "winddir"],
@@ -323,8 +349,9 @@ def _aemet_daily_record_to_row(record: Dict[str, Any]) -> Optional[Dict[str, Any
         "temp_max": float(temp_max) if not pd.isna(temp_max) else float("nan"),
         "temp_min": float(temp_min) if not pd.isna(temp_min) else float("nan"),
         "wind_mean": float(wind_mean) if not pd.isna(wind_mean) else float("nan"),
-        "wind_dir_mean": float(wind_dir_mean) if not pd.isna(wind_dir_mean) else float("nan"),
+        "wind_dir_mean": float("nan"),
         "gust_max": float(gust_max) if not pd.isna(gust_max) else float("nan"),
+        "gust_dir_max": float(gust_dir_max) if not pd.isna(gust_dir_max) else float("nan"),
         "precip_total": float(precip_total) if not pd.isna(precip_total) else float("nan"),
         "solar_hours": float(solar_hours) if not pd.isna(solar_hours) else float("nan"),
     }
@@ -344,7 +371,7 @@ def _normalize_climo_daily_rows(rows: List[Dict[str, Any]]) -> pd.DataFrame:
         if col not in frame.columns:
             frame[col] = float("nan")
 
-    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total", "solar_hours"]
+    numeric_cols = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "gust_dir_max", "precip_total", "solar_hours"]
     for col in numeric_cols:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
     frame["precip_total"] = frame["precip_total"].clip(lower=0)
@@ -445,7 +472,9 @@ def _aemet_monthlyannual_to_metrics(record: Dict[str, Any]) -> Dict[str, Any]:
         "temp_max": float(temp_max) if not pd.isna(temp_max) else float("nan"),
         "temp_min": float(temp_min) if not pd.isna(temp_min) else float("nan"),
         "wind_mean": float(wind_mean) if not pd.isna(wind_mean) else float("nan"),
+        "wind_dir_mean": float("nan"),
         "gust_max": float(gust_max) if not pd.isna(gust_max) else float("nan"),
+        "gust_dir_max": _parse_aemet_gust_direction(raw_gust),
         "precip_total": float(precip_total) if not pd.isna(precip_total) else float("nan"),
         "solar_mean": float(solar_mean) if not pd.isna(solar_mean) else float("nan"),
         "precip_max_24h": float(precip_max_24h) if not pd.isna(precip_max_24h) else float("nan"),
@@ -506,7 +535,7 @@ def _monthly_year_df(payload: Sequence[Any], year: int) -> pd.DataFrame:
         if col not in frame.columns:
             frame[col] = float("nan")
     numeric_cols = [
-        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "gust_max", "precip_total",
+        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "gust_dir_max", "precip_total",
         "solar_mean", "precip_max_24h", "rain_days", "temp_abs_max", "temp_abs_min",
         "tropical_nights", "frost_nights",
     ]
@@ -529,6 +558,7 @@ def _monthly_year_df(payload: Sequence[Any], year: int) -> pd.DataFrame:
         ann_abs_min_date = ann.get("temp_abs_min_date")
         ann_gust = ann.get("gust_max", float("nan"))
         ann_gust_date = ann.get("gust_abs_max_date")
+        ann_gust_dir = ann.get("gust_dir_max", float("nan"))
 
         abs_max_s = pd.to_numeric(frame["temp_abs_max"], errors="coerce")
         if not pd.isna(ann_abs_max) and (
@@ -556,6 +586,8 @@ def _monthly_year_df(payload: Sequence[Any], year: int) -> pd.DataFrame:
         ):
             idx = gust_s.idxmax() if gust_s.notna().any() else frame.index[0]
             frame.loc[idx, "gust_max"] = float(ann_gust)
+            if not pd.isna(ann_gust_dir):
+                frame.loc[idx, "gust_dir_max"] = float(ann_gust_dir)
             if ann_gust_date:
                 frame.loc[idx, "gust_abs_max_date"] = ann_gust_date
 
@@ -583,7 +615,9 @@ def _yearly_df(
                     "temp_max": float(pd.to_numeric(month_df["temp_max"], errors="coerce").mean()),
                     "temp_min": float(pd.to_numeric(month_df["temp_min"], errors="coerce").mean()),
                     "wind_mean": float(pd.to_numeric(month_df["wind_mean"], errors="coerce").mean()),
+                    "wind_dir_mean": float("nan"),
                     "gust_max": float(pd.to_numeric(month_df["gust_max"], errors="coerce").max()),
+                    "gust_dir_max": float("nan"),
                     "precip_total": float(pd.to_numeric(month_df["precip_total"], errors="coerce").sum(min_count=1)),
                     "solar_mean": float(pd.to_numeric(month_df["solar_mean"], errors="coerce").mean()),
                     "precip_max_24h": float(pd.to_numeric(month_df["precip_max_24h"], errors="coerce").max()),
@@ -644,6 +678,14 @@ def _yearly_df(
                         m_date = avail_months[idx_best].get("gust_abs_max_date")
                         if m_date:
                             metrics["gust_abs_max_date"] = m_date
+                        if "gust_dir_max" in mdf.columns:
+                            m_direction = pd.to_numeric(mdf["gust_dir_max"], errors="coerce").iloc[idx_best]
+                            if not pd.isna(m_direction):
+                                metrics["gust_dir_max"] = float(m_direction)
+                    elif "gust_dir_max" in mdf.columns and pd.isna(metrics.get("gust_dir_max", float("nan"))):
+                        m_direction = pd.to_numeric(mdf["gust_dir_max"], errors="coerce").iloc[idx_best]
+                        if not pd.isna(m_direction):
+                            metrics["gust_dir_max"] = float(m_direction)
 
                 # precip_max_24h: mejor valor
                 m_prec24_s = pd.to_numeric(mdf["precip_max_24h"], errors="coerce")
@@ -675,7 +717,7 @@ def _yearly_df(
         if col not in frame.columns:
             frame[col] = float("nan")
     numeric_cols = [
-        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "gust_max", "precip_total",
+        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "gust_dir_max", "precip_total",
         "solar_mean", "precip_max_24h", "rain_days", "temp_abs_max", "temp_abs_min",
         "tropical_nights", "frost_nights",
     ]

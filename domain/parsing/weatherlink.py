@@ -248,8 +248,10 @@ def normalize_weatherlink_historic_series(payload: Dict[str, Any], altitude_m: A
         "pressures_msl": [],
         "winds": [],
         "gusts": [],
+        "gust_dirs": [],
         "wind_dirs": [],
         "precips": [],
+        "rain_rates": [],
         "solar_radiations": [],
         "uv_indexes": [],
         "has_data": False,
@@ -274,6 +276,15 @@ def normalize_weatherlink_historic_series(payload: Dict[str, Any], altitude_m: A
             ("wind_speed_hi", "wind_speed_hi_last_10_min", "wind_gust"),
             convert=_mph_to_kmh,
         )
+        gust_dir = _series_value_from_rows(
+            rows,
+            (
+                "wind_dir_of_hi",
+                "wind_dir_at_hi_speed",
+                "wind_dir_at_hi_speed_last_10_min",
+                "wind_dir_at_hi_speed_last_2_min",
+            ),
+        )
         wind_dir = _series_value_from_rows(
             rows,
             ("wind_dir_of_prevail", "wind_dir_scalar_avg", "wind_dir_last"),
@@ -283,10 +294,14 @@ def normalize_weatherlink_historic_series(payload: Dict[str, Any], altitude_m: A
         if _is_nan(p_abs):
             p_abs = _pressure_abs_from_msl(p_msl, float(elevation))
         precip_mm = _first_precip_mm(rows)
+        rain_rate = _series_value_from_rows(
+            rows,
+            ("rain_rate_hi_mm", "rain_rate_hi_last_15_min_mm", "rain_rate_last_mm"),
+        )
         solar = _series_value_from_rows(rows, ("solar_rad_avg", "solar_rad", "solar_rad_hi"))
         uv = _series_value_from_rows(rows, ("uv_index_avg", "uv_index", "uv_index_hi"))
 
-        if all(_is_nan(value) for value in (temp_c, rh, dew_c, p_abs, p_msl, wind_kmh, gust_kmh, precip_mm, solar, uv)):
+        if all(_is_nan(value) for value in (temp_c, rh, dew_c, p_abs, p_msl, wind_kmh, gust_kmh, precip_mm, rain_rate, solar, uv)):
             continue
 
         series["epochs"].append(int(epoch))
@@ -297,8 +312,10 @@ def normalize_weatherlink_historic_series(payload: Dict[str, Any], altitude_m: A
         series["pressures_msl"].append(float(p_msl))
         series["winds"].append(float(wind_kmh))
         series["gusts"].append(float(gust_kmh))
+        series["gust_dirs"].append(float(gust_dir))
         series["wind_dirs"].append(float(wind_dir))
         series["precips"].append(float(precip_mm))
+        series["rain_rates"].append(float(rain_rate))
         series["solar_radiations"].append(float(solar))
         series["uv_indexes"].append(float(uv))
 
@@ -332,8 +349,10 @@ def _empty_weatherlink_series() -> Dict[str, Any]:
         "pressures_msl": [],
         "winds": [],
         "gusts": [],
+        "gust_dirs": [],
         "wind_dirs": [],
         "precips": [],
+        "rain_rates": [],
         "solar_radiations": [],
         "uv_indexes": [],
         "has_data": False,
@@ -344,7 +363,7 @@ def _series_keys() -> Tuple[str, ...]:
     return (
         "epochs", "temps", "humidities", "dewpts",
         "pressures_abs", "pressures_msl", "winds", "gusts",
-        "wind_dirs", "precips", "solar_radiations", "uv_indexes",
+        "gust_dirs", "wind_dirs", "precips", "rain_rates", "solar_radiations", "uv_indexes",
     )
 
 

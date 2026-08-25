@@ -294,6 +294,245 @@ def card(
     )
 
 
+def dual_value_card(
+    title: str,
+    *,
+    primary_value: str,
+    primary_unit: str = "",
+    primary_date: str,
+    secondary_value: str,
+    secondary_unit: str = "",
+    secondary_date: str,
+    footer_label: str,
+    footer_value: str,
+    footer_items: list[tuple[str, str]] | None = None,
+    primary_label: str = "",
+    secondary_label: str = "",
+    show_arrows: bool = True,
+    icon_kind: str = "temp",
+    uid: str = "dual",
+    dark: bool = False,
+    tooltip_key: str = "",
+) -> str:
+    """Tarjeta con dos valores principales equivalentes y un dato derivado."""
+    icon_html = icon_img(icon_kind, uid=uid, dark=dark)
+    tip_text = _card_tooltip_text(title, tooltip_key=tooltip_key)
+    tip_html = _tooltip_html(tip_text)
+
+    def _unit(value: str) -> str:
+        return f"<span class='historical-dual-unit'>{escape(value)}</span>" if value else ""
+
+    def _label(value: str) -> str:
+        return f"<div class='historical-dual-label'>{escape(value)}</div>" if value else ""
+
+    def _date(value: str) -> str:
+        return f"<div class='historical-dual-date'><b>{escape(value)}</b></div>" if value else ""
+
+    primary_arrow = '<span class="historical-dual-arrow">▲</span>' if show_arrows else ""
+    secondary_arrow = '<span class="historical-dual-arrow">▼</span>' if show_arrows else ""
+
+    footer_parts = []
+    if footer_label and footer_value:
+        footer_parts.append(
+            f"<div class='historical-dual-footer'>{escape(footer_label)}: "
+            f"<b>{escape(footer_value)}</b></div>"
+        )
+    valid_footer_items = [
+        (str(label), str(value))
+        for label, value in (footer_items or [])
+        if str(label).strip() and str(value).strip()
+    ]
+    if valid_footer_items:
+        details = "".join(
+            f"<div><span>{escape(label)}:</span> <b>{escape(value)}</b></div>"
+            for label, value in valid_footer_items
+        )
+        footer_parts.append(f"<div class='historical-dual-details'>{details}</div>")
+    footer_html = "".join(footer_parts)
+
+    # Streamlit vuelve a interpretar como Markdown los niveles HTML muy
+    # indentados. En una tarjeta dual eso convierte los bloques anidados en
+    # ``<pre><code>`` y muestra las etiquetas literalmente. La entregamos en
+    # una sola línea para que todo el fragmento siga siendo HTML crudo.
+    return "".join(
+        line.strip()
+        for line in html_clean(
+        f"""
+  <div class="card card-h historical-dual-card">
+    <div class="card-help-wrap" tabindex="0" aria-label="{escape(t('cards.help_aria', title=title))}">
+      <span class="card-help-btn">?</span>
+      <div class="card-help-tooltip">{tip_html}</div>
+    </div>
+
+    <div class="icon-col">
+      <div class="icon big">{icon_html}</div>
+    </div>
+
+    <div class="historical-dual-content">
+      <div class="card-title">{escape(title)}</div>
+      <div class="historical-dual-values">
+        <div class="historical-dual-stat historical-dual-max">
+          {_label(primary_label)}
+          <div class="historical-dual-value">
+            {primary_arrow}
+            <span>{escape(primary_value)}</span>{_unit(primary_unit)}
+          </div>
+          {_date(primary_date)}
+        </div>
+        <div class="historical-dual-stat historical-dual-min">
+          {_label(secondary_label)}
+          <div class="historical-dual-value">
+            {secondary_arrow}
+            <span>{escape(secondary_value)}</span>{_unit(secondary_unit)}
+          </div>
+          {_date(secondary_date)}
+        </div>
+      </div>
+      {footer_html}
+    </div>
+  </div>
+"""
+        ).splitlines()
+    )
+
+
+def wind_extremes_card(
+    title: str,
+    *,
+    day_label: str,
+    day_value: str,
+    day_unit: str,
+    day_date: str,
+    day_direction: str,
+    day_degrees: str,
+    month_label: str,
+    month_value: str,
+    month_unit: str,
+    month_date: str,
+    month_direction: str,
+    month_degrees: str,
+    direction_label: str,
+    uid: str = "wind-extremes",
+    dark: bool = False,
+    tooltip_key: str = "viento",
+) -> str:
+    """Tarjeta 2×2: velocidad y dirección para el día y el mes extremos."""
+    icon_html = icon_img("wind", uid=uid, dark=dark)
+    tip_text = _card_tooltip_text(title, tooltip_key=tooltip_key)
+    tip_html = _tooltip_html(tip_text)
+
+    def _speed_cell(label: str, value: str, unit: str, date_txt: str) -> str:
+        unit_html = f"<span class='historical-wind-matrix-unit'>{escape(unit)}</span>" if unit else ""
+        date_html = f"<div class='historical-wind-matrix-meta'>{escape(date_txt)}</div>" if date_txt else ""
+        return (
+            "<div class='historical-wind-matrix-cell'>"
+            f"<div class='historical-wind-matrix-label'>{escape(label)}</div>"
+            f"<div class='historical-wind-matrix-value'><span>{escape(value)}</span>{unit_html}</div>"
+            f"{date_html}</div>"
+        )
+
+    def _direction_cell(direction: str, degrees: str) -> str:
+        degrees_html = f"<div class='historical-wind-matrix-meta'>{escape(degrees)}</div>" if degrees else ""
+        return (
+            "<div class='historical-wind-matrix-cell historical-wind-matrix-direction'>"
+            f"<div class='historical-wind-matrix-label'>{escape(direction_label)}</div>"
+            f"<div class='historical-wind-matrix-value'><span>{escape(direction or '-')}</span></div>"
+            f"{degrees_html}</div>"
+        )
+
+    cells = "".join(
+        (
+            _speed_cell(day_label, day_value, day_unit, day_date),
+            _direction_cell(day_direction, day_degrees),
+            _speed_cell(month_label, month_value, month_unit, month_date),
+            _direction_cell(month_direction, month_degrees),
+        )
+    )
+    return "".join(
+        line.strip()
+        for line in html_clean(
+            f"""
+  <div class="card card-h historical-wind-matrix-card">
+    <div class="card-help-wrap" tabindex="0" aria-label="{escape(t('cards.help_aria', title=title))}">
+      <span class="card-help-btn">?</span>
+      <div class="card-help-tooltip">{tip_html}</div>
+    </div>
+    <div class="icon-col"><div class="icon big">{icon_html}</div></div>
+    <div class="historical-wind-matrix-content">
+      <div class="card-title">{escape(title)}</div>
+      <div class="historical-wind-matrix">{cells}</div>
+    </div>
+  </div>
+"""
+        ).splitlines()
+    )
+
+
+def metric_group_card(
+    title: str,
+    metrics: list[tuple[str, str, str]],
+    *,
+    icon_kind: str,
+    uid: str,
+    dark: bool = False,
+    tooltip_key: str = "",
+    equal_columns: bool = False,
+    stack_last_unit: bool = False,
+) -> str:
+    """Tarjeta resumen con una métrica principal y varias auxiliares."""
+    icon_html = icon_img(icon_kind, uid=uid, dark=dark)
+    tip_text = _card_tooltip_text(title, tooltip_key=tooltip_key)
+    tip_html = _tooltip_html(tip_text)
+    normalized_metrics = [
+        (str(label), str(value or "-"), str(unit or ""))
+        for label, value, unit in metrics
+    ]
+    metric_items = "".join(
+        (
+            f'<div class="historical-summary-metric">'
+            f'<div class="historical-summary-label">{escape(label)}</div>'
+            f'<div class="historical-summary-value"><span>{escape(value)}</span>'
+            + (
+                f'<span class="historical-summary-unit">{escape(unit)}</span>'
+                if unit
+                else ""
+            )
+            + "</div></div>"
+        )
+        for label, value, unit in normalized_metrics
+    )
+
+    layout_classes = []
+    if equal_columns:
+        layout_classes.append("historical-summary-equal-columns")
+    if stack_last_unit:
+        layout_classes.append("historical-summary-stack-last-unit")
+    layout_class = "".join(f" {class_name}" for class_name in layout_classes)
+
+    # Una única línea evita que Markdown convierta los niveles anidados de la
+    # rejilla interna en bloques de código.
+    return "".join(
+        line.strip()
+        for line in html_clean(
+            f"""
+  <div class="card card-h historical-summary-card historical-summary-items-{len(normalized_metrics)}{layout_class}">
+    <div class="card-help-wrap" tabindex="0" aria-label="{escape(t('cards.help_aria', title=title))}">
+      <span class="card-help-btn">?</span>
+      <div class="card-help-tooltip">{tip_html}</div>
+    </div>
+    <div class="icon-col">
+      <div class="icon big">{icon_html}</div>
+    </div>
+    <div class="historical-summary-content">
+      <div class="card-title">{escape(title)}</div>
+      <div class="historical-summary-metrics">{metric_items}</div>
+    </div>
+  </div>
+"""
+        ).splitlines()
+    )
+
+
 def section_title(text: str):
     """
     Renderiza un titulo de seccion.

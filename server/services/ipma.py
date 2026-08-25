@@ -390,6 +390,8 @@ async def fetch_today_series(
         "pressures": _col("p_msl_hpa"),
         "uv_indexes": [float("nan")] * len(rows),
         "solar_radiations": _col("solar_wm2"),
+        # ``precAcumulada`` del feed horario es la precipitación de esa hora.
+        "precip_step_mm": _col("precip_mm"),
         "winds": _col("wind_kmh"),
         "gusts": [float("nan")] * len(rows),
         "wind_dirs": _col("wind_dir_deg"),

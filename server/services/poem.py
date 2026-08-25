@@ -108,6 +108,7 @@ async def _fetch_endpoint_series(
     *,
     settings: Optional[Any],
     timeout_s: float,
+    now: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     GET de un endpoint POEM → serie legacy-shape (vía poem_parsing) ya
@@ -188,7 +189,8 @@ async def _fetch_endpoint_series(
 
     epochs = series.get("epochs", [])
     if epochs:
-        age_s = int(datetime.now(tz=timezone.utc).timestamp()) - int(epochs[-1])
+        now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+        age_s = int(now_utc.timestamp()) - int(epochs[-1])
         if age_s > TR_MAX_AGE_SECONDS:
             return {"has_data": False}
     return series
@@ -258,6 +260,7 @@ async def _fetch_station_series(
     *,
     settings: Optional[Any],
     timeout_s: float,
+    now: Optional[datetime] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """→ (tr_series, hourly_series, station_meta). Lanza si la estación
     no tiene endpoints en catálogo."""
@@ -276,7 +279,7 @@ async def _fetch_station_series(
         if not endpoint:
             return {"has_data": False}
         return await _fetch_endpoint_series(
-            endpoint, station_id, client, settings=settings, timeout_s=timeout_s,
+            endpoint, station_id, client, settings=settings, timeout_s=timeout_s, now=now,
         )
 
     tr_result, hourly_result = await asyncio.gather(
@@ -326,7 +329,7 @@ async def fetch_current(
         client = httpx.AsyncClient(timeout=timeout_s)
     try:
         tr_series, hourly_series, station_meta = await _fetch_station_series(
-            station_id, client, settings=settings, timeout_s=timeout_s,
+            station_id, client, settings=settings, timeout_s=timeout_s, now=now,
         )
     finally:
         if owns_client:
@@ -417,7 +420,7 @@ async def fetch_recent_series(
         client = httpx.AsyncClient(timeout=timeout_s)
     try:
         tr_series, hourly_series, station_meta = await _fetch_station_series(
-            station_id, client, settings=settings, timeout_s=timeout_s,
+            station_id, client, settings=settings, timeout_s=timeout_s, now=now,
         )
     finally:
         if owns_client:
@@ -509,7 +512,7 @@ async def fetch_today_series(
         client = httpx.AsyncClient(timeout=timeout_s)
     try:
         tr_series, hourly_series, station_meta = await _fetch_station_series(
-            station_id, client, settings=settings, timeout_s=timeout_s,
+            station_id, client, settings=settings, timeout_s=timeout_s, now=now,
         )
     finally:
         if owns_client:
@@ -557,6 +560,7 @@ async def fetch_today_series(
         "pressures": pressures,
         "uv_indexes": [float("nan")] * len(keep),
         "solar_radiations": _col("solar_radiations"),
+        "precip_step_mm": _col("precips"),
         "winds": _col("winds"),
         "gusts": _col("gusts"),
         "wind_dirs": _col("wind_dirs"),

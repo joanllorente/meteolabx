@@ -27,6 +27,8 @@ from urllib.parse import quote
 
 import httpx
 import pandas as pd
+from domain.parsing.periods import merge_date_periods
+from server.services.climo_cache import get_or_fetch_climo_block
 
 from server.schemas.errors import ProviderError
 from server.services.aemet import _fetch_aemet_two_step
@@ -296,7 +298,7 @@ async def fetch_climo_daily_for_periods(
         return _empty_climo_dataframe(include_extras=False)
 
     legacy_df = _legacy_daily_for_periods(station, periods)
-    api_periods = _periods_outside_legacy_coverage(station, periods)
+    api_periods = merge_date_periods(_periods_outside_legacy_coverage(station, periods))
     if not api_periods:
         return legacy_df if not legacy_df.empty else _empty_climo_dataframe(include_extras=False)
 
@@ -314,7 +316,15 @@ async def fetch_climo_daily_for_periods(
             f"fechaini/{fecha_ini}/fechafin/{fecha_fin}/estacion/{station}"
         )
         async with semaphore:
-            payload = await _fetch_list(client, endpoint, api_key)
+            payload = await get_or_fetch_climo_block(
+                provider="AEMET",
+                kind=f"daily:{chunk_start.isoformat()}:{chunk_end.isoformat()}",
+                station_id=station,
+                credential=api_key,
+                client=client,
+                end_date=chunk_end,
+                fetcher=lambda: _fetch_list(client, endpoint, api_key),
+            )
         rows = []
         for record in payload or []:
             row = _aemet_daily_record_to_row(record)
@@ -341,7 +351,15 @@ async def _fetch_monthlyannual_raw(
         f"/valores/climatologicos/mensualesanuales/datos/"
         f"anioini/{y0:04d}/aniofin/{y1:04d}/estacion/{station}"
     )
-    payload = await _fetch_list(client, endpoint, api_key)
+    payload = await get_or_fetch_climo_block(
+        provider="AEMET",
+        kind=f"monthlyannual:{y0}:{y1}",
+        station_id=station,
+        credential=api_key,
+        client=client,
+        end_date=date(y1, 12, 31),
+        fetcher=lambda: _fetch_list(client, endpoint, api_key),
+    )
     return payload or []
 
 
@@ -378,15 +396,21 @@ async def fetch_climo_yearly_for_years(
 
     semaphore = asyncio.Semaphore(_MAX_CONCURRENT)
 
-    async def _block(chunk_start: int) -> List[Any]:
-        chunk_end = min(chunk_start + 2, max(api_years))
+    year_blocks: List[Tuple[int, int]] = []
+    for year in api_years:
+        if not year_blocks or year > year_blocks[-1][1] + 1 or year - year_blocks[-1][0] >= 3:
+            year_blocks.append((year, year))
+        else:
+            year_blocks[-1] = (year_blocks[-1][0], year)
+
+    async def _block(chunk_start: int, chunk_end: int) -> List[Any]:
         async with semaphore:
             return await _fetch_monthlyannual_raw(
                 client, idema, api_key, chunk_start, chunk_end,
             )
 
     blocks = await asyncio.gather(*(
-        _block(start) for start in range(min(api_years), max(api_years) + 1, 3)
+        _block(start, end) for start, end in year_blocks
     ))
 
     monthly_metrics: Dict[Tuple[int, int], Dict[str, Any]] = {}

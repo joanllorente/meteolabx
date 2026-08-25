@@ -23,8 +23,13 @@ from domain.parsing.weatherlink import (
     normalize_weatherlink_historic_series,
 )
 from domain.parsing.wu_climo import DAILY_SCHEMA, clip_period_tuples_to_today
+from domain.parsing.periods import merge_date_periods
 from server.schemas.errors import ProviderError
 from server.services.weatherlink import _fetch_station_meta, _get_json, _require_credentials
+from server.services.climo_cache import get_or_fetch_climo_block
+
+
+WEATHERLINK_DAILY_SCHEMA = [*DAILY_SCHEMA, "solar_mean"]
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +40,7 @@ _RATELIMIT_BACKOFF_S = 2.0
 
 
 def _empty_daily_dataframe() -> pd.DataFrame:
-    return pd.DataFrame(columns=DAILY_SCHEMA)
+    return pd.DataFrame(columns=WEATHERLINK_DAILY_SCHEMA)
 
 
 def _valid_numbers(values: Sequence[Any]) -> List[float]:
@@ -57,6 +62,19 @@ def _max(values: Sequence[Any]) -> float:
     return max(valid) if valid else float("nan")
 
 
+def _direction_at_max(values: Sequence[Any], directions: Sequence[Any]) -> float:
+    """Devuelve la dirección del mismo registro que contiene el máximo."""
+    best_value = float("nan")
+    best_direction = float("nan")
+    for value, direction in zip(values or [], directions or []):
+        parsed_value = _safe_float(value)
+        if math.isnan(parsed_value) or (not math.isnan(best_value) and parsed_value <= best_value):
+            continue
+        best_value = float(parsed_value)
+        best_direction = float(_safe_float(direction))
+    return best_direction
+
+
 def _sum(values: Sequence[Any]) -> float:
     valid = _valid_numbers(values)
     return float(sum(valid)) if valid else float("nan")
@@ -67,15 +85,16 @@ def _min(values: Sequence[Any]) -> float:
     return min(valid) if valid else float("nan")
 
 
-def _circular_mean_degrees(values: Sequence[Any]) -> float:
+def _predominant_direction_degrees(values: Sequence[Any]) -> float:
     valid = _valid_numbers(values)
     if not valid:
         return float("nan")
-    sin_sum = sum(math.sin(math.radians(value % 360.0)) for value in valid)
-    cos_sum = sum(math.cos(math.radians(value % 360.0)) for value in valid)
-    if sin_sum == 0.0 and cos_sum == 0.0:
-        return float("nan")
-    return float((math.degrees(math.atan2(sin_sum, cos_sum)) + 360.0) % 360.0)
+    counts: Dict[int, int] = {}
+    for value in valid:
+        sector = int((((value % 360.0) + 11.25) // 22.5)) % 16
+        counts[sector] = counts.get(sector, 0) + 1
+    winner = max(counts, key=counts.get)
+    return float(winner * 22.5)
 
 
 def _day_window(day: date, station: Dict[str, Any]) -> Tuple[int, int]:
@@ -110,6 +129,7 @@ def _series_to_daily_row(
         return [values[idx] if idx < len(values) else float("nan") for idx in row_indexes]
 
     temp_values = _col("temps")
+    gust_values = _col("gusts")
     latest_epoch = max(epochs[idx] for idx in row_indexes)
     # La lluvia del día es la SUMA de la caída en cada intervalo (``rainfall_mm``
     # es el incremento por registro, no un acumulado corrido), no el máximo: con
@@ -126,9 +146,12 @@ def _series_to_daily_row(
         "temp_max": _max(temp_values),
         "temp_min": _min(temp_values),
         "wind_mean": _mean(_col("winds")),
-        "wind_dir_mean": _circular_mean_degrees(_col("wind_dirs")),
-        "gust_max": _max(_col("gusts")),
+        "wind_dir_mean": _predominant_direction_degrees(_col("wind_dirs")),
+        "gust_max": _max(gust_values),
+        "gust_dir_max": _direction_at_max(gust_values, _col("gust_dirs")),
         "precip_total": precip_total,
+        "precip_rate_max": _max(_col("rain_rates")),
+        "solar_mean": _mean(_col("solar_radiations")),
     }
 
 
@@ -136,11 +159,11 @@ def _finalize_daily_rows(rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     if not rows:
         return _empty_daily_dataframe()
     frame = pd.DataFrame(rows)
-    for column in DAILY_SCHEMA:
+    for column in WEATHERLINK_DAILY_SCHEMA:
         if column not in frame.columns:
             frame[column] = pd.NA
     frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
-    for column in [c for c in DAILY_SCHEMA if c != "date"]:
+    for column in [c for c in WEATHERLINK_DAILY_SCHEMA if c != "date"]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame = (
         frame.dropna(subset=["date"])
@@ -149,7 +172,7 @@ def _finalize_daily_rows(rows: Sequence[Dict[str, Any]]) -> pd.DataFrame:
         .sort_values("date")
         .reset_index(drop=True)
     )
-    return frame[DAILY_SCHEMA]
+    return frame[WEATHERLINK_DAILY_SCHEMA]
 
 
 async def fetch_climo_daily_for_periods(
@@ -167,15 +190,25 @@ async def fetch_climo_daily_for_periods(
     if not station or not periods:
         return _empty_daily_dataframe()
 
-    station_meta = await _fetch_station_meta(
-        station, api_key, api_secret, client, timeout_s=16.0,
+    station_meta = await get_or_fetch_climo_block(
+        provider="WEATHERLINK",
+        kind="stations",
+        station_id=station,
+        credential=f"{api_key}:{api_secret}",
+        client=client,
+        ttl_s=24 * 60 * 60,
+        fetcher=lambda: _fetch_station_meta(
+            station, api_key, api_secret, client, timeout_s=16.0,
+        ),
     )
-    days: List[date] = []
-    for start, end in clip_period_tuples_to_today(list(periods), today_date=today_date):
+    days_set = set()
+    clipped = clip_period_tuples_to_today(list(periods), today_date=today_date)
+    for start, end in merge_date_periods(clipped):
         cursor = start
         while cursor <= end:
-            days.append(cursor)
+            days_set.add(cursor)
             cursor += timedelta(days=1)
+    days = sorted(days_set)
     if not days:
         return _empty_daily_dataframe()
 
@@ -199,14 +232,25 @@ async def fetch_climo_daily_for_periods(
         async with semaphore:
             for attempt in range(_RATELIMIT_RETRIES + 1):
                 try:
-                    await _pace_request()
-                    payload = await _get_json(
-                        client,
-                        f"historic/{station}",
-                        api_key,
-                        api_secret,
-                        params={"start-timestamp": start_ts, "end-timestamp": end_ts},
-                        timeout_s=16.0,
+                    async def _fetch_payload():
+                        await _pace_request()
+                        return await _get_json(
+                            client,
+                            f"historic/{station}",
+                            api_key,
+                            api_secret,
+                            params={"start-timestamp": start_ts, "end-timestamp": end_ts},
+                            timeout_s=16.0,
+                        )
+
+                    payload = await get_or_fetch_climo_block(
+                        provider="WEATHERLINK",
+                        kind=f"historic-day:{day.isoformat()}",
+                        station_id=station,
+                        credential=f"{api_key}:{api_secret}",
+                        client=client,
+                        end_date=day,
+                        fetcher=_fetch_payload,
                     )
                     break
                 except ProviderError as exc:

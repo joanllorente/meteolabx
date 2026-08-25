@@ -706,6 +706,10 @@ def _normalize_today_series(station_id: str, var_map: VarMap) -> Dict[str, Any]:
         "wind": _series_from_first_available(var_map, LATEST_VARIABLES["wind"]),
         "gust": _series_from_first_available(var_map, LATEST_VARIABLES["gust"]),
         "dir": _series_from_first_available(var_map, LATEST_VARIABLES["wind_dir"]),
+        # PPT (codi 35) son incrementos por intervalo, no un acumulado.
+        # Debe formar parte de la unión temporal: si durante la lluvia no
+        # coincide con otra variable, omitir sus epochs borra el episodio.
+        "precip": var_map.get(V_PRECIP, []),
         "solar": var_map.get(V_SOLAR, []),
         "uv": var_map.get(V_UV, []),
     }
@@ -718,9 +722,8 @@ def _normalize_today_series(station_id: str, var_map: VarMap) -> Dict[str, Any]:
     if not epochs:
         return _empty_today_series()
 
-    # La variable 35 son incrementos de precipitación por intervalo. Aunque
-    # no añadimos esos epochs a las gráficas canónicas (pueden tener una
-    # cadencia distinta), conservamos el total civil como metadata interna.
+    # La variable 35 son incrementos de precipitación por intervalo.
+    # Conservamos también el total civil como metadata interna.
     # ``/current/processed`` lo usa como respaldo si el ranking horario aún no
     # contiene esta estación, sin hacer una segunda descarga a XEMA.
     precip_values = [
@@ -762,6 +765,10 @@ def _normalize_today_series(station_id: str, var_map: VarMap) -> Dict[str, Any]:
         "pressures_abs": [_row(ep, "p_abs") for ep in epochs],
         "uv_indexes": [_row(ep, "uv") for ep in epochs],
         "solar_radiations": [_non_negative(_row(ep, "solar")) for ep in epochs],
+        # Campo explícito para que el normalizador común acumule los
+        # incrementos. ``precips`` queda reservado a la serie diaria ya
+        # acumulada del contrato público.
+        "precip_step_mm": [_non_negative(_row(ep, "precip")) for ep in epochs],
         "winds": [_ms_to_kmh(_row(ep, "wind")) for ep in epochs],
         "gusts": [_ms_to_kmh(_row(ep, "gust")) for ep in epochs],
         "wind_dirs": [_row(ep, "dir") for ep in epochs],

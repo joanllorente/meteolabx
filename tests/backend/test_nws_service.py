@@ -227,6 +227,7 @@ def test_fetch_today_series_normalizes_units_and_dewpoints() -> None:
     result = _run(nws.fetch_today_series(STATION, client=client, now=NOW_LOCAL))
 
     assert result["has_data"] is True
+    assert result["precip_step_mm"] == pytest.approx([2.54, 1.0])
     assert len(result["epochs"]) == 2
     # °F convertido
     assert result["temps"][0] == pytest.approx(20.0)
@@ -235,6 +236,19 @@ def test_fetch_today_series_normalizes_units_and_dewpoints() -> None:
     # MSL nativa en la segunda
     assert result["pressures"][1] == pytest.approx(1014.5)
     assert result["lat"] == pytest.approx(44.98992)
+
+
+def test_hourly_precip_steps_do_not_duplicate_subhourly_rolling_windows() -> None:
+    rows = [
+        {"epoch": 36000, "precip_last_mm": 1.0},
+        {"epoch": 36300, "precip_last_mm": 1.2},
+        {"epoch": 39600, "precip_last_mm": 0.4},
+    ]
+
+    steps = nws._hourly_precip_steps(rows)
+
+    assert math.isnan(steps[0])
+    assert steps[1:] == pytest.approx([1.2, 0.4])
 
 
 def test_fetch_today_series_empty() -> None:

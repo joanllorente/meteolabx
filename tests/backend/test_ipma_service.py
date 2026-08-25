@@ -139,6 +139,7 @@ def test_fetch_today_series_filters_local_day() -> None:
     assert series["temps"] == pytest.approx([24.0, 25.5])
     assert series["winds"][0] == pytest.approx(10.1)
     assert series["solar_radiations"] == pytest.approx([500.0, 1000.0])
+    assert series["precip_step_mm"] == pytest.approx([0.4, 0.2])
     assert math.isnan(series["pressures"][1])
 
 

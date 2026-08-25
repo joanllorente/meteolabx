@@ -25,6 +25,7 @@ import httpx
 import pandas as pd
 
 from server.schemas.errors import ProviderError
+from server.services.climo_cache import get_or_fetch_climo_block
 from domain.parsing.meteofrance_climo import (
     _aggregate_yearly_from_monthly,
     _clamp_climo_dates,
@@ -55,7 +56,7 @@ def _headers(api_key: str) -> Dict[str, str]:
     return {"apikey": api_key, "Accept": "*/*"}
 
 
-async def _request_command_csv(
+async def _request_command_csv_uncached(
     client: httpx.AsyncClient,
     endpoint: str,
     station_id: str,
@@ -119,6 +120,28 @@ async def _request_command_csv(
             break
     logger.warning("Climo MF: fichero no disponible para la commande %s", command_id)
     return None
+
+
+async def _request_command_csv(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    station_id: str,
+    start_iso: str,
+    end_iso: str,
+    api_key: str,
+) -> Optional[str]:
+    end_date = date.fromisoformat(str(end_iso)[:10])
+    return await get_or_fetch_climo_block(
+        provider=PROVIDER,
+        kind=f"{endpoint}:{start_iso}:{end_iso}",
+        station_id=station_id,
+        credential=api_key,
+        client=client,
+        end_date=end_date,
+        fetcher=lambda: _request_command_csv_uncached(
+            client, endpoint, station_id, start_iso, end_iso, api_key,
+        ),
+    )
 
 
 async def fetch_climo_daily_for_periods(

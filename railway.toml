@@ -3,6 +3,9 @@
 # (3.14.6, la misma que el venv local).
 [build]
 builder = "RAILPACK"
+# La wheel oficial de SHARPpy funciona en Python 3.14, pero su metadata fija
+# NumPy 1.15. Evitamos ese pin obsoleto e instalamos solo `sharptab` y su código.
+buildCommand = "python -m pip install --no-deps SHARPpy==1.4.0a5"
 
 [deploy]
 startCommand = "bash scripts/start_web.sh"

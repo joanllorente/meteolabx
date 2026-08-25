@@ -27,7 +27,9 @@ DAILY_SCHEMA = [
     "wind_mean",
     "wind_dir_mean",
     "gust_max",
+    "gust_dir_max",
     "precip_total",
+    "precip_rate_max",
 ]
 
 
@@ -160,8 +162,17 @@ def normalize_wu_daily_payload(payload: Dict[str, Any]) -> pd.DataFrame:
                     metric.get("windGust"),
                     metric.get("windgust"),
                 ),
+                # history/daily no expone de forma consistente la dirección
+                # asociada a windgustHigh. Se conserva el campo canónico para
+                # que la UI pueda mostrar "–" sin confundirlo con winddirAvg.
+                "gust_dir_max": float("nan"),
                 "precip_total": quantize_rain_mm_wu(
                     _first_valid_float(metric.get("precipTotal"), observation.get("precipTotal"))
+                ),
+                # En history/daily, precipRate es la intensidad máxima del
+                # resumen diario (mm/h cuando units=m).
+                "precip_rate_max": _first_valid_float(
+                    metric.get("precipRate"), observation.get("precipRate")
                 ),
             }
         )
@@ -174,7 +185,10 @@ def normalize_wu_daily_payload(payload: Dict[str, Any]) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = pd.NA
 
-    numeric_columns = ["epoch", "temp_mean", "temp_max", "temp_min", "wind_mean", "wind_dir_mean", "gust_max", "precip_total"]
+    numeric_columns = [
+        "epoch", "temp_mean", "temp_max", "temp_min", "wind_mean",
+        "wind_dir_mean", "gust_max", "gust_dir_max", "precip_total", "precip_rate_max",
+    ]
     for column in numeric_columns:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
 
@@ -183,6 +197,7 @@ def normalize_wu_daily_payload(payload: Dict[str, Any]) -> pd.DataFrame:
         frame.loc[missing_mean, "temp_mean"] = (frame.loc[missing_mean, "temp_max"] + frame.loc[missing_mean, "temp_min"]) / 2.0
 
     frame["precip_total"] = frame["precip_total"].clip(lower=0)
+    frame["precip_rate_max"] = frame["precip_rate_max"].clip(lower=0)
 
     frame["quality"] = frame[numeric_columns[1:]].notna().sum(axis=1)
     frame = (

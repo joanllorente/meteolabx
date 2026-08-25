@@ -114,6 +114,7 @@ def test_fetch_today_series_canonical() -> None:
     assert series["temps"] == pytest.approx([20.0, 20.4, 24.1])
     assert all(math.isnan(v) for v in series["dewpts"])  # Td lo deriva la app
     assert series["winds"] == pytest.approx([7.2, 9.0, 10.8])
+    assert series["precip_step_mm"] == pytest.approx([0.0, 0.3, 0.1])
     assert series["gusts"][2] == pytest.approx(27.0)
     assert math.isnan(series["pressures"][2])
 

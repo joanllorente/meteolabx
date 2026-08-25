@@ -17,9 +17,14 @@ data/data_estaciones_iem.json
 # Entorno virtual local (Python 3.14)
 .venv/
 
+# Dependencias y compilación del prototipo Svelte
+prototype-svelte/node_modules/
+prototype-svelte/dist/
+
 # Estadísticas internas de uso (en el Volume en producción)
 data/usage_stats.sqlite
 data/netatmo_tile_cache/
+data/forecast_store/
 data/netatmo_pws_stations_world.sqlite
 data/netatmo_pws_stations.sqlite
 static/temperature_field_*.png

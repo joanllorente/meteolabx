@@ -79,6 +79,28 @@ class Settings(BaseSettings):
     usuarios concurrentes en distintas estaciones.
     """
 
+    # --- Predicción AROME precalculada ---
+    forecast_precomputed_only: bool = False
+    """
+    Si está activo, los diagnósticos MLX solo se sirven desde el almacén
+    persistente generado por el worker; una hora aún no calculada responde 425
+    en vez de ejecutar varios minutos de cálculo dentro de la petición web.
+    """
+
+    forecast_catalog_refresh_s: int = 60
+    """TTL del catálogo progresivo AROME. Debe ser corto durante la publicación."""
+
+    ranking_refresh_enabled: bool = True
+    """
+    Activa el job en segundo plano que refresca el ranking y hace un ciclo
+    completo nada más arrancar el backend. Se mantiene activo por defecto para
+    producción. El lanzador local y los tests lo desactivan para no consumir
+    cuotas de los proveedores durante el desarrollo.
+
+    Para probar expresamente el ranking en local:
+    ``METEOLABX_RANKING_REFRESH_ENABLED=true ./scripts/run_server.sh``.
+    """
+
     ranking_refresh_interval_s: float = 3600.0
     """
     Cadencia del job que refresca el ranking de estaciones (segundos). Por
@@ -190,6 +212,13 @@ class Settings(BaseSettings):
     Configurar vía ``METEOLABX_METEOFRANCE_API_KEY``. Cuota 50 req/min.
     """
 
+    arome_api_key: str = ""
+    """
+    API key de Météo-France AROME (WCS, server-side, header ``apikey``).
+    Se mantiene separada de DPObs y se configura mediante
+    ``METEOLABX_AROME_API_KEY``.
+    """
+
     metoffice_api_key: str = ""
     """
     API key de Met Office Weather DataHub (server-side, header
@@ -261,6 +290,7 @@ class Settings(BaseSettings):
         self.aemet_api_key = _fallback(self.aemet_api_key, "AEMET_API_KEY")
         self.meteocat_api_key = _fallback(self.meteocat_api_key, "METEOCAT_API_KEY")
         self.meteofrance_api_key = _fallback(self.meteofrance_api_key, "METEOFRANCE_API_KEY")
+        self.arome_api_key = _fallback(self.arome_api_key, "AROME_API_KEY")
         self.metoffice_api_key = _fallback(self.metoffice_api_key, "METOFFICE_API_KEY")
         self.frost_client_id = _fallback(self.frost_client_id, "FROST_CLIENT_ID")
         self.frost_client_secret = _fallback(self.frost_client_secret, "FROST_CLIENT_SECRET")

@@ -49,7 +49,9 @@ async def test_iem_climo_fetches_asos_csv_and_aggregates_daily_rows():
     assert row["temp_max"] == pytest.approx(20.0)
     assert row["temp_mean"] == pytest.approx(15.0)
     assert row["wind_mean"] == pytest.approx(27.78)
+    assert row["wind_dir_mean"] == pytest.approx(90.0)
     assert row["gust_max"] == pytest.approx(55.56)
+    assert row["gust_dir_max"] == pytest.approx(180.0)
     assert row["precip_total"] == pytest.approx(0.762)
 
     params = client.calls[0]["params"]

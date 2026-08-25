@@ -38,6 +38,7 @@ from domain.parsing.smhi_climo import (
     yearly_rows_to_climo_df,
 )
 from server.services.smhi import BASE_URL, USER_AGENT
+from server.services.climo_cache import get_or_fetch_climo_block
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +58,23 @@ async def _fetch_param_rows(
     base = f"{BASE_URL}/parameter/{parameter}/station/{station_id}/period"
     rows: List[List[Dict[str, Any]]] = []
     try:
-        response = await client.get(
-            f"{base}/corrected-archive/data.csv", headers=HEADERS, timeout=90.0,
+        async def _archive_text():
+            response = await client.get(
+                f"{base}/corrected-archive/data.csv", headers=HEADERS, timeout=90.0,
+            )
+            response.raise_for_status()
+            return response.text
+
+        archive_text = await get_or_fetch_climo_block(
+            provider=PROVIDER,
+            kind=f"corrected-archive:{parameter}",
+            station_id=station_id,
+            credential="public",
+            client=client,
+            ttl_s=7 * 24 * 60 * 60,
+            fetcher=_archive_text,
         )
-        if response.status_code == 200:
-            rows.append(parse_archive_csv(response.text, field))
+        rows.append(parse_archive_csv(archive_text, field))
     except Exception as exc:
         logger.warning(
             "Climo SMHI: archivo del parámetro %s falló para %s: %s",
@@ -69,12 +82,24 @@ async def _fetch_param_rows(
         )
     if include_recent:
         try:
-            response = await client.get(
-                f"{base}/latest-months/data.json",
-                headers={**HEADERS, "Accept": "application/json"}, timeout=30.0,
+            async def _recent_payload():
+                response = await client.get(
+                    f"{base}/latest-months/data.json",
+                    headers={**HEADERS, "Accept": "application/json"}, timeout=30.0,
+                )
+                response.raise_for_status()
+                return response.json()
+
+            recent_payload = await get_or_fetch_climo_block(
+                provider=PROVIDER,
+                kind=f"latest-months:{parameter}",
+                station_id=station_id,
+                credential="public",
+                client=client,
+                ttl_s=60 * 60,
+                fetcher=_recent_payload,
             )
-            if response.status_code == 200:
-                rows.append(parse_recent_json(response.json(), field))
+            rows.append(parse_recent_json(recent_payload, field))
         except Exception as exc:
             logger.warning(
                 "Climo SMHI: latest-months del parámetro %s falló para %s: %s",

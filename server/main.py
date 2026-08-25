@@ -3,7 +3,11 @@ App FastAPI de MeteoLabX.
 
 Lanzar en desarrollo::
 
-    uvicorn server.main:app --reload --port 8000
+    ./scripts/run_server.sh
+
+El lanzador local desactiva el refresco automático del ranking para no gastar
+cuotas de proveedores en cada autoreload. Puede reactivarse expresamente con
+``METEOLABX_RANKING_REFRESH_ENABLED=true ./scripts/run_server.sh``.
 
 El frontend Streamlit (puerto 8501) consume estos endpoints. Mientras
 dure la migración, ambos procesos conviven; el frontend va sustituyendo
@@ -26,7 +30,7 @@ from fastapi.responses import JSONResponse
 from server import __version__
 from server.config import Settings, get_settings
 from server.dependencies.http import http_client_lifespan
-from server.routers import climo, health, observations, ranking, stations, stats
+from server.routers import climo, forecast, health, observations, ranking, stations, stats
 from server.schemas.errors import ProviderError
 
 logger = logging.getLogger(__name__)
@@ -70,12 +74,26 @@ def create_app() -> FastAPI:
     # CORS: Streamlit en :8501 hace requests desde otro origen. Sin esto
     # el navegador bloquea las llamadas. La lista de orígenes permitidos
     # vive en Settings (env var METEOLABX_CORS_ORIGINS en producción).
+    cors_origins = list(settings.cors_origins)
+    # La variable de producción sustituye la lista completa de Settings. Los
+    # dos orígenes locales deben seguir disponibles para el visor de pruebas,
+    # también cuando DEBUG=false y el resto de la configuración imita Railway.
+    for local_origin in ("http://localhost:8501", "http://127.0.0.1:8501"):
+        if local_origin not in cors_origins:
+            cors_origins.append(local_origin)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
+        expose_headers=[
+            "X-AROME-Run",
+            "X-AROME-Valid-Time",
+            "X-AROME-Max",
+            "X-AROME-Unit",
+        ],
     )
 
     # Exception handler único para ProviderError. Cualquier servicio
@@ -106,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(stations.router, prefix=api_prefix)
     app.include_router(ranking.router, prefix=api_prefix)
     app.include_router(stats.router, prefix=api_prefix)
+    app.include_router(forecast.router, prefix=api_prefix)
 
     return app
 

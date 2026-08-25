@@ -36,11 +36,16 @@ fi
 # debug=True para que /docs y /redoc estén accesibles en local.
 export METEOLABX_DEBUG="${METEOLABX_DEBUG:-true}"
 export METEOLABX_LOG_LEVEL="${METEOLABX_LOG_LEVEL:-DEBUG}"
+# Evita gastar las cuotas de todos los proveedores cada vez que uvicorn se
+# reinicia por el autoreload. Se puede reactivar expresamente anteponiendo
+# METEOLABX_RANKING_REFRESH_ENABLED=true al comando.
+export METEOLABX_RANKING_REFRESH_ENABLED="${METEOLABX_RANKING_REFRESH_ENABLED:-false}"
 
 echo "▶ MeteoLabX API en http://${HOST}:${PORT}"
 echo "  Python: $("${PYTHON}" --version 2>&1) (${PYTHON})"
 echo "  Docs: http://${HOST}:${PORT}/docs"
 echo "  Health: http://${HOST}:${PORT}/v1/health"
+echo "  Ranking automático: ${METEOLABX_RANKING_REFRESH_ENABLED}"
 echo ""
 
 exec "${PYTHON}" -m uvicorn server.main:app \
