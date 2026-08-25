@@ -629,3 +629,33 @@ def test_isolated_job_payload_keeps_every_covered_hour(monkeypatch):
     assert payload["valid_times"] == (H1, H2)
     # Y el trabajo reconstruido en el hijo debe ser equivalente al del padre.
     assert forecast_worker.ForecastJob(**payload).covered_times == job.covered_times
+
+
+def test_accumulated_precip_is_not_queued_behind_every_shear():
+    """El acumulado compite con las cizalladuras, no va detrás de todas.
+
+    La cola ordena por hora dentro de cada nivel. Al representar el trabajo
+    por la última hora que cubre quedaba siempre el último de su nivel, y como
+    abarca la pasada entera esa hora crece según se publica: no le llegaba
+    nunca el turno.
+    """
+    horas = [f"2026-08-24T{hora:02d}:00:00Z" for hora in range(13, 21)]
+    catalog_products = {
+        product: {"run": RUN, "valid_times": horas}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(RUN, horas, catalog_products=catalog_products)
+
+    order = forecast_worker._parallel_work_order(
+        [manifest], {RUN: forecast_worker._jobs_for_manifest(manifest)}
+    )
+    nivel1 = [job for _m, job in order if job.tier == 1]
+    posicion = next(
+        i for i, job in enumerate(nivel1) if job.products == ("accumulated-precip",)
+    )
+
+    # Arranca con la primera hora pendiente, no detrás de toda la cola. Las
+    # cizalladuras de esa misma hora van antes por desempate de producto.
+    assert nivel1[posicion].valid_time == horas[0]
+    assert posicion <= 1, "el acumulado no debe quedar al final de su nivel"
+    assert nivel1[posicion].covered_times == tuple(horas)

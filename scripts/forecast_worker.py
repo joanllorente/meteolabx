@@ -382,9 +382,10 @@ def _jobs_for_manifest(
         jobs.append(
             ForecastJob(
                 run_iso,
-                # La última hora representa al trabajo en el progreso y en el
-                # orden de la cola; las demás viajan en valid_times.
-                accumulated_pending[-1],
+                # Lo representa su primera hora pendiente: la cola ordena por
+                # hora, y con la última el acumulado quedaba detrás de todas
+                # las cizalladuras, desplazándose según se publican horas.
+                accumulated_pending[0],
                 (ACCUMULATED_PRECIP_PRODUCT,),
                 scope,
                 1,
