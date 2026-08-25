@@ -103,6 +103,7 @@
   });
 
   function selectProduct(item) {
+    playing = false;
     selectedProduct = item.id;
     expandedCategory = item.category;
     const count = selectedRunCatalog?.products?.[item.id]?.valid_times?.length || hours.length;
@@ -110,6 +111,7 @@
   }
 
   function selectRun(run) {
+    playing = false;
     selectedRun = run;
     const next = runCatalogs.find((item) => item.run === run)?.products?.[product.id];
     hourIndex = Math.min(hourIndex, Math.max(0, (next?.valid_times?.length || hours.length) - 1));
@@ -161,6 +163,22 @@
 
   function step(delta) {
     hourIndex = Math.max(0, Math.min(activeHours.length - 1, hourIndex + delta));
+  }
+
+  function nextReadyHourIndex(fromIndex) {
+    return activeHours.findIndex((hour, index) => index > fromIndex && hourIsReady(hour));
+  }
+
+  function togglePlayback() {
+    if (playing) {
+      playing = false;
+      return;
+    }
+    if (nextReadyHourIndex(hourIndex) < 0) {
+      const firstReady = activeHours.findIndex(hourIsReady);
+      if (firstReady >= 0) hourIndex = firstReady;
+    }
+    playing = true;
   }
 
   function refreshCatalog() {
@@ -259,6 +277,24 @@
     return () => {
       controller.abort();
     };
+  });
+
+  $effect(() => {
+    const active = playing;
+    const currentIndex = hourIndex;
+    const validTime = valid?.iso;
+    const currentFrameReady = frameData?.valid_time === validTime;
+    const busy = frameLoading || framePending || Boolean(frameError);
+    if (!active || !selectedProduct || busy || !currentFrameReady) return;
+    const nextIndex = nextReadyHourIndex(currentIndex);
+    if (nextIndex < 0) {
+      playing = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      hourIndex = nextIndex;
+    }, 900);
+    return () => window.clearTimeout(timer);
   });
 </script>
 
@@ -412,7 +448,7 @@
 
       <div class="timeline">
         <button type="button" onclick={() => step(-1)} disabled={hourIndex === 0} aria-label="Hora anterior"><ChevronLeft size={17} /></button>
-        <button class="play" class:active={playing} type="button" onclick={() => (playing = !playing)} aria-label={playing ? 'Pausar' : 'Reproducir'}>
+        <button class="play" class:active={playing} type="button" onclick={togglePlayback} aria-label={playing ? 'Pausar' : 'Reproducir'}>
           {#if playing}<Pause size={16} />{:else}<Play size={16} />{/if}
         </button>
         <div class="time-range">

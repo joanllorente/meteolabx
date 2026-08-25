@@ -104,7 +104,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "fetchAromeCatalog" in view
     assert "fetchAromeFrame" in view
     assert "getCachedAromeFrame" in view
-    assert "setTimeout(() =>" not in view[view.index("$effect(() => {"):]
+    assert "}, 350);" not in view
     assert "ForecastGrid" in view
     assert "resetKey" in view
     assert (ROOT / "data" / "ne_50m_admin_1_states_provinces.geojson").exists()
@@ -133,7 +133,9 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     )
     assert "FORECAST_DATA_REVISION" in api
     assert "forecast-fields-v14" in api
-    assert "FRAME_CACHE_LIMIT = 4" in api
+    assert "FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024" in api
+    assert "shareFrameGeometry" in api
+    assert "frameCacheBytes" in api
     assert "params.set('run', run)" in api
     production_start = (ROOT / "scripts" / "start_web.sh").read_text(encoding="utf-8")
     assert "-m scripts.forecast_worker" in production_start
@@ -143,6 +145,9 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "--watch" in production_start
     assert "METEOLABX_FORECAST_WORKER_INTERVAL_S:-60" in production_start
     assert "has_overlay" in api
+    assert "togglePlayback" in view
+    assert "nextReadyHourIndex" in view
+    assert "hourIndex = nextIndex" in view
 
     grid = (ROOT / "prototype-svelte" / "src" / "components" / "ForecastGrid.svelte").read_text(
         encoding="utf-8"
