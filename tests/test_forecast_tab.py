@@ -120,6 +120,11 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "Progreso de cada RUN" in view
     assert "run-progress-list" in view
     assert "runProgress(item).toLocaleString('es-ES')" in view
+    assert "productProgress(item)" in view
+    assert "product-status {availability.state}" in view
+    assert "availability.state === 'complete' ? '✓'" in view
+    assert "class:ready={hourIsReady(hour)}" in view
+    assert "UTC pendiente" in view
 
     api = (ROOT / "prototype-svelte" / "src" / "services" / "forecastApi.js").read_text(
         encoding="utf-8"
