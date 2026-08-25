@@ -103,6 +103,8 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "Selector de mapas" in view
     assert "fetchAromeCatalog" in view
     assert "fetchAromeFrame" in view
+    assert "getCachedAromeFrame" in view
+    assert "setTimeout(() =>" not in view[view.index("$effect(() => {"):]
     assert "ForecastGrid" in view
     assert "resetKey" in view
     assert (ROOT / "data" / "ne_50m_admin_1_states_provinces.geojson").exists()
@@ -131,6 +133,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     )
     assert "FORECAST_DATA_REVISION" in api
     assert "forecast-fields-v14" in api
+    assert "FRAME_CACHE_LIMIT = 4" in api
     assert "params.set('run', run)" in api
     production_start = (ROOT / "scripts" / "start_web.sh").read_text(encoding="utf-8")
     assert "-m scripts.forecast_worker" in production_start

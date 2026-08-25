@@ -11,6 +11,32 @@ const localBase = typeof window !== 'undefined' && ['127.0.0.1', 'localhost'].in
   : '';
 const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
 const FORECAST_DATA_REVISION = 'forecast-fields-v14';
+const FRAME_CACHE_LIMIT = 4;
+const frameCache = new Map();
+
+function frameCacheKey({ product, validTime, run, verticalKind, level } = {}) {
+  return [FORECAST_DATA_REVISION, run || '', product || '', validTime || '', verticalKind || '', level ?? ''].join('|');
+}
+
+export function getCachedAromeFrame(options = {}) {
+  const key = frameCacheKey(options);
+  const frame = frameCache.get(key);
+  if (!frame) return null;
+  // Actualiza el orden LRU para conservar las horas usadas más recientemente.
+  frameCache.delete(key);
+  frameCache.set(key, frame);
+  return frame;
+}
+
+function rememberAromeFrame(options, frame) {
+  const key = frameCacheKey(options);
+  frameCache.delete(key);
+  frameCache.set(key, frame);
+  while (frameCache.size > FRAME_CACHE_LIMIT) {
+    frameCache.delete(frameCache.keys().next().value);
+  }
+  return frame;
+}
 
 async function getJson(path, { signal } = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -28,6 +54,9 @@ export function fetchAromeCatalog({ signal } = {}) {
 }
 
 export function fetchAromeFrame({ product, validTime, run, verticalKind, level, signal } = {}) {
+  const options = { product, validTime, run, verticalKind, level };
+  const cached = getCachedAromeFrame(options);
+  if (cached) return Promise.resolve(cached);
   const params = new URLSearchParams({
     product,
     valid_time: validTime,
@@ -66,7 +95,7 @@ export function fetchAromeFrame({ product, validTime, run, verticalKind, level, 
     const u = header.has_vectors ? readMatrix() : null;
     const v = header.has_vectors ? readMatrix() : null;
     const overlay = header.has_overlay ? readMatrix() : null;
-    return { ...header, values, u, v, overlay };
+    return rememberAromeFrame(options, { ...header, values, u, v, overlay });
   });
 }
 

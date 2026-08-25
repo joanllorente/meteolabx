@@ -7,7 +7,7 @@
   import ForecastGrid from '../components/ForecastGrid.svelte';
   import MathFormula from '../components/MathFormula.svelte';
   import { forecastCategories, forecastProducts, forecastCatalogSummary } from '../data/forecastProducts.js';
-  import { fetchAromeCatalog, fetchAromeFrame } from '../services/forecastApi.js';
+  import { fetchAromeCatalog, fetchAromeFrame, getCachedAromeFrame } from '../services/forecastApi.js';
 
   const assetBase = import.meta.env.BASE_URL;
   const hours = Array.from({ length: 18 }, (_, i) => ({
@@ -223,34 +223,40 @@
       frameError = '';
       return;
     }
+    const frameOptions = {
+      product: productId,
+      validTime,
+      run: requestedRun,
+      verticalKind: productId === 'wind-level' ? requestedWindKind : undefined,
+      level: productId === 'wind-level' ? requestedWindLevel : undefined
+    };
+    const cachedFrame = getCachedAromeFrame(frameOptions);
+    if (cachedFrame) {
+      frameRequest?.abort();
+      frameData = cachedFrame;
+      frameLoading = false;
+      framePending = false;
+      frameError = '';
+      return;
+    }
     frameRequest?.abort();
     const controller = new AbortController();
     frameRequest = controller;
     frameLoading = true;
     framePending = false;
     frameError = '';
-    const timer = window.setTimeout(() => {
-      fetchAromeFrame({
-        product: productId,
-        validTime,
-        run: requestedRun,
-        verticalKind: productId === 'wind-level' ? requestedWindKind : undefined,
-        level: productId === 'wind-level' ? requestedWindLevel : undefined,
-        signal: controller.signal
+    fetchAromeFrame({ ...frameOptions, signal: controller.signal })
+      .then((frame) => {
+        if (controller.signal.aborted) return;
+        frameData = frame;
+        frameLoading = false;
       })
-        .then((frame) => {
-          if (controller.signal.aborted) return;
-          frameData = frame;
-          frameLoading = false;
-        })
-        .catch((error) => {
-          if (error.name === 'AbortError') return;
-          frameError = error.message;
-          frameLoading = false;
-        });
-    }, 350);
+      .catch((error) => {
+        if (error.name === 'AbortError') return;
+        frameError = error.message;
+        frameLoading = false;
+      });
     return () => {
-      window.clearTimeout(timer);
       controller.abort();
     };
   });
