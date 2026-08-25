@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import struct
@@ -27,6 +28,7 @@ from server.services.forecast_store import (
 )
 from scripts.forecast_worker import pending_hours
 from scripts import forecast_worker
+from tabs import arome_forecast
 
 
 RUN = "2026-08-24T12:00:00Z"
@@ -209,6 +211,20 @@ def test_isolated_worker_reuses_an_existing_frame(monkeypatch, tmp_path: Path):
     # Usa un proceso spawn real. Si la coordinación o la configuración no son
     # serializables, esta llamada falla aunque no sea necesario consultar la API.
     forecast_worker._run_isolated_job(job, 15)
+
+
+def test_arome_request_throttle_is_shared_between_threads(monkeypatch, tmp_path: Path):
+    throttle_file = tmp_path / "request-throttle"
+    monkeypatch.setenv("METEOLABX_AROME_REQUEST_THROTTLE_FILE", str(throttle_file))
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(arome_forecast._wait_for_api_request_slot, 0.05)
+            for _ in range(2)
+        ]
+        for future in futures:
+            future.result()
+    assert time.monotonic() - started >= 0.045
 
 
 def test_worker_continues_after_one_frame_failure(monkeypatch, tmp_path: Path):

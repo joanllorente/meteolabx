@@ -266,6 +266,45 @@ def _credential_headers(token: str) -> Dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Accept": "*/*"}
 
 
+def _wait_for_api_request_slot(interval: float | None = None) -> None:
+    """Escalona GetCoverage entre todos los procesos del contenedor."""
+    delay_between_requests = max(
+        0.1,
+        float(
+            interval
+            if interval is not None
+            else os.getenv("METEOLABX_AROME_REQUEST_INTERVAL_S", "0.5")
+        ),
+    )
+    lock_path = Path(
+        os.getenv(
+            "METEOLABX_AROME_REQUEST_THROTTLE_FILE",
+            "/tmp/meteolabx-arome-request-throttle",
+        )
+    )
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - producción y desarrollo son Unix
+        time.sleep(delay_between_requests)
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="ascii") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            handle.seek(0)
+            raw_next = handle.read().strip()
+            next_request = float(raw_next) if raw_next else 0.0
+            delay = next_request - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            handle.seek(0)
+            handle.truncate()
+            handle.write(str(time.monotonic() + delay_between_requests))
+            handle.flush()
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 @st.cache_data(ttl=900, show_spinner=False, max_entries=256)
 def _api_get(
     url: str,
@@ -276,6 +315,8 @@ def _api_get(
     last_connection_error: Optional[requests.RequestException] = None
     for attempt in range(API_MAX_ATTEMPTS):
         try:
+            if url.rstrip("/").endswith("GetCoverage"):
+                _wait_for_api_request_slot()
             response = requests.get(
                 url,
                 params=list(params),
