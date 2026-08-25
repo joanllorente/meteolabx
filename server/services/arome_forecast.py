@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import struct
 import time
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -1022,6 +1022,84 @@ def frame_grid(
     field, config, headers = _computed_frame(
         token, product_id, valid_time_iso, vertical_kind, level, run_iso
     )
+    return _serialize_grid(product_id, field, config, headers), headers
+
+
+def accumulated_precip_series(
+    token: str,
+    valid_times: tuple[str, ...],
+    run_iso: str = "",
+) -> Iterator[tuple[str, bytes, dict[str, str]]]:
+    """Acumulado de precipitación de varias horas con una descarga por hora.
+
+    Resolver cada hora por separado obliga a rebajar de nuevo todos los
+    incrementos anteriores, lo que hace el número de peticiones cuadrático
+    (1.326 para una pasada de 51 horas en lugar de 51). Aquí se recorren las
+    horas en orden llevando la suma acumulada.
+
+    El resultado es el mismo que el del camino por hora: se recortan los
+    negativos incremento a incremento y todos se alinean sobre la rejilla del
+    primer campo, igual que hacía `_computed_frame`.
+    """
+    product_id = "accumulated-precip"
+    config, client, catalog, prefixes, run, times = _product_context(
+        token, product_id, run_iso=run_iso
+    )
+    requested = {_parse_time(value) for value in valid_times}
+    increments = [value for value in times if value > run and value in requested]
+    if not increments:
+        return
+    # La serie necesita cada hora desde la pasada, aunque no todas se publiquen.
+    horizon = max(increments)
+    ordered = [value for value in times if run < value <= horizon]
+
+    reference: RasterField | None = None
+    accumulated: np.ndarray | None = None
+    for valid_time in ordered:
+        increment = client.get_field(
+            catalog,
+            prefixes["field"],
+            run,
+            valid_time,
+            None,
+            None,
+            period=str(config["period"]),
+        )
+        if reference is None:
+            reference = increment
+            accumulated = np.maximum(np.asarray(increment.data, dtype=float), 0.0)
+        else:
+            accumulated = accumulated + np.maximum(_align(reference, increment), 0.0)
+        if valid_time not in requested:
+            continue
+        frame = RasterField(
+            accumulated * float(config.get("scale", 1.0)),
+            reference.transform,
+            reference.crs,
+            reference.bounds,
+            str(config["unit"]),
+        )
+        finite = frame.data[np.isfinite(frame.data)]
+        headers = {
+            "X-AROME-Run": run.isoformat().replace("+00:00", "Z"),
+            "X-AROME-Valid-Time": valid_time.isoformat().replace("+00:00", "Z"),
+            "X-AROME-Max": f"{float(np.nanmax(finite)) if finite.size else float('nan'):.3f}",
+            "X-AROME-Unit": str(config["unit"]),
+        }
+        yield (
+            headers["X-AROME-Valid-Time"],
+            _serialize_grid(product_id, frame, config, headers),
+            headers,
+        )
+
+
+def _serialize_grid(
+    product_id: str,
+    field: RasterField,
+    config: dict[str, Any],
+    headers: dict[str, str],
+) -> bytes:
+    """Empaqueta un campo ya calculado en el formato de rejilla del visor."""
     regions_geojson = _load_forecast_regions_geojson()
     calculation_scope = forecast_calculation_scope()
     if calculation_scope == "catalonia":
@@ -1109,4 +1187,4 @@ def frame_grid(
     body.extend(encoded_header)
     for chunk in body_chunks:
         body.extend(chunk)
-    return bytes(body), headers
+    return bytes(body)

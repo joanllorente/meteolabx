@@ -18,7 +18,11 @@ import time
 from typing import Any, Iterator
 
 from server.config import get_settings
-from server.services.arome_forecast import catalog_payload, frame_grid
+from server.services.arome_forecast import (
+    accumulated_precip_series,
+    catalog_payload,
+    frame_grid,
+)
 from server.services.forecast_store import (
     CONVECTIVE_FORECAST_PRODUCTS,
     DERIVED_FORECAST_PRODUCTS,
@@ -58,8 +62,14 @@ FAST_DERIVED_PRODUCTS = tuple(
 SHEAR_PRODUCTS = tuple(
     product for product in FAST_DERIVED_PRODUCTS if product.startswith("shear-")
 )
+ACCUMULATED_PRECIP_PRODUCT = "accumulated-precip"
+# El acumulado se resuelve de una vez para toda la pasada: cada hora depende de
+# los incrementos anteriores, así que publicarlas por separado los descargaba
+# una y otra vez.
 STANDALONE_FAST_PRODUCTS = tuple(
-    product for product in FAST_DERIVED_PRODUCTS if product not in SHEAR_PRODUCTS
+    product
+    for product in FAST_DERIVED_PRODUCTS
+    if product not in SHEAR_PRODUCTS and product != ACCUMULATED_PRECIP_PRODUCT
 )
 PRODUCT_ORDER = {
     product: index
@@ -80,10 +90,18 @@ class ForecastJob:
     products: tuple[str, ...]
     scope: str
     tier: int
+    # Horas adicionales que resuelve el mismo trabajo. Solo la usa el acumulado
+    # de precipitación, que recorre la pasada entera para no volver a descargar
+    # los incrementos anteriores en cada hora.
+    valid_times: tuple[str, ...] = ()
 
     @property
     def label(self) -> str:
         return ",".join(self.products)
+
+    @property
+    def covered_times(self) -> tuple[str, ...]:
+        return self.valid_times or (self.valid_time,)
 
 
 def _utc_now() -> str:
@@ -311,6 +329,31 @@ def _jobs_for_manifest(
         _grouped_jobs(manifest, SHEAR_PRODUCTS, allowed_times, now, tier=1)
     )
 
+    accumulated_state = (manifest.get("products") or {}).get(
+        ACCUMULATED_PRECIP_PRODUCT
+    ) or {}
+    accumulated_available = set(accumulated_state.get("available_times", ()))
+    accumulated_pending = tuple(
+        valid_time
+        for valid_time in _product_times(manifest, ACCUMULATED_PRECIP_PRODUCT)
+        if valid_time in allowed_times
+        and valid_time not in accumulated_available
+        and _retry_is_due(accumulated_state, valid_time, now)
+    )
+    if accumulated_pending:
+        jobs.append(
+            ForecastJob(
+                run_iso,
+                # La última hora representa al trabajo en el progreso y en el
+                # orden de la cola; las demás viajan en valid_times.
+                accumulated_pending[-1],
+                (ACCUMULATED_PRECIP_PRODUCT,),
+                scope,
+                1,
+                accumulated_pending,
+            )
+        )
+
     jobs.extend(
         _grouped_jobs(
             manifest, CONVECTIVE_FORECAST_PRODUCTS, allowed_times, now, tier=2
@@ -341,6 +384,9 @@ def _frame_path(store, job: ForecastJob, product: str) -> str:
 
 def _calculate_and_store_job(token: str, store, job: ForecastJob) -> None:
     """Calcula los productos del trabajo reutilizando el perfil convectivo."""
+    if job.products == (ACCUMULATED_PRECIP_PRODUCT,) and job.valid_times:
+        _store_accumulated_precip_series(token, store, job)
+        return
     for product in job.products:
         key = _frame_path(store, job, product)
         if store.exists(key):
@@ -352,6 +398,31 @@ def _calculate_and_store_job(token: str, store, job: ForecastJob) -> None:
             run_iso=job.run,
         )
         write_grid(store, key, content)
+
+
+def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> None:
+    """Publica todas las horas del acumulado con una descarga por hora."""
+    pending = tuple(
+        valid_time
+        for valid_time in job.valid_times
+        if not store.exists(
+            frame_key(
+                job.run, ACCUMULATED_PRECIP_PRODUCT, valid_time, scope=job.scope
+            )
+        )
+    )
+    if not pending:
+        return
+    for valid_time, content, _headers in accumulated_precip_series(
+        token, pending, run_iso=job.run
+    ):
+        write_grid(
+            store,
+            frame_key(
+                job.run, ACCUMULATED_PRECIP_PRODUCT, valid_time, scope=job.scope
+            ),
+            content,
+        )
 
 
 def _isolated_job_entry(result_queue, payload: dict[str, Any]) -> None:
@@ -488,9 +559,11 @@ def _mark_job_finished(manifest: dict[str, Any], job: ForecastJob) -> int:
         state = manifest.setdefault("products", {}).setdefault(
             product, {"available_times": [], "errors": {}}
         )
-        if job.valid_time not in set(state.get("available_times", ())):
-            mark_available(manifest, product, job.valid_time)
-            completed += 1
+        available = set(state.get("available_times", ()))
+        for valid_time in job.covered_times:
+            if valid_time not in available:
+                mark_available(manifest, product, valid_time)
+                completed += 1
     _clear_active_job(manifest, job)
     manifest.setdefault("progress", {})["last_completed"] = {
         "run": job.run,
@@ -520,13 +593,14 @@ def _mark_job_failed(
         datetime.now(timezone.utc) + timedelta(seconds=delay_s)
     ).isoformat().replace("+00:00", "Z")
     for product in job.products:
-        mark_error(
-            manifest,
-            product,
-            job.valid_time,
-            message,
-            retry_after=retry_after,
-        )
+        for valid_time in job.covered_times:
+            mark_error(
+                manifest,
+                product,
+                valid_time,
+                message,
+                retry_after=retry_after,
+            )
     _clear_active_job(manifest, job)
 
 

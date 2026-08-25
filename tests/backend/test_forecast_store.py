@@ -110,10 +110,19 @@ def test_incremental_worker_is_idempotent(monkeypatch, tmp_path: Path):
         header = json.dumps(metadata).encode()
         return struct.pack("<I", len(header)) + header + struct.pack("<f", 1.0), {}
 
+    def fake_series(_token, valid_times, run_iso=""):
+        # El acumulado no pasa por frame_grid: resuelve la pasada de una vez.
+        for valid_time in valid_times:
+            content, _ = fake_grid(
+                _token, "accumulated-precip", valid_time, run_iso=run_iso
+            )
+            yield valid_time, content, {}
+
     monkeypatch.setattr(forecast_worker, "get_settings", lambda: SimpleNamespace(arome_api_key="token"))
     monkeypatch.setattr(forecast_worker, "get_forecast_store", lambda: store)
     monkeypatch.setattr(forecast_worker, "catalog_payload", lambda _token: catalog)
     monkeypatch.setattr(forecast_worker, "frame_grid", fake_grid)
+    monkeypatch.setattr(forecast_worker, "accumulated_precip_series", fake_series)
     monkeypatch.setattr(forecast_worker, "forecast_calculation_scope", lambda: "catalonia")
 
     first = forecast_worker.run_incremental_cycle(max_hours=1)
@@ -170,9 +179,11 @@ def test_shear_products_share_one_job_per_hour():
     for job in shear_jobs:
         assert set(job.products) == set(forecast_worker.SHEAR_PRODUCTS)
         assert job.tier == 1
-    # accumulated-precip no comparte cálculo: sigue yendo por su cuenta.
+    # El acumulado va en un único trabajo que cubre todas las horas: cada una
+    # depende de los incrementos anteriores.
     accumulated = [job for job in jobs if job.products == ("accumulated-precip",)]
-    assert len(accumulated) == 2
+    assert len(accumulated) == 1
+    assert accumulated[0].covered_times == (H1, H2)
 
 
 def test_shear_set_downloads_surface_wind_once(monkeypatch):
@@ -464,3 +475,74 @@ def test_frame_grid_v2_roundtrips_through_the_viewer_decoder(monkeypatch):
 
     rebuilt = np.hypot(decoded["u"], decoded["v"])
     assert np.abs(rebuilt[valid] - speed[valid]).max() < 0.05
+
+
+def test_accumulated_precip_series_matches_per_hour_path(monkeypatch):
+    """Acumular en una pasada da el mismo mapa que rehacer cada hora.
+
+    Resolver hora a hora volvía a descargar todos los incrementos anteriores
+    (300 peticiones para 24 horas en lugar de 24). La suma es la misma: solo
+    cambia cuándo se hace.
+    """
+    import numpy as np
+    from datetime import timedelta
+    from server.services import arome_forecast as sa
+
+    run = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
+    hours = [run + timedelta(hours=h) for h in range(1, 13)]
+    rng = np.random.default_rng(4)
+    increments = {hour: rng.normal(0.4, 1.2, (12, 16)) for hour in hours}
+    increments[hours[0]][0, 0] = np.nan  # hueco sin dato
+    downloads: list[datetime] = []
+
+    class FakeClient:
+        def get_field(self, _catalog, _prefix, _run, valid_time, *a, **k):
+            downloads.append(valid_time)
+            return arome_forecast.RasterField(
+                increments[valid_time].copy(), None, None, (0.0, 40.0, 1.0, 41.0), "mm"
+            )
+
+    config = sa.PRODUCTS["accumulated-precip"]
+    monkeypatch.setattr(
+        sa,
+        "_product_context",
+        lambda *a, **k: (config, FakeClient(), None, {"field": "P"}, run, hours),
+    )
+    monkeypatch.setattr(sa, "_align", lambda _ref, field: field.data)
+    monkeypatch.setattr(sa, "_load_forecast_regions_geojson", lambda: {"features": []})
+    monkeypatch.setattr(sa, "_model_boundary_geojson", lambda *a, **k: {"features": []})
+    monkeypatch.setattr(sa, "forecast_calculation_scope", lambda: "model")
+
+    targets = tuple(h.isoformat().replace("+00:00", "Z") for h in hours)
+    produced = {
+        valid_time: content
+        for valid_time, content, _ in sa.accumulated_precip_series(
+            "token", targets, run_iso=run.isoformat()
+        )
+    }
+
+    assert len(produced) == len(hours)
+    # Una descarga por hora, no una por cada par (hora, hora anterior).
+    assert len(downloads) == len(hours)
+
+    for index, hour in enumerate(hours):
+        expected = np.maximum(increments[hours[0]].astype(float), 0.0)
+        for previous in hours[1:index + 1]:
+            expected = expected + np.maximum(increments[previous], 0.0)
+
+        content = produced[hour.isoformat().replace("+00:00", "Z")]
+        header_length = struct.unpack("<I", content[:4])[0]
+        header = json.loads(content[4:4 + header_length])
+        body = content[4 + header_length:]
+        cells = header["width"] * header["height"]
+        scale = header["arrays"][0]
+        raw = np.frombuffer(body, dtype="u1", count=cells * 2)
+        codes = (raw[:cells].astype(np.uint32) << 8) | raw[cells:].astype(np.uint32)
+        decoded = np.where(
+            codes == 0, np.nan, scale["offset"] + (codes.astype(float) - 1) * scale["step"]
+        ).reshape(header["height"], header["width"])
+
+        finite = np.isfinite(expected)
+        assert (np.isfinite(decoded) == finite).all()
+        # Solo debe separarlos el redondeo del formato, nunca la acumulación.
+        assert np.abs(expected[finite] - decoded[finite]).max() <= scale["step"] / 2 + 1e-9
