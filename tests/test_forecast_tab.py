@@ -260,5 +260,8 @@ def test_production_streamlit_runner_registers_clean_forecast_route_first():
     assert 're.compile(r"^/forecast/?$")' in runner
     assert "app.wildcard_router.rules.insert(0, route)" in runner
     assert 'Content-Type", "text/html; charset=UTF-8' in runner
+    assert "decompress_response=False" in runner
+    assert '"Content-Encoding"' in runner
+    assert '"Accept-Encoding"' in runner
     assert 'scripts/run_streamlit.py meteolabx.py' in start
     assert 'scripts/run_streamlit.py meteolabx.py' in local_start

@@ -54,9 +54,17 @@ class ForecastApiProxyHandler(RequestHandler):
         request = HTTPRequest(
             target,
             method=self.request.method,
-            headers={"Accept": self.request.headers.get("Accept", "*/*")},
+            headers={
+                "Accept": self.request.headers.get("Accept", "*/*"),
+                "Accept-Encoding": self.request.headers.get("Accept-Encoding", "gzip"),
+            },
             request_timeout=180,
             follow_redirects=False,
+            # Los grids ya están comprimidos en el volumen. Tornado los
+            # descomprimiría por defecto y dejaría el Content-Length original,
+            # rompiendo la respuesta del proxy. Se reenvían intactos para que
+            # sea el navegador quien los descomprima automáticamente.
+            decompress_response=False,
         )
         try:
             response = await AsyncHTTPClient().fetch(request, raise_error=False)
@@ -66,7 +74,17 @@ class ForecastApiProxyHandler(RequestHandler):
             return
 
         self.set_status(response.code)
-        for header in ("Content-Type", "Content-Length", "Cache-Control", "ETag"):
+        for header in (
+            "Content-Type",
+            "Content-Length",
+            "Content-Encoding",
+            "Cache-Control",
+            "ETag",
+            "Vary",
+            "X-AROME-Run",
+            "X-AROME-Valid-Time",
+            "X-MeteoLabX-Precomputed",
+        ):
             if value := response.headers.get(header):
                 self.set_header(header, value)
         if self.request.method == "HEAD":
