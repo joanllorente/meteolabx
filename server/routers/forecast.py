@@ -80,10 +80,22 @@ def get_progress() -> dict:
 
 @router.get("/catalog", summary="Catálogo de diagnósticos AROME conectados")
 def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
+    store = get_forecast_store()
+    manifest = read_json(store, LATEST_MANIFEST_KEY)
     try:
-        payload = deepcopy(catalog_payload(_token(settings)))
-        store = get_forecast_store()
-        manifest = read_json(store, LATEST_MANIFEST_KEY)
+        persisted_products = deepcopy((manifest or {}).get("catalog_products") or {})
+        if persisted_products:
+            # El visor publicado no debe depender de una llamada en vivo a
+            # Météo-France: el worker ya dejó en el volumen el catálogo exacto
+            # de este RUN junto con sus horas disponibles.
+            payload = {
+                "model": "AROME France",
+                "resolution": "0,025°",
+                "domain": {},
+                "products": persisted_products,
+            }
+        else:
+            payload = deepcopy(catalog_payload(_token(settings)))
         payload = augment_catalog_with_manifest(
             payload,
             manifest,

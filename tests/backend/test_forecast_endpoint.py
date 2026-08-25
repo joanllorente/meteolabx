@@ -63,6 +63,41 @@ def test_forecast_catalog_returns_connected_products(monkeypatch):
     assert response.json()["products"] == {"shear-06": {}}
 
 
+def test_forecast_catalog_uses_persisted_manifest_without_provider(monkeypatch, tmp_path):
+    run = "2026-08-25T06:00:00Z"
+    valid = "2026-08-25T07:00:00Z"
+    product = {
+        "run": run,
+        "run_local": run,
+        "valid_times": [valid],
+        "unit": "°C",
+        "vmax": 42,
+    }
+    store = LocalObjectStore(tmp_path)
+    manifest = new_manifest(run, [valid], catalog_products={"temperature-2m": product})
+    mark_available(manifest, "temperature-2m", valid)
+    write_json(store, LATEST_MANIFEST_KEY, manifest)
+    register_run_slot(store, manifest)
+    monkeypatch.setattr(forecast, "get_forecast_store", lambda: store)
+    monkeypatch.setattr(
+        forecast,
+        "catalog_payload",
+        lambda _token: (_ for _ in ()).throw(AssertionError("consulta en vivo a Météo-France")),
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        arome_api_key="",
+        ranking_refresh_enabled=False,
+        forecast_precomputed_only=True,
+    )
+    with TestClient(app) as client:
+        response = client.get("/v1/forecast/arome/catalog")
+
+    assert response.status_code == 200
+    assert response.json()["products"]["temperature-2m"]["available_times"] == [valid]
+
+
 def test_forecast_catalog_skips_one_missing_optional_coverage(monkeypatch):
     from datetime import datetime, timezone
 
