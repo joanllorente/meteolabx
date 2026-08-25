@@ -737,26 +737,31 @@ def _convective_outputs_in_stripes(
     if step <= 0 or step >= rows:
         return _convective_outputs(*arguments)
 
-    stripes: list[dict[str, np.ndarray]] = []
+    # Cada banda se vuelca sobre el resultado final y se descarta. Acumularlas
+    # todas para concatenarlas al final mantenía dos copias completas de los
+    # catorce campos en el momento de mayor consumo.
+    merged: dict[str, np.ndarray] = {}
     for start in range(0, rows, step):
         band = slice(start, min(start + step, rows))
-        stripes.append(
-            _convective_outputs(
-                pressure[:, band],
-                temperature[:, band],
-                dewpoint[:, band],
-                u_profile[:, band],
-                v_profile[:, band],
-                terrain[band],
-                surface_u[band],
-                surface_v[band],
-                levels,
-            )
+        stripe = _convective_outputs(
+            pressure[:, band],
+            temperature[:, band],
+            dewpoint[:, band],
+            u_profile[:, band],
+            v_profile[:, band],
+            terrain[band],
+            surface_u[band],
+            surface_v[band],
+            levels,
         )
-    return {
-        name: np.concatenate([stripe[name] for stripe in stripes], axis=0)
-        for name in stripes[0]
-    }
+        for name, values in stripe.items():
+            if name not in merged:
+                merged[name] = np.empty(
+                    (rows, *values.shape[1:]), dtype=values.dtype
+                )
+            merged[name][band] = values
+        del stripe
+    return merged
 
 
 # Viento a 10 m de la hora en curso. Las tres cizalladuras parten del mismo
