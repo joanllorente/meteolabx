@@ -140,7 +140,11 @@ PREFIX_CANDIDATES = {
         "CONVECTIVE_AVAILABLE_POTENTIAL_ENERGY__GROUND_OR_WATER_SURFACE",
         "CAPE_INS__GROUND",
     ],
-    "cape_ml": ["MEAN_LAYER_CAPE__GROUND_OR_WATER_SURFACE"],
+    # El WCS responde con catálogos distintos según el backend que atienda:
+    # unas veces anuncia identificadores largos y otras abreviados, y ninguno
+    # de los dos conjuntos es completo. Se listan todos los alias conocidos
+    # para que el producto resuelva con cualquiera de ellos.
+    "cape_ml": ["MEAN_LAYER_CAPE__GROUND_OR_WATER_SURFACE", "MLCAPE__GROUND"],
     "height_temperature": [
         "TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND",
         "T__HEIGHT",
@@ -160,19 +164,26 @@ PREFIX_CANDIDATES = {
         "PRECIP__GROUND",
     ],
     "wind_gust_1h": [
+        # Solo alias de ráfaga MÁXIMA: el producto se publica como tal, y
+        # FF_RAF/WIND_SPEED_GUST son la ráfaga sin más.
+        "WIND_SPEED_MAXIMUM_GUST__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND",
         "WIND_SPEED_GUST_MAX__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND",
+        "FF_RAF_MAX__HEIGHT",
     ],
     "liquid_precipitation_1h": [
         "TOTAL_WATER_PRECIPITATION__GROUND_OR_WATER_SURFACE",
     ],
     "pressure_relative_humidity": [
         "RELATIVE_HUMIDITY__ISOBARIC_SURFACE",
+        "HU__ISOBARIC",
     ],
     "shortwave_down_1h": [
         "DOWNWARD_SHORT_WAVE_RADIATION_FLUX__GROUND_OR_WATER_SURFACE",
+        "FLSOLAIRE__GROUND",
     ],
     "total_cloud_cover": [
         "TOTAL_CLOUD_COVER__GROUND_OR_WATER_SURFACE",
+        "NEBUL__GROUND",
     ],
 }
 
