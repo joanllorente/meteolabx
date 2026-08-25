@@ -125,9 +125,10 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "forecast-fields-v13" in api
     assert "params.set('run', run)" in api
     production_start = (ROOT / "scripts" / "start_web.sh").read_text(encoding="utf-8")
-    assert "scripts/forecast_worker.py" in production_start
+    assert "-m scripts.forecast_worker" in production_start
+    assert "--isolate-tasks" in production_start
     assert "--watch" in production_start
-    assert "METEOLABX_FORECAST_WORKER_INTERVAL_S:-300" in production_start
+    assert "METEOLABX_FORECAST_WORKER_INTERVAL_S:-60" in production_start
     assert "has_overlay" in api
 
     grid = (ROOT / "prototype-svelte" / "src" / "components" / "ForecastGrid.svelte").read_text(

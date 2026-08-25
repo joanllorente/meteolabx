@@ -313,6 +313,14 @@ def new_manifest(
         "expected_times": sorted(set(expected_times)),
         "catalog_products": catalog_products or {},
         "products": {product: {"available_times": [], "errors": {}} for product in PERSISTED_FORECAST_PRODUCTS},
+        "progress": {
+            "frames_available": 0,
+            "frames_total": 0,
+            "percent": 0.0,
+            "error_count": 0,
+            "current_job": None,
+            "last_completed": None,
+        },
     }
 
 
@@ -363,14 +371,26 @@ def mark_available(manifest: dict[str, Any], product: str, valid_iso: str) -> No
         set(product_state.get("available_times", ())) | {valid_iso}
     )
     product_state.setdefault("errors", {}).pop(valid_iso, None)
+    product_state.setdefault("retry_after", {}).pop(valid_iso, None)
     manifest["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def mark_error(manifest: dict[str, Any], product: str, valid_iso: str, message: str) -> None:
+def mark_error(
+    manifest: dict[str, Any],
+    product: str,
+    valid_iso: str,
+    message: str,
+    *,
+    retry_after: str | None = None,
+) -> None:
     product_state = manifest.setdefault("products", {}).setdefault(
         product, {"available_times": [], "errors": {}}
     )
     product_state.setdefault("errors", {})[valid_iso] = str(message)[:500]
+    attempts = product_state.setdefault("attempts", {})
+    attempts[valid_iso] = int(attempts.get(valid_iso, 0)) + 1
+    if retry_after:
+        product_state.setdefault("retry_after", {})[valid_iso] = retry_after
     manifest["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
@@ -383,6 +403,7 @@ def augment_catalog_with_manifest(
         "status": manifest.get("status", "publishing") if manifest else "direct",
         "updated_at": manifest.get("updated_at") if manifest else None,
         "calculation_scope": manifest.get("calculation_scope") if manifest else None,
+        "progress": dict(manifest.get("progress") or {}) if manifest else None,
     }
     catalog["publication"] = publication
     if not manifest:

@@ -68,7 +68,8 @@ UVICORN_PID=$!
 # dentro de la imagen de Railway (la ejecución directa solo añade /app/scripts).
 "${PYTHON}" -m scripts.forecast_worker \
   --watch \
-  --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-300}" &
+  --isolate-tasks \
+  --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
 FORECAST_WORKER_PID=$!
 
 STREAMLIT_PID=""

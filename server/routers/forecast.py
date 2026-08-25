@@ -43,6 +43,30 @@ def _http_headers(headers: dict[str, str]) -> dict[str, str]:
     return {key: str(value).replace("°", "deg ") for key, value in headers.items()}
 
 
+@router.get("/progress", summary="Progreso de las pasadas AROME persistidas")
+def get_progress() -> dict:
+    """Devuelve solo los manifiestos locales, sin consultar Météo-France."""
+    store = get_forecast_store()
+    latest = read_json(store, LATEST_MANIFEST_KEY)
+    runs = retained_manifests(store)
+    return {
+        "run": latest.get("run") if latest else None,
+        "status": latest.get("status") if latest else "idle",
+        "worker_heartbeat_at": latest.get("worker_heartbeat_at") if latest else None,
+        "progress": dict(latest.get("progress") or {}) if latest else None,
+        "runs": [
+            {
+                "run": manifest.get("run"),
+                "status": manifest.get("status"),
+                "updated_at": manifest.get("updated_at"),
+                "worker_heartbeat_at": manifest.get("worker_heartbeat_at"),
+                "progress": dict(manifest.get("progress") or {}),
+            }
+            for manifest in runs
+        ],
+    }
+
+
 @router.get("/catalog", summary="Catálogo de diagnósticos AROME conectados")
 def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
     try:

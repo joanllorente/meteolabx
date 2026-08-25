@@ -216,6 +216,41 @@ def test_forecast_catalog_exposes_retained_run_slots(monkeypatch, tmp_path):
     assert response.json()["runs"][0]["products"]["temperature-2m"]["available_times"] == [runs[-1]]
 
 
+def test_forecast_progress_reads_only_persisted_manifests(monkeypatch, tmp_path):
+    store = LocalObjectStore(tmp_path)
+    manifest = new_manifest(
+        "2026-08-24T18:00:00Z",
+        ["2026-08-24T19:00:00Z"],
+        catalog_products={
+            "temperature-2m": {
+                "run": "2026-08-24T18:00:00Z",
+                "valid_times": ["2026-08-24T19:00:00Z"],
+            }
+        },
+    )
+    manifest["worker_heartbeat_at"] = "2026-08-25T00:20:00Z"
+    manifest["progress"].update(
+        {"frames_available": 7, "frames_total": 1139, "percent": 0.61}
+    )
+    write_json(store, forecast.run_manifest_key(manifest["run"]), manifest)
+    write_json(store, LATEST_MANIFEST_KEY, manifest)
+    register_run_slot(store, manifest)
+    monkeypatch.setattr(forecast, "get_forecast_store", lambda: store)
+    monkeypatch.setattr(
+        forecast,
+        "catalog_payload",
+        lambda _token: (_ for _ in ()).throw(AssertionError("consulta remota")),
+    )
+
+    with _app_with_key() as client:
+        response = client.get("/v1/forecast/arome/progress")
+
+    assert response.status_code == 200
+    assert response.json()["run"] == manifest["run"]
+    assert response.json()["progress"]["frames_available"] == 7
+    assert response.json()["worker_heartbeat_at"] == "2026-08-25T00:20:00Z"
+
+
 def test_forecast_boundaries_preserve_each_region_outline():
     payload = _boundary_payload({
         "features": [{

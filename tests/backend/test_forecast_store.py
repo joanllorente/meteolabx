@@ -69,6 +69,7 @@ def test_manifest_augments_catalog_without_hiding_provider_hours():
     assert result["products"]["ship"]["available_times"] == [H1]
     assert result["products"]["ship"]["available_until"] == H1
     assert result["publication"]["precomputed_only"] is True
+    assert result["publication"]["progress"]["current_job"] is None
 
 
 def test_pending_hours_returns_only_unpublished_frames():
@@ -114,6 +115,64 @@ def test_incremental_worker_is_idempotent(monkeypatch, tmp_path: Path):
     manifest = read_json(store, LATEST_MANIFEST_KEY)
     assert manifest["calculation_scope"] == "catalonia"
     assert manifest["products"]["ship"]["available_times"] == [H1]
+
+
+def test_worker_prioritizes_native_frames_and_groups_convective_diagnostics():
+    catalog_products = {
+        product: {"run": RUN, "valid_times": [H1, H2]}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(
+        RUN,
+        [H1, H2],
+        catalog_products=catalog_products,
+    )
+
+    jobs = forecast_worker._jobs_for_manifest(manifest)
+
+    assert jobs[0].tier == 0
+    assert all(job.tier == 0 for job in jobs[: len(forecast_worker.NATIVE_PRODUCTS) * 2])
+    convective = [job for job in jobs if job.tier == 2]
+    assert len(convective) == 2
+    assert set(convective[0].products) == set(forecast_worker.CONVECTIVE_FORECAST_PRODUCTS)
+
+
+def test_worker_continues_after_one_frame_failure(monkeypatch, tmp_path: Path):
+    store = LocalObjectStore(tmp_path)
+    products = ("temperature-2m", "temperature-850")
+    catalog = {
+        "products": {
+            product: {"run": RUN, "valid_times": [H1]}
+            for product in products
+        }
+    }
+
+    def fake_grid(_token, product, valid_time, *, run_iso=""):
+        del run_iso
+        if product == "temperature-2m":
+            raise RuntimeError("fallo controlado")
+        metadata = {
+            "product": product, "width": 1, "height": 1, "unit": "",
+            "run": RUN, "valid_time": valid_time, "maximum": 1.0,
+        }
+        header = json.dumps(metadata).encode()
+        return struct.pack("<I", len(header)) + header + struct.pack("<f", 1.0), {}
+
+    monkeypatch.setattr(forecast_worker, "get_settings", lambda: SimpleNamespace(arome_api_key="token"))
+    monkeypatch.setattr(forecast_worker, "get_forecast_store", lambda: store)
+    monkeypatch.setattr(forecast_worker, "catalog_payload", lambda _token: catalog)
+    monkeypatch.setattr(forecast_worker, "frame_grid", fake_grid)
+    monkeypatch.setattr(forecast_worker, "forecast_calculation_scope", lambda: "model")
+
+    result = forecast_worker.run_incremental_cycle(max_hours=1)
+    manifest = read_json(store, LATEST_MANIFEST_KEY)
+
+    assert result["failures"] == 1
+    assert result["frames_completed"] == 1
+    assert manifest["products"]["temperature-850"]["available_times"] == [H1]
+    assert H1 in manifest["products"]["temperature-2m"]["errors"]
+    assert manifest["progress"]["current_job"] is None
+    assert manifest["progress"]["frames_available"] == 1
 
 
 def test_local_scope_uses_a_separate_frame_namespace():
