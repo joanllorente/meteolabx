@@ -387,3 +387,43 @@ def test_debug_backend_allows_local_forecast_origin(monkeypatch):
         get_settings.cache_clear()
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:8501"
+
+
+def test_domain_boundaries_are_cached_without_changing_the_result(tmp_path, monkeypatch):
+    """Las fronteras cacheadas deben coincidir con el recorte directo.
+
+    Recortar los GeoJSON completos cuesta ~110 MB por proceso y da siempre lo
+    mismo para unos límites dados; se guarda reducido y se reutiliza.
+    """
+    from server.services import arome_forecast as sa
+
+    monkeypatch.setenv("METEOLABX_FORECAST_BOUNDARY_CACHE_DIR", str(tmp_path))
+    sa._boundary_payload_from_disk.cache_clear()
+    bounds = sa.AROME_MODEL_GRID_BOUNDS
+
+    directo = sa._boundary_payload(
+        sa._model_boundary_geojson(sa._load_forecast_regions_geojson(), bounds)
+    )
+    generado = sa._domain_boundary_payload(bounds, "model")
+    assert generado == directo
+    assert list(tmp_path.glob("boundaries-*.json")), "no se escribió la caché"
+
+    # Un proceso posterior lee del disco: mismo resultado, sin recortar nada.
+    sa._boundary_payload_from_disk.cache_clear()
+    assert sa._domain_boundary_payload(bounds, "model") == directo
+
+
+def test_boundary_cache_falls_back_when_the_directory_is_unusable(tmp_path, monkeypatch):
+    """Sin caché escribible el resultado debe seguir siendo correcto."""
+    from server.services import arome_forecast as sa
+
+    bloqueado = tmp_path / "fichero"
+    bloqueado.write_text("no soy un directorio", encoding="utf-8")
+    monkeypatch.setenv("METEOLABX_FORECAST_BOUNDARY_CACHE_DIR", str(bloqueado))
+    sa._boundary_payload_from_disk.cache_clear()
+    bounds = sa.AROME_MODEL_GRID_BOUNDS
+
+    esperado = sa._boundary_payload(
+        sa._model_boundary_geojson(sa._load_forecast_regions_geojson(), bounds)
+    )
+    assert sa._domain_boundary_payload(bounds, "model") == esperado

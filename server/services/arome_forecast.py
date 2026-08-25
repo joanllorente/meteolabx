@@ -6,11 +6,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from functools import lru_cache
 from io import BytesIO
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import struct
+import tempfile
 import time
 from typing import Any, Iterator
 
@@ -186,6 +188,54 @@ def _boundary_payload(geojson: dict[str, Any]) -> list[dict[str, Any]]:
                 "rings": rings,
             })
     return result
+
+
+def _domain_boundary_payload(
+    bounds: tuple[float, float, float, float], scope: str
+) -> list[dict[str, Any]]:
+    """Anillos de frontera del dominio, reutilizados entre procesos.
+
+    Recortar los GeoJSON completos cuesta ~110 MB y algo más de un segundo, y
+    da siempre el mismo resultado para unos límites dados: apenas 1 MB de
+    anillos. Cada trabajo del worker es un proceso nuevo, así que el resultado
+    se deja en disco y los siguientes solo leen eso.
+    """
+    return _boundary_payload_from_disk(bounds, scope)
+
+
+@lru_cache(maxsize=4)
+def _boundary_payload_from_disk(
+    bounds: tuple[float, float, float, float], scope: str
+) -> list[dict[str, Any]]:
+    firma = hashlib.sha1(
+        f"{scope}|{'|'.join(f'{value:.4f}' for value in bounds)}".encode()
+    ).hexdigest()[:16]
+    cache_path = _boundary_cache_dir() / f"boundaries-{firma}.json"
+    try:
+        return json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    payload = _boundary_payload(
+        _model_boundary_geojson(_load_forecast_regions_geojson(), bounds)
+    )
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        # Se escribe aparte y se renombra para que otro proceso no lea un
+        # fichero a medias.
+        temporal = cache_path.with_suffix(f".{os.getpid()}.tmp")
+        temporal.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+        temporal.replace(cache_path)
+    except OSError:
+        # Sin caché el resultado es el mismo, solo más lento.
+        pass
+    return payload
+
+
+def _boundary_cache_dir() -> Path:
+    configured = os.getenv("METEOLABX_FORECAST_BOUNDARY_CACHE_DIR", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(tempfile.gettempdir()) / "meteolabx-boundaries"
 
 
 def _catalonia_only_geojson(geojson: dict[str, Any]) -> dict[str, Any]:
@@ -1198,17 +1248,17 @@ def _serialize_grid(
     headers: dict[str, str],
 ) -> bytes:
     """Empaqueta un campo ya calculado en el formato de rejilla del visor."""
-    regions_geojson = _load_forecast_regions_geojson()
     calculation_scope = forecast_calculation_scope()
     if calculation_scope == "catalonia":
-        catalonia_geojson = _catalonia_only_geojson(regions_geojson)
-        geometry = _catalonia_geometry(catalonia_geojson)
-        values = np.asarray(_mask_to_catalonia(field, geometry), dtype="<f4")
-        visible_geojson = _model_boundary_geojson(
-            regions_geojson, AROME_MODEL_GRID_BOUNDS
+        geometry = _catalonia_geometry(
+            _catalonia_only_geojson(_load_forecast_regions_geojson())
         )
+        values = np.asarray(_mask_to_catalonia(field, geometry), dtype="<f4")
+        boundary_bounds = AROME_MODEL_GRID_BOUNDS
     else:
-        visible_geojson = _model_boundary_geojson(regions_geojson, field.bounds)
+        # El dominio completo no necesita los GeoJSON en memoria: sus fronteras
+        # se sirven ya recortadas desde la caché.
+        boundary_bounds = tuple(float(value) for value in field.bounds)
         values = np.asarray(field.data, dtype="<f4")
     inside = np.isfinite(values)
     arrays = [values]
@@ -1274,7 +1324,7 @@ def _serialize_grid(
         "vertical_kind": headers.get("X-AROME-Level-Type"),
         "level": float(headers["X-AROME-Level"]) if "X-AROME-Level" in headers else None,
         "calculation_scope": calculation_scope,
-        "boundaries": _boundary_payload(visible_geojson),
+        "boundaries": _domain_boundary_payload(boundary_bounds, calculation_scope),
         "has_vectors": has_vectors,
         "has_overlay": has_overlay,
         "overlay_unit": field.overlay_units if has_overlay else None,
