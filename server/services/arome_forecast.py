@@ -852,6 +852,16 @@ def _convective_frames(
     dewpoint = np.minimum(np.stack(dewpoint_layers), temperature)
     u_profile = np.stack(u_layers)
     v_profile = np.stack(v_layers)
+
+    # Los campos descargados y las capas sueltas ya viven dentro de los
+    # perfiles apilados. Mantenerlos vivos durante el diagnóstico duplicaba el
+    # volumen completo en memoria, y el proceso moría por falta de ella.
+    pressure_layers = temperature_layers = dewpoint_layers = None
+    u_layers = v_layers = None
+    surface_dewpoint_field = surface_pressure_field = None
+    surface_u_field = surface_v_field = terrain_field = None
+    fetched.clear()
+
     outputs = _convective_outputs_in_stripes(
         pressure, temperature, dewpoint, u_profile, v_profile,
         terrain, surface_u, surface_v, levels,
