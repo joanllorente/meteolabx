@@ -64,7 +64,9 @@ UVICORN_PID=$!
 
 # 2) Worker AROME en segundo plano. Comprueba el catálogo cada cinco minutos,
 # completa solo los frames pendientes y conserva los cuatro turnos de RUN.
-"${PYTHON}" scripts/forecast_worker.py \
+# Ejecutarlo como módulo mantiene la raíz del proyecto en sys.path también
+# dentro de la imagen de Railway (la ejecución directa solo añade /app/scripts).
+"${PYTHON}" -m scripts.forecast_worker \
   --watch \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-300}" &
 FORECAST_WORKER_PID=$!
