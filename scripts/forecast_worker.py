@@ -199,6 +199,35 @@ def _publish_run_slot(store, manifest: dict[str, Any]) -> None:
     logger.info("RUN %s sustituido en el turno %sZ", previous_run, previous_run[11:13])
 
 
+def _merge_catalog_products(
+    stored: dict[str, Any], live: dict[str, Any]
+) -> dict[str, Any]:
+    """Conserva las horas ya conocidas de cada producto de la pasada.
+
+    Las coberturas del WCS aparecen y desaparecen mientras se publica un RUN, y
+    copiar el catálogo en vivo tal cual encogía el total: el progreso retrocedía
+    y las horas ya calculadas dejaban de contarse. Una hora publicada no se
+    despublica, así que se unen.
+    """
+    merged: dict[str, Any] = {}
+    for product in PERSISTED_FORECAST_PRODUCTS:
+        current = live.get(product)
+        previous = stored.get(product)
+        if current and previous:
+            item = dict(current)
+            item["valid_times"] = sorted(
+                set(current.get("valid_times", ()))
+                | set(previous.get("valid_times", ())),
+                key=_parse_iso,
+            )
+            merged[product] = item
+        elif current:
+            merged[product] = dict(current)
+        elif previous:
+            merged[product] = dict(previous)
+    return merged
+
+
 def _prepare_latest_manifest(
     store, catalog: dict[str, Any], calculation_scope: str
 ) -> dict[str, Any]:
@@ -230,8 +259,17 @@ def _prepare_latest_manifest(
             catalog_products=catalog_products,
         )
     else:
-        manifest["expected_times"] = expected
-        manifest["catalog_products"] = catalog_products
+        stored = manifest.get("catalog_products") or {}
+        manifest["catalog_products"] = _merge_catalog_products(stored, catalog_products)
+        manifest["expected_times"] = sorted(
+            set(expected)
+            | {
+                valid
+                for item in manifest["catalog_products"].values()
+                for valid in item.get("valid_times", ())
+            },
+            key=_parse_iso,
+        )
         manifest["status"] = "publishing"
         # Un contenedor anterior pudo morir con una tarea marcada como activa.
         manifest.setdefault("progress", {})["current_job"] = None

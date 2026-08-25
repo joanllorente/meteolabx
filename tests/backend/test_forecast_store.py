@@ -546,3 +546,44 @@ def test_accumulated_precip_series_matches_per_hour_path(monkeypatch):
         assert (np.isfinite(decoded) == finite).all()
         # Solo debe separarlos el redondeo del formato, nunca la acumulación.
         assert np.abs(expected[finite] - decoded[finite]).max() <= scale["step"] / 2 + 1e-9
+
+
+def test_progress_total_never_shrinks_when_a_product_disappears():
+    """El total no encoge si el WCS deja de listar una cobertura.
+
+    Las coberturas aparecen y desaparecen mientras se publica una pasada, y
+    copiar el catálogo en vivo tal cual hacía retroceder el porcentaje: las
+    horas ya calculadas dejaban de contarse en el denominador.
+    """
+    live = {
+        product: {"run": RUN, "valid_times": [H1, H2]}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    completo = forecast_worker._merge_catalog_products({}, live)
+    assert sum(len(item["valid_times"]) for item in completo.values()) == (
+        len(PERSISTED_FORECAST_PRODUCTS) * 2
+    )
+
+    # El WCS deja de publicar un producto y otro pierde una hora.
+    degradado = {k: dict(v) for k, v in live.items()}
+    del degradado["wind-gust"]
+    degradado["ship"]["valid_times"] = [H1]
+
+    fusionado = forecast_worker._merge_catalog_products(completo, degradado)
+    assert "wind-gust" in fusionado
+    assert fusionado["wind-gust"]["valid_times"] == [H1, H2]
+    assert fusionado["ship"]["valid_times"] == [H1, H2]
+    assert sum(len(item["valid_times"]) for item in fusionado.values()) == (
+        len(PERSISTED_FORECAST_PRODUCTS) * 2
+    )
+
+
+def test_progress_total_grows_as_the_run_publishes_more_hours():
+    """Las horas nuevas de la pasada sí se incorporan al total."""
+    inicial = forecast_worker._merge_catalog_products(
+        {}, {"ship": {"run": RUN, "valid_times": [H1]}}
+    )
+    ampliado = forecast_worker._merge_catalog_products(
+        inicial, {"ship": {"run": RUN, "valid_times": [H1, H2]}}
+    )
+    assert ampliado["ship"]["valid_times"] == [H1, H2]
