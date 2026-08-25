@@ -69,6 +69,8 @@ UVICORN_PID=$!
 "${PYTHON}" -m scripts.forecast_worker \
   --watch \
   --isolate-tasks \
+  --workers "${METEOLABX_FORECAST_WORKERS:-6}" \
+  --heavy-workers "${METEOLABX_FORECAST_HEAVY_WORKERS:-2}" \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
 FORECAST_WORKER_PID=$!
 

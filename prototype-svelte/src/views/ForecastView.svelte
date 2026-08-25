@@ -85,6 +85,7 @@
     ? `${new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(runCatalogs[0].run))} UTC`
     : runLabel);
   const latestProgress = $derived(runCatalogs[0]?.publication?.progress || null);
+  const activeJobsCount = $derived(latestProgress?.active_jobs?.length || (latestProgress?.current_job ? 1 : 0));
   const currentJobLabel = $derived.by(() => {
     const current = latestProgress?.current_job;
     if (!current) return '';
@@ -238,7 +239,7 @@
           <span><i style:--progress={`${latestProgress.percent || 0}%`}></i></span>
           <em>{latestProgress.frames_available} / {latestProgress.frames_total} · {Number(latestProgress.percent || 0).toLocaleString('es-ES')} %</em>
         </span>
-        {#if currentJobLabel}<small>Ahora: {currentJobLabel} · {latestProgress.current_job.valid_time.slice(11, 16)} UTC</small>{/if}
+        {#if currentJobLabel}<small>Ahora: {activeJobsCount > 1 ? `${activeJobsCount} cálculos simultáneos · ` : ''}{currentJobLabel} · {latestProgress.current_job.valid_time.slice(11, 16)} UTC</small>{/if}
       {/if}
     </div>
     <button type="button" aria-label="Actualizar RUN" onclick={refreshCatalog}><RefreshCw size={15} /></button>

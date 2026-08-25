@@ -567,6 +567,45 @@ def _pressure_levels(client, catalog, prefix: str, run: datetime) -> list[float]
     return sorted((value for value in levels if 100.0 <= value <= 1_000.0), reverse=True)
 
 
+_PROFILE_THROTTLE_LOCK = threading.Lock()
+
+
+def _wait_for_profile_request_slot() -> None:
+    """Limita globalmente WCS incluso con varios perfiles en procesos distintos."""
+    interval = max(
+        0.1,
+        float(os.getenv("METEOLABX_AROME_PROFILE_REQUEST_INTERVAL_S", "1.1")),
+    )
+    lock_path = Path(
+        os.getenv(
+            "METEOLABX_AROME_PROFILE_THROTTLE_FILE",
+            "/tmp/meteolabx-arome-profile-throttle",
+        )
+    )
+    with _PROFILE_THROTTLE_LOCK:
+        try:
+            import fcntl
+        except ImportError:  # pragma: no cover - Railway y desarrollo son Unix
+            time.sleep(interval)
+            return
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="ascii") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                handle.seek(0)
+                raw_next = handle.read().strip()
+                next_request = float(raw_next) if raw_next else 0.0
+                delay = next_request - time.monotonic()
+                if delay > 0:
+                    time.sleep(delay)
+                handle.seek(0)
+                handle.truncate()
+                handle.write(str(time.monotonic() + interval))
+                handle.flush()
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 @lru_cache(maxsize=32)
 def _convective_frames(
     token: str, valid_time_iso: str, run_iso: str = ""
@@ -625,18 +664,11 @@ def _convective_frames(
 
     fetched: dict[tuple[str, float | None], RasterField | None] = {}
     tasks: dict[Any, tuple[str, float | None]] = {}
-    throttle_lock = threading.Lock()
-    next_request_at = [0.0]
-
     def throttled(function, *args):
         # La API ciblée WCS limita campos 2D y aplica cuota. Espaciar los
         # inicios evita ráfagas HTTP 429 mientras se prepara el backend de
         # paquetes GRIB2 multimensaje para producción.
-        with throttle_lock:
-            delay = next_request_at[0] - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            next_request_at[0] = time.monotonic() + 1.1
+        _wait_for_profile_request_slot()
         return function(*args)
 
     with ThreadPoolExecutor(max_workers=4, thread_name_prefix="arome-profile") as executor:

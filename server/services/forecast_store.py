@@ -55,12 +55,14 @@ PERSISTED_FORECAST_PRODUCTS = (
 )
 
 CONVECTIVE_FORECAST_PRODUCTS = (
-    "ebwd",
+    # Orden de publicación por dependencias: primero los diagnósticos de
+    # parcela, después los campos que los consumen y SHIP siempre al final.
     "mucape-muli",
     "mlcape-mlli",
     "sbcape-sbli",
     "dcape",
     "ordinary-cell-motion",
+    "ebwd",
     "ship",
 )
 
@@ -319,6 +321,7 @@ def new_manifest(
             "percent": 0.0,
             "error_count": 0,
             "current_job": None,
+            "active_jobs": [],
             "last_completed": None,
         },
     }

@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import struct
+import threading
+import time
 from types import SimpleNamespace
 
 from server.services.forecast_store import (
@@ -135,6 +137,78 @@ def test_worker_prioritizes_native_frames_and_groups_convective_diagnostics():
     convective = [job for job in jobs if job.tier == 2]
     assert len(convective) == 2
     assert set(convective[0].products) == set(forecast_worker.CONVECTIVE_FORECAST_PRODUCTS)
+    assert convective[0].products[0] == "mucape-muli"
+    assert convective[0].products[-1] == "ship"
+
+
+def test_parallel_worker_respects_tiers_and_heavy_capacity(monkeypatch, tmp_path: Path):
+    store = LocalObjectStore(tmp_path)
+    catalog_products = {
+        product: {"run": RUN, "valid_times": [H1, H2]}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(RUN, [H1, H2], catalog_products=catalog_products)
+    native_jobs = [
+        forecast_worker.ForecastJob(RUN, H1, ("temperature-2m",), "model", 0),
+        forecast_worker.ForecastJob(RUN, H1, ("temperature-850",), "model", 0),
+        forecast_worker.ForecastJob(RUN, H1, ("temperature-500",), "model", 0),
+    ]
+    heavy_jobs = [
+        forecast_worker.ForecastJob(
+            RUN, valid_time, tuple(forecast_worker.CONVECTIVE_FORECAST_PRODUCTS), "model", 2
+        )
+        for valid_time in (H1, H2)
+    ]
+    lock = threading.Lock()
+    active = {0: 0, 2: 0}
+    maximum = {0: 0, 2: 0}
+    events = []
+
+    def fake_isolated(job, _timeout):
+        with lock:
+            active[job.tier] += 1
+            maximum[job.tier] = max(maximum[job.tier], active[job.tier])
+            events.append(("start", job.tier))
+        time.sleep(0.04)
+        with lock:
+            events.append(("end", job.tier))
+            active[job.tier] -= 1
+
+    monkeypatch.setattr(forecast_worker, "_run_isolated_job", fake_isolated)
+    completed, frames, failures = forecast_worker._run_parallel_work(
+        store=store,
+        manifests=[manifest],
+        queues={RUN: [*heavy_jobs, *native_jobs]},
+        latest_run=RUN,
+        workers=3,
+        heavy_workers=1,
+        max_tasks=0,
+        cycle_budget_s=0,
+        native_timeout_s=30,
+        derived_timeout_s=30,
+    )
+
+    assert (completed, frames, failures) == (5, 17, 0)
+    assert maximum[0] >= 2
+    assert maximum[2] == 1
+    first_heavy = events.index(("start", 2))
+    assert all(tier == 0 for event, tier in events[:first_heavy] if event == "start")
+    assert manifest["progress"]["active_jobs"] == []
+    assert manifest["progress"]["current_job"] is None
+
+
+def test_isolated_worker_reuses_an_existing_frame(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("METEOLABX_FORECAST_STORE_PATH", str(tmp_path))
+    monkeypatch.setenv("METEOLABX_AROME_API_KEY", "test-token")
+    store = LocalObjectStore(tmp_path)
+    job = forecast_worker.ForecastJob(
+        RUN, H1, ("temperature-2m",), "model", 0
+    )
+    write_grid(store, forecast_worker._frame_path(store, job, "temperature-2m"), _grid())
+
+    # Usa un proceso spawn real. Si la coordinación o la configuración no son
+    # serializables, esta llamada falla aunque no sea necesario consultar la API.
+    forecast_worker._run_isolated_job(job, 15)
 
 
 def test_worker_continues_after_one_frame_failure(monkeypatch, tmp_path: Path):

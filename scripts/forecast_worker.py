@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
 import multiprocessing
 import os
+from pathlib import Path
 from queue import Empty
 import signal
 import time
@@ -144,6 +146,7 @@ def _refresh_progress(manifest: dict[str, Any]) -> dict[str, Any]:
         }
     )
     progress.setdefault("current_job", None)
+    progress.setdefault("active_jobs", [])
     progress.setdefault("last_completed", None)
     return progress
 
@@ -206,6 +209,7 @@ def _prepare_latest_manifest(
         manifest["status"] = "publishing"
         # Un contenedor anterior pudo morir con una tarea marcada como activa.
         manifest.setdefault("progress", {})["current_job"] = None
+        manifest["progress"]["active_jobs"] = []
     manifest["worker_heartbeat_at"] = _utc_now()
     _persist_manifest(store, manifest, latest_run=run_iso)
     _publish_run_slot(store, manifest)
@@ -415,7 +419,8 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
     now = _utc_now()
     manifest["worker_heartbeat_at"] = now
     manifest["updated_at"] = now
-    manifest.setdefault("progress", {})["current_job"] = {
+    entry = {
+        "id": _job_id(job),
         "run": job.run,
         "valid_time": job.valid_time,
         "products": list(job.products),
@@ -423,6 +428,28 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
         "started_at": now,
         "timeout_seconds": timeout_s,
     }
+    progress = manifest.setdefault("progress", {})
+    active = [
+        item for item in progress.get("active_jobs", ())
+        if item.get("id") != entry["id"]
+    ]
+    active.append(entry)
+    progress["active_jobs"] = active
+    progress["current_job"] = active[0]
+
+
+def _job_id(job: ForecastJob) -> str:
+    return f"{job.run}|{job.valid_time}|{job.label}"
+
+
+def _clear_active_job(manifest: dict[str, Any], job: ForecastJob) -> None:
+    progress = manifest.setdefault("progress", {})
+    active = [
+        item for item in progress.get("active_jobs", ())
+        if item.get("id") != _job_id(job)
+    ]
+    progress["active_jobs"] = active
+    progress["current_job"] = active[0] if active else None
 
 
 def _mark_job_finished(manifest: dict[str, Any], job: ForecastJob) -> int:
@@ -434,8 +461,8 @@ def _mark_job_finished(manifest: dict[str, Any], job: ForecastJob) -> int:
         if job.valid_time not in set(state.get("available_times", ())):
             mark_available(manifest, product, job.valid_time)
             completed += 1
-    manifest.setdefault("progress", {})["current_job"] = None
-    manifest["progress"]["last_completed"] = {
+    _clear_active_job(manifest, job)
+    manifest.setdefault("progress", {})["last_completed"] = {
         "run": job.run,
         "valid_time": job.valid_time,
         "products": list(job.products),
@@ -470,7 +497,7 @@ def _mark_job_failed(
             message,
             retry_after=retry_after,
         )
-    manifest.setdefault("progress", {})["current_job"] = None
+    _clear_active_job(manifest, job)
 
 
 def _finish_status(manifest: dict[str, Any]) -> None:
@@ -511,6 +538,173 @@ def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str,
     return manifests[start:] + manifests[:start]
 
 
+def _parallel_work_order(
+    manifests: list[dict[str, Any]], queues: dict[str, list[ForecastJob]]
+) -> list[tuple[dict[str, Any], ForecastJob]]:
+    """Prioriza dependencias y RUN recientes antes de repartir los trabajos."""
+    work = [
+        (manifest, job)
+        for manifest in manifests
+        for job in queues.get(str(manifest["run"]), ())
+    ]
+    return sorted(
+        work,
+        key=lambda item: (
+            item[1].tier,
+            -_parse_iso(item[1].run).timestamp(),
+            _parse_iso(item[1].valid_time),
+            min(PRODUCT_ORDER.get(product, 999) for product in item[1].products),
+        ),
+    )
+
+
+def _container_memory_ratio() -> float | None:
+    """Uso de memoria del cgroup; permite no lanzar un segundo perfil si no cabe."""
+    candidates = (
+        (Path("/sys/fs/cgroup/memory.current"), Path("/sys/fs/cgroup/memory.max")),
+        (
+            Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+            Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+        ),
+    )
+    for current_path, limit_path in candidates:
+        try:
+            current = int(current_path.read_text().strip())
+            raw_limit = limit_path.read_text().strip()
+            if raw_limit == "max":
+                continue
+            limit = int(raw_limit)
+            if limit > 0:
+                return current / limit
+        except (FileNotFoundError, OSError, ValueError):
+            continue
+    return None
+
+
+def _run_parallel_work(
+    *,
+    store,
+    manifests: list[dict[str, Any]],
+    queues: dict[str, list[ForecastJob]],
+    latest_run: str,
+    workers: int,
+    heavy_workers: int,
+    max_tasks: int,
+    cycle_budget_s: int,
+    native_timeout_s: int,
+    derived_timeout_s: int,
+) -> tuple[int, int, int]:
+    """Calcula frames en paralelo; solo el padre modifica los manifiestos."""
+    pending = _parallel_work_order(manifests, queues)
+    active: dict[Future[None], tuple[dict[str, Any], ForecastJob]] = {}
+    started_at = time.monotonic()
+    tasks_started = 0
+    tasks_completed = 0
+    frames_completed = 0
+    failures = 0
+    last_heavy_launch = 0.0
+
+    def tier_capacity(tier: int) -> int:
+        return min(workers, heavy_workers) if tier == 2 else workers
+
+    def persist_result(manifest: dict[str, Any], run_iso: str) -> None:
+        manifest["worker_heartbeat_at"] = _utc_now()
+        _finish_status(manifest)
+        _persist_manifest(store, manifest, latest_run=latest_run)
+        write_json(
+            store,
+            WORKER_STATE_KEY,
+            {
+                "version": 2,
+                "last_run": run_iso,
+                "heartbeat_at": manifest["worker_heartbeat_at"],
+                "workers": workers,
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="arome-job") as executor:
+        while pending or active:
+            budget_reached = (
+                cycle_budget_s > 0
+                and time.monotonic() - started_at >= cycle_budget_s
+            )
+            task_limit_reached = max_tasks > 0 and tasks_started >= max_tasks
+
+            # No mezclamos niveles: así los campos base terminan antes de los
+            # derivados y los perfiles convectivos no compiten por la API.
+            active_tiers = {job.tier for _manifest, job in active.values()}
+            launch_tier = min(active_tiers) if active_tiers else (
+                pending[0][1].tier if pending else None
+            )
+            capacity = tier_capacity(launch_tier) if launch_tier is not None else 0
+            while (
+                pending
+                and not budget_reached
+                and not task_limit_reached
+                and len(active) < capacity
+                and pending[0][1].tier == launch_tier
+            ):
+                if launch_tier == 2 and active:
+                    # El primer perfil ya está aumentando su memoria. Esperar
+                    # permite medir el cgroup antes de admitir el segundo.
+                    if time.monotonic() - last_heavy_launch < 15.0:
+                        break
+                    memory_ratio = _container_memory_ratio()
+                    if memory_ratio is not None and memory_ratio >= 0.55:
+                        break
+                manifest, job = pending.pop(0)
+                timeout_s = derived_timeout_s if job.tier > 0 else native_timeout_s
+                _mark_job_started(manifest, job, timeout_s)
+                _persist_manifest(store, manifest, latest_run=latest_run)
+                logger.info(
+                    "Procesando en paralelo RUN %s · %s · %s (nivel %d)",
+                    job.run,
+                    job.valid_time,
+                    job.label,
+                    job.tier,
+                )
+                future = executor.submit(_run_isolated_job, job, timeout_s)
+                active[future] = (manifest, job)
+                if job.tier == 2:
+                    last_heavy_launch = time.monotonic()
+                tasks_started += 1
+                task_limit_reached = max_tasks > 0 and tasks_started >= max_tasks
+
+            completed_futures = [future for future in active if future.done()]
+            if not completed_futures:
+                if active:
+                    time.sleep(0.1)
+                    continue
+                # El presupuesto o el límite impiden lanzar más trabajos.
+                break
+
+            for future in completed_futures:
+                manifest, job = active.pop(future)
+                try:
+                    future.result()
+                    completed = _mark_job_finished(manifest, job)
+                    frames_completed += completed
+                    logger.info(
+                        "Completado %s %s: +%d frames",
+                        job.label,
+                        job.valid_time,
+                        completed,
+                    )
+                except Exception as exc:
+                    failures += 1
+                    _mark_job_failed(manifest, job, str(exc))
+                    logger.exception(
+                        "No se pudo calcular %s %s; continuará con la cola",
+                        job.label,
+                        job.valid_time,
+                    )
+                finally:
+                    tasks_completed += 1
+                    persist_result(manifest, job.run)
+
+    return tasks_completed, frames_completed, failures
+
+
 def run_incremental_cycle(
     *,
     max_hours: int = 0,
@@ -519,6 +713,8 @@ def run_incremental_cycle(
     native_timeout_s: int = 300,
     derived_timeout_s: int = 1_800,
     isolate_tasks: bool = False,
+    workers: int = 1,
+    heavy_workers: int = 1,
 ) -> dict[str, Any]:
     settings = get_settings()
     token = str(settings.arome_api_key or "").strip()
@@ -560,11 +756,39 @@ def run_incremental_cycle(
     stop_cycle = False
     pending_count = sum(len(queue) for queue in queues.values())
     logger.info(
-        "RUN actual %s: %d tareas pendientes en %d pasadas retenidas",
+        "RUN actual %s: %d tareas pendientes en %d pasadas retenidas · %d workers",
         latest_run,
         pending_count,
         len(manifests),
+        max(1, workers),
     )
+
+    if workers > 1:
+        tasks_completed, frames_completed, failures = _run_parallel_work(
+            store=store,
+            manifests=manifests,
+            queues=queues,
+            latest_run=latest_run,
+            workers=max(2, workers),
+            heavy_workers=max(1, min(heavy_workers, workers)),
+            max_tasks=max_tasks,
+            cycle_budget_s=cycle_budget_s,
+            native_timeout_s=native_timeout_s,
+            derived_timeout_s=derived_timeout_s,
+        )
+        for manifest in manifests:
+            _finish_status(manifest)
+            _persist_manifest(store, manifest, latest_run=latest_run)
+        return {
+            "run": latest_run,
+            "tasks_seen": tasks_completed,
+            "frames_completed": frames_completed,
+            "failures": failures,
+            "status": latest_manifest["status"],
+            "calculation_scope": calculation_scope,
+            "workers": workers,
+            "progress": _refresh_progress(latest_manifest),
+        }
 
     while not stop_cycle and any(queues.values()):
         made_progress = False
@@ -682,6 +906,18 @@ def main() -> int:
         help="Límite por diagnóstico aislado en segundos.",
     )
     parser.add_argument(
+        "--workers",
+        type=int,
+        default=int(os.getenv("METEOLABX_FORECAST_WORKERS", "6")),
+        help="Número de cálculos simultáneos para campos base y derivados rápidos.",
+    )
+    parser.add_argument(
+        "--heavy-workers",
+        type=int,
+        default=int(os.getenv("METEOLABX_FORECAST_HEAVY_WORKERS", "2")),
+        help="Máximo de perfiles convectivos simultáneos para limitar RAM y cuota API.",
+    )
+    parser.add_argument(
         "--isolate-tasks",
         action="store_true",
         default=os.getenv("METEOLABX_FORECAST_ISOLATE_TASKS", "").lower()
@@ -715,6 +951,8 @@ def main() -> int:
             native_timeout_s=max(1, args.native_timeout),
             derived_timeout_s=max(1, args.derived_timeout),
             isolate_tasks=args.isolate_tasks,
+            workers=max(1, args.workers),
+            heavy_workers=max(1, args.heavy_workers),
         )
 
     if not args.watch:
