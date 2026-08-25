@@ -117,6 +117,9 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "windLevelKind" in view
     assert "runCatalogs" in view
     assert "selectedRun" in view
+    assert "Progreso de cada RUN" in view
+    assert "run-progress-list" in view
+    assert "runProgress(item).toLocaleString('es-ES')" in view
 
     api = (ROOT / "prototype-svelte" / "src" / "services" / "forecastApi.js").read_text(
         encoding="utf-8"
