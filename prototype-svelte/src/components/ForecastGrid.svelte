@@ -5,54 +5,105 @@
 
   const defaultPalette = ['#3b4cc0','#3288bd','#66c2a5','#abdda4','#e6f598','#fee08b','#fdae61','#f46d43','#d73027','#762a83'];
   const precipitationPalette = ['#28465f','#2f6f8e','#369aa1','#58bd91','#9bd275','#d7dc69','#f2c55a','#ed914c','#df6262','#b44f88'];
+  const LUT_SIZE = 256;
+  // El buffer de ImageData es RGBA en orden de memoria; escribirlo como Uint32
+  // exige conocer el orden de bytes de la máquina para componer la paleta.
+  const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+  const lutCache = new Map();
   let layer;
   let surface;
-  let gridImage = $state('');
+  let raster;
   let hover = $state(null);
   let zoom = $state(1);
   let panX = $state(0);
   let panY = $state(0);
   let dragging = $state(false);
   let dragStart = null;
+  // Encuadre asentado: alimenta los cálculos caros (flechas, streamlines) y
+  // solo sigue al gesto cuando este se detiene.
+  let viewZoom = $state(1);
+  let viewPanX = $state(0);
+  let viewPanY = $state(0);
+  let dragFrame = 0;
+  let settleTimer = 0;
+  let pendingPan = null;
+
+  function settleViewport() {
+    window.clearTimeout(settleTimer);
+    settleTimer = 0;
+    viewZoom = zoom;
+    viewPanX = panX;
+    viewPanY = panY;
+  }
+
+  function scheduleSettle() {
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(settleViewport, 160);
+  }
 
   function rgb(hex) {
     return [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
   }
 
-  function colorFor(value) {
-    const isPrecipitation = frame.product === 'precip-1h';
-    const palette = isPrecipitation ? precipitationPalette : defaultPalette;
-    const linear = Math.max(0, Math.min(1, (value - frame.vmin) / (frame.vmax - frame.vmin)));
-    const normalized = isPrecipitation ? Math.log1p(Math.max(0, value)) / Math.log1p(frame.vmax) : linear;
-    const position = normalized * (palette.length - 1);
-    const lower = Math.floor(position);
-    const upper = Math.min(lower + 1, palette.length - 1);
-    const fraction = position - lower;
-    const a = rgb(palette[lower]);
-    const b = rgb(palette[upper]);
-    return a.map((valueA, index) => Math.round(valueA + (b[index] - valueA) * fraction));
+  function packColor(red, green, blue, alpha) {
+    return littleEndian
+      ? ((alpha << 24) | (blue << 16) | (green << 8) | red) >>> 0
+      : ((red << 24) | (green << 16) | (blue << 8) | alpha) >>> 0;
+  }
+
+  /** Paleta interpolada a 256 entradas: evita releer los hex por píxel. */
+  function paletteLut(palette, alpha) {
+    const key = `${palette[0]}|${alpha}`;
+    const cached = lutCache.get(key);
+    if (cached) return cached;
+    const channels = palette.map(rgb);
+    const lut = new Uint32Array(LUT_SIZE);
+    for (let index = 0; index < LUT_SIZE; index += 1) {
+      const position = index / (LUT_SIZE - 1) * (palette.length - 1);
+      const lower = Math.floor(position);
+      const upper = Math.min(lower + 1, palette.length - 1);
+      const fraction = position - lower;
+      const a = channels[lower];
+      const b = channels[upper];
+      lut[index] = packColor(
+        Math.round(a[0] + (b[0] - a[0]) * fraction),
+        Math.round(a[1] + (b[1] - a[1]) * fraction),
+        Math.round(a[2] + (b[2] - a[2]) * fraction),
+        alpha
+      );
+    }
+    lutCache.set(key, lut);
+    return lut;
   }
 
   function renderGrid() {
-    if (!frame || typeof document === 'undefined') return;
-    const bitmap = document.createElement('canvas');
-    bitmap.width = frame.width;
-    bitmap.height = frame.height;
-    const context = bitmap.getContext('2d');
+    if (!frame || !raster) return;
+    const { width, height, values } = frame;
+    raster.width = width;
+    raster.height = height;
+    const context = raster.getContext('2d', { alpha: true });
     context.imageSmoothingEnabled = false;
-    const pixels = context.createImageData(frame.width, frame.height);
-    for (let index = 0; index < frame.values.length; index += 1) {
-      const value = frame.values[index];
+    const pixels = context.createImageData(width, height);
+    const canvas32 = new Uint32Array(pixels.data.buffer);
+    const isPrecipitation = frame.product === 'precip-1h';
+    const lut = paletteLut(isPrecipitation ? precipitationPalette : defaultPalette, 235);
+    const last = LUT_SIZE - 1;
+    // Precipitación: escala logarítmica para no aplastar las lluvias débiles.
+    const logScale = isPrecipitation ? last / Math.log1p(frame.vmax) : 0;
+    const linearScale = last / (frame.vmax - frame.vmin || 1);
+    for (let index = 0; index < values.length; index += 1) {
+      const value = values[index];
       if (!Number.isFinite(value)) continue;
-      const [red, green, blue] = colorFor(value);
-      const offset = index * 4;
-      pixels.data[offset] = red;
-      pixels.data[offset + 1] = green;
-      pixels.data[offset + 2] = blue;
-      pixels.data[offset + 3] = frame.product === 'precip-1h' && value < .05 ? 0 : 235;
+      if (isPrecipitation) {
+        if (value < .05) continue;
+        const slot = Math.log1p(value) * logScale;
+        canvas32[index] = lut[slot > last ? last : slot < 0 ? 0 : slot | 0];
+      } else {
+        const slot = (value - frame.vmin) * linearScale;
+        canvas32[index] = lut[slot > last ? last : slot < 0 ? 0 : slot | 0];
+      }
     }
     context.putImageData(pixels, 0, 0);
-    gridImage = bitmap.toDataURL('image/png');
   }
 
   function makeBoundaryPaths() {
@@ -83,17 +134,23 @@
   function visibleSourceBounds() {
     const renderedWidth = surface?.clientWidth || frame.width;
     const renderedHeight = surface?.clientHeight || frame.height;
-    const userPanX = panX * frame.width / renderedWidth;
-    const userPanY = panY * frame.height / renderedHeight;
+    // Se usa el encuadre asentado, no el del gesto en curso: integrar las
+    // líneas de corriente en cada pointermove bloquea el hilo principal.
+    const userPanX = viewPanX * frame.width / renderedWidth;
+    const userPanY = viewPanY * frame.height / renderedHeight;
     const centerX = frame.width / 2;
     const centerY = frame.height / 2;
-    const sourceX = (screenX) => centerX + (screenX - userPanX - centerX) / zoom;
-    const sourceY = (screenY) => centerY + (screenY - userPanY - centerY) / zoom;
+    const sourceX = (screenX) => centerX + (screenX - userPanX - centerX) / viewZoom;
+    const sourceY = (screenY) => centerY + (screenY - userPanY - centerY) / viewZoom;
+    // El margen mantiene glifos ya calculados fuera de cuadro, de modo que el
+    // arrastre no descubre zonas vacías antes de que el encuadre se asiente.
+    const marginX = frame.width * .3 / viewZoom;
+    const marginY = frame.height * .3 / viewZoom;
     return {
-      west: Math.max(0, sourceX(0)),
-      east: Math.min(frame.width, sourceX(frame.width)),
-      north: Math.max(0, sourceY(0)),
-      south: Math.min(frame.height, sourceY(frame.height))
+      west: Math.max(0, sourceX(0) - marginX),
+      east: Math.min(frame.width, sourceX(frame.width) + marginX),
+      north: Math.max(0, sourceY(0) - marginY),
+      south: Math.min(frame.height, sourceY(frame.height) + marginY)
     };
   }
 
@@ -135,7 +192,7 @@
     // Mantiene una densidad visual estable tanto en el dominio AROME completo
     // como al ampliar una región: unas 26 agrupaciones a lo ancho del visor.
     const baseStep = Math.max(4, frame.width / 26);
-    const sourceStep = baseStep / zoom;
+    const sourceStep = baseStep / viewZoom;
     const bounds = visibleSourceBounds();
     const firstColumn = Math.floor(bounds.west / sourceStep) * sourceStep;
     const firstRow = Math.floor(bounds.north / sourceStep) * sourceStep;
@@ -197,7 +254,7 @@
     if (!frame.u || !frame.v || frame.product !== 'wind-level') return { paths: [], markerPath: '' };
     const paths = [];
     const baseSeedStep = Math.max(4.5, frame.width / 25);
-    const seedStep = baseSeedStep / zoom;
+    const seedStep = baseSeedStep / viewZoom;
     const spatialStep = Math.max(.16, seedStep / 9);
     const bounds = visibleSourceBounds();
     const firstX = Math.floor(bounds.west / seedStep) * seedStep + seedStep * .5;
@@ -323,6 +380,8 @@
     zoom = next;
     if (next === 1) panX = panY = 0;
     hover = null;
+    // El zoom cambia la densidad de glifos: conviene rehacerlos de inmediato.
+    settleViewport();
   }
 
   function vectorTransform() {
@@ -353,13 +412,31 @@
       inspect(event);
       return;
     }
-    panX = dragStart.panX + event.clientX - dragStart.x;
-    panY = dragStart.panY + event.clientY - dragStart.y;
+    // Los eventos de puntero llegan más rápido que el refresco de pantalla:
+    // sin este agrupado se recalcula el encuadre varias veces por fotograma.
+    pendingPan = {
+      x: dragStart.panX + event.clientX - dragStart.x,
+      y: dragStart.panY + event.clientY - dragStart.y
+    };
+    if (dragFrame) return;
+    dragFrame = requestAnimationFrame(() => {
+      dragFrame = 0;
+      if (!pendingPan) return;
+      panX = pendingPan.x;
+      panY = pendingPan.y;
+      scheduleSettle();
+    });
   }
 
   function endDrag(event) {
     dragging = false;
     dragStart = null;
+    pendingPan = null;
+    if (dragFrame) {
+      cancelAnimationFrame(dragFrame);
+      dragFrame = 0;
+    }
+    settleViewport();
     if (surface?.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
   }
 
@@ -368,6 +445,7 @@
     panX = 0;
     panY = 0;
     hover = null;
+    settleViewport();
   }
 
   $effect(() => {
@@ -382,6 +460,11 @@
     frame.height;
     frame.bounds.join(',');
     resetView();
+  });
+
+  $effect(() => () => {
+    window.clearTimeout(settleTimer);
+    if (dragFrame) cancelAnimationFrame(dragFrame);
   });
 </script>
 
@@ -400,11 +483,14 @@
     ondblclick={(event) => setZoom(zoom * 1.7, event.clientX, event.clientY)}
     onpointerleave={() => (hover = null)}
   >
+    <canvas
+      class="grid-raster"
+      bind:this={raster}
+      style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
+      aria-hidden="true"
+    ></canvas>
     <svg class="vector-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} aria-hidden="true">
       <g transform={vectorTransform()}>
-        {#if gridImage}
-          <image class="grid-raster" href={gridImage} x="0" y="0" width={frame.width} height={frame.height} preserveAspectRatio="none" />
-        {/if}
         {#each streamlineData.paths as streamline}
           <path class="streamline-halo" d={streamline.path} />
           <path class="streamline" d={streamline.path} />
@@ -454,7 +540,8 @@
   .map-surface{position:relative;max-width:100%;max-height:100%;width:auto;height:100%;aspect-ratio:var(--grid-ratio);filter:drop-shadow(0 12px 24px rgba(0,0,0,.24));pointer-events:auto;cursor:grab;touch-action:none}
   .map-surface.dragging{cursor:grabbing}
   .vector-overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
-  .grid-raster{image-rendering:pixelated}
+  /* El raster se compone en GPU: el encuadre no vuelve a rasterizar la malla. */
+  .grid-raster{position:absolute;inset:0;display:block;width:100%;height:100%;image-rendering:pixelated;transform-origin:center;will-change:transform}
   .vector-overlay{overflow:visible;pointer-events:none}
   .vector-arrow,.vector-arrow-halo{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
   .vector-arrow-halo{stroke:rgba(239,247,250,.62);stroke-width:1.9}

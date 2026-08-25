@@ -29,6 +29,7 @@ from server.services.forecast_store import (
 )
 from scripts.forecast_worker import pending_hours
 from scripts import forecast_worker
+from server.services import arome_forecast as server_arome
 from tabs import arome_forecast
 
 
@@ -146,6 +147,88 @@ def test_worker_prioritizes_native_frames_and_groups_convective_diagnostics():
     assert set(convective[0].products) == set(forecast_worker.CONVECTIVE_FORECAST_PRODUCTS)
     assert convective[0].products[0] == "mucape-muli"
     assert convective[0].products[-1] == "ship"
+
+
+def test_shear_products_share_one_job_per_hour():
+    """Las tres cizalladuras van juntas para compartir el viento a 10 m.
+
+    Cada trabajo se ejecuta en su propio proceso, así que separarlas obligaba a
+    descargar el mismo campo base una vez por producto.
+    """
+    catalog_products = {
+        product: {"run": RUN, "valid_times": [H1, H2]}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(RUN, [H1, H2], catalog_products=catalog_products)
+
+    jobs = forecast_worker._jobs_for_manifest(manifest)
+    shear_jobs = [
+        job for job in jobs if any(p.startswith("shear-") for p in job.products)
+    ]
+
+    assert len(shear_jobs) == 2  # una por hora, no una por producto
+    for job in shear_jobs:
+        assert set(job.products) == set(forecast_worker.SHEAR_PRODUCTS)
+        assert job.tier == 1
+    # accumulated-precip no comparte cálculo: sigue yendo por su cuenta.
+    accumulated = [job for job in jobs if job.products == ("accumulated-precip",)]
+    assert len(accumulated) == 2
+
+
+def test_shear_set_downloads_surface_wind_once(monkeypatch):
+    """El viento a 10 m se descarga una vez para las tres profundidades."""
+    calls: list[float] = []
+
+    def fake_uv(_client, _catalog, _prefixes, _run, _valid, height_m):
+        calls.append(height_m)
+        field = arome_forecast.RasterField(
+            __import__("numpy").zeros((2, 2)), None, None, (0, 0, 1, 1), "m/s"
+        )
+        return field, field
+
+    monkeypatch.setattr(server_arome, "_get_uv_height", fake_uv)
+    server_arome._SURFACE_WIND_CACHE.clear()
+    run = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
+    valid = datetime(2026, 8, 24, 13, tzinfo=timezone.utc)
+
+    for _ in range(3):
+        server_arome._surface_wind_10m(None, None, {}, run, valid)
+
+    assert calls == [10.0]
+
+    # Al cambiar de hora se descarta la anterior: no se acumulan rejillas.
+    server_arome._surface_wind_10m(
+        None, None, {}, run, datetime(2026, 8, 24, 14, tzinfo=timezone.utc)
+    )
+    assert calls == [10.0, 10.0]
+    assert len(server_arome._SURFACE_WIND_CACHE) == 1
+
+
+def test_work_order_completes_latest_run_before_previous_ones():
+    """El RUN vigente se agota entero —todos sus niveles— antes que el anterior.
+
+    Con la prioridad por nivel, los campos nativos de las pasadas retenidas se
+    colaban delante de los diagnósticos del RUN actual y ninguna terminaba.
+    """
+    previous_run = "2026-08-24T06:00:00Z"
+    manifests = [{"run": RUN}, {"run": previous_run}]
+    queues = {
+        run: [
+            forecast_worker.ForecastJob(run, H1, ("temperature-2m",), "model", 0),
+            forecast_worker.ForecastJob(run, H1, ("shear-01",), "model", 1),
+            forecast_worker.ForecastJob(
+                run, H1, tuple(forecast_worker.CONVECTIVE_FORECAST_PRODUCTS), "model", 2
+            ),
+        ]
+        for run in (RUN, previous_run)
+    }
+
+    order = forecast_worker._parallel_work_order(manifests, queues)
+    runs = [job.run for _manifest, job in order]
+
+    assert runs == [RUN] * 3 + [previous_run] * 3
+    # Dentro de cada pasada se conserva el orden por dependencias.
+    assert [job.tier for _manifest, job in order] == [0, 1, 2, 0, 1, 2]
 
 
 def test_parallel_worker_respects_tiers_and_heavy_capacity(monkeypatch, tmp_path: Path):
@@ -312,3 +395,72 @@ def test_run_slots_keep_one_run_per_main_cycle(tmp_path: Path):
     assert set(index["slots"]) == {"00", "06", "12", "18"}
     assert index["slots"]["00"]["run"] == replacement
     assert [item["run"] for item in retained_manifests(store)][0] == replacement
+
+
+def test_frame_grid_v2_roundtrips_through_the_viewer_decoder(monkeypatch):
+    """Recorre el formato v2 de extremo a extremo: cabecera, escalas y cuerpo.
+
+    Reproduce el decodificador del visor para detectar cualquier desajuste de
+    orden de bytes, de escala o de matrices omitidas antes de publicar.
+    """
+    import numpy as np
+    from server.services import arome_forecast as sa
+
+    height, width = 24, 32
+    rng = np.random.default_rng(5)
+    u = rng.uniform(-18.0, 18.0, (height, width))
+    v = rng.uniform(-18.0, 18.0, (height, width))
+    speed = np.hypot(u, v)
+    # Un hueco sin dato para comprobar que la máscara sobrevive al viaje.
+    speed[0, 0] = u[0, 0] = v[0, 0] = np.nan
+
+    field = arome_forecast.RasterField(
+        speed, None, None, (-1.0, 40.0, 3.0, 43.0), "m/s", vector_u=u, vector_v=v
+    )
+    config = {"vmin": 0.0, "vmax": 55.0, "unit": "m/s"}
+    headers = {
+        "X-AROME-Run": RUN,
+        "X-AROME-Valid-Time": H1,
+        "X-AROME-Max": "42.0",
+    }
+    monkeypatch.setattr(
+        sa, "_computed_frame", lambda *a, **k: (field, config, headers)
+    )
+    monkeypatch.setattr(sa, "_model_boundary_geojson", lambda *a, **k: {"features": []})
+    monkeypatch.setattr(sa, "_load_forecast_regions_geojson", lambda: {"features": []})
+    monkeypatch.setattr(sa, "forecast_calculation_scope", lambda: "model")
+    sa.frame_grid.cache_clear()
+
+    content, _ = sa.frame_grid("token", "wind-level", H1, "height", 10.0)
+
+    header_length = struct.unpack("<I", content[:4])[0]
+    header = json.loads(content[4:4 + header_length])
+    assert header["version"] == 2
+    # El escalar es el módulo del vector: debe viajar solo u y v.
+    assert header["value_source"] == "hypot"
+    assert [item["name"] for item in header["arrays"]] == ["u", "v"]
+
+    body = content[4 + header_length:]
+    cells = width * height
+    assert len(body) == cells * 2 * len(header["arrays"])
+
+    decoded = {}
+    offset = 0
+    for item in header["arrays"]:
+        raw = np.frombuffer(body, dtype="u1", count=cells * 2, offset=offset)
+        codes = (raw[:cells].astype(np.uint32) << 8) | raw[cells:].astype(np.uint32)
+        decoded[item["name"]] = np.where(
+            codes == 0,
+            np.nan,
+            item["offset"] + (codes.astype(float) - 1) * item["step"],
+        ).reshape(height, width)
+        offset += cells * 2
+
+    valid = np.isfinite(speed)
+    assert (np.isfinite(decoded["u"]) == valid).all()
+    for name, original in (("u", u), ("v", v)):
+        step = next(i["step"] for i in header["arrays"] if i["name"] == name)
+        assert np.abs(decoded[name][valid] - original[valid]).max() <= step / 2 + 1e-9
+
+    rebuilt = np.hypot(decoded["u"], decoded["v"])
+    assert np.abs(rebuilt[valid] - speed[valid]).max() < 0.05

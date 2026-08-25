@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 
 from server.services.convective_diagnostics import (
+    _saturated_temperature_from_theta_e,
+    _saturated_theta_e_k,
     dewpoint_from_mixing_ratio_k,
     downdraft_cape,
     effective_bulk_wind_difference,
@@ -10,6 +12,26 @@ from server.services.convective_diagnostics import (
     significant_hail_parameter,
     significant_hail_parameter_sharppy,
 )
+
+
+def test_saturated_temperature_inverts_theta_e_on_every_point():
+    """Newton itera solo los puntos pendientes; debe invertir todos igual.
+
+    El bucle abandona cada punto en cuanto converge, así que conviene fijar que
+    ninguno se quede a medio resolver por haberlo apartado antes de tiempo.
+    """
+    rng = np.random.default_rng(11)
+    pressure = rng.uniform(150.0, 1_000.0, (12, 40, 40))
+    temperature = rng.uniform(215.0, 305.0, (12, 40, 40))
+    target = _saturated_theta_e_k(pressure, temperature)
+
+    recovered = _saturated_temperature_from_theta_e(
+        pressure, target, temperature + rng.uniform(-8.0, 8.0, temperature.shape)
+    )
+
+    assert np.isfinite(recovered).all()
+    # Se comprueba sobre theta-e, que es la magnitud que el método invierte.
+    assert np.allclose(_saturated_theta_e_k(pressure, recovered), target, rtol=1e-6)
 
 
 def test_effective_bulk_wind_difference_uses_half_storm_depth():

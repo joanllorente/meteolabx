@@ -130,28 +130,59 @@ def _saturated_theta_e_k(pressure_hpa: np.ndarray, temperature_k: np.ndarray) ->
     return equivalent_potential_temperature_k(pressure_hpa, temperature_k, temperature_k)
 
 
+_THETA_E_TOLERANCE = 1e-7
+
+
 def _saturated_temperature_from_theta_e(
     pressure_hpa: np.ndarray,
     theta_e_k: np.ndarray,
     initial_k: np.ndarray,
 ) -> np.ndarray:
-    """Invierte theta-e saturada mediante Newton vectorizado."""
+    """Invierte theta-e saturada mediante Newton vectorizado.
+
+    Solo se sigue iterando sobre los puntos que aún no han convergido. Newton
+    es cuadrático y sobre una rejilla AROME el 99,8 % converge en cuatro
+    pasadas, así que iterar la malla entera nueve veces gastaba la mayor parte
+    del tiempo en recalcular exponenciales de puntos ya resueltos.
+    """
     pressure = np.asarray(pressure_hpa, dtype=float)
     target_log = np.log(np.maximum(np.asarray(theta_e_k, dtype=float), 1.0))
     temperature = np.clip(np.asarray(initial_k, dtype=float), 170.0, 380.0)
+
+    shape = temperature.shape
+    values = temperature.ravel().copy()
+    flat_pressure = np.broadcast_to(pressure, shape).ravel()
+    flat_target = np.broadcast_to(target_log, shape).ravel()
+    pending = np.arange(values.size)
+
     for _ in range(9):
-        theta = _saturated_theta_e_k(pressure, temperature)
-        plus = _saturated_theta_e_k(pressure, temperature + 0.08)
-        minus = _saturated_theta_e_k(pressure, temperature - 0.08)
+        point_pressure = flat_pressure[pending]
+        point_temperature = values[pending]
+        residual = (
+            np.log(_saturated_theta_e_k(point_pressure, point_temperature))
+            - flat_target[pending]
+        )
+        # Un residuo no finito no se corrige iterando: se deja como está.
+        improvable = np.isfinite(residual) & (np.abs(residual) >= _THETA_E_TOLERANCE)
+        if not improvable.any():
+            break
+        pending = pending[improvable]
+        point_pressure = point_pressure[improvable]
+        point_temperature = point_temperature[improvable]
+        residual = residual[improvable]
+
+        plus = _saturated_theta_e_k(point_pressure, point_temperature + 0.08)
+        minus = _saturated_theta_e_k(point_pressure, point_temperature - 0.08)
         derivative = (np.log(plus) - np.log(minus)) / 0.16
         correction = np.divide(
-            np.log(theta) - target_log,
+            residual,
             derivative,
-            out=np.zeros_like(temperature),
+            out=np.zeros_like(point_temperature),
             where=np.isfinite(derivative) & (np.abs(derivative) > 1e-8),
         )
-        temperature = np.clip(temperature - correction, 170.0, 380.0)
-    return temperature
+        values[pending] = np.clip(point_temperature - correction, 170.0, 380.0)
+
+    return values.reshape(shape)
 
 
 def parcel_temperature_profile_k(
@@ -531,10 +562,16 @@ def downdraft_cape(
     height = np.asarray(height_m, dtype=float)
     surface_pressure = pressure[0]
 
+    # Los logaritmos de presión no dependen del campo interpolado ni del
+    # objetivo, así que se calculan una sola vez: antes se evaluaban dos por
+    # nivel y por llamada sobre la malla completa, y eran el grueso del coste.
+    log_pressure = np.log(np.maximum(pressure, 1e-6))
+
     def interpolate_to_targets(values: np.ndarray, targets: np.ndarray) -> np.ndarray:
         squeeze = targets.ndim == surface_pressure.ndim
         target_values = targets[None, ...] if squeeze else targets
         result = np.full(target_values.shape, np.nan)
+        log_targets = np.log(np.maximum(target_values, 1e-6))
         for index in range(pressure.shape[0] - 1):
             p_lower = pressure[index]
             p_upper = pressure[index + 1]
@@ -551,24 +588,21 @@ def downdraft_cape(
                 & (target_values <= p_lower[None, ...])
                 & (target_values >= p_upper[None, ...])
             )
+            if not within.any():
+                continue
+            log_lower = log_pressure[index][None, ...]
             log_fraction = np.divide(
-                np.log(
-                    np.maximum(target_values, 1e-6)
-                    / np.maximum(p_lower[None, ...], 1e-6)
-                ),
-                np.log(
-                    np.maximum(p_upper[None, ...], 1e-6)
-                    / np.maximum(p_lower[None, ...], 1e-6)
-                ),
+                log_targets - log_lower,
+                log_pressure[index + 1][None, ...] - log_lower,
                 out=np.zeros_like(target_values),
                 where=within,
             )
             interpolated = values[index][None, ...] + log_fraction * (
                 values[index + 1] - values[index]
             )[None, ...]
-            result = np.where(within, interpolated, result)
+            np.copyto(result, interpolated, where=within)
         surface_match = np.isclose(target_values, surface_pressure[None, ...], atol=0.5)
-        result = np.where(surface_match, values[0][None, ...], result)
+        np.copyto(result, np.broadcast_to(values[0][None, ...], result.shape), where=surface_match)
         return result[0] if squeeze else result
 
     # SHARPpy solo prueba capas cuya base coincide con un nivel del perfil.

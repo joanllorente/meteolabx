@@ -873,8 +873,15 @@ def _compute_shear(
     run: datetime,
     valid_time: datetime,
     depth_m: int,
+    base_uv: Optional[Tuple[RasterField, RasterField]] = None,
 ) -> RasterField:
-    base_u, base_v = _get_uv_height(
+    """Cizalladura entre 10 m y `depth_m`.
+
+    `base_uv` permite compartir el viento de superficie entre las tres
+    profundidades: es el mismo campo para las tres y descargarlo una vez por
+    producto multiplicaba las peticiones al WCS.
+    """
+    base_u, base_v = base_uv or _get_uv_height(
         client, catalog, prefixes, run, valid_time, 10.0
     )
     u0 = base_u.data

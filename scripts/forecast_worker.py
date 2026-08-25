@@ -53,6 +53,14 @@ FAST_DERIVED_PRODUCTS = tuple(
     for product in DERIVED_FORECAST_PRODUCTS
     if product not in CONVECTIVE_FORECAST_PRODUCTS
 )
+# Las tres cizalladuras arrancan del mismo viento a 10 m. Se calculan en un
+# único trabajo para que compartan proceso y, con él, ese campo base.
+SHEAR_PRODUCTS = tuple(
+    product for product in FAST_DERIVED_PRODUCTS if product.startswith("shear-")
+)
+STANDALONE_FAST_PRODUCTS = tuple(
+    product for product in FAST_DERIVED_PRODUCTS if product not in SHEAR_PRODUCTS
+)
 PRODUCT_ORDER = {
     product: index
     for index, product in enumerate(
@@ -226,6 +234,48 @@ def _retry_is_due(state: dict[str, Any], valid_time: str, now: datetime) -> bool
         return True
 
 
+def _grouped_jobs(
+    manifest: dict[str, Any],
+    products: tuple[str, ...],
+    allowed_times: set[str],
+    now: datetime,
+    *,
+    tier: int,
+) -> list[ForecastJob]:
+    """Un trabajo por hora con los productos del grupo que sigan pendientes.
+
+    Los productos de un grupo comparten un cálculo intermedio caro, así que
+    interesa que se resuelvan en el mismo proceso.
+    """
+    run_iso = str(manifest["run"])
+    scope = str(manifest.get("calculation_scope", "model"))
+    times = sorted(
+        {
+            valid
+            for product in products
+            for valid in _product_times(manifest, product)
+            if valid in allowed_times
+        },
+        key=_parse_iso,
+    )
+    jobs: list[ForecastJob] = []
+    for valid_time in times:
+        pending_products = []
+        for product in products:
+            if valid_time not in _product_times(manifest, product):
+                continue
+            state = (manifest.get("products") or {}).get(product) or {}
+            if valid_time in set(state.get("available_times", ())):
+                continue
+            if _retry_is_due(state, valid_time, now):
+                pending_products.append(product)
+        if pending_products:
+            jobs.append(
+                ForecastJob(run_iso, valid_time, tuple(pending_products), scope, tier)
+            )
+    return jobs
+
+
 def _jobs_for_manifest(
     manifest: dict[str, Any], *, max_hours: int = 0, now: datetime | None = None
 ) -> list[ForecastJob]:
@@ -243,7 +293,7 @@ def _jobs_for_manifest(
     allowed_times = set(all_times[:max_hours] if max_hours > 0 else all_times)
     jobs: list[ForecastJob] = []
 
-    for tier, products in ((0, NATIVE_PRODUCTS), (1, FAST_DERIVED_PRODUCTS)):
+    for tier, products in ((0, NATIVE_PRODUCTS), (1, STANDALONE_FAST_PRODUCTS)):
         for product in products:
             state = (manifest.get("products") or {}).get(product) or {}
             available = set(state.get("available_times", ()))
@@ -257,35 +307,15 @@ def _jobs_for_manifest(
                         ForecastJob(run_iso, valid_time, (product,), scope, tier)
                     )
 
-    convective_times = sorted(
-        {
-            valid
-            for product in CONVECTIVE_FORECAST_PRODUCTS
-            for valid in _product_times(manifest, product)
-            if valid in allowed_times
-        },
-        key=_parse_iso,
+    jobs.extend(
+        _grouped_jobs(manifest, SHEAR_PRODUCTS, allowed_times, now, tier=1)
     )
-    for valid_time in convective_times:
-        pending_products = []
-        for product in CONVECTIVE_FORECAST_PRODUCTS:
-            if valid_time not in _product_times(manifest, product):
-                continue
-            state = (manifest.get("products") or {}).get(product) or {}
-            if valid_time in set(state.get("available_times", ())):
-                continue
-            if _retry_is_due(state, valid_time, now):
-                pending_products.append(product)
-        if pending_products:
-            jobs.append(
-                ForecastJob(
-                    run_iso,
-                    valid_time,
-                    tuple(pending_products),
-                    scope,
-                    2,
-                )
-            )
+
+    jobs.extend(
+        _grouped_jobs(
+            manifest, CONVECTIVE_FORECAST_PRODUCTS, allowed_times, now, tier=2
+        )
+    )
 
     return sorted(
         jobs,
@@ -538,10 +568,26 @@ def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str,
     return manifests[start:] + manifests[:start]
 
 
+def _job_group(job: ForecastJob) -> tuple[str, int]:
+    """Identifica el bloque (pasada, nivel) al que pertenece un trabajo."""
+    return (job.run, job.tier)
+
+
+def _group_rank(group: tuple[str, int]) -> tuple[float, int]:
+    """Ordena los bloques: primero la pasada más reciente, luego por nivel."""
+    return (-_parse_iso(group[0]).timestamp(), group[1])
+
+
 def _parallel_work_order(
     manifests: list[dict[str, Any]], queues: dict[str, list[ForecastJob]]
 ) -> list[tuple[dict[str, Any], ForecastJob]]:
-    """Prioriza dependencias y RUN recientes antes de repartir los trabajos."""
+    """Ordena el trabajo por pasada y, dentro de ella, por dependencias.
+
+    La pasada manda sobre el nivel: así el RUN vigente se publica entero antes
+    de invertir tiempo en las pasadas anteriores. Con el criterio inverso, los
+    campos nativos de las tres pasadas retenidas se adelantaban a los
+    diagnósticos del RUN actual y ninguna llegaba a completarse.
+    """
     work = [
         (manifest, job)
         for manifest in manifests
@@ -550,8 +596,7 @@ def _parallel_work_order(
     return sorted(
         work,
         key=lambda item: (
-            item[1].tier,
-            -_parse_iso(item[1].run).timestamp(),
+            *_group_rank(_job_group(item[1])),
             _parse_iso(item[1].valid_time),
             min(PRODUCT_ORDER.get(product, 999) for product in item[1].products),
         ),
@@ -630,19 +675,23 @@ def _run_parallel_work(
             )
             task_limit_reached = max_tasks > 0 and tasks_started >= max_tasks
 
-            # No mezclamos niveles: así los campos base terminan antes de los
-            # derivados y los perfiles convectivos no compiten por la API.
-            active_tiers = {job.tier for _manifest, job in active.values()}
-            launch_tier = min(active_tiers) if active_tiers else (
-                pending[0][1].tier if pending else None
+            # No mezclamos pasadas ni niveles: así los campos base terminan
+            # antes de los derivados, los perfiles convectivos no compiten por
+            # la API y el RUN vigente se completa antes de tocar los anteriores.
+            active_groups = {_job_group(job) for _manifest, job in active.values()}
+            launch_group = (
+                min(active_groups, key=_group_rank)
+                if active_groups
+                else (_job_group(pending[0][1]) if pending else None)
             )
+            launch_tier = launch_group[1] if launch_group is not None else None
             capacity = tier_capacity(launch_tier) if launch_tier is not None else 0
             while (
                 pending
                 and not budget_reached
                 and not task_limit_reached
                 and len(active) < capacity
-                and pending[0][1].tier == launch_tier
+                and _job_group(pending[0][1]) == launch_group
             ):
                 if launch_tier == 2 and active:
                     # El primer perfil ya está aumentando su memoria. Esperar

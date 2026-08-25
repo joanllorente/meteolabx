@@ -132,7 +132,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
         encoding="utf-8"
     )
     assert "FORECAST_DATA_REVISION" in api
-    assert "forecast-fields-v14" in api
+    assert "forecast-fields-v15" in api
     assert "FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024" in api
     assert "shareFrameGeometry" in api
     assert "frameCacheBytes" in api
@@ -159,7 +159,9 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "Math.log1p" in grid
     assert "makeStreamlinePaths" in grid
     assert "integrateStream" in grid
-    assert "baseSeedStep / zoom" in grid
+    # Los glifos se calculan sobre el encuadre asentado, no sobre el gesto en
+    # curso: integrarlos en cada pointermove bloqueaba el hilo principal.
+    assert "baseSeedStep / viewZoom" in grid
     assert "visibleSourceBounds()" in grid
     assert "class=\"streamline\"" in grid
     assert "class=\"stream-particle\"" in grid

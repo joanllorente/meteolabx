@@ -7,7 +7,7 @@
   import ForecastGrid from '../components/ForecastGrid.svelte';
   import MathFormula from '../components/MathFormula.svelte';
   import { forecastCategories, forecastProducts, forecastCatalogSummary } from '../data/forecastProducts.js';
-  import { fetchAromeCatalog, fetchAromeFrame, getCachedAromeFrame } from '../services/forecastApi.js';
+  import { fetchAromeCatalog, fetchAromeFrame, getCachedAromeFrame, prefetchAromeFrames } from '../services/forecastApi.js';
 
   const assetBase = import.meta.env.BASE_URL;
   const hours = Array.from({ length: 18 }, (_, i) => ({
@@ -277,6 +277,30 @@
     return () => {
       controller.abort();
     };
+  });
+
+  // Precarga las horas contiguas una vez la actual está en pantalla, para que
+  // el deslizador no vuelva a mostrar la tarjeta de carga. Se espera a que la
+  // hora visible haya llegado: si no, competirían por el mismo ancho de banda.
+  $effect(() => {
+    const meta = connectedProduct;
+    const currentIso = valid?.iso;
+    if (!selectedProduct || !meta || frameData?.valid_time !== currentIso) return;
+    const productId = product.id;
+    const requestedRun = selectedRunCatalog?.run;
+    const isWind = productId === 'wind-level';
+    // Primero hacia adelante: es el sentido en el que avanza la reproducción.
+    const neighbours = [hourIndex + 1, hourIndex + 2, hourIndex - 1]
+      .filter((index) => index >= 0 && index < activeHours.length)
+      .map((index) => activeHours[index])
+      .filter(hourIsReady);
+    prefetchAromeFrames(neighbours.map((hour) => ({
+      product: productId,
+      validTime: hour.iso,
+      run: requestedRun,
+      verticalKind: isWind ? windLevelKind : undefined,
+      level: isWind ? windLevel : undefined
+    })));
   });
 
   $effect(() => {
