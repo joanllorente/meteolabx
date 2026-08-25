@@ -21,10 +21,10 @@
   let search = $state('');
   let hourIndex = $state(5);
   let playing = $state(false);
-  let catalog = $state(null);
+  let catalog = $state.raw(null);
   let selectedRun = $state('');
   let catalogError = $state('');
-  let frameData = $state(null);
+  let frameData = $state.raw(null);
   let frameLoading = $state(false);
   let framePending = $state(false);
   let frameError = $state('');

@@ -573,9 +573,140 @@ def _wait_for_profile_request_slot() -> None:
     """Limita globalmente WCS incluso con varios perfiles en procesos distintos."""
     interval = max(
         0.1,
-        float(os.getenv("METEOLABX_AROME_PROFILE_REQUEST_INTERVAL_S", "1.1")),
+        float(os.getenv("METEOLABX_AROME_PROFILE_REQUEST_INTERVAL_S", "0.8")),
     )
     _wait_for_api_request_slot(interval)
+
+
+# Filas de rejilla que se diagnostican de una vez. El perfil completo ocupa
+# ~1 GB y los temporales del cálculo varias veces más: trocear por bandas
+# recorta el pico sin cambiar el resultado, porque cada celda es independiente
+# de sus vecinas en la vertical.
+CONVECTIVE_STRIPE_ROWS = int(
+    os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS", "192")
+)
+
+
+def _convective_outputs(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    u_profile: np.ndarray,
+    v_profile: np.ndarray,
+    terrain: np.ndarray,
+    surface_u: np.ndarray,
+    surface_v: np.ndarray,
+    levels: list[float],
+) -> dict[str, np.ndarray]:
+    """Diagnósticos convectivos de un bloque de filas de la rejilla."""
+    shape = terrain.shape
+    height = hypsometric_height_profile_m(pressure, temperature, dewpoint, terrain)
+    diagnostics = diagnose_convection(pressure, temperature, dewpoint, height)
+
+    cell_u = pressure_weighted_layer_mean(
+        pressure,
+        u_profile,
+        diagnostics.ml_lcl_pressure_hpa,
+        diagnostics.ml_equilibrium_pressure_hpa,
+    )
+    cell_v = pressure_weighted_layer_mean(
+        pressure,
+        v_profile,
+        diagnostics.ml_lcl_pressure_hpa,
+        diagnostics.ml_equilibrium_pressure_hpa,
+    )
+
+    ebwd, ebwd_u, ebwd_v = effective_bulk_wind_difference(
+        height,
+        u_profile,
+        v_profile,
+        diagnostics.effective_base_height_m,
+        diagnostics.mu_equilibrium_height_m,
+    )
+    six_km_height = terrain + 6_000.0
+    u_6km = interpolate_profile_at_height(height, u_profile, six_km_height)
+    v_6km = interpolate_profile_at_height(height, v_profile, six_km_height)
+    shear_0_6 = np.hypot(u_6km - surface_u, v_6km - surface_v)
+
+    index_700 = levels.index(700.0) + 1
+    index_500 = levels.index(500.0) + 1
+    layer_depth = height[index_500] - height[index_700]
+    lapse_rate = np.divide(
+        (temperature[index_700] - temperature[index_500]) * 1_000.0,
+        layer_depth,
+        out=np.full(shape, np.nan),
+        where=layer_depth > 0,
+    )
+    freezing_agl = freezing_level_m(temperature, height)
+    ship = significant_hail_parameter_sharppy(
+        diagnostics.mucape,
+        diagnostics.mu_mixing_ratio_gkg,
+        lapse_rate,
+        temperature[index_500] - 273.15,
+        shear_0_6,
+        freezing_agl,
+    )
+
+    return {
+        "mucape": diagnostics.mucape,
+        "muli": diagnostics.muli,
+        "mlcape": diagnostics.mlcape,
+        "mlli": diagnostics.mlli,
+        "sbcape": diagnostics.sbcape,
+        "sbli": diagnostics.sbli,
+        "dcape": diagnostics.dcape,
+        "cell_u": cell_u,
+        "cell_v": cell_v,
+        "cell_speed": np.hypot(cell_u, cell_v),
+        "ebwd": ebwd,
+        "ebwd_u": ebwd_u,
+        "ebwd_v": ebwd_v,
+        "ship": ship,
+    }
+
+
+def _convective_outputs_in_stripes(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    u_profile: np.ndarray,
+    v_profile: np.ndarray,
+    terrain: np.ndarray,
+    surface_u: np.ndarray,
+    surface_v: np.ndarray,
+    levels: list[float],
+    stripe_rows: int | None = None,
+) -> dict[str, np.ndarray]:
+    """Encadena el diagnóstico por bandas de filas y recompone la rejilla."""
+    rows = terrain.shape[0]
+    step = CONVECTIVE_STRIPE_ROWS if stripe_rows is None else stripe_rows
+    arguments = (
+        pressure, temperature, dewpoint, u_profile, v_profile,
+        terrain, surface_u, surface_v, levels,
+    )
+    if step <= 0 or step >= rows:
+        return _convective_outputs(*arguments)
+
+    stripes: list[dict[str, np.ndarray]] = []
+    for start in range(0, rows, step):
+        band = slice(start, min(start + step, rows))
+        stripes.append(
+            _convective_outputs(
+                pressure[:, band],
+                temperature[:, band],
+                dewpoint[:, band],
+                u_profile[:, band],
+                v_profile[:, band],
+                terrain[band],
+                surface_u[band],
+                surface_v[band],
+                levels,
+            )
+        )
+    return {
+        name: np.concatenate([stripe[name] for stripe in stripes], axis=0)
+        for name in stripes[0]
+    }
 
 
 # Viento a 10 m de la hora en curso. Las tres cizalladuras parten del mismo
@@ -721,87 +852,44 @@ def _convective_frames(
     dewpoint = np.minimum(np.stack(dewpoint_layers), temperature)
     u_profile = np.stack(u_layers)
     v_profile = np.stack(v_layers)
-    height = hypsometric_height_profile_m(pressure, temperature, dewpoint, terrain)
-    diagnostics = diagnose_convection(pressure, temperature, dewpoint, height)
-
-    cell_u = pressure_weighted_layer_mean(
-        pressure,
-        u_profile,
-        diagnostics.ml_lcl_pressure_hpa,
-        diagnostics.ml_equilibrium_pressure_hpa,
-    )
-    cell_v = pressure_weighted_layer_mean(
-        pressure,
-        v_profile,
-        diagnostics.ml_lcl_pressure_hpa,
-        diagnostics.ml_equilibrium_pressure_hpa,
-    )
-    cell_speed = np.hypot(cell_u, cell_v)
-
-    ebwd, ebwd_u, ebwd_v = effective_bulk_wind_difference(
-        height,
-        u_profile,
-        v_profile,
-        diagnostics.effective_base_height_m,
-        diagnostics.mu_equilibrium_height_m,
-    )
-    six_km_height = terrain + 6_000.0
-    u_6km = interpolate_profile_at_height(height, u_profile, six_km_height)
-    v_6km = interpolate_profile_at_height(height, v_profile, six_km_height)
-    shear_0_6 = np.hypot(u_6km - surface_u, v_6km - surface_v)
-
-    index_700 = levels.index(700.0) + 1
-    index_500 = levels.index(500.0) + 1
-    layer_depth = height[index_500] - height[index_700]
-    lapse_rate = np.divide(
-        (temperature[index_700] - temperature[index_500]) * 1_000.0,
-        layer_depth,
-        out=np.full(shape, np.nan),
-        where=layer_depth > 0,
-    )
-    freezing_agl = freezing_level_m(temperature, height)
-    ship = significant_hail_parameter_sharppy(
-        diagnostics.mucape,
-        diagnostics.mu_mixing_ratio_gkg,
-        lapse_rate,
-        temperature[index_500] - 273.15,
-        shear_0_6,
-        freezing_agl,
+    outputs = _convective_outputs_in_stripes(
+        pressure, temperature, dewpoint, u_profile, v_profile,
+        terrain, surface_u, surface_v, levels,
     )
 
     common = (reference.transform, reference.crs, reference.bounds)
     frames = {
         "mucape-muli": RasterField(
-            diagnostics.mucape,
+            outputs["mucape"],
             *common,
             "J/kg",
-            overlay=diagnostics.muli,
+            overlay=outputs["muli"],
             overlay_units="°C",
         ),
         "mlcape-mlli": RasterField(
-            diagnostics.mlcape,
+            outputs["mlcape"],
             *common,
             "J/kg",
-            overlay=diagnostics.mlli,
+            overlay=outputs["mlli"],
             overlay_units="°C",
         ),
         "sbcape-sbli": RasterField(
-            diagnostics.sbcape,
+            outputs["sbcape"],
             *common,
             "J/kg",
-            overlay=diagnostics.sbli,
+            overlay=outputs["sbli"],
             overlay_units="°C",
         ),
-        "dcape": RasterField(diagnostics.dcape, *common, "J/kg"),
+        "dcape": RasterField(outputs["dcape"], *common, "J/kg"),
         "ordinary-cell-motion": RasterField(
-            cell_speed,
+            outputs["cell_speed"],
             *common,
             "m/s",
-            vector_u=cell_u,
-            vector_v=cell_v,
+            vector_u=outputs["cell_u"],
+            vector_v=outputs["cell_v"],
         ),
-        "ebwd": RasterField(ebwd, *common, "m/s", vector_u=ebwd_u, vector_v=ebwd_v),
-        "ship": RasterField(ship, *common, ""),
+        "ebwd": RasterField(outputs["ebwd"], *common, "m/s", vector_u=outputs["ebwd_u"], vector_v=outputs["ebwd_v"]),
+        "ship": RasterField(outputs["ship"], *common, ""),
     }
     return frames, run
 

@@ -453,12 +453,20 @@
     renderGrid();
   });
 
+  // Solo se reencuadra cuando cambia de verdad el mapa mostrado. El efecto se
+  // reevalúa también cuando llega un frame equivalente —al refrescarse el
+  // catálogo, por ejemplo—, y reiniciar ahí devolvía el zoom del usuario a 1.
+  let lastViewportKey = '';
   $effect(() => {
-    resetKey;
-    productLabel;
-    frame.width;
-    frame.height;
-    frame.bounds.join(',');
+    const key = [
+      resetKey,
+      productLabel,
+      frame.width,
+      frame.height,
+      frame.bounds.join(',')
+    ].join('|');
+    if (key === lastViewportKey) return;
+    lastViewportKey = key;
     resetView();
   });
 
@@ -468,7 +476,7 @@
   });
 </script>
 
-<div class="grid-layer" bind:this={layer} style:--grid-ratio={`${frame.width}/${frame.height}`}>
+<div class="grid-layer" bind:this={layer} style:--grid-ratio={frame.width / frame.height}>
   <div
     class="map-surface"
     bind:this={surface}
@@ -489,7 +497,7 @@
       style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
       aria-hidden="true"
     ></canvas>
-    <svg class="vector-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} aria-hidden="true">
+    <svg class="vector-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} preserveAspectRatio="none" aria-hidden="true">
       <g transform={vectorTransform()}>
         {#each streamlineData.paths as streamline}
           <path class="streamline-halo" d={streamline.path} />

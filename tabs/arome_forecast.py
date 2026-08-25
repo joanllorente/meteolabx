@@ -69,7 +69,9 @@ SHIP_SCALE = 44_000_000.0
 LOCAL_TZ = ZoneInfo("Europe/Madrid")
 KEYRING_SERVICE = "arome-cizalladura-catalunya"
 KEYRING_ACCOUNT = getpass.getuser()
-RETRYABLE_HTTP_CODES = {500, 502, 503, 504}
+# 429 entra aquí: es la respuesta normal al apretar el ritmo de descarga, y
+# tratarla como fallo definitivo tumbaba el trabajo entero de esa hora.
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 API_MAX_ATTEMPTS = 4
 
 
@@ -266,6 +268,17 @@ def _credential_headers(token: str) -> Dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Accept": "*/*"}
 
 
+def _retry_delay(response, attempt: int) -> float:
+    """Espera antes de reintentar, respetando Retry-After si la API lo indica."""
+    header = str(response.headers.get("Retry-After", "")).strip()
+    if header:
+        try:
+            return max(0.5, min(60.0, float(header)))
+        except ValueError:
+            pass
+    return 1.5 * (2**attempt)
+
+
 def _wait_for_api_request_slot(interval: float | None = None) -> None:
     """Escalona GetCoverage entre todos los procesos del contenedor."""
     delay_between_requests = max(
@@ -335,7 +348,7 @@ def _api_get(
             response.status_code in RETRYABLE_HTTP_CODES
             and attempt < API_MAX_ATTEMPTS - 1
         ):
-            time.sleep(1.5 * (2**attempt))
+            time.sleep(_retry_delay(response, attempt))
             continue
         break
 

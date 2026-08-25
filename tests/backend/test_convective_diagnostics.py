@@ -165,3 +165,71 @@ def test_vectorized_dcape_tracks_sharppy_params_reference():
     ).item()
 
     assert actual == pytest.approx(expected, rel=0.002)
+
+
+def _synthetic_profile(rows, cols, seed=13):
+    levels = [1000., 950., 925., 900., 850., 800., 750., 700., 650., 600.,
+              550., 500., 450., 400., 350., 300., 275., 250., 225., 200.,
+              175., 150., 125., 100.]
+    rng = np.random.default_rng(seed)
+    surface = np.full((rows, cols), 1008.0) + rng.normal(0, 5, (rows, cols))
+    pressure = np.empty((len(levels) + 1, rows, cols))
+    pressure[0] = surface
+    for index, level in enumerate(levels):
+        pressure[index + 1] = np.minimum(level, surface)
+    temperature = np.empty_like(pressure)
+    temperature[0] = 299 + rng.normal(0, 3, (rows, cols))
+    for index, level in enumerate(levels):
+        temperature[index + 1] = temperature[0] - 6.5 * (
+            np.log(surface / np.maximum(level, 1)) * 7.29
+        )
+    dewpoint = temperature - np.clip(rng.normal(5, 3, pressure.shape), 0.5, 32)
+    u = rng.normal(0, 12, pressure.shape)
+    v = rng.normal(0, 12, pressure.shape)
+    terrain = np.abs(rng.normal(200, 150, (rows, cols)))
+    return (pressure, temperature, dewpoint, u, v, terrain,
+            u[0].copy(), v[0].copy(), levels)
+
+
+def test_striped_convective_outputs_match_the_whole_grid():
+    """Trocear por bandas de filas no cambia el diagnóstico.
+
+    El pico de memoria del perfil obliga a procesar la rejilla por bandas; cada
+    celda es independiente de sus vecinas, así que el resultado debe coincidir.
+    DCAPE queda fuera: su selección de capa de origen a través de SHARPpy es
+    sensible al conjunto de celdas y se comprueba aparte.
+    """
+    from server.services.arome_forecast import (
+        _convective_outputs,
+        _convective_outputs_in_stripes,
+    )
+
+    arguments = _synthetic_profile(48, 24)
+    whole = _convective_outputs(*arguments)
+    striped = _convective_outputs_in_stripes(*arguments, stripe_rows=16)
+
+    assert set(whole) == set(striped)
+    for name, expected in whole.items():
+        if name == "dcape":
+            continue
+        actual = striped[name]
+        assert actual.shape == expected.shape, name
+        assert (np.isfinite(actual) == np.isfinite(expected)).all(), name
+        finite = np.isfinite(expected)
+        assert np.array_equal(actual[finite], expected[finite]), name
+
+
+def test_striping_is_disabled_when_the_band_covers_the_grid():
+    """Una banda igual o mayor que la rejilla no debe trocear nada."""
+    from server.services.arome_forecast import (
+        _convective_outputs,
+        _convective_outputs_in_stripes,
+    )
+
+    arguments = _synthetic_profile(24, 16)
+    whole = _convective_outputs(*arguments)
+    for stripe_rows in (0, 24, 500):
+        same = _convective_outputs_in_stripes(*arguments, stripe_rows=stripe_rows)
+        for name, expected in whole.items():
+            finite = np.isfinite(expected)
+            assert np.array_equal(same[name][finite], expected[finite]), (name, stripe_rows)
