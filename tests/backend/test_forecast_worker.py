@@ -92,12 +92,12 @@ def test_logging_setup_overrides_an_inherited_configuration():
         logging.basicConfig(level=logging.WARNING, force=True)
 
 
-def _trabajo(hora, tier=2, run="2026-08-26T12:00:00Z"):
+def _trabajo(hora, tier=2, run="2026-08-26T12:00:00Z", dia=26):
     import scripts.forecast_worker as trabajador
 
     return trabajador.ForecastJob(
         run=run,
-        valid_time=f"2026-08-26T{hora:02d}:00:00Z",
+        valid_time=f"2026-08-{dia:02d}T{hora:02d}:00:00Z",
         products=("mucape-muli",),
         scope="model",
         tier=tier,
@@ -145,3 +145,60 @@ def test_prefetch_does_not_start_without_packages(monkeypatch):
     )
 
     assert hilo is None
+
+
+def test_prefetch_covers_the_whole_run_not_just_the_next_block():
+    """Con margen de disco se adelantan todos los bloques de la pasada.
+
+    Los perfiles convectivos empiezan mucho después que los niveles 0 y 1, así
+    que da tiempo a bajarlo todo mientras aquéllos calculan. El objetivo es que
+    un perfil no espere nunca a una descarga.
+    """
+    import scripts.forecast_worker as trabajador
+
+    # 52 horas de pasada: ocho bloques de siete.
+    trabajos = [_trabajo(h % 24, run="2026-08-26T12:00:00Z") for h in range(12, 24)]
+    trabajos += [
+        trabajador.ForecastJob(
+            run="2026-08-26T12:00:00Z",
+            valid_time=f"2026-08-2{7 + h // 24}T{h % 24:02d}:00:00Z",
+            products=("mucape-muli",), scope="model", tier=2,
+        )
+        for h in range(0, 40)
+    ]
+
+    assert trabajador.PREFETCH_BLOCKS >= 8, "debe cubrir una pasada entera"
+    objetivos = trabajador._blocks_ahead(trabajos, limit=trabajador.PREFETCH_BLOCKS)
+    assert len(objetivos) >= 5, f"solo adelanta {len(objetivos)} bloques"
+
+
+def test_prefetch_keeps_going_when_one_block_is_not_published_yet(monkeypatch):
+    """Un bloque que aún no existe no cancela el adelanto de los demás.
+
+    Durante la publicación los últimos plazos tardan en aparecer; abandonar al
+    primer fallo dejaba sin adelantar todo lo que sí estaba disponible.
+    """
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    pedidos = []
+
+    def a_veces_falla(paquete, run, valid_time):
+        pedidos.append((paquete, valid_time.hour))
+        if valid_time.hour == 19:
+            raise trabajador.AromePackageError("todavía no publicado")
+        return "ruta"
+
+    monkeypatch.setattr(trabajador, "ensure_package", a_veces_falla)
+
+    # 12:00 del 26 -> bloque 00H06H; 19:00 del 26 -> 07H13H; 02:00 del 27 -> 14H20H.
+    trabajos = [_trabajo(12), _trabajo(19), _trabajo(2, dia=27)]
+    hilo = trabajador._start_package_prefetch(trabajos, threading.Event())
+    assert hilo is not None
+    hilo.join(timeout=5)
+
+    horas = {hora for _, hora in pedidos}
+    assert 2 in horas, "debe seguir con el bloque siguiente al que falla"

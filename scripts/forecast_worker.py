@@ -541,10 +541,13 @@ def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> Non
         )
 
 
-# Bloques GRIB que se adelantan mientras el resto trabaja. Cada bloque cubre
-# siete horas, así que uno por delante basta para que nadie espere a que baje.
+# Bloques GRIB que se adelantan mientras el resto trabaja. Una pasada de 52
+# horas son ocho bloques de siete, unos 5 GB en el temporal del contenedor,
+# que tiene cientos de gigas libres. Adelantarlos todos mientras los niveles 0
+# y 1 calculan hace que los perfiles convectivos, que empiezan mucho después,
+# se encuentren el trabajo hecho en vez de descargar entre hora y hora.
 PREFETCH_BLOCKS = max(
-    0, int(os.getenv("METEOLABX_FORECAST_PREFETCH_BLOCKS", "1"))
+    0, int(os.getenv("METEOLABX_FORECAST_PREFETCH_BLOCKS", "8"))
 )
 
 
@@ -591,17 +594,27 @@ def _start_package_prefetch(
         return None
 
     def adelantar() -> None:
+        inicio = time.monotonic()
+        bajados = 0
         for run, valid_time in objetivos:
             for paquete in ("IP1", "SP1", "SP2"):
                 if stop.is_set():
                     return
                 try:
                     ensure_package(paquete, run, valid_time)
+                    bajados += 1
                 except (AromePackageError, MeteoFranceAuthError) as exc:
-                    # Que falle el adelanto no rompe nada: quien lo necesite
-                    # volverá a intentarlo por su cuenta.
+                    # Que falle uno no cancela el resto: puede ser un bloque
+                    # que Météo-France todavía no ha publicado, y los de más
+                    # atrás sí están. Quien lo necesite reintentará por su
+                    # cuenta cuando le toque.
                     logger.info("No se pudo adelantar %s: %s", paquete, exc)
-                    return
+                    continue
+        logger.info(
+            "Adelantados %d paquetes de %d bloques en %.0f s; los perfiles "
+            "convectivos no deberían esperar descargas.",
+            bajados, len(objetivos), time.monotonic() - inicio,
+        )
 
     hilo = threading.Thread(target=adelantar, name="arome-prefetch", daemon=True)
     hilo.start()
