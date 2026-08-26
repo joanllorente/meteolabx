@@ -176,6 +176,20 @@ def _expected_hours(manifest: dict[str, Any], product: str) -> int:
     return diagnostic if product in caros else native
 
 
+def _expected_frames(manifest: dict[str, Any], product: str, published: int) -> int:
+    """Frames que cuentan en el denominador de ese producto.
+
+    De los recortados solo se calculan las horas del límite, así que contar las
+    demás sería contar trabajo que nunca se va a hacer. De los demás manda lo
+    publicado si supera lo previsto.
+    """
+    expected = _expected_hours(manifest, product)
+    caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS)
+    if product in caros:
+        return expected
+    return max(published, expected)
+
+
 def _refresh_progress(manifest: dict[str, Any]) -> dict[str, Any]:
     total = 0
     available = 0
@@ -183,9 +197,8 @@ def _refresh_progress(manifest: dict[str, Any]) -> dict[str, Any]:
     for product in PERSISTED_FORECAST_PRODUCTS:
         expected = set(_product_times(manifest, product))
         state = (manifest.get("products") or {}).get(product) or {}
-        # El denominador es el horizonte completo, no lo publicado hasta ahora:
-        # si AROME acaba entregando más horas de las previstas, manda lo real.
-        total += max(len(expected), _expected_hours(manifest, product))
+        # El denominador es el horizonte completo, no lo publicado hasta ahora.
+        total += _expected_frames(manifest, product, len(expected))
         available += len(expected & set(state.get("available_times", ())))
         errors += len(set(state.get("errors", {})) & expected)
     progress = manifest.setdefault("progress", {})

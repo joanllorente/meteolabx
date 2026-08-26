@@ -795,11 +795,33 @@ def test_expensive_products_use_the_shorter_horizon():
     assert forecast_worker._expected_hours(manifest, "dcape") == 36
 
 
-def test_denominator_follows_reality_when_the_model_publishes_more():
-    """Si AROME entrega más horas de las previstas, manda lo real."""
-    muchas = [f"2026-08-24T{hora:02d}:00:00Z" for hora in range(0, 24)]
-    manifest = new_manifest(
-        RUN, muchas, catalog_products={"ship": {"run": RUN, "valid_times": muchas}}
+def test_denominator_follows_reality_only_for_uncapped_products():
+    """Un producto sin recorte cuenta lo publicado si supera lo previsto.
+
+    Los recortados no: de ellos solo se calculan las horas del límite, así que
+    contar las demás sería contar trabajo que nunca se va a hacer.
+    """
+    manifest = {"expected_hours": {"native": 10, "diagnostic": 6}}
+
+    # 'temperature-2m' no está recortado: si hay 24 horas publicadas, cuentan.
+    assert forecast_worker._expected_frames(manifest, "temperature-2m", 24) == 24
+    assert forecast_worker._expected_frames(manifest, "temperature-2m", 3) == 10
+
+    # 'shear-06' y 'dcape' se quedan en su límite pase lo que pase.
+    assert forecast_worker._expected_frames(manifest, "shear-06", 24) == 6
+    assert forecast_worker._expected_frames(manifest, "dcape", 24) == 6
+    assert forecast_worker._expected_frames(manifest, "dcape", 2) == 6
+
+
+def test_full_run_denominator_is_stable_while_the_model_publishes():
+    """El total no cambia entre el principio y el final de la publicación."""
+    manifest = {"expected_hours": {"native": 52, "diagnostic": 36}}
+    al_principio = sum(
+        forecast_worker._expected_frames(manifest, product, 6)
+        for product in PERSISTED_FORECAST_PRODUCTS
     )
-    manifest["expected_hours"] = {"native": 10, "diagnostic": 10}
-    assert forecast_worker._refresh_progress(manifest)["frames_total"] >= len(muchas)
+    al_final = sum(
+        forecast_worker._expected_frames(manifest, product, 52)
+        for product in PERSISTED_FORECAST_PRODUCTS
+    )
+    assert al_principio == al_final == 984
