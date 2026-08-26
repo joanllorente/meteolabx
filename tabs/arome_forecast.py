@@ -297,7 +297,10 @@ def _wait_for_api_request_slot(interval: float | None = None) -> None:
         float(
             interval
             if interval is not None
-            else os.getenv("METEOLABX_AROME_REQUEST_INTERVAL_S", "0.5")
+            # La suscripcion AROME esta en el tier 50PerMin: una peticion cada
+            # 1,2 s. El lock es global al contenedor, asi que este intervalo
+            # gobierna el ritmo total. 1,25 s deja 48/min, con margen.
+            else os.getenv("METEOLABX_AROME_REQUEST_INTERVAL_S", "1.25")
         ),
     )
     lock_path = Path(

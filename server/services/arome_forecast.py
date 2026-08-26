@@ -634,7 +634,7 @@ def _wait_for_profile_request_slot() -> None:
     """Limita globalmente WCS incluso con varios perfiles en procesos distintos."""
     interval = max(
         0.1,
-        float(os.getenv("METEOLABX_AROME_PROFILE_REQUEST_INTERVAL_S", "0.9")),
+        float(os.getenv("METEOLABX_AROME_PROFILE_REQUEST_INTERVAL_S", "1.25")),
     )
     _wait_for_api_request_slot(interval)
 
