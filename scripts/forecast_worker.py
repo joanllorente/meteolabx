@@ -790,6 +790,35 @@ def _parallel_work_order(
     )
 
 
+# Fracción de memoria del contenedor por encima de la cual no se admite un
+# segundo perfil a la vez. Es un freno de emergencia, no una garantía: mide
+# antes de lanzar, y el perfil recién admitido crece durante los minutos
+# siguientes. Medido en Railway, cada perfil cuesta ~2,9 GB sobre una base de
+# 2,3, así que dos no caben en 8 GB por mucho que el instante del lanzamiento
+# parezca despejado.
+HEAVY_MEMORY_CEILING = max(
+    0.1, min(0.95, float(os.getenv("METEOLABX_FORECAST_HEAVY_MEMORY_CEILING", "0.55")))
+)
+
+
+def _cgroup_anonymous_bytes() -> int | None:
+    """Memoria anónima del cgroup, la que el núcleo no puede recuperar.
+
+    memory.current incluye el page cache, y desde que los perfiles se sirven
+    desde un fichero mapeado buena parte de ese cache es nuestro: memoria que
+    el núcleo suelta en cuanto aprieta, en vez de invocar al OOM. Contarla como
+    ocupada hacía rechazar un segundo perfil que sí cabía.
+    """
+    try:
+        for linea in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
+            campo, _, valor = linea.partition(" ")
+            if campo == "anon":
+                return int(valor)
+    except (FileNotFoundError, OSError, ValueError):
+        pass
+    return None
+
+
 def _container_memory_ratio() -> float | None:
     """Uso de memoria del cgroup; permite no lanzar un segundo perfil si no cabe."""
     candidates = (
@@ -806,8 +835,12 @@ def _container_memory_ratio() -> float | None:
             if raw_limit == "max":
                 continue
             limit = int(raw_limit)
-            if limit > 0:
-                return current / limit
+            if limit <= 0:
+                continue
+            # La anónima cuando se puede leer; si no, el total, que es lo que
+            # había antes y peca de conservador.
+            anonima = _cgroup_anonymous_bytes()
+            return (anonima if anonima is not None else current) / limit
         except (FileNotFoundError, OSError, ValueError):
             continue
     return None
@@ -886,7 +919,15 @@ def _run_parallel_work(
                     if time.monotonic() - last_heavy_launch < 15.0:
                         break
                     memory_ratio = _container_memory_ratio()
-                    if memory_ratio is not None and memory_ratio >= 0.55:
+                    if memory_ratio is not None and memory_ratio >= HEAVY_MEMORY_CEILING:
+                        # Sin esta traza, un segundo worker configurado pero
+                        # nunca admitido parece que no hace nada.
+                        logger.info(
+                            "Segundo perfil en espera: memoria del cgroup al "
+                            "%.0f %% (tope %.0f %%).",
+                            memory_ratio * 100.0,
+                            HEAVY_MEMORY_CEILING * 100.0,
+                        )
                         break
                 manifest, job = pending.pop(0)
                 timeout_s = derived_timeout_s if job.tier > 0 else native_timeout_s
