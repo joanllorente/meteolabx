@@ -901,6 +901,7 @@ def _compute_shear(
     valid_time: datetime,
     depth_m: int,
     base_uv: Optional[Tuple[RasterField, RasterField]] = None,
+    isobaric_levels: Optional[Dict[float, Dict[str, RasterField]]] = None,
 ) -> RasterField:
     """Cizalladura entre 10 m y `depth_m`.
 
@@ -942,6 +943,17 @@ def _compute_shear(
         v_levels: List[np.ndarray] = []
         z_levels: List[np.ndarray] = []
         for pressure in pressure_levels_hpa:
+            if isobaric_levels and float(pressure) in isobaric_levels:
+                # Esos niveles ya vienen en el paquete GRIB que se descarga
+                # para el perfil convectivo: son 18 peticiones menos por hora.
+                nivel = isobaric_levels[float(pressure)]
+                u_levels.append(_align(base_u, nivel["u"]))
+                v_levels.append(_align(base_u, nivel["v"]))
+                z_field = nivel["geopotential"]
+                z_levels.append(
+                    _height_from_geopotential(_align(base_u, z_field), z_field.units)
+                )
+                continue
             u_field = client.get_field(
                 catalog,
                 prefixes["pressure_u"],

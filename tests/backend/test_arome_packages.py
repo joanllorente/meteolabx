@@ -7,6 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from types import SimpleNamespace
+
+from rasterio.transform import from_bounds
 
 from server.services import arome_packages as paquetes
 
@@ -105,3 +108,49 @@ def test_old_packages_are_discarded(tmp_path, monkeypatch):
 
     assert [p.name for p in borrados] == ["IP1-20260825T21-00H06H.grib2"]
     assert (tmp_path / "IP1-20260826T03-00H06H.grib2").exists()
+
+
+def test_shear_06_reuses_the_package_levels_instead_of_downloading(monkeypatch):
+    """La cizalladura 0-6 km lee del paquete los niveles que ya están bajados.
+
+    Interpola el viento a 6 km sobre seis niveles isobáricos; pedirlos al WCS
+    son 18 peticiones por hora que el perfil convectivo ya ha traído.
+    """
+    from tabs import arome_forecast as wcs
+
+    descargas: list[tuple] = []
+
+    limites = (0.0, 40.0, 1.0, 41.0)
+    transform = from_bounds(*limites, 5, 4)
+
+    def campo(valor, unidad="m/s"):
+        return wcs.RasterField(np.full((4, 5), valor), transform, None, limites, unidad)
+
+    def registrar(_catalog, prefix, _run, _valid, nivel, tipo, component=None, period=None):
+        descargas.append((prefix, nivel, tipo))
+        return campo(10.0)
+
+    cliente = SimpleNamespace(get_field=registrar)
+    base = campo(3.0)
+    niveles = {
+        nivel: {
+            "u": campo(20.0),
+            "v": campo(0.0),
+            "geopotential": campo(60000.0 + nivel * 10, "m^2/s^2"),
+        }
+        for nivel in (500.0, 450.0, 400.0, 350.0, 300.0, 250.0)
+    }
+
+    wcs._compute_shear(
+        cliente,
+        object(),
+        {"terrain": None, "height_u": "U", "height_v": "V"},
+        RUN,
+        RUN,
+        6000,
+        base_uv=(base, base),
+        isobaric_levels=niveles,
+    )
+
+    isobaricos = [d for d in descargas if d[2] == "pressure"]
+    assert not isobaricos, f"no debería pedir niveles al WCS: {isobaricos}"

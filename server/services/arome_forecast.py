@@ -820,6 +820,29 @@ def _surface_wind_10m(
 # Cada entrada retiene siete campos del dominio completo (~45 MB). Un trabajo
 # del worker resuelve una sola hora, así que basta con no perder la que se
 # está usando; guardar treinta y dos era retener más de un giga sin necesidad.
+def _shear_levels_from_package(
+    reference: RasterField, run: datetime, valid_time: datetime, levels_hpa: tuple[float, ...]
+) -> dict[float, dict[str, RasterField]] | None:
+    """Niveles isobáricos para la cizalladura 0-6 km, desde el paquete GRIB.
+
+    Son los mismos que ya se bajan para el perfil convectivo, así que leerlos
+    del fichero evita 18 peticiones por hora de predicción.
+    """
+    campos = _isobaric_fields_from_package(reference, run, valid_time, list(levels_hpa))
+    if not campos:
+        return None
+    disponibles = {
+        nivel: {
+            "u": campos["u"][nivel],
+            "v": campos["v"][nivel],
+            "geopotential": campos["geopotential"][nivel],
+        }
+        for nivel in levels_hpa
+        if nivel in campos["u"] and nivel in campos["geopotential"]
+    }
+    return disponibles or None
+
+
 def _dewpoint_from_relative_humidity_c(
     temperature_c: np.ndarray, relative_humidity_pct: np.ndarray
 ) -> np.ndarray:
@@ -1213,6 +1236,14 @@ def _computed_frame(
         field.data = values
         field.units = str(config["unit"])
     else:
+        base_uv = _surface_wind_10m(client, catalog, prefixes, run, valid_time)
+        # La de 0-6 km interpola sobre niveles isobáricos, que ya vienen en el
+        # paquete; las de 0-1 y 0-3 usan niveles de altura y siguen por el WCS.
+        isobaric_levels = None
+        if int(config["depth_m"]) == 6000:
+            isobaric_levels = _shear_levels_from_package(
+                base_uv[0], run, valid_time, (500.0, 450.0, 400.0, 350.0, 300.0, 250.0)
+            )
         field = _compute_shear(
             client,
             catalog,
@@ -1220,7 +1251,8 @@ def _computed_frame(
             run,
             valid_time,
             int(config["depth_m"]),
-            base_uv=_surface_wind_10m(client, catalog, prefixes, run, valid_time),
+            base_uv=base_uv,
+            isobaric_levels=isobaric_levels,
         )
     finite = field.data[np.isfinite(field.data)]
     maximum = float(np.nanmax(finite)) if finite.size else float("nan")
