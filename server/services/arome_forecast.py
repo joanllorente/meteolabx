@@ -1077,6 +1077,12 @@ def _convective_frames(
     surface_dewpoint_field = surface_pressure_field = None
     surface_u_field = surface_v_field = terrain_field = None
     fetched.clear()
+    # Los campos del paquete tambien: son cinco elementos por cada uno de los
+    # 24 niveles, y su contenido ya esta dentro de los perfiles apilados.
+    if package_levels:
+        for campos in package_levels.values():
+            campos.clear()
+        package_levels = None
 
     outputs = _convective_outputs_in_stripes(
         pressure, temperature, dewpoint, u_profile, v_profile,
