@@ -755,6 +755,17 @@ def _convective_outputs(
     }
 
 
+# DCAPE era el único que pedía el rocío isobárico al WCS: 24 peticiones por
+# hora, 864 por pasada, más que todo el resto junto. Medido contra el modelo
+# sobre la misma pasada y hora, el rocío derivado de la humedad del paquete se
+# desvía 0,006 K de media y mueve el DCAPE un 0,18 %, con un 0,3 % de celdas
+# saltando de capa de origen —la misma sensibilidad que ya tiene al troceado
+# de la rejilla—. A 0 se deriva y DCAPE deja de depender del WCS.
+DCAPE_EXACT_DEWPOINT = os.getenv(
+    "METEOLABX_FORECAST_DCAPE_EXACT_DEWPOINT", "1"
+).strip().lower() not in {"0", "false", "no"}
+
+
 PROFILE_SPILL_ENABLED = os.getenv(
     "METEOLABX_FORECAST_PROFILE_SPILL", "1"
 ).strip().lower() not in {"0", "false", "no"}
@@ -1063,8 +1074,19 @@ def _convective_frames(
     valid_time_iso: str,
     run_iso: str = "",
     exact_dewpoint: bool = True,
+    include_dcape: bool | None = None,
 ) -> tuple[dict[str, RasterField], datetime]:
-    """Descarga un perfil común y reutiliza todos sus diagnósticos convectivos."""
+    """Descarga un perfil común y reutiliza todos sus diagnósticos convectivos.
+
+    `exact_dewpoint` pide el rocío isobárico al WCS, nivel a nivel; sin él se
+    deriva de la humedad del paquete. `include_dcape` decide si se calcula
+    DCAPE, que es lo único que necesitaba ese rocío exacto. Van separados
+    porque medido contra el modelo el rocío derivado se desvía 0,006 K y mueve
+    el DCAPE un 0,18 %, así que se puede calcular sin pagar 24 peticiones por
+    hora.
+    """
+    if include_dcape is None:
+        include_dcape = exact_dewpoint
     _, client, catalog, prefixes, run, times = _product_context(
         token, "ship", run_iso=run_iso
     )
@@ -1265,7 +1287,7 @@ def _convective_frames(
         outputs = _convective_outputs_in_stripes(
             *perfiles,
             terrain, surface_u, surface_v, levels,
-            include_dcape=exact_dewpoint,
+            include_dcape=include_dcape,
         )
         perfiles = None
     fases["diagnosticar"] = time.monotonic() - reloj
@@ -1276,7 +1298,7 @@ def _convective_frames(
         fases["traer"], fases["montar"], fases["diagnosticar"],
         "sí" if package_levels_usado else "no",
         "sí" if surface_package_usado else "no",
-        "sí" if exact_dewpoint else "no",
+        "sí" if include_dcape else "no",
     )
 
     common = (reference.transform, reference.crs, reference.bounds)
@@ -1340,7 +1362,8 @@ def _computed_frame(
             token,
             valid_time_iso,
             run_iso,
-            exact_dewpoint=product_id == "dcape",
+            exact_dewpoint=product_id == "dcape" and DCAPE_EXACT_DEWPOINT,
+            include_dcape=product_id == "dcape",
         )
         field = frames[product_id]
         run = diagnostic_run

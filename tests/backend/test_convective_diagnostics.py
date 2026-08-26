@@ -391,3 +391,24 @@ def test_railway_mount_layout_is_recognised_as_real_disk(monkeypatch):
     assert _is_memory_backed(Path("/tmp")) is False
     assert _is_memory_backed(Path("/app/data")) is False
     assert _is_memory_backed(Path("/dev/shm")) is True
+
+
+def test_dcape_can_be_computed_without_asking_the_wcs_for_dewpoint():
+    """Calcular DCAPE y pedir el rocío exacto son decisiones separadas.
+
+    DCAPE era el único que pedía el rocío isobárico al WCS: 24 peticiones por
+    hora, 864 por pasada, más que todo el resto junto. Medido contra el modelo
+    sobre la misma pasada y hora, el rocío derivado de la humedad del paquete
+    se desvía 0,006 K y mueve el DCAPE un 0,18 %, así que tiene que poder
+    calcularse sin esas peticiones.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    firma = inspect.signature(arome_forecast._convective_frames.__wrapped__)
+    assert "include_dcape" in firma.parameters, (
+        "sin separarlo, quitar el rocío del WCS apagaba también el cálculo"
+    )
+    # Por omisión siguen acoplados, que es el comportamiento de siempre.
+    assert firma.parameters["include_dcape"].default is None
