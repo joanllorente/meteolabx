@@ -420,3 +420,18 @@ def test_prefetch_retry_fits_inside_a_cycle():
         f"con reintentos cada {trabajador.PREFETCH_RETRY_S} s apenas da vueltas "
         f"en un ciclo de {ciclo} s"
     )
+
+
+def test_grouped_jobs_are_named_after_what_they_actually_compute():
+    """Un grupo de cizalladuras no puede anunciarse como convectivo.
+
+    Los de cizalladura también viajan agrupados, así que llamar convectivo a
+    todo lo que tenga más de un producto hacía que el visor dijera
+    «Diagnósticos convectivos» mientras calculaba cizalladuras.
+    """
+    import scripts.forecast_worker as trabajador
+
+    assert trabajador._group_label(("shear-0-6",)) == "shear-0-6"
+    assert trabajador._group_label(trabajador.SHEAR_PRODUCTS) == "shear-group"
+    assert trabajador._group_label(trabajador.PROFILE_PRODUCTS) == "convective-group"
+    assert trabajador._group_label(("shear-0-6", "mucape-muli")) == "mixed-group"

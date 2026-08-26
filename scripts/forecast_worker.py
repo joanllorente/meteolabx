@@ -768,7 +768,7 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
         "run": job.run,
         "valid_time": job.valid_time,
         "products": list(job.products),
-        "product": job.products[0] if len(job.products) == 1 else "convective-group",
+        "product": _group_label(job.products),
         "started_at": now,
         "timeout_seconds": timeout_s,
     }
@@ -780,6 +780,22 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
     active.append(entry)
     progress["active_jobs"] = active
     progress["current_job"] = active[0]
+
+
+def _group_label(products: Sequence[str]) -> str:
+    """Nombre con el que el visor identifica un trabajo agrupado.
+
+    Los de cizalladura también viajan agrupados, así que dar por convectivo
+    todo lo que tenga más de un producto hacía que el visor anunciara
+    «Diagnósticos convectivos» mientras calculaba cizalladuras.
+    """
+    if len(products) == 1:
+        return products[0]
+    if all(product.startswith("shear-") for product in products):
+        return "shear-group"
+    if all(product in CONVECTIVE_FORECAST_PRODUCTS for product in products):
+        return "convective-group"
+    return "mixed-group"
 
 
 def _job_id(job: ForecastJob) -> str:

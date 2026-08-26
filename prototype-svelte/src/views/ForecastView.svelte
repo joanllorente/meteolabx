@@ -89,7 +89,12 @@
   const currentJobLabel = $derived.by(() => {
     const current = latestProgress?.current_job;
     if (!current) return '';
-    if (current.product === 'convective-group') return 'Diagnósticos convectivos';
+    const grupos = {
+      'convective-group': 'Diagnósticos convectivos',
+      'shear-group': 'Cizalladuras',
+      'mixed-group': 'Varios mapas'
+    };
+    if (grupos[current.product]) return grupos[current.product];
     return forecastProducts.find((item) => item.id === current.product)?.label || current.product;
   });
   const visibleCategories = $derived.by(() => {
