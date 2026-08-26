@@ -132,7 +132,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
         encoding="utf-8"
     )
     assert "FORECAST_DATA_REVISION" in api
-    assert "forecast-fields-v15" in api
+    assert "forecast-fields-v16" in api
     assert "FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024" in api
     assert "shareFrameGeometry" in api
     assert "frameCacheBytes" in api

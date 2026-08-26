@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from copy import deepcopy
 import gzip
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from server.config import Settings, get_settings
-from server.services.arome_forecast import catalog_payload, frame_grid, frame_png
+from server.services.arome_forecast import (
+    catalog_payload,
+    domain_boundaries,
+    frame_grid,
+    frame_png,
+)
 from server.services.forecast_store import (
     PERSISTED_FORECAST_PRODUCTS,
     LATEST_MANIFEST_KEY,
@@ -145,6 +151,27 @@ def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
         return payload
     except AromeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/boundaries", summary="Contornos del dominio AROME")
+def get_boundaries() -> Response:
+    """Fronteras compartidas por todos los frames.
+
+    Antes viajaban dentro de cada rejilla: los mismos contornos repetidos en
+    miles de ficheros. Se sirven una vez y el visor los reutiliza.
+    """
+    payload = json.dumps(
+        {"boundaries": domain_boundaries()}, separators=(",", ":")
+    ).encode("utf-8")
+    return Response(
+        content=gzip.compress(payload, compresslevel=6),
+        media_type="application/json",
+        headers=_http_headers({
+            "Content-Encoding": "gzip",
+            "Cache-Control": "public, max-age=86400",
+            "Vary": "Accept-Encoding",
+        }),
+    )
 
 
 @router.get("/frames.png", summary="Frame PNG de cizalladura o SHIP")

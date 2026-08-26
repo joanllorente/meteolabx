@@ -354,6 +354,45 @@ def register_run_slot(store: ObjectStore, manifest: dict[str, Any]) -> str | Non
     return str(previous) if previous and previous != run_iso else None
 
 
+def retained_run_limit() -> int:
+    """Pasadas que se conservan en el volumen."""
+    try:
+        return max(1, int(os.getenv("METEOLABX_FORECAST_RETAINED_RUNS", "3")))
+    except ValueError:
+        return 3
+
+
+def prune_retained_runs(store: ObjectStore, keep: int | None = None) -> list[str]:
+    """Deja solo las pasadas más recientes y borra las demás del volumen.
+
+    Cada pasada ocupa más de un gigabyte, así que retener las cuatro del día
+    desbordaba el volumen y el worker se quedaba sin poder escribir.
+    """
+    limit = retained_run_limit() if keep is None else max(1, keep)
+    index = read_json(store, RUN_SLOTS_KEY) or {}
+    slots = dict(index.get("slots") or {})
+    ordered = sorted(
+        (
+            (str(item.get("run")), slot)
+            for slot, item in slots.items()
+            if item.get("run")
+        ),
+        reverse=True,
+    )
+    removed: list[str] = []
+    for run_iso, slot in ordered[limit:]:
+        manifest = read_json(store, run_manifest_key(run_iso)) or {}
+        delete_run(
+            store, run_iso, scope=str(manifest.get("calculation_scope", "model"))
+        )
+        slots.pop(slot, None)
+        removed.append(run_iso)
+    if removed:
+        index["slots"] = slots
+        write_json(store, RUN_SLOTS_KEY, index)
+    return removed
+
+
 def retained_manifests(store: ObjectStore) -> list[dict[str, Any]]:
     index = read_json(store, RUN_SLOTS_KEY) or {}
     manifests = []

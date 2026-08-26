@@ -190,6 +190,17 @@ def _boundary_payload(geojson: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+def domain_boundaries(scope: str = "") -> list[dict[str, Any]]:
+    """Fronteras del dominio AROME, servidas aparte de los frames.
+
+    Son idénticas para todos los mapas, así que el visor las pide una vez y
+    las reutiliza en lugar de recibirlas dentro de cada frame.
+    """
+    return _domain_boundary_payload(
+        AROME_MODEL_GRID_BOUNDS, scope or forecast_calculation_scope()
+    )
+
+
 def _domain_boundary_payload(
     bounds: tuple[float, float, float, float], scope: str
 ) -> list[dict[str, Any]]:
@@ -1109,7 +1120,7 @@ def frame_png(
     return _render_png(field, float(config["vmax"])), headers
 
 
-GRID_FORMAT_VERSION = 2
+GRID_FORMAT_VERSION = 3
 QUANTIZATION_LEVELS = 4096
 MAX_QUANTIZATION_CODE = 65534
 
@@ -1334,7 +1345,10 @@ def _serialize_grid(
         "vertical_kind": headers.get("X-AROME-Level-Type"),
         "level": float(headers["X-AROME-Level"]) if "X-AROME-Level" in headers else None,
         "calculation_scope": calculation_scope,
-        "boundaries": _domain_boundary_payload(boundary_bounds, calculation_scope),
+        # Las fronteras ya no viajan aquí: eran los mismos 293 KB repetidos en
+        # cada frame, un cuarto del volumen y del tráfico. El visor las pide
+        # una vez por dominio y las reutiliza.
+        "boundary_scope": calculation_scope,
         "has_vectors": has_vectors,
         "has_overlay": has_overlay,
         "overlay_unit": field.overlay_units if has_overlay else None,

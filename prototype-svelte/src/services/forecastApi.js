@@ -10,7 +10,7 @@ const localBase = typeof window !== 'undefined' && ['127.0.0.1', 'localhost'].in
   ? (window.location.port === '5173' ? '' : `${window.location.protocol}//${window.location.hostname}:8000`)
   : '';
 const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
-const FORECAST_DATA_REVISION = 'forecast-fields-v15';
+const FORECAST_DATA_REVISION = 'forecast-fields-v16';
 const FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024;
 const frameCache = new Map();
 const geometryCache = new Map();
@@ -51,6 +51,23 @@ function rememberAromeFrame(options, frame) {
   return frame;
 }
 
+// Las fronteras son idénticas para todos los mapas. Desde el formato 3 no
+// viajan dentro del frame: se piden una vez y se reutilizan.
+let boundariesRequest = null;
+
+function fetchDomainBoundaries() {
+  if (!boundariesRequest) {
+    boundariesRequest = getJson('/v1/forecast/arome/boundaries')
+      .then((payload) => payload.boundaries || [])
+      .catch((error) => {
+        // Sin contornos el mapa sigue siendo legible; se reintenta al siguiente.
+        boundariesRequest = null;
+        throw error;
+      });
+  }
+  return boundariesRequest;
+}
+
 function shareFrameGeometry(header) {
   if (!header.boundaries?.length) return header;
   const key = [header.calculation_scope || '', header.width, header.height, ...(header.bounds || [])].join('|');
@@ -63,13 +80,14 @@ function shareFrameGeometry(header) {
 /**
  * Reconstruye las matrices del cuerpo.
  *
- * v1 son Float32 crudos; v2 son códigos uint16 con los bytes altos y bajos en
- * bloques separados, y puede omitir el escalar cuando es el módulo de (u, v).
- * El almacén conserva frames de ambas versiones mientras rotan las pasadas.
+ * v1 son Float32 crudos. De v2 en adelante son códigos uint16 con los bytes
+ * altos y bajos en bloques separados, y puede omitir el escalar cuando es el
+ * módulo de (u, v); v3 solo cambia la cabecera, que ya no lleva fronteras. El
+ * almacén conserva frames de las tres versiones mientras rotan las pasadas.
  */
 function decodeFrameBody(buffer, header, bodyStart) {
   const cellCount = header.width * header.height;
-  if (header.version !== 2) {
+  if (!(header.version >= 2)) {
     const matrixBytes = cellCount * Float32Array.BYTES_PER_ELEMENT;
     let offset = bodyStart;
     const readMatrix = () => {
@@ -166,6 +184,10 @@ export function fetchAromeFrame({ product, validTime, run, verticalKind, level, 
     const view = new DataView(buffer);
     const headerLength = view.getUint32(0, true);
     const header = shareFrameGeometry(JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLength))));
+    if (!header.boundaries?.length) {
+      // Formato 3 en adelante: los contornos llegan por su propio endpoint.
+      header.boundaries = await fetchDomainBoundaries().catch(() => []);
+    }
     return rememberAromeFrame(options, decodeFrameBody(buffer, header, 4 + headerLength));
   });
   if (!signal) {

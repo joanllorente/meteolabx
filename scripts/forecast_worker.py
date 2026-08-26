@@ -35,6 +35,7 @@ from server.services.forecast_store import (
     mark_error,
     new_manifest,
     read_json,
+    prune_retained_runs,
     register_run_slot,
     retained_manifests,
     run_manifest_key,
@@ -199,6 +200,12 @@ def _publish_run_slot(store, manifest: dict[str, Any]) -> None:
     logger.info("RUN %s sustituido en el turno %sZ", previous_run, previous_run[11:13])
 
 
+def _prune_old_runs(store) -> None:
+    """Libera el volumen dejando solo las pasadas recientes."""
+    for run_iso in prune_retained_runs(store):
+        logger.info("RUN %s eliminado del volumen por antigüedad", run_iso)
+
+
 def _merge_catalog_products(
     stored: dict[str, Any], live: dict[str, Any]
 ) -> dict[str, Any]:
@@ -277,6 +284,7 @@ def _prepare_latest_manifest(
     manifest["worker_heartbeat_at"] = _utc_now()
     _persist_manifest(store, manifest, latest_run=run_iso)
     _publish_run_slot(store, manifest)
+    _prune_old_runs(store)
     return manifest
 
 

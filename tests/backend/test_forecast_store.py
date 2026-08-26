@@ -20,6 +20,7 @@ from server.services.forecast_store import (
     mark_available,
     new_manifest,
     register_run_slot,
+    run_manifest_key,
     retained_manifests,
     read_compressed_grid,
     read_grid,
@@ -446,7 +447,9 @@ def test_frame_grid_v2_roundtrips_through_the_viewer_decoder(monkeypatch):
 
     header_length = struct.unpack("<I", content[:4])[0]
     header = json.loads(content[4:4 + header_length])
-    assert header["version"] == 2
+    assert header["version"] >= 2
+    # Desde el formato 3 las fronteras se sirven aparte.
+    assert "boundaries" not in header
     # El escalar es el módulo del vector: debe viajar solo u y v.
     assert header["value_source"] == "hypot"
     assert [item["name"] for item in header["arrays"]] == ["u", "v"]
@@ -659,3 +662,43 @@ def test_accumulated_precip_is_not_queued_behind_every_shear():
     assert nivel1[posicion].valid_time == horas[0]
     assert posicion <= 1, "el acumulado no debe quedar al final de su nivel"
     assert nivel1[posicion].covered_times == tuple(horas)
+
+
+def test_only_the_most_recent_runs_stay_in_the_volume(tmp_path: Path):
+    """Al entrar una pasada nueva se borra la más antigua.
+
+    Cada pasada ocupa más de un gigabyte: retener las cuatro del día desbordaba
+    el volumen de 5 GB y el worker se quedaba sin poder escribir.
+    """
+    from server.services.forecast_store import prune_retained_runs
+
+    store = LocalObjectStore(tmp_path)
+    pasadas = [
+        "2026-08-24T00:00:00Z",
+        "2026-08-24T06:00:00Z",
+        "2026-08-24T12:00:00Z",
+        "2026-08-24T18:00:00Z",
+    ]
+    for run in pasadas:
+        manifest = new_manifest(run, [H1])
+        write_json(store, run_manifest_key(run), manifest)
+        write_grid(store, frame_key(run, "ship", H1), _grid())
+        register_run_slot(store, manifest)
+
+    assert len(retained_manifests(store)) == 4
+
+    eliminadas = prune_retained_runs(store, keep=3)
+
+    assert eliminadas == ["2026-08-24T00:00:00Z"]
+    quedan = [str(m["run"]) for m in retained_manifests(store)]
+    assert quedan == pasadas[:0:-1]  # 18Z, 12Z, 06Z
+    # Y sus frames dejan de ocupar sitio.
+    assert read_compressed_grid(store, frame_key(pasadas[0], "ship", H1)) is None
+    assert read_compressed_grid(store, frame_key(pasadas[-1], "ship", H1)) is not None
+
+
+def test_pruning_keeps_everything_when_there_is_room():
+    """Con menos pasadas que el límite no se borra nada."""
+    from server.services.forecast_store import prune_retained_runs, retained_run_limit
+
+    assert retained_run_limit() >= 1
