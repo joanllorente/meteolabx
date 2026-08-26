@@ -758,3 +758,48 @@ def test_without_diagnostic_limit_everything_keeps_the_same_horizon():
     }
 
     assert convectivos == set(horas)
+
+
+def test_progress_denominator_is_the_full_horizon_not_what_is_published():
+    """El porcentaje no debe bajar porque AROME publique más horas.
+
+    Contando solo lo publicado, un producto al 100 % con 20 horas caía al 62 %
+    en cuanto aparecían 12 más, sin haber perdido nada.
+    """
+    publicadas = [f"2026-08-24T{hora:02d}:00:00Z" for hora in range(12, 20)]
+    catalog_products = {
+        product: {"run": RUN, "valid_times": publicadas}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(RUN, publicadas, catalog_products=catalog_products)
+    manifest["expected_hours"] = {"native": 52, "diagnostic": 36}
+    for product in PERSISTED_FORECAST_PRODUCTS:
+        for hora in publicadas:
+            mark_available(manifest, product, hora)
+
+    progreso = forecast_worker._refresh_progress(manifest)
+
+    # Ocho horas hechas de un horizonte de 52/36, no ocho de ocho.
+    assert progreso["percent"] < 100.0
+    esperado = sum(
+        forecast_worker._expected_hours(manifest, product)
+        for product in PERSISTED_FORECAST_PRODUCTS
+    )
+    assert progreso["frames_total"] == esperado
+
+
+def test_expensive_products_use_the_shorter_horizon():
+    manifest = {"expected_hours": {"native": 52, "diagnostic": 36}}
+    assert forecast_worker._expected_hours(manifest, "temperature-2m") == 52
+    assert forecast_worker._expected_hours(manifest, "shear-06") == 36
+    assert forecast_worker._expected_hours(manifest, "dcape") == 36
+
+
+def test_denominator_follows_reality_when_the_model_publishes_more():
+    """Si AROME entrega más horas de las previstas, manda lo real."""
+    muchas = [f"2026-08-24T{hora:02d}:00:00Z" for hora in range(0, 24)]
+    manifest = new_manifest(
+        RUN, muchas, catalog_products={"ship": {"run": RUN, "valid_times": muchas}}
+    )
+    manifest["expected_hours"] = {"native": 10, "diagnostic": 10}
+    assert forecast_worker._refresh_progress(manifest)["frames_total"] >= len(muchas)

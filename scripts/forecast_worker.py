@@ -161,6 +161,21 @@ def pending_hours(
     return sorted(pending, key=_parse_iso)
 
 
+# Horizonte que AROME publica en cada pasada. Fijarlo permite que el progreso
+# vaya de 0 a 100 sin sobresaltos: contando solo las horas ya publicadas, el
+# denominador crecía durante la publicación y el porcentaje retrocedía.
+EXPECTED_NATIVE_HOURS = int(os.getenv("METEOLABX_FORECAST_EXPECTED_HOURS", "52"))
+
+
+def _expected_hours(manifest: dict[str, Any], product: str) -> int:
+    """Horas que se esperan de un producto en una pasada completa."""
+    limits = manifest.get("expected_hours") or {}
+    native = int(limits.get("native") or EXPECTED_NATIVE_HOURS)
+    diagnostic = int(limits.get("diagnostic") or 0) or native
+    caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS)
+    return diagnostic if product in caros else native
+
+
 def _refresh_progress(manifest: dict[str, Any]) -> dict[str, Any]:
     total = 0
     available = 0
@@ -168,7 +183,9 @@ def _refresh_progress(manifest: dict[str, Any]) -> dict[str, Any]:
     for product in PERSISTED_FORECAST_PRODUCTS:
         expected = set(_product_times(manifest, product))
         state = (manifest.get("products") or {}).get(product) or {}
-        total += len(expected)
+        # El denominador es el horizonte completo, no lo publicado hasta ahora:
+        # si AROME acaba entregando más horas de las previstas, manda lo real.
+        total += max(len(expected), _expected_hours(manifest, product))
         available += len(expected & set(state.get("available_times", ())))
         errors += len(set(state.get("errors", {})) & expected)
     progress = manifest.setdefault("progress", {})
@@ -248,7 +265,10 @@ def _merge_catalog_products(
 
 
 def _prepare_latest_manifest(
-    store, catalog: dict[str, Any], calculation_scope: str
+    store,
+    catalog: dict[str, Any],
+    calculation_scope: str,
+    diagnostic_max_hours: int = 0,
 ) -> dict[str, Any]:
     run_iso = _latest_persisted_run(catalog)
     catalog_products = {
@@ -293,6 +313,12 @@ def _prepare_latest_manifest(
         # Un contenedor anterior pudo morir con una tarea marcada como activa.
         manifest.setdefault("progress", {})["current_job"] = None
         manifest["progress"]["active_jobs"] = []
+    # Con los horizontes guardados, el progreso conoce su denominador desde el
+    # primer ciclo en vez de deducirlo de lo publicado hasta ese momento.
+    manifest["expected_hours"] = {
+        "native": EXPECTED_NATIVE_HOURS,
+        "diagnostic": diagnostic_max_hours or EXPECTED_NATIVE_HOURS,
+    }
     manifest["worker_heartbeat_at"] = _utc_now()
     _persist_manifest(store, manifest, latest_run=run_iso)
     _publish_run_slot(store, manifest)
@@ -922,7 +948,9 @@ def run_incremental_cycle(
     store = get_forecast_store()
     catalog = catalog_payload(token)
     calculation_scope = forecast_calculation_scope()
-    latest_manifest = _prepare_latest_manifest(store, catalog, calculation_scope)
+    latest_manifest = _prepare_latest_manifest(
+        store, catalog, calculation_scope, diagnostic_max_hours=diagnostic_max_hours
+    )
     latest_run = str(latest_manifest["run"])
     manifests = [
         manifest
