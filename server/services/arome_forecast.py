@@ -658,6 +658,16 @@ def _wait_for_profile_request_slot() -> None:
 CONVECTIVE_STRIPE_ROWS = int(
     os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS", "192")
 )
+# DCAPE es el único que no tolera bandas estrechas: su selección de capa de
+# origen a través de SHARPpy cambia según cómo se particione la rejilla, y
+# sólo por encima de ~120 filas devuelve lo mismo que la rejilla entera. Los
+# otros trece son celda a celda, así que cuando DCAPE queda fuera —su propio
+# turno lo calcula aparte— se puede bajar mucho: medido sobre una rejilla de
+# 384x1121, pasar de 192 a 64 filas recorta 1.089 MB del pico en el mismo
+# tiempo y con resultados idénticos hasta el último bit.
+CONVECTIVE_STRIPE_ROWS_WITHOUT_DCAPE = int(
+    os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS_NO_DCAPE", "64")
+)
 
 
 def _convective_outputs(
@@ -756,7 +766,12 @@ def _convective_outputs_in_stripes(
 ) -> dict[str, np.ndarray]:
     """Encadena el diagnóstico por bandas de filas y recompone la rejilla."""
     rows = terrain.shape[0]
-    step = CONVECTIVE_STRIPE_ROWS if stripe_rows is None else stripe_rows
+    if stripe_rows is not None:
+        step = stripe_rows
+    elif include_dcape:
+        step = CONVECTIVE_STRIPE_ROWS
+    else:
+        step = CONVECTIVE_STRIPE_ROWS_WITHOUT_DCAPE
     arguments = (
         pressure, temperature, dewpoint, u_profile, v_profile,
         terrain, surface_u, surface_v, levels, include_dcape,

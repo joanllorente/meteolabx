@@ -275,3 +275,36 @@ def test_derived_dewpoint_matches_the_published_one():
     recuperado = _dewpoint_from_relative_humidity_c(temperatura, humedad)
 
     assert np.allclose(recuperado, rocio, atol=1e-6)
+
+
+def test_narrow_bands_are_reserved_for_the_run_without_dcape():
+    """Sin DCAPE la banda por defecto se estrecha, y el resultado no cambia.
+
+    DCAPE es el único diagnóstico sensible a cómo se particione la rejilla, así
+    que cuando se calcula aparte los otros trece pueden ir en bandas mucho más
+    estrechas y recortar el pico de memoria. Lo que no puede cambiar es el
+    resultado: se comprueba contra la rejilla entera, sin trocear.
+    """
+    from server.services import arome_forecast
+    from server.services.arome_forecast import (
+        _convective_outputs,
+        _convective_outputs_in_stripes,
+    )
+
+    assert (
+        arome_forecast.CONVECTIVE_STRIPE_ROWS_WITHOUT_DCAPE
+        < arome_forecast.CONVECTIVE_STRIPE_ROWS
+    ), "la banda sin DCAPE existe para ser más estrecha"
+
+    argumentos = _synthetic_profile(96, 40)
+    entera = _convective_outputs(*argumentos, include_dcape=False)
+    # Sin stripe_rows explícito: usa la banda estrecha por omisión.
+    troceada = _convective_outputs_in_stripes(*argumentos, include_dcape=False)
+
+    for nombre, esperado in entera.items():
+        if nombre == "dcape":
+            continue
+        obtenido = troceada[nombre]
+        finitos = np.isfinite(esperado)
+        assert (np.isfinite(obtenido) == finitos).all(), nombre
+        assert np.array_equal(obtenido[finitos], esperado[finitos]), nombre
