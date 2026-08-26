@@ -228,3 +228,27 @@ def test_a_drained_tier_does_not_hold_back_the_free_workers(monkeypatch):
         trabajador.tier_capacity_for(1, workers=6, heavy_workers=4),
         trabajador.tier_capacity_for(2, workers=6, heavy_workers=4),
     ) == 4
+
+
+def test_the_memory_guard_covers_dcape_not_just_the_other_profiles():
+    """El freno protege todos los niveles pesados, no sólo el 2.
+
+    DCAPE es nivel 3 y es el perfil más caro de todos: usa bandas de 192 filas
+    en vez de 64, porque su selección de capa de origen depende de cómo se
+    particione la rejilla. Dejarlo fuera del freno permitía arrancar cuatro a la
+    vez sin mirar la memoria, que es justo el caso que más aprieta.
+    """
+    from pathlib import Path as RutaReal
+    import inspect
+
+    import scripts.forecast_worker as trabajador
+
+    fuente = inspect.getsource(trabajador._run_parallel_work)
+    assert "launch_tier >= 2" in fuente, "el freno debe cubrir del nivel 2 en adelante"
+    assert "launch_tier == 2" not in fuente, "quedaría DCAPE sin protección"
+    assert "job.tier >= 2" in fuente, (
+        "sin esto no se anota el lanzamiento de un DCAPE y el escalonado de "
+        "15 s no lo tiene en cuenta"
+    )
+    # El nivel 3 comparte límite con el 2: ambos son un perfil completo.
+    assert trabajador.tier_capacity_for(3, workers=6, heavy_workers=4) == 4

@@ -1042,18 +1042,23 @@ def _run_parallel_work(
                 and len(active) < capacity
                 and _job_group(pending[0][1]) == launch_group
             ):
-                if launch_tier == 2 and active:
-                    # El primer perfil ya está aumentando su memoria. Esperar
-                    # permite medir el cgroup antes de admitir el segundo.
+                # Todo lo que lee un perfil completo, no sólo el nivel 2.
+                # DCAPE es nivel 3 y sale más caro que los otros trece: usa
+                # bandas de 192 filas en vez de 64 porque su selección de capa
+                # de origen depende de cómo se particione la rejilla.
+                if launch_tier is not None and launch_tier >= 2 and active:
+                    # El perfil anterior todavía está creciendo. Esperar permite
+                    # medir el cgroup cuando ya se le nota, no antes.
                     if time.monotonic() - last_heavy_launch < 15.0:
                         break
                     memory_ratio = _container_memory_ratio()
                     if memory_ratio is not None and memory_ratio >= HEAVY_MEMORY_CEILING:
-                        # Sin esta traza, un segundo worker configurado pero
-                        # nunca admitido parece que no hace nada.
+                        # Sin esta traza, unos workers configurados pero nunca
+                        # admitidos parecen no estar haciendo nada.
                         logger.info(
-                            "Segundo perfil en espera: memoria del cgroup al "
-                            "%.0f %% (tope %.0f %%).",
+                            "Perfil de nivel %d en espera: memoria del cgroup "
+                            "al %.0f %% (tope %.0f %%).",
+                            launch_tier,
                             memory_ratio * 100.0,
                             HEAVY_MEMORY_CEILING * 100.0,
                         )
@@ -1071,7 +1076,7 @@ def _run_parallel_work(
                 )
                 future = executor.submit(_run_isolated_job, job, timeout_s)
                 active[future] = (manifest, job)
-                if job.tier == 2:
+                if job.tier >= 2:
                     last_heavy_launch = time.monotonic()
                 tasks_started += 1
                 task_limit_reached = max_tasks > 0 and tasks_started >= max_tasks
