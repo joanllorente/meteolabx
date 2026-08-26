@@ -1,0 +1,162 @@
+"""Cliente de los paquetes GRIB2 de AROME.
+
+La API "ciblée" que alimenta el resto del visor entrega **un campo por
+petición**: montar un perfil vertical cuesta ahí 102 descargas por hora de
+predicción. Los paquetes traen el mismo dato agrupado —un GRIB2 multimensaje
+con todos los niveles y siete plazos— y transfieren tres veces menos bytes.
+
+El fichero se guarda en disco mientras se usa, se lee mensaje a mensaje y se
+descarta: descomprimirlo entero en memoria serían ~1,9 GB.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+import os
+from pathlib import Path
+import tempfile
+import time
+
+import numpy as np
+import rasterio
+import requests
+
+from server.services.meteofrance_auth import authorization_headers
+
+
+PACKAGE_BASE = "https://public-api.meteofrance.fr/previnum/DPPaquetAROME/v1"
+# Cada paquete cubre siete plazos horarios consecutivos.
+BLOCK_HOURS = 7
+# Elementos del paquete isobárico IP1, con la clave que usa el perfil.
+IP1_ELEMENTS = {
+    "TMP": "temperature",
+    "RH": "relative_humidity",
+    "UGRD": "u",
+    "VGRD": "v",
+    "GP": "geopotential",
+}
+
+
+class AromePackageError(RuntimeError):
+    """El paquete no se pudo descargar o no contiene lo esperado."""
+
+
+def _cache_dir() -> Path:
+    configured = os.getenv("METEOLABX_AROME_PACKAGE_CACHE_DIR", "").strip()
+    if configured:
+        return Path(configured)
+    # Al temporal del contenedor, nunca al volumen: son cientos de megas.
+    return Path(tempfile.gettempdir()) / "meteolabx-arome-packages"
+
+
+def block_range(run: datetime, valid_time: datetime) -> str:
+    """Rango de plazos, en el formato `00H06H` que espera la API."""
+    horizon = int((valid_time - run).total_seconds() // 3600)
+    if horizon < 0:
+        raise AromePackageError("La hora pedida es anterior a la pasada.")
+    start = (horizon // BLOCK_HOURS) * BLOCK_HOURS
+    return f"{start:02d}H{start + BLOCK_HOURS - 1:02d}H"
+
+
+def _package_path(package: str, run: datetime, block: str) -> Path:
+    stamp = run.astimezone(timezone.utc).strftime("%Y%m%dT%H")
+    return _cache_dir() / f"{package}-{stamp}-{block}.grib2"
+
+
+def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
+    """Descarga el bloque que contiene esa hora, si no está ya en disco."""
+    block = block_range(run, valid_time)
+    destination = _package_path(package, run, block)
+    if destination.exists() and destination.stat().st_size > 0:
+        return destination
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix(f".{os.getpid()}.part")
+    url = f"{PACKAGE_BASE}/models/AROME/grids/0.025/packages/{package}/productARO"
+    parameters = {
+        "referencetime": run.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "time": block,
+        "format": "grib2",
+    }
+    try:
+        with requests.get(
+            url,
+            headers=authorization_headers(),
+            params=parameters,
+            timeout=1800,
+            stream=True,
+        ) as response:
+            if response.status_code != 200:
+                raise AromePackageError(
+                    f"El paquete {package} {block} no está disponible "
+                    f"(HTTP {response.status_code})."
+                )
+            with partial.open("wb") as handle:
+                for chunk in response.iter_content(1024 * 1024):
+                    handle.write(chunk)
+        # Se renombra al final para que nadie lea un fichero a medio bajar.
+        partial.replace(destination)
+    except requests.RequestException as exc:
+        partial.unlink(missing_ok=True)
+        raise AromePackageError(f"No se pudo descargar {package} {block}: {exc}") from exc
+    return destination
+
+
+def read_isobaric_profile(
+    path: Path, valid_time: datetime, levels_hpa: list[float]
+) -> dict[str, dict[float, np.ndarray]]:
+    """Campos del perfil para una hora, leídos mensaje a mensaje.
+
+    Devuelve `{"temperature": {850.0: array, ...}, "u": {...}, ...}` con las
+    unidades tal cual las publica el paquete: °C, %, m/s y m²/s².
+    """
+    wanted_levels = {int(round(level * 100)) for level in levels_hpa}
+    stamp = int(valid_time.astimezone(timezone.utc).timestamp())
+    profile: dict[str, dict[float, np.ndarray]] = {
+        name: {} for name in IP1_ELEMENTS.values()
+    }
+    with rasterio.open(path) as dataset:
+        for index in range(1, dataset.count + 1):
+            tags = dataset.tags(index)
+            element = IP1_ELEMENTS.get(tags.get("GRIB_ELEMENT", ""))
+            if element is None:
+                continue
+            if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
+                continue
+            short_name = tags.get("GRIB_SHORT_NAME", "")
+            if not short_name.endswith("-ISBL"):
+                continue
+            level_pa = int(short_name.split("-", 1)[0])
+            if level_pa not in wanted_levels:
+                continue
+            # read() de una sola banda: el fichero nunca entra entero en memoria.
+            # El paquete marca las celdas fuera del dominio con 9999; el resto
+            # del pipeline espera NaN, igual que entrega el WCS.
+            values = dataset.read(index, masked=True).astype(float)
+            profile[element][level_pa / 100.0] = values.filled(np.nan)
+    faltan = [name for name, campos in profile.items() if not campos]
+    if faltan:
+        raise AromePackageError(
+            f"El paquete no trae {', '.join(faltan)} para "
+            f"{valid_time:%Y-%m-%dT%H:%M}Z."
+        )
+    return profile
+
+
+def discard_packages_before(run: datetime) -> list[Path]:
+    """Borra los paquetes de pasadas anteriores; ocupan cientos de megas."""
+    stamp = run.astimezone(timezone.utc).strftime("%Y%m%dT%H")
+    removed: list[Path] = []
+    try:
+        candidates = list(_cache_dir().glob("*.grib2"))
+    except OSError:
+        return removed
+    for path in candidates:
+        partes = path.stem.split("-")
+        if len(partes) >= 2 and partes[1] < stamp:
+            try:
+                path.unlink()
+                removed.append(path)
+            except OSError:
+                continue
+    return removed
