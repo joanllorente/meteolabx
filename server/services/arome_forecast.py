@@ -24,6 +24,8 @@ from PIL import Image, ImageDraw
 from shapely.geometry import box, mapping, shape
 
 from server.services.arome_packages import (
+    SURFACE_ELEMENTS,
+    read_surface_fields,
     AromePackageError,
     discard_packages_before,
     ensure_package,
@@ -991,14 +993,15 @@ def _isobaric_fields_from_package(
         return None
     try:
         path = ensure_package("IP1", run, valid_time)
-        profile = read_isobaric_profile(path, valid_time, levels)
+        profile, geometria = read_isobaric_profile(path, valid_time, levels)
     except (AromePackageError, MeteoFranceAuthError) as exc:
         logger.info("Paquete IP1 no disponible, se usa el WCS: %s", exc)
         return None
 
-    # La rejilla del paquete coincide con la del modelo, así que envolverla con
-    # la geometría de la referencia deja el resto del montaje intacto.
-    common = (reference.transform, reference.crs, reference.bounds)
+    # Con la geometría del propio paquete: cuando coincide con la referencia,
+    # _align la reconoce y devuelve los datos sin tocarlos, y cuando no, los
+    # recorta bien en vez de reinterpretarlos sobre una rejilla ajena.
+    common = geometria
     unidades = {
         "temperature": "C",
         "relative_humidity": "%",
@@ -1013,6 +1016,45 @@ def _isobaric_fields_from_package(
             for nivel, valores in profile[nombre].items()
         }
     return salida
+
+
+def _surface_fields_from_package(
+    reference: RasterField,
+    run: datetime,
+    valid_time: datetime,
+) -> dict[str, RasterField] | None:
+    """Rocío, presión y viento de superficie de los paquetes SP1 y SP2.
+
+    Ahorra cuatro descargas WCS por hora, cada una con su turno en el
+    estrangulador. Devuelve None si algún paquete todavía no está publicado,
+    para que quien llame siga por el camino de siempre.
+    """
+    if not _packages_available():
+        return None
+    campos: dict[str, RasterField] = {}
+    for paquete, elementos in SURFACE_ELEMENTS.items():
+        try:
+            path = ensure_package(paquete, run, valid_time)
+            leidos, geometria = read_surface_fields(path, valid_time, elementos)
+        except (AromePackageError, MeteoFranceAuthError) as exc:
+            logger.info("Paquete %s no disponible, se usa el WCS: %s", paquete, exc)
+            return None
+        # Con la geometría del propio paquete; alinearlos con la referencia es
+        # cosa de quien llama, igual que con cualquier campo del WCS.
+        for nombre, (valores, unidad) in leidos.items():
+            campos[nombre] = RasterField(valores, *geometria, unidad)
+    esperados = {
+        nombre for elementos in SURFACE_ELEMENTS.values()
+        for nombre, _ in elementos.values()
+    }
+    if esperados - set(campos):
+        logger.info(
+            "Los paquetes de superficie no traen %s para %s; se usa el WCS.",
+            ", ".join(sorted(esperados - set(campos))),
+            valid_time.isoformat(),
+        )
+        return None
+    return campos
 
 
 @lru_cache(maxsize=2)
@@ -1085,6 +1127,12 @@ def _convective_frames(
     else:
         level_variables = ("temperature", "dewpoint", "u", "v")
 
+    # Rocío, presión y viento de superficie salen de SP1/SP2 cuando están
+    # publicados: son cuatro descargas WCS menos por hora, cada una con su
+    # turno en el estrangulador. El terreno no viaja en los paquetes y la
+    # temperatura a 2 m es la referencia, así que esas dos siguen igual.
+    surface_package = _surface_fields_from_package(reference, run, valid_time)
+
     fetched: dict[tuple[str, float | None], RasterField | None] = {}
     tasks: dict[Any, tuple[str, float | None]] = {}
     def throttled(function, *args):
@@ -1095,7 +1143,10 @@ def _convective_frames(
         return function(*args)
 
     with ThreadPoolExecutor(max_workers=4, thread_name_prefix="arome-profile") as executor:
-        for name in ("dewpoint", "pressure", "u", "v", "terrain"):
+        pendientes = ("terrain",) if surface_package else (
+            "dewpoint", "pressure", "u", "v", "terrain"
+        )
+        for name in pendientes:
             tasks[executor.submit(throttled, fetch_surface, name)] = (name, None)
         for level_hpa in levels:
             for variable in level_variables:
@@ -1103,10 +1154,16 @@ def _convective_frames(
         for future in as_completed(tasks):
             fetched[tasks[future]] = future.result()
 
-    surface_dewpoint_field = fetched[("dewpoint", None)]
-    surface_pressure_field = fetched[("pressure", None)]
-    surface_u_field = fetched[("u", None)]
-    surface_v_field = fetched[("v", None)]
+    if surface_package:
+        surface_dewpoint_field = surface_package["surface_dewpoint"]
+        surface_pressure_field = surface_package["surface_pressure"]
+        surface_u_field = surface_package["surface_u"]
+        surface_v_field = surface_package["surface_v"]
+    else:
+        surface_dewpoint_field = fetched[("dewpoint", None)]
+        surface_pressure_field = fetched[("pressure", None)]
+        surface_u_field = fetched[("u", None)]
+        surface_v_field = fetched[("v", None)]
     if not all((surface_dewpoint_field, surface_pressure_field, surface_u_field, surface_v_field)):
         raise AromeError("Faltan campos de superficie para el perfil convectivo.")
 
@@ -1180,6 +1237,9 @@ def _convective_frames(
         for campos in package_levels.values():
             campos.clear()
         package_levels = None
+    if surface_package:
+        surface_package.clear()
+        surface_package = None
 
     # Los perfiles apilados rondan el giga y sólo se leen. Apartarlos al disco
     # los saca de la memoria que el núcleo no puede recuperar; hay que soltar

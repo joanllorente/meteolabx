@@ -17,6 +17,8 @@ from pathlib import Path
 import tempfile
 import time
 
+from typing import Any
+
 import numpy as np
 import rasterio
 import requests
@@ -105,11 +107,15 @@ def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
 
 def read_isobaric_profile(
     path: Path, valid_time: datetime, levels_hpa: list[float]
-) -> dict[str, dict[float, np.ndarray]]:
+) -> tuple[dict[str, dict[float, np.ndarray]], tuple[Any, Any, Any]]:
     """Campos del perfil para una hora, leídos mensaje a mensaje.
 
-    Devuelve `{"temperature": {850.0: array, ...}, "u": {...}, ...}` con las
+    Devuelve `({"temperature": {850.0: array, ...}, ...}, geometría)` con las
     unidades tal cual las publica el paquete: °C, %, m/s y m²/s².
+
+    La geometría es la del paquete, no la de quien pregunta: son rejillas que
+    pueden no coincidir —un recorte del WCS frente al dominio completo del
+    GRIB— y darles la ajena convierte los valores en basura sin avisar.
     """
     wanted_levels = {int(round(level * 100)) for level in levels_hpa}
     stamp = int(valid_time.astimezone(timezone.utc).timestamp())
@@ -121,6 +127,7 @@ def read_isobaric_profile(
     # un giga por proceso, memoria que le hace falta al diagnóstico. Acotarlo
     # no cuesta tiempo: los mensajes se leen una vez y en orden.
     with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
+        geometria = (dataset.transform, dataset.crs, dataset.bounds)
         for index in range(1, dataset.count + 1):
             tags = dataset.tags(index)
             element = IP1_ELEMENTS.get(tags.get("GRIB_ELEMENT", ""))
@@ -145,7 +152,57 @@ def read_isobaric_profile(
             f"El paquete no trae {', '.join(faltan)} para "
             f"{valid_time:%Y-%m-%dT%H:%M}Z."
         )
-    return profile
+    return profile, geometria
+
+
+# Campos de superficie que el diagnóstico convectivo necesita, repartidos entre
+# los dos paquetes de superficie. La temperatura a 2 m no está aquí: se sigue
+# pidiendo al WCS porque es la referencia que fija la geometría del recorte.
+# Comprobado contra el WCS sobre la misma pasada y hora: viento y presión
+# coinciden hasta el último bit del float, y el rocío difiere 0,039 °C como
+# máximo, que es la precisión con la que el paquete empaqueta ese campo.
+SURFACE_ELEMENTS: dict[str, dict[tuple[str, str], tuple[str, str]]] = {
+    "SP1": {
+        ("UGRD", "10-HTGL"): ("surface_u", "m/s"),
+        ("VGRD", "10-HTGL"): ("surface_v", "m/s"),
+    },
+    "SP2": {
+        ("DPT", "2-HTGL"): ("surface_dewpoint", "C"),
+        ("PRES", "0-SFC"): ("surface_pressure", "Pa"),
+    },
+}
+
+
+def read_surface_fields(
+    path: Path, valid_time: datetime, wanted: dict[tuple[str, str], tuple[str, str]]
+) -> tuple[dict[str, tuple[np.ndarray, str]], tuple[Any, Any, Any]]:
+    """Campos de superficie de una hora, leídos mensaje a mensaje.
+
+    Devuelve `({"surface_u": (array, "m/s"), ...}, geometría)` con las unidades
+    tal cual las publica el paquete. Faltar un campo no es un error aquí: quien
+    llama decide si completa por el WCS o se queda sin él.
+
+    La geometría es la del paquete, no la de quien pregunta: son rejillas que
+    pueden no coincidir —un recorte del WCS frente al dominio completo del
+    GRIB— y darles la ajena convierte los valores en basura sin avisar.
+    """
+    stamp = int(valid_time.astimezone(timezone.utc).timestamp())
+    salida: dict[str, tuple[np.ndarray, str]] = {}
+    with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
+        geometria = (dataset.transform, dataset.crs, dataset.bounds)
+        for index in range(1, dataset.count + 1):
+            tags = dataset.tags(index)
+            clave = (tags.get("GRIB_ELEMENT", ""), tags.get("GRIB_SHORT_NAME", ""))
+            destino = wanted.get(clave)
+            if destino is None or destino[0] in salida:
+                continue
+            if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
+                continue
+            # Igual que en el perfil: 9999 marca fuera de dominio y el resto
+            # del pipeline espera NaN, que es lo que entrega el WCS.
+            values = dataset.read(index, masked=True).astype(float)
+            salida[destino[0]] = (values.filled(np.nan), destino[1])
+    return salida, geometria
 
 
 def discard_packages_before(run: datetime) -> list[Path]:

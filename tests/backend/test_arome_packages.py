@@ -63,6 +63,12 @@ class _DatasetFalso:
             return np.ma.masked_equal(datos, 9999.0)
         return datos
 
+    # Geometría del paquete: el lector debe devolverla para que quien la use
+    # alinee los campos en vez de darles por buena una rejilla ajena.
+    transform = "transform-del-paquete"
+    crs = "crs-del-paquete"
+    bounds = "bounds-del-paquete"
+
     def __enter__(self): return self
     def __exit__(self, *args): return False
 
@@ -76,7 +82,13 @@ def test_reader_selects_the_requested_hour_and_marks_missing_cells(monkeypatch):
     stamp = int(RUN.timestamp())
     monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _DatasetFalso(stamp))
 
-    perfil = paquetes.read_isobaric_profile(Path("da-igual"), RUN, [850.0, 500.0])
+    perfil, geometria = paquetes.read_isobaric_profile(
+        Path("da-igual"), RUN, [850.0, 500.0]
+    )
+
+    assert geometria == (
+        "transform-del-paquete", "crs-del-paquete", "bounds-del-paquete",
+    ), "la geometría debe ser la del paquete, no la de quien pregunta"
 
     assert set(perfil["temperature"]) == {850.0, 500.0}
     assert set(perfil["u"]) == {850.0, 500.0}
@@ -154,3 +166,117 @@ def test_shear_06_reuses_the_package_levels_instead_of_downloading(monkeypatch):
 
     isobaricos = [d for d in descargas if d[2] == "pressure"]
     assert not isobaricos, f"no debería pedir niveles al WCS: {isobaricos}"
+
+
+class _SuperficieFalsa:
+    """Un GRIB de superficie con los elementos de SP1/SP2 y dos plazos."""
+
+    transform = "transform-del-paquete"
+    crs = "crs-del-paquete"
+    bounds = "bounds-del-paquete"
+
+    def __init__(self, stamp, elementos=None):
+        catalogo = elementos or (
+            ("UGRD", "10-HTGL"), ("VGRD", "10-HTGL"),
+            ("DPT", "2-HTGL"), ("PRES", "0-SFC"),
+            ("TMP", "2-HTGL"),          # presente pero no pedido
+        )
+        self._bandas = [
+            (el, niv, instante)
+            for el, niv in catalogo
+            for instante in (stamp, stamp + 3600)
+        ]
+        self.count = len(self._bandas)
+
+    def tags(self, index):
+        elemento, nivel, instante = self._bandas[index - 1]
+        return {
+            "GRIB_ELEMENT": elemento,
+            "GRIB_SHORT_NAME": nivel,
+            "GRIB_VALID_TIME": str(instante),
+        }
+
+    def read(self, index, masked=False):
+        elemento, _, instante = self._bandas[index - 1]
+        datos = np.full((3, 4), float(len(elemento)) + (instante % 10))
+        datos[0, 0] = 9999.0
+        return np.ma.masked_equal(datos, 9999.0) if masked else datos
+
+    def __enter__(self): return self
+    def __exit__(self, *args): return False
+
+
+def test_surface_reader_picks_the_requested_elements_and_hour(monkeypatch):
+    """Sólo los elementos pedidos, sólo el plazo pedido, y 9999 como NaN.
+
+    El paquete trae muchos más campos de los que hace falta —rachas, nubosidad,
+    radiación—; leerlos todos sería tirar memoria y tiempo por la ventana.
+    """
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _SuperficieFalsa(stamp))
+
+    campos, geometria = paquetes.read_surface_fields(
+        Path("da-igual"), RUN, paquetes.SURFACE_ELEMENTS["SP1"]
+    )
+
+    assert set(campos) == {"surface_u", "surface_v"}, "TMP no se pidió"
+    assert geometria == (
+        "transform-del-paquete", "crs-del-paquete", "bounds-del-paquete",
+    )
+    valores, unidad = campos["surface_u"]
+    assert unidad == "m/s"
+    assert np.isnan(valores[0, 0]), "el 9999 debe quedar como NaN"
+    # El plazo siguiente no debe colarse.
+    assert valores[1, 1] == pytest.approx(len("UGRD") + stamp % 10)
+
+
+def test_surface_reader_returns_what_it_finds_without_complaining(monkeypatch):
+    """Faltar un campo no es un error: quien llama decide si vuelve al WCS."""
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(
+        paquetes.rasterio, "open",
+        lambda _p: _SuperficieFalsa(stamp, elementos=(("DPT", "2-HTGL"),)),
+    )
+
+    campos, _ = paquetes.read_surface_fields(
+        Path("da-igual"), RUN, paquetes.SURFACE_ELEMENTS["SP2"]
+    )
+
+    assert set(campos) == {"surface_dewpoint"}
+
+
+def test_surface_package_falls_back_to_wcs_when_a_field_is_missing(monkeypatch):
+    """Si a los paquetes les falta un campo, se vuelve al WCS entero.
+
+    Durante la publicación de una pasada un paquete puede existir a medias.
+    Devolver campos sueltos dejaría el diagnóstico mezclando fuentes sin que
+    nadie lo note; es preferible pagar las cuatro descargas.
+    """
+    from server.services import arome_forecast as prevision
+
+    monkeypatch.setattr(prevision, "_packages_available", lambda: True)
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+    def solo_el_rocio(path, valid_time, wanted):
+        # Faltan la presión y las dos componentes del viento.
+        return {"surface_dewpoint": (np.zeros((3, 4)), "C")}, ("t", "c", "b")
+
+    monkeypatch.setattr(prevision, "read_surface_fields", solo_el_rocio)
+    referencia = SimpleNamespace(
+        transform=from_bounds(0, 0, 1, 1, 4, 3), crs="epsg:4326", bounds=(0, 0, 1, 1)
+    )
+
+    assert prevision._surface_fields_from_package(referencia, RUN, RUN) is None
+
+
+def test_surface_package_is_skipped_when_packages_are_not_available(monkeypatch):
+    """Sin credencial de paquetes ni ámbito de producción, ni se intenta."""
+    from server.services import arome_forecast as prevision
+
+    monkeypatch.setattr(prevision, "_packages_available", lambda: False)
+
+    def no_deberia_llamarse(*args, **kwargs):
+        raise AssertionError("no debe tocarse el paquete")
+
+    monkeypatch.setattr(prevision, "ensure_package", no_deberia_llamarse)
+
+    assert prevision._surface_fields_from_package(None, RUN, RUN) is None
