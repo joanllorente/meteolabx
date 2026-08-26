@@ -472,3 +472,91 @@ def test_prefetch_horizon_covers_the_diagnostics_horizon():
 
     diagnosticos = int(os.getenv("METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS", "36"))
     assert trabajador.PREFETCH_HORIZON_H >= diagnosticos
+
+
+def _cola(horas, tier=2, run="2026-08-26T12:00:00Z"):
+    return [({}, _trabajo(h, tier=tier, run=run)) for h in horas]
+
+
+def test_an_hour_with_its_package_goes_first(monkeypatch):
+    """Si la primera hora no tiene paquete y otra sí, esa se adelanta.
+
+    Una hora de perfil sin paquete cuesta 102 peticiones al WCS, unos dos
+    minutos de estrangulador, frente a dos con él. Adelantar la que ya lo tiene
+    le da tiempo al GRIB de la otra a publicarse.
+    """
+    import scripts.forecast_worker as trabajador
+
+    listos = {"2026-08-26T14:00:00Z"}
+    monkeypatch.setattr(
+        trabajador, "_profile_package_ready",
+        lambda job: job.valid_time in listos,
+    )
+
+    pending = _cola([12, 13, 14, 15])
+    grupo = trabajador._job_group(pending[0][1])
+    trabajador._bring_forward_a_ready_hour(pending, grupo)
+
+    assert pending[0][1].valid_time == "2026-08-26T14:00:00Z"
+    # Las demás conservan su orden relativo.
+    assert [j.valid_time[11:13] for _m, j in pending] == ["14", "12", "13", "15"]
+
+
+def test_nothing_moves_when_the_first_hour_is_already_ready(monkeypatch):
+    import scripts.forecast_worker as trabajador
+
+    monkeypatch.setattr(trabajador, "_profile_package_ready", lambda job: True)
+    pending = _cola([12, 13, 14])
+    antes = [j.valid_time for _m, j in pending]
+
+    trabajador._bring_forward_a_ready_hour(pending, trabajador._job_group(pending[0][1]))
+
+    assert [j.valid_time for _m, j in pending] == antes
+
+
+def test_the_run_does_not_stall_when_no_hour_has_its_package(monkeypatch):
+    """Si ninguna hora tiene paquete se sigue igualmente, por el WCS.
+
+    Quedarse esperando a Météo-France dejaría la pasada parada, que es peor que
+    pagar las peticiones.
+    """
+    import scripts.forecast_worker as trabajador
+
+    monkeypatch.setattr(trabajador, "_profile_package_ready", lambda job: False)
+    pending = _cola([12, 13, 14])
+    antes = [j.valid_time for _m, j in pending]
+
+    trabajador._bring_forward_a_ready_hour(pending, trabajador._job_group(pending[0][1]))
+
+    assert [j.valid_time for _m, j in pending] == antes
+
+
+def test_lighter_tiers_are_not_reordered(monkeypatch):
+    """Cizalladura y nativos no se reordenan: sin paquete cuestan mucho menos."""
+    import scripts.forecast_worker as trabajador
+
+    monkeypatch.setattr(trabajador, "_profile_package_ready", lambda job: False)
+    for tier in (0, 1):
+        pending = _cola([12, 13], tier=tier)
+        antes = [j.valid_time for _m, j in pending]
+        trabajador._bring_forward_a_ready_hour(
+            pending, trabajador._job_group(pending[0][1])
+        )
+        assert [j.valid_time for _m, j in pending] == antes, tier
+
+
+def test_reordering_never_crosses_into_another_group(monkeypatch):
+    """Sólo se busca dentro del mismo nivel y la misma pasada."""
+    import scripts.forecast_worker as trabajador
+
+    # La hora lista está en otro nivel: no debe adelantarse.
+    monkeypatch.setattr(
+        trabajador, "_profile_package_ready",
+        lambda job: job.tier == 3,
+    )
+    pending = _cola([12, 13]) + _cola([14], tier=3)
+    antes = [j.valid_time for _m, j in pending]
+
+    trabajador._bring_forward_a_ready_hour(pending, trabajador._job_group(pending[0][1]))
+
+    assert [j.valid_time for _m, j in pending] == antes

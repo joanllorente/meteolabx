@@ -49,6 +49,7 @@ from server.services.arome_packages import (
     block_range,
     discard_packages_before,
     ensure_package,
+    package_ready,
 )
 from server.services.meteofrance_auth import MeteoFranceAuthError
 from tabs.arome_forecast import forecast_calculation_scope
@@ -789,6 +790,48 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
     progress["current_job"] = active[0]
 
 
+def _profile_package_ready(job: ForecastJob) -> bool:
+    """Indica si el perfil de ese trabajo puede salir del paquete GRIB.
+
+    Sin él, una hora de perfil convectivo cuesta 102 peticiones al WCS —unos
+    dos minutos de estrangulador— frente a dos con el paquete. Merece la pena
+    saberlo antes de empezar, para hacer mientras tanto otra hora que sí lo
+    tenga.
+    """
+    try:
+        run = _parse_iso(job.run)
+        valid_time = _parse_iso(job.valid_time)
+    except ValueError:
+        return True
+    return package_ready("IP1", run, valid_time)
+
+
+def _bring_forward_a_ready_hour(
+    pending: list[tuple[dict[str, Any], ForecastJob]], group: tuple[str, int]
+) -> None:
+    """Adelanta una hora cuyo paquete ya esté, si la primera aún no lo tiene.
+
+    Reordena dentro del mismo nivel, así que no altera el orden de publicación
+    entre niveles ni adelanta trabajo de otra pasada. Si ninguna hora del nivel
+    tiene paquete, no toca nada y la primera sale por el WCS como siempre: es
+    preferible a dejar la pasada parada esperando a Météo-France.
+    """
+    if not pending or _job_group(pending[0][1]) != group or group[1] < 2:
+        return
+    if _profile_package_ready(pending[0][1]):
+        return
+    for indice, (_manifest, job) in enumerate(pending):
+        if _job_group(job) != group:
+            break
+        if _profile_package_ready(job):
+            pending.insert(0, pending.pop(indice))
+            logger.info(
+                "Se adelanta %s: su paquete ya está y el de %s todavía no.",
+                job.valid_time, pending[1][1].valid_time,
+            )
+            return
+
+
 def _group_label(products: Sequence[str]) -> str:
     """Nombre con el que el visor identifica un trabajo agrupado.
 
@@ -1147,6 +1190,12 @@ def _run_parallel_work(
                             HEAVY_PROFILE_BYTES / 1024**3,
                         )
                         break
+                # Antes de coger la siguiente hora: si su paquete todavía no
+                # está publicado y otra del mismo nivel sí lo tiene, esa va
+                # primero. Le da tiempo al GRIB a aparecer en vez de pagar sus
+                # 102 peticiones al WCS.
+                if launch_group is not None:
+                    _bring_forward_a_ready_hour(pending, launch_group)
                 manifest, job = pending.pop(0)
                 timeout_s = derived_timeout_s if job.tier > 0 else native_timeout_s
                 _mark_job_started(manifest, job, timeout_s)

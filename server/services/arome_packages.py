@@ -119,6 +119,14 @@ def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
+def package_ready(package: str, run: datetime, valid_time: datetime) -> bool:
+    """Indica si el bloque de esa hora ya está descargado, sin bajar nada."""
+    try:
+        return _is_downloaded(_package_path(package, run, block_range(run, valid_time)))
+    except AromePackageError:
+        return False
+
+
 def _download_package(
     package: str, run: datetime, block: str, destination: Path
 ) -> Path:
