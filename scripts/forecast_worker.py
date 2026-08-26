@@ -550,11 +550,14 @@ PREFETCH_BLOCKS = max(
     0, int(os.getenv("METEOLABX_FORECAST_PREFETCH_BLOCKS", "8"))
 )
 # Espera entre vueltas cuando un bloque todavía no está publicado, y tiempo
-# máximo persiguiéndolos. Una pasada tarda horas en completarse, así que vale
-# la pena insistir un buen rato antes de rendirse al WCS.
-PREFETCH_RETRY_S = max(30, int(os.getenv("METEOLABX_FORECAST_PREFETCH_RETRY_S", "120")))
+# máximo persiguiéndolos dentro de un ciclo. El hilo vive lo que dure el ciclo
+# —unos cuatro minutos—, así que la espera tiene que ser bastante menor o solo
+# da una vuelta antes de que lo corten. Quien mantiene la insistencia a lo
+# largo de la pasada es el ciclo siguiente, que vuelve a lanzarlo: los bloques
+# ya descargados se resuelven al instante contra el disco.
+PREFETCH_RETRY_S = max(10, int(os.getenv("METEOLABX_FORECAST_PREFETCH_RETRY_S", "45")))
 PREFETCH_DEADLINE_S = max(
-    60, int(os.getenv("METEOLABX_FORECAST_PREFETCH_DEADLINE_S", "5400"))
+    60, int(os.getenv("METEOLABX_FORECAST_PREFETCH_DEADLINE_S", "600"))
 )
 
 

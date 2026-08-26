@@ -402,3 +402,21 @@ def test_prefetch_stops_when_the_cycle_ends(monkeypatch):
     assert hilo is not None
     hilo.join(timeout=5)
     assert not hilo.is_alive()
+
+
+def test_prefetch_retry_fits_inside_a_cycle():
+    """La espera entre reintentos tiene que caber varias veces en un ciclo.
+
+    El hilo de adelanto muere cuando termina el ciclo que lo lanzó. Con una
+    espera parecida a la duración del ciclo solo daba una vuelta antes de que
+    lo cortaran, y el plazo largo no se alcanzaba nunca.
+    """
+    import os
+
+    import scripts.forecast_worker as trabajador
+
+    ciclo = int(os.getenv("METEOLABX_FORECAST_WORKER_CYCLE_BUDGET_S", "240"))
+    assert trabajador.PREFETCH_RETRY_S * 3 <= ciclo, (
+        f"con reintentos cada {trabajador.PREFETCH_RETRY_S} s apenas da vueltas "
+        f"en un ciclo de {ciclo} s"
+    )
