@@ -141,7 +141,10 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "-m scripts.forecast_worker" in production_start
     assert "--isolate-tasks" in production_start
     assert 'METEOLABX_FORECAST_WORKERS:-6' in production_start
-    assert 'METEOLABX_FORECAST_HEAVY_WORKERS:-1' in production_start
+    # A 0 no hay tope fijo de perfiles convectivos: se intentan tantos como
+    # workers y frena la memoria libre del momento, que es lo que sirve igual
+    # en una máquina de 8 GB que en una de 24.
+    assert 'METEOLABX_FORECAST_HEAVY_WORKERS:-0' in production_start
     assert "--watch" in production_start
     assert "METEOLABX_FORECAST_WORKER_INTERVAL_S:-60" in production_start
     assert "has_overlay" in api

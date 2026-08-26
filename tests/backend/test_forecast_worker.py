@@ -252,3 +252,44 @@ def test_the_memory_guard_covers_dcape_not_just_the_other_profiles():
     )
     # El nivel 3 comparte límite con el 2: ambos son un perfil completo.
     assert trabajador.tier_capacity_for(3, workers=6, heavy_workers=4) == 4
+
+
+def test_without_a_fixed_cap_the_profiles_use_every_worker():
+    """A 0 no hay tope: los perfiles pueden usar los mismos workers que el resto.
+
+    El tope fijo existía porque un porcentaje de memoria no dice lo mismo en
+    cada máquina. Ahora frena el hueco real, así que no hace falta adivinar el
+    número de antemano.
+    """
+    import scripts.forecast_worker as trabajador
+
+    assert trabajador.tier_capacity_for(2, workers=6, heavy_workers=0) == 6
+    assert trabajador.tier_capacity_for(3, workers=6, heavy_workers=0) == 6
+    # Un tope explícito se sigue respetando.
+    assert trabajador.tier_capacity_for(2, workers=6, heavy_workers=2) == 2
+
+
+def test_free_memory_gates_another_profile(monkeypatch):
+    """Se admite otro perfil sólo si cabe entero en lo que queda libre.
+
+    Un porcentaje no vale igual en todas las máquinas: el 55 % de 8 GB deja
+    3,6 GB y el de 24 deja casi 11. Lo que decide es si cabe uno más.
+    """
+    import scripts.forecast_worker as trabajador
+
+    GB = 1024**3
+    monkeypatch.setattr(trabajador, "HEAVY_PROFILE_BYTES", 3 * GB)
+
+    monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: (14 * GB, 24 * GB))
+    assert trabajador._room_for_another_profile(), "quedan 10 GB, cabe otro"
+
+    monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: (22 * GB, 24 * GB))
+    assert not trabajador._room_for_another_profile(), "quedan 2 GB, no cabe"
+
+    # Una máquina pequeña con el mismo hueco relativo que la grande de arriba
+    # (58 % ocupado): en 24 GB cabía otro perfil, en 8 GB no.
+    monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: (int(5.5 * GB), 8 * GB))
+    assert not trabajador._room_for_another_profile()
+
+    monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: None)
+    assert trabajador._room_for_another_profile(), "sin cgroup legible, no se frena"

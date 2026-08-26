@@ -861,10 +861,14 @@ def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str,
 def tier_capacity_for(tier: int, workers: int, heavy_workers: int) -> int:
     """Cuántos trabajos de ese nivel caben a la vez.
 
-    Los perfiles convectivos (nivel 2 en adelante) cuestan unos 2,9 GB cada uno,
-    así que van limitados aparte de los campos base y derivados rápidos.
+    Los perfiles convectivos (nivel 2 en adelante) cuestan unos 3 GB cada uno,
+    así que admiten un tope propio. A 0 no hay tope fijo: se intentan tantos
+    como workers y es la memoria libre del momento la que frena, que es lo que
+    conviene cuando no se sabe de antemano cuánta RAM tiene la máquina.
     """
-    return min(workers, heavy_workers) if tier >= 2 else workers
+    if tier < 2:
+        return workers
+    return workers if heavy_workers <= 0 else min(workers, heavy_workers)
 
 
 def _job_group(job: ForecastJob) -> tuple[str, int]:
@@ -902,17 +906,6 @@ def _parallel_work_order(
     )
 
 
-# Fracción de memoria del contenedor por encima de la cual no se admite un
-# segundo perfil a la vez. Es un freno de emergencia, no una garantía: mide
-# antes de lanzar, y el perfil recién admitido crece durante los minutos
-# siguientes. Medido en Railway, cada perfil cuesta ~2,9 GB sobre una base de
-# 2,3, así que dos no caben en 8 GB por mucho que el instante del lanzamiento
-# parezca despejado.
-HEAVY_MEMORY_CEILING = max(
-    0.1, min(0.95, float(os.getenv("METEOLABX_FORECAST_HEAVY_MEMORY_CEILING", "0.55")))
-)
-
-
 def _cgroup_anonymous_bytes() -> int | None:
     """Memoria anónima del cgroup, la que el núcleo no puede recuperar.
 
@@ -931,8 +924,15 @@ def _cgroup_anonymous_bytes() -> int | None:
     return None
 
 
-def _container_memory_ratio() -> float | None:
-    """Uso de memoria del cgroup; permite no lanzar un segundo perfil si no cabe."""
+# Lo que ocupa un perfil convectivo completo, medido en Railway. DCAPE es el
+# más caro (bandas de 192 filas en vez de 64) y marca el listón.
+HEAVY_PROFILE_BYTES = int(
+    float(os.getenv("METEOLABX_FORECAST_HEAVY_PROFILE_GB", "3.0")) * 1024**3
+)
+
+
+def _cgroup_memory() -> tuple[int, int] | None:
+    """Memoria usada y límite del cgroup, en bytes."""
     candidates = (
         (Path("/sys/fs/cgroup/memory.current"), Path("/sys/fs/cgroup/memory.max")),
         (
@@ -952,10 +952,31 @@ def _container_memory_ratio() -> float | None:
             # La anónima cuando se puede leer; si no, el total, que es lo que
             # había antes y peca de conservador.
             anonima = _cgroup_anonymous_bytes()
-            return (anonima if anonima is not None else current) / limit
+            return (anonima if anonima is not None else current), limit
         except (FileNotFoundError, OSError, ValueError):
             continue
     return None
+
+
+def _container_memory_ratio() -> float | None:
+    """Fracción del límite del cgroup que está ocupada."""
+    medida = _cgroup_memory()
+    return None if medida is None else medida[0] / medida[1]
+
+
+def _room_for_another_profile() -> bool:
+    """Indica si queda sitio para un perfil convectivo más.
+
+    Un porcentaje no sirve igual en todas las máquinas: el 55 % de 8 GB deja
+    3,6 GB y el de 24 deja casi 11. Lo que decide es si cabe otro perfil
+    entero, así que se compara el hueco que queda con lo que uno ocupa. Sin
+    cgroup legible se responde que sí, que es como se comportaba antes.
+    """
+    medida = _cgroup_memory()
+    if medida is None:
+        return True
+    usada, limite = medida
+    return (limite - usada) >= HEAVY_PROFILE_BYTES
 
 
 def _run_parallel_work(
@@ -1051,16 +1072,16 @@ def _run_parallel_work(
                     # medir el cgroup cuando ya se le nota, no antes.
                     if time.monotonic() - last_heavy_launch < 15.0:
                         break
-                    memory_ratio = _container_memory_ratio()
-                    if memory_ratio is not None and memory_ratio >= HEAVY_MEMORY_CEILING:
+                    if not _room_for_another_profile():
                         # Sin esta traza, unos workers configurados pero nunca
                         # admitidos parecen no estar haciendo nada.
+                        medida = _cgroup_memory()
                         logger.info(
-                            "Perfil de nivel %d en espera: memoria del cgroup "
-                            "al %.0f %% (tope %.0f %%).",
+                            "Perfil de nivel %d en espera: quedan %.1f GB "
+                            "libres y uno necesita %.1f.",
                             launch_tier,
-                            memory_ratio * 100.0,
-                            HEAVY_MEMORY_CEILING * 100.0,
+                            (medida[1] - medida[0]) / 1024**3 if medida else 0.0,
+                            HEAVY_PROFILE_BYTES / 1024**3,
                         )
                         break
                 manifest, job = pending.pop(0)
@@ -1177,11 +1198,13 @@ def run_incremental_cycle(
     stop_cycle = False
     pending_count = sum(len(queue) for queue in queues.values())
     logger.info(
-        "RUN actual %s: %d tareas pendientes en %d pasadas retenidas · %d workers",
+        "RUN actual %s: %d tareas pendientes en %d pasadas retenidas · "
+        "%d workers, %d de ellos para perfiles convectivos",
         latest_run,
         pending_count,
         len(manifests),
         max(1, workers),
+        tier_capacity_for(2, max(1, workers), heavy_workers),
     )
 
     if workers > 1:
@@ -1344,7 +1367,7 @@ def main() -> int:
     parser.add_argument(
         "--heavy-workers",
         type=int,
-        default=int(os.getenv("METEOLABX_FORECAST_HEAVY_WORKERS", "1")),
+        default=int(os.getenv("METEOLABX_FORECAST_HEAVY_WORKERS", "0")),
         help="Máximo de perfiles convectivos simultáneos para limitar RAM y cuota API.",
     )
     parser.add_argument(
