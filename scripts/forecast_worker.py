@@ -10,12 +10,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
 import multiprocessing
+import threading
 import os
 from pathlib import Path
 from queue import Empty
 import signal
 import time
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 from server.config import get_settings
 from server.services.arome_forecast import (
@@ -42,7 +43,13 @@ from server.services.forecast_store import (
     write_grid,
     write_json,
 )
-from server.services.arome_packages import discard_packages_before
+from server.services.arome_packages import (
+    AromePackageError,
+    block_range,
+    discard_packages_before,
+    ensure_package,
+)
+from server.services.meteofrance_auth import MeteoFranceAuthError
 from tabs.arome_forecast import forecast_calculation_scope
 
 
@@ -534,6 +541,73 @@ def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> Non
         )
 
 
+# Bloques GRIB que se adelantan mientras el resto trabaja. Cada bloque cubre
+# siete horas, así que uno por delante basta para que nadie espere a que baje.
+PREFETCH_BLOCKS = max(
+    0, int(os.getenv("METEOLABX_FORECAST_PREFETCH_BLOCKS", "1"))
+)
+
+
+def _blocks_ahead(jobs: Sequence[ForecastJob], limit: int) -> list[tuple[datetime, datetime]]:
+    """Primeras horas de los bloques que vendrán después del que se usa ahora.
+
+    Devuelve un (run, hora) por bloque, que es cuanto necesita ensure_package
+    para saber qué fichero pedir.
+    """
+    vistos: dict[tuple[str, str], tuple[datetime, datetime]] = {}
+    for job in jobs:
+        if job.tier < 1:
+            continue
+        try:
+            run = _parse_iso(job.run)
+            valid_time = _parse_iso(job.valid_time)
+            clave = (job.run, block_range(run, valid_time))
+        except (AromePackageError, ValueError):
+            continue
+        if clave not in vistos:
+            vistos[clave] = (run, valid_time)
+        if len(vistos) > limit:
+            break
+    # El primero es el bloque en uso: ese ya lo está bajando quien lo necesita.
+    return list(vistos.values())[1 : limit + 1]
+
+
+def _start_package_prefetch(
+    jobs: Sequence[ForecastJob], stop: threading.Event
+) -> threading.Thread | None:
+    """Baja por adelantado los bloques siguientes, en segundo plano.
+
+    Mientras una hora se diagnostica no se está usando la red para nada, y la
+    siguiente acabará necesitando su bloque. Adelantarlo convierte una espera
+    en tiempo aprovechado. El cerrojo de ensure_package hace el resto: si el
+    trabajo llega antes de que termine, espera a este en vez de bajar su copia.
+    """
+    from server.services.arome_forecast import _packages_available
+
+    if PREFETCH_BLOCKS <= 0 or not _packages_available():
+        return None
+    objetivos = _blocks_ahead(jobs, PREFETCH_BLOCKS)
+    if not objetivos:
+        return None
+
+    def adelantar() -> None:
+        for run, valid_time in objetivos:
+            for paquete in ("IP1", "SP1", "SP2"):
+                if stop.is_set():
+                    return
+                try:
+                    ensure_package(paquete, run, valid_time)
+                except (AromePackageError, MeteoFranceAuthError) as exc:
+                    # Que falle el adelanto no rompe nada: quien lo necesite
+                    # volverá a intentarlo por su cuenta.
+                    logger.info("No se pudo adelantar %s: %s", paquete, exc)
+                    return
+
+    hilo = threading.Thread(target=adelantar, name="arome-prefetch", daemon=True)
+    hilo.start()
+    return hilo
+
+
 def _configure_logging() -> None:
     """Formato y nivel de log, para el proceso padre y para cada hijo.
 
@@ -877,6 +951,8 @@ def _run_parallel_work(
 ) -> tuple[int, int, int]:
     """Calcula frames en paralelo; solo el padre modifica los manifiestos."""
     pending = _parallel_work_order(manifests, queues)
+    prefetch_stop = threading.Event()
+    prefetch = _start_package_prefetch([job for _, job in pending], prefetch_stop)
     active: dict[Future[None], tuple[dict[str, Any], ForecastJob]] = {}
     started_at = time.monotonic()
     tasks_started = 0
@@ -995,6 +1071,11 @@ def _run_parallel_work(
                     tasks_completed += 1
                     persist_result(manifest, job.run)
 
+    prefetch_stop.set()
+    if prefetch is not None:
+        # No se espera: es trabajo adelantado, y el fichero a medias queda como
+        # .part sin que nadie lo confunda con uno completo.
+        prefetch.join(timeout=0.1)
     return tasks_completed, frames_completed, failures
 
 

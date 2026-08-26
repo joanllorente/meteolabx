@@ -90,3 +90,58 @@ def test_logging_setup_overrides_an_inherited_configuration():
         assert logging.getLogger().level == logging.INFO
     finally:
         logging.basicConfig(level=logging.WARNING, force=True)
+
+
+def _trabajo(hora, tier=2, run="2026-08-26T12:00:00Z"):
+    import scripts.forecast_worker as trabajador
+
+    return trabajador.ForecastJob(
+        run=run,
+        valid_time=f"2026-08-26T{hora:02d}:00:00Z",
+        products=("mucape-muli",),
+        scope="model",
+        tier=tier,
+    )
+
+
+def test_prefetch_skips_the_block_already_in_use():
+    """Se adelanta el bloque siguiente, no el que se está usando.
+
+    El bloque en curso ya lo está bajando quien lo necesita; pedirlo otra vez
+    solo serviría para quedarse esperando en su cerrojo sin adelantar nada.
+    """
+    import scripts.forecast_worker as trabajador
+
+    # 12Z: las horas 12-18 son el bloque 00H06H y las 19+ el siguiente.
+    trabajos = [_trabajo(h) for h in (12, 13, 14, 15, 19, 20, 26)]
+
+    objetivos = trabajador._blocks_ahead(trabajos, limit=1)
+
+    assert len(objetivos) == 1
+    _, hora = objetivos[0]
+    assert hora.hour == 19, "debe adelantar el segundo bloque, no el primero"
+
+
+def test_prefetch_ignores_jobs_that_do_not_use_packages():
+    """Los productos nativos (nivel 0) no leen paquetes; no cuentan."""
+    import scripts.forecast_worker as trabajador
+
+    trabajos = [_trabajo(h, tier=0) for h in (12, 19, 26)]
+
+    assert trabajador._blocks_ahead(trabajos, limit=2) == []
+
+
+def test_prefetch_does_not_start_without_packages(monkeypatch):
+    """Sin credencial de paquetes no se lanza ningún hilo."""
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: False)
+
+    hilo = trabajador._start_package_prefetch(
+        [_trabajo(h) for h in (12, 19)], threading.Event()
+    )
+
+    assert hilo is None
