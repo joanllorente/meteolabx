@@ -341,7 +341,11 @@ def _grouped_jobs(
 
 
 def _jobs_for_manifest(
-    manifest: dict[str, Any], *, max_hours: int = 0, now: datetime | None = None
+    manifest: dict[str, Any],
+    *,
+    max_hours: int = 0,
+    diagnostic_max_hours: int = 0,
+    now: datetime | None = None,
 ) -> list[ForecastJob]:
     now = now or datetime.now(timezone.utc)
     run_iso = str(manifest["run"])
@@ -355,6 +359,12 @@ def _jobs_for_manifest(
         key=_parse_iso,
     )
     allowed_times = set(all_times[:max_hours] if max_hours > 0 else all_times)
+    # Un campo nativo cuesta segundos y una hora convectiva varios minutos, así
+    # que el horizonte se recorta solo donde duele: cizalladuras y diagnósticos
+    # convectivos. Los nativos siguen cubriendo la pasada entera.
+    diagnostic_times = allowed_times
+    if diagnostic_max_hours > 0:
+        diagnostic_times = allowed_times & set(all_times[:diagnostic_max_hours])
     jobs: list[ForecastJob] = []
 
     for tier, products in ((0, NATIVE_PRODUCTS), (1, STANDALONE_FAST_PRODUCTS)):
@@ -372,7 +382,7 @@ def _jobs_for_manifest(
                     )
 
     jobs.extend(
-        _grouped_jobs(manifest, SHEAR_PRODUCTS, allowed_times, now, tier=1)
+        _grouped_jobs(manifest, SHEAR_PRODUCTS, diagnostic_times, now, tier=1)
     )
 
     accumulated_state = (manifest.get("products") or {}).get(
@@ -403,7 +413,7 @@ def _jobs_for_manifest(
 
     jobs.extend(
         _grouped_jobs(
-            manifest, CONVECTIVE_FORECAST_PRODUCTS, allowed_times, now, tier=2
+            manifest, CONVECTIVE_FORECAST_PRODUCTS, diagnostic_times, now, tier=2
         )
     )
 
@@ -882,6 +892,7 @@ def _run_parallel_work(
 def run_incremental_cycle(
     *,
     max_hours: int = 0,
+    diagnostic_max_hours: int = 0,
     max_tasks: int = 0,
     cycle_budget_s: int = 0,
     native_timeout_s: int = 300,
@@ -919,7 +930,9 @@ def run_incremental_cycle(
 
     queues = {
         str(manifest["run"]): _jobs_for_manifest(
-            manifest, max_hours=max(0, max_hours)
+            manifest,
+            max_hours=max(0, max_hours),
+            diagnostic_max_hours=max(0, diagnostic_max_hours),
         )
         for manifest in manifests
     }
@@ -1056,6 +1069,15 @@ def main() -> int:
         help="Limita las horas consideradas por pasada; 0 usa todas.",
     )
     parser.add_argument(
+        "--diagnostic-max-hours",
+        type=int,
+        default=int(os.getenv("METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS", "0")),
+        help=(
+            "Limita el horizonte de cizalladuras y diagnósticos convectivos, "
+            "que son los caros; 0 usa el mismo que el resto."
+        ),
+    )
+    parser.add_argument(
         "--max-tasks",
         type=int,
         default=int(os.getenv("METEOLABX_FORECAST_WORKER_MAX_TASKS", "48")),
@@ -1120,6 +1142,7 @@ def main() -> int:
     def run_cycle() -> dict[str, Any]:
         return run_incremental_cycle(
             max_hours=max(0, args.max_hours),
+            diagnostic_max_hours=max(0, args.diagnostic_max_hours),
             max_tasks=max(0, args.max_tasks),
             cycle_budget_s=max(0, args.cycle_budget),
             native_timeout_s=max(1, args.native_timeout),

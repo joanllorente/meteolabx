@@ -71,6 +71,7 @@ UVICORN_PID=$!
   --isolate-tasks \
   --workers "${METEOLABX_FORECAST_WORKERS:-6}" \
   --heavy-workers "${METEOLABX_FORECAST_HEAVY_WORKERS:-1}" \
+  --diagnostic-max-hours "${METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS:-36}" \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
 FORECAST_WORKER_PID=$!
 

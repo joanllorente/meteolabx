@@ -702,3 +702,53 @@ def test_pruning_keeps_everything_when_there_is_room():
     from server.services.forecast_store import prune_retained_runs, retained_run_limit
 
     assert retained_run_limit() >= 1
+
+
+def test_diagnostic_horizon_only_trims_the_expensive_products():
+    """El recorte afecta a cizalladuras y convectivos, no a los nativos.
+
+    Un campo nativo cuesta segundos y una hora convectiva varios minutos, así
+    que limitar el horizonte de todos por igual sacrificaba cobertura barata.
+    """
+    horas = [f"2026-08-24T{hora:02d}:00:00Z" for hora in range(13, 21)]  # 8 horas
+    catalog_products = {
+        product: {"run": RUN, "valid_times": horas}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(RUN, horas, catalog_products=catalog_products)
+
+    jobs = forecast_worker._jobs_for_manifest(manifest, diagnostic_max_hours=4)
+
+    def horas_de(predicado):
+        return {
+            valid
+            for job in jobs
+            if predicado(job)
+            for valid in job.covered_times
+        }
+
+    nativos = horas_de(lambda job: job.tier == 0)
+    cizalladuras = horas_de(
+        lambda job: any(p.startswith("shear-") for p in job.products)
+    )
+    convectivos = horas_de(lambda job: job.tier == 2)
+
+    assert nativos == set(horas), "los nativos cubren la pasada entera"
+    assert cizalladuras == set(horas[:4])
+    assert convectivos == set(horas[:4])
+
+
+def test_without_diagnostic_limit_everything_keeps_the_same_horizon():
+    horas = [f"2026-08-24T{hora:02d}:00:00Z" for hora in range(13, 19)]
+    catalog_products = {
+        product: {"run": RUN, "valid_times": horas}
+        for product in PERSISTED_FORECAST_PRODUCTS
+    }
+    manifest = new_manifest(RUN, horas, catalog_products=catalog_products)
+
+    jobs = forecast_worker._jobs_for_manifest(manifest)
+    convectivos = {
+        valid for job in jobs if job.tier == 2 for valid in job.covered_times
+    }
+
+    assert convectivos == set(horas)
