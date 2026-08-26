@@ -320,3 +320,85 @@ def test_zero_survives_every_clamp_down_to_the_capacity(monkeypatch):
     # Y el resultado al final del camino: los perfiles usan los seis.
     assert trabajador.tier_capacity_for(2, 6, trabajador._effective_heavy_workers(0, 6)) == 6
     assert trabajador.tier_capacity_for(0, 6, trabajador._effective_heavy_workers(0, 6)) == 6
+
+
+def test_prefetch_retries_blocks_that_are_not_published_yet(monkeypatch):
+    """Un bloque que aún no existe se reintenta, no se abandona.
+
+    Al principio de una pasada Météo-France publica los bloques poco a poco y
+    la cizalladura, a menos de un minuto por hora, adelanta a la publicación.
+    Si el adelanto se rinde a la primera, las horas siguientes acaban bajando
+    el perfil campo a campo por el WCS.
+    """
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    intentos = {"n": 0}
+
+    def publicado_a_la_tercera(paquete, run, valid_time):
+        intentos["n"] += 1
+        if intentos["n"] < 3:
+            raise trabajador.AromePackageError("todavía no publicado")
+        return "ruta"
+
+    monkeypatch.setattr(trabajador, "ensure_package", publicado_a_la_tercera)
+
+    hilo = trabajador._start_package_prefetch(
+        [_trabajo(12), _trabajo(19)], threading.Event()
+    )
+    assert hilo is not None
+    hilo.join(timeout=5)
+
+    assert not hilo.is_alive(), "el hilo debe terminar cuando lo consigue"
+    assert intentos["n"] >= 3, "debe insistir hasta que el bloque aparezca"
+
+
+def test_prefetch_gives_up_after_the_deadline(monkeypatch):
+    """No se persigue indefinidamente un bloque que nunca llega."""
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    monkeypatch.setattr(trabajador, "PREFETCH_DEADLINE_S", 0)
+
+    def nunca(paquete, run, valid_time):
+        raise trabajador.AromePackageError("nunca se publica")
+
+    monkeypatch.setattr(trabajador, "ensure_package", nunca)
+
+    hilo = trabajador._start_package_prefetch(
+        [_trabajo(12), _trabajo(19)], threading.Event()
+    )
+    assert hilo is not None
+    hilo.join(timeout=5)
+    assert not hilo.is_alive(), "debe rendirse en vez de girar para siempre"
+
+
+def test_prefetch_stops_when_the_cycle_ends(monkeypatch):
+    """La señal de parada corta el adelanto aunque queden bloques."""
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    parar = threading.Event()
+
+    def falla_y_para(paquete, run, valid_time):
+        parar.set()
+        raise trabajador.AromePackageError("todavía no publicado")
+
+    monkeypatch.setattr(trabajador, "ensure_package", falla_y_para)
+
+    hilo = trabajador._start_package_prefetch([_trabajo(12), _trabajo(19)], parar)
+    assert hilo is not None
+    hilo.join(timeout=5)
+    assert not hilo.is_alive()

@@ -549,6 +549,13 @@ def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> Non
 PREFETCH_BLOCKS = max(
     0, int(os.getenv("METEOLABX_FORECAST_PREFETCH_BLOCKS", "8"))
 )
+# Espera entre vueltas cuando un bloque todavía no está publicado, y tiempo
+# máximo persiguiéndolos. Una pasada tarda horas en completarse, así que vale
+# la pena insistir un buen rato antes de rendirse al WCS.
+PREFETCH_RETRY_S = max(30, int(os.getenv("METEOLABX_FORECAST_PREFETCH_RETRY_S", "120")))
+PREFETCH_DEADLINE_S = max(
+    60, int(os.getenv("METEOLABX_FORECAST_PREFETCH_DEADLINE_S", "5400"))
+)
 
 
 def _blocks_ahead(jobs: Sequence[ForecastJob], limit: int) -> list[tuple[datetime, datetime]]:
@@ -596,20 +603,37 @@ def _start_package_prefetch(
     def adelantar() -> None:
         inicio = time.monotonic()
         bajados = 0
-        for run, valid_time in objetivos:
-            for paquete in ("IP1", "SP1", "SP2"):
-                if stop.is_set():
-                    return
-                try:
-                    ensure_package(paquete, run, valid_time)
-                    bajados += 1
-                except (AromePackageError, MeteoFranceAuthError) as exc:
-                    # Que falle uno no cancela el resto: puede ser un bloque
-                    # que Météo-France todavía no ha publicado, y los de más
-                    # atrás sí están. Quien lo necesite reintentará por su
-                    # cuenta cuando le toque.
-                    logger.info("No se pudo adelantar %s: %s", paquete, exc)
-                    continue
+        # Al principio de una pasada los bloques largos todavía no existen:
+        # Météo-France los publica poco a poco y la cizalladura, que va a
+        # menos de un minuto por hora, adelanta a la publicación. Insistir
+        # hasta que aparezcan es lo que evita que las horas siguientes acaben
+        # bajando el perfil campo a campo por el WCS.
+        pendientes = list(objetivos)
+        while pendientes and not stop.is_set():
+            quedan: list[tuple[datetime, datetime]] = []
+            for run, valid_time in pendientes:
+                for paquete in ("IP1", "SP1", "SP2"):
+                    if stop.is_set():
+                        return
+                    try:
+                        ensure_package(paquete, run, valid_time)
+                        bajados += 1
+                    except (AromePackageError, MeteoFranceAuthError):
+                        # Todavía no publicado: se reintenta en la vuelta
+                        # siguiente, sin abandonar los bloques posteriores.
+                        quedan.append((run, valid_time))
+                        break
+            if not quedan:
+                break
+            if time.monotonic() - inicio > PREFETCH_DEADLINE_S:
+                logger.info(
+                    "Se deja de perseguir %d bloques sin publicar tras %.0f min; "
+                    "esas horas se resolverán por el WCS.",
+                    len(quedan), (time.monotonic() - inicio) / 60.0,
+                )
+                break
+            pendientes = quedan
+            stop.wait(PREFETCH_RETRY_S)
         logger.info(
             "Adelantados %d paquetes de %d bloques en %.0f s; los perfiles "
             "convectivos no deberían esperar descargas.",
