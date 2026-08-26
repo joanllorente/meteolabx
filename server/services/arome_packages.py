@@ -13,13 +13,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import fcntl
+import logging
 import os
 from pathlib import Path
 import tempfile
-from typing import Any
-
-import logging
 import time
+from typing import Any
 
 import numpy as np
 import rasterio
