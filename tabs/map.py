@@ -99,7 +99,7 @@ MAP_PROVIDER_COUNTRIES = {
 }
 
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(ttl=900, show_spinner=False, max_entries=8)
 def _cached_map_country_counts(
     provider_ids: tuple[str, ...],
     cache_version: int = MAP_COUNTRY_COUNTS_CACHE_VERSION,
@@ -109,7 +109,10 @@ def _cached_map_country_counts(
     return fetch_station_countries_via_api(list(provider_ids))
 
 
-@st.cache_data(ttl=900, show_spinner=False)
+# lat/lon entran en la clave, así que cada posición consultada crea una
+# entrada nueva. Sin techo, quince minutos de uso acumulan lotes de estaciones
+# sin límite en un contenedor que comparte memoria con el worker AROME.
+@st.cache_data(ttl=900, show_spinner=False, max_entries=32)
 def _cached_map_station_batches(
     lat: float,
     lon: float,
@@ -282,7 +285,7 @@ def _map_deck_views(pdk):
     ]
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8)
 def _cached_temp_field_static_path(
     data_version: str,
     palette_version: int,
@@ -354,7 +357,7 @@ def _cached_temp_field_static_path(
     return tuple(tiles)
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8)
 def _cached_wind_field_static_path(
     data_version: str,
     palette_version: int,
@@ -417,7 +420,7 @@ def _cached_wind_field_static_path(
     return tuple(tiles)
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8)
 def _cached_precipitation_field_static_path(
     data_version: str,
     palette_version: int,
@@ -478,7 +481,7 @@ def _cached_precipitation_field_static_path(
     return tuple(tiles)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False, max_entries=2)
 def _cached_current_temperature_snapshot() -> tuple[list[dict], str]:
     """Todas las estaciones con temperatura reciente para el cluster.
 
@@ -533,7 +536,7 @@ def _temperature_label_rows(points) -> list[dict]:
     return rows
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False, max_entries=2)
 def _cached_current_wind_snapshot() -> tuple[list[dict], str]:
     """Estaciones con vector de viento reciente para flechas y clusters."""
     import json as _json
@@ -587,7 +590,7 @@ def _wind_label_rows(points) -> list[dict]:
     return rows
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False, max_entries=2)
 def _cached_precipitation_snapshot() -> tuple[list[dict], str]:
     """Acumulados moviles 24 h para etiquetas y seleccion de estaciones."""
     import json as _json
