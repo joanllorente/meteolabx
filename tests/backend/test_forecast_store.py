@@ -154,9 +154,15 @@ def test_worker_prioritizes_native_frames_and_groups_convective_diagnostics():
     assert all(job.tier == 0 for job in jobs[: len(forecast_worker.NATIVE_PRODUCTS) * 2])
     convective = [job for job in jobs if job.tier == 2]
     assert len(convective) == 2
-    assert set(convective[0].products) == set(forecast_worker.CONVECTIVE_FORECAST_PRODUCTS)
+    # DCAPE sale aparte: es el unico que exige el rocio del WCS.
+    assert set(convective[0].products) == set(forecast_worker.PROFILE_PRODUCTS)
+    assert "dcape" not in convective[0].products
     assert convective[0].products[0] == "mucape-muli"
     assert convective[0].products[-1] == "ship"
+
+    dcape = [job for job in jobs if job.tier == 3]
+    assert len(dcape) == 2, "una hora por trabajo, en su propio nivel"
+    assert all(job.products == ("dcape",) for job in dcape)
 
 
 def test_shear_products_share_one_job_per_hour():

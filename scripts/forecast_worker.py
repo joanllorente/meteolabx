@@ -65,6 +65,13 @@ SHEAR_PRODUCTS = tuple(
     product for product in FAST_DERIVED_PRODUCTS if product.startswith("shear-")
 )
 ACCUMULATED_PRECIP_PRODUCT = "accumulated-precip"
+# DCAPE sale del grupo convectivo: es el unico que exige el rocio del WCS, y
+# esperarlo retrasaria media hora a los otros trece. Va en su propio nivel,
+# detras de ellos, para que no bloquee la pasada.
+DCAPE_PRODUCT = "dcape"
+PROFILE_PRODUCTS = tuple(
+    product for product in CONVECTIVE_FORECAST_PRODUCTS if product != DCAPE_PRODUCT
+)
 # El acumulado se resuelve de una vez para toda la pasada: cada hora depende de
 # los incrementos anteriores, así que publicarlas por separado los descargaba
 # una y otra vez.
@@ -417,9 +424,10 @@ def _jobs_for_manifest(
         )
 
     jobs.extend(
-        _grouped_jobs(
-            manifest, CONVECTIVE_FORECAST_PRODUCTS, diagnostic_times, now, tier=2
-        )
+        _grouped_jobs(manifest, PROFILE_PRODUCTS, diagnostic_times, now, tier=2)
+    )
+    jobs.extend(
+        _grouped_jobs(manifest, (DCAPE_PRODUCT,), diagnostic_times, now, tier=3)
     )
 
     return sorted(
@@ -790,7 +798,7 @@ def _run_parallel_work(
     last_heavy_launch = 0.0
 
     def tier_capacity(tier: int) -> int:
-        return min(workers, heavy_workers) if tier == 2 else workers
+        return min(workers, heavy_workers) if tier >= 2 else workers
 
     def persist_result(manifest: dict[str, Any], run_iso: str) -> None:
         manifest["worker_heartbeat_at"] = _utc_now()

@@ -1116,7 +1116,14 @@ def _computed_frame(
     if valid_time not in times:
         raise AromeError("La hora solicitada no está disponible en la última pasada.")
     if config["kind"] == "convective":
-        frames, diagnostic_run = _convective_frames(token, valid_time_iso, run_iso)
+        # Solo DCAPE necesita el rocío que publica el modelo; los otros trece
+        # se resuelven con el derivado del paquete y no esperan esas descargas.
+        frames, diagnostic_run = _convective_frames(
+            token,
+            valid_time_iso,
+            run_iso,
+            exact_dewpoint=product_id == "dcape",
+        )
         field = frames[product_id]
         run = diagnostic_run
     elif config["kind"] == "wind":
