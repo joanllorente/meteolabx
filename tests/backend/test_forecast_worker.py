@@ -202,3 +202,29 @@ def test_prefetch_keeps_going_when_one_block_is_not_published_yet(monkeypatch):
 
     horas = {hora for _, hora in pedidos}
     assert 2 in horas, "debe seguir con el bloque siguiente al que falla"
+
+
+def test_a_drained_tier_does_not_hold_back_the_free_workers(monkeypatch):
+    """Sin pendientes del nivel activo, quien esté libre empieza el siguiente.
+
+    Antes había que esperar a que el último trabajo del nivel terminase. Con un
+    worker daba igual; con cuatro son tres parados en cada cambio de nivel.
+    """
+    import scripts.forecast_worker as trabajador
+
+    # Un trabajo de nivel 1 aún corriendo, y en la cola solo queda nivel 2.
+    activo = _trabajo(12, tier=1)
+    cola = [_trabajo(13, tier=2), _trabajo(14, tier=2)]
+
+    grupo_activo = trabajador._job_group(activo)
+    siguiente = trabajador._job_group(cola[0])
+
+    assert grupo_activo != siguiente
+    assert not any(trabajador._job_group(j) == grupo_activo for j in cola), (
+        "el nivel activo ya está drenado: nada debería bloquear al siguiente"
+    )
+    # La capacidad mezclada es la más estrecha, para no admitir de más.
+    assert min(
+        trabajador.tier_capacity_for(1, workers=6, heavy_workers=4),
+        trabajador.tier_capacity_for(2, workers=6, heavy_workers=4),
+    ) == 4

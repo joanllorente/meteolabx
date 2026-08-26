@@ -858,6 +858,15 @@ def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str,
     return manifests[start:] + manifests[:start]
 
 
+def tier_capacity_for(tier: int, workers: int, heavy_workers: int) -> int:
+    """Cuántos trabajos de ese nivel caben a la vez.
+
+    Los perfiles convectivos (nivel 2 en adelante) cuestan unos 2,9 GB cada uno,
+    así que van limitados aparte de los campos base y derivados rápidos.
+    """
+    return min(workers, heavy_workers) if tier >= 2 else workers
+
+
 def _job_group(job: ForecastJob) -> tuple[str, int]:
     """Identifica el bloque (pasada, nivel) al que pertenece un trabajo."""
     return (job.run, job.tier)
@@ -975,7 +984,7 @@ def _run_parallel_work(
     last_heavy_launch = 0.0
 
     def tier_capacity(tier: int) -> int:
-        return min(workers, heavy_workers) if tier >= 2 else workers
+        return tier_capacity_for(tier, workers, heavy_workers)
 
     def persist_result(manifest: dict[str, Any], run_iso: str) -> None:
         manifest["worker_heartbeat_at"] = _utc_now()
@@ -1011,6 +1020,21 @@ def _run_parallel_work(
             )
             launch_tier = launch_group[1] if launch_group is not None else None
             capacity = tier_capacity(launch_tier) if launch_tier is not None else 0
+            # Si al grupo activo ya no le quedan trabajos por repartir, quien
+            # esté libre empieza el siguiente en vez de esperar a que el último
+            # termine. Con un worker eso no se notaba; con cuatro son tres
+            # parados en cada cambio de nivel. La capacidad pasa a ser la más
+            # estrecha de las dos, así que mezclarlos nunca admite más perfiles
+            # pesados a la vez de los que cabrían en memoria.
+            if (
+                pending
+                and launch_group is not None
+                and _job_group(pending[0][1]) != launch_group
+                and not any(_job_group(job) == launch_group for _m, job in pending)
+            ):
+                launch_group = _job_group(pending[0][1])
+                launch_tier = launch_group[1]
+                capacity = min(capacity, tier_capacity(launch_tier))
             while (
                 pending
                 and not budget_reached
