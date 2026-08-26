@@ -66,6 +66,15 @@ CONVECTIVE_FORECAST_PRODUCTS = (
     "ship",
 )
 
+# Diagnósticos cuyo horizonte se recorta: una hora convectiva cuesta minutos
+# y una nativa segundos, así que se calculan menos plazos de ellos.
+CAPPED_FORECAST_PRODUCTS = tuple(
+    product
+    for product in PERSISTED_FORECAST_PRODUCTS
+    if product.startswith("shear-") or product in CONVECTIVE_FORECAST_PRODUCTS
+)
+
+
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9._/-]+$")
 LATEST_MANIFEST_KEY = "forecast/manifests/latest.json"
 RUN_SLOTS_KEY = "forecast/manifests/slots.json"
@@ -456,11 +465,23 @@ def augment_catalog_with_manifest(
     if not manifest:
         return catalog
     manifest_run = manifest.get("run")
+    # El visor no debe ofrecer horas que no se van a calcular: de los productos
+    # recortados solo existen los primeros plazos.
+    diagnostic_hours = int((manifest.get("expected_hours") or {}).get("diagnostic") or 0)
+    if diagnostic_hours > 0:
+        for product in CAPPED_FORECAST_PRODUCTS:
+            product_catalog = catalog.get("products", {}).get(product)
+            if not product_catalog or product_catalog.get("run") != manifest_run:
+                continue
+            times = sorted(set(product_catalog.get("valid_times", ())))
+            product_catalog["valid_times"] = times[:diagnostic_hours]
+
     for product, state in manifest.get("products", {}).items():
         product_catalog = catalog.get("products", {}).get(product)
         if not product_catalog or product_catalog.get("run") != manifest_run:
             continue
-        available = sorted(set(state.get("available_times", ())))
+        expected = set(product_catalog.get("valid_times", ()))
+        available = sorted(set(state.get("available_times", ())) & expected)
         product_catalog["available_times"] = available
         product_catalog["publishing"] = len(available) < len(product_catalog.get("valid_times", ()))
         product_catalog["available_until"] = available[-1] if available else None

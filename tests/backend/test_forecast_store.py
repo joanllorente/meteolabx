@@ -825,3 +825,43 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
         for product in PERSISTED_FORECAST_PRODUCTS
     )
     assert al_principio == al_final == 984
+
+
+def test_capped_products_only_offer_the_hours_that_will_exist():
+    """El visor no debe ofrecer horas de cizalladura que nadie va a calcular.
+
+    Con el horizonte recortado, anunciar las 52 horas dejaba 16 plazos que
+    nunca tendrían datos y un porcentaje calculado sobre un total irreal.
+    """
+    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(0, 12)]
+    manifest = new_manifest(RUN, horas)
+    manifest["expected_hours"] = {"native": 12, "diagnostic": 5}
+    for hora in horas[:4]:
+        mark_available(manifest, "shear-01", hora)
+        mark_available(manifest, "temperature-2m", hora)
+
+    catalog = {
+        "products": {
+            "shear-01": {"run": RUN, "valid_times": list(horas)},
+            "temperature-2m": {"run": RUN, "valid_times": list(horas)},
+        }
+    }
+    resultado = augment_catalog_with_manifest(catalog, manifest, precomputed_only=True)
+
+    assert resultado["products"]["shear-01"]["valid_times"] == horas[:5]
+    # Un producto sin recorte conserva su horizonte completo.
+    assert resultado["products"]["temperature-2m"]["valid_times"] == horas
+
+
+def test_available_hours_outside_the_cap_are_not_announced():
+    """Si una hora quedó calculada fuera del recorte, no se ofrece."""
+    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(0, 8)]
+    manifest = new_manifest(RUN, horas)
+    manifest["expected_hours"] = {"native": 8, "diagnostic": 3}
+    for hora in horas:  # se calcularon todas antes de aplicar el recorte
+        mark_available(manifest, "dcape", hora)
+
+    catalog = {"products": {"dcape": {"run": RUN, "valid_times": list(horas)}}}
+    resultado = augment_catalog_with_manifest(catalog, manifest, precomputed_only=True)
+
+    assert resultado["products"]["dcape"]["available_times"] == horas[:3]
