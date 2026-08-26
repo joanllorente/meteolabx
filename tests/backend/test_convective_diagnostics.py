@@ -365,3 +365,29 @@ def test_profiles_stay_in_memory_when_the_temporary_lives_in_ram(tmp_path, monke
         assert perfiles is original
         assert not any(isinstance(p, np.memmap) for p in perfiles)
     assert not list(tmp_path.iterdir())
+
+
+def test_railway_mount_layout_is_recognised_as_real_disk(monkeypatch):
+    """En Railway /tmp cuelga de un overlay y hereda el montaje de la raíz.
+
+    La distinción decide si los perfiles se apartan al disco o no, y errar hacia
+    "está en RAM" desactivaría la optimización en silencio. /dev/shm sí es RAM y
+    debe seguir detectándose como tal.
+    """
+    from pathlib import Path
+    from server.services.arome_forecast import _is_memory_backed
+
+    montajes = (
+        "overlay / overlay rw,relatime,lowerdir=/var/lib/docker/overlay2/l/ABC 0 0\n"
+        "proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n"
+        "tmpfs /dev tmpfs rw,nosuid,size=65536k,mode=755 0 0\n"
+        "shm /dev/shm tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k 0 0\n"
+        "/dev/sda1 /app/data ext4 rw,relatime 0 0\n"
+    )
+    monkeypatch.setattr(Path, "exists", lambda self: str(self) == "/proc/mounts")
+    monkeypatch.setattr(Path, "read_text", lambda self, **kwargs: montajes)
+    monkeypatch.setattr(Path, "resolve", lambda self: self)
+
+    assert _is_memory_backed(Path("/tmp")) is False
+    assert _is_memory_backed(Path("/app/data")) is False
+    assert _is_memory_backed(Path("/dev/shm")) is True
