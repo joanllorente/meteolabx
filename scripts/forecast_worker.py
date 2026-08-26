@@ -42,6 +42,7 @@ from server.services.forecast_store import (
     write_grid,
     write_json,
 )
+from server.services.arome_packages import discard_packages_before
 from tabs.arome_forecast import forecast_calculation_scope
 
 
@@ -200,10 +201,14 @@ def _publish_run_slot(store, manifest: dict[str, Any]) -> None:
     logger.info("RUN %s sustituido en el turno %sZ", previous_run, previous_run[11:13])
 
 
-def _prune_old_runs(store) -> None:
-    """Libera el volumen dejando solo las pasadas recientes."""
+def _prune_old_runs(store, latest_run: str) -> None:
+    """Libera el volumen y el disco temporal de lo que ya no se usa."""
     for run_iso in prune_retained_runs(store):
         logger.info("RUN %s eliminado del volumen por antigüedad", run_iso)
+    # Los paquetes GRIB viven en el disco del contenedor, no en el volumen, y
+    # cada bloque ocupa cientos de megas: solo interesan los del RUN vigente.
+    for path in discard_packages_before(_parse_iso(latest_run)):
+        logger.info("Paquete %s descartado", path.name)
 
 
 def _merge_catalog_products(
@@ -284,7 +289,7 @@ def _prepare_latest_manifest(
     manifest["worker_heartbeat_at"] = _utc_now()
     _persist_manifest(store, manifest, latest_run=run_iso)
     _publish_run_slot(store, manifest)
-    _prune_old_runs(store)
+    _prune_old_runs(store, run_iso)
     return manifest
 
 
