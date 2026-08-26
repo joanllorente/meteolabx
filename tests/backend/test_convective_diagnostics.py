@@ -308,3 +308,60 @@ def test_narrow_bands_are_reserved_for_the_run_without_dcape():
         finitos = np.isfinite(esperado)
         assert (np.isfinite(obtenido) == finitos).all(), nombre
         assert np.array_equal(obtenido[finitos], esperado[finitos]), nombre
+
+
+def test_spilling_the_profiles_to_disk_does_not_change_the_result(tmp_path, monkeypatch):
+    """Leer los perfiles desde un fichero mapeado da lo mismo que desde memoria.
+
+    Apartarlos al disco existe para que ese giga sea caché recuperable en vez de
+    memoria anónima, no para cambiar nada del diagnóstico.
+    """
+    from server.services import arome_forecast
+    from server.services.arome_forecast import (
+        _convective_outputs_in_stripes,
+        _profiles_spilled_to_disk,
+    )
+
+    monkeypatch.setattr(arome_forecast, "PROFILE_SPILL_ENABLED", True)
+    monkeypatch.setattr(arome_forecast, "_is_memory_backed", lambda path: False)
+    monkeypatch.setattr(arome_forecast.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    pressure, temperature, dewpoint, u, v, terrain, su, sv, levels = _synthetic_profile(
+        64, 32
+    )
+    en_memoria = _convective_outputs_in_stripes(
+        pressure, temperature, dewpoint, u, v, terrain, su, sv, levels,
+        stripe_rows=16, include_dcape=False,
+    )
+
+    apilados = [pressure, temperature, dewpoint, u, v]
+    with _profiles_spilled_to_disk(apilados) as perfiles:
+        assert not apilados, "la lista original debe quedar vacía"
+        assert all(isinstance(p, np.memmap) for p in perfiles)
+        en_disco = _convective_outputs_in_stripes(
+            *perfiles, terrain, su, sv, levels, stripe_rows=16, include_dcape=False,
+        )
+
+    assert not list(tmp_path.glob("meteolabx-perfil-*")), "los ficheros deben borrarse"
+    for nombre, esperado in en_memoria.items():
+        if nombre == "dcape":
+            continue
+        finitos = np.isfinite(esperado)
+        assert (np.isfinite(en_disco[nombre]) == finitos).all(), nombre
+        assert np.array_equal(en_disco[nombre][finitos], esperado[finitos]), nombre
+
+
+def test_profiles_stay_in_memory_when_the_temporary_lives_in_ram(tmp_path, monkeypatch):
+    """Sobre un tmpfs no se vuelca: los bytes seguirían en memoria igualmente."""
+    from server.services import arome_forecast
+    from server.services.arome_forecast import _profiles_spilled_to_disk
+
+    monkeypatch.setattr(arome_forecast, "PROFILE_SPILL_ENABLED", True)
+    monkeypatch.setattr(arome_forecast, "_is_memory_backed", lambda path: True)
+    monkeypatch.setattr(arome_forecast.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    original = [np.zeros((2, 4, 4)), np.ones((2, 4, 4))]
+    with _profiles_spilled_to_disk(original) as perfiles:
+        assert perfiles is original
+        assert not any(isinstance(p, np.memmap) for p in perfiles)
+    assert not list(tmp_path.iterdir())

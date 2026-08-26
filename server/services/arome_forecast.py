@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import contextlib
 from datetime import datetime, timezone
 from functools import lru_cache
 from io import BytesIO
@@ -12,6 +13,7 @@ import logging
 import math
 import os
 from pathlib import Path
+import shutil
 import struct
 import tempfile
 import time
@@ -751,6 +753,86 @@ def _convective_outputs(
     }
 
 
+PROFILE_SPILL_ENABLED = os.getenv(
+    "METEOLABX_FORECAST_PROFILE_SPILL", "1"
+).strip().lower() not in {"0", "false", "no"}
+
+
+def _is_memory_backed(path: Path) -> bool:
+    """Indica si la ruta vive en un sistema de archivos en RAM.
+
+    Volcar a un tmpfs no libera nada: los bytes siguen en memoria, sólo que
+    contabilizados de otra forma. Ante la duda se responde que sí, para no
+    empeorar las cosas creyendo que se mejoran.
+    """
+    mounts = Path("/proc/mounts")
+    if not mounts.exists():  # macOS y demás: no se vuelca.
+        return True
+    try:
+        target = path.resolve()
+        best, memoria = -1, True
+        for linea in mounts.read_text(encoding="utf-8", errors="replace").splitlines():
+            partes = linea.split()
+            if len(partes) < 3:
+                continue
+            punto, tipo = Path(partes[1]), partes[2]
+            if punto == target or punto in target.parents:
+                if len(str(punto)) > best:
+                    best, memoria = len(str(punto)), tipo in {"tmpfs", "ramfs"}
+        return memoria
+    except OSError:
+        return True
+
+
+@contextlib.contextmanager
+def _profiles_spilled_to_disk(
+    profiles: list[np.ndarray],
+) -> Iterator[list[np.ndarray]]:
+    """Aparta los perfiles apilados al disco y los sirve mapeados.
+
+    El diagnóstico recorre la rejilla por bandas de filas, que en un perfil
+    apilado son trozos contiguos: leerlos desde un fichero mapeado no cuesta
+    tiempo medible, porque el cálculo lo domina la CPU y no el acceso. A cambio,
+    ese giga deja de ser memoria anónima —la que el núcleo no puede recuperar y
+    que acaba en un OOM— y pasa a ser caché de fichero, que sí puede soltar
+    cuando hay presión.
+
+    La lista se vacía: quien llama debe soltar sus propias referencias antes,
+    o los perfiles seguirán ocupando memoria además del fichero.
+    """
+    destino = Path(tempfile.gettempdir())
+    if not PROFILE_SPILL_ENABLED or _is_memory_backed(destino):
+        yield profiles
+        return
+    carpeta = None
+    mapeados: list[np.ndarray] = []
+    try:
+        carpeta = Path(tempfile.mkdtemp(prefix="meteolabx-perfil-", dir=destino))
+        for indice, array in enumerate(profiles):
+            ruta = carpeta / f"{indice}.f8"
+            escritura = np.memmap(ruta, dtype=array.dtype, mode="w+", shape=array.shape)
+            escritura[:] = array
+            escritura.flush()
+            del escritura
+            mapeados.append(
+                np.memmap(ruta, dtype=array.dtype, mode="r", shape=array.shape)
+            )
+    except OSError as error:
+        # Sin espacio o sin permisos: se sigue en memoria, que siempre funciona.
+        logger.warning("No se han podido volcar los perfiles al disco: %s", error)
+        mapeados.clear()
+        if carpeta is not None:
+            shutil.rmtree(carpeta, ignore_errors=True)
+        yield profiles
+        return
+    try:
+        profiles.clear()
+        yield mapeados
+    finally:
+        mapeados.clear()
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
 def _convective_outputs_in_stripes(
     pressure: np.ndarray,
     temperature: np.ndarray,
@@ -1099,11 +1181,19 @@ def _convective_frames(
             campos.clear()
         package_levels = None
 
-    outputs = _convective_outputs_in_stripes(
-        pressure, temperature, dewpoint, u_profile, v_profile,
-        terrain, surface_u, surface_v, levels,
-        include_dcape=exact_dewpoint,
-    )
+    # Los perfiles apilados rondan el giga y sólo se leen. Apartarlos al disco
+    # los saca de la memoria que el núcleo no puede recuperar; hay que soltar
+    # las referencias locales o seguirían ocupando sitio además del fichero.
+    apilados = [pressure, temperature, dewpoint, u_profile, v_profile]
+    del pressure, temperature, dewpoint, u_profile, v_profile
+    with _profiles_spilled_to_disk(apilados) as perfiles:
+        apilados = None
+        outputs = _convective_outputs_in_stripes(
+            *perfiles,
+            terrain, surface_u, surface_v, levels,
+            include_dcape=exact_dewpoint,
+        )
+        perfiles = None
 
     common = (reference.transform, reference.crs, reference.bounds)
     frames = {
