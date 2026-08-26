@@ -789,7 +789,10 @@ def _surface_wind_10m(
     return fields
 
 
-@lru_cache(maxsize=32)
+# Cada entrada retiene siete campos del dominio completo (~45 MB). Un trabajo
+# del worker resuelve una sola hora, así que basta con no perder la que se
+# está usando; guardar treinta y dos era retener más de un giga sin necesidad.
+@lru_cache(maxsize=2)
 def _convective_frames(
     token: str, valid_time_iso: str, run_iso: str = ""
 ) -> tuple[dict[str, RasterField], datetime]:
@@ -959,7 +962,8 @@ def _convective_frames(
     return frames, run
 
 
-@lru_cache(maxsize=96)
+# Guarda campos sin serializar, a 6,4 MB cada uno.
+@lru_cache(maxsize=12)
 def _computed_frame(
     token: str,
     product_id: str,
@@ -1089,7 +1093,7 @@ def _computed_frame(
     return field, config, headers
 
 
-@lru_cache(maxsize=96)
+@lru_cache(maxsize=32)
 def frame_png(
     token: str,
     product_id: str,
@@ -1162,7 +1166,8 @@ def _quantize_array(array: np.ndarray) -> tuple[bytes, dict[str, Any]]:
     }
 
 
-@lru_cache(maxsize=96)
+# Ya serializado y comprimido: barato de guardar, pero tampoco sin límite.
+@lru_cache(maxsize=32)
 def frame_grid(
     token: str,
     product_id: str,
