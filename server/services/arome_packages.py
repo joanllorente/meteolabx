@@ -27,6 +27,7 @@ from server.services.meteofrance_auth import authorization_headers
 PACKAGE_BASE = "https://public-api.meteofrance.fr/previnum/DPPaquetAROME/v1"
 # Cada paquete cubre siete plazos horarios consecutivos.
 BLOCK_HOURS = 7
+GDAL_CACHE_MB = int(os.getenv("METEOLABX_GDAL_CACHE_MB", "64"))
 # Elementos del paquete isobárico IP1, con la clave que usa el perfil.
 IP1_ELEMENTS = {
     "TMP": "temperature",
@@ -115,7 +116,11 @@ def read_isobaric_profile(
     profile: dict[str, dict[float, np.ndarray]] = {
         name: {} for name in IP1_ELEMENTS.values()
     }
-    with rasterio.open(path) as dataset:
+    # GDAL cachea bloques del GRIB y su límite por defecto es un porcentaje de
+    # la RAM de la máquina: sobre un fichero de medio giga se quedaba con casi
+    # un giga por proceso, memoria que le hace falta al diagnóstico. Acotarlo
+    # no cuesta tiempo: los mensajes se leen una vez y en orden.
+    with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
         for index in range(1, dataset.count + 1):
             tags = dataset.tags(index)
             element = IP1_ELEMENTS.get(tags.get("GRIB_ELEMENT", ""))
