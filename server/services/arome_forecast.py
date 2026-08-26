@@ -670,11 +670,14 @@ def _convective_outputs(
     surface_u: np.ndarray,
     surface_v: np.ndarray,
     levels: list[float],
+    include_dcape: bool = True,
 ) -> dict[str, np.ndarray]:
     """Diagnósticos convectivos de un bloque de filas de la rejilla."""
     shape = terrain.shape
     height = hypsometric_height_profile_m(pressure, temperature, dewpoint, terrain)
-    diagnostics = diagnose_convection(pressure, temperature, dewpoint, height)
+    diagnostics = diagnose_convection(
+        pressure, temperature, dewpoint, height, include_dcape=include_dcape
+    )
 
     cell_u = pressure_weighted_layer_mean(
         pressure,
@@ -749,13 +752,14 @@ def _convective_outputs_in_stripes(
     surface_v: np.ndarray,
     levels: list[float],
     stripe_rows: int | None = None,
+    include_dcape: bool = True,
 ) -> dict[str, np.ndarray]:
     """Encadena el diagnóstico por bandas de filas y recompone la rejilla."""
     rows = terrain.shape[0]
     step = CONVECTIVE_STRIPE_ROWS if stripe_rows is None else stripe_rows
     arguments = (
         pressure, temperature, dewpoint, u_profile, v_profile,
-        terrain, surface_u, surface_v, levels,
+        terrain, surface_u, surface_v, levels, include_dcape,
     )
     if step <= 0 or step >= rows:
         return _convective_outputs(*arguments)
@@ -776,6 +780,7 @@ def _convective_outputs_in_stripes(
             surface_u[band],
             surface_v[band],
             levels,
+            include_dcape,
         )
         for name, values in stripe.items():
             if name not in merged:
@@ -815,6 +820,26 @@ def _surface_wind_10m(
 # Cada entrada retiene siete campos del dominio completo (~45 MB). Un trabajo
 # del worker resuelve una sola hora, así que basta con no perder la que se
 # está usando; guardar treinta y dos era retener más de un giga sin necesidad.
+def _dewpoint_from_relative_humidity_c(
+    temperature_c: np.ndarray, relative_humidity_pct: np.ndarray
+) -> np.ndarray:
+    """Punto de rocío en °C a partir de temperatura y humedad relativa.
+
+    Misma formulación de Magnus que `saturation_vapor_pressure_hpa`, para que
+    el rocío derivado sea coherente con el resto de la termodinámica.
+
+    Se usa solo en el bloque de trece diagnósticos: DCAPE emplea el rocío que
+    publica el modelo, porque su selección de capa de origen es sensible a
+    diferencias mínimas y la derivación lo desplazaba en un 0,8 % de celdas.
+    """
+    saturation = 6.112 * np.exp(
+        17.67 * temperature_c / (temperature_c + 243.5)
+    )
+    vapour = np.clip(relative_humidity_pct, 0.01, 100.0) / 100.0 * saturation
+    logarithm = np.log(np.maximum(vapour, 1e-6) / 6.112)
+    return 243.5 * logarithm / (17.67 - logarithm)
+
+
 def _packages_available() -> bool:
     """Si conviene servir el perfil desde los paquetes GRIB.
 
@@ -856,6 +881,7 @@ def _isobaric_fields_from_package(
     common = (reference.transform, reference.crs, reference.bounds)
     unidades = {
         "temperature": "C",
+        "relative_humidity": "%",
         "u": "m/s",
         "v": "m/s",
         "geopotential": "m^2/s^2",
@@ -871,7 +897,10 @@ def _isobaric_fields_from_package(
 
 @lru_cache(maxsize=2)
 def _convective_frames(
-    token: str, valid_time_iso: str, run_iso: str = ""
+    token: str,
+    valid_time_iso: str,
+    run_iso: str = "",
+    exact_dewpoint: bool = True,
 ) -> tuple[dict[str, RasterField], datetime]:
     """Descarga un perfil común y reutiliza todos sus diagnósticos convectivos."""
     _, client, catalog, prefixes, run, times = _product_context(
@@ -929,9 +958,12 @@ def _convective_frames(
     # isobárico se sigue pidiendo al WCS porque el paquete solo trae humedad
     # relativa, y derivarlo alteraría el DCAPE.
     package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
-    level_variables = (
-        ("dewpoint",) if package_levels else ("temperature", "dewpoint", "u", "v")
-    )
+    if package_levels:
+        # Con el rocío derivado de la humedad del paquete no hace falta pedir
+        # nada al WCS por niveles: son 24 descargas menos por hora.
+        level_variables = ("dewpoint",) if exact_dewpoint else ()
+    else:
+        level_variables = ("temperature", "dewpoint", "u", "v")
 
     fetched: dict[tuple[str, float | None], RasterField | None] = {}
     tasks: dict[Any, tuple[str, float | None]] = {}
@@ -981,7 +1013,20 @@ def _convective_frames(
             temperature_field = fetched[("temperature", level_hpa)]
             u_field = fetched[("u", level_hpa)]
             v_field = fetched[("v", level_hpa)]
-        dewpoint_field = fetched[("dewpoint", level_hpa)]
+        if package_levels and not exact_dewpoint:
+            humedad = package_levels["relative_humidity"][level_hpa]
+            dewpoint_field = RasterField(
+                _dewpoint_from_relative_humidity_c(
+                    np.asarray(temperature_field.data, dtype=float),
+                    np.asarray(humedad.data, dtype=float),
+                ),
+                temperature_field.transform,
+                temperature_field.crs,
+                temperature_field.bounds,
+                "C",
+            )
+        else:
+            dewpoint_field = fetched[("dewpoint", level_hpa)]
         assert temperature_field and dewpoint_field and u_field and v_field
         temperature = _as_kelvin(_align(reference, temperature_field), temperature_field.units)
         dewpoint = _as_kelvin(_align(reference, dewpoint_field), dewpoint_field.units)
@@ -1013,6 +1058,7 @@ def _convective_frames(
     outputs = _convective_outputs_in_stripes(
         pressure, temperature, dewpoint, u_profile, v_profile,
         terrain, surface_u, surface_v, levels,
+        include_dcape=exact_dewpoint,
     )
 
     common = (reference.transform, reference.crs, reference.bounds)

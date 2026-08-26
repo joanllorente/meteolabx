@@ -336,6 +336,7 @@ def diagnose_convection(
     temperature_k: np.ndarray,
     dewpoint_k: np.ndarray,
     height_m: np.ndarray,
+    include_dcape: bool = True,
 ) -> ConvectiveDiagnostics:
     """Calcula MU parcel y base efectiva para una matriz completa de perfiles."""
     pressure = np.asarray(pressure_hpa, dtype=float)
@@ -436,11 +437,12 @@ def diagnose_convection(
         1.0 / KAPPA,
     )
 
-    dcape = downdraft_cape(
-        pressure,
-        temperature,
-        dewpoint,
-        height,
+    # DCAPE es el diagnóstico más caro y el único que exige el punto de rocío
+    # exacto del modelo, así que se puede pedir aparte y no retrasar al resto.
+    dcape = (
+        downdraft_cape(pressure, temperature, dewpoint, height)
+        if include_dcape
+        else np.full(pressure.shape[1:], np.nan)
     )
 
     effective_base = np.full(surface_pressure.shape, np.nan)

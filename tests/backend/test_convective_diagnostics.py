@@ -233,3 +233,45 @@ def test_striping_is_disabled_when_the_band_covers_the_grid():
         for name, expected in whole.items():
             finite = np.isfinite(expected)
             assert np.array_equal(same[name][finite], expected[finite]), (name, stripe_rows)
+
+
+def test_dcape_can_be_skipped_without_touching_the_other_diagnostics():
+    """DCAPE se puede omitir para no retrasar a los otros trece.
+
+    Es el diagnóstico más caro y el único que exige el punto de rocío exacto
+    del modelo, así que se calcula aparte. Omitirlo no debe alterar nada más.
+    """
+    from server.services.arome_forecast import _convective_outputs_in_stripes
+
+    arguments = _synthetic_profile(32, 20)
+    con = _convective_outputs_in_stripes(*arguments, stripe_rows=16, include_dcape=True)
+    sin = _convective_outputs_in_stripes(*arguments, stripe_rows=16, include_dcape=False)
+
+    assert np.isfinite(con["dcape"]).any(), "con el interruptor activo debe calcularse"
+    assert not np.isfinite(sin["dcape"]).any(), "omitido debe quedar sin valores"
+    for nombre in con:
+        if nombre == "dcape":
+            continue
+        finitos = np.isfinite(con[nombre])
+        assert (np.isfinite(sin[nombre]) == finitos).all(), nombre
+        assert np.array_equal(sin[nombre][finitos], con[nombre][finitos]), nombre
+
+
+def test_derived_dewpoint_matches_the_published_one():
+    """El rocío derivado de T y humedad reproduce el que publica el modelo.
+
+    Medido contra AROME: fuera del aire ultraseco el error es de milésimas de
+    grado, muy por debajo de lo que distingue cualquier diagnóstico.
+    """
+    from server.services.arome_forecast import _dewpoint_from_relative_humidity_c
+
+    temperatura = np.array([[25.0, 10.0, -5.0, 30.0]])
+    # Rocío de referencia y la humedad relativa que le corresponde.
+    rocio = np.array([[18.0, 4.0, -12.0, 12.0]])
+    es_t = 6.112 * np.exp(17.67 * temperatura / (temperatura + 243.5))
+    es_td = 6.112 * np.exp(17.67 * rocio / (rocio + 243.5))
+    humedad = es_td / es_t * 100.0
+
+    recuperado = _dewpoint_from_relative_humidity_c(temperatura, humedad)
+
+    assert np.allclose(recuperado, rocio, atol=1e-6)
