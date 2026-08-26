@@ -280,3 +280,73 @@ def test_surface_package_is_skipped_when_packages_are_not_available(monkeypatch)
     monkeypatch.setattr(prevision, "ensure_package", no_deberia_llamarse)
 
     assert prevision._surface_fields_from_package(None, RUN, RUN) is None
+
+
+def test_only_one_process_downloads_a_block(monkeypatch, tmp_path):
+    """Varios procesos pidiendo el mismo bloque lo descargan una sola vez.
+
+    Un bloque cubre siete plazos y los workers avanzan por horas consecutivas,
+    así que coinciden en el mismo fichero de medio giga. Sin cerrojo cada uno
+    se bajaba su copia y competían por el ancho de banda.
+    """
+    import threading
+
+    monkeypatch.setattr(paquetes, "_cache_dir", lambda: tmp_path)
+    descargas = []
+    empezada = threading.Event()
+
+    def descarga_lenta(package, run, block, destination):
+        descargas.append(block)
+        empezada.set()
+        # Da tiempo a que el otro hilo llegue al cerrojo antes de terminar.
+        __import__("time").sleep(0.2)
+        destination.write_bytes(b"grib")
+        return destination
+
+    monkeypatch.setattr(paquetes, "_download_package", descarga_lenta)
+
+    resultados = []
+    hilos = [
+        threading.Thread(
+            target=lambda: resultados.append(
+                paquetes.ensure_package("IP1", RUN, RUN)
+            )
+        )
+        for _ in range(4)
+    ]
+    for hilo in hilos:
+        hilo.start()
+    for hilo in hilos:
+        hilo.join(timeout=10)
+
+    assert len(descargas) == 1, f"se descargó {len(descargas)} veces"
+    assert len(resultados) == 4, "todos deben acabar con el fichero"
+    assert all(r.read_bytes() == b"grib" for r in resultados)
+
+
+def test_a_block_already_on_disk_is_not_downloaded_again(monkeypatch, tmp_path):
+    monkeypatch.setattr(paquetes, "_cache_dir", lambda: tmp_path)
+
+    def no_deberia_llamarse(*args, **kwargs):
+        raise AssertionError("ya estaba en disco")
+
+    monkeypatch.setattr(paquetes, "_download_package", no_deberia_llamarse)
+    ya = paquetes._package_path("IP1", RUN, paquetes.block_range(RUN, RUN))
+    ya.write_bytes(b"grib")
+
+    assert paquetes.ensure_package("IP1", RUN, RUN) == ya
+
+
+def test_old_locks_are_swept_with_their_packages(monkeypatch, tmp_path):
+    """Los cerrojos de pasadas viejas también se recogen."""
+    monkeypatch.setattr(paquetes, "_cache_dir", lambda: tmp_path)
+    viejo = tmp_path / "IP1-20260825T18-00H06H.grib2"
+    cerrojo_viejo = tmp_path / "IP1-20260825T18-00H06H.lock"
+    actual = tmp_path / "IP1-20260826T03-00H06H.grib2"
+    for f in (viejo, cerrojo_viejo, actual):
+        f.write_bytes(b"x")
+
+    borrados = paquetes.discard_packages_before(RUN)
+
+    assert set(borrados) == {viejo, cerrojo_viejo}
+    assert actual.exists(), "la pasada en curso no se toca"

@@ -12,11 +12,11 @@ descarta: descomprimirlo entero en memoria serían ~1,9 GB.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import fcntl
 import os
 from pathlib import Path
 import tempfile
 import time
-
 from typing import Any
 
 import numpy as np
@@ -66,14 +66,43 @@ def _package_path(package: str, run: datetime, block: str) -> Path:
     return _cache_dir() / f"{package}-{stamp}-{block}.grib2"
 
 
+def _is_downloaded(destination: Path) -> bool:
+    try:
+        return destination.stat().st_size > 0
+    except OSError:
+        return False
+
+
 def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
-    """Descarga el bloque que contiene esa hora, si no está ya en disco."""
+    """Descarga el bloque que contiene esa hora, si no está ya en disco.
+
+    Un bloque cubre siete plazos y los procesos van por horas consecutivas, así
+    que varios piden el mismo fichero casi a la vez. Sin coordinarlos, seis
+    workers se bajaban seis copias de medio giga simultáneamente y se robaban
+    el ancho de banda entre ellos. Con el cerrojo baja uno y los demás esperan
+    a encontrarlo hecho, que es justo lo que iban a tardar de todas formas.
+    """
     block = block_range(run, valid_time)
     destination = _package_path(package, run, block)
-    if destination.exists() and destination.stat().st_size > 0:
+    if _is_downloaded(destination):
         return destination
 
     destination.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = destination.with_suffix(".lock")
+    with lock_path.open("a+", encoding="ascii") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            # Puede haberlo bajado otro mientras esperábamos el turno.
+            if _is_downloaded(destination):
+                return destination
+            return _download_package(package, run, block, destination)
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def _download_package(
+    package: str, run: datetime, block: str, destination: Path
+) -> Path:
     partial = destination.with_suffix(f".{os.getpid()}.part")
     url = f"{PACKAGE_BASE}/models/AROME/grids/0.025/packages/{package}/productARO"
     parameters = {
@@ -206,11 +235,16 @@ def read_surface_fields(
 
 
 def discard_packages_before(run: datetime) -> list[Path]:
-    """Borra los paquetes de pasadas anteriores; ocupan cientos de megas."""
+    """Borra los paquetes de pasadas anteriores; ocupan cientos de megas.
+
+    También sus cerrojos, que no pesan nada pero se acumularían pasada tras
+    pasada sin que nadie volviera a mirarlos.
+    """
     stamp = run.astimezone(timezone.utc).strftime("%Y%m%dT%H")
     removed: list[Path] = []
     try:
         candidates = list(_cache_dir().glob("*.grib2"))
+        candidates += list(_cache_dir().glob("*.lock"))
     except OSError:
         return removed
     for path in candidates:
