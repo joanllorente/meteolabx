@@ -858,6 +858,19 @@ def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str,
     return manifests[start:] + manifests[:start]
 
 
+def _effective_heavy_workers(heavy_workers: int, workers: int) -> int:
+    """Normaliza el tope de perfiles convectivos sin perder el 0.
+
+    El 0 significa «sin tope propio» y tiene que sobrevivir hasta el final: un
+    max(1, ...) por el camino lo convertía en un único perfil a la vez, que es
+    justo lo contrario de lo que pide. Un tope explícito se recorta al número
+    de workers, porque no puede haber más perfiles que procesos.
+    """
+    if heavy_workers <= 0:
+        return 0
+    return max(1, min(heavy_workers, workers))
+
+
 def tier_capacity_for(tier: int, workers: int, heavy_workers: int) -> int:
     """Cuántos trabajos de ese nivel caben a la vez.
 
@@ -1152,7 +1165,8 @@ def run_incremental_cycle(
     derived_timeout_s: int = 1_800,
     isolate_tasks: bool = False,
     workers: int = 1,
-    heavy_workers: int = 1,
+    # 0 = sin tope propio: tantos perfiles como workers, y frena la memoria.
+    heavy_workers: int = 0,
 ) -> dict[str, Any]:
     settings = get_settings()
     token = str(settings.arome_api_key or "").strip()
@@ -1214,7 +1228,7 @@ def run_incremental_cycle(
             queues=queues,
             latest_run=latest_run,
             workers=max(2, workers),
-            heavy_workers=max(1, min(heavy_workers, workers)),
+            heavy_workers=_effective_heavy_workers(heavy_workers, workers),
             max_tasks=max_tasks,
             cycle_budget_s=cycle_budget_s,
             native_timeout_s=native_timeout_s,
@@ -1403,7 +1417,7 @@ def main() -> int:
             derived_timeout_s=max(1, args.derived_timeout),
             isolate_tasks=args.isolate_tasks,
             workers=max(1, args.workers),
-            heavy_workers=max(1, args.heavy_workers),
+            heavy_workers=max(0, args.heavy_workers),
         )
 
     if not args.watch:

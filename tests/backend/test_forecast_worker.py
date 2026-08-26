@@ -293,3 +293,30 @@ def test_free_memory_gates_another_profile(monkeypatch):
 
     monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: None)
     assert trabajador._room_for_another_profile(), "sin cgroup legible, no se frena"
+
+
+def test_zero_survives_every_clamp_down_to_the_capacity(monkeypatch):
+    """El 0 debe llegar entero desde los argumentos hasta la capacidad.
+
+    Significa «sin tope propio», pero varios max(1, ...) por el camino lo
+    convertían en un único perfil a la vez: exactamente lo contrario. El valor
+    por defecto es 0, así que el fallo dejaba la instalación entera en uno.
+    """
+    import inspect
+
+    import scripts.forecast_worker as trabajador
+
+    # El valor por defecto de la cadena entera es 0.
+    firma = inspect.signature(trabajador.run_incremental_cycle)
+    assert firma.parameters["heavy_workers"].default == 0
+
+    # La normalización lo conserva en vez de subirlo a 1.
+    assert trabajador._effective_heavy_workers(0, 6) == 0
+    assert trabajador._effective_heavy_workers(-3, 6) == 0
+    # Un tope explícito se respeta y se recorta al número de workers.
+    assert trabajador._effective_heavy_workers(4, 6) == 4
+    assert trabajador._effective_heavy_workers(9, 6) == 6
+
+    # Y el resultado al final del camino: los perfiles usan los seis.
+    assert trabajador.tier_capacity_for(2, 6, trabajador._effective_heavy_workers(0, 6)) == 6
+    assert trabajador.tier_capacity_for(0, 6, trabajador._effective_heavy_workers(0, 6)) == 6
