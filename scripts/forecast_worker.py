@@ -534,7 +534,23 @@ def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> Non
         )
 
 
+def _configure_logging() -> None:
+    """Formato y nivel de log, para el proceso padre y para cada hijo.
+
+    Los trabajos se aíslan con «spawn», que arranca un intérprete limpio: sin
+    volver a configurarlo, el hijo se queda en WARNING y todo lo que cuenta el
+    trabajo de verdad —qué tarda cada fase, qué paquetes se bajan, cuándo se
+    cae al WCS— se pierde sin dejar rastro.
+    """
+    logging.basicConfig(
+        level=os.getenv("METEOLABX_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
+    )
+
+
 def _isolated_job_entry(result_queue, payload: dict[str, Any]) -> None:
+    _configure_logging()
     try:
         settings = get_settings()
         token = str(settings.arome_api_key or "").strip()
@@ -1229,10 +1245,7 @@ def main() -> int:
         help="Segundos entre ciclos cuando --watch está activo.",
     )
     args = parser.parse_args()
-    logging.basicConfig(
-        level=os.getenv("METEOLABX_LOG_LEVEL", "INFO").upper(),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    _configure_logging()
 
     def run_cycle() -> dict[str, Any]:
         return run_incremental_cycle(

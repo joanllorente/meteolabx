@@ -47,3 +47,46 @@ def test_memory_ratio_falls_back_to_the_total_without_a_breakdown(monkeypatch, t
     monkeypatch.setattr(trabajador, "Path", ruta_falsa)
 
     assert trabajador._container_memory_ratio() == pytest.approx(0.75)
+
+
+def test_isolated_jobs_configure_their_own_logging(monkeypatch):
+    """Cada trabajo aislado reconfigura el log al arrancar.
+
+    Se aíslan con «spawn», que arranca un intérprete limpio. Sin esto el hijo
+    se queda en WARNING y todo lo que cuenta el trabajo de verdad —el reparto
+    de tiempo por fases, las descargas de paquetes, las caídas al WCS— se
+    pierde sin dejar rastro, que es como estuvo hasta ahora.
+    """
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    configurado = []
+    monkeypatch.setattr(trabajador, "_configure_logging",
+                        lambda: configurado.append(True))
+    monkeypatch.setattr(trabajador, "get_settings",
+                        lambda: (_ for _ in ()).throw(RuntimeError("basta")))
+
+    class ColaFalsa:
+        def __init__(self): self.puesto = []
+        def put(self, valor): self.puesto.append(valor)
+
+    cola = ColaFalsa()
+    trabajador._isolated_job_entry(cola, {})
+
+    assert configurado, "el hijo debe configurar su propio log"
+    assert cola.puesto and cola.puesto[0][0] == "error"
+
+
+def test_logging_setup_overrides_an_inherited_configuration():
+    """basicConfig con force: si no, una config previa lo deja mudo."""
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    logging.basicConfig(level=logging.CRITICAL, force=True)
+    try:
+        trabajador._configure_logging()
+        assert logging.getLogger().level == logging.INFO
+    finally:
+        logging.basicConfig(level=logging.WARNING, force=True)
