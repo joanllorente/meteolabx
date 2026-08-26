@@ -16,8 +16,10 @@ import fcntl
 import os
 from pathlib import Path
 import tempfile
-import time
 from typing import Any
+
+import logging
+import time
 
 import numpy as np
 import rasterio
@@ -28,6 +30,8 @@ from server.services.meteofrance_auth import authorization_headers
 
 PACKAGE_BASE = "https://public-api.meteofrance.fr/previnum/DPPaquetAROME/v1"
 # Cada paquete cubre siete plazos horarios consecutivos.
+logger = logging.getLogger("meteolabx.arome_packages")
+
 BLOCK_HOURS = 7
 GDAL_CACHE_MB = int(os.getenv("METEOLABX_GDAL_CACHE_MB", "64"))
 # Elementos del paquete isobárico IP1, con la clave que usa el perfil.
@@ -89,13 +93,29 @@ def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     lock_path = destination.with_suffix(".lock")
+    espera = time.monotonic()
     with lock_path.open("a+", encoding="ascii") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        turno = time.monotonic() - espera
         try:
             # Puede haberlo bajado otro mientras esperábamos el turno.
             if _is_downloaded(destination):
+                if turno > 1.0:
+                    logger.info(
+                        "%s %s lo bajó otro proceso; %.0f s de espera en vez "
+                        "de una segunda descarga.", package, block, turno
+                    )
                 return destination
-            return _download_package(package, run, block, destination)
+            descarga = time.monotonic()
+            resultado = _download_package(package, run, block, destination)
+            logger.info(
+                "%s %s descargado: %.0f MB en %.0f s%s.",
+                package, block,
+                resultado.stat().st_size / 1e6,
+                time.monotonic() - descarga,
+                f" (tras {turno:.0f} s de cola)" if turno > 1.0 else "",
+            )
+            return resultado
         finally:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 

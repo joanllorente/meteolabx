@@ -1072,6 +1072,12 @@ def _convective_frames(
     if valid_time not in times:
         raise AromeError("La hora solicitada no está disponible en la última pasada.")
 
+    # Sin repartir el tiempo entre fases no hay forma de saber si una hora se
+    # va en traer los datos o en diagnosticarlos, y las dos se arreglan por
+    # caminos distintos. Es una línea de log por hora de predicción.
+    fases: dict[str, float] = {}
+    reloj = time.monotonic()
+
     reference = client.get_field(
         catalog,
         prefixes["height_temperature"],
@@ -1120,6 +1126,7 @@ def _convective_frames(
     # isobárico se sigue pidiendo al WCS porque el paquete solo trae humedad
     # relativa, y derivarlo alteraría el DCAPE.
     package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
+    package_levels_usado = bool(package_levels)
     if package_levels:
         # Con el rocío derivado de la humedad del paquete no hace falta pedir
         # nada al WCS por niveles: son 24 descargas menos por hora.
@@ -1132,6 +1139,7 @@ def _convective_frames(
     # turno en el estrangulador. El terreno no viaja en los paquetes y la
     # temperatura a 2 m es la referencia, así que esas dos siguen igual.
     surface_package = _surface_fields_from_package(reference, run, valid_time)
+    surface_package_usado = bool(surface_package)
 
     fetched: dict[tuple[str, float | None], RasterField | None] = {}
     tasks: dict[Any, tuple[str, float | None]] = {}
@@ -1166,6 +1174,9 @@ def _convective_frames(
         surface_v_field = fetched[("v", None)]
     if not all((surface_dewpoint_field, surface_pressure_field, surface_u_field, surface_v_field)):
         raise AromeError("Faltan campos de superficie para el perfil convectivo.")
+
+    fases["traer"] = time.monotonic() - reloj
+    reloj = time.monotonic()
 
     surface_dewpoint = _as_kelvin(_align(reference, surface_dewpoint_field), surface_dewpoint_field.units)
     surface_pressure = _as_hpa(_align(reference, surface_pressure_field), surface_pressure_field.units)
@@ -1244,6 +1255,9 @@ def _convective_frames(
     # Los perfiles apilados rondan el giga y sólo se leen. Apartarlos al disco
     # los saca de la memoria que el núcleo no puede recuperar; hay que soltar
     # las referencias locales o seguirían ocupando sitio además del fichero.
+    fases["montar"] = time.monotonic() - reloj
+    reloj = time.monotonic()
+
     apilados = [pressure, temperature, dewpoint, u_profile, v_profile]
     del pressure, temperature, dewpoint, u_profile, v_profile
     with _profiles_spilled_to_disk(apilados) as perfiles:
@@ -1254,6 +1268,16 @@ def _convective_frames(
             include_dcape=exact_dewpoint,
         )
         perfiles = None
+    fases["diagnosticar"] = time.monotonic() - reloj
+    logger.info(
+        "Perfil convectivo %s: traer %.0f s, montar %.0f s, diagnosticar %.0f s "
+        "(paquete isobárico: %s, superficie: %s, DCAPE: %s).",
+        valid_time_iso,
+        fases["traer"], fases["montar"], fases["diagnosticar"],
+        "sí" if package_levels_usado else "no",
+        "sí" if surface_package_usado else "no",
+        "sí" if exact_dewpoint else "no",
+    )
 
     common = (reference.transform, reference.crs, reference.bounds)
     frames = {
