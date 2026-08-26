@@ -435,3 +435,40 @@ def test_grouped_jobs_are_named_after_what_they_actually_compute():
     assert trabajador._group_label(trabajador.SHEAR_PRODUCTS) == "shear-group"
     assert trabajador._group_label(trabajador.PROFILE_PRODUCTS) == "convective-group"
     assert trabajador._group_label(("shear-0-6", "mucape-muli")) == "mixed-group"
+
+
+def test_prefetch_does_not_depend_on_what_the_catalog_has_announced():
+    """Se persiguen los bloques del horizonte, no los de la cola.
+
+    Al principio de una pasada el WCS solo anuncia las primeras horas, así que
+    la cola pendiente llega hasta +6 y poco más. Derivar de ella los bloques a
+    adelantar dejaba sin perseguir precisamente los que más tardan en
+    publicarse: cuando los convectivos llegaran a +8, no habría paquete y esas
+    treinta horas se resolverían campo a campo por el WCS.
+    """
+    from server.services.arome_packages import block_range
+
+    import scripts.forecast_worker as trabajador
+
+    # Cola como al arrancar la pasada: solo tres horas anunciadas.
+    cola = [_trabajo(h, tier=1, run="2026-08-26T12:00:00Z") for h in (12, 13, 14)]
+
+    objetivos = trabajador._blocks_ahead(cola, trabajador.PREFETCH_BLOCKS)
+    bloques = [block_range(run, vt) for run, vt in objetivos]
+
+    assert len(bloques) >= 5, f"con la cola corta solo persigue {bloques}"
+    assert "35H41H" in bloques, "el final de la pasada también hace falta"
+    # El que está en uso se deja para el final: esperar en su cerrojo
+    # retrasaría a los que harán falta antes.
+    assert bloques[0] != "00H06H"
+    assert bloques[-1] == "00H06H"
+
+
+def test_prefetch_horizon_covers_the_diagnostics_horizon():
+    """El horizonte perseguido no puede quedarse corto respecto a los cálculos."""
+    import os
+
+    import scripts.forecast_worker as trabajador
+
+    diagnosticos = int(os.getenv("METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS", "36"))
+    assert trabajador.PREFETCH_HORIZON_H >= diagnosticos

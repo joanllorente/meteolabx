@@ -44,6 +44,7 @@ from server.services.forecast_store import (
     write_json,
 )
 from server.services.arome_packages import (
+    BLOCK_HOURS,
     AromePackageError,
     block_range,
     discard_packages_before,
@@ -556,33 +557,39 @@ PREFETCH_BLOCKS = max(
 # largo de la pasada es el ciclo siguiente, que vuelve a lanzarlo: los bloques
 # ya descargados se resuelven al instante contra el disco.
 PREFETCH_RETRY_S = max(10, int(os.getenv("METEOLABX_FORECAST_PREFETCH_RETRY_S", "45")))
+# Horizonte que se persigue, en horas de predicción. Debe cubrir el mismo que
+# los diagnósticos, o quedarían horas sin paquete al final de la pasada.
+PREFETCH_HORIZON_H = max(
+    0, int(os.getenv("METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS", "36"))
+)
 PREFETCH_DEADLINE_S = max(
     60, int(os.getenv("METEOLABX_FORECAST_PREFETCH_DEADLINE_S", "600"))
 )
 
 
 def _blocks_ahead(jobs: Sequence[ForecastJob], limit: int) -> list[tuple[datetime, datetime]]:
-    """Primeras horas de los bloques que vendrán después del que se usa ahora.
+    """Un (run, hora) por cada bloque que la pasada va a necesitar.
 
-    Devuelve un (run, hora) por bloque, que es cuanto necesita ensure_package
-    para saber qué fichero pedir.
+    No se derivan de la cola pendiente: al principio de una pasada el catálogo
+    del WCS solo anuncia las primeras horas, así que mirar la cola dejaba sin
+    perseguir precisamente los bloques que más tardan en publicarse. El
+    horizonte se sabe de antemano, y un bloque que todavía no exista fallará y
+    se reintentará, que es justo lo que se busca.
+
+    El primero se deja para el final: es el que está usando alguien ahora, y
+    esperar en su cerrojo retrasaría a los que de verdad hacen falta pronto.
     """
-    vistos: dict[tuple[str, str], tuple[datetime, datetime]] = {}
-    for job in jobs:
-        if job.tier < 1:
-            continue
-        try:
-            run = _parse_iso(job.run)
-            valid_time = _parse_iso(job.valid_time)
-            clave = (job.run, block_range(run, valid_time))
-        except (AromePackageError, ValueError):
-            continue
-        if clave not in vistos:
-            vistos[clave] = (run, valid_time)
-        if len(vistos) > limit:
-            break
-    # El primero es el bloque en uso: ese ya lo está bajando quien lo necesita.
-    return list(vistos.values())[1 : limit + 1]
+    run = next(
+        (_parse_iso(job.run) for job in jobs if job.tier >= 1),
+        None,
+    )
+    if run is None:
+        return []
+    bloques = [
+        (run, run + timedelta(hours=horizonte))
+        for horizonte in range(0, PREFETCH_HORIZON_H + 1, BLOCK_HOURS)
+    ]
+    return (bloques[1:] + bloques[:1])[:limit]
 
 
 def _start_package_prefetch(
