@@ -8,6 +8,7 @@ from functools import lru_cache
 from io import BytesIO
 import hashlib
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -20,6 +21,13 @@ import numpy as np
 from PIL import Image, ImageDraw
 from shapely.geometry import box, mapping, shape
 
+from server.services.arome_packages import (
+    AromePackageError,
+    discard_packages_before,
+    ensure_package,
+    read_isobaric_profile,
+)
+from server.services.meteofrance_auth import MeteoFranceAuthError
 from server.services.convective_diagnostics import (
     diagnose_convection,
     effective_bulk_wind_difference,
@@ -47,6 +55,10 @@ from tabs.arome_forecast import (
     _wait_for_api_request_slot,
     forecast_calculation_scope,
 )
+
+
+
+logger = logging.getLogger("meteolabx.arome_forecast")
 
 
 # El resolvedor importado admite tanto identificadores WCS largos como abreviados.
@@ -803,6 +815,60 @@ def _surface_wind_10m(
 # Cada entrada retiene siete campos del dominio completo (~45 MB). Un trabajo
 # del worker resuelve una sola hora, así que basta con no perder la que se
 # está usando; guardar treinta y dos era retener más de un giga sin necesidad.
+def _packages_available() -> bool:
+    """Si conviene servir el perfil desde los paquetes GRIB.
+
+    Solo en el dominio completo: en local el WCS entrega el recorte catalán y
+    el paquete siempre trae la rejilla entera, así que no son intercambiables.
+    """
+    if forecast_calculation_scope() != "model":
+        return False
+    if not os.getenv("METEOLABX_METEOFRANCE_APPLICATION_ID", "").strip():
+        return False
+    return os.getenv("METEOLABX_AROME_USE_PACKAGES", "1").strip().lower() not in {
+        "0", "false", "no"
+    }
+
+
+def _isobaric_fields_from_package(
+    reference: RasterField,
+    run: datetime,
+    valid_time: datetime,
+    levels: list[float],
+) -> dict[str, dict[float, RasterField]] | None:
+    """Temperatura, viento y geopotencial del paquete isobárico.
+
+    Devuelve None si el paquete todavía no está publicado, para que quien
+    llame siga por el camino del WCS: durante las primeras horas de una pasada
+    el bloque aún no existe.
+    """
+    if not _packages_available():
+        return None
+    try:
+        path = ensure_package("IP1", run, valid_time)
+        profile = read_isobaric_profile(path, valid_time, levels)
+    except (AromePackageError, MeteoFranceAuthError) as exc:
+        logger.info("Paquete IP1 no disponible, se usa el WCS: %s", exc)
+        return None
+
+    # La rejilla del paquete coincide con la del modelo, así que envolverla con
+    # la geometría de la referencia deja el resto del montaje intacto.
+    common = (reference.transform, reference.crs, reference.bounds)
+    unidades = {
+        "temperature": "C",
+        "u": "m/s",
+        "v": "m/s",
+        "geopotential": "m^2/s^2",
+    }
+    salida: dict[str, dict[float, RasterField]] = {}
+    for nombre, unidad in unidades.items():
+        salida[nombre] = {
+            nivel: RasterField(valores, *common, unidad)
+            for nivel, valores in profile[nombre].items()
+        }
+    return salida
+
+
 @lru_cache(maxsize=2)
 def _convective_frames(
     token: str, valid_time_iso: str, run_iso: str = ""
@@ -859,6 +925,14 @@ def _convective_frames(
             component=component,
         )
 
+    # Del paquete salen temperatura, viento y geopotencial en altura; el rocío
+    # isobárico se sigue pidiendo al WCS porque el paquete solo trae humedad
+    # relativa, y derivarlo alteraría el DCAPE.
+    package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
+    level_variables = (
+        ("dewpoint",) if package_levels else ("temperature", "dewpoint", "u", "v")
+    )
+
     fetched: dict[tuple[str, float | None], RasterField | None] = {}
     tasks: dict[Any, tuple[str, float | None]] = {}
     def throttled(function, *args):
@@ -872,7 +946,7 @@ def _convective_frames(
         for name in ("dewpoint", "pressure", "u", "v", "terrain"):
             tasks[executor.submit(throttled, fetch_surface, name)] = (name, None)
         for level_hpa in levels:
-            for variable in ("temperature", "dewpoint", "u", "v"):
+            for variable in level_variables:
                 tasks[executor.submit(throttled, fetch_level, variable, level_hpa)] = (variable, level_hpa)
         for future in as_completed(tasks):
             fetched[tasks[future]] = future.result()
@@ -899,10 +973,15 @@ def _convective_frames(
     u_layers = [surface_u]
     v_layers = [surface_v]
     for level_hpa in levels:
-        temperature_field = fetched[("temperature", level_hpa)]
+        if package_levels:
+            temperature_field = package_levels["temperature"][level_hpa]
+            u_field = package_levels["u"][level_hpa]
+            v_field = package_levels["v"][level_hpa]
+        else:
+            temperature_field = fetched[("temperature", level_hpa)]
+            u_field = fetched[("u", level_hpa)]
+            v_field = fetched[("v", level_hpa)]
         dewpoint_field = fetched[("dewpoint", level_hpa)]
-        u_field = fetched[("u", level_hpa)]
-        v_field = fetched[("v", level_hpa)]
         assert temperature_field and dewpoint_field and u_field and v_field
         temperature = _as_kelvin(_align(reference, temperature_field), temperature_field.units)
         dewpoint = _as_kelvin(_align(reference, dewpoint_field), dewpoint_field.units)
