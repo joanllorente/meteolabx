@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
 import collections
+from functools import lru_cache
 import multiprocessing
 import threading
 import os
@@ -1081,8 +1082,22 @@ HEAVY_PROFILE_BYTES = int(
 )
 
 
+# Límite de memoria declarado a mano, en GB. Hace falta cuando el cgroup no
+# publica ninguno —«max»—, que es lo que ocurre en algunos alojamientos: sin
+# él no hay contra qué comparar y el freno se desactivaba en silencio, justo
+# donde más falta hace.
+DECLARED_MEMORY_LIMIT_B = int(
+    float(os.getenv("METEOLABX_FORECAST_MEMORY_LIMIT_GB", "0")) * 1024**3
+)
+
+
 def _cgroup_memory() -> tuple[int, int] | None:
-    """Memoria usada y límite del cgroup, en bytes."""
+    """Memoria usada y límite, en bytes.
+
+    El límite sale del cgroup cuando lo declara; si dice «max», del valor
+    configurado a mano. Sin ninguno de los dos no se puede frenar nada, y se
+    devuelve None avisando una sola vez.
+    """
     candidates = (
         (Path("/sys/fs/cgroup/memory.current"), Path("/sys/fs/cgroup/memory.max")),
         (
@@ -1095,8 +1110,9 @@ def _cgroup_memory() -> tuple[int, int] | None:
             current = int(current_path.read_text().strip())
             raw_limit = limit_path.read_text().strip()
             if raw_limit == "max":
-                continue
-            limit = int(raw_limit)
+                limit = DECLARED_MEMORY_LIMIT_B
+            else:
+                limit = int(raw_limit)
             if limit <= 0:
                 continue
             # La anónima cuando se puede leer; si no, el total, que es lo que
@@ -1105,7 +1121,17 @@ def _cgroup_memory() -> tuple[int, int] | None:
             return (anonima if anonima is not None else current), limit
         except (FileNotFoundError, OSError, ValueError):
             continue
+    _warn_memory_is_unbounded()
     return None
+
+
+@lru_cache(maxsize=1)
+def _warn_memory_is_unbounded() -> None:
+    """Avisa una sola vez de que no hay límite contra el que comparar."""
+    logger.warning(
+        "Sin límite de memoria legible: el freno de perfiles queda desactivado. "
+        "Declara METEOLABX_FORECAST_MEMORY_LIMIT_GB con la memoria del plan."
+    )
 
 
 def _container_memory_ratio() -> float | None:

@@ -622,3 +622,65 @@ def test_prefetch_also_brings_the_dcape_package(monkeypatch):
     # Y después de los que hacen falta antes.
     primero = pedidos[:4]
     assert primero.index("IP3") == 3, f"IP3 debe ir el último: {primero}"
+
+
+def test_a_declared_limit_is_used_when_the_cgroup_has_none(monkeypatch, tmp_path):
+    """Con el cgroup en «max» manda el límite declarado a mano.
+
+    Algunos alojamientos no publican límite. Sin uno declarado no hay contra
+    qué comparar y el freno se desactivaba en silencio, que es justo donde más
+    falta hace: nada impide que los perfiles pasen del techo real.
+    """
+    from pathlib import Path as RutaReal
+
+    import scripts.forecast_worker as trabajador
+
+    GB = 1024**3
+    (tmp_path / "memory.current").write_text(str(10 * GB))
+    (tmp_path / "memory.max").write_text("max")
+    (tmp_path / "memory.stat").write_text(f"anon {9 * GB}\n")
+
+    def ruta_falsa(texto):
+        nombre = str(texto).rsplit("/", 1)[-1]
+        return tmp_path / nombre if "cgroup" in str(texto) else RutaReal(texto)
+
+    monkeypatch.setattr(trabajador, "Path", ruta_falsa)
+    monkeypatch.setattr(trabajador, "DECLARED_MEMORY_LIMIT_B", 24 * GB)
+
+    assert trabajador._cgroup_memory() == (9 * GB, 24 * GB)
+    monkeypatch.setattr(trabajador, "HEAVY_PROFILE_BYTES", 3 * GB)
+    assert trabajador._room_for_another_profile(), "quedan 15 GB"
+
+    (tmp_path / "memory.stat").write_text(f"anon {22 * GB}\n")
+    assert not trabajador._room_for_another_profile(), "quedan 2 GB, no cabe otro"
+
+
+def test_without_any_limit_the_guard_says_so(monkeypatch, tmp_path):
+    """Sin límite de ningún tipo se avisa en vez de callar."""
+    from pathlib import Path as RutaReal
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    (tmp_path / "memory.current").write_text("1000")
+    (tmp_path / "memory.max").write_text("max")
+
+    def ruta_falsa(texto):
+        nombre = str(texto).rsplit("/", 1)[-1]
+        return tmp_path / nombre if "cgroup" in str(texto) else RutaReal(texto)
+
+    monkeypatch.setattr(trabajador, "Path", ruta_falsa)
+    monkeypatch.setattr(trabajador, "DECLARED_MEMORY_LIMIT_B", 0)
+    trabajador._warn_memory_is_unbounded.cache_clear()
+
+    with monkeypatch.context():
+        import io
+        registro = io.StringIO()
+        manejador = logging.StreamHandler(registro)
+        trabajador.logger.addHandler(manejador)
+        try:
+            assert trabajador._cgroup_memory() is None
+        finally:
+            trabajador.logger.removeHandler(manejador)
+
+    assert "freno de perfiles queda desactivado" in registro.getvalue()
