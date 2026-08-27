@@ -23,7 +23,7 @@ from streamlit.web.server.server import Server
 
 
 class ForecastIndexHandler(RequestHandler):
-    """Entrega el entrypoint Svelte conservando exactamente ``/forecast``."""
+    """Entrega ``/forecast`` y consolida la variante con barra final."""
 
     def initialize(self, index_path: str) -> None:
         self._index_path = Path(index_path)
@@ -33,12 +33,18 @@ class ForecastIndexHandler(RequestHandler):
         self.set_header("Cache-Control", "no-cache")
 
     async def get(self) -> None:
+        if self.request.path == "/forecast/":
+            self.redirect("/forecast", permanent=True)
+            return
         if not self._index_path.is_file():
             self.send_error(404)
             return
         self.write(self._index_path.read_bytes())
 
     async def head(self) -> None:
+        if self.request.path == "/forecast/":
+            self.redirect("/forecast", permanent=True)
+            return
         if not self._index_path.is_file():
             self.send_error(404)
             return
@@ -103,12 +109,12 @@ class ForecastApiProxyHandler(RequestHandler):
         await self._proxy()
 
 
-class ForecastStatsProxyHandler(ForecastApiProxyHandler):
-    """Permite al visor registrar una entrada anónima en su mismo origen."""
+class PublicStatsProxyHandler(ForecastApiProxyHandler):
+    """Permite registrar eventos anónimos validados desde el mismo origen."""
 
     def check_xsrf_cookie(self) -> None:
-        # Solo se expone el endpoint validado de secciones, que acepta una
-        # enumeración cerrada y no modifica datos del usuario.
+        # Solo se exponen endpoints de telemetría anónima con cuerpos validados
+        # y sin datos de usuario.
         return None
 
     async def post(self) -> None:
@@ -133,8 +139,8 @@ def install_forecast_route() -> None:
             ForecastApiProxyHandler,
         )
         stats_route = Rule(
-            PathMatches(re.compile(r"^/v1/stats/section$")),
-            ForecastStatsProxyHandler,
+            PathMatches(re.compile(r"^/v1/stats/(?:section|seo-view)$")),
+            PublicStatsProxyHandler,
         )
         # ``wildcard_router`` contiene las rutas declaradas por Streamlit. La
         # entrada debe ir antes de su StaticFileHandler y de Add/RemoveSlash.

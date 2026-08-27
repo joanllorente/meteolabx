@@ -103,10 +103,11 @@ def render_internal_stats() -> None:
     seo_source = sources.get("seo", {}) or {}
     legacy_source = sources.get("legacy", {}) or {}
     panel_clicks = totals.get("panel_clicks", {}) or {}
-    st.markdown("### 🔎 Origen de las conexiones")
+    st.markdown("### 🔎 Origen y fichas SEO")
     st.caption(
-        "La ficha SEO cuenta cuando carga los datos de una estación. "
-        "Abrir panel completo se registra aparte y no duplica la conexión."
+        "La ficha SEO cuenta al abrir su página HTML, aunque los datos de la "
+        "estación no lleguen a cargarse. Abrir el panel completo se registra "
+        "aparte y no duplica la conexión."
     )
     origin_1, origin_2, origin_3, origin_4 = st.columns(4)
     origin_1.metric("Web MeteoLabX · 30 días", app_source.get("d30", 0))
@@ -162,8 +163,8 @@ def render_internal_stats() -> None:
         return
 
     st.caption(
-        "Conexiones y errores por estación. Ordenable pulsando en las "
-        "cabeceras; por defecto, por total de conexiones descendente."
+        "Conexiones, aperturas SEO y errores por estación. Ordenable pulsando "
+        "en las cabeceras; por defecto, por total de conexiones descendente."
     )
     rows = [
         {
@@ -182,7 +183,7 @@ def render_internal_stats() -> None:
             "Sin origen total": s.get("legacy_total", 0),
             "Panel completo 30 d": (s.get("panel_clicks") or {}).get("d30", 0),
             "Panel completo total": (s.get("panel_clicks") or {}).get("total", 0),
-            "Última visita": _datetime_from_epoch(s.get("last_epoch", 0)),
+            "Última actividad": _datetime_from_epoch(s.get("last_epoch", 0)),
             "Err 30 d": (s.get("errors") or {}).get("d30", 0),
             "Err total": (s.get("errors") or {}).get("total", 0),
             "Último error": (

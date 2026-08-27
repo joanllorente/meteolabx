@@ -560,7 +560,9 @@ def disconnect_active_station(*, clear_runtime_cache: bool = True) -> None:
 def _track_station_visit(provider_id: str, station_id: str, name: str = "") -> None:
     """Registra la conexión en las estadísticas internas (fire-and-forget).
     Cubre todas las vías de entrada: selector, mapa, ranking, deep links y
-    autoconexión, porque se llama desde los ``apply_*_station_state``."""
+    autoconexión, porque se llama desde los ``apply_*_station_state``. El
+    iframe de una ficha SEO no cuenta aquí: la apertura del HTML se registra
+    por separado antes de intentar cargar los datos."""
     if st.session_state.pop("_suppress_next_station_visit", False):
         return
     try:
@@ -569,8 +571,9 @@ def _track_station_visit(provider_id: str, station_id: str, name: str = "") -> N
         raw_embed = st.query_params.get("embed", "")
         if isinstance(raw_embed, list):
             raw_embed = raw_embed[0] if raw_embed else ""
-        source = "seo" if str(raw_embed or "").strip().lower() == "seo" else "app"
-        track_station_visit_via_api(provider_id, station_id, name, source=source)
+        if str(raw_embed or "").strip().lower() == "seo":
+            return
+        track_station_visit_via_api(provider_id, station_id, name, source="app")
     except Exception:
         pass
 

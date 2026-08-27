@@ -93,7 +93,7 @@ def test_builds_indexable_station_pages_and_sitemap(tmp_path: Path):
         "cities": 1,
         "languages": 6,
         "pages": 42,
-        "sitemap_urls": 43,
+        "sitemap_urls": 44,
     }
     station_page = (
         output
@@ -124,8 +124,13 @@ def test_builds_indexable_station_pages_and_sitemap(tmp_path: Path):
     assert "tab=historico&amp;lang=es&amp;from=seo" not in page
     assert '<link rel="stylesheet" href="/seo-pages.css?v=1">' in page
     assert '<script src="/seo-observation.js?v=1" defer></script>' in page
+    assert 'data-seo-provider="AEMET"' in page
+    assert 'data-seo-station-id="0201X"' in page
+    assert 'data-seo-language="es"' in page
     assert "syncObservation" not in page
-    assert "syncObservation" in (output / "seo-observation.js").read_text(encoding="utf-8")
+    observation_script = (output / "seo-observation.js").read_text(encoding="utf-8")
+    assert "syncObservation" in observation_script
+    assert "/v1/stats/seo-view" in observation_script
     assert "<h2 id=\"history\">Histórico meteorológico de Barcelona Drassanes</h2>" in page
     assert "tab=historico" in page
     assert "/es/estaciones/meteocat/barcelona-el-raval-x4.html" in page
@@ -172,13 +177,15 @@ def test_builds_indexable_station_pages_and_sitemap(tmp_path: Path):
     assert "Fitxa de l&#x27;estació" in catalan_page
 
     sitemap = (output / "sitemap.xml").read_text(encoding="utf-8")
-    assert sitemap.count("<url>") == 43
+    assert sitemap.count("<url>") == 44
     assert sitemap.count("<xhtml:link") == 294
     assert 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' in sitemap
     assert "https://www.meteolabx.com/es/estaciones/aemet.html" in sitemap
     assert "https://www.meteolabx.com/fr/stations-meteo/aemet.html" in sitemap
     assert "https://www.meteolabx.com/es/tiempo/barcelona.html" in sitemap
     assert "https://www.meteolabx.com/pt/tempo/barcelona.html" in sitemap
+    assert "<loc>https://www.meteolabx.com/forecast</loc>" in sitemap
+    assert '<a href="/forecast">AROME</a>' in page
     assert 'hreflang="x-default" href="https://www.meteolabx.com/es/estaciones.html"' in sitemap
     assert "https://meteolabx.com" not in sitemap
     assert (output / "robots.txt").read_text(encoding="utf-8").endswith(
@@ -247,7 +254,7 @@ def test_splits_large_sitemap_into_an_index(tmp_path: Path, monkeypatch):
     summary = build_pages(database=database, output=output, providers=("METEOFRANCE",))
 
     sitemap_index = (output / "sitemap.xml").read_text(encoding="utf-8")
-    assert summary["sitemap_urls"] == 19
+    assert summary["sitemap_urls"] == 20
     assert "<sitemapindex" in sitemap_index
     assert sitemap_index.count("<sitemap>") == 2
     for index in range(1, 3):

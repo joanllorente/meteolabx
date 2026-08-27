@@ -5,13 +5,32 @@
     <base href="/forecast/" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#080d17" />
-    <meta name="description" content="Predicción convectiva AROME de MeteoLabx" />
+    <meta name="description" content="Mapas horarios del modelo AROME a 2,5 km hasta 51 horas: temperatura, viento, precipitación, nubosidad, CAPE, cizalladura, DCAPE, SHIP y Vertical Totals." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://www.meteolabx.com/forecast" />
     <link rel="icon" type="image/png" href="./favicon-32x32.png" />
-    <title>Predicción AROME · MeteoLabx</title>
-    <script type="module" crossorigin src="./assets/forecast-CXSye0Cg.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MeteoLabX" />
+    <meta property="og:url" content="https://www.meteolabx.com/forecast" />
+    <meta property="og:title" content="Modelo AROME: mapas de predicción por horas | MeteoLabX" />
+    <meta property="og:description" content="Mapas horarios del modelo AROME a 2,5 km: temperatura, viento, precipitación, CAPE, cizalladura, DCAPE, SHIP y Vertical Totals." />
+    <title>Modelo AROME: mapas de predicción por horas | MeteoLabX</title>
+    <style>
+      .forecast-static-intro{max-width:900px;margin:auto;padding:64px 24px;color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6}
+      .forecast-static-intro h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.1;margin:0 0 20px}
+      .forecast-static-intro p{max-width:760px;color:#aebbd0;font-size:1.1rem}
+      .forecast-static-intro a{color:#78b7ff}
+    </style>
+    <script type="module" crossorigin src="./assets/forecast-CsaSxIXL.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/forecast-RKy2NfRS.css">
   </head>
   <body>
-    <div id="forecast-app"></div>
+    <div id="forecast-app">
+      <main class="forecast-static-intro">
+        <h1>Mapas del modelo AROME</h1>
+        <p>Consulta la predicción del modelo AROME a 2,5 km hora a hora: temperatura en superficie y en altura, viento y racha, precipitación horaria y acumulada, nubosidad, radiación y los diagnósticos convectivos —CAPE, cizalladura, EBWD, DCAPE, SHIP y Vertical Totals— para analizar tormentas y entornos favorables a supercélulas.</p>
+        <p><a href="/">Volver al panel de MeteoLabX</a></p>
+      </main>
+    </div>
   </body>
 </html>

@@ -41,6 +41,7 @@ from utils.station_slug import slugify
 
 
 SITE_URL = "https://www.meteolabx.com"
+STATIC_SITEMAP_URLS = (f"{SITE_URL}/", f"{SITE_URL}/forecast")
 DEFAULT_PROVIDERS = (
     "AEMET",
     "METEOCAT",
@@ -107,6 +108,8 @@ header,main,footer{width:min(1040px,calc(100% - 32px));margin:auto}header{displa
 """.strip()
 SEO_OBSERVATION_SCRIPT = r"""
 document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('.live-panel').forEach(section=>{
+const pageView={provider:section.dataset.seoProvider||'',station_id:section.dataset.seoStationId||'',name:section.dataset.seoStationName||'',language:section.dataset.seoLanguage||''};
+if(pageView.provider&&pageView.station_id&&!section.dataset.seoViewSent){section.dataset.seoViewSent='1';fetch('/v1/stats/seo-view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pageView),keepalive:true}).catch(()=>{})}
 const frame=section.querySelector('.observation-loader'),status=section.querySelector('[data-observation-status]'),slots=Array.from(section.querySelectorAll('[data-observation-slot]'));
 const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
 const syncObservation=()=>{try{const doc=frame.contentDocument;if(!doc)return false;const grid=Array.from(doc.querySelectorAll('.grid.grid-3')).find(item=>item.querySelectorAll(':scope > .card .card-value').length>=6);if(!grid){const alert=doc.querySelector('[data-testid="stAlert"]');if(alert){status.textContent=clean(alert.innerText).slice(0,260);status.classList.add('error')}return false}
@@ -730,6 +733,7 @@ def _page_shell_inline_legacy(
   <header><a class="brand" href="/">MeteoLabX</a><div class="header-links">
     <a href="{_city_directory_path(language)}">{html.escape(language.t('cities'))}</a>
     <a href="{_directory_path(language)}">{html.escape(language.t('stations'))}</a>
+    <a href="/forecast">AROME</a>
     <a href="/">{html.escape(language.t('panel'))}</a>
     {_language_navigation(language, alternates)}
   </div></header>
@@ -771,6 +775,7 @@ def _page_shell(
 {json_ld}<script src="/seo-observation.js?v=1" defer></script></head><body><header><a class="brand" href="/">MeteoLabX</a><div class="header-links">
 <a href="{_city_directory_path(language)}">{html.escape(language.t('cities'))}</a>
 <a href="{_directory_path(language)}">{html.escape(language.t('stations'))}</a>
+<a href="/forecast">AROME</a>
 <a href="/">{html.escape(language.t('panel'))}</a>{_language_navigation(language, alternates)}</div></header>
 <main>{body}</main><footer>{html.escape(language.t('footer'))}</footer></body></html>"""
 
@@ -841,6 +846,10 @@ def _station_html(
     <h1>{html.escape(station.name)}</h1>
     <p class="lede">{html.escape(language.t('station_lede', name=search_name, provider=station.provider_label, location=location))}</p>
     <section class="live-panel" aria-label="{html.escape(language.t('current_title', name=search_name), quote=True)}"
+      data-seo-provider="{html.escape(station.provider, quote=True)}"
+      data-seo-station-id="{html.escape(station.station_id, quote=True)}"
+      data-seo-station-name="{html.escape(station.name, quote=True)}"
+      data-seo-language="{html.escape(language.code, quote=True)}"
       data-maximum-label="{html.escape(language.t('maximum'), quote=True)}"
       data-minimum-label="{html.escape(language.t('minimum'), quote=True)}"
       data-updated-label="{html.escape(language.t('observation_updated'), quote=True)}">
@@ -1168,7 +1177,9 @@ def _xml_alternate_links(alternates: Mapping[str, str]) -> str:
 
 
 def _sitemap(alternate_groups: Sequence[Mapping[str, str]]) -> str:
-    entries = [f"  <url><loc>{SITE_URL}/</loc></url>"]
+    entries = [
+        f"  <url><loc>{xml_escape(url)}</loc></url>" for url in STATIC_SITEMAP_URLS
+    ]
     for alternates in alternate_groups:
         alternate_links = _xml_alternate_links(alternates)
         for url in alternates.values():
@@ -1211,14 +1222,16 @@ def _write_sitemaps(
     output: Path,
     alternate_groups: Sequence[Mapping[str, str]],
 ) -> int:
-    sitemap_url_count = 1 + sum(len(group) for group in alternate_groups)
+    sitemap_url_count = len(STATIC_SITEMAP_URLS) + sum(
+        len(group) for group in alternate_groups
+    )
     for stale in output.glob("sitemap-*.xml"):
         stale.unlink()
     if sitemap_url_count <= SITEMAP_URL_LIMIT:
         _write_text(output / "sitemap.xml", _sitemap(alternate_groups))
         return sitemap_url_count
 
-    urls = [f"{SITE_URL}/"]
+    urls = list(STATIC_SITEMAP_URLS)
     urls.extend(url for group in alternate_groups for url in group.values())
     names: list[str] = []
     for index, offset in enumerate(range(0, len(urls), SITEMAP_URL_LIMIT), start=1):

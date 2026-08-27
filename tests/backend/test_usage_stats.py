@@ -22,6 +22,9 @@ def test_record_and_summary_windows(tmp_path):
     usage_stats.record_visit(
         "AEMET", "0076", "BARCELONA AEROPUERTO", source="seo", settings=settings
     )
+    usage_stats.record_seo_page_view(
+        "AEMET", "0076", "BARCELONA AEROPUERTO", language="es", settings=settings
+    )
     usage_stats.record_visit("WU", "IMADRID1", "", settings=settings)
     usage_stats.record_seo_panel_click(
         "AEMET", "0076", "BARCELONA AEROPUERTO", language="es", settings=settings
@@ -66,6 +69,20 @@ def test_visit_normalizes_and_ignores_empty(tmp_path):
     summary = usage_stats.visit_summary(settings=settings)
     assert summary["totals"]["total"] == 1
     assert summary["stations"][0]["provider"] == "WU"
+
+
+def test_seo_page_view_counts_without_station_connection(tmp_path):
+    settings = _settings(tmp_path)
+    usage_stats.record_seo_page_view(
+        "meteocat", "D5", "Observatori Fabra", language="ca", settings=settings
+    )
+
+    summary = usage_stats.visit_summary(settings=settings)
+
+    assert summary["totals"]["total"] == 0
+    assert summary["totals"]["sources"]["seo"] == {"d30": 1, "total": 1}
+    assert summary["stations"][0]["station_id"] == "D5"
+    assert summary["stations"][0]["seo_total"] == 1
 
 
 def test_record_section_visits_and_summary_windows(tmp_path):
@@ -194,6 +211,16 @@ def test_stats_endpoints_roundtrip_and_auth(stats_client):
         },
     )
     assert ok.status_code == 204
+    seo_view = stats_client.post(
+        "/v1/stats/seo-view",
+        json={
+            "provider": "AEMET",
+            "station_id": "0076",
+            "name": "Barcelona Aeropuerto",
+            "language": "es",
+        },
+    )
+    assert seo_view.status_code == 204
     click = stats_client.post(
         "/v1/stats/panel-click",
         json={

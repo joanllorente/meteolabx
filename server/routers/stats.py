@@ -1,9 +1,9 @@
 """
 Router de estadísticas internas de uso.
 
-``POST /v1/stats/visit`` lo llama el frontend en cada conexión a una estación
-e indica si procede de la web o de una ficha SEO. ``POST
-/v1/stats/panel-click`` registra que esa ficha ha abierto el panel completo,
+``POST /v1/stats/visit`` lo llama el frontend en cada conexión a una estación.
+``POST /v1/stats/seo-view`` registra la apertura del HTML de una ficha SEO y
+``POST /v1/stats/panel-click`` que esa ficha ha abierto el panel completo.
 ``POST /v1/stats/error`` registra fallos y ``POST /v1/stats/section`` las
 transiciones reales de navegación (todos fire-and-forget). ``GET
 /v1/stats/stations`` alimenta el panel interno y exige la contraseña de administración
@@ -82,6 +82,10 @@ class SeoPanelClickRequest(BaseModel):
     language: str = Field(default="", max_length=8)
 
 
+class SeoPageViewRequest(SeoPanelClickRequest):
+    pass
+
+
 @router.post("/error", status_code=204, summary="Registrar un error de conexión a estación")
 def post_connection_error(
     body: ConnectionErrorRequest, settings: Settings = Depends(get_settings)
@@ -131,6 +135,25 @@ def post_seo_panel_click(
         )
     except Exception:
         logger.warning("stats: no se pudo registrar el clic SEO", exc_info=True)
+    return Response(status_code=204)
+
+
+@router.post("/seo-view", status_code=204, summary="Registrar apertura de una ficha SEO")
+def post_seo_page_view(
+    body: SeoPageViewRequest, settings: Settings = Depends(get_settings)
+) -> Response:
+    from server.services import usage_stats
+
+    try:
+        usage_stats.record_seo_page_view(
+            body.provider,
+            body.station_id,
+            body.name,
+            language=body.language,
+            settings=settings,
+        )
+    except Exception:
+        logger.warning("stats: no se pudo registrar la apertura SEO", exc_info=True)
     return Response(status_code=204)
 
 

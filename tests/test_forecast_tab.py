@@ -60,6 +60,21 @@ def test_svelte_forecast_is_a_standalone_entrypoint():
     vite_config = (ROOT / "prototype-svelte" / "vite.config.js").read_text(encoding="utf-8")
 
     assert 'id="forecast-app"' in forecast_html
+    assert '<link rel="canonical" href="https://www.meteolabx.com/forecast"' in forecast_html
+    # El texto exacto es cosa de SEO y se ajusta; lo que no puede faltar es un
+    # título propio con el nombre del modelo y la marca, ni la descripción que
+    # Google enseña debajo.
+    import re as _re
+
+    titulo = _re.search(r"<title>([^<]+)</title>", forecast_html)
+    assert titulo and "AROME" in titulo.group(1) and "MeteoLabX" in titulo.group(1)
+    assert len(titulo.group(1)) <= 60, "Google recorta el título sobre los 60"
+    descripcion = _re.search(
+        r'<meta name="description" content="([^"]+)"', forecast_html
+    )
+    assert descripcion and len(descripcion.group(1)) <= 160
+    assert "cizalladura 0–1, 0–3 y 0–6 km" in forecast_html
+    assert "diagnósticos de tormentas y supercélulas" in forecast_html
     assert "ForecastView" in forecast_app
     assert "forecast.streamlit" in forecast_app
     assert "forecast.direct" in forecast_app
@@ -277,8 +292,10 @@ def test_production_streamlit_runner_registers_clean_forecast_route_first():
     local_start = (ROOT / "scripts" / "run_app.sh").read_text(encoding="utf-8")
 
     assert 're.compile(r"^/forecast/?$")' in runner
-    assert 're.compile(r"^/v1/stats/section$")' in runner
-    assert "ForecastStatsProxyHandler" in runner
+    assert 're.compile(r"^/v1/stats/(?:section|seo-view)$")' in runner
+    assert "PublicStatsProxyHandler" in runner
+    assert 'self.request.path == "/forecast/"' in runner
+    assert 'self.redirect("/forecast", permanent=True)' in runner
     assert "app.wildcard_router.rules.insert(0, route)" in runner
     assert 'Content-Type", "text/html; charset=UTF-8' in runner
     assert "decompress_response=False" in runner

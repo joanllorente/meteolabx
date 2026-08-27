@@ -1,15 +1,16 @@
 """
-Estadísticas internas de uso: visitas (conexiones) por estación y origen,
-aperturas del panel completo desde fichas SEO, errores de conexión y entradas
-a pestañas/mapas.
+Estadísticas internas de uso: visitas (conexiones) por estación, aperturas de
+las fichas SEO, aperturas del panel completo desde esas fichas, errores de
+conexión y entradas a pestañas/mapas.
 
 Cada vez que un usuario se conecta a una estación (selector, mapa, ranking,
 deep link o autoconexión) el frontend registra una visita vía
 ``POST /v1/stats/visit``. Si la conexión falla, registra el error vía
 ``POST /v1/stats/error`` con la categoría (timeout, unauthorized, network…).
-Las fichas SEO se distinguen de la web normal y sus aperturas del panel se
-registran mediante ``POST /v1/stats/panel-click``. Las entradas a secciones se
-registran mediante ``POST /v1/stats/section``.
+Las aperturas del HTML de las fichas SEO se registran mediante ``POST
+/v1/stats/seo-view`` y sus aperturas del panel mediante ``POST
+/v1/stats/panel-click``. Las entradas a secciones se registran mediante ``POST
+/v1/stats/section``.
 El panel interno (credenciales especiales en el formulario WU) las consulta
 agregadas por ventanas temporales.
 
@@ -62,6 +63,16 @@ CREATE TABLE IF NOT EXISTS section_visits (
 );
 CREATE INDEX IF NOT EXISTS idx_section_visits_section ON section_visits(section);
 CREATE INDEX IF NOT EXISTS idx_section_visits_epoch ON section_visits(epoch);
+CREATE TABLE IF NOT EXISTS seo_page_views (
+    view_pk INTEGER PRIMARY KEY,
+    provider TEXT NOT NULL,
+    station_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    language TEXT NOT NULL DEFAULT '',
+    epoch INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_seo_views_station ON seo_page_views(provider, station_id);
+CREATE INDEX IF NOT EXISTS idx_seo_views_epoch ON seo_page_views(epoch);
 CREATE TABLE IF NOT EXISTS seo_panel_clicks (
     click_pk INTEGER PRIMARY KEY,
     provider TEXT NOT NULL,
@@ -157,6 +168,38 @@ def record_seo_panel_click(
     with _connect(settings) as connection:
         connection.execute(
             "INSERT INTO seo_panel_clicks(provider, station_id, name, language, epoch)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                provider,
+                station_id,
+                str(name or "").strip()[:120],
+                str(language or "").strip().lower()[:8],
+                int(time.time()),
+            ),
+        )
+
+
+def record_seo_page_view(
+    provider: str,
+    station_id: str,
+    name: str = "",
+    *,
+    language: str = "",
+    settings=None,
+) -> None:
+    """Registra la apertura del HTML de una ficha SEO.
+
+    Es independiente de que el iframe de observaciones consiga conectarse a
+    la fuente oficial. No se almacenan IP, sesión ni identificadores de
+    usuario.
+    """
+    provider = str(provider or "").strip().upper()
+    station_id = str(station_id or "").strip()
+    if not provider or not station_id:
+        return
+    with _connect(settings) as connection:
+        connection.execute(
+            "INSERT INTO seo_page_views(provider, station_id, name, language, epoch)"
             " VALUES (?, ?, ?, ?, ?)",
             (
                 provider,
@@ -312,6 +355,32 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             """,
             (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
         ).fetchall()
+        seo_view_rows = connection.execute(
+            """
+            SELECT provider, station_id,
+                   (SELECT s2.name FROM seo_page_views s2
+                    WHERE s2.provider = s.provider AND s2.station_id = s.station_id
+                      AND s2.name <> '' ORDER BY s2.epoch DESC LIMIT 1) AS name,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM seo_page_views s
+            GROUP BY provider, station_id
+            """,
+            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+        ).fetchall()
+        seo_view_totals_row = connection.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM seo_page_views
+            """,
+            (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"]),
+        ).fetchone()
         panel_click_rows = connection.execute(
             """
             SELECT provider, station_id,
@@ -360,6 +429,28 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             "errors": dict(empty_errors),
             "panel_clicks": {"d1": 0, "d7": 0, "d30": 0, "total": 0, "last_epoch": 0},
         }
+    for row in seo_view_rows:
+        key = (row["provider"], row["station_id"])
+        station = stations_by_key.get(key)
+        if station is None:
+            station = stations_by_key[key] = {
+                "provider": row["provider"],
+                "station_id": row["station_id"],
+                "name": row["name"] or row["station_id"],
+                "d1": 0, "d7": 0, "d30": 0, "total": 0,
+                "app_total": 0, "app_d30": 0,
+                "seo_total": 0, "seo_d30": 0,
+                "legacy_total": 0, "legacy_d30": 0,
+                "last_epoch": 0,
+                "errors": dict(empty_errors),
+                "panel_clicks": {"d1": 0, "d7": 0, "d30": 0, "total": 0, "last_epoch": 0},
+            }
+        station["seo_total"] = int(row["total"] or 0)
+        station["seo_d30"] = int(row["d30"] or 0)
+        if int(row["last_epoch"] or 0) > int(station["last_epoch"] or 0):
+            station["last_epoch"] = int(row["last_epoch"] or 0)
+            if row["name"]:
+                station["name"] = row["name"]
     for row in error_rows:
         key = (row["provider"], row["station_id"])
         station = stations_by_key.get(key)
@@ -462,8 +553,8 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
                     "total": int(totals_row["app_total"] or 0),
                 },
                 "seo": {
-                    "d30": int(totals_row["seo_d30"] or 0),
-                    "total": int(totals_row["seo_total"] or 0),
+                    "d30": int(seo_view_totals_row["d30"] or 0),
+                    "total": int(seo_view_totals_row["total"] or 0),
                 },
                 "legacy": {
                     "d30": int(totals_row["legacy_d30"] or 0),

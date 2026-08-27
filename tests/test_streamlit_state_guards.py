@@ -128,7 +128,7 @@ def test_disable_provider_autoconnect_does_not_mutate_rendered_toggle(monkeypatc
     assert calls
 
 
-def test_station_visit_tracks_normal_app_and_seo_embed_separately(monkeypatch):
+def test_station_visit_tracks_app_but_not_hidden_seo_embed(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "utils.api_client.track_station_visit_via_api",
@@ -142,7 +142,7 @@ def test_station_visit_tracks_normal_app_and_seo_embed_separately(monkeypatch):
     provider_state._track_station_visit("METEOCAT", "D5", "Observatori Fabra")
 
     assert calls[0][1]["source"] == "app"
-    assert calls[1][1]["source"] == "seo"
+    assert len(calls) == 1
 
 
 def test_station_visit_can_be_suppressed_after_full_panel_click(monkeypatch):
