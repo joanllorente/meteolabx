@@ -1582,6 +1582,10 @@ def _computed_frame(
         field.data = values
         field.units = str(config["unit"])
     else:
+        # Mismo reparto que llevan los perfiles y los mapas nativos: sin él, el
+        # nivel 1 era el único tramo de la pasada del que no se sabía en qué se
+        # iba el tiempo.
+        reloj_ciz = time.monotonic()
         base_uv = _surface_wind_10m(client, catalog, prefixes, run, valid_time)
         # La de 0-6 km interpola sobre niveles isobáricos, que ya vienen en el
         # paquete; las de 0-1 y 0-3 usan niveles de altura y siguen por el WCS.
@@ -1590,6 +1594,8 @@ def _computed_frame(
             isobaric_levels = _shear_levels_from_package(
                 base_uv[0], run, valid_time, (500.0, 450.0, 400.0, 350.0, 300.0, 250.0)
             )
+        traer_ciz = time.monotonic() - reloj_ciz
+        reloj_ciz = time.monotonic()
         field = _compute_shear(
             client,
             catalog,
@@ -1599,6 +1605,12 @@ def _computed_frame(
             int(config["depth_m"]),
             base_uv=base_uv,
             isobaric_levels=isobaric_levels,
+        )
+        logger.info(
+            "Cizalladura %s %s: traer %.1f s, calcular %.1f s (niveles del "
+            "paquete: %s).",
+            product_id, valid_time_iso, traer_ciz, time.monotonic() - reloj_ciz,
+            "sí" if isobaric_levels else "no",
         )
     finite = field.data[np.isfinite(field.data)]
     maximum = float(np.nanmax(finite)) if finite.size else float("nan")

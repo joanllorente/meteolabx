@@ -755,3 +755,58 @@ def test_parallel_prefetch_still_retries_what_is_not_published(monkeypatch):
 
     assert not hilo.is_alive()
     assert intentos["n"] >= 4, "debe insistir hasta que aparezcan"
+
+
+def test_a_finished_run_summarises_itself(caplog):
+    """Al completarse, la pasada deja su cronología en una línea.
+
+    Sin esto, saber lo que costó obliga a juntar los logs de todos los
+    despliegues que la atravesaron y reconstruir los tiempos a mano.
+    """
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    manifiesto = {
+        "run": "2026-08-27T06:00:00Z",
+        "tier_timing": {
+            "0": {"first_start": "2026-08-27T06:10:00Z",
+                  "last_start": "2026-08-27T06:40:00Z", "jobs": 306},
+            "2": {"first_start": "2026-08-27T06:44:00Z",
+                  "last_start": "2026-08-27T07:30:00Z", "jobs": 38},
+        },
+    }
+
+    with caplog.at_level(logging.INFO, logger="meteolabx.forecast_worker"):
+        trabajador._log_run_summary(manifiesto)
+
+    texto = caplog.text
+    assert "Pasada 2026-08-27T06:00:00Z completada en 80 min" in texto
+    assert "nativos 306 trabajos 0-30 min" in texto
+    assert "convectivos 38 trabajos 34-80 min" in texto
+
+
+def test_the_summary_only_appears_once(caplog):
+    """Se registra al pasar a completa, no en cada ciclo posterior."""
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    veces = []
+    original = trabajador._log_run_summary
+    trabajador._log_run_summary = lambda m: veces.append(m)
+    try:
+        manifiesto = {
+            "run": "2026-08-27T06:00:00Z",
+            "status": "publishing",
+            "expected_times": ["2026-08-29T09:00:00Z"],
+            "products": {},
+            "tier_timing": {"0": {"first_start": "2026-08-27T06:10:00Z",
+                                  "last_start": "2026-08-27T06:40:00Z", "jobs": 1}},
+        }
+        trabajador._finish_status(manifiesto)
+        primera = len(veces)
+        trabajador._finish_status(manifiesto)
+        assert len(veces) == primera, "no debe repetirse en ciclos posteriores"
+    finally:
+        trabajador._log_run_summary = original

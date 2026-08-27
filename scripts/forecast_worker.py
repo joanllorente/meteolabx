@@ -848,6 +848,14 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
         "started_at": now,
         "timeout_seconds": timeout_s,
     }
+    # Marca de paso por nivel, para poder resumir la pasada al terminarla sin
+    # tener que reconstruir la cronología de miles de líneas de log.
+    tiempos = manifest.setdefault("tier_timing", {})
+    tramo = tiempos.setdefault(str(job.tier), {})
+    tramo.setdefault("first_start", now)
+    tramo["last_start"] = now
+    tramo["jobs"] = int(tramo.get("jobs", 0)) + 1
+
     progress = manifest.setdefault("progress", {})
     active = [
         item for item in progress.get("active_jobs", ())
@@ -1002,8 +1010,53 @@ def _finish_status(manifest: dict[str, Any]) -> None:
         ),
         default=-1,
     )
+    estaba = manifest.get("status")
     manifest["status"] = (
         "complete" if all_complete and final_horizon >= 51 else "publishing"
+    )
+    if manifest["status"] == "complete" and estaba != "complete":
+        _log_run_summary(manifest)
+
+
+def _log_run_summary(manifest: dict[str, Any]) -> None:
+    """Deja en una línea cuánto ha tardado cada nivel de la pasada.
+
+    Sin esto, saber lo que costó una pasada obliga a juntar los logs de todos
+    los despliegues que la atravesaron y reconstruir la cronología a mano.
+    """
+    tiempos = manifest.get("tier_timing") or {}
+    if not tiempos:
+        return
+    arranques = [
+        _parse_iso(tramo["first_start"])
+        for tramo in tiempos.values()
+        if tramo.get("first_start")
+    ]
+    finales = [
+        _parse_iso(tramo["last_start"])
+        for tramo in tiempos.values()
+        if tramo.get("last_start")
+    ]
+    if not arranques or not finales:
+        return
+    inicio = min(arranques)
+    nombres = {0: "nativos", 1: "derivados", 2: "convectivos", 3: "DCAPE"}
+    tramos = []
+    for clave in sorted(tiempos, key=int):
+        tramo = tiempos[clave]
+        if not tramo.get("first_start"):
+            continue
+        desde = (_parse_iso(tramo["first_start"]) - inicio).total_seconds() / 60
+        hasta = (_parse_iso(tramo["last_start"]) - inicio).total_seconds() / 60
+        tramos.append(
+            f"{nombres.get(int(clave), clave)} {tramo.get('jobs', 0)} trabajos "
+            f"{desde:.0f}-{hasta:.0f} min"
+        )
+    logger.info(
+        "Pasada %s completada en %.0f min · %s",
+        manifest.get("run"),
+        (max(finales) - inicio).total_seconds() / 60,
+        " · ".join(tramos),
     )
 
 
@@ -1300,9 +1353,13 @@ def _run_parallel_work(
                 reparto = collections.Counter(
                     trabajo.tier for _m, trabajo in active.values()
                 )
+                # La memoria va en la misma línea: hasta ahora sólo se veía
+                # cuando el freno actuaba, así que para saber cuánta se estaba
+                # usando había que salir del log y mirar la gráfica.
+                medida = _cgroup_memory()
                 logger.info(
                     "Procesando en paralelo RUN %s · %s · %s (nivel %d) "
-                    "[activos %d/%d: %s]",
+                    "[activos %d/%d: %s · memoria %s]",
                     job.run,
                     job.valid_time,
                     job.label,
@@ -1313,6 +1370,9 @@ def _run_parallel_work(
                         f"nivel {nivel}×{cuenta}"
                         for nivel, cuenta in sorted(reparto.items())
                     ) or "ninguno",
+                    f"{medida[0]/1024**3:.1f}/{medida[1]/1024**3:.0f} GB"
+                    if medida
+                    else "sin límite legible",
                 )
                 future = executor.submit(_run_isolated_job, job, timeout_s)
                 active[future] = (manifest, job)
