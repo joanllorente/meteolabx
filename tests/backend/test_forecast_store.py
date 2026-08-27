@@ -1119,3 +1119,30 @@ def test_vertical_totals_falls_back_to_the_wcs_without_the_package(monkeypatch):
 
     assert pedidos == [850.0, 500.0]
     assert np.allclose(campo.data, 32.0), "la unidad no debe alterar la diferencia"
+
+
+def test_only_real_native_maps_report_as_such(monkeypatch, capsys):
+    """La traza de mapa no puede incluir perfiles ni cizalladuras.
+
+    Todos pasan por frame_grid, pero los convectivos ya reparten su tiempo en
+    su propia línea: verlos aquí hacía leer 170 s de perfil como si fueran una
+    descarga de campo.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    fuente = inspect.getsource(arome_forecast.frame_grid)
+    assert '"native", "level_difference"' in fuente, (
+        "debe filtrar por tipo antes de registrar"
+    )
+    # Los productos que se colaban.
+    for producto in ("mucape-muli", "dcape", "ship", "shear-06"):
+        assert arome_forecast.PRODUCTS[producto]["kind"] not in {
+            "native", "level_difference"
+        }, producto
+    # Y los que sí deben aparecer.
+    for producto in ("temperature-850", "cloud-cover", "vertical-totals"):
+        assert arome_forecast.PRODUCTS[producto]["kind"] in {
+            "native", "level_difference"
+        }, producto

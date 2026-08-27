@@ -1720,10 +1720,15 @@ def frame_grid(
     traer = time.monotonic() - reloj
     reloj = time.monotonic()
     cuerpo = _serialize_grid(product_id, field, config, headers)
-    logger.info(
-        "Mapa nativo %s %s: traer %.1f s, serializar %.1f s.",
-        product_id, valid_time_iso, traer, time.monotonic() - reloj,
-    )
+    # Sólo los que de verdad traen un campo: los convectivos y las
+    # cizalladuras pasan por aquí, pero su tiempo ya lo reparte su propia
+    # traza, y llamarlos «nativos» hacía leer 170 s de perfil como si fuera
+    # una descarga.
+    if (PRODUCTS.get(product_id) or {}).get("kind") in {"native", "level_difference"}:
+        logger.info(
+            "Mapa %s %s: traer %.1f s, serializar %.1f s.",
+            product_id, valid_time_iso, traer, time.monotonic() - reloj,
+        )
     return cuerpo, headers
 
 
