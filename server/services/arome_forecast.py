@@ -162,6 +162,9 @@ PRODUCTS = {
     },
     "cloud-cover": {
         "kind": "native", "prefix_kind": "total_cloud_cover",
+        # AROME no publica nubosidad total en el instante de la pasada, aunque
+        # la cobertura no declare periodo como hacen lluvia o racha.
+        "starts_at_hour": 1,
         "value_mode": "percent", "vmax": 100.0, "unit": "%",
     },
     "wind-level": {

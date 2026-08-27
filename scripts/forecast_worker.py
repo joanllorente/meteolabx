@@ -181,22 +181,29 @@ def pending_hours(
 EXPECTED_NATIVE_HOURS = int(os.getenv("METEOLABX_FORECAST_EXPECTED_HOURS", "52"))
 
 
-def _expected_hours(manifest: dict[str, Any], product: str) -> int:
-    """Horas que se esperan de un producto en una pasada completa.
+def _first_available_hour(product: str) -> int:
+    """Primer plazo en el que existe ese producto, contado desde la pasada.
 
-    Los productos acumulativos —lluvia, racha, radiación— tienen una hora menos:
-    un periodo de una hora necesita la anterior, así que no existen en el
-    instante de la pasada. Contarles esa hora dejaba el progreso topando en el
-    99,5 % con todo calculado.
+    Los acumulativos —lluvia, racha, radiación— arrancan en la +1: un periodo
+    de una hora necesita la anterior. La nubosidad total también, aunque su
+    cobertura no declare periodo, así que se marca a mano en el catálogo de
+    productos. Contarles la hora +0 dejaba el progreso topando poco antes del
+    100 % con todo calculado, sin forma de distinguirlo de un fallo real.
     """
+    config = PRODUCTS.get(product) or {}
+    if config.get("period"):
+        return 1
+    return int(config.get("starts_at_hour", 0))
+
+
+def _expected_hours(manifest: dict[str, Any], product: str) -> int:
+    """Horas que se esperan de un producto en una pasada completa."""
     limits = manifest.get("expected_hours") or {}
     native = int(limits.get("native") or EXPECTED_NATIVE_HOURS)
     diagnostic = int(limits.get("diagnostic") or 0) or native
     caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS)
     horas = diagnostic if product in caros else native
-    if (PRODUCTS.get(product) or {}).get("period"):
-        horas -= 1
-    return horas
+    return horas - _first_available_hour(product)
 
 
 def _expected_frames(manifest: dict[str, Any], product: str, published: int) -> int:

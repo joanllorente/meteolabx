@@ -579,6 +579,11 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     assert trabajador._expected_hours(manifiesto, "accumulated-precip") == 51
     assert trabajador._expected_hours(manifiesto, "wind-gust") == 51
     assert trabajador._expected_hours(manifiesto, "shortwave-down") == 51
+    # La nubosidad tampoco existe en H+0, aunque su cobertura no declare
+    # periodo: se marca a mano en el catálogo de productos.
+    assert trabajador._expected_hours(manifiesto, "cloud-cover") == 51
+    assert trabajador._first_available_hour("cloud-cover") == 1
+    assert trabajador._first_available_hour("temperature-2m") == 0
     # Los instantáneos conservan las 52.
     assert trabajador._expected_hours(manifiesto, "temperature-2m") == 52
     # Y los diagnósticos, su propio límite.
@@ -587,4 +592,4 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     total = sum(
         trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
     )
-    assert total == 980, f"el denominador de una pasada completa es 980, no {total}"
+    assert total == 979, f"el denominador de una pasada completa es 979, no {total}"

@@ -830,7 +830,7 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
     def publicadas_al_final(product: str) -> int:
         if product in set(forecast_worker.SHEAR_PRODUCTS) | set(CONV):
             return 36
-        return 51 if (PRODUCTS.get(product) or {}).get("period") else 52
+        return 52 - forecast_worker._first_available_hour(product)
 
     al_principio = sum(
         forecast_worker._expected_frames(manifest, product, 6)
@@ -840,7 +840,7 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
         forecast_worker._expected_frames(manifest, product, publicadas_al_final(product))
         for product in PERSISTED_FORECAST_PRODUCTS
     )
-    assert al_principio == al_final == 980
+    assert al_principio == al_final == 979
 
 
 def test_capped_products_only_offer_the_hours_that_will_exist():
