@@ -73,8 +73,10 @@ def test_svelte_forecast_is_a_standalone_entrypoint():
         r'<meta name="description" content="([^"]+)"', forecast_html
     )
     assert descripcion and len(descripcion.group(1)) <= 160
-    assert "cizalladura 0–1, 0–3 y 0–6 km" in forecast_html
-    assert "diagnósticos de tormentas y supercélulas" in forecast_html
+    # La página tiene que decir de qué va sin depender de JavaScript: es lo
+    # único que ve un rastreador que no ejecuta el visor.
+    assert "<h1>" in forecast_html and "AROME" in forecast_html
+    assert "supercélulas" in forecast_html
     assert "ForecastView" in forecast_app
     assert "forecast.streamlit" in forecast_app
     assert "forecast.direct" in forecast_app
