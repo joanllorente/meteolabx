@@ -1146,3 +1146,50 @@ def test_only_real_native_maps_report_as_such(monkeypatch, capsys):
         assert arome_forecast.PRODUCTS[producto]["kind"] in {
             "native", "level_difference"
         }, producto
+
+
+def test_a_run_can_actually_reach_complete():
+    """Dar la pasada por completa usa el mismo criterio que el progreso.
+
+    El progreso cuenta las horas que se van a calcular —36 para los productos
+    recortados—, pero el estado exigía las 52 del catálogo. Así el visor
+    marcaba 100 % mientras el estado se quedaba en «publicando» para siempre, y
+    con él el resumen final de la pasada.
+    """
+    horas_52 = [f"2026-08-28T{h:02d}:00:00Z" for h in range(24)] + [
+        f"2026-08-29T{h:02d}:00:00Z" for h in range(24)
+    ] + [f"2026-08-30T{h:02d}:00:00Z" for h in range(4)]
+    manifest = {
+        "run": "2026-08-27T12:00:00Z",
+        "status": "publishing",
+        "expected_hours": {"native": 52, "diagnostic": 36},
+        "expected_times": horas_52,
+        "catalog_products": {
+            product: {"valid_times": horas_52}
+            for product in PERSISTED_FORECAST_PRODUCTS
+        },
+        "products": {},
+    }
+    # Cada producto tiene exactamente lo que le toca: 52 los nativos, 36 los
+    # recortados.
+    for product in PERSISTED_FORECAST_PRODUCTS:
+        esperadas = forecast_worker._product_expected_times(manifest, product)
+        manifest["products"][product] = {"available_times": list(esperadas)}
+
+    forecast_worker._finish_status(manifest)
+
+    assert manifest["status"] == "complete", (
+        "con todo lo que se calcula publicado, la pasada tiene que darse por hecha"
+    )
+
+
+def test_a_capped_product_does_not_expect_the_hours_nobody_computes():
+    """Un recortado espera su límite, no todo el catálogo."""
+    horas = [f"2026-08-28T{h:02d}:00:00Z" for h in range(24)]
+    manifest = {
+        "expected_hours": {"native": 24, "diagnostic": 6},
+        "catalog_products": {p: {"valid_times": horas} for p in ("dcape", "temperature-2m")},
+    }
+
+    assert len(forecast_worker._product_expected_times(manifest, "dcape")) == 6
+    assert len(forecast_worker._product_expected_times(manifest, "temperature-2m")) == 24

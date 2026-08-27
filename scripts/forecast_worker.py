@@ -209,6 +209,23 @@ def _expected_hours(manifest: dict[str, Any], product: str) -> int:
     return horas - _first_available_hour(product)
 
 
+def _product_expected_times(manifest: dict[str, Any], product: str) -> list[str]:
+    """Horas que ese producto va a tener de verdad cuando la pasada acabe.
+
+    De los recortados sólo se calculan las primeras, así que exigir el resto
+    para dar la pasada por completa la dejaba en «publicando» para siempre,
+    aunque el progreso marcara el 100 %.
+    """
+    horas = _product_times(manifest, product)
+    limite = _expected_hours(manifest, product)
+    caros = (
+        set(SHEAR_PRODUCTS)
+        | set(CONVECTIVE_FORECAST_PRODUCTS)
+        | set(LEVEL_INDEX_PRODUCTS)
+    )
+    return horas[:limite] if product in caros else horas
+
+
 def _expected_frames(manifest: dict[str, Any], product: str, published: int) -> int:
     """Frames que cuentan en el denominador de ese producto.
 
@@ -992,7 +1009,7 @@ def _mark_job_failed(
 def _finish_status(manifest: dict[str, Any]) -> None:
     all_complete = True
     for product in PERSISTED_FORECAST_PRODUCTS:
-        expected_product = set(_product_times(manifest, product))
+        expected_product = set(_product_expected_times(manifest, product))
         available_product = set(
             ((manifest.get("products") or {}).get(product) or {}).get(
                 "available_times", ()
