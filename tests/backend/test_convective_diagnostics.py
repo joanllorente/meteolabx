@@ -460,3 +460,30 @@ def test_a_profile_without_buoyancy_has_no_lfc():
 
     assert np.isnan(resultado.lfc_pressure_hpa).all()
     assert np.isnan(resultado.lfc_height_m).all()
+
+
+def test_dcape_survives_the_band_it_runs_with():
+    """La banda de DCAPE da el mismo resultado que una más ancha.
+
+    Su selección de capa de origen a través de SHARPpy depende de cómo se
+    particione la rejilla, así que estrecharla no es gratis por definición:
+    hay que comprobarlo. A 128 filas coincide con 192 y ahorra 435 MB por
+    perfil, que es lo que aprieta cuando corren varios a la vez.
+    """
+    from server.services import arome_forecast
+    from server.services.arome_forecast import _convective_outputs_in_stripes
+
+    assert arome_forecast.CONVECTIVE_STRIPE_ROWS >= 120, (
+        "por debajo de ~120 filas el DCAPE deja de ser reproducible"
+    )
+
+    argumentos = _synthetic_profile(256, 60)
+    estrecha = _convective_outputs_in_stripes(
+        *argumentos, stripe_rows=arome_forecast.CONVECTIVE_STRIPE_ROWS,
+        include_dcape=True,
+    )
+    ancha = _convective_outputs_in_stripes(*argumentos, stripe_rows=192, include_dcape=True)
+
+    finitos = np.isfinite(ancha["dcape"])
+    assert (np.isfinite(estrecha["dcape"]) == finitos).all()
+    assert np.array_equal(estrecha["dcape"][finitos], ancha["dcape"][finitos])

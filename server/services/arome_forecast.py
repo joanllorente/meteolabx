@@ -678,11 +678,14 @@ def _wait_for_profile_request_slot() -> None:
 # recorta el pico sin cambiar el resultado, porque cada celda es independiente
 # de sus vecinas en la vertical.
 CONVECTIVE_STRIPE_ROWS = int(
-    os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS", "192")
+    os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS", "128")
 )
 # DCAPE es el único que no tolera bandas estrechas: su selección de capa de
 # origen a través de SHARPpy cambia según cómo se particione la rejilla, y
-# sólo por encima de ~120 filas devuelve lo mismo que la rejilla entera. Los
+# sólo por encima de ~120 filas devuelve lo mismo que la rejilla entera. De ahí
+# las 128 de arriba: comprobado sobre 384x1121, da el mismo DCAPE bit a bit que
+# con 192 y ahorra 435 MB por perfil, que es lo que más aprieta cuando hay
+# varios a la vez. Los
 # otros trece son celda a celda, así que cuando DCAPE queda fuera —su propio
 # turno lo calcula aparte— se puede bajar mucho: medido sobre una rejilla de
 # 384x1121, pasar de 192 a 64 filas recorta 1.089 MB del pico en el mismo
