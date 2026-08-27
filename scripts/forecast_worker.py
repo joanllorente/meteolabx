@@ -21,6 +21,7 @@ from typing import Any, Iterator, Sequence
 from server.config import get_settings
 from server.services.arome_forecast import (
     accumulated_precip_series,
+    stored_grid_values,
     catalog_payload,
     frame_grid,
 )
@@ -74,6 +75,9 @@ SHEAR_PRODUCTS = tuple(
     product for product in FAST_DERIVED_PRODUCTS if product.startswith("shear-")
 )
 ACCUMULATED_PRECIP_PRODUCT = "accumulated-precip"
+# El mapa horario de lluvia sale del mismo campo del WCS que el acumulado y se
+# publica antes, asi que sus horas se reutilizan en vez de volver a pedirlas.
+HOURLY_PRECIP_PRODUCT = "precip-1h"
 # DCAPE sale del grupo convectivo: es el unico que exige el rocio del WCS, y
 # esperarlo retrasaria media hora a los otros trece. Va en su propio nivel,
 # detras de ellos, para que no bloquee la pasada.
@@ -531,8 +535,21 @@ def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> Non
     )
     if not pending:
         return
+    def hora_ya_publicada(valid_time: str) -> "np.ndarray | None":
+        """Recupera el incremento del mapa horario de lluvia, si ya está.
+
+        Sale del mismo campo del WCS que necesita el acumulado, y como es un
+        producto nativo se publica antes: en ese punto son 50 peticiones que no
+        hay que repetir. Vuelve cuantizado, con un error de centésimas de
+        milímetro sobre el acumulado de una pasada entera.
+        """
+        contenido = store.get(
+            frame_key(job.run, HOURLY_PRECIP_PRODUCT, valid_time, scope=job.scope)
+        )
+        return stored_grid_values(contenido) if contenido else None
+
     for valid_time, content, _headers in accumulated_precip_series(
-        token, pending, run_iso=job.run
+        token, pending, run_iso=job.run, stored_increment=hora_ya_publicada
     ):
         write_grid(
             store,

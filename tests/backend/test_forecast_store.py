@@ -9,6 +9,8 @@ import threading
 import time
 from types import SimpleNamespace
 
+import pytest
+
 from server.services.forecast_store import (
     LATEST_MANIFEST_KEY,
     PERSISTED_FORECAST_PRODUCTS,
@@ -111,7 +113,7 @@ def test_incremental_worker_is_idempotent(monkeypatch, tmp_path: Path):
         header = json.dumps(metadata).encode()
         return struct.pack("<I", len(header)) + header + struct.pack("<f", 1.0), {}
 
-    def fake_series(_token, valid_times, run_iso=""):
+    def fake_series(_token, valid_times, run_iso="", stored_increment=None):
         # El acumulado no pasa por frame_grid: resuelve la pasada de una vez.
         for valid_time in valid_times:
             content, _ = fake_grid(
@@ -865,3 +867,162 @@ def test_available_hours_outside_the_cap_are_not_announced():
     resultado = augment_catalog_with_manifest(catalog, manifest, precomputed_only=True)
 
     assert resultado["products"]["dcape"]["available_times"] == horas[:3]
+
+
+def test_stored_grid_values_recovers_what_was_serialized(monkeypatch):
+    """Leer un frame guardado devuelve el campo con el error de cuantización.
+
+    Es lo que permite al acumulado sumar las horas que el mapa horario de
+    lluvia ya publicó en vez de volver a pedirlas al WCS. Si el inverso no
+    fuera fiel, el acumulado saldría mal sin que nada fallase.
+    """
+    import numpy as np
+
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services import arome_forecast
+    from server.services.arome_forecast import _serialize_grid, stored_grid_values
+    from tabs.arome_forecast import RasterField
+
+    # Ámbito de producción: en local el serializador recoloca el recorte sobre
+    # la rejilla entera del modelo, que no es lo que se guarda en Railway.
+    monkeypatch.setattr(arome_forecast, "forecast_calculation_scope", lambda: "model")
+
+    rng = np.random.default_rng(7)
+    valores = rng.gamma(1.5, 2.0, (23, 31))
+    valores[valores < 0.4] = 0.0
+    valores[0, 0] = np.nan          # fuera del dominio
+    campo = RasterField(
+        valores,
+        from_bounds(-2, 40, 3, 44, 31, 23),
+        CRS.from_epsg(4326),
+        (-2, 40, 3, 44),
+        "mm",
+    )
+    config = {"vmax": 60.0, "unit": "mm"}
+    cabeceras = {
+        "X-AROME-Run": "2026-08-26T12:00:00Z",
+        "X-AROME-Valid-Time": "2026-08-26T15:00:00Z",
+        "X-AROME-Max": f"{float(np.nanmax(valores)):.3f}",
+        "X-AROME-Unit": "mm",
+    }
+
+    recuperado = stored_grid_values(_serialize_grid("precip-1h", campo, config, cabeceras))
+
+    assert recuperado is not None
+    assert recuperado.shape == valores.shape
+    assert np.isnan(recuperado[0, 0]), "el hueco debe seguir siendo hueco"
+    finitos = np.isfinite(valores)
+    # El paso de cuantización de este rango, más margen de redondeo.
+    from server.services.arome_forecast import _quantization_step
+    paso = _quantization_step(float(np.nanmax(valores)) - float(np.nanmin(valores)))
+    assert np.abs(recuperado[finitos] - valores[finitos]).max() <= paso
+
+
+def test_stored_grid_values_declines_what_it_cannot_read():
+    """Ante un frame que no encaja, prefiere no devolver nada.
+
+    Quien llama vuelve a descargarlo; interpretar mal unos bytes daría un
+    acumulado silenciosamente incorrecto.
+    """
+    from server.services.arome_forecast import stored_grid_values
+
+    assert stored_grid_values(b"") is None
+    assert stored_grid_values(b"\x04\x00\x00\x00no-json") is None
+    assert stored_grid_values(b"\x02\x00\x00\x00{}") is None
+
+
+def test_accumulation_reuses_published_hours_instead_of_downloading(monkeypatch):
+    """El acumulado suma las horas que el mapa horario ya publicó.
+
+    Ambos salen del mismo campo del WCS, y el horario se publica antes por ser
+    nativo: volver a pedirlas eran 51 peticiones tiradas por pasada. La primera
+    hora se descarga siempre, porque de ella salen la rejilla y la proyección
+    sobre las que se alinea el resto.
+    """
+    import numpy as np
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services import arome_forecast
+    from tabs.arome_forecast import RasterField
+
+    monkeypatch.setattr(arome_forecast, "forecast_calculation_scope", lambda: "model")
+    horas = [f"2026-08-26T{h:02d}:00:00Z" for h in range(13, 19)]
+    geometria = (from_bounds(-2, 40, 3, 44, 4, 3), CRS.from_epsg(4326), (-2, 40, 3, 44))
+    descargas = []
+
+    class ClienteFalso:
+        def get_field(self, catalog, prefix, run, valid_time, *a, **k):
+            descargas.append(valid_time)
+            return RasterField(np.full((3, 4), 2.0), *geometria, "mm")
+
+    monkeypatch.setattr(
+        arome_forecast, "_product_context",
+        lambda token, product, run_iso="": (
+            arome_forecast.PRODUCTS["accumulated-precip"],
+            ClienteFalso(), {}, {"field": "x"},
+            arome_forecast._parse_time("2026-08-26T12:00:00Z"),
+            [arome_forecast._parse_time(h) for h in horas],
+        ),
+    )
+
+    # Todas menos la primera están ya publicadas, con 2 mm cada una.
+    guardadas = {h: np.full((3, 4), 2.0) for h in horas[1:]}
+    salida = list(
+        arome_forecast.accumulated_precip_series(
+            "token", tuple(horas), run_iso="2026-08-26T12:00:00Z",
+            stored_increment=guardadas.get,
+        )
+    )
+
+    assert len(descargas) == 1, f"solo la primera hora se descarga, no {len(descargas)}"
+    assert len(salida) == len(horas)
+    # Seis horas de 2 mm: la última acumula 12.
+    ultimo = arome_forecast.stored_grid_values(salida[-1][1])
+    assert np.nanmax(ultimo) == pytest.approx(12.0, abs=0.05)
+
+
+def test_accumulation_downloads_when_the_stored_grid_does_not_match(monkeypatch):
+    """Una rejilla distinta no se mezcla: se vuelve a descargar.
+
+    En local el WCS entrega el recorte catalán y los frames guardados cubren el
+    dominio entero; sumarlos daría un acumulado sin sentido.
+    """
+    import numpy as np
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services import arome_forecast
+    from tabs.arome_forecast import RasterField
+
+    monkeypatch.setattr(arome_forecast, "forecast_calculation_scope", lambda: "model")
+    horas = [f"2026-08-26T{h:02d}:00:00Z" for h in range(13, 17)]
+    geometria = (from_bounds(-2, 40, 3, 44, 4, 3), CRS.from_epsg(4326), (-2, 40, 3, 44))
+    descargas = []
+
+    class ClienteFalso:
+        def get_field(self, catalog, prefix, run, valid_time, *a, **k):
+            descargas.append(valid_time)
+            return RasterField(np.full((3, 4), 1.0), *geometria, "mm")
+
+    monkeypatch.setattr(
+        arome_forecast, "_product_context",
+        lambda token, product, run_iso="": (
+            arome_forecast.PRODUCTS["accumulated-precip"],
+            ClienteFalso(), {}, {"field": "x"},
+            arome_forecast._parse_time("2026-08-26T12:00:00Z"),
+            [arome_forecast._parse_time(h) for h in horas],
+        ),
+    )
+
+    list(
+        arome_forecast.accumulated_precip_series(
+            "token", tuple(horas), run_iso="2026-08-26T12:00:00Z",
+            # Rejilla que no cuadra con la del campo descargado.
+            stored_increment=lambda hora: np.full((9, 9), 1.0),
+        )
+    )
+
+    assert len(descargas) == len(horas), "ninguna se puede reutilizar"

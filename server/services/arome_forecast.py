@@ -17,7 +17,7 @@ import shutil
 import struct
 import tempfile
 import time
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -1580,6 +1580,7 @@ def accumulated_precip_series(
     token: str,
     valid_times: tuple[str, ...],
     run_iso: str = "",
+    stored_increment: Callable[[str], np.ndarray | None] | None = None,
 ) -> Iterator[tuple[str, bytes, dict[str, str]]]:
     """Acumulado de precipitación de varias horas con una descarga por hora.
 
@@ -1591,6 +1592,12 @@ def accumulated_precip_series(
     El resultado es el mismo que el del camino por hora: se recortan los
     negativos incremento a incremento y todos se alinean sobre la rejilla del
     primer campo, igual que hacía `_computed_frame`.
+
+    `stored_increment` permite recuperar una hora ya calculada en vez de
+    volver a pedirla: el mapa horario de lluvia sale del mismo campo del WCS y
+    se publica antes, así que cuando llega el acumulado esas horas ya están en
+    disco. La primera siempre se descarga, porque de ella salen la rejilla y la
+    proyección sobre las que se alinea el resto.
     """
     product_id = "accumulated-precip"
     config, client, catalog, prefixes, run, times = _product_context(
@@ -1606,21 +1613,34 @@ def accumulated_precip_series(
 
     reference: RasterField | None = None
     accumulated: np.ndarray | None = None
+    reutilizados = 0
     for valid_time in ordered:
-        increment = client.get_field(
-            catalog,
-            prefixes["field"],
-            run,
-            valid_time,
-            None,
-            None,
-            period=str(config["period"]),
-        )
-        if reference is None:
-            reference = increment
-            accumulated = np.maximum(np.asarray(increment.data, dtype=float), 0.0)
+        guardado = None
+        if reference is not None and stored_increment is not None:
+            guardado = stored_increment(
+                valid_time.isoformat().replace("+00:00", "Z")
+            )
+            # Sólo sirve si cubre la misma rejilla; si no, se descarga.
+            if guardado is not None and guardado.shape != reference.data.shape:
+                guardado = None
+        if guardado is not None:
+            reutilizados += 1
+            accumulated = accumulated + np.maximum(guardado, 0.0)
         else:
-            accumulated = accumulated + np.maximum(_align(reference, increment), 0.0)
+            increment = client.get_field(
+                catalog,
+                prefixes["field"],
+                run,
+                valid_time,
+                None,
+                None,
+                period=str(config["period"]),
+            )
+            if reference is None:
+                reference = increment
+                accumulated = np.maximum(np.asarray(increment.data, dtype=float), 0.0)
+            else:
+                accumulated = accumulated + np.maximum(_align(reference, increment), 0.0)
         if valid_time not in requested:
             continue
         frame = RasterField(
@@ -1642,6 +1662,52 @@ def accumulated_precip_series(
             _serialize_grid(product_id, frame, config, headers),
             headers,
         )
+    if reutilizados:
+        logger.info(
+            "Acumulado: %d de %d horas reutilizadas del mapa horario ya "
+            "publicado, sin volver a pedirlas.",
+            reutilizados, len(ordered),
+        )
+
+
+def stored_grid_values(content: bytes) -> np.ndarray | None:
+    """Deshace el empaquetado de un frame guardado y devuelve su escalar.
+
+    Es el inverso de `_serialize_grid` para el caso simple —un solo array, sin
+    vectores ni overlay—, que es el de los productos nativos. Devuelve None si
+    el frame no encaja en ese caso, para que quien llame vuelva a descargarlo
+    en vez de interpretar mal unos bytes.
+    """
+    if len(content) < 4:
+        return None
+    try:
+        largo = struct.unpack("<I", content[:4])[0]
+        metadatos = json.loads(content[4 : 4 + largo])
+    except (struct.error, ValueError):
+        return None
+    if metadatos.get("encoding") != "u16-planes":
+        return None
+    nombres = metadatos.get("array_order") or []
+    if "value" not in nombres:
+        # value_source «hypot»: el escalar se reconstruye de u y v, no está.
+        return None
+    indice = nombres.index("value")
+    alto_px, ancho = int(metadatos["height"]), int(metadatos["width"])
+    plano = alto_px * ancho
+    inicio = 4 + largo + indice * plano * 2
+    if len(content) < inicio + plano * 2:
+        return None
+    altos = np.frombuffer(content, dtype="u1", count=plano, offset=inicio)
+    bajos = np.frombuffer(content, dtype="u1", count=plano, offset=inicio + plano)
+    codigos = (altos.astype("<u2") << 8) | bajos
+    escala = metadatos["arrays"][indice]
+    valores = np.full(plano, np.nan, dtype=float)
+    # El código 0 marca «sin dato»; el resto van desplazados en uno.
+    vivos = codigos > 0
+    valores[vivos] = (
+        float(escala["offset"]) + (codigos[vivos] - 1) * float(escala["step"])
+    )
+    return valores.reshape(alto_px, ancho)
 
 
 def _serialize_grid(
