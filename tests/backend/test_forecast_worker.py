@@ -593,3 +593,32 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
         trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
     )
     assert total == 979, f"el denominador de una pasada completa es 979, no {total}"
+
+
+def test_prefetch_also_brings_the_dcape_package(monkeypatch):
+    """IP3 se adelanta como los demás: DCAPE no debe esperar medio giga.
+
+    Va el último de la lista porque sólo lo necesita DCAPE, que está al final
+    de la cola; los perfiles del nivel 2 no deben quedarse esperando por él.
+    """
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    pedidos = []
+    monkeypatch.setattr(
+        trabajador, "ensure_package",
+        lambda paquete, run, vt: pedidos.append(paquete) or "ruta",
+    )
+
+    hilo = trabajador._start_package_prefetch([_trabajo(12), _trabajo(19)], threading.Event())
+    assert hilo is not None
+    hilo.join(timeout=5)
+
+    assert "IP3" in pedidos
+    # Y después de los que hacen falta antes.
+    primero = pedidos[:4]
+    assert primero.index("IP3") == 3, f"IP3 debe ir el último: {primero}"

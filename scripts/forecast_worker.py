@@ -657,7 +657,9 @@ def _start_package_prefetch(
         while pendientes and not stop.is_set():
             quedan: list[tuple[datetime, datetime]] = []
             for run, valid_time in pendientes:
-                for paquete in ("IP1", "SP1", "SP2"):
+                # IP3 el último: sólo lo necesita DCAPE, que va al final de la
+                # cola, así que los demás no deben esperar por él.
+                for paquete in ("IP1", "SP1", "SP2", "IP3"):
                     if stop.is_set():
                         return
                     try:
