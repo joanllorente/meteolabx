@@ -69,6 +69,8 @@ class SectionVisitRequest(BaseModel):
         "map.temperature",
         "map.wind",
         "map.precipitation",
+        "forecast.streamlit",
+        "forecast.direct",
         "ranking",
     ]
 

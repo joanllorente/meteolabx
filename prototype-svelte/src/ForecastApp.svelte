@@ -1,12 +1,37 @@
 <script>
+  import { onMount } from 'svelte';
   import { ArrowLeft, Moon, Sun } from '@lucide/svelte';
   import ForecastView from './views/ForecastView.svelte';
 
   const assetBase = import.meta.env.BASE_URL;
   const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const forecastHome = isLocal ? `${assetBase}forecast.html?v=20260825-54` : '/forecast';
+  const entryParams = new URLSearchParams(window.location.search);
+  const visitSection = entryParams.get('from') === 'streamlit'
+    ? 'forecast.streamlit'
+    : 'forecast.direct';
   let theme = $state(localStorage.getItem('mlx-forecast-theme') || 'dark');
   $effect(() => localStorage.setItem('mlx-forecast-theme', theme));
+
+  onMount(() => {
+    // El origen se usa una sola vez y se retira de la URL: si el visitante
+    // copia después el enlace, la siguiente apertura contará como directa.
+    if (entryParams.has('from')) {
+      entryParams.delete('from');
+      const query = entryParams.toString();
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`
+      );
+    }
+    fetch('/v1/stats/section', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section: visitSection }),
+      keepalive: true
+    }).catch(() => {});
+  });
 </script>
 
 <div class="forecast-shell theme-{theme}">

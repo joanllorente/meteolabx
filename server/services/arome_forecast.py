@@ -12,6 +12,8 @@ import json
 import logging
 import math
 import os
+import resource
+import sys
 from pathlib import Path
 import shutil
 import struct
@@ -1399,15 +1401,24 @@ def _convective_frames(
         )
         perfiles = None
     fases["diagnosticar"] = time.monotonic() - reloj
+    # El pico del propio proceso, que es el dato que falta: la memoria que se
+    # registra al lanzar mide antes de que el perfil crezca, así que nunca ve
+    # el máximo. Con seis a la vez, la diferencia entre uno y otro es de más
+    # del doble.
+    pico_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (
+        1024 if sys.platform == "linux" else 1024**2
+    )
     logger.info(
         "Perfil convectivo %s: traer %.0f s, montar %.0f s, diagnosticar %.0f s "
-        "(paquete isobárico: %s, rocío isobárico: %s, superficie: %s, DCAPE: %s).",
+        "(paquete isobárico: %s, rocío isobárico: %s, superficie: %s, DCAPE: %s"
+        ", pico %.1f GB).",
         valid_time_iso,
         fases["traer"], fases["montar"], fases["diagnosticar"],
         "sí" if package_levels_usado else "no",
         "IP3" if rocio_de_ip3 else ("derivado" if package_levels_usado else "WCS"),
         "sí" if surface_package_usado else "no",
         "sí" if include_dcape else "no",
+        pico_mb / 1024,
     )
     common = (reference.transform, reference.crs, reference.bounds)
     frames = {

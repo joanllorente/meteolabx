@@ -51,13 +51,17 @@ class ForecastApiProxyHandler(RequestHandler):
     async def _proxy(self) -> None:
         backend = os.getenv("METEOLABX_API_URL", "http://127.0.0.1:8000").rstrip("/")
         target = f"{backend}{self.request.uri}"
+        headers = {
+            "Accept": self.request.headers.get("Accept", "*/*"),
+            "Accept-Encoding": self.request.headers.get("Accept-Encoding", "gzip"),
+        }
+        if content_type := self.request.headers.get("Content-Type"):
+            headers["Content-Type"] = content_type
         request = HTTPRequest(
             target,
             method=self.request.method,
-            headers={
-                "Accept": self.request.headers.get("Accept", "*/*"),
-                "Accept-Encoding": self.request.headers.get("Accept-Encoding", "gzip"),
-            },
+            headers=headers,
+            body=self.request.body if self.request.method == "POST" else None,
             request_timeout=180,
             follow_redirects=False,
             # Los grids ya están comprimidos en el volumen. Tornado los
@@ -99,6 +103,18 @@ class ForecastApiProxyHandler(RequestHandler):
         await self._proxy()
 
 
+class ForecastStatsProxyHandler(ForecastApiProxyHandler):
+    """Permite al visor registrar una entrada anónima en su mismo origen."""
+
+    def check_xsrf_cookie(self) -> None:
+        # Solo se expone el endpoint validado de secciones, que acepta una
+        # enumeración cerrada y no modifica datos del usuario.
+        return None
+
+    async def post(self) -> None:
+        await self._proxy()
+
+
 def install_forecast_route() -> None:
     original_create_app = Server._create_app
 
@@ -116,10 +132,15 @@ def install_forecast_route() -> None:
             PathMatches(re.compile(r"^/v1/forecast/arome(?:/.*)?$")),
             ForecastApiProxyHandler,
         )
+        stats_route = Rule(
+            PathMatches(re.compile(r"^/v1/stats/section$")),
+            ForecastStatsProxyHandler,
+        )
         # ``wildcard_router`` contiene las rutas declaradas por Streamlit. La
         # entrada debe ir antes de su StaticFileHandler y de Add/RemoveSlash.
         app.wildcard_router.rules.insert(0, route)
         app.wildcard_router.rules.insert(0, api_route)
+        app.wildcard_router.rules.insert(0, stats_route)
         return app
 
     Server._create_app = create_app_with_forecast

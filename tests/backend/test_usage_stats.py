@@ -72,6 +72,8 @@ def test_record_section_visits_and_summary_windows(tmp_path):
     settings = _settings(tmp_path)
     usage_stats.record_section_visit("map.stations", settings=settings)
     usage_stats.record_section_visit("MAP.TEMPERATURE", settings=settings)
+    usage_stats.record_section_visit("forecast.streamlit", settings=settings)
+    usage_stats.record_section_visit("forecast.direct", settings=settings)
     usage_stats.record_section_visit("ranking", settings=settings)
     usage_stats.record_section_visit("unknown", settings=settings)  # ignorada
 
@@ -89,6 +91,8 @@ def test_record_section_visits_and_summary_windows(tmp_path):
     assert by_section["map.stations"]["d30"] == 1
     assert by_section["map.temperature"]["total"] == 1
     assert by_section["ranking"]["total"] == 1
+    assert by_section["forecast.streamlit"]["total"] == 1
+    assert by_section["forecast.direct"]["total"] == 1
     assert by_section["observation"]["total"] == 0
     assert len(summary["sections"]) == len(usage_stats.TRACKED_SECTIONS)
 
@@ -226,6 +230,12 @@ def test_stats_endpoints_roundtrip_and_auth(stats_client):
     )
     assert section.status_code == 204
     assert stats_client.post(
+        "/v1/stats/section", json={"section": "forecast.streamlit"},
+    ).status_code == 204
+    assert stats_client.post(
+        "/v1/stats/section", json={"section": "forecast.direct"},
+    ).status_code == 204
+    assert stats_client.post(
         "/v1/stats/section", json={"section": "unknown"},
     ).status_code == 422
     # status_code fuera de rango o error_kind vacío → 422 de validación.
@@ -252,6 +262,8 @@ def test_stats_endpoints_roundtrip_and_auth(stats_client):
     assert payload["error_kinds"][0]["kind"] == "timeout"
     sections = {row["section"]: row for row in payload["sections"]}
     assert sections["map.precipitation"]["total"] == 1
+    assert sections["forecast.streamlit"]["total"] == 1
+    assert sections["forecast.direct"]["total"] == 1
 
 
 def test_stats_disabled_without_password(tmp_path, monkeypatch):

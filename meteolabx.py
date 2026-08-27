@@ -5278,6 +5278,8 @@ components.html(
       const localForecastUrl = '/forecast/forecast.html?v=20260825-54';
       const isLocal = ['localhost', '127.0.0.1'].includes(host.location.hostname);
       const url = isLocal && publicUrl === '/forecast' ? localForecastUrl : publicUrl;
+      const trackedUrl = new URL(url, host.location.origin);
+      trackedUrl.searchParams.set('from', 'streamlit');
       const forecastIndex = {TAB_OPTIONS.index("forecast")};
       const selector = '.st-key-primary_tab_navigation div[role="radiogroup"]';
 
@@ -5298,7 +5300,7 @@ components.html(
           link.setAttribute('aria-label', 'Abrir Predicción Beta en una pestaña nueva');
           label.appendChild(link);
         }}
-        link.href = url;
+        link.href = trackedUrl.toString();
         return true;
       }}
 

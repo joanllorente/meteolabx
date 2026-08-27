@@ -1193,3 +1193,25 @@ def test_a_capped_product_does_not_expect_the_hours_nobody_computes():
 
     assert len(forecast_worker._product_expected_times(manifest, "dcape")) == 6
     assert len(forecast_worker._product_expected_times(manifest, "temperature-2m")) == 24
+
+
+def test_the_profile_reports_its_own_memory_peak():
+    """El perfil registra su pico real, no la memoria de antes de empezar.
+
+    La traza del lanzamiento mide antes de que el perfil crezca, así que nunca
+    ve el máximo: con seis a la vez, la gráfica marcaba 26,5 GB mientras el log
+    decía 11. ru_maxrss del propio proceso sí lo ve.
+
+    La unidad cambia según el sistema: Linux da kilobytes y macOS bytes, y
+    confundirlas daría un pico mil veces mayor o menor.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    fuente = inspect.getsource(arome_forecast._convective_frames.__wrapped__)
+    assert "ru_maxrss" in fuente
+    assert 'sys.platform == "linux"' in fuente, (
+        "la unidad de ru_maxrss depende del sistema"
+    )
+    assert "pico %.1f GB" in fuente

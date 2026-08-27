@@ -62,3 +62,12 @@ def test_unknown_map_mode_falls_back_to_station_map():
         "map.stations",
         True,
     )
+
+
+def test_embedded_forecast_fallback_counts_as_streamlit_entry():
+    state = {}
+    sent = []
+
+    assert _track(state, sent, "forecast") is True
+    assert _track(state, sent, "forecast") is False
+    assert sent == ["forecast.streamlit"]

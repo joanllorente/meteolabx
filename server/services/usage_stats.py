@@ -82,6 +82,8 @@ TRACKED_SECTIONS = (
     "map.temperature",
     "map.wind",
     "map.precipitation",
+    "forecast.streamlit",
+    "forecast.direct",
     "ranking",
 )
 _TRACKED_SECTION_SET = frozenset(TRACKED_SECTIONS)

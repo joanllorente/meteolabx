@@ -25,6 +25,7 @@ def test_forecast_tab_is_registered_with_beta_badge_and_shareable_slug():
     assert "const isLocal = ['localhost', '127.0.0.1'].includes(host.location.hostname)" in source
     assert "'/forecast/forecast.html?v=20260825-54'" in source
     assert 'target = \'_blank\'' in source
+    assert "trackedUrl.searchParams.set('from', 'streamlit')" in source
     assert "mlbx-forecast-external-link" in source
     assert 'elif tab_id == "forecast":' in source
     assert 'render_forecast_tab(_build_forecast_tab_context())' in source
@@ -60,6 +61,10 @@ def test_svelte_forecast_is_a_standalone_entrypoint():
 
     assert 'id="forecast-app"' in forecast_html
     assert "ForecastView" in forecast_app
+    assert "forecast.streamlit" in forecast_app
+    assert "forecast.direct" in forecast_app
+    assert "fetch('/v1/stats/section'" in forecast_app
+    assert "window.history.replaceState" in forecast_app
     assert "const forecastHome = isLocal" in forecast_app
     assert "ObservationView" not in forecast_app
     assert "TrendsView" not in forecast_app
@@ -272,6 +277,8 @@ def test_production_streamlit_runner_registers_clean_forecast_route_first():
     local_start = (ROOT / "scripts" / "run_app.sh").read_text(encoding="utf-8")
 
     assert 're.compile(r"^/forecast/?$")' in runner
+    assert 're.compile(r"^/v1/stats/section$")' in runner
+    assert "ForecastStatsProxyHandler" in runner
     assert "app.wildcard_router.rules.insert(0, route)" in runner
     assert 'Content-Type", "text/html; charset=UTF-8' in runner
     assert "decompress_response=False" in runner

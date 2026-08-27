@@ -27,6 +27,8 @@ SECTION_LABELS = {
     "map.temperature": "Mapa · Temperatura",
     "map.wind": "Mapa · Viento",
     "map.precipitation": "Mapa · Precipitación",
+    "forecast.streamlit": "Predicción · Desde Streamlit",
+    "forecast.direct": "Predicción · Enlace directo",
     "ranking": "Ranking",
 }
 
@@ -122,7 +124,9 @@ def render_internal_stats() -> None:
         st.caption(
             "Entradas reales a cada sección; los refrescos internos no cuentan. "
             "Observación, Tendencias e Histórico solo se registran con una "
-            "estación conectada. La apertura automática inicial de Ranking se omite."
+            "estación conectada. Predicción distingue el acceso desde Streamlit "
+            "de la apertura directa del enlace. La apertura automática inicial "
+            "de Ranking se omite."
         )
         st.dataframe(
             [

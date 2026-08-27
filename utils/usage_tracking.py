@@ -19,6 +19,8 @@ TRACKED_USAGE_SECTIONS = (
     "map.temperature",
     "map.wind",
     "map.precipitation",
+    "forecast.streamlit",
+    "forecast.direct",
     "ranking",
 )
 _TRACKED_USAGE_SECTION_SET = frozenset(TRACKED_USAGE_SECTIONS)
@@ -43,6 +45,10 @@ def usage_section_state(
         if mode not in _MAP_VIEW_MODES:
             mode = "stations"
         return f"map.{mode}", True
+    if tab == "forecast":
+        # Fallback por si el enlace externo no llega a instalarse y Streamlit
+        # termina renderizando su pestaña embebida.
+        return "forecast.streamlit", True
     if tab == "ranking":
         return "ranking", True
     return "", False
