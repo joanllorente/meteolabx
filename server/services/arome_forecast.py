@@ -1349,9 +1349,17 @@ def _computed_frame(
     run_iso: str = "",
 ):
     """Calcula un campo y conserva la matriz nativa en memoria."""
+    reloj = time.monotonic()
     config, client, catalog, prefixes, run, times = _product_context(
         token, product_id, vertical_kind, run_iso
     )
+    catalogo_s = time.monotonic() - reloj
+    if catalogo_s > 3.0:
+        # El catálogo se rehace en cada proceso aislado: si pesa, se nota 242
+        # veces por pasada y conviene verlo separado de la descarga del campo.
+        logger.info(
+            "Catálogo del WCS para %s: %.1f s.", product_id, catalogo_s
+        )
     valid_time = _parse_time(valid_time_iso)
     if valid_time not in times:
         raise AromeError("La hora solicitada no está disponible en la última pasada.")
@@ -1570,10 +1578,21 @@ def frame_grid(
     run_iso: str = "",
 ) -> tuple[bytes, dict[str, str]]:
     """Serializa la rejilla nativa: cabecera JSON + matrices uint16 cuantizadas."""
+    # El mismo reparto que llevan los perfiles convectivos. Sin él no se sabe
+    # si una hora de mapa nativo se va en pedir el dato o en prepararlo, y son
+    # 242 trabajos por pasada: el nivel 0 entero ronda la media hora.
+    reloj = time.monotonic()
     field, config, headers = _computed_frame(
         token, product_id, valid_time_iso, vertical_kind, level, run_iso
     )
-    return _serialize_grid(product_id, field, config, headers), headers
+    traer = time.monotonic() - reloj
+    reloj = time.monotonic()
+    cuerpo = _serialize_grid(product_id, field, config, headers)
+    logger.info(
+        "Mapa nativo %s %s: traer %.1f s, serializar %.1f s.",
+        product_id, valid_time_iso, traer, time.monotonic() - reloj,
+    )
+    return cuerpo, headers
 
 
 def accumulated_precip_series(
