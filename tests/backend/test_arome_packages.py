@@ -376,3 +376,77 @@ def test_blocks_up_to_lists_the_first_lead_time_of_each_block():
     assert paquetes.blocks_up_to(36) == [0, 7, 13, 19, 25, 31]
     assert paquetes.blocks_up_to(6) == [0]
     assert paquetes.blocks_up_to(51) == [0, 7, 13, 19, 25, 31, 37, 43, 49]
+
+
+class _IsobaricoFalso:
+    """Un IP3 minimo con los nombres que usa GDAL, no los de la documentacion."""
+
+    transform, crs, bounds = "t", "c", "b"
+
+    def __init__(self, stamp, elementos=("DPT", "DZDT", "SPFH")):
+        self._bandas = [
+            (el, niv, instante)
+            for el in elementos
+            for niv in (85000, 50000)
+            for instante in (stamp, stamp + 3600)
+        ]
+        self.count = len(self._bandas)
+
+    def tags(self, index):
+        el, niv, instante = self._bandas[index - 1]
+        return {
+            "GRIB_ELEMENT": el,
+            "GRIB_SHORT_NAME": f"{niv}-ISBL",
+            "GRIB_VALID_TIME": str(instante),
+        }
+
+    def read(self, index, masked=False):
+        el, niv, _ = self._bandas[index - 1]
+        datos = np.full((3, 4), float(len(el)) + niv / 100000.0)
+        datos[0, 0] = 9999.0
+        return np.ma.masked_equal(datos, 9999.0) if masked else datos
+
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+
+def test_ip3_reader_accepts_the_names_gdal_actually_exposes(monkeypatch):
+    """La documentación dice TD y VV2; GDAL puede exponer DPT y DZDT.
+
+    Aceptar varias grafías evita tener que acertar a la primera con unos
+    nombres que no se pueden comprobar sin descargar medio giga.
+    """
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _IsobaricoFalso(stamp))
+
+    campos, geometria = paquetes.read_isobaric_extras(
+        Path("da-igual"), RUN, [850.0, 500.0], paquetes.IP3_ELEMENTS
+    )
+
+    assert set(campos["dewpoint"]) == {850.0, 500.0}
+    assert set(campos["vertical_velocity"]) == {850.0, 500.0}
+    assert geometria == ("t", "c", "b")
+    assert np.isnan(campos["dewpoint"][850.0][0, 0]), "el 9999 debe ser NaN"
+
+
+def test_ip3_reader_reports_what_the_file_has_when_a_field_is_missing(monkeypatch, caplog):
+    """Si no encuentra un campo, deja en el log los elementos que sí trae.
+
+    Es la forma de averiguar cómo se llaman de verdad sin adivinar dos veces.
+    """
+    import logging
+
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(
+        paquetes.rasterio, "open",
+        lambda _p: _IsobaricoFalso(stamp, elementos=("DPT", "RARO")),
+    )
+
+    with caplog.at_level(logging.INFO, logger="meteolabx.arome_packages"):
+        campos, _ = paquetes.read_isobaric_extras(
+            Path("da-igual"), RUN, [850.0], paquetes.IP3_ELEMENTS
+        )
+
+    assert campos["dewpoint"], "el que sí está debe leerse igualmente"
+    assert not campos["vertical_velocity"]
+    assert "RARO" in caplog.text, "debe listar lo que trae el fichero"

@@ -37,6 +37,11 @@ class ParcelDiagnostics:
     li500: np.ndarray
     equilibrium_height_m: np.ndarray
     equilibrium_pressure_hpa: np.ndarray
+    # Nivel de convección libre: el primero, subiendo, en el que la parcela
+    # gana flotabilidad. Es hasta donde tiene que llegar el ascenso forzado
+    # para que la convección se dispare sola.
+    lfc_height_m: np.ndarray
+    lfc_pressure_hpa: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -280,6 +285,13 @@ def parcel_diagnostics(
     equilibrium_pressure = np.min(positive_top_pressure, axis=0)
     equilibrium_pressure = np.where(has_positive, equilibrium_pressure, np.nan)
 
+    # El LFC es el extremo opuesto de la misma capa flotante: la base en vez
+    # del techo. En presión es el valor más alto; en altura, el más bajo.
+    lfc_pressure = np.max(np.where(positive, pressure[1:], -np.inf), axis=0)
+    lfc_pressure = np.where(has_positive, lfc_pressure, np.nan)
+    lfc_height = np.min(np.where(positive, height[1:], np.inf), axis=0)
+    lfc_height = np.where(has_positive, lfc_height, np.nan)
+
     pressure_1d = pressure[:, 0, 0]
     index_500 = int(np.nanargmin(np.abs(pressure_1d - 500.0)))
     li500 = env_temperature[index_500] - parcel_temperature[index_500]
@@ -290,6 +302,8 @@ def parcel_diagnostics(
         li500,
         equilibrium_height,
         equilibrium_pressure,
+        lfc_height,
+        lfc_pressure,
     )
 
 

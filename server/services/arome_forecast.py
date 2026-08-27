@@ -24,7 +24,9 @@ from PIL import Image, ImageDraw
 from shapely.geometry import box, mapping, shape
 
 from server.services.arome_packages import (
+    IP3_ELEMENTS,
     SURFACE_ELEMENTS,
+    read_isobaric_extras,
     read_surface_fields,
     AromePackageError,
     discard_packages_before,
@@ -1071,6 +1073,42 @@ def _surface_fields_from_package(
     return campos
 
 
+def _isobaric_extras_from_package(
+    run: datetime,
+    valid_time: datetime,
+    levels: list[float],
+) -> tuple[dict[str, dict[float, RasterField]], tuple[Any, Any, Any]] | None:
+    """Rocío y velocidad vertical isobáricos, del paquete IP3.
+
+    El rocío es el único campo por el que DCAPE seguía pidiendo al WCS: 24
+    peticiones por hora, más de la mitad de lo que tardaba. La velocidad
+    vertical viene en el mismo paquete y no cuesta nada más.
+
+    Devuelve None si el paquete no está o no trae lo que se espera, para que
+    quien llame siga por el camino de siempre.
+    """
+    if not _packages_available():
+        return None
+    try:
+        path = ensure_package("IP3", run, valid_time)
+        campos, geometria = read_isobaric_extras(
+            path, valid_time, levels, IP3_ELEMENTS
+        )
+    except (AromePackageError, MeteoFranceAuthError) as exc:
+        logger.info("Paquete IP3 no disponible: %s", exc)
+        return None
+    unidades = {"dewpoint": "C", "vertical_velocity": "m/s"}
+    salida: dict[str, dict[float, RasterField]] = {}
+    for nombre, niveles in campos.items():
+        if not niveles:
+            continue
+        salida[nombre] = {
+            nivel: RasterField(valores, *geometria, unidades.get(nombre, ""))
+            for nivel, valores in niveles.items()
+        }
+    return (salida, geometria) if salida else None
+
+
 @lru_cache(maxsize=2)
 def _convective_frames(
     token: str,
@@ -1147,15 +1185,24 @@ def _convective_frames(
             component=component,
         )
 
-    # Del paquete salen temperatura, viento y geopotencial en altura; el rocío
-    # isobárico se sigue pidiendo al WCS porque el paquete solo trae humedad
-    # relativa, y derivarlo alteraría el DCAPE.
+    # De IP1 salen temperatura, viento y geopotencial en altura. El rocío
+    # isobárico, que sólo necesita DCAPE, viaja en IP3 junto a la velocidad
+    # vertical: con él no hace falta pedir un solo campo por niveles al WCS.
     package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
     package_levels_usado = bool(package_levels)
+    extras = (
+        _isobaric_extras_from_package(run, valid_time, levels)
+        if package_levels and exact_dewpoint
+        else None
+    )
+    package_dewpoint = (extras[0].get("dewpoint") if extras else None) or None
+    rocio_de_ip3 = bool(package_dewpoint)
     if package_levels:
-        # Con el rocío derivado de la humedad del paquete no hace falta pedir
-        # nada al WCS por niveles: son 24 descargas menos por hora.
-        level_variables = ("dewpoint",) if exact_dewpoint else ()
+        # Con el rocío derivado de la humedad de IP1 —o el exacto de IP3— no
+        # hace falta pedir nada al WCS por niveles: 24 descargas menos por hora.
+        level_variables = (
+            ("dewpoint",) if exact_dewpoint and not package_dewpoint else ()
+        )
     else:
         level_variables = ("temperature", "dewpoint", "u", "v")
 
@@ -1226,7 +1273,9 @@ def _convective_frames(
             temperature_field = fetched[("temperature", level_hpa)]
             u_field = fetched[("u", level_hpa)]
             v_field = fetched[("v", level_hpa)]
-        if package_levels and not exact_dewpoint:
+        if package_dewpoint and level_hpa in package_dewpoint:
+            dewpoint_field = package_dewpoint[level_hpa]
+        elif package_levels and not exact_dewpoint:
             humedad = package_levels["relative_humidity"][level_hpa]
             dewpoint_field = RasterField(
                 _dewpoint_from_relative_humidity_c(
@@ -1296,13 +1345,17 @@ def _convective_frames(
     fases["diagnosticar"] = time.monotonic() - reloj
     logger.info(
         "Perfil convectivo %s: traer %.0f s, montar %.0f s, diagnosticar %.0f s "
-        "(paquete isobárico: %s, superficie: %s, DCAPE: %s).",
+        "(paquete isobárico: %s, rocío isobárico: %s, superficie: %s, DCAPE: %s).",
         valid_time_iso,
         fases["traer"], fases["montar"], fases["diagnosticar"],
         "sí" if package_levels_usado else "no",
+        "IP3" if rocio_de_ip3 else ("derivado" if package_levels_usado else "WCS"),
         "sí" if surface_package_usado else "no",
         "sí" if include_dcape else "no",
     )
+    if package_dewpoint:
+        package_dewpoint.clear()
+    package_dewpoint = None
 
     common = (reference.transform, reference.crs, reference.bounds)
     frames = {

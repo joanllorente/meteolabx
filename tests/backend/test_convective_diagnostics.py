@@ -412,3 +412,51 @@ def test_dcape_can_be_computed_without_asking_the_wcs_for_dewpoint():
     )
     # Por omisión siguen acoplados, que es el comportamiento de siempre.
     assert firma.parameters["include_dcape"].default is None
+
+
+def test_parcel_reports_the_level_of_free_convection():
+    """El LFC es la base de la capa flotante, y el EL su techo.
+
+    Hace falta expuesto para poder mirar qué está haciendo el aire justo ahí:
+    un ascenso que llega al LFC dispara la convección, y uno que se queda por
+    debajo se embotella bajo la inversión.
+    """
+    from server.services.convective_diagnostics import parcel_diagnostics
+
+    # Perfil con inversión hasta 850 y flotabilidad entre 800 y 500.
+    pressure = np.asarray([1000., 900., 850., 800., 700., 600., 500., 400.])[:, None, None]
+    height = np.asarray([100., 1000., 1500., 2000., 3000., 4200., 5600., 7200.])[:, None, None]
+    # Entorno cálido abajo (frena) y frío arriba (deja subir).
+    temperature = np.asarray([300., 294., 292., 285., 276., 266., 253., 236.])[:, None, None]
+    dewpoint = temperature - np.asarray([2., 3., 4., 6., 10., 14., 18., 24.])[:, None, None]
+
+    # La parcela sale de superficie, con su propio rocío.
+    resultado = parcel_diagnostics(
+        pressure, temperature, dewpoint, height,
+        pressure[0], temperature[0], dewpoint[0],
+    )
+
+    assert np.isfinite(resultado.lfc_pressure_hpa).all()
+    assert np.isfinite(resultado.lfc_height_m).all()
+    # El LFC va por debajo del EL: más presión y menos altura.
+    assert resultado.lfc_pressure_hpa.item() > resultado.equilibrium_pressure_hpa.item()
+    assert resultado.lfc_height_m.item() < resultado.equilibrium_height_m.item()
+
+
+def test_a_profile_without_buoyancy_has_no_lfc():
+    """Sin capa flotante no hay nivel de convección libre que informar."""
+    from server.services.convective_diagnostics import parcel_diagnostics
+
+    pressure = np.asarray([1000., 900., 800., 700.])[:, None, None]
+    height = np.asarray([0., 1000., 2000., 3100.])[:, None, None]
+    # Isotermo muy seco: la parcela nunca gana flotabilidad.
+    temperature = np.full((4, 1, 1), 300.0)
+    dewpoint = temperature - 40.0
+
+    resultado = parcel_diagnostics(
+        pressure, temperature, dewpoint, height,
+        pressure[0], temperature[0], dewpoint[0],
+    )
+
+    assert np.isnan(resultado.lfc_pressure_hpa).all()
+    assert np.isnan(resultado.lfc_height_m).all()

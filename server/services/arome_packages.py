@@ -52,6 +52,17 @@ IP1_ELEMENTS = {
 }
 
 
+# Elementos del paquete IP3. Los nombres de la documentación (TD, VV2) no
+# tienen por qué ser los que GDAL expone en GRIB_ELEMENT, así que se admiten
+# variantes y se registra lo que trae el fichero cuando no aparece ninguna.
+IP3_ELEMENTS: dict[str, tuple[str, ...]] = {
+    # Rocío isobárico: el único campo por el que DCAPE seguía pidiendo al WCS.
+    "dewpoint": ("DPT", "TD", "DEPR"),
+    # Velocidad vertical geométrica, en m/s (positiva hacia arriba).
+    "vertical_velocity": ("DZDT", "VV2", "WZ", "W"),
+}
+
+
 class AromePackageError(RuntimeError):
     """El paquete no se pudo descargar o no contiene lo esperado."""
 
@@ -281,6 +292,54 @@ def read_surface_fields(
             # del pipeline espera NaN, que es lo que entrega el WCS.
             values = dataset.read(index, masked=True).astype(float)
             salida[destino[0]] = (values.filled(np.nan), destino[1])
+    return salida, geometria
+
+
+def read_isobaric_extras(
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+    wanted: dict[str, tuple[str, ...]],
+) -> tuple[dict[str, dict[float, np.ndarray]], tuple[Any, Any, Any]]:
+    """Campos isobáricos de IP3 para una hora, leídos mensaje a mensaje.
+
+    Acepta varias grafías por campo porque los nombres de la documentación no
+    coinciden necesariamente con los que expone GDAL. Si alguno no aparece se
+    registran los elementos que sí trae el fichero: es la forma de averiguar
+    cómo se llaman de verdad sin tener que adivinar dos veces.
+    """
+    wanted_levels = {int(round(level * 100)) for level in levels_hpa}
+    stamp = int(valid_time.astimezone(timezone.utc).timestamp())
+    por_elemento = {
+        grafia: nombre for nombre, grafias in wanted.items() for grafia in grafias
+    }
+    salida: dict[str, dict[float, np.ndarray]] = {nombre: {} for nombre in wanted}
+    vistos: set[str] = set()
+    with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
+        geometria = (dataset.transform, dataset.crs, dataset.bounds)
+        for index in range(1, dataset.count + 1):
+            tags = dataset.tags(index)
+            elemento = tags.get("GRIB_ELEMENT", "")
+            vistos.add(elemento)
+            nombre = por_elemento.get(elemento)
+            if nombre is None:
+                continue
+            if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
+                continue
+            short_name = tags.get("GRIB_SHORT_NAME", "")
+            if not short_name.endswith("-ISBL"):
+                continue
+            level_pa = int(short_name.split("-", 1)[0])
+            if level_pa not in wanted_levels:
+                continue
+            values = dataset.read(index, masked=True).astype(float)
+            salida[nombre][level_pa / 100.0] = values.filled(np.nan)
+    faltan = [nombre for nombre, campos in salida.items() if not campos]
+    if faltan:
+        logger.info(
+            "IP3 no trae %s con los nombres esperados. Elementos del fichero: %s",
+            ", ".join(faltan), ", ".join(sorted(vistos)),
+        )
     return salida, geometria
 
 
