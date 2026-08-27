@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
+import collections
 import multiprocessing
 import threading
 import os
@@ -1243,12 +1244,26 @@ def _run_parallel_work(
                 timeout_s = derived_timeout_s if job.tier > 0 else native_timeout_s
                 _mark_job_started(manifest, job, timeout_s)
                 _persist_manifest(store, manifest, latest_run=latest_run)
+                # El reparto por nivel importa: los workers son del contenedor
+                # entero, no de cada nivel, así que ver cuatro perfiles no
+                # significa que sobren dos plazas —pueden estar ocupadas por
+                # trabajos de otro nivel que aún no han terminado—.
+                reparto = collections.Counter(
+                    trabajo.tier for _m, trabajo in active.values()
+                )
                 logger.info(
-                    "Procesando en paralelo RUN %s · %s · %s (nivel %d)",
+                    "Procesando en paralelo RUN %s · %s · %s (nivel %d) "
+                    "[activos %d/%d: %s]",
                     job.run,
                     job.valid_time,
                     job.label,
                     job.tier,
+                    len(active) + 1,
+                    capacity,
+                    ", ".join(
+                        f"nivel {nivel}×{cuenta}"
+                        for nivel, cuenta in sorted(reparto.items())
+                    ) or "ninguno",
                 )
                 future = executor.submit(_run_isolated_job, job, timeout_s)
                 active[future] = (manifest, job)
