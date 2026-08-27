@@ -601,6 +601,12 @@ PREFETCH_BLOCKS = max(
 # largo de la pasada es el ciclo siguiente, que vuelve a lanzarlo: los bloques
 # ya descargados se resuelven al instante contra el disco.
 PREFETCH_RETRY_S = max(10, int(os.getenv("METEOLABX_FORECAST_PREFETCH_RETRY_S", "45")))
+# Bloques que se bajan a la vez. Uno solo no alcanza al nivel 2 cuando los
+# niveles previos son rápidos; pasarse satura la red y roba ancho de banda a
+# las descargas que el diagnóstico sí está esperando ahora mismo.
+PREFETCH_STREAMS = max(
+    1, int(os.getenv("METEOLABX_FORECAST_PREFETCH_STREAMS", "2"))
+)
 # Horizonte que se persigue, en horas de predicción. Debe cubrir el mismo que
 # los diagnósticos, o quedarían horas sin paquete al final de la pasada.
 PREFETCH_HORIZON_H = max(
@@ -665,20 +671,37 @@ def _start_package_prefetch(
         pendientes = list(objetivos)
         while pendientes and not stop.is_set():
             quedan: list[tuple[datetime, datetime]] = []
-            for run, valid_time in pendientes:
+
+            def bajar_bloque(objetivo: tuple[datetime, datetime]) -> int:
+                """Los cuatro paquetes de un bloque, en orden de urgencia."""
+                run, valid_time = objetivo
+                hechos = 0
                 # IP3 el último: sólo lo necesita DCAPE, que va al final de la
                 # cola, así que los demás no deben esperar por él.
                 for paquete in ("IP1", "SP1", "SP2", "IP3"):
                     if stop.is_set():
-                        return
+                        return hechos
                     try:
                         ensure_package(paquete, run, valid_time)
-                        bajados += 1
+                        hechos += 1
                     except (AromePackageError, MeteoFranceAuthError):
                         # Todavía no publicado: se reintenta en la vuelta
                         # siguiente, sin abandonar los bloques posteriores.
-                        quedan.append((run, valid_time))
-                        break
+                        quedan.append(objetivo)
+                        return hechos
+                return hechos
+
+            # Los bloques se bajan de varios en varios porque el nivel 2 los
+            # consume más deprisa de lo que tarda uno en llegar: cuatro
+            # minutos frente a menos de tres. Mientras los niveles 0 y 1
+            # duraban casi una hora eso daba igual —la precarga terminaba con
+            # tiempo de sobra—, pero al acelerarlos deja de dar.
+            with ThreadPoolExecutor(
+                max_workers=PREFETCH_STREAMS, thread_name_prefix="arome-prefetch"
+            ) as descargas:
+                bajados += sum(descargas.map(bajar_bloque, pendientes))
+            if stop.is_set():
+                return
             if not quedan:
                 break
             if time.monotonic() - inicio > PREFETCH_DEADLINE_S:

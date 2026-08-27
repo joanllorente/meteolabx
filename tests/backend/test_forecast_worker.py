@@ -684,3 +684,74 @@ def test_without_any_limit_the_guard_says_so(monkeypatch, tmp_path):
             trabajador.logger.removeHandler(manejador)
 
     assert "freno de perfiles queda desactivado" in registro.getvalue()
+
+
+def test_prefetch_downloads_several_blocks_at_once(monkeypatch):
+    """Los bloques se adelantan de varios en varios, no en fila india.
+
+    El nivel 2 consume un bloque en menos de tres minutos y bajar uno lleva
+    cuatro. Mientras los niveles previos duraban casi una hora la precarga
+    terminaba con tiempo de sobra; al acelerarlos deja de llegar.
+    """
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    assert trabajador.PREFETCH_STREAMS >= 2
+
+    a_la_vez = []
+    corriendo = []
+    cerrojo = threading.Lock()
+
+    def descarga_lenta(paquete, run, valid_time):
+        with cerrojo:
+            corriendo.append(1)
+            a_la_vez.append(len(corriendo))
+        __import__("time").sleep(0.05)
+        with cerrojo:
+            corriendo.pop()
+        return "ruta"
+
+    monkeypatch.setattr(trabajador, "ensure_package", descarga_lenta)
+
+    hilo = trabajador._start_package_prefetch(
+        [_trabajo(12), _trabajo(19), _trabajo(1, dia=27)], threading.Event()
+    )
+    assert hilo is not None
+    hilo.join(timeout=10)
+
+    assert max(a_la_vez) >= 2, f"nunca hubo dos descargas a la vez: {a_la_vez}"
+
+
+def test_parallel_prefetch_still_retries_what_is_not_published(monkeypatch):
+    """Bajar en paralelo no rompe el reintento de los bloques que faltan."""
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    intentos = {"n": 0}
+    cerrojo = threading.Lock()
+
+    def publicado_tarde(paquete, run, valid_time):
+        with cerrojo:
+            intentos["n"] += 1
+            if intentos["n"] < 4:
+                raise trabajador.AromePackageError("todavía no publicado")
+        return "ruta"
+
+    monkeypatch.setattr(trabajador, "ensure_package", publicado_tarde)
+
+    hilo = trabajador._start_package_prefetch(
+        [_trabajo(12), _trabajo(19)], threading.Event()
+    )
+    assert hilo is not None
+    hilo.join(timeout=10)
+
+    assert not hilo.is_alive()
+    assert intentos["n"] >= 4, "debe insistir hasta que aparezcan"
