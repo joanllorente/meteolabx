@@ -315,3 +315,51 @@ def test_the_viewer_can_describe_a_validation_error():
 
     assert "function describeApiDetail" in api
     assert "describeApiDetail(payload.detail)" in api
+
+
+def test_wcs_metadata_is_shared_between_processes(tmp_path, monkeypatch):
+    """GetCapabilities y DescribeCoverage se guardan en disco, no por proceso.
+
+    Cada trabajo se aísla en su propio intérprete, así que la caché en memoria
+    no le sirve al siguiente. Medido en producción, rehacer esos metadatos
+    costaba 46 minutos por pasada, con catálogos de hasta 60 s.
+    """
+    from tabs import arome_forecast as arome
+
+    monkeypatch.setattr(arome.tempfile, "gettempdir", lambda: str(tmp_path))
+    llamadas = []
+
+    def api_falsa(url, params, token):
+        llamadas.append(url)
+        return b"<xml/>", "application/xml"
+
+    monkeypatch.setattr(arome, "_api_get", api_falsa)
+    parametros = (("service", "WCS"), ("version", "2.0.1"))
+
+    primera = arome._api_get_metadata("https://x/GetCapabilities", parametros, "t")
+    segunda = arome._api_get_metadata("https://x/GetCapabilities", parametros, "t")
+
+    assert primera[0] == segunda[0] == b"<xml/>"
+    assert len(llamadas) == 1, "la segunda debe salir del disco"
+
+    # Una consulta distinta no reutiliza la anterior.
+    arome._api_get_metadata("https://x/DescribeCoverage", parametros, "t")
+    assert len(llamadas) == 2
+
+
+def test_expired_wcs_metadata_is_fetched_again(tmp_path, monkeypatch):
+    """Caducado se vuelve a pedir: el catálogo cambia cuando el modelo publica."""
+    from tabs import arome_forecast as arome
+
+    monkeypatch.setattr(arome.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(arome, "METADATA_CACHE_TTL_S", 0)
+    llamadas = []
+    monkeypatch.setattr(
+        arome, "_api_get",
+        lambda url, params, token: (llamadas.append(url), (b"<xml/>", "x"))[1],
+    )
+
+    arome._api_get_metadata("https://x/GetCapabilities", (), "t")
+    arome._api_get_metadata("https://x/GetCapabilities", (), "t")
+
+    assert len(llamadas) == 2

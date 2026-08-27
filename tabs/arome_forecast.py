@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import getpass
 import base64
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -332,6 +334,57 @@ def _wait_for_api_request_slot(interval: float | None = None) -> None:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+# Los metadatos del WCS —GetCapabilities y DescribeCoverage— son iguales para
+# todos los procesos y cambian sólo cuando el modelo publica. Cada trabajo se
+# aísla en su propio intérprete, así que la caché en memoria no le sirve al
+# siguiente: medido en producción, rehacerlos costaba 46 minutos por pasada,
+# con catálogos de hasta 60 s. En disco se comparten.
+METADATA_CACHE_TTL_S = max(
+    5, int(os.getenv("METEOLABX_AROME_METADATA_CACHE_TTL_S", "120"))
+)
+
+
+def _metadata_cache_path(url: str, params: Tuple[Tuple[str, str], ...]) -> Path:
+    firma = hashlib.sha256(f"{url}|{params}".encode("utf-8")).hexdigest()[:32]
+    return Path(tempfile.gettempdir()) / "meteolabx-wcs-metadata" / f"{firma}.xml"
+
+
+def _cached_metadata(ruta: Path) -> Optional[bytes]:
+    """Devuelve los metadatos guardados si no han caducado."""
+    try:
+        edad = time.time() - ruta.stat().st_mtime
+        if edad > METADATA_CACHE_TTL_S:
+            return None
+        contenido = ruta.read_bytes()
+    except OSError:
+        return None
+    return contenido or None
+
+
+def _store_metadata(ruta: Path, contenido: bytes) -> None:
+    """Guarda los metadatos con un temporal, para que nadie lea a medias."""
+    try:
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        parcial = ruta.with_suffix(f".{os.getpid()}.part")
+        parcial.write_bytes(contenido)
+        parcial.replace(ruta)
+    except OSError:
+        pass
+
+
+def _api_get_metadata(
+    url: str, params: Tuple[Tuple[str, str], ...], token: str
+) -> Tuple[bytes, str]:
+    """GetCapabilities o DescribeCoverage, compartidos entre procesos."""
+    ruta = _metadata_cache_path(url, params)
+    guardado = _cached_metadata(ruta)
+    if guardado is not None:
+        return guardado, "application/xml"
+    contenido, tipo = _api_get(url, params, token)
+    _store_metadata(ruta, contenido)
+    return contenido, tipo
+
+
 @st.cache_data(ttl=900, show_spinner=False, max_entries=256)
 def _api_get(
     url: str,
@@ -583,7 +636,9 @@ class AromeWCS:
             ("version", "2.0.1"),
             ("language", "fre"),
         )
-        content, _ = _api_get(f"{WCS_BASE}/GetCapabilities", params, self.token)
+        content, _ = _api_get_metadata(
+            f"{WCS_BASE}/GetCapabilities", params, self.token
+        )
         return CoverageCatalog(content)
 
     def describe(self, coverage_id: str) -> CoverageMetadata:
@@ -592,7 +647,9 @@ class AromeWCS:
             ("version", "2.0.1"),
             ("coverageID", coverage_id),
         )
-        content, _ = _api_get(f"{WCS_BASE}/DescribeCoverage", params, self.token)
+        content, _ = _api_get_metadata(
+            f"{WCS_BASE}/DescribeCoverage", params, self.token
+        )
         try:
             root = ET.fromstring(content)
         except ET.ParseError as exc:
