@@ -62,6 +62,24 @@ export const forecastProductGuides = {
     sources: [MF_AROME, MF_API]
   },
 
+  'vertical-totals': {
+    what: 'Vertical Totals: diferencia de temperatura entre las superficies isobáricas de 850 y 500 hPa. Es la mitad térmica del índice Total Totals y mide el gradiente vertical de la troposfera baja y media.',
+    interpretation: [
+      'Describe el entorno, no una parcela concreta. Ahí está su valor junto a los CAPE: donde MUCAPE y MLCAPE discrepan porque la capa de origen es dudosa, el VT no tiene esa ambigüedad, porque no depende de qué parcela se elija.',
+      'Valores en torno a 26 °C indican un gradiente suficiente para convección; por encima de 30 °C el gradiente es marcado. Un VT alto con poca humedad en niveles bajos apunta al ambiente de reventones secos, donde el aire descendente se enfría poco por evaporación pero acelera por el gradiente.',
+      'No incorpora humedad: por sí solo no distingue una atmósfera inestable y húmeda de una inestable y seca. Conviene leerlo junto a la humedad de niveles bajos o al DCAPE.'
+    ],
+    method: 'Resta directa de dos niveles isobáricos del mismo campo de temperatura. Ambos viajan en el paquete GRIB IP1, que ya se descarga para los perfiles convectivos, así que no añade ninguna petición.',
+    equations: [
+      { label: 'Vertical Totals', latex: String.raw`\mathrm{VT}=T_{850}-T_{500}` }
+    ],
+    steps: [
+      'Temperatura en 850 y 500 hPa del paquete isobárico IP1.',
+      'Diferencia en kelvin, equivalente a la diferencia en grados Celsius.',
+      'Sin valor donde p_s < 850 hPa: la superficie isobárica queda bajo tierra.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
   'temperature-850': {
     what: 'Temperatura del aire sobre la superficie isobárica de 850 hPa. Representa la masa de aire de la baja troposfera, normalmente por encima de gran parte de la influencia térmica inmediata del suelo.',
     interpretation: [

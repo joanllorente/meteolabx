@@ -233,12 +233,20 @@ const allForecastProducts = [
     unit: '%', min: 0, max: 100, palette: 'clouds', accent: '#c3b8d9', vectors: false,
     description: 'Cobertura nubosa del estrato superior prevista por AROME.',
     method: 'Campo nativo HIGH_CLOUD_COVER sobre la superficie.', coverage: 'HIGH CLOUD COVER'
-  }
+  },
+  {
+    id: 'vertical-totals', category: 'convection', label: 'Vertical Totals', short: 'VT', kind: 'derived',
+    unit: '°C', min: 18, max: 34, palette: 'shear', accent: '#e0a458', vectors: false,
+    description: 'Diferencia de temperatura entre 850 y 500 hPa. Mide el gradiente térmico del entorno sin depender de qué parcela se elija, así que no comparte las ambigüedades de los CAPE. Valores altos con poca humedad en niveles bajos señalan el ambiente de reventones secos.',
+    method: 'T850 menos T500, ambos del paquete isobárico IP1 que ya se descarga para los perfiles.',
+    coverage: 'TEMPERATURE · 850 y 500 hPa'
+  },
 ];
 
 // Selección inicial deliberadamente corta. El catálogo completo queda listo para
 // incorporar nuevos mapas cuando se decida qué variables formarán el producto.
 const initialProductIds = [
+  'vertical-totals',
   'temperature-2m',
   'temperature-850',
   'temperature-500',

@@ -79,6 +79,10 @@ ACCUMULATED_PRECIP_PRODUCT = "accumulated-precip"
 # El mapa horario de lluvia sale del mismo campo del WCS que el acumulado y se
 # publica antes, asi que sus horas se reutilizan en vez de volver a pedirlas.
 HOURLY_PRECIP_PRODUCT = "precip-1h"
+# Indices que se resuelven con dos niveles isobaricos en vez de un perfil
+# entero: no pasan por el nivel 2, pero siguen el mismo horizonte que los
+# demas diagnosticos, porque su paquete solo se adelanta hasta ahi.
+LEVEL_INDEX_PRODUCTS = ("vertical-totals",)
 # DCAPE sale del grupo convectivo: es el unico que exige el rocio del WCS, y
 # esperarlo retrasaria media hora a los otros trece. Va en su propio nivel,
 # detras de ellos, para que no bloquee la pasada.
@@ -201,7 +205,7 @@ def _expected_hours(manifest: dict[str, Any], product: str) -> int:
     limits = manifest.get("expected_hours") or {}
     native = int(limits.get("native") or EXPECTED_NATIVE_HOURS)
     diagnostic = int(limits.get("diagnostic") or 0) or native
-    caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS)
+    caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS) | set(LEVEL_INDEX_PRODUCTS)
     horas = diagnostic if product in caros else native
     return horas - _first_available_hour(product)
 
@@ -214,7 +218,7 @@ def _expected_frames(manifest: dict[str, Any], product: str, published: int) -> 
     publicado si supera lo previsto.
     """
     expected = _expected_hours(manifest, product)
-    caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS)
+    caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS) | set(LEVEL_INDEX_PRODUCTS)
     if product in caros:
         return expected
     return max(published, expected)

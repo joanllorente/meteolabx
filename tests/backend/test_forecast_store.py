@@ -828,7 +828,11 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
     manifest = {"expected_hours": {"native": 52, "diagnostic": 36}}
 
     def publicadas_al_final(product: str) -> int:
-        if product in set(forecast_worker.SHEAR_PRODUCTS) | set(CONV):
+        if product in (
+            set(forecast_worker.SHEAR_PRODUCTS)
+            | set(CONV)
+            | set(forecast_worker.LEVEL_INDEX_PRODUCTS)
+        ):
             return 36
         return 52 - forecast_worker._first_available_hour(product)
 
@@ -840,7 +844,7 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
         forecast_worker._expected_frames(manifest, product, publicadas_al_final(product))
         for product in PERSISTED_FORECAST_PRODUCTS
     )
-    assert al_principio == al_final == 979
+    assert al_principio == al_final == 1015
 
 
 def test_capped_products_only_offer_the_hours_that_will_exist():
@@ -1040,3 +1044,73 @@ def test_accumulation_downloads_when_the_stored_grid_does_not_match(monkeypatch)
     )
 
     assert len(descargas) == len(horas), "ninguna se puede reutilizar"
+
+
+def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
+    """VT es T850 menos T500, con los dos niveles del mismo paquete.
+
+    No cuesta ninguna descarga nueva: IP1 ya trae ambos para los perfiles. Lo
+    que hay que fijar es que la resta va en el orden correcto y que la unidad
+    no la altera —en kelvin o en grados la diferencia es la misma—.
+    """
+    import numpy as np
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services import arome_forecast
+    from tabs.arome_forecast import RasterField
+
+    geometria = (from_bounds(-2, 40, 3, 44, 4, 3), CRS.from_epsg(4326), (-2, 40, 3, 44))
+    # 12 °C a 850 y -20 °C a 500: VT = 32.
+    monkeypatch.setattr(
+        arome_forecast, "_isobaric_fields_from_package",
+        lambda ref, run, vt, levels: {
+            "temperature": {
+                850.0: RasterField(np.full((3, 4), 12.0), *geometria, "C"),
+                500.0: RasterField(np.full((3, 4), -20.0), *geometria, "C"),
+            }
+        },
+    )
+    config = arome_forecast.PRODUCTS["vertical-totals"]
+    campo = arome_forecast._level_difference_field(
+        None, None, {}, config,
+        arome_forecast._parse_time("2026-08-26T06:00:00Z"),
+        arome_forecast._parse_time("2026-08-26T09:00:00Z"),
+    )
+
+    assert np.allclose(campo.data, 32.0)
+    assert campo.units == "°C"
+
+
+def test_vertical_totals_falls_back_to_the_wcs_without_the_package(monkeypatch):
+    """Sin IP1 se piden los dos niveles al WCS, que son dos peticiones."""
+    import numpy as np
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services import arome_forecast
+    from tabs.arome_forecast import RasterField
+
+    monkeypatch.setattr(
+        arome_forecast, "_isobaric_fields_from_package",
+        lambda *a, **k: None,
+    )
+    geometria = (from_bounds(-2, 40, 3, 44, 4, 3), CRS.from_epsg(4326), (-2, 40, 3, 44))
+    pedidos = []
+
+    class ClienteFalso:
+        def get_field(self, catalog, prefix, run, valid_time, level, kind, **k):
+            pedidos.append(level)
+            # 285 K a 850 y 253 K a 500: VT = 32.
+            valor = 285.0 if level == 850.0 else 253.0
+            return RasterField(np.full((3, 4), valor), *geometria, "K")
+
+    campo = arome_forecast._level_difference_field(
+        ClienteFalso(), None, {"field": "x"},
+        arome_forecast.PRODUCTS["vertical-totals"],
+        arome_forecast._parse_time("2026-08-26T06:00:00Z"),
+        arome_forecast._parse_time("2026-08-26T09:00:00Z"),
+    )
+
+    assert pedidos == [850.0, 500.0]
+    assert np.allclose(campo.data, 32.0), "la unidad no debe alterar la diferencia"

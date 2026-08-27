@@ -162,6 +162,17 @@ PRODUCTS = {
         "scale": 1.0 / 3600.0,
         "vmax": 1000.0, "unit": "W/m²",
     },
+    "vertical-totals": {
+        # Vertical Totals: T850 - T500. Mide el gradiente termico del entorno
+        # sin depender de que parcela se elija, que es lo que lo hace util al
+        # lado de los CAPE. Ambos niveles vienen en IP1, asi que no cuesta
+        # ninguna descarga nueva.
+        "kind": "level_difference",
+        "prefix_kind": "pressure_temperature",
+        "lower_level": 850.0,
+        "upper_level": 500.0,
+        "vmin": 18.0, "vmax": 34.0, "unit": "°C",
+    },
     "cloud-cover": {
         "kind": "native", "prefix_kind": "total_cloud_cover",
         # AROME no publica nubosidad total en el instante de la pasada, aunque
@@ -415,7 +426,9 @@ def _product_context(
         raise AromeError(f"Producto de predicción desconocido: {product_id}")
     client = AromeWCS(token)
     catalog = client.capabilities()
-    if config["kind"] == "native":
+    if config["kind"] in {"native", "level_difference"}:
+        # La diferencia entre dos niveles usa un solo campo, como los nativos:
+        # lo que cambia es que se pide dos veces, a alturas distintas.
         prefixes = {"field": catalog.resolve(str(config["prefix_kind"]))}
     elif config["kind"] == "convective":
         prefixes = _convective_prefixes(catalog)
@@ -1395,6 +1408,42 @@ def _convective_frames(
 
 
 # Guarda campos sin serializar, a 6,4 MB cada uno.
+def _level_difference_field(
+    client, catalog, prefixes, config, run: datetime, valid_time: datetime
+) -> RasterField:
+    """Diferencia de un campo entre dos niveles isobáricos.
+
+    Es lo que necesita el Vertical Totals: T850 menos T500. Los dos niveles
+    viajan en IP1, que ya se descarga para los perfiles, así que sólo se acude
+    al WCS cuando el paquete todavía no está publicado.
+    """
+    bajo = float(config["lower_level"])
+    alto = float(config["upper_level"])
+    paquete = _isobaric_fields_from_package(None, run, valid_time, [bajo, alto])
+    temperaturas = (paquete or {}).get("temperature") or {}
+    if bajo in temperaturas and alto in temperaturas:
+        campo_bajo, campo_alto = temperaturas[bajo], temperaturas[alto]
+    else:
+        campo_bajo = client.get_field(
+            catalog, prefixes["field"], run, valid_time, bajo, "pressure"
+        )
+        campo_alto = client.get_field(
+            catalog, prefixes["field"], run, valid_time, alto, "pressure"
+        )
+    # En kelvin o en grados la diferencia es la misma; se normaliza para no
+    # depender de en cuál venga cada uno.
+    valores = _as_kelvin(
+        np.asarray(campo_bajo.data, dtype=float), campo_bajo.units
+    ) - _as_kelvin(_align(campo_bajo, campo_alto), campo_alto.units)
+    return RasterField(
+        valores,
+        campo_bajo.transform,
+        campo_bajo.crs,
+        campo_bajo.bounds,
+        str(config["unit"]),
+    )
+
+
 @lru_cache(maxsize=12)
 def _computed_frame(
     token: str,
@@ -1431,6 +1480,10 @@ def _computed_frame(
         )
         field = frames[product_id]
         run = diagnostic_run
+    elif config["kind"] == "level_difference":
+        field = _level_difference_field(
+            client, catalog, prefixes, config, run, valid_time
+        )
     elif config["kind"] == "wind":
         vertical_mode = "height" if vertical_kind == "height" else "pressure"
         u_field = client.get_field(

@@ -52,6 +52,7 @@ PERSISTED_FORECAST_PRODUCTS = (
     "ordinary-cell-motion",
     "ship",
     "cloud-cover",
+    "vertical-totals",
 )
 
 CONVECTIVE_FORECAST_PRODUCTS = (
