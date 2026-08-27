@@ -16,6 +16,9 @@ from typing import Any, Protocol
 
 
 DERIVED_FORECAST_PRODUCTS = (
+    # Sale de dos niveles de IP1, no de una cobertura propia: va con los
+    # derivados para que el paquete ya esté bajado cuando le toque.
+    "vertical-totals",
     "shear-01",
     "shear-03",
     "shear-06",
@@ -69,10 +72,17 @@ CONVECTIVE_FORECAST_PRODUCTS = (
 
 # Diagnósticos cuyo horizonte se recorta: una hora convectiva cuesta minutos
 # y una nativa segundos, así que se calculan menos plazos de ellos.
+# Indices que salen de dos niveles isobaricos en vez de un perfil entero. No
+# pasan por el nivel 2, pero su paquete solo se adelanta hasta el horizonte de
+# los diagnosticos, asi que se recortan igual.
+LEVEL_INDEX_PRODUCTS = ("vertical-totals",)
+
 CAPPED_FORECAST_PRODUCTS = tuple(
     product
     for product in PERSISTED_FORECAST_PRODUCTS
-    if product.startswith("shear-") or product in CONVECTIVE_FORECAST_PRODUCTS
+    if product.startswith("shear-")
+    or product in CONVECTIVE_FORECAST_PRODUCTS
+    or product in LEVEL_INDEX_PRODUCTS
 )
 
 

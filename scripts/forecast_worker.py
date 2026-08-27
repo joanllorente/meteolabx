@@ -28,6 +28,7 @@ from server.services.arome_forecast import (
 )
 from server.services.forecast_store import (
     CONVECTIVE_FORECAST_PRODUCTS,
+    LEVEL_INDEX_PRODUCTS,
     DERIVED_FORECAST_PRODUCTS,
     LATEST_MANIFEST_KEY,
     PERSISTED_FORECAST_PRODUCTS,
@@ -79,10 +80,6 @@ ACCUMULATED_PRECIP_PRODUCT = "accumulated-precip"
 # El mapa horario de lluvia sale del mismo campo del WCS que el acumulado y se
 # publica antes, asi que sus horas se reutilizan en vez de volver a pedirlas.
 HOURLY_PRECIP_PRODUCT = "precip-1h"
-# Indices que se resuelven con dos niveles isobaricos en vez de un perfil
-# entero: no pasan por el nivel 2, pero siguen el mismo horizonte que los
-# demas diagnosticos, porque su paquete solo se adelanta hasta ahi.
-LEVEL_INDEX_PRODUCTS = ("vertical-totals",)
 # DCAPE sale del grupo convectivo: es el unico que exige el rocio del WCS, y
 # esperarlo retrasaria media hora a los otros trece. Va en su propio nivel,
 # detras de ellos, para que no bloquee la pasada.
@@ -456,9 +453,15 @@ def _jobs_for_manifest(
         for product in products:
             state = (manifest.get("products") or {}).get(product) or {}
             available = set(state.get("available_times", ()))
+            # Los índices isobáricos siguen el horizonte de los diagnósticos:
+            # encolar más horas de las que cuenta el denominador dejaría el
+            # progreso por encima del 100 %.
+            ventana = (
+                diagnostic_times if product in LEVEL_INDEX_PRODUCTS else allowed_times
+            )
             for valid_time in _product_times(manifest, product):
                 if (
-                    valid_time in allowed_times
+                    valid_time in ventana
                     and valid_time not in available
                     and _retry_is_due(state, valid_time, now)
                 ):

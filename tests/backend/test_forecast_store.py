@@ -665,10 +665,15 @@ def test_accumulated_precip_is_not_queued_behind_every_shear():
         i for i, job in enumerate(nivel1) if job.products == ("accumulated-precip",)
     )
 
-    # Arranca con la primera hora pendiente, no detrás de toda la cola. Las
-    # cizalladuras de esa misma hora van antes por desempate de producto.
+    # Arranca con la primera hora pendiente, no detrás de toda la cola. Lo que
+    # importa es que no quede detrás de las cizalladuras de horas posteriores;
+    # los trabajos de esa misma primera hora van antes por desempate de
+    # producto, y su número crece al añadir mapas al nivel.
     assert nivel1[posicion].valid_time == horas[0]
-    assert posicion <= 1, "el acumulado no debe quedar al final de su nivel"
+    de_la_primera_hora = sum(1 for job in nivel1 if job.valid_time == horas[0])
+    assert posicion < de_la_primera_hora, (
+        "el acumulado debe salir dentro del grupo de la primera hora"
+    )
     assert nivel1[posicion].covered_times == tuple(horas)
 
 
