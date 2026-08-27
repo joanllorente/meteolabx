@@ -28,11 +28,18 @@ from server.services.forecast_store import (
     run_manifest_key,
     write_grid,
 )
+import re
+
 from tabs.arome_forecast import AromeError
 
 
 router = APIRouter(prefix="/forecast/arome", tags=["forecast"])
-FORECAST_PRODUCT_PATTERN = "^(temperature-2m|temperature-850|temperature-500|wind-level|wind-gust|shear-01|shear-03|shear-06|ebwd|precip-1h|accumulated-precip|relative-humidity-700|shortwave-down|cloud-cover|ship|mucape-muli|mlcape-mlli|sbcape-sbli|dcape|ordinary-cell-motion|mu-ecape|ml-ecape)$"
+# Se genera del catálogo, no a mano: una lista paralela se queda atrás al
+# añadir un mapa y la API responde 422, cuyo detalle es una lista de objetos
+# que el visor no sabe enseñar.
+FORECAST_PRODUCT_PATTERN = (
+    "^(" + "|".join(re.escape(product) for product in PERSISTED_FORECAST_PRODUCTS) + ")$"
+)
 
 
 def _token(settings: Settings) -> str:

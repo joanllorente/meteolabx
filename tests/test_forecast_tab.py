@@ -279,3 +279,39 @@ def test_production_streamlit_runner_registers_clean_forecast_route_first():
     assert '"Accept-Encoding"' in runner
     assert 'scripts/run_streamlit.py meteolabx.py' in start
     assert 'scripts/run_streamlit.py meteolabx.py' in local_start
+
+
+def test_the_api_accepts_every_published_product():
+    """El patrón del endpoint sale del catálogo, no de una lista paralela.
+
+    Escrito a mano se quedaba atrás al añadir un mapa: la API respondía 422 y
+    su detalle es una lista de objetos, que el visor mostraba como
+    «[object Object]» sin decir qué pasaba.
+    """
+    import re
+
+    from server.routers.forecast import FORECAST_PRODUCT_PATTERN
+    from server.services.forecast_store import PERSISTED_FORECAST_PRODUCTS
+
+    rechazados = [
+        product
+        for product in PERSISTED_FORECAST_PRODUCTS
+        if not re.match(FORECAST_PRODUCT_PATTERN, product)
+    ]
+    assert not rechazados, f"la API rechazaría {rechazados}"
+    # Y sigue rechazando lo que no existe.
+    assert not re.match(FORECAST_PRODUCT_PATTERN, "no-existe")
+    assert not re.match(FORECAST_PRODUCT_PATTERN, "temperature-2m; drop")
+
+
+def test_the_viewer_can_describe_a_validation_error():
+    """El visor traduce el detalle de FastAPI en vez de interpolar el objeto."""
+    from pathlib import Path
+
+    api = (
+        Path(__file__).resolve().parents[1]
+        / "prototype-svelte" / "src" / "services" / "forecastApi.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function describeApiDetail" in api
+    assert "describeApiDetail(payload.detail)" in api

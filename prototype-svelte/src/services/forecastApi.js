@@ -55,6 +55,25 @@ function rememberAromeFrame(options, frame) {
 // viajan dentro del frame: se piden una vez y se reutilizan.
 let boundariesRequest = null;
 
+/**
+ * Convierte el `detail` de la API en algo legible.
+ *
+ * FastAPI lo devuelve como texto en sus errores propios, pero en los de
+ * validación es una lista de objetos: interpolarla directamente dejaba un
+ * «[object Object]» en pantalla en vez de decir qué campo estaba mal.
+ */
+function describeApiDetail(detail) {
+  if (!detail) return '';
+  if (typeof detail === 'string') return detail;
+  const partes = (Array.isArray(detail) ? detail : [detail]).map((item) => {
+    if (typeof item === 'string') return item;
+    const campo = Array.isArray(item?.loc) ? item.loc.filter((p) => p !== 'query').join('.') : '';
+    const mensaje = item?.msg || JSON.stringify(item);
+    return campo ? `${campo}: ${mensaje}` : mensaje;
+  });
+  return partes.join(' · ');
+}
+
 function fetchDomainBoundaries() {
   if (!boundariesRequest) {
     boundariesRequest = getJson('/v1/forecast/arome/boundaries')
@@ -174,7 +193,7 @@ export function fetchAromeFrame({ product, validTime, run, verticalKind, level, 
       let detail = `Forecast API ${response.status}`;
       try {
         const payload = await response.json();
-        detail = payload.detail || detail;
+        detail = describeApiDetail(payload.detail) || detail;
       } catch {
         // La respuesta puede no ser JSON si el proxy todavía no está listo.
       }
