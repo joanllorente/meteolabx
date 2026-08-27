@@ -450,3 +450,29 @@ def test_ip3_reader_reports_what_the_file_has_when_a_field_is_missing(monkeypatc
     assert campos["dewpoint"], "el que sí está debe leerse igualmente"
     assert not campos["vertical_velocity"]
     assert "RARO" in caplog.text, "debe listar lo que trae el fichero"
+
+
+def test_only_the_requested_ip3_fields_are_read(monkeypatch):
+    """Leer un elemento que nadie usa son 150 MB por hora tirados.
+
+    El perfil convectivo sólo necesita el rocío de IP3; la velocidad vertical
+    va en el mismo paquete pero la usa otro mapa, y cargarla mientras se monta
+    el perfil sólo estrecha el margen de DCAPE, que es el que menos tiene.
+    """
+    from server.services import arome_forecast as prevision
+
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _IsobaricoFalso(stamp))
+    monkeypatch.setattr(prevision, "_packages_available", lambda: True)
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+
+    solo_rocio = prevision._isobaric_extras_from_package(
+        RUN, RUN, [850.0], ("dewpoint",)
+    )
+    assert solo_rocio is not None
+    assert set(solo_rocio[0]) == {"dewpoint"}
+
+    # Sin pedir nada concreto se leen todos, que es lo que necesita el mapa
+    # de velocidad vertical.
+    todos = prevision._isobaric_extras_from_package(RUN, RUN, [850.0])
+    assert set(todos[0]) == {"dewpoint", "vertical_velocity"}

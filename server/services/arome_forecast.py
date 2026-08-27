@@ -1090,6 +1090,7 @@ def _isobaric_extras_from_package(
     run: datetime,
     valid_time: datetime,
     levels: list[float],
+    campos_pedidos: tuple[str, ...] = (),
 ) -> tuple[dict[str, dict[float, RasterField]], tuple[Any, Any, Any]] | None:
     """Rocío y velocidad vertical isobáricos, del paquete IP3.
 
@@ -1104,9 +1105,14 @@ def _isobaric_extras_from_package(
         return None
     try:
         path = ensure_package("IP3", run, valid_time)
-        campos, geometria = read_isobaric_extras(
-            path, valid_time, levels, IP3_ELEMENTS
+        # Leer un elemento que nadie va a usar son 150 MB por hora tirados: el
+        # perfil convectivo sólo necesita el rocío.
+        buscar = (
+            {nombre: IP3_ELEMENTS[nombre] for nombre in campos_pedidos}
+            if campos_pedidos
+            else IP3_ELEMENTS
         )
+        campos, geometria = read_isobaric_extras(path, valid_time, levels, buscar)
     except (AromePackageError, MeteoFranceAuthError) as exc:
         logger.info("Paquete IP3 no disponible: %s", exc)
         return None
@@ -1204,7 +1210,7 @@ def _convective_frames(
     package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
     package_levels_usado = bool(package_levels)
     extras = (
-        _isobaric_extras_from_package(run, valid_time, levels)
+        _isobaric_extras_from_package(run, valid_time, levels, ("dewpoint",))
         if package_levels and exact_dewpoint
         else None
     )
@@ -1338,6 +1344,12 @@ def _convective_frames(
     if surface_package:
         surface_package.clear()
         surface_package = None
+    # El rocío de IP3 ya está dentro de los perfiles apilados. Mantenerlo vivo
+    # durante el diagnóstico eran 150 MB por perfil, y DCAPE es el que menos
+    # margen tiene.
+    if package_dewpoint:
+        package_dewpoint.clear()
+    package_dewpoint = extras = None
 
     # Los perfiles apilados rondan el giga y sólo se leen. Apartarlos al disco
     # los saca de la memoria que el núcleo no puede recuperar; hay que soltar
@@ -1366,10 +1378,6 @@ def _convective_frames(
         "sí" if surface_package_usado else "no",
         "sí" if include_dcape else "no",
     )
-    if package_dewpoint:
-        package_dewpoint.clear()
-    package_dewpoint = None
-
     common = (reference.transform, reference.crs, reference.bounds)
     frames = {
         "mucape-muli": RasterField(
