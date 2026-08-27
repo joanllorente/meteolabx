@@ -487,3 +487,41 @@ def test_dcape_survives_the_band_it_runs_with():
     finitos = np.isfinite(ancha["dcape"])
     assert (np.isfinite(estrecha["dcape"]) == finitos).all()
     assert np.array_equal(estrecha["dcape"][finitos], ancha["dcape"][finitos])
+
+
+def test_only_dcape_gives_the_same_dcape_without_the_parcels():
+    """Pedir sólo DCAPE devuelve el mismo campo, sin rehacer las parcelas.
+
+    DCAPE va en su propio nivel, detrás de los otros trece, y por el camino se
+    recalculaban MU, ML y SB —que ese nivel anterior ya había hecho—. Medido
+    sobre 192x1121: 14,8 s de parcelas para llegar a un DCAPE que cuesta 12,3.
+    """
+    from server.services.arome_forecast import _convective_outputs
+
+    argumentos = _synthetic_profile(48, 30)
+    completo = _convective_outputs(*argumentos, include_dcape=True)
+    suelto = _convective_outputs(*argumentos, include_dcape=True, only_dcape=True)
+
+    finitos = np.isfinite(completo["dcape"])
+    assert (np.isfinite(suelto["dcape"]) == finitos).all()
+    assert np.array_equal(suelto["dcape"][finitos], completo["dcape"][finitos])
+
+    # Lo demás llega vacío: quien pide sólo DCAPE no lo mira.
+    for nombre in ("mucape", "mlcape", "sbcape", "ship", "ebwd", "cell_speed"):
+        assert not np.isfinite(suelto[nombre]).any(), nombre
+
+
+def test_only_dcape_survives_the_striping():
+    """El troceado por bandas no altera el DCAPE calculado a solas."""
+    from server.services.arome_forecast import _convective_outputs_in_stripes
+
+    argumentos = _synthetic_profile(256, 30)
+    entero = _convective_outputs_in_stripes(
+        *argumentos, stripe_rows=0, include_dcape=True, only_dcape=True
+    )
+    troceado = _convective_outputs_in_stripes(
+        *argumentos, stripe_rows=128, include_dcape=True, only_dcape=True
+    )
+
+    finitos = np.isfinite(entero["dcape"])
+    assert np.array_equal(troceado["dcape"][finitos], entero["dcape"][finitos])
