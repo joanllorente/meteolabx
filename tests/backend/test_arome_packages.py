@@ -19,10 +19,21 @@ RUN = datetime(2026, 8, 26, 3, 0, tzinfo=timezone.utc)
 
 @pytest.mark.parametrize(
     ("horizonte", "esperado"),
-    [(0, "00H06H"), (3, "00H06H"), (6, "00H06H"), (7, "07H13H"), (13, "07H13H"), (36, "35H41H")],
+    [
+        (0, "00H06H"), (3, "00H06H"), (6, "00H06H"),
+        (7, "07H12H"), (12, "07H12H"),
+        (13, "13H18H"), (18, "13H18H"),
+        (24, "19H24H"), (25, "25H30H"), (36, "31H36H"),
+        (48, "43H48H"), (49, "49H51H"), (51, "49H51H"),
+    ],
 )
-def test_block_range_groups_seven_hours(horizonte, esperado):
-    """Cada paquete cubre siete plazos consecutivos."""
+def test_block_range_matches_the_ranges_the_api_publishes(horizonte, esperado):
+    """Los bloques no son iguales: el primero son siete plazos y el resto seis.
+
+    Suponer siete en todos generaba rangos inexistentes —07H13H, 14H20H— que la
+    API rechazaba con 404, de modo que solo el primer bloque se descargaba y el
+    resto de la pasada se resolvia campo a campo por el WCS.
+    """
     valid = RUN.replace() + __import__("datetime").timedelta(hours=horizonte)
     assert paquetes.block_range(RUN, valid) == esperado
 
@@ -350,3 +361,18 @@ def test_old_locks_are_swept_with_their_packages(monkeypatch, tmp_path):
 
     assert set(borrados) == {viejo, cerrojo_viejo}
     assert actual.exists(), "la pasada en curso no se toca"
+
+
+def test_horizons_beyond_the_last_block_are_rejected():
+    """Más allá de +51 h no hay paquete; pedirlo sería un 404 seguro."""
+    from datetime import timedelta
+
+    with pytest.raises(paquetes.AromePackageError, match="horizonte"):
+        paquetes.block_range(RUN, RUN + timedelta(hours=52))
+
+
+def test_blocks_up_to_lists_the_first_lead_time_of_each_block():
+    """Para adelantar una pasada entera sin depender del catálogo."""
+    assert paquetes.blocks_up_to(36) == [0, 7, 13, 19, 25, 31]
+    assert paquetes.blocks_up_to(6) == [0]
+    assert paquetes.blocks_up_to(51) == [0, 7, 13, 19, 25, 31, 37, 43, 49]

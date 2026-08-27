@@ -31,7 +31,16 @@ PACKAGE_BASE = "https://public-api.meteofrance.fr/previnum/DPPaquetAROME/v1"
 # Cada paquete cubre siete plazos horarios consecutivos.
 logger = logging.getLogger("meteolabx.arome_packages")
 
-BLOCK_HOURS = 7
+# Los paquetes no se reparten en bloques iguales: el primero cubre siete
+# plazos (0 a 6) y los siguientes seis, hasta un último de tres. Suponer que
+# todos median siete generaba rangos que no existen —07H13H, 14H20H— y la API
+# respondía 404, de modo que solo el primer bloque llegaba a descargarse y el
+# resto de la pasada acababa resolviéndose campo a campo por el WCS.
+BLOCK_BOUNDS: tuple[tuple[int, int], ...] = (
+    (0, 6), (7, 12), (13, 18), (19, 24), (25, 30),
+    (31, 36), (37, 42), (43, 48), (49, 51),
+)
+MAX_HORIZON_H = BLOCK_BOUNDS[-1][1]
 GDAL_CACHE_MB = int(os.getenv("METEOLABX_GDAL_CACHE_MB", "64"))
 # Elementos del paquete isobárico IP1, con la clave que usa el perfil.
 IP1_ELEMENTS = {
@@ -60,8 +69,22 @@ def block_range(run: datetime, valid_time: datetime) -> str:
     horizon = int((valid_time - run).total_seconds() // 3600)
     if horizon < 0:
         raise AromePackageError("La hora pedida es anterior a la pasada.")
-    start = (horizon // BLOCK_HOURS) * BLOCK_HOURS
-    return f"{start:02d}H{start + BLOCK_HOURS - 1:02d}H"
+    for inicio, fin in BLOCK_BOUNDS:
+        if horizon <= fin:
+            return f"{inicio:02d}H{fin:02d}H"
+    raise AromePackageError(
+        f"El plazo +{horizon} h pasa del horizonte de los paquetes "
+        f"(+{MAX_HORIZON_H} h)."
+    )
+
+
+def blocks_up_to(horizon_h: int) -> list[int]:
+    """Primer plazo de cada bloque necesario para cubrir ese horizonte.
+
+    Sirve para adelantar los paquetes de una pasada entera sin depender de qué
+    horas haya anunciado todavía el catálogo.
+    """
+    return [inicio for inicio, _fin in BLOCK_BOUNDS if inicio <= horizon_h]
 
 
 def _package_path(package: str, run: datetime, block: str) -> Path:

@@ -194,14 +194,14 @@ def test_prefetch_keeps_going_when_one_block_is_not_published_yet(monkeypatch):
 
     monkeypatch.setattr(trabajador, "ensure_package", a_veces_falla)
 
-    # 12:00 del 26 -> bloque 00H06H; 19:00 del 26 -> 07H13H; 02:00 del 27 -> 14H20H.
-    trabajos = [_trabajo(12), _trabajo(19), _trabajo(2, dia=27)]
+    # 12:00 del 26 -> 00H06H; 19:00 del 26 -> 07H12H; 01:00 del 27 -> 13H18H.
+    trabajos = [_trabajo(12), _trabajo(19), _trabajo(1, dia=27)]
     hilo = trabajador._start_package_prefetch(trabajos, threading.Event())
     assert hilo is not None
     hilo.join(timeout=5)
 
     horas = {hora for _, hora in pedidos}
-    assert 2 in horas, "debe seguir con el bloque siguiente al que falla"
+    assert 1 in horas, "debe seguir con el bloque siguiente al que falla"
 
 
 def test_a_drained_tier_does_not_hold_back_the_free_workers(monkeypatch):
@@ -457,7 +457,7 @@ def test_prefetch_does_not_depend_on_what_the_catalog_has_announced():
     bloques = [block_range(run, vt) for run, vt in objetivos]
 
     assert len(bloques) >= 5, f"con la cola corta solo persigue {bloques}"
-    assert "35H41H" in bloques, "el final de la pasada también hace falta"
+    assert "31H36H" in bloques, "el final de la pasada también hace falta"
     # El que está en uso se deja para el final: esperar en su cerrojo
     # retrasaría a los que harán falta antes.
     assert bloques[0] != "00H06H"

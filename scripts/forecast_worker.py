@@ -44,9 +44,9 @@ from server.services.forecast_store import (
     write_json,
 )
 from server.services.arome_packages import (
-    BLOCK_HOURS,
     AromePackageError,
     block_range,
+    blocks_up_to,
     discard_packages_before,
     ensure_package,
     package_ready,
@@ -588,7 +588,7 @@ def _blocks_ahead(jobs: Sequence[ForecastJob], limit: int) -> list[tuple[datetim
         return []
     bloques = [
         (run, run + timedelta(hours=horizonte))
-        for horizonte in range(0, PREFETCH_HORIZON_H + 1, BLOCK_HOURS)
+        for horizonte in blocks_up_to(PREFETCH_HORIZON_H)
     ]
     return (bloques[1:] + bloques[:1])[:limit]
 
