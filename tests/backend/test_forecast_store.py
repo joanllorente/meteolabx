@@ -816,17 +816,31 @@ def test_denominator_follows_reality_only_for_uncapped_products():
 
 
 def test_full_run_denominator_is_stable_while_the_model_publishes():
-    """El total no cambia entre el principio y el final de la publicación."""
+    """El total no cambia entre el principio y el final de la publicación.
+
+    Los acumulativos —lluvia, racha, radiación— rematan en 51 horas y no en 52:
+    un periodo de una hora no existe en el instante de la pasada. Simular que
+    llegan a 52 escondía que el denominador se movía justo al final.
+    """
+    from server.services.arome_forecast import PRODUCTS
+    from server.services.forecast_store import CONVECTIVE_FORECAST_PRODUCTS as CONV
+
     manifest = {"expected_hours": {"native": 52, "diagnostic": 36}}
+
+    def publicadas_al_final(product: str) -> int:
+        if product in set(forecast_worker.SHEAR_PRODUCTS) | set(CONV):
+            return 36
+        return 51 if (PRODUCTS.get(product) or {}).get("period") else 52
+
     al_principio = sum(
         forecast_worker._expected_frames(manifest, product, 6)
         for product in PERSISTED_FORECAST_PRODUCTS
     )
     al_final = sum(
-        forecast_worker._expected_frames(manifest, product, 52)
+        forecast_worker._expected_frames(manifest, product, publicadas_al_final(product))
         for product in PERSISTED_FORECAST_PRODUCTS
     )
-    assert al_principio == al_final == 984
+    assert al_principio == al_final == 980
 
 
 def test_capped_products_only_offer_the_hours_that_will_exist():

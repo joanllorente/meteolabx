@@ -560,3 +560,31 @@ def test_reordering_never_crosses_into_another_group(monkeypatch):
     trabajador._bring_forward_a_ready_hour(pending, trabajador._job_group(pending[0][1]))
 
     assert [j.valid_time for _m, j in pending] == antes
+
+
+def test_accumulative_products_are_not_expected_at_the_run_hour():
+    """Un acumulado de una hora no existe en el instante de la pasada.
+
+    Lluvia, racha y radiación se publican con periodo PT1H: la primera hora
+    disponible es la +1, no la +0. Contarles esa hora dejaba el progreso
+    topando en el 99,5 % con absolutamente todo calculado, y no había forma de
+    distinguir eso de un fallo real.
+    """
+    import scripts.forecast_worker as trabajador
+    from server.services.forecast_store import PERSISTED_FORECAST_PRODUCTS
+
+    manifiesto = {"expected_hours": {"native": 52, "diagnostic": 36}}
+
+    assert trabajador._expected_hours(manifiesto, "precip-1h") == 51
+    assert trabajador._expected_hours(manifiesto, "accumulated-precip") == 51
+    assert trabajador._expected_hours(manifiesto, "wind-gust") == 51
+    assert trabajador._expected_hours(manifiesto, "shortwave-down") == 51
+    # Los instantáneos conservan las 52.
+    assert trabajador._expected_hours(manifiesto, "temperature-2m") == 52
+    # Y los diagnósticos, su propio límite.
+    assert trabajador._expected_hours(manifiesto, "mucape-muli") == 36
+
+    total = sum(
+        trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
+    )
+    assert total == 980, f"el denominador de una pasada completa es 980, no {total}"

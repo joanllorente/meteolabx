@@ -20,6 +20,7 @@ from typing import Any, Iterator, Sequence
 
 from server.config import get_settings
 from server.services.arome_forecast import (
+    PRODUCTS,
     accumulated_precip_series,
     stored_grid_values,
     catalog_payload,
@@ -181,12 +182,21 @@ EXPECTED_NATIVE_HOURS = int(os.getenv("METEOLABX_FORECAST_EXPECTED_HOURS", "52")
 
 
 def _expected_hours(manifest: dict[str, Any], product: str) -> int:
-    """Horas que se esperan de un producto en una pasada completa."""
+    """Horas que se esperan de un producto en una pasada completa.
+
+    Los productos acumulativos —lluvia, racha, radiación— tienen una hora menos:
+    un periodo de una hora necesita la anterior, así que no existen en el
+    instante de la pasada. Contarles esa hora dejaba el progreso topando en el
+    99,5 % con todo calculado.
+    """
     limits = manifest.get("expected_hours") or {}
     native = int(limits.get("native") or EXPECTED_NATIVE_HOURS)
     diagnostic = int(limits.get("diagnostic") or 0) or native
     caros = set(SHEAR_PRODUCTS) | set(CONVECTIVE_FORECAST_PRODUCTS)
-    return diagnostic if product in caros else native
+    horas = diagnostic if product in caros else native
+    if (PRODUCTS.get(product) or {}).get("period"):
+        horas -= 1
+    return horas
 
 
 def _expected_frames(manifest: dict[str, Any], product: str, published: int) -> int:
