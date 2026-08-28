@@ -241,12 +241,28 @@ const allForecastProducts = [
     method: 'T850 menos T500, ambos del paquete isobárico IP1 que ya se descarga para los perfiles.',
     coverage: 'TEMPERATURE · 850 y 500 hPa'
   },
+  {
+    id: 'srh-01', category: 'convection', label: 'Helicidad relativa 0–1 km', short: 'SRH 0–1', kind: 'derived',
+    unit: 'm²/s²', min: -200, max: 500, palette: 'shear', accent: '#c084fc', vectors: true,
+    description: 'Helicidad relativa a la tormenta en el primer kilómetro, referida al movimiento de la supercélula derecha de Bunkers. Mide el giro que una corriente ascendente puede heredar del entorno, y es el nivel que más se asocia con la tornadogénesis.',
+    method: 'Integral del hodógrafo entre 0 y 1.000 m sobre el terreno, restando el movimiento Bunkers 2000 right mover. Sale del mismo perfil de viento que los demás diagnósticos convectivos.',
+    coverage: 'Perfil de viento AROME · 0–1 km AGL'
+  },
+  {
+    id: 'srh-03', category: 'convection', label: 'Helicidad relativa 0–3 km', short: 'SRH 0–3', kind: 'derived',
+    unit: 'm²/s²', min: -300, max: 700, palette: 'shear', accent: '#a855f7', vectors: true,
+    description: 'Helicidad relativa a la tormenta en los tres primeros kilómetros, referida al movimiento de la supercélula derecha de Bunkers. Es la capa habitual para valorar el potencial de rotación de una supercélula.',
+    method: 'Integral del hodógrafo entre 0 y 3.000 m sobre el terreno, restando el movimiento Bunkers 2000 right mover. Sale del mismo perfil de viento que los demás diagnósticos convectivos.',
+    coverage: 'Perfil de viento AROME · 0–3 km AGL'
+  },
 ];
 
 // Selección inicial deliberadamente corta. El catálogo completo queda listo para
 // incorporar nuevos mapas cuando se decida qué variables formarán el producto.
 const initialProductIds = [
   'vertical-totals',
+  'srh-01',
+  'srh-03',
   'temperature-2m',
   'temperature-850',
   'temperature-500',

@@ -62,6 +62,46 @@ export const forecastProductGuides = {
     sources: [MF_AROME, MF_API]
   },
 
+  'srh-01': {
+    what: 'Helicidad relativa a la tormenta entre el suelo y 1.000 m sobre el terreno, en m²/s². Mide el área que el hodógrafo barre alrededor del vector de movimiento de la tormenta: cuánto giro puede heredar una corriente ascendente del entorno en el que se forma.',
+    interpretation: [
+      'Es la capa que más se asocia con la tornadogénesis. Valores por encima de 100 m²/s² ya son favorables y por encima de 150 son significativos, siempre acompañados de inestabilidad y de una base nubosa baja.',
+      'El signo importa: positivo indica giro ciclónico y negativo, anticiclónico. Un SRH alto sin CAPE describe un entorno cizallado pero sin tormentas; conviene leerlo junto a los mapas de CAPE y al de cizalladura 0–6 km.',
+      'Las flechas son el movimiento estimado de la supercélula derecha, no el viento: indican hacia dónde se desplazaría la tormenta a la que se refiere esa helicidad.'
+    ],
+    method: 'Integral del hodógrafo entre 0 y 1.000 m AGL, restando el movimiento Bunkers 2000 right mover. Se recorren todos los niveles del perfil, no solo los extremos, y el límite superior se interpola. Las alturas son sobre el terreno y los niveles isobáricos subterráneos quedan excluidos. No se filtra por CAPE: es un campo cinemático del entorno.',
+    equations: [
+      { label: 'Helicidad relativa', latex: String.raw`\mathrm{SRH}=\sum_i\left[(u_{i+1}-C_u)(v_i-C_v)-(u_i-C_u)(v_{i+1}-C_v)\right]` },
+      { label: 'Movimiento de Bunkers', latex: String.raw`\mathbf{C}_R=\overline{\mathbf{V}}_{0-6}+7{,}5\,\frac{(\Delta v,\,-\Delta u)}{|\Delta \mathbf{V}|}` }
+    ],
+    steps: [
+      'Perfil de viento del paquete isobárico, con el viento de 10 m como base.',
+      'Movimiento Bunkers: viento medio 0–6 km desviado 7,5 m/s perpendicular a la cizalladura entre las capas 0–0,5 y 5,5–6 km.',
+      'Las medias van pesadas por espesor y no por presión, como especifica Bunkers et al. (2000): allí se comprueba que ponderar por presión no reduce el error. MetPy integra esas mismas capas en coordenada de presión, de modo que su movimiento sale algo distinto —en un hodógrafo de prueba, 1,1 m/s por componente— sin que ninguna de las dos formulaciones esté mal.',
+      'Sin valor donde el perfil no alcanza los 6 km: la desviación de Bunkers no queda definida.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+  'srh-03': {
+    what: 'Helicidad relativa a la tormenta entre el suelo y 3.000 m sobre el terreno, en m²/s². Misma magnitud que la de 0–1 km, sobre la capa que abarca el grueso de la corriente ascendente.',
+    interpretation: [
+      'Es la capa habitual para valorar el potencial de rotación de una supercélula. Por encima de 150 m²/s² el entorno favorece supercélulas y por encima de 300 la rotación es marcada.',
+      'Comparar 0–3 con 0–1 km dice dónde está el giro: si el de 0–1 es proporcionalmente alto, la cizalladura se concentra cerca del suelo, que es la configuración asociada a tornados.',
+      'Las flechas son el movimiento estimado de la supercélula derecha, el mismo que se resta para calcular la helicidad.'
+    ],
+    method: 'Integral del hodógrafo entre 0 y 3.000 m AGL, restando el movimiento Bunkers 2000 right mover. Se recorren todos los niveles del perfil, no solo los extremos, y el límite superior se interpola. Las alturas son sobre el terreno y los niveles isobáricos subterráneos quedan excluidos. No se filtra por CAPE: es un campo cinemático del entorno.',
+    equations: [
+      { label: 'Helicidad relativa', latex: String.raw`\mathrm{SRH}=\sum_i\left[(u_{i+1}-C_u)(v_i-C_v)-(u_i-C_u)(v_{i+1}-C_v)\right]` },
+      { label: 'Movimiento de Bunkers', latex: String.raw`\mathbf{C}_R=\overline{\mathbf{V}}_{0-6}+7{,}5\,\frac{(\Delta v,\,-\Delta u)}{|\Delta \mathbf{V}|}` }
+    ],
+    steps: [
+      'Perfil de viento del paquete isobárico, con el viento de 10 m como base.',
+      'Movimiento Bunkers: viento medio 0–6 km desviado 7,5 m/s perpendicular a la cizalladura entre las capas 0–0,5 y 5,5–6 km.',
+      'Las medias van pesadas por espesor y no por presión, como especifica Bunkers et al. (2000). MetPy integra esas mismas capas en presión y obtiene un movimiento algo distinto; la helicidad, con el mismo movimiento de partida, coincide entre ambas hasta la última cifra.',
+      'Sin valor donde el perfil no alcanza los 6 km: la desviación de Bunkers no queda definida.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
   'vertical-totals': {
     what: 'Vertical Totals: diferencia de temperatura entre las superficies isobáricas de 850 y 500 hPa. Es la mitad térmica del índice Total Totals y mide el gradiente vertical de la troposfera baja y media.',
     interpretation: [

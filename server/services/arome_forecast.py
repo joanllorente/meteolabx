@@ -38,7 +38,9 @@ from server.services.arome_packages import (
 )
 from server.services.meteofrance_auth import MeteoFranceAuthError
 from server.services.convective_diagnostics import (
+    bunkers_right_motion,
     downdraft_cape,
+    storm_relative_helicity,
     diagnose_convection,
     effective_bulk_wind_difference,
     freezing_level_m,
@@ -116,6 +118,16 @@ PRODUCTS = {
         "diagnostic": "dcape",
         "vmax": 1800.0,
         "unit": "J/kg",
+    },
+    "srh-01": {
+        "kind": "convective",
+        "diagnostic": "srh_01",
+        "vmin": -200.0, "vmax": 500.0, "unit": "m²/s²",
+    },
+    "srh-03": {
+        "kind": "convective",
+        "diagnostic": "srh_03",
+        "vmin": -300.0, "vmax": 700.0, "unit": "m²/s²",
     },
     "ordinary-cell-motion": {
         "kind": "convective",
@@ -746,6 +758,7 @@ def _convective_outputs(
                     "mucape", "muli", "mlcape", "mlli", "sbcape", "sbli",
                     "cell_u", "cell_v", "cell_speed",
                     "ebwd", "ebwd_u", "ebwd_v", "ship",
+                    "srh_01", "srh_03", "bunkers_u", "bunkers_v",
                 )
             },
         }
@@ -773,6 +786,18 @@ def _convective_outputs(
         diagnostics.effective_base_height_m,
         diagnostics.mu_equilibrium_height_m,
     )
+    # Helicidad relativa a la tormenta, sobre el movimiento de Bunkers. Sale
+    # del mismo perfil de viento que ya está montado, así que no cuesta una
+    # sola descarga: 69 ms por capa sobre el dominio entero.
+    height_agl = height - terrain[None, ...]
+    bunkers_u, bunkers_v = bunkers_right_motion(height_agl, u_profile, v_profile)
+    srh_01 = storm_relative_helicity(
+        height_agl, u_profile, v_profile, bunkers_u, bunkers_v, 1_000.0
+    )
+    srh_03 = storm_relative_helicity(
+        height_agl, u_profile, v_profile, bunkers_u, bunkers_v, 3_000.0
+    )
+
     six_km_height = terrain + 6_000.0
     u_6km = interpolate_profile_at_height(height, u_profile, six_km_height)
     v_6km = interpolate_profile_at_height(height, v_profile, six_km_height)
@@ -812,6 +837,10 @@ def _convective_outputs(
         "ebwd_u": ebwd_u,
         "ebwd_v": ebwd_v,
         "ship": ship,
+        "srh_01": srh_01,
+        "srh_03": srh_03,
+        "bunkers_u": bunkers_u,
+        "bunkers_v": bunkers_v,
     }
 
 
@@ -1495,6 +1524,16 @@ def _convective_frames(
         ),
         "ebwd": RasterField(outputs["ebwd"], *common, "m/s", vector_u=outputs["ebwd_u"], vector_v=outputs["ebwd_v"]),
         "ship": RasterField(outputs["ship"], *common, ""),
+        # El vector es el movimiento de la supercélula derecha, que es la
+        # tormenta a la que esa helicidad se refiere.
+        "srh-01": RasterField(
+            outputs["srh_01"], *common, "m²/s²",
+            vector_u=outputs["bunkers_u"], vector_v=outputs["bunkers_v"],
+        ),
+        "srh-03": RasterField(
+            outputs["srh_03"], *common, "m²/s²",
+            vector_u=outputs["bunkers_u"], vector_v=outputs["bunkers_v"],
+        ),
     }
     return frames, run
 

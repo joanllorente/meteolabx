@@ -525,3 +525,93 @@ def test_only_dcape_survives_the_striping():
 
     finitos = np.isfinite(entero["dcape"])
     assert np.array_equal(troceado["dcape"][finitos], entero["dcape"][finitos])
+
+
+def test_storm_relative_helicity_matches_metpy():
+    """La helicidad coincide con MetPy sobre el mismo movimiento de tormenta.
+
+    Es la referencia del cálculo, así que conviene comprobarlo y no solo el
+    signo: una fórmula con los índices cruzados da valores plausibles y de
+    signo correcto, pero equivocados.
+    """
+    metpy_calc = pytest.importorskip("metpy.calc")
+    from metpy.units import units
+
+    from server.services.convective_diagnostics import storm_relative_helicity
+
+    z = np.array([0., 250., 500., 1000., 2000., 3000., 4000., 5000., 5750., 6000.])
+    angulos = np.radians([180., 200., 220., 250., 270., 280., 285., 290., 295., 300.])
+    modulo = np.array([5., 8., 10., 14., 18., 21., 24., 27., 29., 30.])
+    u, v = -modulo * np.sin(angulos), -modulo * np.cos(angulos)
+    cu, cv = 12.95, -7.50
+
+    for techo in (1_000.0, 3_000.0):
+        _, _, referencia = metpy_calc.storm_relative_helicity(
+            z * units.m, u * units("m/s"), v * units("m/s"),
+            depth=techo * units.m,
+            storm_u=cu * units("m/s"), storm_v=cv * units("m/s"),
+        )
+        mio = storm_relative_helicity(
+            z[:, None, None], u[:, None, None], v[:, None, None],
+            np.array([[cu]]), np.array([[cv]]), techo,
+        ).item()
+        assert mio == pytest.approx(referencia.m, abs=0.05), techo
+
+
+def test_veering_gives_positive_helicity_and_backing_negative():
+    """El signo: giro a derechas positivo, a izquierdas negativo.
+
+    Es el error clásico de esta fórmula y no se ve en los valores, que salen
+    plausibles con el signo cambiado.
+    """
+    from server.services.convective_diagnostics import storm_relative_helicity
+
+    z = np.array([0., 250., 500., 1000., 2000., 3000.])[:, None, None]
+    angulos = np.radians([180., 200., 220., 250., 280., 300.])
+    modulo = np.array([5., 8., 10., 14., 18., 22.])
+    u = (-modulo * np.sin(angulos))[:, None, None]
+    v = (-modulo * np.cos(angulos))[:, None, None]
+    cero = np.zeros((1, 1))
+
+    derechas = storm_relative_helicity(z, u, v, cero, cero, 3_000.0).item()
+    # Espejar el hodógrafo en el eje este-oeste invierte el sentido del giro.
+    izquierdas = storm_relative_helicity(z, -u, v, cero, cero, 3_000.0).item()
+
+    assert derechas > 0, "el giro a derechas da helicidad positiva"
+    assert izquierdas < 0, "el giro a izquierdas, negativa"
+
+
+def test_bunkers_needs_the_whole_six_kilometres():
+    """Sin la capa 0-6 km no hay movimiento que calcular."""
+    from server.services.convective_diagnostics import bunkers_right_motion
+
+    z = np.array([0., 500., 1000., 2000.])[:, None, None]
+    u = np.array([5., 8., 12., 16.])[:, None, None]
+    v = np.zeros_like(u)
+
+    cu, cv = bunkers_right_motion(z, u, v)
+
+    assert np.isnan(cu).all() and np.isnan(cv).all()
+
+
+def test_bunkers_deviates_to_the_right_of_the_shear():
+    """La desviación son 7,5 m/s perpendiculares a la cizalladura, a derechas.
+
+    Con cizalladura puramente del oeste, el desvío tiene que ir hacia el sur:
+    es lo que separa al right mover del viento medio.
+    """
+    from server.services.convective_diagnostics import (
+        DEVIATION_MS, bunkers_right_motion,
+    )
+
+    z = np.array([0., 250., 500., 3000., 5500., 5750., 6000.])[:, None, None]
+    # Sólo componente u, creciente con la altura: cizalladura del oeste.
+    u = np.array([2., 4., 6., 16., 26., 27., 28.])[:, None, None]
+    v = np.zeros_like(u)
+
+    cu, cv = bunkers_right_motion(z, u, v)
+
+    assert cv.item() == pytest.approx(-DEVIATION_MS, abs=0.01), (
+        "con cizalladura del oeste el desvío va al sur"
+    )
+    assert cu.item() > 0

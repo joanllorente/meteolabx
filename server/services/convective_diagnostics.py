@@ -26,6 +26,8 @@ RD = 287.05
 RV = 461.5
 CP_D = 1004.0
 EPSILON = RD / RV
+# Desviación de Bunkers respecto al viento medio de la capa 0-6 km.
+DEVIATION_MS = 7.5
 GRAVITY = 9.80665
 KAPPA = RD / CP_D
 
@@ -797,6 +799,127 @@ def interpolate_profile_at_height(
         )
         result = np.where(within, data[index] + fraction * (data[index + 1] - data[index]), result)
     return result
+
+
+def _layer_mean_wind(
+    height_agl_m: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+    base_m: float,
+    top_m: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Viento medio de una capa, pesado por su espesor.
+
+    Pesar por espesor y no por niveles evita que la rejilla isobárica, que es
+    mucho más densa abajo que arriba, incline la media hacia los niveles
+    bajos. Los bordes se interpolan para que la capa sea exactamente la pedida.
+    """
+    z0, z1 = height_agl_m[:-1], height_agl_m[1:]
+    espesor = z1 - z0
+    valido = np.isfinite(espesor) & (espesor > 0)
+    # Recorte de cada capa al tramo pedido.
+    desde = np.clip(np.maximum(z0, base_m), base_m, top_m)
+    hasta = np.clip(np.minimum(z1, top_m), base_m, top_m)
+    dentro = valido & (hasta > desde)
+    peso = np.where(dentro, hasta - desde, 0.0)
+
+    def medio(valores: np.ndarray) -> np.ndarray:
+        # Valor en el punto medio del tramo recortado, interpolado.
+        centro = 0.5 * (desde + hasta)
+        fraccion = np.where(dentro, (centro - z0) / np.where(valido, espesor, 1.0), 0.0)
+        en_centro = valores[:-1] + fraccion * (valores[1:] - valores[:-1])
+        total = np.sum(peso, axis=0)
+        return np.divide(
+            np.sum(np.where(dentro, en_centro * peso, 0.0), axis=0),
+            total,
+            out=np.full(total.shape, np.nan),
+            where=total > 0,
+        )
+
+    return medio(u), medio(v)
+
+
+def bunkers_right_motion(
+    height_agl_m: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Movimiento de la supercélula derecha, Bunkers 2000.
+
+    Es el viento medio de los seis primeros kilómetros desviado 7,5 m/s
+    perpendicularmente a la cizalladura de la capa, hacia la derecha. Se usa
+    éste y no el movimiento de célula ordinaria del panel porque los umbrales
+    de SRH al uso —150, 300 m²/s²— están definidos sobre Bunkers, y con otro
+    movimiento dejarían de significar lo mismo.
+
+    Las medias van pesadas por espesor, no por presión, como especifica el
+    artículo original: allí se comprueba que ponderar por presión no reduce el
+    error. MetPy integra en presión, de modo que su movimiento sale algo
+    distinto —en un hodógrafo de prueba, 1,1 m/s por componente— sin que
+    ninguno de los dos esté mal.
+
+    Devuelve NaN donde el perfil no llega a 6 km: sin esa capa la desviación
+    no está definida y un valor aproximado engañaría más que ayudar.
+    """
+    medio_u, medio_v = _layer_mean_wind(height_agl_m, u, v, 0.0, 6_000.0)
+    bajo_u, bajo_v = _layer_mean_wind(height_agl_m, u, v, 0.0, 500.0)
+    alto_u, alto_v = _layer_mean_wind(height_agl_m, u, v, 5_500.0, 6_000.0)
+    corte_u, corte_v = alto_u - bajo_u, alto_v - bajo_v
+    modulo = np.hypot(corte_u, corte_v)
+    # Perpendicular a la cizalladura, hacia la derecha del vector.
+    desviacion_u = np.divide(
+        DEVIATION_MS * corte_v, modulo, out=np.zeros_like(modulo), where=modulo > 0
+    )
+    desviacion_v = np.divide(
+        -DEVIATION_MS * corte_u, modulo, out=np.zeros_like(modulo), where=modulo > 0
+    )
+    alcanza = np.nanmax(height_agl_m, axis=0) >= 6_000.0
+    fuera = ~alcanza | (modulo <= 0)
+    return (
+        np.where(fuera, np.nan, medio_u + desviacion_u),
+        np.where(fuera, np.nan, medio_v + desviacion_v),
+    )
+
+
+def storm_relative_helicity(
+    height_agl_m: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+    storm_u: np.ndarray,
+    storm_v: np.ndarray,
+    depth_m: float,
+) -> np.ndarray:
+    """Helicidad relativa a la tormenta entre el suelo y `depth_m`, en m²/s².
+
+    Suma el área que el hodógrafo barre alrededor del vector de movimiento,
+    tramo a tramo:
+
+        SRH = Σ (u_{i+1}-C_u)(v_i-C_v) - (u_i-C_u)(v_{i+1}-C_v)
+
+    Se recorren todos los niveles intermedios, no sólo los extremos, y el
+    tramo que cruza el techo se interpola para que la capa sea exactamente la
+    pedida. Las capas de espesor nulo —niveles isobáricos que quedan bajo
+    tierra— no aportan nada.
+    """
+    z0, z1 = height_agl_m[:-1], height_agl_m[1:]
+    espesor = z1 - z0
+    valido = np.isfinite(espesor) & (espesor > 0) & (z0 < depth_m)
+    # Qué parte del tramo entra: 1 si cabe entero, menos si cruza el techo.
+    fraccion = np.clip(
+        np.divide(
+            depth_m - z0, espesor, out=np.zeros_like(espesor), where=espesor > 0
+        ),
+        0.0,
+        1.0,
+    )
+    u_techo = u[:-1] + fraccion * (u[1:] - u[:-1])
+    v_techo = v[:-1] + fraccion * (v[1:] - v[:-1])
+    ur0, vr0 = u[:-1] - storm_u[None, ...], v[:-1] - storm_v[None, ...]
+    ur1, vr1 = u_techo - storm_u[None, ...], v_techo - storm_v[None, ...]
+    aporte = ur1 * vr0 - ur0 * vr1
+    hay = np.any(valido & np.isfinite(aporte), axis=0)
+    total = np.sum(np.where(valido & np.isfinite(aporte), aporte, 0.0), axis=0)
+    return np.where(hay, total, np.nan)
 
 
 def effective_bulk_wind_difference(

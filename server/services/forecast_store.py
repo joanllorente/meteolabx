@@ -30,6 +30,8 @@ DERIVED_FORECAST_PRODUCTS = (
     "dcape",
     "ordinary-cell-motion",
     "ship",
+    "srh-01",
+    "srh-03",
 )
 
 PERSISTED_FORECAST_PRODUCTS = (
@@ -54,6 +56,8 @@ PERSISTED_FORECAST_PRODUCTS = (
     "dcape",
     "ordinary-cell-motion",
     "ship",
+    "srh-01",
+    "srh-03",
     "cloud-cover",
     "vertical-totals",
 )
@@ -67,6 +71,9 @@ CONVECTIVE_FORECAST_PRODUCTS = (
     "dcape",
     "ordinary-cell-motion",
     "ebwd",
+    # Cinemáticos: no dependen de las parcelas, sólo del perfil de viento.
+    "srh-01",
+    "srh-03",
     "ship",
 )
 

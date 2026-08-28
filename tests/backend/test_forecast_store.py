@@ -298,7 +298,11 @@ def test_parallel_worker_respects_tiers_and_heavy_capacity(monkeypatch, tmp_path
         derived_timeout_s=30,
     )
 
-    assert (completed, frames, failures) == (5, 17, 0)
+    # Cinco trabajos, pero más frames: el grupo convectivo publica todos sus
+    # diagnósticos de una vez y el de cizalladura, los tres suyos. El número
+    # sube al añadir un producto a esos grupos.
+    assert (completed, failures) == (5, 0)
+    assert frames == 21, f"{frames} frames en cinco trabajos"
     assert maximum[0] >= 2
     assert maximum[2] == 1
     first_heavy = events.index(("start", 2))
@@ -849,7 +853,7 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
         forecast_worker._expected_frames(manifest, product, publicadas_al_final(product))
         for product in PERSISTED_FORECAST_PRODUCTS
     )
-    assert al_principio == al_final == 1015
+    assert al_principio == al_final == 1087
 
 
 def test_capped_products_only_offer_the_hours_that_will_exist():
