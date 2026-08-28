@@ -615,3 +615,148 @@ def test_bunkers_deviates_to_the_right_of_the_shear():
         "con cizalladura del oeste el desvío va al sur"
     )
     assert cu.item() > 0
+
+
+def test_vertical_velocity_at_the_lfc_needs_the_profile():
+    """Sin perfil de velocidad vertical el campo llega vacío, no a cero.
+
+    Un cero diría «no hay ascenso», que es una afirmación meteorológica; la
+    ausencia del dato no lo es.
+    """
+    from server.services.arome_forecast import _convective_outputs
+
+    argumentos = _synthetic_profile(48, 30)
+    sin_dato = _convective_outputs(*argumentos, include_dcape=False)
+
+    assert not np.isfinite(sin_dato["vv_lfc"]).any()
+
+
+def test_vertical_velocity_is_read_at_the_free_convection_level():
+    """Se interpola al NCL de la parcela de capa mezclada, no a un nivel fijo.
+
+    Ahí está el sentido del mapa: un ascenso que alcanza ese nivel dispara la
+    convección, y uno que se queda por debajo se embotella bajo la inversión.
+    """
+    from server.services.arome_forecast import _convective_outputs
+
+    argumentos = _synthetic_profile(48, 30)
+    presion = argumentos[0]
+    # Velocidad vertical que crece con la altura: el valor en el NCL depende
+    # de a qué altura esté, así que no puede salir constante.
+    perfil_vv = np.linspace(0.0, 2.0, presion.shape[0])[:, None, None] * np.ones_like(presion)
+
+    salida = _convective_outputs(
+        *argumentos, include_dcape=False, vertical_velocity=perfil_vv
+    )
+
+    con_valor = np.isfinite(salida["vv_lfc"])
+    assert con_valor.any()
+    # Sólo donde hay capa flotante que alcanzar.
+    assert np.array_equal(con_valor, np.isfinite(salida["ml_lfc_height"]))
+    assert salida["vv_lfc"][con_valor].std() > 0, "no puede ser un nivel fijo"
+
+
+def test_adding_vertical_velocity_changes_nothing_else():
+    """El campo nuevo no altera ninguno de los diagnósticos que ya había."""
+    from server.services.arome_forecast import _convective_outputs
+
+    argumentos = _synthetic_profile(48, 30)
+    presion = argumentos[0]
+    perfil_vv = np.linspace(0.0, 2.0, presion.shape[0])[:, None, None] * np.ones_like(presion)
+
+    sin_dato = _convective_outputs(*argumentos, include_dcape=False)
+    con_dato = _convective_outputs(
+        *argumentos, include_dcape=False, vertical_velocity=perfil_vv
+    )
+
+    for nombre in sin_dato:
+        if nombre == "vv_lfc":
+            continue
+        assert np.array_equal(
+            np.nan_to_num(sin_dato[nombre]), np.nan_to_num(con_dato[nombre])
+        ), nombre
+
+
+def _perfil_con_vorticidad(filas=96, columnas=60):
+    """Perfil sintético con un vórtice y ascenso, para la helicidad."""
+    p, t, td, u, v, terr, su, sv, niveles = _synthetic_profile(filas, columnas)
+    Y, X = np.meshgrid(
+        np.arange(filas) - filas / 2, np.arange(columnas) - columnas / 2,
+        indexing="ij",
+    )
+    radio = np.hypot(X, Y) + 1e-9
+    giro = np.exp(-radio / 12) * 20.0
+    u[:] = (-Y / radio * giro)[None, ...]
+    v[:] = (X / radio * giro)[None, ...]
+    w = np.full(p.shape, 4.0)
+    latitudes = np.linspace(43.0, 42.0, filas)
+    return (p, t, td, u, v, terr, w, (latitudes, 0.025, 0.025))
+
+
+def test_striped_updraft_helicity_matches_the_whole_grid():
+    """Trocear no puede cambiar la helicidad ni dejar costuras.
+
+    La vorticidad se deriva en el plano, así que cada banda lee una fila de más
+    por arriba y otra por abajo. Sin ese halo, las filas de unión se derivarían
+    contra el vacío y el mapa saldría rayado.
+
+    Las únicas diferencias admisibles están en el borde exterior del dominio,
+    donde no hay vecina que leer y np.gradient usa diferencias de un solo lado.
+    """
+    from server.services.arome_forecast import _updraft_helicity_in_stripes
+
+    p, t, td, u, v, terr, w, rejilla = _perfil_con_vorticidad()
+
+    entero = _updraft_helicity_in_stripes(p, t, td, u, v, terr, w, rejilla, stripe_rows=0)
+    troceado = _updraft_helicity_in_stripes(p, t, td, u, v, terr, w, rejilla, stripe_rows=24)
+
+    # El interior tiene que coincidir exactamente, uniones incluidas.
+    interior = slice(1, -1)
+    assert np.allclose(
+        troceado[interior], entero[interior], equal_nan=True
+    ), "el troceado altera el interior del dominio"
+    # Y en particular las filas donde se unen las bandas.
+    for union in (24, 48, 72):
+        assert np.allclose(
+            troceado[union - 1 : union + 1], entero[union - 1 : union + 1], equal_nan=True
+        ), f"costura en la fila {union}"
+
+
+def test_updraft_helicity_has_no_seams_between_bands():
+    """En las uniones no aparece ningún salto que el campo no tuviera ya.
+
+    Medir el salto contra el resto del mapa no vale: un vórtice puede caer
+    justo en una unión y su gradiente real dispararía la comparación. Lo que
+    delata una costura es que el escalón sea mayor troceando que sin trocear.
+    """
+    from server.services.arome_forecast import _updraft_helicity_in_stripes
+
+    p, t, td, u, v, terr, w, rejilla = _perfil_con_vorticidad()
+    troceado = _updraft_helicity_in_stripes(
+        p, t, td, u, v, terr, w, rejilla, stripe_rows=24
+    )
+    entero = _updraft_helicity_in_stripes(
+        p, t, td, u, v, terr, w, rejilla, stripe_rows=0
+    )
+
+    saltos_troceado = np.abs(np.diff(troceado, axis=0))
+    saltos_entero = np.abs(np.diff(entero, axis=0))
+    for union in (24, 48, 72):
+        troceando = np.nanmax(saltos_troceado[union - 1])
+        sin_trocear = np.nanmax(saltos_entero[union - 1])
+        assert troceando == pytest.approx(sin_trocear, rel=1e-9), (
+            f"la unión {union} salta {troceando:.2f} troceando y "
+            f"{sin_trocear:.2f} sin trocear"
+        )
+
+
+def test_updraft_helicity_without_vertical_velocity_is_empty():
+    """Sin velocidad vertical no hay helicidad que integrar."""
+    from server.services.arome_forecast import _updraft_helicity_in_stripes
+
+    p, t, td, u, v, terr, _w, rejilla = _perfil_con_vorticidad(48, 30)
+
+    vacio = _updraft_helicity_in_stripes(p, t, td, u, v, terr, None, rejilla)
+
+    assert vacio.shape == terr.shape
+    assert not np.isfinite(vacio).any()

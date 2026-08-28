@@ -58,6 +58,8 @@ PERSISTED_FORECAST_PRODUCTS = (
     "ship",
     "srh-01",
     "srh-03",
+    "vv-lfc",
+    "updraft-helicity",
     "cloud-cover",
     "vertical-totals",
 )
@@ -73,6 +75,8 @@ CONVECTIVE_FORECAST_PRODUCTS = (
     "ebwd",
     # Cinemáticos: no dependen de las parcelas, sólo del perfil de viento.
     "srh-01",
+    "vv-lfc",
+    "updraft-helicity",
     "srh-03",
     "ship",
 )

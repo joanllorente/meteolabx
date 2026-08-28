@@ -222,7 +222,7 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 25
+    assert len(selected_ids) == 27
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 
@@ -389,3 +389,23 @@ def test_expired_wcs_metadata_is_fetched_again(tmp_path, monkeypatch):
     arome._api_get_metadata("https://x/GetCapabilities", (), "t")
 
     assert len(llamadas) == 2
+
+
+def test_the_proxy_does_not_send_a_body_with_204():
+    """Tornado rechaza un cuerpo en un 204, aunque venga vacío.
+
+    Las métricas de visita responden 204, así que cada una dejaba un
+    «AssertionError: Cannot send body with 204» en el log del servidor. La
+    petición del navegador se completaba igual, pero el ruido escondía errores
+    de verdad.
+    """
+    import inspect
+    from pathlib import Path
+
+    fuente = (
+        Path(__file__).resolve().parents[1] / "scripts" / "run_streamlit.py"
+    ).read_text(encoding="utf-8")
+
+    assert "response.code in (204, 304)" in fuente, (
+        "las respuestas sin cuerpo tienen que cerrarse sin él"
+    )

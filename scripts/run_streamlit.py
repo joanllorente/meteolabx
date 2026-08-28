@@ -97,7 +97,11 @@ class ForecastApiProxyHandler(RequestHandler):
         ):
             if value := response.headers.get(header):
                 self.set_header(header, value)
-        if self.request.method == "HEAD":
+        # Un 204 no lleva cuerpo, y Tornado se niega a enviarlo aunque el
+        # cuerpo esté vacío: hay que cerrar sin más. Las respuestas de las
+        # métricas de visita son 204, así que cada una dejaba una excepción en
+        # el log del servidor.
+        if self.request.method == "HEAD" or response.code in (204, 304):
             self.finish()
         else:
             self.finish(response.body)

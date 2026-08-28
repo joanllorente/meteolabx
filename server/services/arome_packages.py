@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import fcntl
+from functools import lru_cache
 import logging
 import os
 from pathlib import Path
@@ -340,7 +341,17 @@ def read_isobaric_extras(
             "IP3 no trae %s con los nombres esperados. Elementos del fichero: %s",
             ", ".join(faltan), ", ".join(sorted(vistos)),
         )
+    else:
+        # Aunque salga todo: saber qué más trae el paquete es lo que permite
+        # decidir si un campo nuevo cuesta una descarga o ya está pagado.
+        _log_package_inventory(path.name, tuple(sorted(vistos)))
     return salida, geometria
+
+
+@lru_cache(maxsize=8)
+def _log_package_inventory(nombre: str, elementos: tuple[str, ...]) -> None:
+    """Deja constancia de lo que trae un paquete, una vez por fichero."""
+    logger.info("%s contiene: %s", nombre.split("-")[0], ", ".join(elementos))
 
 
 def discard_packages_before(run: datetime) -> list[Path]:

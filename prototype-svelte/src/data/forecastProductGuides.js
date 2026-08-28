@@ -62,6 +62,44 @@ export const forecastProductGuides = {
     sources: [MF_AROME, MF_API]
   },
 
+  'vv-lfc': {
+    what: 'Velocidad vertical del modelo en el nivel de convección libre de la parcela de capa mezclada, en m/s. Positiva hacia arriba.',
+    interpretation: [
+      'Responde a la pregunta que los mapas de inestabilidad no contestan: si el ascenso llega hasta donde la parcela se vuelve flotante. Alcanzado el NCL la convección se dispara sola; por debajo, la convergencia se embotella bajo la inversión y no pasa nada.',
+      'Por eso complementa a los CAPE en lugar de repetirlos: aquéllos dicen cuánta energía hay disponible y éste, si algo la va a liberar. Un valor alto sobre una zona con CAPE apreciable señala dónde y cuándo.',
+      'AROME resuelve parcialmente la convección, así que en celdas ya desarrolladas este campo recoge la propia corriente ascendente y no solo el forzamiento previo. Como detector de dónde el modelo está convectando sigue siendo útil, pero conviene saber que no siempre es la causa.',
+      'Las flechas son el viento de 10 m: indican qué está forzando el ascenso —brisa, línea de convergencia, relieve— y hacia dónde se propagaría lo que se dispare.'
+    ],
+    method: 'Velocidad vertical geométrica de los niveles isobáricos del paquete IP3, interpolada linealmente a la altura del NCL. El NCL sale de la parcela de capa mezclada de los 100 hPa inferiores, la misma con la que se calcula el MLCAPE.',
+    equations: [
+      { label: 'Interpolación al NCL', latex: String.raw`w_{\mathrm{NCL}}=w_k+\frac{z_{\mathrm{NCL}}-z_k}{z_{k+1}-z_k}\,(w_{k+1}-w_k)` }
+    ],
+    steps: [
+      'Velocidad vertical en niveles isobáricos del paquete IP3, que ya se descarga para el rocío del DCAPE.',
+      'Altura del nivel de convección libre de la parcela ML100, sobre el terreno.',
+      'Sin valor donde la parcela no llega a ganar flotabilidad: no hay nivel al que mirar.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+  'updraft-helicity': {
+    what: 'Helicidad de la corriente ascendente entre 2 y 5 km sobre el terreno, en m²/s². Integra el producto de la velocidad vertical por la vorticidad vertical a lo largo de esa capa.',
+    interpretation: [
+      'Separa una tormenta que rota de otra que sólo sube con fuerza. Un ascenso intenso sin vorticidad da valores bajos; uno moderado pero rotatorio, altos. Es el rastro que deja una supercélula en un modelo que resuelve la convección.',
+      'Se usa habitualmente para identificar mesociclones simulados. El signo distingue el sentido del giro: positivo, ciclónico; negativo, la supercélula izquierda.',
+      'A diferencia de CAPE o cizalladura, no describe el ambiente sino lo que el modelo está generando: aparece donde AROME ya ha desarrollado la tormenta, no antes. Por eso conviene leerlo junto a los campos de entorno y no en su lugar.'
+    ],
+    method: 'Vorticidad vertical de cada nivel isobárico calculada con las distancias horizontales en metros —la longitud se corrige por el coseno de la latitud—, multiplicada por la velocidad vertical geométrica de IP3 e integrada por trapecios entre 2.000 y 5.000 m sobre el terreno, con los extremos interpolados.',
+    equations: [
+      { label: 'Vorticidad vertical', latex: String.raw`\zeta=\frac{\partial v}{\partial x}-\frac{\partial u}{\partial y}` },
+      { label: 'Helicidad del ascenso', latex: String.raw`\mathrm{UH}_{2-5}=\int_{2000}^{5000} w\,\zeta\;\mathrm{d}z` }
+    ],
+    steps: [
+      'Altura de cada nivel a partir del geopotencial de IP1, sobre el terreno.',
+      'Vorticidad en la rejilla completa: necesita las celdas vecinas, así que no puede trocearse.',
+      'Sin valor donde la columna no cubre la capa 2–5 km entera: un valor parcial se leería como rotación débil cuando es falta de datos.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
   'srh-01': {
     what: 'Helicidad relativa a la tormenta entre el suelo y 1.000 m sobre el terreno, en m²/s². Mide el área que el hodógrafo barre alrededor del vector de movimiento de la tormenta: cuánto giro puede heredar una corriente ascendente del entorno en el que se forma.',
     interpretation: [

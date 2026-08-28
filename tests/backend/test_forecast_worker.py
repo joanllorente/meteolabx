@@ -592,7 +592,7 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     total = sum(
         trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
     )
-    assert total == 1087, f"el denominador de una pasada completa es 1087, no {total}"
+    assert total == 1159, f"el denominador de una pasada completa es 1159, no {total}"
 
 
 def test_prefetch_also_brings_the_dcape_package(monkeypatch):

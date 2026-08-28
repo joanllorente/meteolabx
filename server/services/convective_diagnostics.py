@@ -62,6 +62,9 @@ class ConvectiveDiagnostics:
     mu_mixing_ratio_gkg: np.ndarray
     mu_equilibrium_height_m: np.ndarray
     effective_base_height_m: np.ndarray
+    # Nivel de convección libre de la parcela de capa mezclada: hasta dónde
+    # tiene que llegar el ascenso forzado para que la convección se dispare.
+    ml_lfc_height_m: np.ndarray
 
 
 def saturation_vapor_pressure_hpa(temperature_k: np.ndarray) -> np.ndarray:
@@ -501,6 +504,7 @@ def diagnose_convection(
         mu_mixing_ratio_gkg=mu_ratio,
         mu_equilibrium_height_m=mu.equilibrium_height_m,
         effective_base_height_m=effective_base,
+        ml_lfc_height_m=mixed.lfc_height_m,
     )
 
 
@@ -799,6 +803,94 @@ def interpolate_profile_at_height(
         )
         result = np.where(within, data[index] + fraction * (data[index + 1] - data[index]), result)
     return result
+
+
+EARTH_RADIUS_M = 6_371_000.0
+
+
+def vertical_vorticity(
+    u: np.ndarray,
+    v: np.ndarray,
+    latitudes_deg: np.ndarray,
+    lon_step_deg: float,
+    lat_step_deg: float,
+) -> np.ndarray:
+    """Vorticidad vertical de cada nivel, en s⁻¹.
+
+        ζ = ∂v/∂x − ∂u/∂y
+
+    Las distancias van en metros, no en grados: un grado de longitud mide
+    111 km en el ecuador y 64 en el norte del dominio, así que sin corregir por
+    el coseno de la latitud la vorticidad saldría inflada arriba del mapa.
+
+    Necesita las celdas vecinas, de modo que hay que calcularla sobre la
+    rejilla entera: por bandas, cada borde saldría mal.
+    """
+    paso_lat_m = np.radians(lat_step_deg) * EARTH_RADIUS_M
+    paso_lon_m = (
+        np.radians(lon_step_deg)
+        * EARTH_RADIUS_M
+        * np.cos(np.radians(latitudes_deg))
+    )
+    # np.gradient da diferencias centradas dentro y de un lado en los bordes.
+    dv_dx = np.gradient(v, axis=-1) / paso_lon_m[None, :, None]
+    du_dy = np.gradient(u, axis=-2) / paso_lat_m
+    return dv_dx - du_dy
+
+
+def updraft_helicity(
+    height_agl_m: np.ndarray,
+    vertical_velocity_ms: np.ndarray,
+    u: np.ndarray,
+    v: np.ndarray,
+    latitudes_deg: np.ndarray,
+    lon_step_deg: float,
+    lat_step_deg: float,
+    base_m: float = 2_000.0,
+    top_m: float = 5_000.0,
+) -> np.ndarray:
+    """Helicidad de la corriente ascendente entre dos alturas, en m²/s².
+
+        UH = ∫ w·ζ dz
+
+    Integra por trapecios sobre todos los niveles de la capa, con los extremos
+    interpolados para que sea exactamente la pedida. Mide cuánta rotación
+    acompaña al ascenso: es el rastro que deja una supercélula en un modelo que
+    resuelve la convección, y separa una tormenta rotatoria de una que sólo
+    sube fuerte.
+
+    Devuelve NaN donde la columna no cubre la capa entera o no le quedan
+    niveles válidos dentro: un valor parcial se leería como rotación débil
+    cuando en realidad es falta de datos.
+    """
+    integrando = vertical_velocity_ms * vertical_vorticity(
+        u, v, latitudes_deg, lon_step_deg, lat_step_deg
+    )
+    z = height_agl_m
+    z0, z1 = z[:-1], z[1:]
+    h0, h1 = integrando[:-1], integrando[1:]
+    espesor = z1 - z0
+    utilizable = np.isfinite(espesor) & (espesor > 0)
+
+    # Recorte de cada tramo a la capa, interpolando el integrando en los cortes.
+    desde = np.clip(z0, base_m, top_m)
+    hasta = np.clip(z1, base_m, top_m)
+    dentro = utilizable & (hasta > desde) & np.isfinite(h0) & np.isfinite(h1)
+
+    def en(altura: np.ndarray) -> np.ndarray:
+        fraccion = np.divide(
+            altura - z0, espesor, out=np.zeros_like(espesor), where=utilizable
+        )
+        return h0 + np.clip(fraccion, 0.0, 1.0) * (h1 - h0)
+
+    trapecio = 0.5 * (en(desde) + en(hasta)) * (hasta - desde)
+    total = np.sum(np.where(dentro, trapecio, 0.0), axis=0)
+
+    # La columna tiene que llegar de verdad a los dos extremos de la capa.
+    cima = np.nanmax(np.where(np.isfinite(z), z, -np.inf), axis=0)
+    suelo = np.nanmin(np.where(np.isfinite(z), z, np.inf), axis=0)
+    cubre = (cima >= top_m) & (suelo <= base_m) & np.any(dentro, axis=0)
+    return np.where(cubre, total, np.nan)
 
 
 def _layer_mean_wind(

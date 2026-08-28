@@ -39,6 +39,7 @@ from server.services.arome_packages import (
 from server.services.meteofrance_auth import MeteoFranceAuthError
 from server.services.convective_diagnostics import (
     bunkers_right_motion,
+    updraft_helicity,
     downdraft_cape,
     storm_relative_helicity,
     diagnose_convection,
@@ -118,6 +119,16 @@ PRODUCTS = {
         "diagnostic": "dcape",
         "vmax": 1800.0,
         "unit": "J/kg",
+    },
+    "updraft-helicity": {
+        "kind": "convective",
+        "diagnostic": "updraft_helicity",
+        "vmin": -50.0, "vmax": 250.0, "unit": "m²/s²",
+    },
+    "vv-lfc": {
+        "kind": "convective",
+        "diagnostic": "vv_lfc",
+        "vmin": -5.0, "vmax": 10.0, "unit": "m/s",
     },
     "srh-01": {
         "kind": "convective",
@@ -737,6 +748,7 @@ def _convective_outputs(
     levels: list[float],
     include_dcape: bool = True,
     only_dcape: bool = False,
+    vertical_velocity: np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """Diagnósticos convectivos de un bloque de filas de la rejilla.
 
@@ -759,6 +771,7 @@ def _convective_outputs(
                     "cell_u", "cell_v", "cell_speed",
                     "ebwd", "ebwd_u", "ebwd_v", "ship",
                     "srh_01", "srh_03", "bunkers_u", "bunkers_v",
+                    "vv_lfc", "ml_lfc_height",
                 )
             },
         }
@@ -786,6 +799,21 @@ def _convective_outputs(
         diagnostics.effective_base_height_m,
         diagnostics.mu_equilibrium_height_m,
     )
+    # Velocidad vertical en el nivel de convección libre de la parcela de capa
+    # mezclada. Un ascenso que alcanza ese nivel dispara la convección; el que
+    # se queda por debajo se embotella bajo la inversión, y la convergencia en
+    # superficie no distingue esos dos casos.
+    if vertical_velocity is None:
+        vv_lfc = np.full(shape, np.nan)
+    else:
+        vv_lfc = interpolate_profile_at_height(
+            height, vertical_velocity, diagnostics.ml_lfc_height_m + terrain
+        )
+        # Sin capa flotante no hay nivel al que mirar.
+        vv_lfc = np.where(
+            np.isfinite(diagnostics.ml_lfc_height_m), vv_lfc, np.nan
+        )
+
     # Helicidad relativa a la tormenta, sobre el movimiento de Bunkers. Sale
     # del mismo perfil de viento que ya está montado, así que no cuesta una
     # sola descarga: 69 ms por capa sobre el dominio entero.
@@ -839,6 +867,8 @@ def _convective_outputs(
         "ship": ship,
         "srh_01": srh_01,
         "srh_03": srh_03,
+        "vv_lfc": vv_lfc,
+        "ml_lfc_height": diagnostics.ml_lfc_height_m,
         "bunkers_u": bunkers_u,
         "bunkers_v": bunkers_v,
     }
@@ -941,6 +971,61 @@ def _profiles_spilled_to_disk(
         shutil.rmtree(carpeta, ignore_errors=True)
 
 
+def _updraft_helicity_in_stripes(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    u_profile: np.ndarray,
+    v_profile: np.ndarray,
+    terrain: np.ndarray,
+    vertical_velocity: np.ndarray | None,
+    grid: tuple[np.ndarray, float, float] | None,
+    stripe_rows: int | None = None,
+) -> np.ndarray:
+    """Helicidad de la corriente ascendente, por bandas con halo.
+
+    Va aparte del resto del diagnóstico porque necesita algo que ninguno de los
+    otros pide: las celdas vecinas. La vorticidad se deriva en el plano, así
+    que la primera y la última fila de cada banda se calcularían contra el
+    vacío y dejarían una costura en el mapa.
+
+    Cada banda lee una fila de más por arriba y otra por abajo —basta una con
+    diferencias centradas de segundo orden— y la descarta al escribir. Las
+    columnas no necesitan halo: el troceado es por filas, así que ya están
+    enteras. En el borde exterior del dominio no hay vecina que leer y
+    np.gradient recurre a diferencias de un solo lado.
+    """
+    rows = terrain.shape[0]
+    if vertical_velocity is None or grid is None:
+        return np.full(terrain.shape, np.nan)
+    latitudes, paso_lon, paso_lat = grid
+    step = CONVECTIVE_STRIPE_ROWS if stripe_rows is None else stripe_rows
+    if step <= 0 or step >= rows:
+        step = rows
+
+    salida = np.empty(terrain.shape, dtype=float)
+    for start in range(0, rows, step):
+        band = slice(start, min(start + step, rows))
+        arriba = max(0, band.start - 1)
+        abajo = min(rows, band.stop + 1)
+        ancha = slice(arriba, abajo)
+        altura = hypsometric_height_profile_m(
+            pressure[:, ancha], temperature[:, ancha],
+            dewpoint[:, ancha], terrain[ancha],
+        )
+        completa = updraft_helicity(
+            altura - terrain[ancha][None, ...],
+            vertical_velocity[:, ancha],
+            u_profile[:, ancha],
+            v_profile[:, ancha],
+            latitudes[ancha],
+            paso_lon,
+            paso_lat,
+        )
+        salida[band] = completa[band.start - arriba : band.stop - arriba]
+    return salida
+
+
 def _convective_outputs_in_stripes(
     pressure: np.ndarray,
     temperature: np.ndarray,
@@ -954,6 +1039,7 @@ def _convective_outputs_in_stripes(
     stripe_rows: int | None = None,
     include_dcape: bool = True,
     only_dcape: bool = False,
+    vertical_velocity: np.ndarray | None = None,
 ) -> dict[str, np.ndarray]:
     """Encadena el diagnóstico por bandas de filas y recompone la rejilla."""
     rows = terrain.shape[0]
@@ -966,6 +1052,7 @@ def _convective_outputs_in_stripes(
     arguments = (
         pressure, temperature, dewpoint, u_profile, v_profile,
         terrain, surface_u, surface_v, levels, include_dcape, only_dcape,
+        vertical_velocity,
     )
     if step <= 0 or step >= rows:
         return _convective_outputs(*arguments)
@@ -989,6 +1076,7 @@ def _convective_outputs_in_stripes(
             levels,
             include_dcape,
             only_dcape,
+            None if vertical_velocity is None else vertical_velocity[:, band],
         )
         for name, values in stripe.items():
             with reserva:
@@ -1310,13 +1398,19 @@ def _convective_frames(
     # vertical: con él no hace falta pedir un solo campo por niveles al WCS.
     package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
     package_levels_usado = bool(package_levels)
+    # De IP3 salen el rocío exacto —sólo lo necesita DCAPE— y la velocidad
+    # vertical, que alimenta el mapa del nivel de convección libre. El paquete
+    # se descarga y adelanta igual, así que pedir el segundo campo no cuesta
+    # una petición más: sólo leerlo del fichero.
+    quiere = ("dewpoint", "vertical_velocity") if exact_dewpoint else ("vertical_velocity",)
     extras = (
-        _isobaric_extras_from_package(run, valid_time, levels, ("dewpoint",))
-        if package_levels and exact_dewpoint
+        _isobaric_extras_from_package(run, valid_time, levels, quiere)
+        if package_levels
         else None
     )
     package_dewpoint = (extras[0].get("dewpoint") if extras else None) or None
     rocio_de_ip3 = bool(package_dewpoint)
+    package_vv = (extras[0].get("vertical_velocity") if extras else None) or None
     if package_levels:
         # Con el rocío derivado de la humedad de IP1 —o el exacto de IP3— no
         # hace falta pedir nada al WCS por niveles: 24 descargas menos por hora.
@@ -1379,6 +1473,10 @@ def _convective_frames(
     terrain = np.where(np.isfinite(terrain), terrain, 0.0)
 
     shape = surface_temperature.shape
+    # La velocidad vertical no tiene valor en superficie: se arranca en el
+    # primer nivel isobárico y el suelo queda a cero, que es su condición de
+    # contorno.
+    vv_layers = [np.zeros(shape)] if package_vv else None
     pressure_layers = [surface_pressure]
     temperature_layers = [surface_temperature]
     dewpoint_layers = [surface_dewpoint]
@@ -1421,18 +1519,24 @@ def _convective_frames(
         dewpoint_layers.append(np.where(below_ground, surface_dewpoint, dewpoint))
         u_layers.append(np.where(below_ground, surface_u, u_value))
         v_layers.append(np.where(below_ground, surface_v, v_value))
+        if vv_layers is not None:
+            vv_nivel = np.asarray(
+                _align(reference, package_vv[level_hpa]), dtype=float
+            ) if level_hpa in package_vv else np.full(shape, np.nan)
+            vv_layers.append(np.where(below_ground, 0.0, vv_nivel))
 
     pressure = np.stack(pressure_layers)
     temperature = np.stack(temperature_layers)
     dewpoint = np.minimum(np.stack(dewpoint_layers), temperature)
     u_profile = np.stack(u_layers)
     v_profile = np.stack(v_layers)
+    vv_profile = np.stack(vv_layers) if vv_layers is not None else None
 
     # Los campos descargados y las capas sueltas ya viven dentro de los
     # perfiles apilados. Mantenerlos vivos durante el diagnóstico duplicaba el
     # volumen completo en memoria, y el proceso moría por falta de ella.
     pressure_layers = temperature_layers = dewpoint_layers = None
-    u_layers = v_layers = None
+    u_layers = v_layers = vv_layers = None
     surface_dewpoint_field = surface_pressure_field = None
     surface_u_field = surface_v_field = terrain_field = None
     fetched.clear()
@@ -1450,7 +1554,18 @@ def _convective_frames(
     # margen tiene.
     if package_dewpoint:
         package_dewpoint.clear()
-    package_dewpoint = extras = None
+    if package_vv:
+        package_vv.clear()
+    package_dewpoint = package_vv = extras = None
+
+    # La rejilla hace falta para la vorticidad: sus derivadas van en metros y
+    # un grado de longitud mide 111 km abajo del dominio y 64 arriba.
+    filas = np.arange(shape[0], dtype=float) + 0.5
+    rejilla = (
+        reference.transform.f + filas * reference.transform.e,
+        abs(float(reference.transform.a)),
+        abs(float(reference.transform.e)),
+    )
 
     # Los perfiles apilados rondan el giga y sólo se leen. Apartarlos al disco
     # los saca de la memoria que el núcleo no puede recuperar; hay que soltar
@@ -1469,6 +1584,10 @@ def _convective_frames(
             # Cuando sólo se pide DCAPE no hay que rehacer las tres parcelas:
             # de eso se encargó el nivel anterior.
             only_dcape=only_dcape,
+            vertical_velocity=vv_profile,
+        )
+        updraft = _updraft_helicity_in_stripes(
+            *perfiles, terrain, vv_profile, rejilla,
         )
         perfiles = None
     fases["diagnosticar"] = time.monotonic() - reloj
@@ -1526,6 +1645,13 @@ def _convective_frames(
         "ship": RasterField(outputs["ship"], *common, ""),
         # El vector es el movimiento de la supercélula derecha, que es la
         # tormenta a la que esa helicidad se refiere.
+        # El vector es el viento de 10 m: dice qué está forzando ese ascenso y
+        # hacia dónde se propagaría lo que dispare.
+        "vv-lfc": RasterField(
+            outputs["vv_lfc"], *common, "m/s",
+            vector_u=surface_u, vector_v=surface_v,
+        ),
+        "updraft-helicity": RasterField(updraft, *common, "m²/s²"),
         "srh-01": RasterField(
             outputs["srh_01"], *common, "m²/s²",
             vector_u=outputs["bunkers_u"], vector_v=outputs["bunkers_v"],

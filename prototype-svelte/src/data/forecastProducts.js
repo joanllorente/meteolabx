@@ -255,6 +255,20 @@ const allForecastProducts = [
     method: 'Integral del hodógrafo entre 0 y 3.000 m sobre el terreno, restando el movimiento Bunkers 2000 right mover. Sale del mismo perfil de viento que los demás diagnósticos convectivos.',
     coverage: 'Perfil de viento AROME · 0–3 km AGL'
   },
+  {
+    id: 'vv-lfc', category: 'convection', label: 'Velocidad vertical en el NCL', short: 'w en NCL', kind: 'derived',
+    unit: 'm/s', min: -5, max: 10, palette: 'shear', accent: '#4ade80', vectors: true,
+    description: 'Velocidad vertical del modelo interpolada al nivel de convección libre de la parcela de capa mezclada. Un ascenso que alcanza ese nivel dispara la convección; el que se queda por debajo se embotella bajo la inversión, y una convergencia en superficie no distingue esos dos casos.',
+    method: 'Velocidad vertical geométrica del paquete isobárico IP3, interpolada a la altura del NCL que calcula la parcela ML100. Las flechas son el viento de 10 m.',
+    coverage: 'IP3 · velocidad vertical en niveles isobáricos'
+  },
+  {
+    id: 'updraft-helicity', category: 'convection', label: 'Helicidad de la corriente ascendente 2–5 km', short: 'UH 2–5', kind: 'derived',
+    unit: 'm²/s²', min: -50, max: 250, palette: 'shear', accent: '#f472b6', vectors: false,
+    description: 'Integral del producto de la velocidad vertical por la vorticidad entre 2 y 5 km sobre el terreno. Mide cuánta rotación acompaña al ascenso, así que separa una tormenta rotatoria de otra que sólo sube con fuerza: es el rastro que deja una supercélula en un modelo que resuelve la convección.',
+    method: 'Vorticidad vertical de cada nivel isobárico con las distancias en metros, multiplicada por la velocidad vertical de IP3 e integrada por trapecios entre 2.000 y 5.000 m AGL.',
+    coverage: 'IP1 · viento y geopotencial · IP3 · velocidad vertical'
+  },
 ];
 
 // Selección inicial deliberadamente corta. El catálogo completo queda listo para
@@ -263,6 +277,8 @@ const initialProductIds = [
   'vertical-totals',
   'srh-01',
   'srh-03',
+  'vv-lfc',
+  'updraft-helicity',
   'temperature-2m',
   'temperature-850',
   'temperature-500',
