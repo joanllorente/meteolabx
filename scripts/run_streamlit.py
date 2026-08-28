@@ -146,11 +146,19 @@ def install_forecast_route() -> None:
             PathMatches(re.compile(r"^/v1/stats/(?:section|seo-view)$")),
             PublicStatsProxyHandler,
         )
+        # El estado del backend, accesible desde fuera para que la plataforma
+        # pueda reiniciar el servicio cuando deje de responder. Va por el mismo
+        # proxy, así que responde sólo si el backend está vivo de verdad.
+        health_route = Rule(
+            PathMatches(re.compile(r"^/v1/health/?$")),
+            ForecastApiProxyHandler,
+        )
         # ``wildcard_router`` contiene las rutas declaradas por Streamlit. La
         # entrada debe ir antes de su StaticFileHandler y de Add/RemoveSlash.
         app.wildcard_router.rules.insert(0, route)
         app.wildcard_router.rules.insert(0, api_route)
         app.wildcard_router.rules.insert(0, stats_route)
+        app.wildcard_router.rules.insert(0, health_route)
         return app
 
     Server._create_app = create_app_with_forecast

@@ -1410,15 +1410,14 @@ def _convective_frames(
     # vertical, que alimenta el mapa del nivel de convección libre. El paquete
     # se descarga y adelanta igual, así que pedir el segundo campo no cuesta
     # una petición más: sólo leerlo del fichero.
-    # DCAPE no puede seguir sin el rocío, así que espera a IP3 si hace falta.
-    # La velocidad vertical alimenta dos mapas más y no manda sobre el resto:
-    # si el paquete todavía no está, se prescinde de ella y esos dos salen
-    # vacíos esa hora.
+    # Se espera a IP3 aunque todavía no esté: un perfil derivado tiene media
+    # hora de plazo y el paquete tarda unos dos minutos, así que sale a cuenta.
+    # Prescindir de él publicaría esas horas con los dos mapas de velocidad
+    # vertical vacíos, y una hora ya publicada no se recalcula: se quedarían
+    # así para siempre.
     quiere = ("dewpoint", "vertical_velocity") if exact_dewpoint else ("vertical_velocity",)
     extras = (
-        _isobaric_extras_from_package(
-            run, valid_time, levels, quiere, esperar=exact_dewpoint
-        )
+        _isobaric_extras_from_package(run, valid_time, levels, quiere)
         if package_levels
         else None
     )

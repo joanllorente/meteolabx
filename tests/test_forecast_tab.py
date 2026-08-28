@@ -409,3 +409,38 @@ def test_the_proxy_does_not_send_a_body_with_204():
     assert "response.code in (204, 304)" in fuente, (
         "las respuestas sin cuerpo tienen que cerrarse sin él"
     )
+
+
+def test_the_health_endpoint_is_reachable_from_outside():
+    """El estado del backend tiene que llegar al exterior.
+
+    Sin ruta pública, la plataforma no puede saber que el servicio dejó de
+    responder y devuelve 502 hasta que alguien lo mira. Pasa por el mismo
+    proxy que el resto, así que sólo contesta si el backend está vivo.
+    """
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parents[1]
+    proxy = (raiz / "scripts" / "run_streamlit.py").read_text(encoding="utf-8")
+    despliegue = (raiz / "railway.toml").read_text(encoding="utf-8")
+
+    assert 'r"^/v1/health/?$"' in proxy
+    assert "health_route" in proxy
+    assert 'healthcheckPath = "/v1/health"' in despliegue
+
+
+def test_the_worker_runs_at_lower_priority():
+    """El cálculo cede la CPU a la web cuando compiten.
+
+    Con siete procesos saturando los núcleos, una visita esperaba detrás de
+    ellos. `nice` no les quita tiempo mientras sobra; sólo los adelanta cuando
+    hay competencia.
+    """
+    from pathlib import Path
+
+    arranque = (
+        Path(__file__).resolve().parents[1] / "scripts" / "start_web.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "nice -n" in arranque
+    assert "METEOLABX_FORECAST_WORKER_NICE" in arranque

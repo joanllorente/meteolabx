@@ -11,3 +11,9 @@ buildCommand = "python -m pip install --no-deps SHARPpy==1.4.0a5"
 startCommand = "bash scripts/start_web.sh"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+# Si el servicio deja de responder -por ejemplo porque el worker agotó la
+# memoria del contenedor- se reinicia solo en vez de devolver 502 hasta que
+# alguien lo mire. El plazo es amplio porque el arranque descompone los
+# catálogos y levanta backend y frontend.
+healthcheckPath = "/v1/health"
+healthcheckTimeout = 300

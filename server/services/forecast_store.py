@@ -19,6 +19,12 @@ DERIVED_FORECAST_PRODUCTS = (
     # Sale de dos niveles de IP1, no de una cobertura propia: va con los
     # derivados para que el paquete ya esté bajado cuando le toque.
     "vertical-totals",
+    # Los convectivos tienen que estar todos aquí: NATIVE_PRODUCTS se define
+    # como «lo que no es derivado», así que faltar en esta lista los encola
+    # además en el nivel 0, donde cada uno recalcula el perfil entero con el
+    # límite de los campos nativos.
+    "vv-lfc",
+    "updraft-helicity",
     "shear-01",
     "shear-03",
     "shear-06",

@@ -1276,13 +1276,13 @@ def test_the_run_adoption_threshold_is_configurable():
     assert ">= 12" not in fuente, "el umbral no puede quedar fijado a mano"
 
 
-def test_the_profile_does_not_wait_for_ip3_when_only_the_extra_maps_need_it(monkeypatch):
-    """Sin IP3 descargado, los trece diagnósticos salen igual.
+def test_waiting_for_ip3_is_available_when_the_caller_prefers_it(monkeypatch):
+    """Se puede leer IP3 sin esperar, para quien no dependa de él.
 
-    El nivel 2 lee de IP3 la velocidad vertical, que alimenta dos mapas más.
-    Esperar a que baje medio giga dejaba a los primeros perfiles agotando su
-    límite de cálculo y descartándose enteros, con los trece diagnósticos que
-    sí dependen del perfil dentro.
+    El perfil sí espera: tiene media hora de plazo y el paquete tarda dos
+    minutos, mientras que publicar la hora sin la velocidad vertical dejaría
+    esos dos mapas vacíos para siempre, porque una hora publicada no se
+    recalcula.
     """
     from server.services import arome_forecast
 
@@ -1321,3 +1321,38 @@ def test_dcape_does_wait_for_ip3(monkeypatch):
     )
 
     assert pedidos == ["IP3"], "con esperar=True tiene que intentar la descarga"
+
+
+def test_every_convective_product_is_also_derived():
+    """Un convectivo que falte en DERIVED se encola además como nativo.
+
+    NATIVE_PRODUCTS se define como «lo que no es derivado», así que olvidarse
+    de esta lista al añadir un mapa lo pone también en el nivel 0: allí cada
+    uno recalcula el perfil entero —cuatro gigas— con el límite de los campos
+    nativos, que son cinco minutos. Con siete workers eso agotó la memoria del
+    contenedor y tiró el servicio.
+    """
+    from server.services.forecast_store import (
+        CONVECTIVE_FORECAST_PRODUCTS,
+        DERIVED_FORECAST_PRODUCTS,
+    )
+
+    huerfanos = [
+        product
+        for product in CONVECTIVE_FORECAST_PRODUCTS
+        if product not in DERIVED_FORECAST_PRODUCTS
+    ]
+    assert not huerfanos, f"{huerfanos} se encolarían dos veces"
+
+
+def test_no_convective_product_lands_in_the_native_tier():
+    """Ningún producto que necesite el perfil puede acabar en el nivel 0."""
+    from server.services.arome_forecast import PRODUCTS
+
+    caros = {
+        nombre
+        for nombre, config in PRODUCTS.items()
+        if config.get("kind") == "convective"
+    }
+    coladas = caros & set(forecast_worker.NATIVE_PRODUCTS)
+    assert not coladas, f"{sorted(coladas)} irían al nivel 0"

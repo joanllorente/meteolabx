@@ -66,7 +66,11 @@ UVICORN_PID=$!
 # completa solo los frames pendientes y conserva los cuatro turnos de RUN.
 # Ejecutarlo como módulo mantiene la raíz del proyecto en sys.path también
 # dentro de la imagen de Railway (la ejecución directa solo añade /app/scripts).
-"${PYTHON}" -m scripts.forecast_worker \
+# Con nice: cuando la CPU está saturada calculando perfiles, una visita a la
+# web no tiene que esperar detrás de siete procesos. No les quita tiempo
+# mientras haya de sobra, sólo los adelanta cuando compiten.
+nice -n "${METEOLABX_FORECAST_WORKER_NICE:-10}" \
+  "${PYTHON}" -m scripts.forecast_worker \
   --watch \
   --isolate-tasks \
   --workers "${METEOLABX_FORECAST_WORKERS:-6}" \
