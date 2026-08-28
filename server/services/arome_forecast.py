@@ -28,6 +28,7 @@ from shapely.geometry import box, mapping, shape
 
 from server.services.arome_packages import (
     IP3_ELEMENTS,
+    package_ready,
     SURFACE_ELEMENTS,
     read_isobaric_extras,
     read_surface_fields,
@@ -1279,6 +1280,7 @@ def _isobaric_extras_from_package(
     valid_time: datetime,
     levels: list[float],
     campos_pedidos: tuple[str, ...] = (),
+    esperar: bool = True,
 ) -> tuple[dict[str, dict[float, RasterField]], tuple[Any, Any, Any]] | None:
     """Rocío y velocidad vertical isobáricos, del paquete IP3.
 
@@ -1290,6 +1292,12 @@ def _isobaric_extras_from_package(
     quien llame siga por el camino de siempre.
     """
     if not _packages_available():
+        return None
+    if not esperar and not package_ready("IP3", run, valid_time):
+        # El adelanto todavía no ha llegado a este bloque. Quien sólo quiere la
+        # velocidad vertical se va sin ella: es un mapa más, y esperar medio
+        # giga dejaría sin publicar los trece diagnósticos que sí dependen del
+        # perfil.
         return None
     try:
         path = ensure_package("IP3", run, valid_time)
@@ -1402,9 +1410,15 @@ def _convective_frames(
     # vertical, que alimenta el mapa del nivel de convección libre. El paquete
     # se descarga y adelanta igual, así que pedir el segundo campo no cuesta
     # una petición más: sólo leerlo del fichero.
+    # DCAPE no puede seguir sin el rocío, así que espera a IP3 si hace falta.
+    # La velocidad vertical alimenta dos mapas más y no manda sobre el resto:
+    # si el paquete todavía no está, se prescinde de ella y esos dos salen
+    # vacíos esa hora.
     quiere = ("dewpoint", "vertical_velocity") if exact_dewpoint else ("vertical_velocity",)
     extras = (
-        _isobaric_extras_from_package(run, valid_time, levels, quiere)
+        _isobaric_extras_from_package(
+            run, valid_time, levels, quiere, esperar=exact_dewpoint
+        )
         if package_levels
         else None
     )

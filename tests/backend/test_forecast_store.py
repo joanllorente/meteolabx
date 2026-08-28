@@ -1274,3 +1274,50 @@ def test_the_run_adoption_threshold_is_configurable():
     fuente = inspect.getsource(arome_forecast._product_context)
     assert "MINIMUM_RUN_HOURS" in fuente
     assert ">= 12" not in fuente, "el umbral no puede quedar fijado a mano"
+
+
+def test_the_profile_does_not_wait_for_ip3_when_only_the_extra_maps_need_it(monkeypatch):
+    """Sin IP3 descargado, los trece diagnósticos salen igual.
+
+    El nivel 2 lee de IP3 la velocidad vertical, que alimenta dos mapas más.
+    Esperar a que baje medio giga dejaba a los primeros perfiles agotando su
+    límite de cálculo y descartándose enteros, con los trece diagnósticos que
+    sí dependen del perfil dentro.
+    """
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(arome_forecast, "package_ready", lambda *a: False)
+
+    def no_deberia_bajar(*args, **kwargs):
+        raise AssertionError("no debe esperar a que se descargue")
+
+    monkeypatch.setattr(arome_forecast, "ensure_package", no_deberia_bajar)
+    hora = arome_forecast._parse_time("2026-08-28T06:00:00Z")
+
+    # Sin esperar: se va sin la velocidad vertical.
+    assert arome_forecast._isobaric_extras_from_package(
+        hora, hora, [850.0], ("vertical_velocity",), esperar=False
+    ) is None
+
+
+def test_dcape_does_wait_for_ip3(monkeypatch):
+    """DCAPE sí espera: sin el rocío exacto no puede calcularse."""
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(arome_forecast, "package_ready", lambda *a: False)
+    pedidos = []
+    monkeypatch.setattr(
+        arome_forecast, "ensure_package",
+        lambda *a: pedidos.append(a[0]) or (_ for _ in ()).throw(
+            arome_forecast.AromePackageError("aún no")
+        ),
+    )
+    hora = arome_forecast._parse_time("2026-08-28T06:00:00Z")
+
+    arome_forecast._isobaric_extras_from_package(
+        hora, hora, [850.0], ("dewpoint",), esperar=True
+    )
+
+    assert pedidos == ["IP3"], "con esperar=True tiene que intentar la descarga"

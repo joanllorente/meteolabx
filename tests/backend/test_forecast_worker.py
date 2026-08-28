@@ -596,10 +596,10 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
 
 
 def test_prefetch_also_brings_the_dcape_package(monkeypatch):
-    """IP3 se adelanta como los demás: DCAPE no debe esperar medio giga.
+    """IP3 se adelanta pronto: lo necesitan dos niveles, no sólo DCAPE.
 
-    Va el último de la lista porque sólo lo necesita DCAPE, que está al final
-    de la cola; los perfiles del nivel 2 no deben quedarse esperando por él.
+    Cuando iba el último, los primeros perfiles del nivel 2 se quedaban
+    esperando medio giga y agotaban su límite de cálculo.
     """
     import threading
 
@@ -619,9 +619,11 @@ def test_prefetch_also_brings_the_dcape_package(monkeypatch):
     hilo.join(timeout=5)
 
     assert "IP3" in pedidos
-    # Y después de los que hacen falta antes.
+    # Detrás de IP1, que es el que necesita todo el mundo, y por delante de los
+    # de superficie, que pesan cincuenta megas y llegan enseguida.
     primero = pedidos[:4]
-    assert primero.index("IP3") == 3, f"IP3 debe ir el último: {primero}"
+    assert primero.index("IP1") == 0, f"IP1 primero: {primero}"
+    assert primero.index("IP3") == 1, f"IP3 detrás de IP1: {primero}"
 
 
 def test_a_declared_limit_is_used_when_the_cgroup_has_none(monkeypatch, tmp_path):

@@ -693,9 +693,11 @@ def _start_package_prefetch(
                 """Los cuatro paquetes de un bloque, en orden de urgencia."""
                 run, valid_time = objetivo
                 hechos = 0
-                # IP3 el último: sólo lo necesita DCAPE, que va al final de la
-                # cola, así que los demás no deben esperar por él.
-                for paquete in ("IP1", "SP1", "SP2", "IP3"):
+                # IP3 va detrás de IP1 y antes que los de superficie: lo
+                # necesitan tanto DCAPE como los mapas de velocidad vertical
+                # del nivel 2, y es el que más tarda en bajar. Los SP pesan
+                # cincuenta megas y llegan enseguida.
+                for paquete in ("IP1", "IP3", "SP1", "SP2"):
                     if stop.is_set():
                         return hechos
                     try:
