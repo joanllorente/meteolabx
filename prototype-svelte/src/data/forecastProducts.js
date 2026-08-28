@@ -265,7 +265,7 @@ const allForecastProducts = [
   {
     id: 'updraft-helicity', category: 'convection', label: 'Helicidad de la corriente ascendente 2–5 km', short: 'UH 2–5', kind: 'derived',
     unit: 'm²/s²', min: -50, max: 250, palette: 'shear', accent: '#f472b6', vectors: false,
-    description: 'Integral del producto de la velocidad vertical por la vorticidad entre 2 y 5 km sobre el terreno. Mide cuánta rotación acompaña al ascenso, así que separa una tormenta rotatoria de otra que sólo sube con fuerza: es el rastro que deja una supercélula en un modelo que resuelve la convección.',
+    description: 'Diagnóstico de la rotación que el propio modelo genera dentro de una corriente ascendente: integra el producto de la velocidad vertical por la vorticidad vertical entre 2 y 5 km sobre el terreno. Mide cuánto coinciden el ascenso y el giro, así que separa una tormenta rotatoria de otra que sólo sube con fuerza: es el rastro que deja una supercélula en un modelo que resuelve la convección.',
     method: 'Vorticidad vertical de cada nivel isobárico con las distancias en metros, multiplicada por la velocidad vertical de IP3 e integrada por trapecios entre 2.000 y 5.000 m AGL.',
     coverage: 'IP1 · viento y geopotencial · IP3 · velocidad vertical'
   },

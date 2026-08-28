@@ -62,8 +62,8 @@ class ConvectiveDiagnostics:
     mu_mixing_ratio_gkg: np.ndarray
     mu_equilibrium_height_m: np.ndarray
     effective_base_height_m: np.ndarray
-    # Nivel de convección libre de la parcela de capa mezclada: hasta dónde
-    # tiene que llegar el ascenso forzado para que la convección se dispare.
+    # Altura AGL del nivel de convección libre de la parcela de capa mezclada:
+    # hasta dónde tiene que llegar el ascenso forzado para que se dispare.
     ml_lfc_height_m: np.ndarray
 
 
@@ -230,6 +230,109 @@ def parcel_temperature_profile_k(
     return np.where(valid, result, np.nan)
 
 
+def _level_of_free_convection(
+    pressure_hpa: np.ndarray,
+    height_m: np.ndarray,
+    buoyancy_ms2: np.ndarray,
+    lcl_pressure_hpa: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Interpola el primer cruce de flotabilidad positiva por encima del LCL.
+
+    El recorrido nivel a nivel evita crear varias matrices 3-D auxiliares, que
+    penalizarían mucho el pico de memoria sobre la rejilla AROME completa.
+    """
+    pressure = np.asarray(pressure_hpa, dtype=float)
+    height = np.asarray(height_m, dtype=float)
+    buoyancy = np.asarray(buoyancy_ms2, dtype=float)
+    lcl_pressure = np.asarray(lcl_pressure_hpa, dtype=float)
+    shape = pressure.shape[1:]
+
+    lcl_height = np.full(shape, np.nan)
+    for index in range(pressure.shape[0] - 1):
+        p0 = pressure[index]
+        p1 = pressure[index + 1]
+        z0 = height[index]
+        z1 = height[index + 1]
+        valid = (
+            ~np.isfinite(lcl_height)
+            & np.isfinite(p0)
+            & np.isfinite(p1)
+            & np.isfinite(z0)
+            & np.isfinite(z1)
+            & np.isfinite(lcl_pressure)
+            & (p0 > p1)
+            & (z1 > z0)
+            & (p0 >= lcl_pressure)
+            & (p1 <= lcl_pressure)
+        )
+        with np.errstate(divide="ignore", invalid="ignore"):
+            fraction = np.divide(
+                np.log(p0 / lcl_pressure),
+                np.log(p0 / p1),
+                out=np.zeros(shape),
+                where=valid,
+            )
+        candidate = z0 + np.clip(fraction, 0.0, 1.0) * (z1 - z0)
+        lcl_height = np.where(valid, candidate, lcl_height)
+
+    lfc_height = np.full(shape, np.nan)
+    lfc_pressure = np.full(shape, np.nan)
+    for index in range(pressure.shape[0] - 1):
+        p0 = pressure[index]
+        p1 = pressure[index + 1]
+        z0 = height[index]
+        z1 = height[index + 1]
+        b0 = buoyancy[index]
+        b1 = buoyancy[index + 1]
+        valid = (
+            ~np.isfinite(lfc_height)
+            & np.isfinite(lcl_height)
+            & np.isfinite(p0)
+            & np.isfinite(p1)
+            & np.isfinite(z0)
+            & np.isfinite(z1)
+            & np.isfinite(b0)
+            & np.isfinite(b1)
+            & (p0 > p1)
+            & (z1 > z0)
+            & (z1 >= lcl_height)
+        )
+        start_height = np.maximum(z0, lcl_height)
+        start_fraction = np.divide(
+            start_height - z0,
+            z1 - z0,
+            out=np.zeros(shape),
+            where=valid,
+        )
+        start_buoyancy = b0 + start_fraction * (b1 - b0)
+        already_positive = valid & (start_buoyancy > 0.0)
+        crosses_zero = valid & (start_buoyancy <= 0.0) & (b1 > 0.0)
+        crossing_fraction = np.divide(
+            -start_buoyancy,
+            b1 - start_buoyancy,
+            out=np.zeros(shape),
+            where=crosses_zero,
+        )
+        candidate_height = np.where(
+            already_positive,
+            start_height,
+            start_height + crossing_fraction * (z1 - start_height),
+        )
+        found = already_positive | crosses_zero
+        height_fraction = np.divide(
+            candidate_height - z0,
+            z1 - z0,
+            out=np.zeros(shape),
+            where=found,
+        )
+        with np.errstate(divide="ignore", invalid="ignore"):
+            candidate_pressure = p0 * np.power(p1 / p0, height_fraction)
+        lfc_height = np.where(found, candidate_height, lfc_height)
+        lfc_pressure = np.where(found, candidate_pressure, lfc_pressure)
+
+    return lfc_height, lfc_pressure
+
+
 def parcel_diagnostics(
     pressure_hpa: np.ndarray,
     environmental_temperature_k: np.ndarray,
@@ -290,12 +393,11 @@ def parcel_diagnostics(
     equilibrium_pressure = np.min(positive_top_pressure, axis=0)
     equilibrium_pressure = np.where(has_positive, equilibrium_pressure, np.nan)
 
-    # El LFC es el extremo opuesto de la misma capa flotante: la base en vez
-    # del techo. En presión es el valor más alto; en altura, el más bajo.
-    lfc_pressure = np.max(np.where(positive, pressure[1:], -np.inf), axis=0)
-    lfc_pressure = np.where(has_positive, lfc_pressure, np.nan)
-    lfc_height = np.min(np.where(positive, height[1:], np.inf), axis=0)
-    lfc_height = np.where(has_positive, lfc_height, np.nan)
+    # El NCL/LFC no coincide normalmente con un nivel isobárico del modelo:
+    # es el primer cruce B=0 por encima del LCL y se interpola dentro de la capa.
+    lfc_height, lfc_pressure = _level_of_free_convection(
+        pressure, height, buoyancy, plcl
+    )
 
     pressure_1d = pressure[:, 0, 0]
     index_500 = int(np.nanargmin(np.abs(pressure_1d - 500.0)))
@@ -411,35 +513,8 @@ def diagnose_convection(
     # Parcela de capa mezclada: promedio de theta y razón de mezcla en los
     # 100 hPa inferiores, reconstruido a la presión de superficie. Esta es la
     # definición convencional de ML y no debe confundirse con ML-ECAPE nativo.
-    mixing_layer = (
-        np.isfinite(pressure)
-        & np.isfinite(temperature)
-        & np.isfinite(dewpoint)
-        & (pressure <= surface_pressure[None, ...] + 0.5)
-        & (pressure >= surface_pressure[None, ...] - 100.0)
-    )
-    potential_temperature = temperature * np.power(
-        1000.0 / pressure,
-        KAPPA,
-    )
-    environmental_ratio = mixing_ratio_kgkg(pressure, dewpoint)
-    layer_count = np.sum(mixing_layer, axis=0)
-    mean_theta = np.divide(
-        np.sum(np.where(mixing_layer, potential_temperature, 0.0), axis=0),
-        layer_count,
-        out=np.full(surface_pressure.shape, np.nan),
-        where=layer_count > 0,
-    )
-    mean_ratio = np.divide(
-        np.sum(np.where(mixing_layer, environmental_ratio, 0.0), axis=0),
-        layer_count,
-        out=np.full(surface_pressure.shape, np.nan),
-        where=layer_count > 0,
-    )
-    mixed_temperature = mean_theta * np.power(surface_pressure / 1000.0, KAPPA)
-    mixed_dewpoint = np.minimum(
-        dewpoint_from_mixing_ratio_k(surface_pressure, mean_ratio),
-        mixed_temperature,
+    mixed_temperature, mixed_dewpoint = _mixed_layer_parcel_properties(
+        pressure, temperature, dewpoint
     )
     mixed = parcel_diagnostics(
         pressure,
@@ -504,7 +579,7 @@ def diagnose_convection(
         mu_mixing_ratio_gkg=mu_ratio,
         mu_equilibrium_height_m=mu.equilibrium_height_m,
         effective_base_height_m=effective_base,
-        ml_lfc_height_m=mixed.lfc_height_m,
+        ml_lfc_height_m=mixed.lfc_height_m - height[0],
     )
 
 
@@ -563,6 +638,34 @@ def pressure_weighted_layer_mean(
         out=np.full(bottom.shape, np.nan),
         where=np.isfinite(depth) & (depth > 0.0),
     )
+
+
+def _mixed_layer_parcel_properties(
+    pressure_hpa: np.ndarray,
+    temperature_k: np.ndarray,
+    dewpoint_k: np.ndarray,
+    depth_hpa: float = 100.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reconstruye en superficie la parcela media de una capa en presión."""
+    pressure = np.asarray(pressure_hpa, dtype=float)
+    temperature = np.asarray(temperature_k, dtype=float)
+    dewpoint = np.asarray(dewpoint_k, dtype=float)
+    surface_pressure = pressure[0]
+    layer_top = surface_pressure - depth_hpa
+    potential_temperature = temperature * np.power(1000.0 / pressure, KAPPA)
+    ratio = mixing_ratio_kgkg(pressure, dewpoint)
+    mean_theta = pressure_weighted_layer_mean(
+        pressure, potential_temperature, surface_pressure, layer_top
+    )
+    mean_ratio = pressure_weighted_layer_mean(
+        pressure, ratio, surface_pressure, layer_top
+    )
+    mixed_temperature = mean_theta * np.power(surface_pressure / 1000.0, KAPPA)
+    mixed_dewpoint = np.minimum(
+        dewpoint_from_mixing_ratio_k(surface_pressure, mean_ratio),
+        mixed_temperature,
+    )
+    return mixed_temperature, mixed_dewpoint
 
 
 def downdraft_cape(
@@ -823,6 +926,12 @@ def vertical_vorticity(
     111 km en el ecuador y 64 en el norte del dominio, así que sin corregir por
     el coseno de la latitud la vorticidad saldría inflada arriba del mapa.
 
+    Los dos pasos van con signo, el que lleva la rejilla al avanzar de índice:
+    en AROME las filas bajan de norte a sur, así que lat_step_deg es negativo y
+    es ese signo el que convierte ∂u/∂fila en ∂u/∂y. Pasarlo en valor absoluto
+    invierte el término y en un vórtice ideal las dos contribuciones se anulan
+    en lugar de sumarse.
+
     Necesita las celdas vecinas, de modo que hay que calcularla sobre la
     rejilla entera: por bandas, cada borde saldría mal.
     """
@@ -859,9 +968,9 @@ def updraft_helicity(
     resuelve la convección, y separa una tormenta rotatoria de una que sólo
     sube fuerte.
 
-    Devuelve NaN donde la columna no cubre la capa entera o no le quedan
-    niveles válidos dentro: un valor parcial se leería como rotación débil
-    cuando en realidad es falta de datos.
+    Devuelve NaN donde la columna no cubre la capa entera, no le quedan
+    niveles válidos dentro o le falta alguno de los de en medio: un valor
+    parcial se leería como rotación débil cuando en realidad es falta de datos.
     """
     integrando = vertical_velocity_ms * vertical_vorticity(
         u, v, latitudes_deg, lon_step_deg, lat_step_deg
@@ -875,7 +984,12 @@ def updraft_helicity(
     # Recorte de cada tramo a la capa, interpolando el integrando en los cortes.
     desde = np.clip(z0, base_m, top_m)
     hasta = np.clip(z1, base_m, top_m)
-    dentro = utilizable & (hasta > desde) & np.isfinite(h0) & np.isfinite(h1)
+    solapa = utilizable & (hasta > desde)
+    dentro = solapa & np.isfinite(h0) & np.isfinite(h1)
+    # Un tramo que cae en la capa pero se queda sin integrando —falta un nivel
+    # de IP3, por ejemplo— no se puede saltar: la integral saldría corta y ese
+    # hueco no se distingue de una columna que gira poco.
+    incompleta = np.any(solapa & ~dentro, axis=0)
 
     def en(altura: np.ndarray) -> np.ndarray:
         fraccion = np.divide(
@@ -889,7 +1003,12 @@ def updraft_helicity(
     # La columna tiene que llegar de verdad a los dos extremos de la capa.
     cima = np.nanmax(np.where(np.isfinite(z), z, -np.inf), axis=0)
     suelo = np.nanmin(np.where(np.isfinite(z), z, np.inf), axis=0)
-    cubre = (cima >= top_m) & (suelo <= base_m) & np.any(dentro, axis=0)
+    cubre = (
+        (cima >= top_m)
+        & (suelo <= base_m)
+        & np.any(dentro, axis=0)
+        & ~incompleta
+    )
     return np.where(cubre, total, np.nan)
 
 

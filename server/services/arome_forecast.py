@@ -1702,11 +1702,15 @@ def _convective_frames(
 
         # La rejilla hace falta para la vorticidad: sus derivadas van en metros
         # y un grado de longitud mide 111 km abajo del dominio y 64 arriba.
+        # Los pasos van con su signo, no en valor absoluto: las filas avanzan
+        # de norte a sur, así que el paso latitudinal es negativo y es lo que
+        # le da el signo a ∂u/∂y. Con el valor absoluto, el término entra
+        # cambiado y anula la vorticidad en vez de completarla.
         filas = np.arange(shape[0], dtype=float) + 0.5
         rejilla = (
             reference.transform.f + filas * reference.transform.e,
-            abs(float(reference.transform.a)),
-            abs(float(reference.transform.e)),
+            float(reference.transform.a),
+            float(reference.transform.e),
         )
         fases["montar"] = time.monotonic() - reloj
         reloj = time.monotonic()

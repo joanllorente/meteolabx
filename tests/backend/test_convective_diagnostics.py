@@ -2,6 +2,9 @@ import numpy as np
 import pytest
 
 from server.services.convective_diagnostics import (
+    KAPPA,
+    _level_of_free_convection,
+    _mixed_layer_parcel_properties,
     _saturated_temperature_from_theta_e,
     _saturated_theta_e_k,
     dewpoint_from_mixing_ratio_k,
@@ -66,6 +69,40 @@ def test_pressure_weighted_layer_mean_honors_lcl_and_el_boundaries():
     )
 
     assert result.item() == 7.0
+
+
+def test_mixed_layer_average_weights_uneven_pressure_levels():
+    """ML100 es una integral en presión, no una media de niveles discretos."""
+    pressure = np.asarray([1000.0, 990.0, 930.0, 900.0])[:, None, None]
+    theta = np.asarray([300.0, 310.0, 330.0, 340.0])[:, None, None]
+    temperature = theta * np.power(pressure / 1000.0, KAPPA)
+    ratio = np.full_like(pressure, 0.01)
+    dewpoint = dewpoint_from_mixing_ratio_k(pressure, ratio)
+
+    mixed_temperature, mixed_dewpoint = _mixed_layer_parcel_properties(
+        pressure, temperature, dewpoint
+    )
+
+    # Integral trapezoidal exacta: (305*10 + 320*60 + 335*30) / 100.
+    assert mixed_temperature.item() == pytest.approx(323.0)
+    assert mixed_temperature.item() != pytest.approx(theta.mean())
+    assert mixed_dewpoint.item() == pytest.approx(
+        dewpoint_from_mixing_ratio_k(np.asarray([[1000.0]]), np.asarray([[0.01]])).item()
+    )
+
+
+def test_lfc_is_interpolated_at_the_buoyancy_zero_crossing():
+    pressure = np.asarray([1000.0, 900.0, 800.0, 700.0])[:, None, None]
+    height = np.asarray([0.0, 1000.0, 2000.0, 3000.0])[:, None, None]
+    buoyancy = np.asarray([-1.0, -0.5, 0.5, 1.0])[:, None, None]
+
+    lfc_height, lfc_pressure = _level_of_free_convection(
+        pressure, height, buoyancy, np.asarray([[950.0]])
+    )
+
+    assert lfc_height.item() == pytest.approx(1500.0)
+    # La presión se interpola logarítmicamente entre 900 y 800 hPa.
+    assert lfc_pressure.item() == pytest.approx(np.sqrt(900.0 * 800.0))
 
 
 def test_ship_matches_sharppy_spc_base_equation():
@@ -656,6 +693,38 @@ def test_vertical_velocity_is_read_at_the_free_convection_level():
     assert salida["vv_lfc"][con_valor].std() > 0, "no puede ser un nivel fijo"
 
 
+def test_lfc_and_vertical_velocity_use_height_above_ground():
+    """El relieve no puede sumarse dos veces al buscar el NCL en el perfil."""
+    from server.services.arome_forecast import _convective_outputs
+
+    argumentos = list(_synthetic_profile(24, 18))
+    presion = argumentos[0]
+    terreno = argumentos[5]
+    perfil_vv = (
+        np.linspace(0.0, 4.0, presion.shape[0])[:, None, None]
+        * np.ones_like(presion)
+    )
+
+    con_relieve = _convective_outputs(
+        *argumentos, include_dcape=False, vertical_velocity=perfil_vv
+    )
+    argumentos[5] = np.zeros_like(terreno)
+    a_nivel_del_mar = _convective_outputs(
+        *argumentos, include_dcape=False, vertical_velocity=perfil_vv
+    )
+
+    assert np.allclose(
+        con_relieve["ml_lfc_height"],
+        a_nivel_del_mar["ml_lfc_height"],
+        equal_nan=True,
+    )
+    assert np.allclose(
+        con_relieve["vv_lfc"],
+        a_nivel_del_mar["vv_lfc"],
+        equal_nan=True,
+    )
+
+
 def test_adding_vertical_velocity_changes_nothing_else():
     """El campo nuevo no altera ninguno de los diagnósticos que ya había."""
     from server.services.arome_forecast import _convective_outputs
@@ -690,7 +759,9 @@ def _perfil_con_vorticidad(filas=96, columnas=60):
     v[:] = (X / radio * giro)[None, ...]
     w = np.full(p.shape, 4.0)
     latitudes = np.linspace(43.0, 42.0, filas)
-    return (p, t, td, u, v, terr, w, (latitudes, 0.025, 0.025))
+    # Como la rejilla de verdad: las filas bajan de norte a sur, así que el
+    # paso latitudinal es negativo.
+    return (p, t, td, u, v, terr, w, (latitudes, 0.025, -0.025))
 
 
 def test_striped_updraft_helicity_matches_the_whole_grid():
@@ -760,6 +831,104 @@ def test_updraft_helicity_without_vertical_velocity_is_empty():
 
     assert vacio.shape == terr.shape
     assert not np.isfinite(vacio).any()
+
+
+def test_vertical_vorticity_keeps_the_sign_of_the_latitudinal_step():
+    """Una rotación sólida ciclónica tiene que dar 2Ω, no cero.
+
+    Las filas de la rejilla bajan de norte a sur, así que su paso latitudinal
+    es negativo, y es ese signo el que convierte ∂u/∂fila en ∂u/∂y. Pasado en
+    valor absoluto, el término entra cambiado: en un vórtice ideal las dos
+    contribuciones se anulan en vez de sumarse y el mapa sale plano.
+    """
+    from server.services.convective_diagnostics import (
+        EARTH_RADIUS_M,
+        vertical_vorticity,
+    )
+
+    filas = columnas = 40
+    paso = 0.025
+    latitudes = 43.0 - (np.arange(filas) + 0.5) * paso
+    paso_lat_m = np.radians(-paso) * EARTH_RADIUS_M
+    paso_lon_m = np.radians(paso) * EARTH_RADIUS_M * np.cos(np.radians(latitudes))
+    # Rotación sólida ciclónica en metros: u = −Ωy, v = Ωx, con y hacia el norte.
+    omega = 1e-4
+    norte = (np.arange(filas) - filas / 2) * paso_lat_m
+    este = (np.arange(columnas) - columnas / 2)[None, :] * paso_lon_m[:, None]
+    u = np.broadcast_to(-omega * norte[:, None], (1, filas, columnas))
+    v = (omega * este)[None, ...]
+
+    zeta = vertical_vorticity(u, v, latitudes, paso, -paso)
+
+    assert np.allclose(zeta, 2 * omega, rtol=1e-6)
+    # Con el paso en valor absoluto, que era el error, el vórtice desaparecía.
+    plano = vertical_vorticity(u, v, latitudes, paso, paso)
+    assert np.abs(plano).max() < 1e-3 * omega
+
+
+def _columna_giratoria(niveles=24):
+    """Una columna con ascenso y rotación, para la integral de la helicidad."""
+    filas = columnas = 5
+    paso = 0.025
+    latitudes = 42.5 - (np.arange(filas) + 0.5) * paso
+    altura = np.linspace(0.0, 8_000.0, niveles)[:, None, None] * np.ones(
+        (niveles, filas, columnas)
+    )
+    u = np.zeros_like(altura)
+    v = np.zeros_like(altura)
+    # ∂v/∂x constante en toda la columna: la vorticidad no depende de la altura.
+    v[:] = np.arange(columnas)[None, None, :] * 1.5
+    w = np.full_like(altura, 5.0)
+    return altura, w, u, v, latitudes, paso, -paso
+
+
+def test_updraft_helicity_is_nan_when_a_level_inside_the_layer_is_missing():
+    """Sin uno de los niveles de en medio, la helicidad no es un número menor.
+
+    Comprobar sólo que la columna llega a 2 y a 5 km deja pasar los huecos
+    interiores: si falta un nivel de IP3, ese tramo de w·ζ se salta y la
+    integral sale corta. Un valor bajo no se distingue de una columna que gira
+    poco, así que tiene que salir NaN.
+    """
+    from server.services.convective_diagnostics import updraft_helicity
+
+    altura, w, u, v, latitudes, paso_lon, paso_lat = _columna_giratoria()
+    entera = updraft_helicity(altura, w, u, v, latitudes, paso_lon, paso_lat)
+    assert np.isfinite(entera).all() and (entera > 0).all()
+
+    # Un nivel de IP3 que no llega: cae dentro de la capa 2-5 km.
+    dentro = int(np.argmin(np.abs(altura[:, 0, 0] - 3_500.0)))
+    assert 2_000.0 < altura[dentro, 0, 0] < 5_000.0
+    hueca = w.copy()
+    hueca[dentro, 2, 2] = np.nan
+
+    salida = updraft_helicity(altura, hueca, u, v, latitudes, paso_lon, paso_lat)
+
+    assert np.isnan(salida[2, 2]), "un tramo perdido no puede dar valor parcial"
+    vecinas = np.delete(salida.ravel(), 2 * salida.shape[1] + 2)
+    assert np.isfinite(vecinas).all(), "sólo esa columna se queda sin dato"
+
+
+def test_updraft_helicity_ignores_a_hole_outside_the_layer():
+    """Un nivel perdido fuera de 2-5 km no tiene por qué anular la columna.
+
+    Lo que invalida la integral es el hueco que cae dentro de la capa. Por
+    encima de la cima o por debajo de la base, el tramo no entra en la suma y
+    la helicidad sigue estando completa.
+    """
+    from server.services.convective_diagnostics import updraft_helicity
+
+    altura, w, u, v, latitudes, paso_lon, paso_lat = _columna_giratoria()
+    entera = updraft_helicity(altura, w, u, v, latitudes, paso_lon, paso_lat)
+
+    fuera = int(np.argmin(np.abs(altura[:, 0, 0] - 7_000.0)))
+    assert altura[fuera, 0, 0] > 5_000.0
+    hueca = w.copy()
+    hueca[fuera, 2, 2] = np.nan
+
+    salida = updraft_helicity(altura, hueca, u, v, latitudes, paso_lon, paso_lat)
+
+    assert np.allclose(salida, entera)
 
 
 def test_profiles_built_on_disk_give_the_same_numbers(tmp_path, monkeypatch):

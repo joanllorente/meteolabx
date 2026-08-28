@@ -1390,6 +1390,26 @@ def test_the_dcape_pass_does_not_load_what_it_will_discard():
     )
 
 
+def test_the_vorticity_grid_keeps_the_sign_of_the_transform():
+    """La rejilla que se le pasa a la vorticidad lleva los pasos con signo.
+
+    Las filas avanzan de norte a sur (transform.e < 0). En valor absoluto,
+    ∂u/∂y entra cambiado de signo y en un vórtice ideal anula la vorticidad en
+    vez de completarla: el mapa de helicidad sale plano donde más importa.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    fuente = inspect.getsource(arome_forecast._convective_frames.__wrapped__)
+    assert "abs(float(reference.transform.e))" not in fuente, (
+        "el paso latitudinal no puede ir en valor absoluto"
+    )
+    assert "float(reference.transform.e),\n" in fuente, (
+        "la rejilla tiene que llevar el paso latitudinal con su signo"
+    )
+
+
 def test_packages_survive_while_an_older_run_still_needs_them(tmp_path: Path):
     """No se borran los GRIB de una pasada que sigue trabajando.
 

@@ -33,6 +33,11 @@ const RKW_1988 = {
   url: 'https://doi.org/10.1175/1520-0469(1988)045%3C0463:ATFSLL%3E2.0.CO;2'
 };
 
+const NAYLOR_2012 = {
+  label: 'Naylor et al. (2012) \u00b7 sensibilidad de la helicidad del ascenso simulada',
+  url: 'https://journals.ametsoc.org/view/journals/mwre/140/7/mwr-d-11-00209.1.xml'
+};
+
 const LINE_ORIENTATION = {
   label: 'Bluestein y Weisman (2000) · orientación de la cizalladura respecto a la línea de disparo',
   url: 'https://journals.ametsoc.org/view/journals/mwre/128/9/1520-0493_2000_128_3128_tionss_2.0.co_2.xml'
@@ -82,23 +87,29 @@ export const forecastProductGuides = {
     sources: [MF_AROME, MF_API]
   },
   'updraft-helicity': {
-    what: 'Helicidad de la corriente ascendente entre 2 y 5 km sobre el terreno, en m²/s². Integra el producto de la velocidad vertical por la vorticidad vertical a lo largo de esa capa.',
+    what: 'Helicidad de la corriente ascendente entre 2 y 5 km sobre el terreno, en m\u00b2/s\u00b2. Diagnostica la rotaci\u00f3n que el propio modelo genera dentro de una corriente ascendente: combina la velocidad vertical con la vorticidad vertical entre 2.000 y 5.000 metros sobre el terreno.',
     interpretation: [
-      'Separa una tormenta que rota de otra que sólo sube con fuerza. Un ascenso intenso sin vorticidad da valores bajos; uno moderado pero rotatorio, altos. Es el rastro que deja una supercélula en un modelo que resuelve la convección.',
-      'Se usa habitualmente para identificar mesociclones simulados. El signo distingue el sentido del giro: positivo, ciclónico; negativo, la supercélula izquierda.',
-      'A diferencia de CAPE o cizalladura, no describe el ambiente sino lo que el modelo está generando: aparece donde AROME ya ha desarrollado la tormenta, no antes. Por eso conviene leerlo junto a los campos de entorno y no en su lugar.'
+      'Los valores positivos indican que el ascenso y la rotaci\u00f3n cicl\u00f3nica coinciden, que en el hemisferio norte es la se\u00f1al habitual de una superc\u00e9lula derecha. Los negativos, rotaci\u00f3n anticicl\u00f3nica acompa\u00f1ando al ascenso: puede corresponder a una superc\u00e9lula izquierda, pero el signo por s\u00ed solo no lo demuestra.',
+      'Mide coincidencia, no intensidad: una corriente ascendente fuerte sin rotaci\u00f3n da poca UH, y una zona con vorticidad pero sin ascenso, tambi\u00e9n.',
+      'Una UH elevada identifica un mesocicl\u00f3n simulado de niveles medios. No significa autom\u00e1ticamente tornado ni tiempo severo en superficie, as\u00ed que conviene leerla junto al MLCAPE, la helicidad relativa, la cizalladura de la capa efectiva, la velocidad vertical en el NCL y la evoluci\u00f3n entre horas.',
+      'A diferencia de CAPE o cizalladura, no describe el ambiente sino lo que el modelo est\u00e1 generando: aparece donde AROME ya ha desarrollado la tormenta, no antes. Por eso complementa a los campos de entorno y no los sustituye.',
+      'Como orientaci\u00f3n para modelos de 2\u20134 km, alrededor de 25\u201350 m\u00b2/s\u00b2 puede se\u00f1alar rotaci\u00f3n organizada, 75\u2013150 una se\u00f1al fuerte y por encima de 150 una rotaci\u00f3n muy intensa. Son rangos que dependen del modelo, de la resoluci\u00f3n y de la acumulaci\u00f3n temporal \u2014los estudios han usado umbrales de 50 a 150 seg\u00fan uno y otro\u2014, de modo que para AROME piden calibraci\u00f3n propia.'
     ],
-    method: 'Vorticidad vertical de cada nivel isobárico calculada con las distancias horizontales en metros —la longitud se corrige por el coseno de la latitud—, multiplicada por la velocidad vertical geométrica de IP3 e integrada por trapecios entre 2.000 y 5.000 m sobre el terreno, con los extremos interpolados.',
+    method: 'Vorticidad vertical de cada nivel isob\u00e1rico calculada con las distancias horizontales en metros \u2014la longitud se corrige por el coseno de la latitud\u2014, multiplicada por la velocidad vertical geom\u00e9trica de IP3 e integrada por trapecios entre 2.000 y 5.000 m sobre el terreno, con los extremos interpolados.',
     equations: [
       { label: 'Vorticidad vertical', latex: String.raw`\zeta=\frac{\partial v}{\partial x}-\frac{\partial u}{\partial y}` },
       { label: 'Helicidad del ascenso', latex: String.raw`\mathrm{UH}_{2-5}=\int_{2000}^{5000} w\,\zeta\;\mathrm{d}z` }
     ],
     steps: [
-      'Altura de cada nivel a partir del geopotencial de IP1, sobre el terreno.',
-      'Vorticidad en la rejilla completa: necesita las celdas vecinas, así que no puede trocearse.',
-      'Sin valor donde la columna no cubre la capa 2–5 km entera: un valor parcial se leería como rotación débil cuando es falta de datos.'
+      'Presi\u00f3n, temperatura, humedad y viento horizontal de los niveles isob\u00e1ricos de IP1, y velocidad vertical geom\u00e9trica de IP3.',
+      'Altura de cada nivel reconstruida con la ecuaci\u00f3n hipsom\u00e9trica, menos el terreno: la capa va sobre el suelo, no sobre el mar.',
+      'Vorticidad vertical en el plano, con los grados pasados a metros y la distancia longitudinal corregida por el coseno de la latitud. Las filas de la rejilla bajan de norte a sur, y ese signo es el que le da el suyo a \u2202u/\u2202y.',
+      'Producto de la velocidad vertical por la vorticidad en cada nivel, interpolado exactamente en 2.000 y 5.000 m.',
+      'Integraci\u00f3n por trapecios de todos los tramos comprendidos en esa capa.',
+      'El troceado por bandas lee una fila de halo a cada lado para que las derivadas no dejen costuras en las uniones.',
+      'Sin valor donde la columna no cubre la capa entera o le falta alguno de los niveles de en medio: un valor parcial se leer\u00eda como rotaci\u00f3n d\u00e9bil cuando es falta de datos.'
     ],
-    sources: [MF_AROME, MF_API]
+    sources: [MF_AROME, MF_API, NAYLOR_2012]
   },
   'srh-01': {
     what: 'Helicidad relativa a la tormenta entre el suelo y 1.000 m sobre el terreno, en m²/s². Mide el área que el hodógrafo barre alrededor del vector de movimiento de la tormenta: cuánto giro puede heredar una corriente ascendente del entorno en el que se forma.',
