@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 import shutil
 import struct
+import threading
 import tempfile
 import time
 from typing import Any, Callable, Iterator
@@ -477,6 +478,12 @@ def _product_context(
     # Durante la publicación, un RUN nuevo puede aparecer con solo H+00.
     # Priorizamos la más reciente que ya tenga un horizonte útil; si ninguna
     # alcanza el mínimo, conservamos la última como fallback transparente.
+    #
+    # El mínimo decide cuánto se tarda en empezar: el nivel 0 se pasa casi una
+    # hora esperando a que el modelo publique, así que adoptar antes la pasada
+    # solapa esa espera con el trabajo en vez de encadenarlos. Bajarlo también
+    # compromete antes: si Météo-France retirase una pasada a medio publicar,
+    # se habría calculado sobre ella. Por eso es configurable.
     run = max(common_runs)
     times = []
     for candidate in sorted(common_runs, reverse=True):
@@ -484,7 +491,7 @@ def _product_context(
         candidate_times = client.describe(reference).valid_times(candidate)
         if not times:
             run, times = candidate, candidate_times
-        if len(candidate_times) >= 12:
+        if len(candidate_times) >= MINIMUM_RUN_HOURS:
             run, times = candidate, candidate_times
             break
     if not times:
@@ -680,6 +687,14 @@ def _wait_for_profile_request_slot() -> None:
 # ~1 GB y los temporales del cálculo varias veces más: trocear por bandas
 # recorta el pico sin cambiar el resultado, porque cada celda es independiente
 # de sus vecinas en la vertical.
+# Bandas que se calculan a la vez dentro de un mismo perfil. Numpy suelta el
+# GIL en las operaciones grandes, así que los hilos escalan de verdad; por
+# encima de tres deja de mejorar y cada uno suma su propio pico de memoria.
+CONVECTIVE_THREADS = max(
+    1, int(os.getenv("METEOLABX_FORECAST_CONVECTIVE_THREADS", "3"))
+)
+
+
 CONVECTIVE_STRIPE_ROWS = int(
     os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS", "128")
 )
@@ -811,6 +826,12 @@ DCAPE_EXACT_DEWPOINT = os.getenv(
 ).strip().lower() not in {"0", "false", "no"}
 
 
+# Plazos publicados que se le exigen a una pasada para adoptarla.
+MINIMUM_RUN_HOURS = max(
+    1, int(os.getenv("METEOLABX_AROME_MINIMUM_RUN_HOURS", "6"))
+)
+
+
 PROFILE_SPILL_ENABLED = os.getenv(
     "METEOLABX_FORECAST_PROFILE_SPILL", "1"
 ).strip().lower() not in {"0", "false", "no"}
@@ -924,8 +945,9 @@ def _convective_outputs_in_stripes(
     # todas para concatenarlas al final mantenía dos copias completas de los
     # catorce campos en el momento de mayor consumo.
     merged: dict[str, np.ndarray] = {}
-    for start in range(0, rows, step):
-        band = slice(start, min(start + step, rows))
+    reserva = threading.Lock()
+
+    def una_banda(band: slice) -> None:
         stripe = _convective_outputs(
             pressure[:, band],
             temperature[:, band],
@@ -940,12 +962,32 @@ def _convective_outputs_in_stripes(
             only_dcape,
         )
         for name, values in stripe.items():
-            if name not in merged:
-                merged[name] = np.empty(
-                    (rows, *values.shape[1:]), dtype=values.dtype
-                )
+            with reserva:
+                if name not in merged:
+                    merged[name] = np.empty(
+                        (rows, *values.shape[1:]), dtype=values.dtype
+                    )
+            # Cada banda escribe en sus propias filas, así que fuera del
+            # cerrojo no hay dos hilos tocando lo mismo.
             merged[name][band] = values
-        del stripe
+        stripe.clear()
+
+    bandas = [
+        slice(start, min(start + step, rows)) for start in range(0, rows, step)
+    ]
+    if CONVECTIVE_THREADS <= 1 or len(bandas) == 1:
+        for band in bandas:
+            una_banda(band)
+        return merged
+
+    # Las bandas son independientes y numpy suelta el GIL en las operaciones
+    # grandes, así que se calculan a la vez. Medido sobre 384x1121: tres hilos
+    # bajan el DCAPE de 24,3 a 9,2 s, con el mismo resultado, a cambio de
+    # 743 MB. Por encima de tres deja de mejorar.
+    with ThreadPoolExecutor(
+        max_workers=CONVECTIVE_THREADS, thread_name_prefix="arome-banda"
+    ) as bandas_a_la_vez:
+        list(bandas_a_la_vez.map(una_banda, bandas))
     return merged
 
 

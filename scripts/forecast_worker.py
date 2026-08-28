@@ -1027,11 +1027,14 @@ def _finish_status(manifest: dict[str, Any]) -> None:
         ),
         default=-1,
     )
-    estaba = manifest.get("status")
     manifest["status"] = (
         "complete" if all_complete and final_horizon >= 51 else "publishing"
     )
-    if manifest["status"] == "complete" and estaba != "complete":
+    # Con una marca propia y no con el estado anterior: el manifiesto se
+    # reconstruye entre ciclos, así que comparar contra su estado previo
+    # repetía el resumen en cada vuelta mientras la pasada siguiera completa.
+    if manifest["status"] == "complete" and not manifest.get("summary_logged"):
+        manifest["summary_logged"] = True
         _log_run_summary(manifest)
 
 
@@ -1182,6 +1185,36 @@ HEAVY_PROFILE_BYTES = int(
 DECLARED_MEMORY_LIMIT_B = int(
     float(os.getenv("METEOLABX_FORECAST_MEMORY_LIMIT_GB", "0")) * 1024**3
 )
+
+
+def _describe_memory(medida: tuple[int, int] | None) -> str:
+    """Anónima y total, en ese orden: la primera es la que provoca el OOM."""
+    if medida is None:
+        return "sin límite legible"
+    total = _cgroup_total_bytes()
+    texto = f"{medida[0]/1024**3:.1f}/{medida[1]/1024**3:.0f} GB"
+    if total is not None and total > medida[0]:
+        # El resto es caché de fichero, que el núcleo recupera solo.
+        texto += f" (+{(total-medida[0])/1024**3:.1f} recuperables)"
+    return texto
+
+
+def _cgroup_total_bytes() -> int | None:
+    """Lo que el cgroup contabiliza en total, con el page cache dentro.
+
+    Es lo que enseñan las gráficas del proveedor, y engaña: buena parte son
+    ficheros mapeados que el núcleo suelta en cuanto hace falta. Se registra
+    junto a la anónima para no volver a leer una como la otra.
+    """
+    for ruta in (
+        Path("/sys/fs/cgroup/memory.current"),
+        Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+    ):
+        try:
+            return int(ruta.read_text().strip())
+        except (FileNotFoundError, OSError, ValueError):
+            continue
+    return None
 
 
 def _cgroup_memory() -> tuple[int, int] | None:
@@ -1387,9 +1420,7 @@ def _run_parallel_work(
                         f"nivel {nivel}×{cuenta}"
                         for nivel, cuenta in sorted(reparto.items())
                     ) or "ninguno",
-                    f"{medida[0]/1024**3:.1f}/{medida[1]/1024**3:.0f} GB"
-                    if medida
-                    else "sin límite legible",
+                    _describe_memory(medida),
                 )
                 future = executor.submit(_run_isolated_job, job, timeout_s)
                 active[future] = (manifest, job)

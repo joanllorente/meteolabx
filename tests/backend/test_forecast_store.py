@@ -1215,3 +1215,58 @@ def test_the_profile_reports_its_own_memory_peak():
         "la unidad de ru_maxrss depende del sistema"
     )
     assert "pico %.1f GB" in fuente
+
+
+def test_the_run_summary_is_logged_once_per_run():
+    """El resumen sale al completarse, no en cada ciclo posterior.
+
+    Se apoyaba en el estado anterior del manifiesto, pero éste se reconstruye
+    entre ciclos: en la 18Z la línea salió cuatro veces seguidas.
+    """
+    horas = [f"2026-08-28T{h:02d}:00:00Z" for h in range(24)] + [
+        f"2026-08-29T{h:02d}:00:00Z" for h in range(24)
+    ] + [f"2026-08-30T{h:02d}:00:00Z" for h in range(4)]
+    manifest = {
+        "run": "2026-08-27T18:00:00Z",
+        "expected_hours": {"native": 52, "diagnostic": 36},
+        "expected_times": horas,
+        "catalog_products": {p: {"valid_times": horas} for p in PERSISTED_FORECAST_PRODUCTS},
+        "products": {},
+        "tier_timing": {"0": {"first_start": "2026-08-27T20:00:00Z",
+                              "last_start": "2026-08-27T21:00:00Z", "jobs": 604}},
+    }
+    for product in PERSISTED_FORECAST_PRODUCTS:
+        manifest["products"][product] = {
+            "available_times": list(forecast_worker._product_expected_times(manifest, product))
+        }
+
+    veces = []
+    original = forecast_worker._log_run_summary
+    forecast_worker._log_run_summary = lambda m: veces.append(m)
+    try:
+        for _ in range(4):
+            # El estado se pierde entre ciclos; la marca no.
+            manifest.pop("status", None)
+            forecast_worker._finish_status(manifest)
+    finally:
+        forecast_worker._log_run_summary = original
+
+    assert len(veces) == 1, f"el resumen salió {len(veces)} veces"
+
+
+def test_the_run_adoption_threshold_is_configurable():
+    """Cuántos plazos se exigen a una pasada para adoptarla.
+
+    Decide cuánto se tarda en empezar: el nivel 0 se pasa casi una hora
+    esperando publicaciones, así que adoptar antes solapa esa espera con el
+    trabajo. A cambio compromete antes con una pasada aún incipiente, y por eso
+    tiene que poder volverse atrás sin desplegar.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    assert 1 <= arome_forecast.MINIMUM_RUN_HOURS <= 12
+    fuente = inspect.getsource(arome_forecast._product_context)
+    assert "MINIMUM_RUN_HOURS" in fuente
+    assert ">= 12" not in fuente, "el umbral no puede quedar fijado a mano"
