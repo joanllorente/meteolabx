@@ -72,7 +72,10 @@ def _cache_dir() -> Path:
     configured = os.getenv("METEOLABX_AROME_PACKAGE_CACHE_DIR", "").strip()
     if configured:
         return Path(configured)
-    # Al temporal del contenedor, nunca al volumen: son cientos de megas.
+    # Por omisión, al temporal del contenedor. Conviene apuntarla al volumen
+    # con METEOLABX_AROME_PACKAGE_CACHE_DIR cuando haya sitio: el temporal se
+    # pierde en cada reinicio y una pasada son unos 8 GB de bloques que habría
+    # que volver a bajar, justo cuando el servicio acaba de caerse.
     return Path(tempfile.gettempdir()) / "meteolabx-arome-packages"
 
 
@@ -197,21 +200,35 @@ def _download_package(
 
 
 def read_isobaric_profile(
-    path: Path, valid_time: datetime, levels_hpa: list[float]
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+    elements: tuple[str, ...] = (),
 ) -> tuple[dict[str, dict[float, np.ndarray]], tuple[Any, Any, Any]]:
     """Campos del perfil para una hora, leídos mensaje a mensaje.
 
     Devuelve `({"temperature": {850.0: array, ...}, ...}, geometría)` con las
     unidades tal cual las publica el paquete: °C, %, m/s y m²/s².
 
+    `elements` limita lo que se decodifica. Descomprimir un elemento que nadie
+    va a mirar son seis megas por nivel: la cizalladura sólo necesita el
+    viento, y descodificarle además temperatura, humedad y geopotencial es
+    tirar la mitad del trabajo.
+
     La geometría es la del paquete, no la de quien pregunta: son rejillas que
     pueden no coincidir —un recorte del WCS frente al dominio completo del
     GRIB— y darles la ajena convierte los valores en basura sin avisar.
     """
+    buscados = set(elements) if elements else set(IP1_ELEMENTS.values())
+    desconocidos = buscados - set(IP1_ELEMENTS.values())
+    if desconocidos:
+        raise AromePackageError(
+            f"IP1 no publica {', '.join(sorted(desconocidos))}."
+        )
     wanted_levels = {int(round(level * 100)) for level in levels_hpa}
     stamp = int(valid_time.astimezone(timezone.utc).timestamp())
     profile: dict[str, dict[float, np.ndarray]] = {
-        name: {} for name in IP1_ELEMENTS.values()
+        name: {} for name in buscados
     }
     # GDAL cachea bloques del GRIB y su límite por defecto es un porcentaje de
     # la RAM de la máquina: sobre un fichero de medio giga se quedaba con casi
@@ -222,7 +239,7 @@ def read_isobaric_profile(
         for index in range(1, dataset.count + 1):
             tags = dataset.tags(index)
             element = IP1_ELEMENTS.get(tags.get("GRIB_ELEMENT", ""))
-            if element is None:
+            if element is None or element not in buscados:
                 continue
             if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
                 continue

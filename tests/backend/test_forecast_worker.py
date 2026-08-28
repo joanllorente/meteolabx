@@ -796,7 +796,9 @@ def test_the_summary_only_appears_once(caplog):
 
     veces = []
     original = trabajador._log_run_summary
-    trabajador._log_run_summary = lambda m: veces.append(m)
+    # Devuelve True como el real cuando llega a escribirlo: quien llama usa
+    # ese valor para no repetirlo.
+    trabajador._log_run_summary = lambda m: bool(veces.append(m) or True)
     try:
         manifiesto = {
             "run": "2026-08-27T06:00:00Z",
@@ -812,3 +814,23 @@ def test_the_summary_only_appears_once(caplog):
         assert len(veces) == primera, "no debe repetirse en ciclos posteriores"
     finally:
         trabajador._log_run_summary = original
+
+
+def test_a_run_without_timings_is_not_marked_as_summarised():
+    """Sin marcas de tiempo no hay resumen, y tampoco se da por hecho.
+
+    Una pasada empezada antes de que existieran esas marcas no tiene nada que
+    resumir. Apuntarla igualmente la daba por resumida para siempre: la 12Z
+    llegó al 100 % y su cronología no llegó a escribirse nunca.
+    """
+    import scripts.forecast_worker as trabajador
+
+    sin_marcas = {"run": "2026-08-28T12:00:00Z"}
+    assert trabajador._log_run_summary(sin_marcas) is False
+
+    con_marcas = {
+        "run": "2026-08-28T12:00:00Z",
+        "tier_timing": {"0": {"first_start": "2026-08-28T14:00:00Z",
+                              "last_start": "2026-08-28T14:30:00Z", "jobs": 12}},
+    }
+    assert trabajador._log_run_summary(con_marcas) is True

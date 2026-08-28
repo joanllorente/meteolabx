@@ -476,3 +476,32 @@ def test_only_the_requested_ip3_fields_are_read(monkeypatch):
     # de velocidad vertical.
     todos = prevision._isobaric_extras_from_package(RUN, RUN, [850.0])
     assert set(todos[0]) == {"dewpoint", "vertical_velocity"}
+
+
+def test_the_profile_reader_decodes_only_what_is_asked(monkeypatch):
+    """Descomprimir un elemento que nadie mira son seis megas por nivel.
+
+    La cizalladura necesita viento y geopotencial; descodificarle además
+    temperatura y humedad es tirar la mitad del trabajo de cada banda.
+    """
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _DatasetFalso(stamp))
+
+    todos, _ = paquetes.read_isobaric_profile(Path("da-igual"), RUN, [850.0])
+    solo_viento, _ = paquetes.read_isobaric_profile(
+        Path("da-igual"), RUN, [850.0], ("u", "v")
+    )
+
+    assert set(solo_viento) == {"u", "v"}
+    assert len(todos) > len(solo_viento)
+
+
+def test_asking_for_something_ip1_does_not_publish_is_an_error(monkeypatch):
+    """Pedir un elemento inexistente falla en vez de devolverlo vacío."""
+    stamp = int(RUN.timestamp())
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _DatasetFalso(stamp))
+
+    with pytest.raises(paquetes.AromePackageError, match="no publica"):
+        paquetes.read_isobaric_profile(
+            Path("da-igual"), RUN, [850.0], ("vertical_velocity",)
+        )

@@ -737,6 +737,23 @@ CONVECTIVE_STRIPE_ROWS_WITHOUT_DCAPE = int(
 )
 
 
+# Los perfiles se guardan a la mitad de precisión, pero se calculan enteros.
+# Medido sobre 38.400 celdas de un perfil sintético, guardar en float32 y
+# calcular en float64 deja las máscaras de validez idénticas y mueve una sola
+# celda de DCAPE por encima de 25 J/kg (media 0,008 J/kg de 600); CAPE y SRH no
+# mueven ninguna. Calcular en float32 es otra cosa muy distinta, y no es lo que
+# se hace: por eso la conversión vive aquí dentro y no en quien trocea, para
+# que ningún camino —banda, rejilla entera o test— pueda saltársela.
+PROFILE_STORAGE_DTYPE = np.float32
+
+
+def _as_float64(array: np.ndarray | None) -> np.ndarray | None:
+    """Sube una banda de perfil a la precisión en la que se calcula."""
+    if array is None:
+        return None
+    return np.asarray(array, dtype=np.float64)
+
+
 def _convective_outputs(
     pressure: np.ndarray,
     temperature: np.ndarray,
@@ -760,6 +777,17 @@ def _convective_outputs(
     12,3. El resultado es idéntico; lo que se ahorra es el trabajo repetido.
     """
     shape = terrain.shape
+    # Aquí es donde la banda deja de ser almacenamiento y pasa a ser cálculo.
+    pressure = _as_float64(pressure)
+    temperature = _as_float64(temperature)
+    dewpoint = _as_float64(dewpoint)
+    u_profile = _as_float64(u_profile)
+    v_profile = _as_float64(v_profile)
+    vertical_velocity = _as_float64(vertical_velocity)
+    # La altura la recalcula también la helicidad del ascenso, que trocea con
+    # halo y no puede reutilizar ésta. Son 54 ms por banda: compartirla
+    # obligaría a unificar dos troceados distintos para ahorrar 0,3 s de los
+    # 138 que dura un perfil.
     height = hypsometric_height_profile_m(pressure, temperature, dewpoint, terrain)
     if only_dcape:
         vacio = np.full(shape, np.nan)
@@ -924,6 +952,50 @@ def _is_memory_backed(path: Path) -> bool:
 
 
 @contextlib.contextmanager
+def _empty_profiles_on_disk(
+    names: tuple[str, ...], shape: tuple[int, ...]
+) -> Iterator[dict[str, np.ndarray] | None]:
+    """Crea perfiles vacíos ya mapeados a disco, para llenarlos nivel a nivel.
+
+    Apilar en memoria y volcar después hace convivir tres copias en el peor
+    momento: las capas sueltas del GRIB, el perfil apilado y el destino en
+    disco. Escribiendo cada nivel en su sitio en cuanto se lee, sólo existe una
+    capa a la vez.
+
+    Devuelve None cuando no hay dónde volcar —un tmpfs, o sin permisos—, para
+    que quien llama siga apilando en memoria, que siempre funciona.
+    """
+    destino = Path(tempfile.gettempdir())
+    if not PROFILE_SPILL_ENABLED or _is_memory_backed(destino):
+        yield None
+        return
+    carpeta = None
+    try:
+        carpeta = Path(tempfile.mkdtemp(prefix="meteolabx-perfil-", dir=destino))
+        sufijo = np.dtype(PROFILE_STORAGE_DTYPE).name
+        perfiles = {
+            nombre: np.memmap(
+                carpeta / f"{nombre}.{sufijo}",
+                dtype=PROFILE_STORAGE_DTYPE,
+                mode="w+",
+                shape=shape,
+            )
+            for nombre in names
+        }
+    except OSError as error:
+        logger.warning("No se han podido crear los perfiles en disco: %s", error)
+        if carpeta is not None:
+            shutil.rmtree(carpeta, ignore_errors=True)
+        yield None
+        return
+    try:
+        yield perfiles
+    finally:
+        perfiles.clear()
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+@contextlib.contextmanager
 def _profiles_spilled_to_disk(
     profiles: list[np.ndarray],
 ) -> Iterator[list[np.ndarray]]:
@@ -1011,14 +1083,14 @@ def _updraft_helicity_in_stripes(
         abajo = min(rows, band.stop + 1)
         ancha = slice(arriba, abajo)
         altura = hypsometric_height_profile_m(
-            pressure[:, ancha], temperature[:, ancha],
-            dewpoint[:, ancha], terrain[ancha],
+            _as_float64(pressure[:, ancha]), _as_float64(temperature[:, ancha]),
+            _as_float64(dewpoint[:, ancha]), terrain[ancha],
         )
         completa = updraft_helicity(
             altura - terrain[ancha][None, ...],
-            vertical_velocity[:, ancha],
-            u_profile[:, ancha],
-            v_profile[:, ancha],
+            _as_float64(vertical_velocity[:, ancha]),
+            _as_float64(u_profile[:, ancha]),
+            _as_float64(v_profile[:, ancha]),
             latitudes[ancha],
             paso_lon,
             paso_lat,
@@ -1145,7 +1217,12 @@ def _shear_levels_from_package(
     Son los mismos que ya se bajan para el perfil convectivo, así que leerlos
     del fichero evita 18 peticiones por hora de predicción.
     """
-    campos = _isobaric_fields_from_package(reference, run, valid_time, list(levels_hpa))
+    # De los cinco elementos de IP1 sólo hacen falta tres: descodificar
+    # temperatura y humedad para esto sería tirar seis megas por nivel.
+    campos = _isobaric_fields_from_package(
+        reference, run, valid_time, list(levels_hpa),
+        ("u", "v", "geopotential"),
+    )
     if not campos:
         return None
     disponibles = {
@@ -1200,8 +1277,12 @@ def _isobaric_fields_from_package(
     run: datetime,
     valid_time: datetime,
     levels: list[float],
+    elements: tuple[str, ...] = (),
 ) -> dict[str, dict[float, RasterField]] | None:
-    """Temperatura, viento y geopotencial del paquete isobárico.
+    """Los elementos pedidos del paquete isobárico, nivel a nivel.
+
+    `elements` vacío descodifica los cinco que trae IP1. Cada elemento son unos
+    seis megas por nivel, así que quien sólo necesite tres los nombra.
 
     Devuelve None si el paquete todavía no está publicado, para que quien
     llame siga por el camino del WCS: durante las primeras horas de una pasada
@@ -1211,7 +1292,9 @@ def _isobaric_fields_from_package(
         return None
     try:
         path = ensure_package("IP1", run, valid_time)
-        profile, geometria = read_isobaric_profile(path, valid_time, levels)
+        profile, geometria = read_isobaric_profile(
+            path, valid_time, levels, elements
+        )
     except (AromePackageError, MeteoFranceAuthError) as exc:
         logger.info("Paquete IP1 no disponible, se usa el WCS: %s", exc)
         return None
@@ -1229,6 +1312,8 @@ def _isobaric_fields_from_package(
     }
     salida: dict[str, dict[float, RasterField]] = {}
     for nombre, unidad in unidades.items():
+        if nombre not in profile:
+            continue
         salida[nombre] = {
             nivel: RasterField(valores, *common, unidad)
             for nivel, valores in profile[nombre].items()
@@ -1404,7 +1489,13 @@ def _convective_frames(
     # De IP1 salen temperatura, viento y geopotencial en altura. El rocío
     # isobárico, que sólo necesita DCAPE, viaja en IP3 junto a la velocidad
     # vertical: con él no hace falta pedir un solo campo por niveles al WCS.
-    package_levels = _isobaric_fields_from_package(reference, run, valid_time, levels)
+    # El geopotencial es el quinto elemento de IP1 y aqui no lo usa nadie: la
+    # altura sale de la ecuacion hipsometrica, no del paquete. Descodificarlo
+    # eran 100-150 MB por perfil para tirarlos.
+    package_levels = _isobaric_fields_from_package(
+        reference, run, valid_time, levels,
+        ("temperature", "relative_humidity", "u", "v"),
+    )
     package_levels_usado = bool(package_levels)
     # De IP3 salen el rocío exacto —sólo lo necesita DCAPE— y la velocidad
     # vertical, que alimenta el mapa del nivel de convección libre. El paquete
@@ -1415,7 +1506,12 @@ def _convective_frames(
     # Prescindir de él publicaría esas horas con los dos mapas de velocidad
     # vertical vacíos, y una hora ya publicada no se recalcula: se quedarían
     # así para siempre.
-    quiere = ("dewpoint", "vertical_velocity") if exact_dewpoint else ("vertical_velocity",)
+    # Cuando sólo se publica DCAPE no hay que traer la velocidad vertical: los
+    # dos mapas que la usan salen del nivel anterior y aquí se descartarían.
+    if only_dcape:
+        quiere = ("dewpoint",)
+    else:
+        quiere = ("dewpoint", "vertical_velocity") if exact_dewpoint else ("vertical_velocity",)
     extras = (
         _isobaric_extras_from_package(run, valid_time, levels, quiere)
         if package_levels
@@ -1489,120 +1585,141 @@ def _convective_frames(
     # La velocidad vertical no tiene valor en superficie: se arranca en el
     # primer nivel isobárico y el suelo queda a cero, que es su condición de
     # contorno.
-    vv_layers = [np.zeros(shape)] if package_vv else None
-    pressure_layers = [surface_pressure]
-    temperature_layers = [surface_temperature]
-    dewpoint_layers = [surface_dewpoint]
-    u_layers = [surface_u]
-    v_layers = [surface_v]
-    for level_hpa in levels:
-        if package_levels:
-            temperature_field = package_levels["temperature"][level_hpa]
-            u_field = package_levels["u"][level_hpa]
-            v_field = package_levels["v"][level_hpa]
-        else:
-            temperature_field = fetched[("temperature", level_hpa)]
-            u_field = fetched[("u", level_hpa)]
-            v_field = fetched[("v", level_hpa)]
-        if package_dewpoint and level_hpa in package_dewpoint:
-            dewpoint_field = package_dewpoint[level_hpa]
-        elif package_levels and not exact_dewpoint:
-            humedad = package_levels["relative_humidity"][level_hpa]
-            dewpoint_field = RasterField(
-                _dewpoint_from_relative_humidity_c(
-                    np.asarray(temperature_field.data, dtype=float),
-                    np.asarray(humedad.data, dtype=float),
-                ),
-                temperature_field.transform,
-                temperature_field.crs,
-                temperature_field.bounds,
-                "C",
+    # Los perfiles se llenan nivel a nivel sobre ficheros ya mapeados, en vez
+    # de apilarse en memoria y volcarse después: así nunca coexisten la capa
+    # suelta, el perfil apilado y su copia en disco, que era el momento de
+    # mayor consumo de todo el proceso.
+    lleva_vv = bool(package_vv) and not only_dcape
+    nombres = ("pressure", "temperature", "dewpoint", "u", "v")
+    if lleva_vv:
+        nombres += ("vv",)
+    forma = (len(levels) + 1, *shape)
+
+    with _empty_profiles_on_disk(nombres, forma) as en_disco:
+        # Sin sitio donde volcar se apila en memoria, que siempre funciona.
+        perfiles = en_disco or {
+            nombre: np.empty(forma, dtype=PROFILE_STORAGE_DTYPE)
+            for nombre in nombres
+        }
+        perfiles["pressure"][0] = surface_pressure
+        perfiles["temperature"][0] = surface_temperature
+        perfiles["dewpoint"][0] = np.minimum(surface_dewpoint, surface_temperature)
+        perfiles["u"][0] = surface_u
+        perfiles["v"][0] = surface_v
+        if lleva_vv:
+            # En superficie no hay velocidad vertical: es su contorno.
+            perfiles["vv"][0] = 0.0
+
+        for indice, level_hpa in enumerate(levels, start=1):
+            if package_levels:
+                temperature_field = package_levels["temperature"][level_hpa]
+                u_field = package_levels["u"][level_hpa]
+                v_field = package_levels["v"][level_hpa]
+            else:
+                temperature_field = fetched[("temperature", level_hpa)]
+                u_field = fetched[("u", level_hpa)]
+                v_field = fetched[("v", level_hpa)]
+            if package_dewpoint and level_hpa in package_dewpoint:
+                dewpoint_field = package_dewpoint[level_hpa]
+            elif package_levels and not exact_dewpoint:
+                humedad = package_levels["relative_humidity"][level_hpa]
+                dewpoint_field = RasterField(
+                    _dewpoint_from_relative_humidity_c(
+                        np.asarray(temperature_field.data, dtype=float),
+                        np.asarray(humedad.data, dtype=float),
+                    ),
+                    temperature_field.transform,
+                    temperature_field.crs,
+                    temperature_field.bounds,
+                    "C",
+                )
+            else:
+                dewpoint_field = fetched[("dewpoint", level_hpa)]
+            assert temperature_field and dewpoint_field and u_field and v_field
+            temperature = _as_kelvin(
+                _align(reference, temperature_field), temperature_field.units
             )
-        else:
-            dewpoint_field = fetched[("dewpoint", level_hpa)]
-        assert temperature_field and dewpoint_field and u_field and v_field
-        temperature = _as_kelvin(_align(reference, temperature_field), temperature_field.units)
-        dewpoint = _as_kelvin(_align(reference, dewpoint_field), dewpoint_field.units)
-        u_value = _align(reference, u_field)
-        v_value = _align(reference, v_field)
-        fixed_pressure = np.full(shape, level_hpa, dtype=float)
-        below_ground = fixed_pressure >= surface_pressure
-        pressure_layers.append(np.where(below_ground, surface_pressure, fixed_pressure))
-        temperature_layers.append(np.where(below_ground, surface_temperature, temperature))
-        dewpoint_layers.append(np.where(below_ground, surface_dewpoint, dewpoint))
-        u_layers.append(np.where(below_ground, surface_u, u_value))
-        v_layers.append(np.where(below_ground, surface_v, v_value))
-        if vv_layers is not None:
-            vv_nivel = np.asarray(
-                _align(reference, package_vv[level_hpa]), dtype=float
-            ) if level_hpa in package_vv else np.full(shape, np.nan)
-            vv_layers.append(np.where(below_ground, 0.0, vv_nivel))
+            dewpoint = _as_kelvin(
+                _align(reference, dewpoint_field), dewpoint_field.units
+            )
+            below_ground = level_hpa >= surface_pressure
 
-    pressure = np.stack(pressure_layers)
-    temperature = np.stack(temperature_layers)
-    dewpoint = np.minimum(np.stack(dewpoint_layers), temperature)
-    u_profile = np.stack(u_layers)
-    v_profile = np.stack(v_layers)
-    vv_profile = np.stack(vv_layers) if vv_layers is not None else None
+            perfiles["pressure"][indice] = np.where(
+                below_ground, surface_pressure, level_hpa
+            )
+            perfiles["temperature"][indice] = np.where(
+                below_ground, surface_temperature, temperature
+            )
+            perfiles["dewpoint"][indice] = np.minimum(
+                np.where(below_ground, surface_dewpoint, dewpoint),
+                perfiles["temperature"][indice],
+            )
+            perfiles["u"][indice] = np.where(
+                below_ground, surface_u, _align(reference, u_field)
+            )
+            perfiles["v"][indice] = np.where(
+                below_ground, surface_v, _align(reference, v_field)
+            )
+            if lleva_vv:
+                perfiles["vv"][indice] = np.where(
+                    below_ground,
+                    0.0,
+                    np.asarray(_align(reference, package_vv[level_hpa]), dtype=float)
+                    if level_hpa in package_vv
+                    else np.nan,
+                )
+            # La capa ya está en su sitio: nada de esto tiene que sobrevivir a
+            # la vuelta siguiente.
+            temperature = dewpoint = None
+            temperature_field = dewpoint_field = u_field = v_field = None
 
-    # Los campos descargados y las capas sueltas ya viven dentro de los
-    # perfiles apilados. Mantenerlos vivos durante el diagnóstico duplicaba el
-    # volumen completo en memoria, y el proceso moría por falta de ella.
-    pressure_layers = temperature_layers = dewpoint_layers = None
-    u_layers = v_layers = vv_layers = None
-    surface_dewpoint_field = surface_pressure_field = None
-    surface_u_field = surface_v_field = terrain_field = None
-    fetched.clear()
-    # Los campos del paquete tambien: son cinco elementos por cada uno de los
-    # 24 niveles, y su contenido ya esta dentro de los perfiles apilados.
-    if package_levels:
-        for campos in package_levels.values():
-            campos.clear()
-        package_levels = None
-    if surface_package:
-        surface_package.clear()
-        surface_package = None
-    # El rocío de IP3 ya está dentro de los perfiles apilados. Mantenerlo vivo
-    # durante el diagnóstico eran 150 MB por perfil, y DCAPE es el que menos
-    # margen tiene.
-    if package_dewpoint:
-        package_dewpoint.clear()
-    if package_vv:
-        package_vv.clear()
-    package_dewpoint = package_vv = extras = None
+        # Los campos de origen ya viven dentro de los perfiles.
+        surface_dewpoint_field = surface_pressure_field = None
+        surface_u_field = surface_v_field = terrain_field = None
+        fetched.clear()
+        if package_levels:
+            for campos in package_levels.values():
+                campos.clear()
+            package_levels = None
+        if surface_package:
+            surface_package.clear()
+            surface_package = None
+        if package_dewpoint:
+            package_dewpoint.clear()
+        if package_vv:
+            package_vv.clear()
+        package_dewpoint = package_vv = extras = None
 
-    # La rejilla hace falta para la vorticidad: sus derivadas van en metros y
-    # un grado de longitud mide 111 km abajo del dominio y 64 arriba.
-    filas = np.arange(shape[0], dtype=float) + 0.5
-    rejilla = (
-        reference.transform.f + filas * reference.transform.e,
-        abs(float(reference.transform.a)),
-        abs(float(reference.transform.e)),
-    )
+        # La rejilla hace falta para la vorticidad: sus derivadas van en metros
+        # y un grado de longitud mide 111 km abajo del dominio y 64 arriba.
+        filas = np.arange(shape[0], dtype=float) + 0.5
+        rejilla = (
+            reference.transform.f + filas * reference.transform.e,
+            abs(float(reference.transform.a)),
+            abs(float(reference.transform.e)),
+        )
+        fases["montar"] = time.monotonic() - reloj
+        reloj = time.monotonic()
 
-    # Los perfiles apilados rondan el giga y sólo se leen. Apartarlos al disco
-    # los saca de la memoria que el núcleo no puede recuperar; hay que soltar
-    # las referencias locales o seguirían ocupando sitio además del fichero.
-    fases["montar"] = time.monotonic() - reloj
-    reloj = time.monotonic()
-
-    apilados = [pressure, temperature, dewpoint, u_profile, v_profile]
-    del pressure, temperature, dewpoint, u_profile, v_profile
-    with _profiles_spilled_to_disk(apilados) as perfiles:
-        apilados = None
+        base = [perfiles[n] for n in ("pressure", "temperature", "dewpoint", "u", "v")]
+        vv_en_disco = perfiles["vv"] if lleva_vv else None
         outputs = _convective_outputs_in_stripes(
-            *perfiles,
+            *base,
             terrain, surface_u, surface_v, levels,
             include_dcape=include_dcape,
             # Cuando sólo se pide DCAPE no hay que rehacer las tres parcelas:
             # de eso se encargó el nivel anterior.
             only_dcape=only_dcape,
-            vertical_velocity=vv_profile,
+            vertical_velocity=vv_en_disco,
         )
-        updraft = _updraft_helicity_in_stripes(
-            *perfiles, terrain, vv_profile, rejilla,
+        # Su mapa se publica en el nivel anterior; recalcularlo aquí sería
+        # medio giga y cuatro décimas de segundo para tirarlo.
+        updraft = (
+            np.full(shape, np.nan)
+            if only_dcape
+            else _updraft_helicity_in_stripes(*base, terrain, vv_en_disco, rejilla)
         )
-        perfiles = None
+        base = vv_en_disco = perfiles = None
     fases["diagnosticar"] = time.monotonic() - reloj
     # El pico del propio proceso, que es el dato que falta: la memoria que se
     # registra al lanzar mide antes de que el perfil crezca, así que nunca ve
@@ -1689,7 +1806,9 @@ def _level_difference_field(
     """
     bajo = float(config["lower_level"])
     alto = float(config["upper_level"])
-    paquete = _isobaric_fields_from_package(None, run, valid_time, [bajo, alto])
+    paquete = _isobaric_fields_from_package(
+        None, run, valid_time, [bajo, alto], ("temperature",)
+    )
     temperaturas = (paquete or {}).get("temperature") or {}
     if bajo in temperaturas and alto in temperaturas:
         campo_bajo, campo_alto = temperaturas[bajo], temperaturas[alto]

@@ -30,6 +30,7 @@ from server.services.arome_forecast import (
 )
 from server.services.forecast_store import (
     CONVECTIVE_FORECAST_PRODUCTS,
+    RUN_SLOTS_KEY,
     LEVEL_INDEX_PRODUCTS,
     DERIVED_FORECAST_PRODUCTS,
     LATEST_MANIFEST_KEY,
@@ -288,13 +289,36 @@ def _publish_run_slot(store, manifest: dict[str, Any]) -> None:
     logger.info("RUN %s sustituido en el turno %sZ", previous_run, previous_run[11:13])
 
 
+def _oldest_unfinished_run(store, latest_run: str) -> str:
+    """Pasada más antigua a la que todavía le queda trabajo.
+
+    Sus paquetes siguen haciendo falta aunque haya salido una más nueva: en
+    cuanto aparece la siguiente, la anterior suele estar todavía con los
+    diagnósticos convectivos o con DCAPE.
+    """
+    pendientes = [latest_run]
+    indice = read_json(store, RUN_SLOTS_KEY) or {}
+    for item in (indice.get("slots") or {}).values():
+        run_iso = str((item or {}).get("run") or "")
+        if not run_iso:
+            continue
+        manifest = read_json(store, run_manifest_key(run_iso)) or {}
+        if manifest.get("status") != "complete":
+            pendientes.append(run_iso)
+    return min(pendientes, key=_parse_iso)
+
+
 def _prune_old_runs(store, latest_run: str) -> None:
     """Libera el volumen y el disco temporal de lo que ya no se usa."""
     for run_iso in prune_retained_runs(store):
         logger.info("RUN %s eliminado del volumen por antigüedad", run_iso)
-    # Los paquetes GRIB viven en el disco del contenedor, no en el volumen, y
-    # cada bloque ocupa cientos de megas: solo interesan los del RUN vigente.
-    for path in discard_packages_before(_parse_iso(latest_run)):
+    # Los paquetes GRIB ocupan cientos de megas por bloque, pero borrarlos en
+    # cuanto sale una pasada nueva dejaba sin ellos a la anterior, que suele
+    # seguir con los convectivos o con DCAPE: se rebajaban enteros, y algún
+    # bloque llegó a descargarse seis veces. Se conservan mientras alguna
+    # pasada retenida los necesite.
+    frontera = _oldest_unfinished_run(store, latest_run)
+    for path in discard_packages_before(_parse_iso(frontera)):
         logger.info("Paquete %s descartado", path.name)
 
 
@@ -1035,20 +1059,26 @@ def _finish_status(manifest: dict[str, Any]) -> None:
     # Con una marca propia y no con el estado anterior: el manifiesto se
     # reconstruye entre ciclos, así que comparar contra su estado previo
     # repetía el resumen en cada vuelta mientras la pasada siguiera completa.
+    # Se marca sólo si el resumen llegó a escribirse: el manifiesto de una
+    # pasada empezada antes de que existieran las marcas de tiempo no tiene
+    # nada que resumir, y apuntarlo igualmente lo daba por hecho para siempre.
     if manifest["status"] == "complete" and not manifest.get("summary_logged"):
-        manifest["summary_logged"] = True
-        _log_run_summary(manifest)
+        manifest["summary_logged"] = _log_run_summary(manifest)
 
 
-def _log_run_summary(manifest: dict[str, Any]) -> None:
+def _log_run_summary(manifest: dict[str, Any]) -> bool:
     """Deja en una línea cuánto ha tardado cada nivel de la pasada.
 
     Sin esto, saber lo que costó una pasada obliga a juntar los logs de todos
     los despliegues que la atravesaron y reconstruir la cronología a mano.
+
+    Devuelve si llegó a escribirlo: una pasada empezada antes de que existieran
+    las marcas de tiempo no tiene nada que resumir, y quien llama no debe darla
+    por resumida.
     """
     tiempos = manifest.get("tier_timing") or {}
     if not tiempos:
-        return
+        return False
     arranques = [
         _parse_iso(tramo["first_start"])
         for tramo in tiempos.values()
@@ -1060,7 +1090,7 @@ def _log_run_summary(manifest: dict[str, Any]) -> None:
         if tramo.get("last_start")
     ]
     if not arranques or not finales:
-        return
+        return False
     inicio = min(arranques)
     nombres = {0: "nativos", 1: "derivados", 2: "convectivos", 3: "DCAPE"}
     tramos = []
@@ -1080,6 +1110,7 @@ def _log_run_summary(manifest: dict[str, Any]) -> None:
         (max(finales) - inicio).total_seconds() / 60,
         " · ".join(tramos),
     )
+    return True
 
 
 def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -1071,14 +1071,19 @@ def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
 
     geometria = (from_bounds(-2, 40, 3, 44, 4, 3), CRS.from_epsg(4326), (-2, 40, 3, 44))
     # 12 °C a 850 y -20 °C a 500: VT = 32.
-    monkeypatch.setattr(
-        arome_forecast, "_isobaric_fields_from_package",
-        lambda ref, run, vt, levels: {
+    pedido = {}
+
+    def paquete_falso(ref, run, vt, levels, elements=()):
+        pedido["elements"] = elements
+        return {
             "temperature": {
                 850.0: RasterField(np.full((3, 4), 12.0), *geometria, "C"),
                 500.0: RasterField(np.full((3, 4), -20.0), *geometria, "C"),
             }
-        },
+        }
+
+    monkeypatch.setattr(
+        arome_forecast, "_isobaric_fields_from_package", paquete_falso
     )
     config = arome_forecast.PRODUCTS["vertical-totals"]
     campo = arome_forecast._level_difference_field(
@@ -1089,6 +1094,10 @@ def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
 
     assert np.allclose(campo.data, 32.0)
     assert campo.units == "°C"
+    # IP1 trae cinco elementos y aqui solo hace falta uno: descodificar viento
+    # y geopotencial para una resta de temperaturas son seis megas por nivel
+    # tirados.
+    assert pedido["elements"] == ("temperature",)
 
 
 def test_vertical_totals_falls_back_to_the_wcs_without_the_package(monkeypatch):
@@ -1246,7 +1255,7 @@ def test_the_run_summary_is_logged_once_per_run():
 
     veces = []
     original = forecast_worker._log_run_summary
-    forecast_worker._log_run_summary = lambda m: veces.append(m)
+    forecast_worker._log_run_summary = lambda m: bool(veces.append(m) or True)
     try:
         for _ in range(4):
             # El estado se pierde entre ciclos; la marca no.
@@ -1356,3 +1365,60 @@ def test_no_convective_product_lands_in_the_native_tier():
     }
     coladas = caros & set(forecast_worker.NATIVE_PRODUCTS)
     assert not coladas, f"{sorted(coladas)} irían al nivel 0"
+
+
+def test_the_dcape_pass_does_not_load_what_it_will_discard():
+    """El turno de DCAPE no trae la velocidad vertical ni calcula la helicidad.
+
+    Sus dos mapas se publican en el nivel anterior, así que aquí se
+    descartarían: eran 160 MB de lectura y medio giga de cálculo por perfil,
+    tirados. Con seis a la vez, casi cuatro gigas.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    fuente = inspect.getsource(arome_forecast._convective_frames.__wrapped__)
+    assert 'if only_dcape:\n        quiere = ("dewpoint",)' in fuente, (
+        "de IP3 sólo debe pedir el rocío"
+    )
+    assert "bool(package_vv) and not only_dcape" in fuente, (
+        "no debe reservar el perfil de velocidad vertical"
+    )
+    assert "if only_dcape\n            else _updraft_helicity_in_stripes" in fuente, (
+        "no debe recalcular la helicidad del ascenso"
+    )
+
+
+def test_packages_survive_while_an_older_run_still_needs_them(tmp_path: Path):
+    """No se borran los GRIB de una pasada que sigue trabajando.
+
+    En cuanto sale una pasada nueva, la anterior suele estar todavía con los
+    convectivos o con DCAPE. Borrarle los paquetes la obligaba a rebajarlos
+    enteros: en un solo log, 108 descargas y 218 descartes, con bloques que se
+    bajaron hasta seis veces.
+    """
+    from server.services.forecast_store import RUN_SLOTS_KEY, run_manifest_key
+
+    store = LocalObjectStore(tmp_path)
+    vieja, nueva = "2026-08-28T06:00:00Z", "2026-08-28T12:00:00Z"
+    write_json(store, RUN_SLOTS_KEY, {"slots": {"06": {"run": vieja}, "12": {"run": nueva}}})
+    write_json(store, run_manifest_key(vieja), {"run": vieja, "status": "publishing"})
+    write_json(store, run_manifest_key(nueva), {"run": nueva, "status": "publishing"})
+
+    frontera = forecast_worker._oldest_unfinished_run(store, nueva)
+
+    assert frontera == vieja, "la frontera la marca la más antigua sin terminar"
+
+
+def test_packages_of_a_finished_run_are_released(tmp_path: Path):
+    """Una pasada completa sí libera sus paquetes."""
+    from server.services.forecast_store import RUN_SLOTS_KEY, run_manifest_key
+
+    store = LocalObjectStore(tmp_path)
+    vieja, nueva = "2026-08-28T06:00:00Z", "2026-08-28T12:00:00Z"
+    write_json(store, RUN_SLOTS_KEY, {"slots": {"06": {"run": vieja}, "12": {"run": nueva}}})
+    write_json(store, run_manifest_key(vieja), {"run": vieja, "status": "complete"})
+    write_json(store, run_manifest_key(nueva), {"run": nueva, "status": "publishing"})
+
+    assert forecast_worker._oldest_unfinished_run(store, nueva) == nueva

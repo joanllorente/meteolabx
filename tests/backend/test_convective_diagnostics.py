@@ -760,3 +760,119 @@ def test_updraft_helicity_without_vertical_velocity_is_empty():
 
     assert vacio.shape == terr.shape
     assert not np.isfinite(vacio).any()
+
+
+def test_profiles_built_on_disk_give_the_same_numbers(tmp_path, monkeypatch):
+    """Llenar los perfiles sobre disco no cambia ningún diagnóstico.
+
+    Apilar en memoria y volcar después hacía convivir tres copias en el peor
+    momento: la capa suelta, el perfil apilado y su destino en disco. Escribir
+    cada nivel en su sitio elimina dos, pero sólo sirve si el resultado es
+    idéntico.
+
+    La referencia se redondea a la precisión con la que se guarda para que lo
+    comparado sea el volcado y nada más. Que guardar en float32 no mueva los
+    mapas es otra propiedad, y la vigila su propio test: mezclarlas aquí
+    dejaría este test pasando por el motivo equivocado.
+    """
+    from server.services import arome_forecast
+    from server.services.arome_forecast import (
+        _convective_outputs_in_stripes,
+        _empty_profiles_on_disk,
+    )
+
+    monkeypatch.setattr(arome_forecast, "PROFILE_SPILL_ENABLED", True)
+    monkeypatch.setattr(arome_forecast, "_is_memory_backed", lambda ruta: False)
+    monkeypatch.setattr(arome_forecast.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    p, t, td, u, v, terr, su, sv, niveles = _synthetic_profile(64, 40)
+    guardado = arome_forecast.PROFILE_STORAGE_DTYPE
+    p, t, td, u, v = (campo.astype(guardado) for campo in (p, t, td, u, v))
+
+    en_memoria = _convective_outputs_in_stripes(
+        p, t, td, u, v, terr, su, sv, niveles, stripe_rows=16, include_dcape=False
+    )
+
+    nombres = ("pressure", "temperature", "dewpoint", "u", "v")
+    with _empty_profiles_on_disk(nombres, p.shape) as en_disco:
+        assert en_disco is not None, "el volcado tiene que estar activo aquí"
+        for nombre, origen in zip(nombres, (p, t, td, u, v)):
+            for nivel in range(p.shape[0]):
+                en_disco[nombre][nivel] = origen[nivel]
+        desde_disco = _convective_outputs_in_stripes(
+            *(en_disco[n] for n in nombres),
+            terr, su, sv, niveles, stripe_rows=16, include_dcape=False,
+        )
+
+    for nombre, esperado in en_memoria.items():
+        finitos = np.isfinite(esperado)
+        assert (np.isfinite(desde_disco[nombre]) == finitos).all(), nombre
+        assert np.array_equal(desde_disco[nombre][finitos], esperado[finitos]), nombre
+
+
+def test_empty_profiles_fall_back_to_memory_without_a_place_to_spill(monkeypatch):
+    """Sobre un tmpfs no se vuelca: quien llama apila en memoria."""
+    from server.services import arome_forecast
+    from server.services.arome_forecast import _empty_profiles_on_disk
+
+    monkeypatch.setattr(arome_forecast, "_is_memory_backed", lambda ruta: True)
+
+    with _empty_profiles_on_disk(("pressure",), (3, 4, 4)) as perfiles:
+        assert perfiles is None
+
+def test_float32_storage_keeps_the_maps_but_not_the_arithmetic():
+    """Guardar en float32 no mueve los mapas; calcular en float32 sí los movería.
+
+    Los perfiles ocupan la mitad en disco y en caché desde que se guardan en
+    float32, y eso sólo es admisible porque cada banda vuelve a float64 antes
+    de entrar en las fórmulas. Este test vigila las dos mitades del trato.
+
+    La segunda mitad no se puede comprobar por el tipo del resultado: numpy
+    promueve a float64 en cuanto un float32 se cruza con un escalar de doble
+    precisión, así que los campos salen en float64 aunque por el camino se haya
+    perdido precisión. Lo que sí distingue una cosa de la otra es exigir que
+    partir de float32 dé bit a bit lo mismo que partir de esos mismos valores
+    ya en float64: sólo se cumple si la conversión ocurre antes de calcular.
+
+    La tolerancia de la primera mitad no es cosmética: DCAPE elige la capa de
+    origen del descenso, y un cambio en el último bit puede hacerle elegir la
+    de al lado. Medido sobre 38.400 celdas, eso le pasa a una; a CAPE y SRH, a
+    ninguna.
+    """
+    from server.services.arome_forecast import (
+        PROFILE_STORAGE_DTYPE,
+        _convective_outputs_in_stripes,
+    )
+
+    p, t, td, u, v, terr, su, sv, niveles = _synthetic_profile(64, 60)
+    comun = dict(stripe_rows=16, include_dcape=True)
+
+    def diagnosticar(campos):
+        return _convective_outputs_in_stripes(*campos, terr, su, sv, niveles, **comun)
+
+    exacto = diagnosticar((p, t, td, u, v))
+    como_se_guarda = [campo.astype(PROFILE_STORAGE_DTYPE) for campo in (p, t, td, u, v)]
+    guardado = diagnosticar(como_se_guarda)
+
+    # Segunda mitad del trato: el almacenamiento encoge, la aritmética no.
+    en_doble = diagnosticar([campo.astype(np.float64) for campo in como_se_guarda])
+    for nombre, valores in guardado.items():
+        assert np.array_equal(valores, en_doble[nombre], equal_nan=True), (
+            f"{nombre} depende de con qué precisión estaba guardado el perfil: "
+            "las fórmulas están corriendo en float32"
+        )
+
+    # Primera mitad: frente al perfil sin redondear, los mapas no se mueven.
+    holgura = {"dcape": 25.0, "mucape": 25.0, "mlcape": 25.0, "sbcape": 25.0,
+               "srh_01": 5.0, "srh_03": 5.0}
+    for nombre, esperado in exacto.items():
+        obtenido = guardado[nombre]
+        assert (np.isfinite(obtenido) == np.isfinite(esperado)).all(), (
+            f"{nombre} cambia dónde hay dato, no sólo cuánto"
+        )
+        finitos = np.isfinite(esperado)
+        if not finitos.any() or nombre not in holgura:
+            continue
+        desvia = (np.abs(obtenido[finitos] - esperado[finitos]) > holgura[nombre]).sum()
+        limite = 0 if nombre != "dcape" else max(1, int(finitos.sum() * 0.001))
+        assert desvia <= limite, f"{nombre}: {desvia} celdas fuera de tolerancia"
