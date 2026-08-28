@@ -318,8 +318,17 @@ def _prune_old_runs(store, latest_run: str) -> None:
     # bloque llegó a descargarse seis veces. Se conservan mientras alguna
     # pasada retenida los necesite.
     frontera = _oldest_unfinished_run(store, latest_run)
+    # También cuando no se borra nada: sin esta línea, «no se descartó ningún
+    # paquete» y «la retención no llegó a ejecutarse» se ven exactamente igual.
+    logger.info(
+        "Paquetes conservados desde %s (pasada vigente %s).", frontera, latest_run
+    )
+    descartados = 0
     for path in discard_packages_before(_parse_iso(frontera)):
+        descartados += 1
         logger.info("Paquete %s descartado", path.name)
+    if descartados:
+        logger.info("Paquetes descartados: %d.", descartados)
 
 
 def _merge_catalog_products(

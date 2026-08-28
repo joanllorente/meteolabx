@@ -220,6 +220,7 @@ def read_isobaric_profile(
     GRIB— y darles la ajena convierte los valores en basura sin avisar.
     """
     buscados = set(elements) if elements else set(IP1_ELEMENTS.values())
+    _log_package_decode(path.name, tuple(sorted(buscados)))
     desconocidos = buscados - set(IP1_ELEMENTS.values())
     if desconocidos:
         raise AromePackageError(
@@ -363,6 +364,19 @@ def read_isobaric_extras(
         # decidir si un campo nuevo cuesta una descarga o ya está pagado.
         _log_package_inventory(path.name, tuple(sorted(vistos)))
     return salida, geometria
+
+
+@lru_cache(maxsize=32)
+def _log_package_decode(nombre: str, elementos: tuple[str, ...]) -> None:
+    """Deja constancia de qué se descodifica, una vez por fichero y peticion.
+
+    Cada elemento son unos seis megas por nivel, así que la diferencia entre
+    pedir tres y pedir cinco son 150 MB por perfil: sin esta línea no hay forma
+    de comprobar desde fuera que la lectura selectiva sigue en pie.
+    """
+    logger.info(
+        "%s: se descodifican %s.", nombre.split("-")[0], ", ".join(elementos)
+    )
 
 
 @lru_cache(maxsize=8)

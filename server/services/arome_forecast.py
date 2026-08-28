@@ -982,6 +982,16 @@ def _empty_profiles_on_disk(
             )
             for nombre in names
         }
+        logger.info(
+            "Perfiles en disco: %d de %s en %s, %.0f MB en total.",
+            len(names),
+            "x".join(str(d) for d in shape),
+            np.dtype(PROFILE_STORAGE_DTYPE).name,
+            len(names)
+            * int(np.prod(shape))
+            * np.dtype(PROFILE_STORAGE_DTYPE).itemsize
+            / 1e6,
+        )
     except OSError as error:
         logger.warning("No se han podido crear los perfiles en disco: %s", error)
         if carpeta is not None:
