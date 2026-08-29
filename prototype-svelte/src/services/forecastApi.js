@@ -10,7 +10,11 @@ const localBase = typeof window !== 'undefined' && ['127.0.0.1', 'localhost'].in
   ? (window.location.port === '5173' ? '' : `${window.location.protocol}//${window.location.hostname}:8000`)
   : '';
 const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
-const FORECAST_DATA_REVISION = 'forecast-fields-v16';
+// Se sube con cada cambio de formato de la rejilla. Los frames se sirven con
+// `immutable` y un año de caché, así que sin tocar esto un navegador que ya
+// tenga la hora guardada seguiría enseñando la versión anterior —sin la capa
+// de geopotencial, en este caso— y ni recargando ni reiniciando la cambiaría.
+const FORECAST_DATA_REVISION = 'forecast-fields-v17';
 const FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024;
 const frameCache = new Map();
 const geometryCache = new Map();

@@ -323,12 +323,20 @@ def _wait_for_api_request_slot(interval: float | None = None) -> None:
             handle.seek(0)
             raw_next = handle.read().strip()
             next_request = float(raw_next) if raw_next else 0.0
-            delay = next_request - time.monotonic()
+            # Reloj de pared, no monotónico: el turno se comparte entre
+            # procesos y el origen de `monotonic` no tiene por qué coincidir
+            # entre ellos. En macOS arranca en cero con cada proceso, así que
+            # el segundo leía el turno del primero como si faltaran horas: una
+            # sola petición local llegó a quedarse dormida dos horas y media.
+            delay = next_request - time.time()
+            # Y por si el turno guardado no vale —reloj cambiado de hora, un
+            # fichero de otra máquina—, nunca se espera más de un turno: como
+            # mucho se pierde el ritmo una vez y se recupera solo.
             if delay > 0:
-                time.sleep(delay)
+                time.sleep(min(delay, delay_between_requests))
             handle.seek(0)
             handle.truncate()
-            handle.write(str(time.monotonic() + delay_between_requests))
+            handle.write(str(time.time() + delay_between_requests))
             handle.flush()
         finally:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)

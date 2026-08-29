@@ -19,15 +19,31 @@ const allForecastProducts = [
     coverage: 'TEMPERATURE · altura 2 m'
   },
   {
-    id: 'temperature-850', category: 'temperature', label: 'Temperatura a 850 hPa', short: 'T 850 hPa', kind: 'native',
-    unit: '°C', min: -18, max: 30, palette: 'temperature', accent: '#ed7f61', vectors: false,
+    id: 'temperature-850', category: 'temperature', label: 'Temperatura y geopotencial 850 hPa', short: 'T/Z 850 hPa', kind: 'native',
+    unit: '°C', min: -24, max: 36, palette: 'temperature', accent: '#ed7f61', vectors: false,
+    contourStep: 2, nationalBoundariesOnly: true,
+    // Lo que enseña el mapa, que ya no es solo su categoría: en la cabecera se
+    // lee «Temperatura · Geopotencial» y no «Temperatura» a secas.
+    contents: 'Temperatura · Geopotencial',
+    // Sin nombre para la capa superpuesta: en un mapa que se llama «temperatura
+    // y geopotencial», un valor en dam solo puede ser una cosa. Los CAPE sí lo
+    // llevan, porque ahí conviven tres índices distintos.
+    // Isohipsas del geopotencial de 850 hPa, que viajan en la capa superpuesta
+    // del propio frame. Cada 3 dam, y una de cada dos más marcada.
+    overlayStep: 3, overlayMajorStep: 6,
     description: 'Temperatura en la superficie isobárica de 850 hPa, útil para reconocer masas de aire por encima de la capa superficial.',
     method: 'Campo AROME de temperatura sobre superficie isobárica, seleccionado en 850 hPa mediante DescribeCoverage.',
     coverage: 'TEMPERATURE · 850 hPa'
   },
   {
-    id: 'temperature-500', category: 'temperature', label: 'Temperatura a 500 hPa', short: 'T 500 hPa', kind: 'native',
-    unit: '°C', min: -38, max: -4, palette: 'temperature', accent: '#bc6ed0', vectors: false,
+    id: 'temperature-500', category: 'temperature', label: 'Temperatura y geopotencial 500 hPa', short: 'T/Z 500 hPa', kind: 'native',
+    unit: '°C', min: -42, max: -2, palette: 'temperature', accent: '#bc6ed0', vectors: false,
+    contourStep: 2, nationalBoundariesOnly: true,
+    contents: 'Temperatura · Geopotencial',
+    overlayStep: 4, overlayMajorStep: 8,
+    // Ejes de vaguada sobre el geopotencial de 500 hPa, que es el nivel donde
+    // la onda se lee sin que el relieve la enmascare.
+    troughAxes: true,
     description: 'Temperatura prevista en la superficie isobárica de 500 hPa, representativa de la troposfera media y útil para valorar el aire frío en altura.',
     method: 'Campo AROME TEMPERATURE sobre superficie isobárica, seleccionado en 500 hPa mediante DescribeCoverage.',
     coverage: 'TEMPERATURE · 500 hPa'
@@ -88,7 +104,13 @@ const allForecastProducts = [
   },
   {
     id: 'accumulated-precip', category: 'precipitation', label: 'Precipitación acumulada', short: 'Precip. acumulada', kind: 'derived',
-    unit: 'mm', min: 0, max: 150, palette: 'precipitation', accent: '#479be5', vectors: false,
+    unit: 'mm', min: 0, max: 400, palette: 'precipitation', accent: '#479be5', vectors: false,
+    // Clases en mm, no una rampa continua: un acumulado reparte casi todas sus
+    // celdas por debajo de los 20 mm, y en escala lineal hasta el máximo esas
+    // salen todas del mismo azul. `zeroFloor` deja el cero sin pintar para que
+    // lo acumulado se lea sobre el fondo en vez de sobre una capa de color.
+    scaleBreaks: [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400],
+    zeroFloor: 0.05,
     description: 'Precipitación total acumulada desde el inicio de la pasada hasta la hora válida seleccionada.',
     method: 'MeteoLabX suma celda a celda los campos horarios TOTAL_PRECIPITATION PT1H comprendidos entre H+01 y la hora seleccionada. Incluye precipitación líquida y sólida en equivalente de agua.',
     coverage: 'Diagnóstico MeteoLabX · suma TOTAL PRECIPITATION PT1H desde el RUN'
@@ -236,7 +258,9 @@ const allForecastProducts = [
   },
   {
     id: 'vertical-totals', category: 'convection', label: 'Vertical Totals', short: 'VT', kind: 'derived',
-    unit: '°C', min: 18, max: 34, palette: 'shear', accent: '#e0a458', vectors: false,
+    // Grados de diferencia entre dos niveles, no una temperatura: pasarlo a °F
+    // con el desplazamiento de 32 daría un número sin significado.
+    unit: '°C', unitFixed: true, min: 18, max: 34, palette: 'shear', accent: '#e0a458', vectors: false,
     description: 'Diferencia de temperatura entre 850 y 500 hPa. Mide el gradiente térmico del entorno sin depender de qué parcela se elija, así que no comparte las ambigüedades de los CAPE. Valores altos con poca humedad en niveles bajos señalan el ambiente de reventones secos.',
     method: 'T850 menos T500, ambos del paquete isobárico IP1 que ya se descarga para los perfiles.',
     coverage: 'TEMPERATURE · 850 y 500 hPa'
@@ -250,7 +274,7 @@ const allForecastProducts = [
   },
   {
     id: 'srh-03', category: 'convection', label: 'Helicidad relativa 0–3 km', short: 'SRH 0–3', kind: 'derived',
-    unit: 'm²/s²', min: -300, max: 700, palette: 'shear', accent: '#a855f7', vectors: true,
+    unit: 'm²/s²', min: -300, max: 600, palette: 'shear', accent: '#a855f7', vectors: true,
     description: 'Helicidad relativa a la tormenta en los tres primeros kilómetros, referida al movimiento de la supercélula derecha de Bunkers. Es la capa habitual para valorar el potencial de rotación de una supercélula.',
     method: 'Integral del hodógrafo entre 0 y 3.000 m sobre el terreno, restando el movimiento Bunkers 2000 right mover. Sale del mismo perfil de viento que los demás diagnósticos convectivos.',
     coverage: 'Perfil de viento AROME · 0–3 km AGL'

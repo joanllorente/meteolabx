@@ -17,6 +17,11 @@ fi
 echo "▶ MeteoLabX en http://127.0.0.1:${PORT}"
 echo "  Python: $("${PYTHON}" --version 2>&1) (${PYTHON})"
 
+# Streamlit sirve /forecast desde su propio directorio static, no desde
+# static/forecast_app: sin este paso, un `npm run build:forecast` no llega al
+# navegador y la página se queda con el bundle de la instalación anterior.
+"${PYTHON}" scripts/install_forecast_frontend.py
+
 exec "${PYTHON}" scripts/run_streamlit.py meteolabx.py \
   --server.port="${PORT}" \
   --server.address="${HOST}" \

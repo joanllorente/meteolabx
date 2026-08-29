@@ -427,3 +427,53 @@ def test_boundary_cache_falls_back_when_the_directory_is_unusable(tmp_path, monk
         sa._model_boundary_geojson(sa._load_forecast_regions_geojson(), bounds)
     )
     assert sa._domain_boundary_payload(bounds, "model") == esperado
+
+
+def test_isobaric_temperature_maps_carry_their_geopotential():
+    """La temperatura isobárica viaja con su altura geopotencial encima.
+
+    Es el mapa sinóptico de siempre: temperatura en color e isohipsas en
+    línea continua. Va en la capa superpuesta del propio frame y no como un
+    producto aparte, para que el visor no tenga que bajar dos rejillas ni el
+    worker publicar dos mapas por hora.
+    """
+    from server.services.arome_forecast import PRODUCTS
+
+    for producto in ("temperature-850", "temperature-500"):
+        config = PRODUCTS[producto]
+        assert config["overlay_prefix_kind"] == "geopotential", producto
+        # En decámetros: es como se leen las isohipsas y como las rotula el
+        # visor, que las traza cada 3 y 4 dam.
+        assert config["overlay_unit"] == "dam", producto
+
+    assert "overlay_prefix_kind" not in PRODUCTS["temperature-2m"], (
+        "a 2 m no hay superficie isobárica que acompañar"
+    )
+
+
+def test_the_request_throttle_never_sleeps_longer_than_one_slot(tmp_path, monkeypatch):
+    """El turno se comparte por fichero, así que no puede ir en reloj monotónico.
+
+    El origen de `time.monotonic()` no tiene por qué coincidir entre procesos
+    —en macOS arranca en cero con cada uno—, de modo que el segundo leía el
+    turno del primero como si faltaran horas para su hueco. Una sola petición
+    local se quedó dormida dos horas y media, y desde fuera parecía la API
+    tardando o la clave caducada.
+    """
+    import time
+
+    from tabs.arome_forecast import _wait_for_api_request_slot
+
+    fichero = tmp_path / "turno"
+    monkeypatch.setenv("METEOLABX_AROME_REQUEST_THROTTLE_FILE", str(fichero))
+    # Un turno guardado por un proceso con otro origen de reloj: absurdamente
+    # lejos en el futuro.
+    fichero.write_text(str(time.time() + 86_400), encoding="ascii")
+
+    inicio = time.monotonic()
+    _wait_for_api_request_slot(interval=0.2)
+    espera = time.monotonic() - inicio
+
+    assert espera < 1.0, f"esperó {espera:.1f} s por un turno corrupto"
+    # Y deja el turno siguiente en la escala compartida de reloj de pared.
+    assert abs(float(fichero.read_text()) - time.time()) < 5

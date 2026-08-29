@@ -22,6 +22,34 @@ os.environ["METEOLABX_RANKING_REFRESH_ENABLED"] = "false"
 
 from server.dependencies.http import get_http_client
 from server.main import create_app
+from server.services.forecast_store import get_forecast_store
+
+
+@pytest.fixture(autouse=True)
+def isolated_forecast_store(tmp_path_factory, monkeypatch):
+    """Cada test ve un almacén de predicción vacío.
+
+    Sin esto, los tests leen el `data/forecast_store` de la máquina: quien
+    haya corrido el worker en local —o guardado una foto de mapas reales para
+    desarrollar— tiene ahí un manifiesto, y el catálogo deja de pedir la clave
+    de AROME porque ya puede responder desde disco. Un test no puede depender
+    de lo que haya en el disco del que lo ejecuta.
+    """
+    for nombre in (
+        "AWS_S3_BUCKET_NAME", "BUCKET", "METEOLABX_FORECAST_BUCKET",
+        "AWS_ENDPOINT_URL", "ENDPOINT", "METEOLABX_FORECAST_S3_ENDPOINT",
+        "AWS_ACCESS_KEY_ID", "ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY", "SECRET_ACCESS_KEY",
+        "RAILWAY_VOLUME_MOUNT_PATH",
+    ):
+        monkeypatch.delenv(nombre, raising=False)
+    monkeypatch.setenv(
+        "METEOLABX_FORECAST_STORE_PATH",
+        str(tmp_path_factory.mktemp("forecast_store")),
+    )
+    get_forecast_store.cache_clear()
+    yield
+    get_forecast_store.cache_clear()
 
 
 # Respuesta WU "OK" mínima realista para reutilizar en tests.

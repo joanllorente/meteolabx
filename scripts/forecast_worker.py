@@ -245,13 +245,20 @@ def _refresh_progress(manifest: dict[str, Any]) -> dict[str, Any]:
     total = 0
     available = 0
     errors = 0
+    # El denominador de cada mapa, guardado para que lo use también el visor.
+    # Sin él, el porcentaje de un mapa se calcula sobre las horas que
+    # Météo-France lleva publicadas, que crecen durante la pasada: el mapa
+    # marcaba 100 % con doce plazos y volvía a bajar en cuanto aparecían los
+    # siguientes. El total final, en cambio, se conoce desde el primer ciclo.
+    totales: dict[str, int] = {}
     for product in PERSISTED_FORECAST_PRODUCTS:
         expected = set(_product_times(manifest, product))
         state = (manifest.get("products") or {}).get(product) or {}
-        # El denominador es el horizonte completo, no lo publicado hasta ahora.
-        total += _expected_frames(manifest, product, len(expected))
+        totales[product] = _expected_frames(manifest, product, len(expected))
+        total += totales[product]
         available += len(expected & set(state.get("available_times", ())))
         errors += len(set(state.get("errors", {})) & expected)
+    manifest["expected_totals"] = totales
     progress = manifest.setdefault("progress", {})
     progress.update(
         {

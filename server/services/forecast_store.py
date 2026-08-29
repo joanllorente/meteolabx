@@ -513,4 +513,11 @@ def augment_catalog_with_manifest(
         product_catalog["available_times"] = available
         product_catalog["publishing"] = len(available) < len(product_catalog.get("valid_times", ()))
         product_catalog["available_until"] = available[-1] if available else None
+        # Horas que el mapa va a tener cuando la pasada termine. Las que
+        # anuncia el catálogo van creciendo mientras Météo-France publica, así
+        # que sirven para saber qué se puede pedir, pero no como denominador
+        # de un porcentaje: daría 100 % a media pasada.
+        total_final = (manifest.get("expected_totals") or {}).get(product)
+        if total_final:
+            product_catalog["expected_total"] = int(total_final)
     return catalog

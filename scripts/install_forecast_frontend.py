@@ -24,6 +24,11 @@ def install_forecast_frontend(target_static_dir: Path | None = None) -> Path:
     Vite conserva ``forecast.html`` porque es el nombre del entrypoint. También
     instalamos una copia como ``index.html`` para que el servidor pueda resolver
     la URL pública limpia ``/forecast`` (o su redirección canónica ``/forecast/``).
+
+    Los ``assets`` del build anterior se retiran. La copia solo añade, así que
+    sin esta limpieza el destino acumula un bundle por build —sesenta y uno en
+    una instalación local, trece megas— y, lo que importa más, deja servible un
+    frontend viejo si el ``forecast.html`` se queda a medio actualizar.
     """
     if not (BUILD_DIR / "forecast.html").is_file():
         raise FileNotFoundError(
@@ -32,6 +37,12 @@ def install_forecast_frontend(target_static_dir: Path | None = None) -> Path:
         )
 
     target = (target_static_dir or streamlit_static_dir()) / "forecast"
+    assets = target / "assets"
+    if assets.is_dir():
+        vigentes = {path.name for path in (BUILD_DIR / "assets").iterdir()}
+        for path in assets.iterdir():
+            if path.is_file() and path.name not in vigentes:
+                path.unlink()
     target.mkdir(parents=True, exist_ok=True)
     shutil.copytree(BUILD_DIR, target, dirs_exist_ok=True)
     shutil.copy2(target / "forecast.html", target / "index.html")

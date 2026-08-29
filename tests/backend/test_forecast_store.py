@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -1442,3 +1443,242 @@ def test_packages_of_a_finished_run_are_released(tmp_path: Path):
     write_json(store, run_manifest_key(nueva), {"run": nueva, "status": "publishing"})
 
     assert forecast_worker._oldest_unfinished_run(store, nueva) == nueva
+
+
+def _fake_grid(product: str, run_iso: str, valid_iso: str) -> bytes:
+    """Rejilla mínima con la cabecera que lee el almacén."""
+    header = json.dumps({
+        "product": product,
+        "run": run_iso,
+        "valid_time": valid_iso,
+        "calculation_scope": "model",
+        "unit": "m²/s²",
+        "width": 2,
+        "height": 1,
+    }).encode("utf-8")
+    return struct.pack("<I", len(header)) + header + b"\x00" * 8
+
+
+def _fake_source(run_iso: str, horas: list[str]):
+    """Instancia de mentira: catálogo y frames sin salir a la red."""
+    catalogo = {
+        "publication": {"calculation_scope": "model"},
+        "runs": [{
+            "run": run_iso,
+            "status": "complete",
+            "products": {
+                "updraft-helicity": {
+                    "run": run_iso,
+                    "unit": "m²/s²",
+                    "valid_times": horas,
+                    "available_times": horas[:2],
+                },
+                "wind-level": {
+                    "run": run_iso,
+                    "unit": "m/s",
+                    "valid_times": horas,
+                    "available_times": horas[:2],
+                    "levels": {"height": [10.0, 100.0], "isobaric": [850.0]},
+                },
+            },
+        }],
+    }
+
+    class Respuesta:
+        def __init__(self, payload=None, content=b"", status=200):
+            self.status_code = status
+            self._payload = payload
+            self.content = content
+
+        def json(self):
+            return self._payload
+
+    class Session:
+        def get(self, url, params=None, timeout=None, headers=None):
+            if url.endswith("/catalog"):
+                return Respuesta(payload=catalogo)
+            producto = (params or {})["product"]
+            valido = (params or {})["valid_time"]
+            if valido not in horas[:2]:
+                return Respuesta(status=425)
+            return Respuesta(content=_fake_grid(producto, run_iso, valido))
+
+    return Session()
+
+
+def test_captured_fixtures_are_served_as_available_hours(tmp_path: Path, monkeypatch):
+    """La foto local tiene que quedar servible sin clave de AROME.
+
+    El visor lee las horas del manifiesto, así que una captura que anunciara
+    los 36 plazos del RUN dejaría el deslizador lleno de horas que responden
+    425. El manifiesto de la foto solo puede ofrecer lo que hay en disco.
+    """
+    import importlib.util
+
+    ruta = Path(__file__).resolve().parents[2] / "scripts" / "capture_forecast_fixtures.py"
+    especificacion = importlib.util.spec_from_file_location("capture_fixtures", ruta)
+    capture = importlib.util.module_from_spec(especificacion)
+    especificacion.loader.exec_module(capture)
+
+    run_iso = "2026-08-29T00:00:00Z"
+    horas = [f"2026-08-29T{hora:02d}:00:00Z" for hora in range(4)]
+    monkeypatch.setattr(capture.requests, "Session", lambda: _fake_source(run_iso, horas))
+
+    codigo = capture.capture(SimpleNamespace(
+        source="https://ejemplo.invalid",
+        store=str(tmp_path),
+        run="",
+        products="updraft-helicity,wind-level",
+        all=False,
+        hours=6,
+        vertical_kind="height",
+        level=10.0,
+        timeout=5.0,
+        force=False,
+        reset=False,
+        list=False,
+    ))
+
+    assert codigo == 0
+    store = LocalObjectStore(tmp_path)
+    for valid_iso in horas[:2]:
+        clave = frame_key(run_iso, "updraft-helicity", valid_iso)
+        assert read_grid(store, clave) is not None, f"falta el frame de {valid_iso}"
+        assert grid_metadata(read_grid(store, clave))["run"] == run_iso
+
+    manifest = read_json(store, LATEST_MANIFEST_KEY)
+    assert manifest["status"] == "complete"
+    assert manifest["calculation_scope"] == "model"
+    catalogo = augment_catalog_with_manifest(
+        {"products": deepcopy(manifest["catalog_products"])},
+        manifest,
+        precomputed_only=True,
+    )
+    producto = catalogo["products"]["updraft-helicity"]
+    # Solo las dos horas capturadas, y ninguna pendiente que dé 425 al pulsarla.
+    assert producto["valid_times"] == horas[:2]
+    assert producto["available_times"] == horas[:2]
+    assert producto["publishing"] is False
+    # Del viento solo se ha bajado un nivel: ofrecer los demás sería ofrecer 425.
+    assert catalogo["products"]["wind-level"]["levels"] == {"height": [10.0], "isobaric": []}
+    assert read_json(store, run_manifest_key(run_iso))["run"] == run_iso
+
+
+def _capture_arguments(tmp_path: Path, products: str, **cambios):
+    argumentos = {
+        "source": "https://ejemplo.invalid",
+        "store": str(tmp_path),
+        "run": "",
+        "products": products,
+        "all": False,
+        "hours": 6,
+        "vertical_kind": "height",
+        "level": 10.0,
+        "timeout": 5.0,
+        "force": False,
+        "reset": False,
+        "list": False,
+    }
+    argumentos.update(cambios)
+    return SimpleNamespace(**argumentos)
+
+
+def _capture_module():
+    import importlib.util
+
+    ruta = Path(__file__).resolve().parents[2] / "scripts" / "capture_forecast_fixtures.py"
+    especificacion = importlib.util.spec_from_file_location("capture_fixtures", ruta)
+    modulo = importlib.util.module_from_spec(especificacion)
+    especificacion.loader.exec_module(modulo)
+    return modulo
+
+
+def test_a_second_capture_keeps_what_the_first_one_saved(tmp_path: Path, monkeypatch):
+    """Bajar un producto más no puede dejar sin índice a los anteriores.
+
+    El manifiesto es lo único que mira el visor: si cada captura lo
+    reescribiera, pedir dos horas de un mapa borraría del catálogo los seis
+    productos que ya estaban en disco y el visor se quedaría en blanco con los
+    ficheros delante.
+    """
+    capture = _capture_module()
+    run_iso = "2026-08-29T00:00:00Z"
+    horas = [f"2026-08-29T{hora:02d}:00:00Z" for hora in range(4)]
+    monkeypatch.setattr(capture.requests, "Session", lambda: _fake_source(run_iso, horas))
+
+    capture.capture(_capture_arguments(tmp_path, "updraft-helicity"))
+    capture.capture(_capture_arguments(tmp_path, "wind-level"))
+
+    manifest = read_json(LocalObjectStore(tmp_path), LATEST_MANIFEST_KEY)
+    assert sorted(manifest["catalog_products"]) == ["updraft-helicity", "wind-level"]
+    assert manifest["catalog_products"]["updraft-helicity"]["valid_times"] == horas[:2]
+    assert manifest["products"]["updraft-helicity"]["available_times"] == horas[:2]
+
+
+def test_a_capture_drops_hours_whose_grid_is_gone(tmp_path: Path, monkeypatch):
+    """Lo heredado se contrasta contra el disco, no se cree a ciegas.
+
+    Si alguien borra frames a mano, el manifiesto tiene que enterarse: una hora
+    anunciada sin rejilla detrás responde 425 al pulsarla.
+    """
+    capture = _capture_module()
+    run_iso = "2026-08-29T00:00:00Z"
+    horas = [f"2026-08-29T{hora:02d}:00:00Z" for hora in range(4)]
+    monkeypatch.setattr(capture.requests, "Session", lambda: _fake_source(run_iso, horas))
+    store = LocalObjectStore(tmp_path)
+
+    capture.capture(_capture_arguments(tmp_path, "updraft-helicity"))
+    store.delete(frame_key(run_iso, "updraft-helicity", horas[1]))
+    capture.capture(_capture_arguments(tmp_path, "wind-level"))
+
+    manifest = read_json(store, LATEST_MANIFEST_KEY)
+    assert manifest["catalog_products"]["updraft-helicity"]["valid_times"] == horas[:1]
+
+
+def test_the_catalog_publishes_the_final_total_of_each_map():
+    """El porcentaje de un mapa no puede medirse contra lo ya publicado.
+
+    Las horas que anuncia Météo-France crecen durante la pasada: con doce
+    plazos publicados y doce calculados, el mapa marcaba «Completo» y volvía a
+    bajar en cuanto aparecían los siguientes. El denominador es el horizonte
+    final, que el worker conoce desde el primer ciclo.
+    """
+    run = "2026-08-29T00:00:00Z"
+    horas = [f"2026-08-29T{hora:02d}:00:00Z" for hora in range(12)]
+    manifest = new_manifest(run, horas, catalog_products={})
+    manifest["expected_totals"] = {"temperature-850": 51}
+    for valid in horas:
+        mark_available(manifest, "temperature-850", valid)
+
+    catalogo = augment_catalog_with_manifest(
+        {"products": {"temperature-850": {"run": run, "valid_times": list(horas)}}},
+        manifest,
+        precomputed_only=True,
+    )
+
+    producto = catalogo["products"]["temperature-850"]
+    assert producto["expected_total"] == 51, "el visor necesita el total final"
+    assert len(producto["available_times"]) == 12
+    # Doce de cincuenta y una es un 24 %, no un mapa terminado: con el total
+    # final delante, el visor ya no puede confundir una cosa con la otra.
+    assert round(len(producto["available_times"]) * 100 / producto["expected_total"]) == 24
+
+
+def test_the_worker_records_the_final_total_of_every_map():
+    """El total final lo escribe quien lo sabe: el que reparte el trabajo."""
+    import scripts.forecast_worker as forecast_worker
+
+    run = "2026-08-29T00:00:00Z"
+    horas = [f"2026-08-29T{hora:02d}:00:00Z" for hora in range(12)]
+    manifest = new_manifest(run, horas, catalog_products={
+        producto: {"run": run, "valid_times": list(horas)}
+        for producto in PERSISTED_FORECAST_PRODUCTS
+    })
+    manifest["expected_hours"] = {"native": 51, "diagnostic": 36}
+
+    forecast_worker._refresh_progress(manifest)
+
+    totales = manifest["expected_totals"]
+    assert totales["temperature-850"] == 51, "un nativo llega al horizonte entero"
+    assert totales["updraft-helicity"] == 36, "los convectivos van recortados"
+    assert manifest["progress"]["frames_total"] == sum(totales.values())

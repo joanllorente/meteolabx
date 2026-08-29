@@ -107,8 +107,17 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     ):
         assert f"label: '{category}'" in products
 
-    assert "Temperatura a 500 hPa" in products
-    assert "Temperatura a 850 hPa" in products
+    # Los dos isobáricos llevan el geopotencial encima, y el nombre lo dice:
+    # quien busca isohipsas no tiene por qué adivinar que están ahí.
+    assert "Temperatura y geopotencial 500 hPa" in products
+    assert "Temperatura y geopotencial 850 hPa" in products
+    # Y el subtítulo dice lo que lleva encima, no solo su categoría.
+    assert "contents: 'Temperatura · Geopotencial'" in products
+    # La capa superpuesta se nombra desde el producto y no a mano en el globo,
+    # que decía «LI 584,8 dam» al poner el geopotencial debajo. Los CAPE la
+    # nombran porque conviven tres índices; en un mapa de geopotencial, un
+    # valor en dam no necesita presentación.
+    assert "overlay: 'MULI'" in products
     assert "Precipitación en 1 hora" in products
     assert "Viento por niveles" in products
     assert "Cizalladura efectiva (EBWD)" in products
@@ -154,7 +163,12 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
         encoding="utf-8"
     )
     assert "FORECAST_DATA_REVISION" in api
-    assert "forecast-fields-v16" in api
+    # Los frames se sirven con `immutable` y un año de caché, así que esta
+    # revisión es lo único que hace que un navegador vuelva a pedirlos. Sube
+    # con cada cambio de formato de la rejilla: la v17 es la que trae la capa
+    # de geopotencial, y sin subirla el cambio no llega a quien ya tenga la
+    # hora guardada, ni recargando ni reiniciando.
+    assert "forecast-fields-v17" in api
     assert "FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024" in api
     assert "shareFrameGeometry" in api
     assert "frameCacheBytes" in api
@@ -196,10 +210,144 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "clusteredVector" in grid
     assert "visibleSourceBounds" in grid
     assert "scale(${(1 / zoom).toFixed(5)})" in grid
-    assert "makeContourPaths" in grid
+    assert "contourLines" in grid
     assert "scalar-contour" in grid
+    # Las isolíneas del propio campo van discontinuas y con halo claro: sobre
+    # los extremos de la paleta, que son azul y granate oscuros, una línea
+    # negra fina desaparece.
+    assert "value-contour" in grid
+    assert "stroke-dasharray" in grid
+    assert "value-contour-halo" in grid
+    # El suelo del cero es solo para la precipitación acumulada. Aplicado con
+    # un 0 por defecto, descartaba el campo entero de cualquier mapa negativo:
+    # la temperatura de 500 hPa se quedó sin color.
+    assert "zeroFloor > 0 ? zeroFloor : -Infinity" in grid
+    # El trazo discontinuo va en píxeles de pantalla, así que a poco zoom una
+    # raya fina se lee como línea continua: el patrón depende del encuadre.
+    assert "contourDash" in grid
+    assert "style:stroke-dasharray" in grid
+    # Sobre un campo ya cruzado de isotermas, las divisiones interiores
+    # compiten con ellas: esos mapas se quedan con costas y fronteras
+    # nacionales, que son 146 de los 519 anillos del dominio.
+    assert "nationalBoundariesOnly" in grid
+    # Isohipsas: continuas, con paso propio y grosor que depende del encuadre.
+    # Fijo, el que se lee de lejos se convierte en un chorizo al ampliar.
+    assert "height-contour" in grid
+    assert "overlayWidth" in grid
+    assert "isMajorOverlay" in grid
+    # Capas apagables desde el propio mapa, con la elección recordada.
+    assert "layer-panel" in grid
+    # Un solo reparto para todos los rótulos: con uno por familia, cada una
+    # esquivaba los suyos y los dos salían impresos uno encima del otro.
+    assert "mapLabels" in grid
+    assert "LI {hover.overlay" not in grid, "el nombre de la capa no puede ir a mano"
+    assert "contourLabels" not in grid and "overlayLabels" not in grid
+    assert "toggleLayer" in grid
+    assert "showIsotherms" in grid and "showIsohypses" in grid and "showTroughs" in grid
+    capas = (ROOT / "prototype-svelte" / "src" / "lib" / "layerPreferences.svelte.js").read_text(encoding="utf-8")
+    assert "mlx-forecast-layers" in capas
+    assert "localStorage.setItem" in capas
     assert "zoomWithWheel" in grid
     assert "ondblclick" in grid
+
+
+def test_the_map_percentage_is_measured_against_its_final_total():
+    """El visor mide contra el horizonte final, no contra lo ya publicado."""
+    vista = (ROOT / "prototype-svelte" / "src" / "views" / "ForecastView.svelte").read_text(encoding="utf-8")
+
+    assert "Number(metadata?.expected_total) || expectedTimes.length" in vista, (
+        "el denominador tiene que ser el total final, con lo anunciado de respaldo"
+    )
+
+
+def test_every_list_the_grid_template_iterates_is_declared():
+    """Lo que recorre la plantilla tiene que existir en el script.
+
+    Svelte no se queja al compilar de un identificador que no declara nadie:
+    trata la plantilla como si pudiera venir de un global. El fallo sale en el
+    navegador y de la peor manera, porque el error ocurre al pintar el frame ya
+    descargado y el visor se queda con el cartel de «Cargando» puesto: sin
+    error visible, con el mapa en el aire y la red diciendo 200.
+    """
+    import re
+
+    fuente = (ROOT / "prototype-svelte" / "src" / "components" / "ForecastGrid.svelte").read_text(encoding="utf-8")
+    script, plantilla = fuente.split("</script>", 1)
+    plantilla = plantilla.split("<style>", 1)[0]
+
+    declarados = set(re.findall(r"(?:const|let|function)\s+([A-Za-z_$][\w$]*)", script))
+    declarados |= set(re.findall(r"([A-Za-z_$][\w$]*)\s*[,}]", script.split("$props()")[0].split("let {")[-1]))
+    recorridos = set(re.findall(r"\{#each\s+([A-Za-z_$][\w$]*)", plantilla))
+
+    huerfanos = sorted(recorridos - declarados)
+    assert not huerfanos, f"la plantilla recorre algo que no existe: {huerfanos}"
+
+
+def test_the_trough_detector_follows_the_six_steps():
+    """El detector de vaguadas hace lo que dice hacer, en orden.
+
+    El criterio no es la curvatura a secas: la fórmula divide por el cubo del
+    gradiente, así que en un campo plano una ondulación de un decámetro sale
+    con la curvatura de una vaguada. Lo que se busca es curvatura por
+    intensidad del flujo, que es el término de curvatura de la vorticidad
+    geostrófica: el mismo giro pesa en una corriente fuerte y no en un campo
+    parado.
+    """
+    fuente = (ROOT / "prototype-svelte" / "src" / "lib" / "troughs.js").read_text(encoding="utf-8")
+
+    assert "coarsen" in fuente, "1. engrosado antes del suavizado sinóptico"
+    assert "TROUGH_SIGMA_KM = 50" in fuente, "1. sigma de escala sinóptica"
+    assert "curvatureVorticity" in fuente, "2. curvatura por intensidad del flujo"
+    assert "geostrophicVorticity" in fuente
+    assert "curvaturePeaks" in fuente, "3. máximos sobre cada isohipsa"
+    assert "chainAxes" in fuente, "4. encadenado"
+    assert "TROUGH_MIN_LENGTH_KM = 350" in fuente, "5. poda por longitud"
+    # La cadena se siembra por el pico más marcado y crece hacia las dos
+    # isohipsas vecinas. Sembrando en orden de barrido el resultado no era
+    # monótono con el umbral, y creciendo en un solo sentido el eje se partía
+    # en dos mitades que no llegaban a la longitud mínima.
+    assert "semillas.sort" in fuente
+    assert "crecer(nivel, semilla, -1)" in fuente
+    assert "closedLows" in fuente, "6. depresiones cerradas aparte"
+    # La curvatura ciclónica no basta: los hombros de una dorsal también curvan
+    # hacia ese lado —un bulto tiene la cima convexa y los flancos cóncavos— y
+    # el detector los marcaba como ejes. Hace falta que la onda exista: que la
+    # isohipsa quede al sur de lo que hace a los dos lados.
+    assert "waveAmplitude" in fuente
+    assert "TROUGH_MIN_AMPLITUDE_KM = 150" in fuente
+    assert "centro - Math.max(oeste, este)" in fuente, (
+        "contra el lado menos favorable, no contra la media de los dos"
+    )
+    # Y la geometría: sin codos, recta por PCA con pocos vértices y curva con
+    # muchos, uniendo antes las cadenas que son el mismo eje partido.
+    assert "TROUGH_MAX_DRIFT_DEG" in fuente
+    assert "pcaLine" in fuente and "smoothAxis" in fuente
+    assert "mergeChains" in fuente
+    # El gradiente mínimo es lo que evita los ejes fantasma de un campo plano.
+    assert "TROUGH_MIN_GRADIENT" in fuente
+
+
+def test_the_contour_pipeline_cleans_the_field_before_drawing():
+    """Las isolíneas no se trazan sobre el campo crudo.
+
+    Sin suavizar, siguen el color celda a celda y llenan el mapa de anillos de
+    dos o tres celdas que no dicen nada. El orden importa: gaussiano primero,
+    después el trazado, y solo al final se tiran los anillos diminutos y se
+    simplifica lo que queda.
+    """
+    contornos = (ROOT / "prototype-svelte" / "src" / "lib" / "contours.js").read_text(encoding="utf-8")
+
+    assert "gaussianBlur" in contornos
+    assert "CONTOUR_SIGMA = 1.75" in contornos, "sigma fuera del rango pedido"
+    assert "linkSegments" in contornos
+    assert "ringArea" in contornos
+    assert "CONTOUR_MIN_RING_CELLS = 20" in contornos
+    assert "simplify" in contornos
+    assert "CONTOUR_TOLERANCE = 0.8" in contornos
+    assert "CONTOUR_LABEL_MIN_LENGTH" in contornos
+    # El suavizado tiene que renormalizarse con el peso de las muestras válidas:
+    # fuera del dominio no hay dato y la media arrastraría el borde al vacío.
+    assert "weights > 0 ? total / weights : NaN" in contornos
 
 
 def test_every_selected_forecast_product_has_a_technical_guide():
@@ -286,6 +434,40 @@ def test_forecast_build_can_be_installed_into_streamlit_static_dir(tmp_path):
     assert (installed / "index.html").read_bytes() == (installed / "forecast.html").read_bytes()
     assert (installed / "assets").is_dir()
     assert "Frontend Svelte instalado" in result.stdout
+
+
+def test_installing_the_frontend_removes_the_previous_bundle(tmp_path):
+    """El destino no puede quedarse con el bundle de la instalación anterior.
+
+    Streamlit sirve /forecast desde su propio `static`, y la instalación solo
+    copiaba encima. Con un nombre distinto por build, el directorio acumulaba
+    un bundle por compilación —sesenta y uno, trece megas, en una instalación
+    local— y bastaba que el `forecast.html` no se refrescara para que el
+    navegador siguiera ejecutando un visor viejo contra frames nuevos.
+    """
+    from scripts.install_forecast_frontend import install_forecast_frontend
+
+    instalado = install_forecast_frontend(tmp_path)
+    intruso = instalado / "assets" / "forecast-VIEJO0000.js"
+    intruso.write_text("// build anterior")
+
+    install_forecast_frontend(tmp_path)
+
+    assert not intruso.exists(), "el bundle anterior sigue servible"
+    actuales = {path.name for path in (ROOT / "static" / "forecast_app" / "assets").iterdir()}
+    assert {path.name for path in (instalado / "assets").iterdir()} == actuales
+
+
+def test_the_local_launcher_installs_the_current_build():
+    """Compilar el visor tiene que llegar al navegador sin pasos manuales.
+
+    `start_web.sh` ya lo instala en el contenedor; en local faltaba, así que un
+    `npm run build:forecast` no se veía en :8501 y costaba media hora entender
+    por qué el mapa salía con ruido.
+    """
+    local_start = (ROOT / "scripts" / "run_app.sh").read_text(encoding="utf-8")
+
+    assert "scripts/install_forecast_frontend.py" in local_start
 
 
 def test_production_streamlit_runner_registers_clean_forecast_route_first():

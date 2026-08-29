@@ -75,6 +75,36 @@ completo.
 - El visor refresca el manifiesto cada 30 segundos y habilita el mapa en cuanto
   el worker lo publica.
 
+## Mapas reales en local, sin descargas
+
+Trabajar en el visor no necesita clave de AROME ni bajar un solo GRIB: se copia
+una foto de frames ya calculados de una instancia en marcha al mismo almacén
+que lee el servidor local.
+
+```bash
+python scripts/capture_forecast_fixtures.py --list
+python scripts/capture_forecast_fixtures.py --hours 6
+```
+
+Por defecto toma la pasada más reciente de `https://www.meteolabx.com` y siete
+productos —uno por familia de unidades más los dos mapas convectivos nuevos—;
+`--products`, `--all`, `--run` y `--level` ajustan el resto. Cada frame del
+dominio completo ocupa entre 1 y 3 MB, y todo cae en `data/forecast_store`, que
+está en `.gitignore`.
+
+La foto incluye su manifiesto, recortado a lo que se ha guardado: el visor solo
+ofrece las horas y los niveles que existen en disco, y cualquier otra responde
+425 en un milisegundo en vez de intentar calcularse. Para servirla:
+
+```bash
+METEOLABX_FORECAST_PRECOMPUTED_ONLY=true \
+METEOLABX_FORECAST_CALCULATION_SCOPE=model \
+./scripts/run_server.sh
+```
+
+El alcance importa: los frames copiados son del dominio entero, así que sin
+`model` los contornos se dibujarían con el recorte catalán del modo local.
+
 ## Ejecución local limitada
 
 Para comprobar una única hora nueva sin procesar todo el RUN:

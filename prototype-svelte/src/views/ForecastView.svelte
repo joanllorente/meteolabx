@@ -7,6 +7,9 @@
   import ForecastGrid from '../components/ForecastGrid.svelte';
   import MathFormula from '../components/MathFormula.svelte';
   import { forecastCategories, forecastProducts, forecastCatalogSummary } from '../data/forecastProducts.js';
+  import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
+  import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
+  import { bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
   import { fetchAromeCatalog, fetchAromeFrame, getCachedAromeFrame, prefetchAromeFrames } from '../services/forecastApi.js';
 
   const assetBase = import.meta.env.BASE_URL;
@@ -30,6 +33,7 @@
   let frameError = $state('');
   let windLevelKind = $state('height');
   let windLevel = $state(10);
+  let unitMenuOpen = $state(false);
   let mapResetKey = $state(0);
   let mapContainer = $state();
   let frameRequest = null;
@@ -74,10 +78,46 @@
       || (connectedProduct?.available_times || []).includes(valid?.iso)
   );
   const selectedCategory = $derived(forecastCategories.find((item) => item.id === product.category));
+  // Qué enseña el mapa. Por defecto su categoría, que para la mayoría es
+  // descripción bastante; los que llevan más de un campo encima lo dicen.
+  const productContents = $derived(product.contents || selectedCategory?.label || '');
   const windLevels = $derived(connectedProduct?.levels?.[windLevelKind] || []);
   const displayedWindLevels = $derived(windLevelKind === 'height' ? [...windLevels].reverse() : windLevels);
   const windLevelUnit = $derived(windLevelKind === 'height' ? 'm AGL' : 'hPa');
   const mapProductLabel = $derived(product.id === 'wind-level' ? `${product.label} · ${windLevel} ${windLevelUnit}` : product.label);
+  // Unidad de presentación: no toca el frame ni la escala de color, solo los
+  // números que se escriben en la leyenda y en el globo del cursor.
+  const displayUnit = $derived(activeUnit(product, unitPreferences));
+  const displayUnitLabel = $derived(displayUnit ? unitLabel(product, displayUnit) : product.unit);
+  const displayUnitOptions = $derived(unitOptions(product));
+  const legendMin = $derived(formatBound(product.min, product, displayUnit));
+  const legendMax = $derived(formatBound(product.max, product, displayUnit));
+  // Leyenda por clases: los mismos colores y los mismos cortes que pinta el
+  // ráster, para que la barra no describa una escala que el mapa no usa.
+  const legendBands = $derived(
+    product.scaleBreaks?.length
+      ? bandHexColors(
+          product.palette === 'precipitation' ? precipitationPalette : defaultPalette,
+          product.scaleBreaks.length + 1
+        )
+      : []
+  );
+  const legendMarks = $derived.by(() => {
+    if (!legendBands.length) return [];
+    const cortes = [0, ...product.scaleBreaks];
+    return cortes.map((value, index) => ({
+      at: index / legendBands.length * 100,
+      label: formatBound(value, product, displayUnit)
+    }));
+  });
+  // Rótulo de isolínea: sin decimales y con la unidad pegada, que va dentro
+  // del mapa y compite por sitio con el propio campo.
+  const formatContour = $derived(
+    (value) => `${formatValue(value, product, displayUnit, 0)}${displayUnitLabel}`
+  );
+  const formatProbe = $derived(
+    (value) => `${formatValue(value, product, displayUnit, product.id === 'ship' ? 2 : undefined)} ${displayUnitLabel}`.trim()
+  );
   const runLabel = $derived(connectedProduct
     ? `${new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(connectedProduct.run))} UTC`
     : '24/08 · 03:00 UTC');
@@ -109,6 +149,7 @@
 
   function selectProduct(item) {
     playing = false;
+    unitMenuOpen = false;
     selectedProduct = item.id;
     expandedCategory = item.category;
     const count = selectedRunCatalog?.products?.[item.id]?.valid_times?.length || hours.length;
@@ -140,19 +181,30 @@
     const expected = new Set(expectedTimes);
     const available = [...new Set(metadata?.available_times || [])]
       .filter((value) => expected.has(value)).length;
-    const total = expectedTimes.length;
-    const percent = total ? Math.round(available * 100 / total) : 0;
+    // El denominador es el horizonte final del mapa, no las horas que
+    // Météo-France lleva publicadas: esas crecen durante la pasada, así que un
+    // mapa marcaba «Completo» con doce plazos y volvía a bajar al aparecer los
+    // siguientes. Si el manifiesto no lo trae —una foto local, por ejemplo—,
+    // lo anunciado es el total.
+    const total = Number(metadata?.expected_total) || expectedTimes.length;
+    const percent = total ? Math.min(100, Math.round(available * 100 / total)) : 0;
     return {
       available,
       total,
       percent,
-      state: total > 0 && available === total ? 'complete' : available > 0 ? 'partial' : 'pending',
-      label: total > 0 && available === total ? 'Completo' : available > 0 ? `${percent} %` : 'Pendiente'
+      state: total > 0 && available >= total ? 'complete' : available > 0 ? 'partial' : 'pending',
+      label: total > 0 && available >= total ? 'Completo' : available > 0 ? `${percent} %` : 'Pendiente'
     };
   }
 
   function hourIsReady(hour) {
     return !precomputedOnly || (connectedProduct?.available_times || []).includes(hour?.iso);
+  }
+
+  function pickUnit(unit) {
+    const family = unitFamilyOf(product);
+    if (family) chooseUnit(family.id, unit);
+    unitMenuOpen = false;
   }
 
   function selectWindKind(kind) {
@@ -327,6 +379,11 @@
   });
 </script>
 
+<svelte:window
+  onclick={() => (unitMenuOpen = false)}
+  onkeydown={(event) => { if (event.key === 'Escape') unitMenuOpen = false; }}
+/>
+
 <section class="forecast-head">
   <div>
     <div class="eyebrow"><Activity size={14} /> Predicción numérica <span class="beta-badge">Beta</span></div>
@@ -438,7 +495,7 @@
               <strong>{product.label}</strong>
               {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt="Calculado por MeteoLabX" />{/if}
             </span>
-            <small>{selectedCategory?.label}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · Válido {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
+            <small>{productContents}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · Válido {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
           </div>
         </div>
         <div class="map-actions">
@@ -447,7 +504,7 @@
       </header>
 
       <div class="forecast-map palette-{product.palette}" bind:this={mapContainer}>
-        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} zeroFloor={product.zeroFloor || 0} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label="Nivel vertical del viento">
             <header><strong>Nivel</strong><small>{windLevelKind === 'height' ? 'Sobre terreno' : 'Isobárico'}</small></header>
@@ -471,7 +528,51 @@
             <img src={`${assetBase}mlx-logo.png`} alt="" />
             <span><strong>METEOLABX</strong><small>Predicción numérica</small></span>
           </div>
-          <div class="legend"><span>{product.min}</span><i></i><span>{product.max} {product.unit}</span></div>
+          <div class="legend" class:legend-classes={legendBands.length > 0}>
+            {#if legendBands.length}
+              <div class="band-scale">
+                <div class="bands" style:--bands={legendBands.length}>
+                  {#each legendBands as color}<span class="band" style:background-color={color}></span>{/each}
+                </div>
+                <div class="band-marks">
+                  {#each legendMarks as mark}<span style:left={`${mark.at}%`}>{mark.label}</span>{/each}
+                </div>
+              </div>
+            {:else}
+              <span>{legendMin}</span><i></i><span>{legendMax}</span>
+            {/if}
+            {#if displayUnitOptions.length > 1}
+              <div class="unit-picker">
+                <button
+                  type="button"
+                  class="unit-button"
+                  class:open={unitMenuOpen}
+                  aria-haspopup="menu"
+                  aria-expanded={unitMenuOpen}
+                  title="Cambiar unidades"
+                  onclick={(event) => { event.stopPropagation(); unitMenuOpen = !unitMenuOpen; }}
+                >
+                  <span>{displayUnitLabel}</span>
+                  <ChevronDown size={11} />
+                </button>
+                {#if unitMenuOpen}
+                  <div class="unit-menu" role="menu" aria-label="Unidades">
+                    {#each displayUnitOptions as option}
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={option.unit === displayUnit}
+                        class:active={option.unit === displayUnit}
+                        onclick={(event) => { event.stopPropagation(); pickUnit(option.unit); }}
+                      >{option.label}</button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <span class="unit-static">{product.unit}</span>
+            {/if}
+          </div>
         {/if}
       </div>
 
@@ -494,7 +595,7 @@
         <div class="explainer-identity">
           <span class="explainer-icon"><Info size={18} /></span>
           <div>
-            <small>Mapa visualizado · {selectedCategory?.label}</small>
+            <small>Mapa visualizado · {productContents}</small>
             <span class="product-title">
               <h3>{product.label}</h3>
               {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt="Calculado por MeteoLabX" />{/if}
@@ -548,6 +649,25 @@
   .viewer-column{min-width:0}.empty-map-card{display:grid;place-items:center;min-height:clamp(620px,64vh,780px);background:var(--panel)}.empty-forecast{display:flex;align-items:center;flex-direction:column;color:var(--ink);text-align:center}.empty-forecast img{width:62px;height:62px;margin-bottom:18px;border-radius:16px;opacity:.88}.empty-forecast strong{font-size:1.72rem;letter-spacing:.14em}.empty-forecast span{margin-top:7px;color:var(--muted);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase}.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}.map-product{display:flex;align-items:center;gap:10px}.product-mark{width:4px;height:35px;border-radius:5px;background:var(--product-accent);box-shadow:0 0 16px color-mix(in srgb,var(--product-accent) 45%,transparent)}.product-title{display:flex;align-items:center;gap:7px}.product-title strong{font-size:.82rem}.product-title img{width:21px;height:21px;border-radius:6px}.map-head small{display:block;margin-top:3px;color:var(--muted);font-size:.61rem;font-variant-numeric:tabular-nums}.map-actions{display:flex;gap:5px}.map-actions button{width:31px;height:31px;border-radius:8px}
   .forecast-map{position:relative;min-height:clamp(620px,64vh,780px);overflow:hidden;background:#0b1926}:global(.theme-light) .forecast-map{background:#d5e1e6}.real-frame{position:absolute;inset:5% 7%;z-index:3;width:86%;height:90%;object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.25))}.frame-state{position:absolute;left:50%;top:50%;z-index:9;display:flex;align-items:center;flex-direction:column;gap:6px;width:min(280px,70%);padding:16px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#eaf3f8;background:rgba(6,16,25,.82);backdrop-filter:blur(10px);text-align:center}.frame-state strong{font-size:.72rem}.frame-state small{color:rgba(235,244,251,.65);font-size:.58rem;line-height:1.4}.frame-state.error{border-color:rgba(239,111,118,.32)}.frame-state button{margin-top:4px;padding:6px 9px;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#dceaf2;background:rgba(255,255,255,.06);font-size:.57rem}.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.18);border-top-color:#70b9ef;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.legend{position:absolute;right:12px;bottom:12px;z-index:8;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:rgba(235,244,251,.8);background:rgba(6,16,25,.62);font-size:.6rem}.legend i{width:130px;height:8px;border-radius:99px;background:linear-gradient(90deg,#3b4cc0,#3288bd,#66c2a5,#e6f598,#fdae61,#d73027,#762a83)}
   .palette-precipitation .legend i{background:linear-gradient(90deg,#28465f,#2f6f8e,#369aa1,#58bd91,#9bd275,#d7dc69,#f2c55a,#ed914c,#df6262,#b44f88)}
+  .legend-classes{align-items:flex-end;padding-bottom:6px}
+  .band-scale{position:relative;padding-bottom:11px}
+  .bands{display:grid;grid-template-columns:repeat(var(--bands),1fr);width:262px;height:8px;border-radius:99px;overflow:hidden}
+  .bands .band{display:block;height:100%}
+  .band-marks{position:absolute;left:0;right:0;bottom:0;height:10px}
+  .band-marks span{position:absolute;color:rgba(235,244,251,.72);font-size:.44rem;line-height:1;transform:translateX(-50%);white-space:nowrap}
+  .band-marks span:first-child{transform:none}
+  .unit-picker{position:relative}
+  .legend .unit-static{margin-left:-4px}
+  .unit-button{display:flex;align-items:center;gap:3px;padding:3px 5px 3px 7px;border:1px solid rgba(140,205,246,.42);border-radius:6px;color:#9fd8ff;background:rgba(76,163,219,.16);font-size:.6rem;font-weight:720;line-height:1;cursor:pointer}
+  .unit-button :global(svg){opacity:.75;transition:transform .14s ease}
+  .unit-button:hover{border-color:rgba(140,205,246,.75);color:#cfeaff;background:rgba(76,163,219,.3)}
+  .unit-button:focus-visible{outline:2px solid rgba(140,205,246,.85);outline-offset:1px}
+  .unit-button.open{border-color:rgba(140,205,246,.85);color:#e8f5ff;background:rgba(76,163,219,.38)}
+  .unit-button.open :global(svg){transform:rotate(180deg)}
+  .unit-menu{position:absolute;right:0;bottom:calc(100% + 6px);z-index:16;display:flex;min-width:74px;flex-direction:column;gap:1px;padding:4px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(5,14,22,.94);box-shadow:0 10px 26px rgba(0,0,0,.38);backdrop-filter:blur(8px)}
+  .unit-menu button{width:100%;padding:5px 8px;border:0;border-radius:5px;color:rgba(235,244,251,.74);background:transparent;font-size:.6rem;text-align:right;cursor:pointer}
+  .unit-menu button:hover{color:#fff;background:rgba(255,255,255,.08)}
+  .unit-menu button.active{color:#06131c;background:#68bdf1;font-weight:750}
   .map-watermark{position:absolute;left:14px;bottom:13px;z-index:7;display:flex;align-items:center;gap:8px;color:rgba(230,241,248,.58);pointer-events:none;user-select:none}.map-watermark img{width:27px;height:27px;border-radius:7px;opacity:.55}.map-watermark span{display:flex;flex-direction:column;line-height:1}.map-watermark strong{font-size:.56rem;letter-spacing:.12em}.map-watermark small{margin-top:4px;font-size:.46rem;letter-spacing:.16em;text-transform:uppercase}:global(.theme-light) .map-watermark{color:rgba(27,58,78,.52)}
   .forecast-map:fullscreen{min-height:100vh}
   .level-rail{position:absolute;right:12px;top:58px;bottom:54px;z-index:14;display:flex;width:92px;flex-direction:column;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8f2f7;background:rgba(5,14,22,.78);backdrop-filter:blur(10px);overflow:hidden}.level-rail header{padding:9px 9px 7px;border-bottom:1px solid rgba(255,255,255,.1)}.level-rail header strong,.level-rail header small{display:block}.level-rail header strong{font-size:.62rem}.level-rail header small{margin-top:2px;color:rgba(235,244,251,.55);font-size:.47rem}.level-kind{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px}.level-kind button,.level-list button{border:0;color:rgba(235,244,251,.62);background:transparent;font-size:.5rem}.level-kind button{padding:5px 2px;border-radius:5px}.level-kind button.active{color:#06131c;background:#68bdf1;font-weight:750}.level-list{display:flex;min-height:0;flex:1;flex-direction:column;overflow-y:auto;padding:2px 5px 6px}.level-list button{flex:0 0 25px;border-left:2px solid transparent;text-align:right}.level-list button:hover{color:#fff;background:rgba(255,255,255,.06)}.level-list button.active{border-left-color:#68bdf1;border-radius:4px;color:#8ed3ff;background:rgba(76,163,219,.12);font-weight:750}
@@ -555,5 +675,6 @@
   .product-explainer{margin-top:14px;padding:17px}.product-explainer>header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.explainer-identity{display:flex;align-items:center;gap:11px}.explainer-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;color:#6ab7ef;background:rgba(62,142,208,.11)}.explainer-identity small{display:block;margin-bottom:3px;color:var(--muted);font-size:.56rem}.explainer-identity h3{font-size:.88rem}.source-tag{padding:5px 8px;border-radius:6px;color:#78baf0;background:rgba(62,142,208,.11);font-size:.55rem;font-weight:740;text-transform:uppercase}.source-tag.derived{color:#f08b9d;background:rgba(240,112,134,.1)}.product-explainer h4{margin-bottom:7px;color:var(--ink-2);font-size:.61rem;text-transform:uppercase;letter-spacing:.065em}.explanation-overview{display:grid;grid-template-columns:1fr;gap:19px;padding-top:17px}.explanation-overview p,.interpretation li,.calculation-detail p,.calculation-detail li{color:var(--muted);font-size:.65rem;line-height:1.62}.interpretation ul{display:grid;gap:8px;margin:0;padding-left:17px}.interpretation li::marker,.calculation-copy li::marker{color:#67b7ef}.calculation-detail{margin-top:19px;padding-top:17px;border-top:1px solid var(--border)}.calculation-copy{min-width:0}.calculation-copy ol{display:grid;gap:5px;margin:11px 0 0;padding-left:18px}.calculation-copy code{display:block;margin-top:12px;padding:7px 9px;border-radius:7px;color:#70b9ef;background:var(--panel-2);font-size:.52rem;overflow-wrap:anywhere}.technical-sources{display:grid;grid-template-columns:1fr;gap:12px;margin-top:17px;padding-top:14px;border-top:1px solid var(--border)}.technical-sources>strong{color:var(--ink-2);font-size:.58rem;text-transform:uppercase;letter-spacing:.055em}.technical-sources>div{display:flex;flex-wrap:wrap;gap:6px}.technical-sources a{padding:5px 7px;border:1px solid var(--border);border-radius:6px;color:#6db5e9;background:var(--panel-2);font-size:.53rem;line-height:1.35;text-decoration:none}.technical-sources a:hover{border-color:rgba(109,181,233,.42);color:#8bcbf8}
   @media(max-width:980px){.forecast-layout{grid-template-columns:220px minmax(0,1fr)}.forecast-map{min-height:440px}}
   @media(max-width:760px){.forecast-head{align-items:stretch;flex-direction:column}.run-status{min-width:0}.control-bar{flex-wrap:wrap}.run-progress-list{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto}.run-progress-list button{flex:0 0 auto}.forecast-layout{grid-template-columns:1fr}.product-selector{position:static;max-height:none}.category-list{max-height:360px}.forecast-map{min-height:390px}.map-head{align-items:flex-start}.map-actions button:nth-child(2){display:none}}
+  @media(max-width:640px){.bands{width:158px}.band-marks span:nth-child(even){display:none}}
   @media(max-width:480px){.control-bar label{flex:1}.control-bar label>span{display:none}.forecast-map{min-height:330px}.legend i{width:76px}.timeline{grid-template-columns:32px 32px minmax(150px,1fr) 32px;padding-inline:8px}.timeline>button{width:32px;height:32px}.time-labels>span{display:none}.time-labels{justify-content:center}.product-explainer>header{align-items:flex-start;flex-direction:column}.source-tag{margin-left:47px}}
 </style>

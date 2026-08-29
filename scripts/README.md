@@ -22,6 +22,15 @@ También se puede usar `.venv/bin/python` directamente. Ejecutar `python3` sin
 activar el entorno depende del `PATH` de la terminal y no aplica por sí solo
 el contenido de `.python-version`.
 
+Para trabajar en el visor de predicción sin clave de AROME ni descargas,
+`capture_forecast_fixtures.py` copia mapas ya calculados de una instancia en
+marcha al almacén local. Ver `docs/FORECAST_PIPELINE.md`.
+
+```bash
+python scripts/capture_forecast_fixtures.py --list
+python scripts/capture_forecast_fixtures.py --hours 6
+```
+
 Incluye generadores manuales de inventarios y mapas locales:
 
 - `build_aemet_inventory.py`

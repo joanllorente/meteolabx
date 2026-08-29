@@ -85,12 +85,18 @@ PRODUCTS = {
     "temperature-850": {
         "kind": "native", "prefix_kind": "pressure_temperature",
         "level": 850.0, "vertical_kind": "pressure", "value_mode": "temperature_c",
-        "vmin": -18.0, "vmax": 30.0, "unit": "°C",
+        "vmin": -24.0, "vmax": 36.0, "unit": "°C",
+        # La altura geopotencial del mismo nivel viaja como capa superpuesta:
+        # es el mapa sinóptico de toda la vida, temperatura en color y
+        # geopotencial en isohipsas, y así el visor no necesita una segunda
+        # descarga para dibujarlas.
+        "overlay_prefix_kind": "geopotential", "overlay_unit": "dam",
     },
     "temperature-500": {
         "kind": "native", "prefix_kind": "pressure_temperature",
         "level": 500.0, "vertical_kind": "pressure", "value_mode": "temperature_c",
-        "vmin": -38.0, "vmax": -4.0, "unit": "°C",
+        "vmin": -42.0, "vmax": -2.0, "unit": "°C",
+        "overlay_prefix_kind": "geopotential", "overlay_unit": "dam",
     },
     "shear-01": {"kind": "shear", "depth_m": 1000, "vmax": 26.0, "unit": "m/s"},
     "shear-03": {"kind": "shear", "depth_m": 3000, "vmax": 36.0, "unit": "m/s"},
@@ -139,7 +145,7 @@ PRODUCTS = {
     "srh-03": {
         "kind": "convective",
         "diagnostic": "srh_03",
-        "vmin": -300.0, "vmax": 700.0, "unit": "m²/s²",
+        "vmin": -300.0, "vmax": 600.0, "unit": "m²/s²",
     },
     "ordinary-cell-motion": {
         "kind": "convective",
@@ -458,6 +464,8 @@ def _product_context(
         # La diferencia entre dos niveles usa un solo campo, como los nativos:
         # lo que cambia es que se pide dos veces, a alturas distintas.
         prefixes = {"field": catalog.resolve(str(config["prefix_kind"]))}
+        if config.get("overlay_prefix_kind"):
+            prefixes["overlay"] = catalog.resolve(str(config["overlay_prefix_kind"]))
     elif config["kind"] == "convective":
         prefixes = _convective_prefixes(catalog)
     elif config["kind"] == "wind":
@@ -474,7 +482,14 @@ def _product_context(
         prefixes = _resolved_prefixes(
             catalog, int(config["depth_m"]), str(config["kind"])
         )
-    required = [prefix for key, prefix in prefixes.items() if key != "terrain"]
+    # La capa superpuesta queda fuera de las obligatorias: si el catálogo
+    # anuncia la temperatura y todavía no el geopotencial —y ese catálogo
+    # cambia de una consulta a otra—, el mapa tiene que salir igual, sin
+    # isohipsas, en vez de dejar de publicarse por una línea de adorno.
+    required = [
+        prefix for key, prefix in prefixes.items()
+        if key not in {"terrain", "overlay"}
+    ]
     period = config.get("period")
     common_runs = catalog.runs_for(required[0], period)
     for prefix in required[1:]:
@@ -1974,6 +1989,34 @@ def _computed_frame(
         values = values * float(config.get("scale", 1.0))
         field.data = values
         field.units = str(config["unit"])
+        if prefixes.get("overlay"):
+            from tabs.arome_forecast import _align, _height_from_geopotential
+
+            try:
+                overlay_field = client.get_field(
+                    catalog,
+                    prefixes["overlay"],
+                    run,
+                    field_times[0],
+                    float(native_level) if native_level is not None else None,
+                    str(native_vertical_kind) if native_vertical_kind else None,
+                )
+            except AromeError as error:
+                logger.info(
+                    "Sin geopotencial para %s %s, el mapa sale sin isohipsas: %s",
+                    product_id, valid_time_iso, error,
+                )
+                overlay_field = None
+            # El WCS lo publica unas veces como geopotencial en m²/s² y otras
+            # ya como altura en metros; la conversión mira las unidades y, si
+            # no vienen, la magnitud. De ahí a decámetros, que es como se leen
+            # las isohipsas.
+            if overlay_field is not None:
+                altura = _height_from_geopotential(
+                    _align(field, overlay_field), overlay_field.units
+                )
+                field.overlay = altura / 10.0
+                field.overlay_units = str(config.get("overlay_unit", "dam"))
     else:
         # Mismo reparto que llevan los perfiles y los mapas nativos: sin él, el
         # nivel 1 era el único tramo de la pasada del que no se sabía en qué se
