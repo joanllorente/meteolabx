@@ -161,6 +161,7 @@ PREFIX_CANDIDATES = {
         "TD__HEIGHT",
     ],
     "surface_pressure": ["PRESSURE__GROUND_OR_WATER_SURFACE", "P__GROUND"],
+    "mean_sea_level_pressure": ["PRESSURE__MEAN_SEA_LEVEL", "MSL__MEAN_SEA_LEVEL"],
     "precipitation_1h": [
         "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE",
         "PRECIP__GROUND",

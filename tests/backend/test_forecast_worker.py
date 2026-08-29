@@ -592,7 +592,8 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     total = sum(
         trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
     )
-    assert total == 1159, f"el denominador de una pasada completa es 1159, no {total}"
+    # Sube al añadir un mapa: theta-e + MSLP aportó sus 52 plazos nativos.
+    assert total == 1211, f"el denominador de una pasada completa es 1211, no {total}"
 
 
 def test_prefetch_also_brings_the_dcape_package(monkeypatch):

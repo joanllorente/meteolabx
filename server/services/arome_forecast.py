@@ -142,6 +142,16 @@ PRODUCTS = {
         "diagnostic": "srh_01",
         "vmin": -200.0, "vmax": 500.0, "unit": "m²/s²",
     },
+    "mslp-theta-e-850": {
+        # Theta-e en color y presión al nivel del mar en isobaras: el mapa de
+        # masas de aire de toda la vida. Cuesta cuatro coberturas por hora
+        # —temperatura y rocío a 850, presión en superficie y MSLP— porque no
+        # hay ninguna que lo dé hecho.
+        "kind": "theta_e",
+        "level": 850.0,
+        "vmin": -10.0, "vmax": 60.0, "unit": "°C",
+        "overlay_unit": "hPa",
+    },
     "srh-03": {
         "kind": "convective",
         "diagnostic": "srh_03",
@@ -466,6 +476,13 @@ def _product_context(
         prefixes = {"field": catalog.resolve(str(config["prefix_kind"]))}
         if config.get("overlay_prefix_kind"):
             prefixes["overlay"] = catalog.resolve(str(config["overlay_prefix_kind"]))
+    elif config["kind"] == "theta_e":
+        prefixes = {
+            "temperature": catalog.resolve("pressure_temperature"),
+            "dewpoint": catalog.resolve("pressure_dewpoint"),
+            "surface_pressure": catalog.resolve("surface_pressure"),
+            "overlay": catalog.resolve("mean_sea_level_pressure"),
+        }
     elif config["kind"] == "convective":
         prefixes = _convective_prefixes(catalog)
     elif config["kind"] == "wind":
@@ -1936,6 +1953,46 @@ def _computed_frame(
             u_field.vector_v = np.where(above_ground, u_field.vector_v, np.nan)
         u_field.units = "m/s"
         field = u_field
+    elif config["kind"] == "theta_e":
+        from tabs.arome_forecast import _align
+
+        from server.services.convective_diagnostics import (
+            equivalent_potential_temperature_metpy_k,
+        )
+
+        level = float(config["level"])
+        field = client.get_field(
+            catalog, prefixes["temperature"], run, valid_time, level, "pressure"
+        )
+        dewpoint_field = client.get_field(
+            catalog, prefixes["dewpoint"], run, valid_time, level, "pressure"
+        )
+        surface_field = client.get_field(
+            catalog, prefixes["surface_pressure"], run, valid_time, None, None
+        )
+        temperature = _as_kelvin(np.asarray(field.data, dtype=float), field.units)
+        dewpoint = _as_kelvin(_align(field, dewpoint_field), dewpoint_field.units)
+        surface = _align(field, surface_field)
+        finite_surface = surface[np.isfinite(surface)]
+        if finite_surface.size and float(np.nanmedian(finite_surface)) > 2_000:
+            surface = surface / 100.0
+        theta_e = equivalent_potential_temperature_metpy_k(level, temperature, dewpoint)
+        # Donde la superficie no llega a 850 hPa, ese nivel está bajo tierra:
+        # el modelo publica un valor extrapolado que no es aire de ninguna
+        # parte, y pintarlo dibujaría la orografía como si fuera una masa.
+        theta_e = np.where(surface > level, theta_e, np.nan)
+        # En kelvin por dentro, en grados solo para el mapa.
+        field.data = theta_e - 273.15
+        field.units = str(config["unit"])
+        mslp_field = client.get_field(
+            catalog, prefixes["overlay"], run, valid_time, None, None
+        )
+        mslp = _align(field, mslp_field)
+        finite_mslp = mslp[np.isfinite(mslp)]
+        if finite_mslp.size and float(np.nanmedian(finite_mslp)) > 2_000:
+            mslp = mslp / 100.0
+        field.overlay = mslp
+        field.overlay_units = str(config.get("overlay_unit", "hPa"))
     elif config["kind"] == "native":
         native_level = config.get("level")
         native_vertical_kind = config.get("vertical_kind")

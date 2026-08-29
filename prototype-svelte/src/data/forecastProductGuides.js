@@ -33,6 +33,16 @@ const RKW_1988 = {
   url: 'https://doi.org/10.1175/1520-0469(1988)045%3C0463:ATFSLL%3E2.0.CO;2'
 };
 
+const BOLTON_1980 = {
+  label: 'Bolton (1980) \u00b7 c\u00e1lculo de la temperatura potencial equivalente',
+  url: 'https://doi.org/10.1175/1520-0493(1980)108%3C1046:TCOEPT%3E2.0.CO;2'
+};
+
+const METPY = {
+  label: 'MetPy \u00b7 equivalent_potential_temperature',
+  url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.equivalent_potential_temperature.html'
+};
+
 const NAYLOR_2012 = {
   label: 'Naylor et al. (2012) \u00b7 sensibilidad de la helicidad del ascenso simulada',
   url: 'https://journals.ametsoc.org/view/journals/mwre/140/7/mwr-d-11-00209.1.xml'
@@ -110,6 +120,30 @@ export const forecastProductGuides = {
       'Sin valor donde la columna no cubre la capa entera o le falta alguno de los niveles de en medio: un valor parcial se leer\u00eda como rotaci\u00f3n d\u00e9bil cuando es falta de datos.'
     ],
     sources: [MF_AROME, MF_API, NAYLOR_2012]
+  },
+  'mslp-theta-e-850': {
+    what: 'Temperatura potencial equivalente en 850 hPa, en \u00b0C, con la presi\u00f3n al nivel del mar en isobaras y sus centros marcados. La theta-e resume en un solo n\u00famero el calor y la humedad que trae el aire, y se conserva tanto si la masa sube seca como si condensa: por eso identifica a la masa misma y no al term\u00f3metro de un momento.',
+    interpretation: [
+      'Es el mapa de masas de aire. Una lengua de theta-e alta que avanza sobre valores m\u00e1s bajos es advecci\u00f3n c\u00e1lida y h\u00fameda; el gradiente apretado entre dos zonas marca el frente mejor que la temperatura sola, porque una masa seca y otra h\u00fameda pueden estar al mismo grado y no ser la misma cosa.',
+      'Se lee junto a las isobaras: el aire va casi paralelo a ellas, as\u00ed que ellas dicen de d\u00f3nde viene la masa que la theta-e describe. Una baja al oeste con isobaras del sur trae la lengua c\u00e1lida por delante.',
+      'El nivel de 850 hPa se elige porque queda por encima del rozamiento y del ciclo diario de la superficie, pero a\u00fan dentro del aire que alimenta la convecci\u00f3n.',
+      'Sin valor donde la presi\u00f3n en superficie no llega a 850 hPa: ah\u00ed ese nivel est\u00e1 bajo tierra y el modelo publica una extrapolaci\u00f3n que no es aire de ninguna parte. Es lo que deja en blanco los Alpes y buena parte de la meseta.'
+    ],
+    method: 'Theta-e de Bolton (1980) con la implementaci\u00f3n de MetPy, sobre la temperatura y el rocío nativos de 850 hPa. El roc\u00edo se recorta a la temperatura para absorber las sobresaturaciones num\u00e9ricas del modelo, la presi\u00f3n se toma constante en 850 hPa y el c\u00e1lculo va en kelvin; solo el mapa se pasa a grados. La presi\u00f3n al nivel del mar viaja en la capa superpuesta del mismo frame.',
+    equations: [
+      { label: 'Presi\u00f3n de vapor', latex: String.raw`e=6{,}112\exp\!\left(\frac{17{,}67\,T_d}{T_d+243{,}5}\right)` },
+      { label: 'Raz\u00f3n de mezcla', latex: String.raw`r=\frac{0{,}622\,e}{p-e}` },
+      { label: 'Temperatura del NCA', latex: String.raw`T_L=\left[\frac{1}{T_d-56}+\frac{\ln(T/T_d)}{800}\right]^{-1}+56` },
+      { label: 'Theta-e', latex: String.raw`\theta_e=T\left(\frac{1000}{p-e}\right)^{\kappa}\left(\frac{T}{T_L}\right)^{0{,}28r}\exp\!\left[\left(\frac{3036}{T_L}-1{,}78\right)r(1+0{,}448r)\right]` }
+    ],
+    steps: [
+      'Temperatura y roc\u00edo isob\u00e1ricos de 850 hPa, presi\u00f3n en superficie y presi\u00f3n al nivel del mar: cuatro coberturas por hora, porque ninguna lo da hecho.',
+      'El roc\u00edo nunca por encima de la temperatura, y la presi\u00f3n constante en 850 hPa.',
+      'Theta-e por MetPy, no por la funci\u00f3n compartida de los diagn\u00f3sticos convectivos: aquella mezcla dos variantes de Bolton y se desv\u00eda entre 0,02 y 0,19 K, poco pero sin motivo, y cambiarla movería MUCAPE, MULI y SHIP a la vez.',
+      'Isobaras cada 4 hPa sobre el campo sin suavizar, con una de cada cinco marcada.',
+      'Bajas y anticiclones: el campo se suaviza a 40 km solo para buscarlos, tienen que ser el extremo en 200 km a la redonda y ganarle al entorno 2,5 hPa. Dos del mismo signo a menos de 300 km son el mismo. Al ampliar se rebaja el list\u00f3n y aparecen los secundarios.'
+    ],
+    sources: [MF_AROME, MF_API, BOLTON_1980, METPY]
   },
   'srh-01': {
     what: 'Helicidad relativa a la tormenta entre el suelo y 1.000 m sobre el terreno, en m²/s². Mide el área que el hodógrafo barre alrededor del vector de movimiento de la tormenta: cuánto giro puede heredar una corriente ascendente del entorno en el que se forma.',

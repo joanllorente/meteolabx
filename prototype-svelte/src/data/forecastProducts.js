@@ -266,6 +266,20 @@ const allForecastProducts = [
     coverage: 'TEMPERATURE · 850 y 500 hPa'
   },
   {
+    id: 'mslp-theta-e-850', category: 'dynamics', label: 'θₑ 850 hPa y presión al nivel del mar', short: 'θₑ 850 · MSLP', kind: 'derived',
+    unit: '°C', min: -10, max: 60, palette: 'temperature', accent: '#5ac8a8', vectors: false,
+    contents: 'Masas de aire · Presión',
+    // Isobaras cada 4 hPa, una de cada cinco marcada, y sin suavizar: mover la
+    // línea la separaría del campo. El geopotencial sí se suaviza; la presión
+    // al nivel del mar, no.
+    overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 0, overlay: '',
+    overlayLayerLabel: 'Isobaras',
+    pressureCentres: true,
+    description: 'Temperatura potencial equivalente en 850 hPa, en color, con la presión al nivel del mar en isobaras y los centros de acción marcados. Es el mapa de masas de aire: la theta-e resume en un número el calor y la humedad que trae el aire, y se conserva cuando sube o baja.',
+    method: 'Theta-e de Bolton (1980) calculada con MetPy sobre la temperatura y el rocío nativos de 850 hPa, con el rocío recortado a la temperatura. Se enmascara donde la presión en superficie no llega a 850 hPa, es decir donde ese nivel queda bajo tierra.',
+    coverage: 'AROME · T y Td isobáricos · presión en superficie · MSLP'
+  },
+  {
     id: 'srh-01', category: 'convection', label: 'Helicidad relativa 0–1 km', short: 'SRH 0–1', kind: 'derived',
     unit: 'm²/s²', min: -200, max: 500, palette: 'shear', accent: '#c084fc', vectors: true,
     description: 'Helicidad relativa a la tormenta en el primer kilómetro, referida al movimiento de la supercélula derecha de Bunkers. Mide el giro que una corriente ascendente puede heredar del entorno, y es el nivel que más se asocia con la tornadogénesis.',
@@ -299,6 +313,7 @@ const allForecastProducts = [
 // incorporar nuevos mapas cuando se decida qué variables formarán el producto.
 const initialProductIds = [
   'vertical-totals',
+  'mslp-theta-e-850',
   'srh-01',
   'srh-03',
   'vv-lfc',

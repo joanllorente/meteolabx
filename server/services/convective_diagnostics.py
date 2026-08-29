@@ -136,6 +136,38 @@ def equivalent_potential_temperature_k(
     )
 
 
+def equivalent_potential_temperature_metpy_k(
+    pressure_hpa: np.ndarray,
+    temperature_k: np.ndarray,
+    dewpoint_k: np.ndarray,
+) -> np.ndarray:
+    """Theta-e de Bolton (1980) delegada en MetPy, en kelvin.
+
+    Existe aparte de :func:`equivalent_potential_temperature_k` a propósito.
+    Aquella mezcla dos variantes de Bolton —toma el exponencial de una y la
+    theta seca de otra— y se desvía de MetPy entre 0,02 y 0,19 K en casos
+    corrientes. La diferencia es pequeña, pero es una función compartida por
+    los diagnósticos convectivos: cambiarla movería MUCAPE, MULI, la capa
+    efectiva y SHIP a la vez, así que se revisa por separado y con calma. Un
+    mapa nuevo no tiene por qué heredar esa deuda.
+
+    El rocío se recorta a la temperatura: el modelo publica de vez en cuando
+    sobresaturaciones numéricas de centésimas y MetPy las propaga.
+    """
+    import metpy.calc as mpcalc
+    from metpy.units import units
+
+    temperature = np.asarray(temperature_k, dtype=float)
+    dewpoint = np.minimum(np.asarray(dewpoint_k, dtype=float), temperature)
+    pressure = np.asarray(pressure_hpa, dtype=float)
+    theta_e = mpcalc.equivalent_potential_temperature(
+        pressure * units.hPa,
+        temperature * units.kelvin,
+        dewpoint * units.kelvin,
+    )
+    return np.asarray(theta_e.to("K").magnitude, dtype=float)
+
+
 def _saturated_theta_e_k(pressure_hpa: np.ndarray, temperature_k: np.ndarray) -> np.ndarray:
     return equivalent_potential_temperature_k(pressure_hpa, temperature_k, temperature_k)
 

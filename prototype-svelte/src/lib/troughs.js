@@ -263,6 +263,32 @@ export function waveAmplitude(field, width, height, point, spanCells, minSpanCel
 }
 
 /**
+ * Decide si las amplitudes medidas sostienen un eje de vaguada.
+ *
+ * La mediana sigue siendo la prueba principal: una cadena profunda de punta a
+ * punta tiene que superarla. Pero una vaguada real puede debilitarse al
+ * avanzar hacia las isohipsas altas. En ese caso no se tira todo el eje si
+ * hay dos niveles consecutivos que sí alcanzan la amplitud sinóptica y la
+ * mediana conserva el signo de vaguada. Exigir dos anclas evita que un único
+ * recodo fuerte rescate una cadena; exigir mediana positiva mantiene fuera
+ * dorsales y cadenas que cambian de signo.
+ */
+export function supportsTroughAmplitude(measures, minAmplitude, spanCells) {
+  if (!measures.length) return false;
+  if (!(minAmplitude > 0) || !(spanCells > 0)) return true;
+  const orderedRatios = measures.map(
+    ({ amplitude, span }) => amplitude / (minAmplitude * (span / spanCells))
+  );
+  const sortedRatios = [...orderedRatios].sort((left, right) => left - right);
+  const median = sortedRatios[Math.floor(sortedRatios.length / 2)];
+  if (median >= 1) return true;
+  const anchored = orderedRatios.some(
+    (ratio, index) => ratio >= 1 && orderedRatios[index + 1] >= 1
+  );
+  return median > 0 && anchored;
+}
+
+/**
  * ¿Hay una isohipsa cerrada alrededor de este mínimo?
  *
  * Un mínimo local no basta: una vaguada abierta también los tiene, y
@@ -739,10 +765,7 @@ export function troughAxes(field, {
     // El umbral se ajusta a lo que se ha podido medir: con 250 km de ventana
     // se le pide la mitad de amplitud que con 500. Medir menos exige menos,
     // no da barra libre.
-    const razones = medidas
-      .map(({ amplitude, span }) => amplitude / (minAmplitude * (span / spanCells)))
-      .sort((izquierda, derecha) => izquierda - derecha);
-    if (razones[Math.floor(razones.length / 2)] < 1) continue;
+    if (!supportsTroughAmplitude(medidas, minAmplitude, spanCells)) continue;
 
     const recortada = medidas.some(({ span }) => span < spanCells);
     if (!recortada) {

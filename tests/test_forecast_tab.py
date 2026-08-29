@@ -118,6 +118,10 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     # nombran porque conviven tres índices; en un mapa de geopotencial, un
     # valor en dam no necesita presentación.
     assert "overlay: 'MULI'" in products
+    # El mapa de masas de aire: theta-e en color, isobaras encima y sus centros.
+    assert "'mslp-theta-e-850'" in products
+    assert "overlaySmoothing: 0" in products, "las isobaras van sin suavizar"
+    assert "pressureCentres: true" in products
     assert "Precipitación en 1 hora" in products
     assert "Viento por niveles" in products
     assert "Cizalladura efectiva (EBWD)" in products
@@ -237,6 +241,20 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "isMajorOverlay" in grid
     # Capas apagables desde el propio mapa, con la elección recordada.
     assert "layer-panel" in grid
+    # La capa superpuesta se llama distinto según el campo: isohipsas sobre
+    # geopotencial, isobaras sobre presión.
+    assert "overlayLayerLabel" in grid
+    assert "detectPressureCentres" in grid
+    # Mayúscula para el centro principal y minúscula para el relativo, como en
+    # los mapas de AEMET. Lo decide el cierre, medido por inundación.
+    assert "centre.main ? 'B' : 'b'" in grid
+    centros = (ROOT / "prototype-svelte" / "src" / "lib" / "pressureCentres.js").read_text(encoding="utf-8")
+    assert "closureDepth" in centros
+    assert "CENTRE_MAIN_DEPTH_HPA = 4" in centros
+    assert "CENTRE_MAIN_RADIUS_KM = 150" in centros
+    assert "ringExtreme" not in centros, (
+        "el anillo fijo medía el sector que más favorecía al candidato"
+    )
     # Un solo reparto para todos los rótulos: con uno por familia, cada una
     # esquivaba los suyos y los dos salían impresos uno encima del otro.
     assert "mapLabels" in grid
@@ -370,7 +388,7 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 27
+    assert len(selected_ids) == 28
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 

@@ -1,5 +1,5 @@
 """
-Comportamiento del detector de vaguadas, no su estructura.
+Comportamiento de los detectores del visor: vaguadas y centros de presión.
 
 Las otras pruebas del visor comprueban que el código diga lo que dice; estas
 lo ejecutan contra campos sintéticos y miran lo que devuelve. El detector vive
@@ -70,7 +70,34 @@ console.log(JSON.stringify({
   dorsal_borde: resumen(onda(-16, 120)),
   plano: resumen(onda(0, 560)),
   gota_fria: resumen(gotaFria()),
-  vaguada_con_minimo: resumen(vaguadaConMinimo())
+  vaguada_con_minimo: resumen(vaguadaConMinimo()),
+  amplitud: {
+    // Caso real H+32: la vaguada está bien anclada en dos isohipsas y luego
+    // se debilita. La mediana sola descartaba sus 526 km de eje completo.
+    anclada: T.supportsTroughAmplitude([
+      { amplitude: 118.7 / 20, span: 10 },
+      { amplitude: 191.8 / 20, span: 19 },
+      { amplitude: -25.9 / 20, span: 17 },
+      { amplitude: 28.4 / 20, span: 25 },
+      { amplitude: 72.5 / 20, span: 25 },
+      { amplitude: 67.4 / 20, span: 25 }
+    ], 150 / 20, 25),
+    // Pasada anterior junto al borde: ningún par alcanza el listón y dos
+    // vértices cambian de signo, así que no debe reaparecer al abrir el caso.
+    dudosa: T.supportsTroughAmplitude([
+      { amplitude: 83 / 20, span: 14 },
+      { amplitude: 59 / 20, span: 16 },
+      { amplitude: 28 / 20, span: 18 },
+      { amplitude: 15 / 20, span: 19 },
+      { amplitude: -26 / 20, span: 18 },
+      { amplitude: -38 / 20, span: 17 }
+    ], 150 / 20, 25),
+    dorsal: T.supportsTroughAmplitude([
+      { amplitude: -120 / 20, span: 10 },
+      { amplitude: -150 / 20, span: 15 },
+      { amplitude: -187 / 20, span: 22 }
+    ], 150 / 20, 25)
+  }
 }));
 """
 
@@ -130,3 +157,84 @@ def test_a_cut_off_low_is_a_low_and_an_open_trough_is_an_axis(deteccion):
     con_minimo = deteccion["vaguada_con_minimo"]
     assert con_minimo["ejes"] == 1
     assert con_minimo["bajas"] == 0
+
+
+def test_a_trough_can_weaken_after_two_strong_consecutive_levels(deteccion):
+    """Una cola somera no borra una vaguada bien anclada aguas arriba."""
+    assert deteccion["amplitud"] == {
+        "anclada": True,
+        "dudosa": False,
+        "dorsal": False,
+    }
+
+
+GUION_CENTROS = """
+const P = await import('file://%(modulo)s');
+const W = 400, H = 300;
+// Una baja de 12 hPa de hondura, un anticiclón de 10 y una arruga de 1 hPa
+// que no debe salir. La baja lleva encima ruido de celda, que es lo que el
+// suavizado de detección tiene que ignorar.
+function campo() {
+  const p = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const baja = -12 * Math.exp(-(((x - 100) / 45) ** 2 + ((y - 120) / 45) ** 2));
+    const alta = 10 * Math.exp(-(((x - 300) / 50) ** 2 + ((y - 170) / 50) ** 2));
+    const arruga = -1 * Math.exp(-(((x - 200) / 20) ** 2 + ((y - 60) / 20) ** 2));
+    p[y * W + x] = 1013 + baja + alta + arruga + 0.4 * Math.sin(x / 3) * Math.cos(y / 4);
+  }
+  return p;
+}
+const centros = P.pressureCentres(campo(), { width: W, height: H, cellKm: 2.5 });
+console.log(JSON.stringify(centros.map((c) => ({
+  tipo: c.type, valor: Math.round(c.value), x: Math.round(c.x), y: Math.round(c.y),
+  principal: c.main, cierre: Number(c.prominence.toFixed(1)), radio: Math.round(c.radiusKm)
+}))));
+"""
+
+
+@pytest.fixture(scope="module")
+def centros() -> list:
+    if shutil.which("node") is None:
+        pytest.skip("node no está disponible")
+    modulo = ROOT / "prototype-svelte" / "src" / "lib" / "pressureCentres.js"
+    salida = subprocess.run(
+        ["node", "--input-type=module", "-e", GUION_CENTROS % {"modulo": modulo}],
+        capture_output=True, text=True, timeout=120, cwd=ROOT,
+    )
+    assert salida.returncode == 0, salida.stderr[-2000:]
+    return json.loads(salida.stdout)
+
+
+def test_pressure_centres_find_the_low_and_the_high_and_ignore_the_wrinkle(centros):
+    """Una baja, un anticiclón y nada más.
+
+    En un campo de 2,5 km hay cientos de mínimos locales y casi todos son ruido
+    o un valle entre montañas. Lo que separa un centro es ganarle al entorno
+    por un margen de presión —2,5 hPa a 200 km— y no tener otro del mismo signo
+    al lado. La arruga de 1 hPa del campo de prueba se queda fuera por eso.
+    """
+    assert len(centros) == 2, centros
+    baja = next(c for c in centros if c["tipo"] == "low")
+    alta = next(c for c in centros if c["tipo"] == "high")
+    assert abs(baja["x"] - 100) < 25 and abs(baja["y"] - 120) < 25
+    assert abs(alta["x"] - 300) < 25 and abs(alta["y"] - 170) < 25
+    # El valor sale del campo suavizado: sin el ruido de celda, que si no haría
+    # bailar la etiqueta un hectopascal de una hora a otra.
+    assert 1000 <= baja["valor"] <= 1003
+    assert 1021 <= alta["valor"] <= 1024
+
+
+def test_a_centre_is_main_or_relative_by_how_much_it_closes(centros):
+    """Mayúscula y minúscula salen del cierre, no del tamaño de la anomalía.
+
+    Δp es lo que hay entre el centro y el collado por el que se derrama o se
+    une a un sistema más intenso, medido por inundación. El anillo fijo que
+    había antes comparaba contra el sector que más favorecía al candidato, así
+    que un mínimo pegado a una vaguada sal\u00eda tan cerrado como una borrasca
+    redonda.
+    """
+    for centro in centros:
+        # Los dos del campo de prueba cierran de sobra y ocupan lo suyo.
+        assert centro["cierre"] >= 4, centro
+        assert centro["radio"] >= 150, centro
+        assert centro["principal"] is True, centro

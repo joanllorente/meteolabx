@@ -6,6 +6,9 @@
   } from '../lib/palettes.js';
   import { contourLines, stepLevels } from '../lib/contours.js';
   import { troughAxes as detectTroughAxes } from '../lib/troughs.js';
+  import {
+    CENTRE_PROMINENCE_HPA, pressureCentres as detectPressureCentres,
+  } from '../lib/pressureCentres.js';
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
 
   // `formatProbe` trae ya la unidad elegida en la leyenda; sin ella se cae a la
@@ -17,6 +20,7 @@
     displayMin = null, displayMax = null, contourStep = 0, formatContour = null,
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
     troughAxes = false, overlayLabel = '',
+    pressureCentres = false, overlaySmoothing = 4, overlayLayerLabel = '',
   } = $props();
 
   // Isotermas notables: la del cero es la que separa nieve de lluvia y helada
@@ -26,11 +30,19 @@
   const availableLayers = $derived(LAYERS.filter((capa) => (
     capa.id === 'isotherms' ? contourStep > 0
       : capa.id === 'isohypses' ? overlayStep > 0
-      : troughAxes && Boolean(frame.overlay)
+      : capa.id === 'troughs' ? troughAxes && Boolean(frame.overlay)
+      : pressureCentres && Boolean(frame.overlay)
+  // La capa superpuesta se llama distinto según el campo: isohipsas en un
+  // mapa de geopotencial e isobaras en uno de presión.
+  )).map((capa) => (
+    capa.id === 'isohypses' && overlayLayerLabel
+      ? { ...capa, label: overlayLayerLabel }
+      : capa
   )));
   const showIsotherms = $derived(contourStep > 0 && layerPreferences.isotherms);
   const showIsohypses = $derived(overlayStep > 0 && layerPreferences.isohypses);
   const showTroughs = $derived(troughAxes && layerPreferences.troughs);
+  const showCentres = $derived(pressureCentres && layerPreferences.centres);
 
   const EMPHASISED_LEVELS = [0, 10, 20, 30];
 
@@ -366,9 +378,12 @@
         // meteorología, sino el escalón de la cuantización uint16 del frame.
         // Con más sigma y más tolerancia la isohipsa queda como dibujada a
         // mano y no se pierde nada del campo.
-        sigma: 4,
+        // Las isobaras van sin suavizar: mover la línea la separaría del dato.
+        // El geopotencial sí se suaviza, que es liso de verdad y sus dientes
+        // vienen del escalón de la cuantización.
+        sigma: overlaySmoothing,
         minRingArea: 40,
-        tolerance: 1.6,
+        tolerance: overlaySmoothing > 0 ? 1.6 : 0.8,
         labelMinLength: 90,
         labelSpacing: 70
       });
@@ -416,6 +431,22 @@
    * a cada uno con la pendiente del anterior al siguiente, así que no quedan
    * esquinas entre isohipsa e isohipsa.
    */
+  /**
+   * Bajas y anticiclones del campo superpuesto.
+   *
+   * La prominencia exigida baja al ampliar: con el mapa entero solo interesan
+   * los centros sinópticos, y de cerca sí aporta ver los secundarios.
+   */
+  const centres = $derived(
+    showCentres && frame.overlay
+      ? detectPressureCentres(frame.overlay, {
+          width: frame.width,
+          height: frame.height,
+          prominenceHpa: Math.max(1, CENTRE_PROMINENCE_HPA / Math.min(2.5, viewZoom))
+        })
+      : []
+  );
+
   function axisPath(axis) {
     if (axis.length < 3) {
       return `M${axis.map((punto) => `${punto.x.toFixed(1)},${punto.y.toFixed(1)}`).join('L')}`;
@@ -553,7 +584,7 @@
       groups.push({
         kind: 'height',
         contours: contourPaths,
-        format: (level) => `${level} dam`,
+        format: (level) => `${level} ${frame.overlay_unit || ''}`.trim(),
         // Un rótulo de isohipsa es más largo y pide más aire alrededor.
         gapX: 230 / viewZoom,
         gapY: 118 / viewZoom,
@@ -789,6 +820,21 @@
           <path class="trough-axis-halo" d={axisPath(axis)} />
           <path class="trough-axis" d={axisPath(axis)} />
         {/each}
+        {#each centres as centre}
+          <g transform={`translate(${centre.x.toFixed(1)} ${centre.y.toFixed(1)}) scale(${(1 / zoom).toFixed(5)})`}>
+            <text
+              class="pressure-centre"
+              class:relative={!centre.main}
+              text-anchor="middle"
+              dominant-baseline="central"
+            >
+              <tspan class="symbol">{centre.type === 'low'
+                ? (centre.main ? 'B' : 'b')
+                : (centre.main ? 'A' : 'a')}</tspan>
+              <tspan dx="3">{Math.round(centre.value)}</tspan>
+            </text>
+          </g>
+        {/each}
         {#each showTroughs ? troughs.lows : [] as low}
           <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(1 / zoom).toFixed(5)})`}>
             <text class="closed-low" text-anchor="middle" dominant-baseline="central">B</text>
@@ -884,6 +930,14 @@
   .trough-axis,.trough-axis-halo{fill:none;stroke-linecap:butt;stroke-linejoin:round;vector-effect:non-scaling-stroke;stroke-dasharray:11 7}
   .trough-axis-halo{stroke:rgba(10,18,28,.5);stroke-width:6.2}
   .trough-axis{stroke:rgba(255,255,255,.97);stroke-width:3.4}
+  /* Centro de presión: la letra manda y el valor la acompaña, los dos en
+     blanco con perfil oscuro para que se lean sobre cualquier tono. */
+  .pressure-centre{fill:#fff;stroke:rgba(10,18,28,.68);stroke-width:3.2px;paint-order:stroke;font-size:13px;font-weight:750;pointer-events:none}
+  .pressure-centre .symbol{font-size:18px;font-weight:900}
+  /* Los relativos van en minúscula y algo más discretos, como en los mapas de
+     AEMET: están, pero no compiten con el centro principal. */
+  .pressure-centre.relative{font-size:11px;fill:rgba(255,255,255,.92)}
+  .pressure-centre.relative .symbol{font-size:15px;font-weight:800}
   .closed-low{fill:#fff;stroke:rgba(10,18,28,.6);stroke-width:3.4px;paint-order:stroke;font-size:19px;font-weight:800}
   .height-label{fill:rgba(20,34,54,.96);stroke:rgba(252,253,255,.85);stroke-width:2.6px;paint-order:stroke;font-size:11px;font-weight:700;pointer-events:none}
   .height-label.major{font-size:12px;font-weight:800}

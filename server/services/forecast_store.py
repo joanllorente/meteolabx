@@ -25,6 +25,7 @@ DERIVED_FORECAST_PRODUCTS = (
     # límite de los campos nativos.
     "vv-lfc",
     "updraft-helicity",
+    "mslp-theta-e-850",
     "shear-01",
     "shear-03",
     "shear-06",
@@ -66,6 +67,7 @@ PERSISTED_FORECAST_PRODUCTS = (
     "srh-03",
     "vv-lfc",
     "updraft-helicity",
+    "mslp-theta-e-850",
     "cloud-cover",
     "vertical-totals",
 )

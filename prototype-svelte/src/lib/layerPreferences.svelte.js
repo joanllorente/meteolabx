@@ -11,7 +11,8 @@ const STORAGE_KEY = 'mlx-forecast-layers';
 export const LAYERS = [
   { id: 'isotherms', label: 'Isotermas' },
   { id: 'isohypses', label: 'Isohipsas' },
-  { id: 'troughs', label: 'Ejes de vaguada' }
+  { id: 'troughs', label: 'Ejes de vaguada' },
+  { id: 'centres', label: 'Centros de presión' }
 ];
 
 const defaults = Object.fromEntries(LAYERS.map((capa) => [capa.id, true]));
