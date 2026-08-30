@@ -854,7 +854,7 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
         forecast_worker._expected_frames(manifest, product, publicadas_al_final(product))
         for product in PERSISTED_FORECAST_PRODUCTS
     )
-    assert al_principio == al_final == 1263
+    assert al_principio == al_final == 1262
 
 
 def test_capped_products_only_offer_the_hours_that_will_exist():

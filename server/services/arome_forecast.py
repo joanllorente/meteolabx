@@ -144,6 +144,10 @@ PRODUCTS = {
     },
     "reflectivity": {
         "kind": "native", "prefix_kind": "reflectivity_max",
+        # AROME lo publica de H+01 en adelante, no desde la hora del RUN. Sin
+        # decirlo, el denominador de la pasada esperaba un plazo que no existe
+        # y el progreso se quedaba clavado en el 99,9 % con cero errores.
+        "starts_at_hour": 1,
         "value_mode": "nonnegative", "vmin": 0.0, "vmax": 70.0, "unit": "dBZ",
     },
     "mslp-theta-e-850": {
@@ -2221,7 +2225,9 @@ def frame_grid(
     # cizalladuras pasan por aquí, pero su tiempo ya lo reparte su propia
     # traza, y llamarlos «nativos» hacía leer 170 s de perfil como si fuera
     # una descarga.
-    if (PRODUCTS.get(product_id) or {}).get("kind") in {"native", "level_difference"}:
+    if (PRODUCTS.get(product_id) or {}).get("kind") in {
+        "native", "level_difference", "theta_e",
+    }:
         logger.info(
             "Mapa %s %s: traer %.1f s, serializar %.1f s.",
             product_id, valid_time_iso, traer, time.monotonic() - reloj,
