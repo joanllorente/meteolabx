@@ -220,10 +220,16 @@ const allForecastProducts = [
     method: 'Campo nativo CONVECTIVE_INHIBITION sobre la superficie.', coverage: 'CONVECTIVE INHIBITION'
   },
   {
-    id: 'reflectivity', category: 'convection', label: 'Reflectividad máxima', short: 'Reflectividad', kind: 'native',
+    id: 'reflectivity', category: 'precipitation', label: 'Reflectividad simulada MAX', short: 'Reflectividad MAX', kind: 'native',
     unit: 'dBZ', min: 0, max: 70, palette: 'reflectivity', accent: '#ef6f76', vectors: false,
-    description: 'Reflectividad máxima simulada para visualizar áreas precipitantes y núcleos convectivos.',
-    method: 'Campo nativo REFLECTIVITY_MAX_DBZ sobre la superficie.', coverage: 'REFLECTIVITY MAX · dBZ'
+    // Clases de 5 dBZ, como un radar, y sin eco por debajo de 5: en una hora
+    // corriente nueve décimas partes del dominio están limpias y pintarlas de
+    // azul taparía justo lo que se busca.
+    scaleBreaks: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70],
+    zeroFloor: 5,
+    description: 'Reflectividad máxima simulada en la columna, en dBZ. Es la lectura de radar que tendría el modelo si sus hidrometeoros fueran los reales: enseña dónde llueve, con qué intensidad y con qué estructura.',
+    method: 'Campo nativo REFLECTIVITY_MAX_DBZ de AROME sobre la superficie, sin más cálculo.',
+    coverage: 'AROME · REFLECTIVITY MAX DBZ · superficie'
   },
   {
     id: 'lightning-density', category: 'convection', label: 'Densidad de rayos en 3 h', short: 'Rayos 3 h', kind: 'native',
@@ -313,6 +319,7 @@ const allForecastProducts = [
 // incorporar nuevos mapas cuando se decida qué variables formarán el producto.
 const initialProductIds = [
   'vertical-totals',
+  'reflectivity',
   'mslp-theta-e-850',
   'srh-01',
   'srh-03',

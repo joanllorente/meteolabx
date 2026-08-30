@@ -55,6 +55,7 @@ PERSISTED_FORECAST_PRODUCTS = (
     "accumulated-precip",
     "relative-humidity-700",
     "shortwave-down",
+    "reflectivity",
     "mu-ecape",
     "ml-ecape",
     "mucape-muli",

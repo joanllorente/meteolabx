@@ -142,6 +142,10 @@ PRODUCTS = {
         "diagnostic": "srh_01",
         "vmin": -200.0, "vmax": 500.0, "unit": "m²/s²",
     },
+    "reflectivity": {
+        "kind": "native", "prefix_kind": "reflectivity_max",
+        "value_mode": "nonnegative", "vmin": 0.0, "vmax": 70.0, "unit": "dBZ",
+    },
     "mslp-theta-e-850": {
         # Theta-e en color y presión al nivel del mar en isobaras: el mapa de
         # masas de aire de toda la vida. Cuesta cuatro coberturas por hora

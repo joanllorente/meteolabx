@@ -121,6 +121,22 @@ export const forecastProductGuides = {
     ],
     sources: [MF_AROME, MF_API, NAYLOR_2012]
   },
+  reflectivity: {
+    what: 'Reflectividad m\u00e1xima simulada de la columna, en dBZ: la lectura que dar\u00eda un radar si los hidrometeoros del modelo fueran los reales. De todos los niveles se queda con el valor mayor, que es lo que ve un radar al barrer.',
+    interpretation: [
+      'Es el mapa m\u00e1s directo para ver d\u00f3nde llueve y c\u00f3mo: no da una cantidad acumulada sino la estructura del momento, y ah\u00ed se distingue una banda estratiforme de un tren de c\u00e9lulas o de una l\u00ednea organizada.',
+      'Como orientaci\u00f3n: por debajo de 20 dBZ es lluvia d\u00e9bil o llovizna; entre 20 y 35, lluvia moderada; por encima de 40 hay convecci\u00f3n y por encima de 50, n\u00facleos con posible granizo. Son los mismos \u00f3rdenes que en un radar de verdad, pero calculados, no medidos.',
+      'AROME resuelve parcialmente la convecci\u00f3n, as\u00ed que la posici\u00f3n exacta de cada c\u00e9lula es orientativa: lo fiable es el tipo de estructura y la zona, no que el n\u00facleo caiga en un pueblo concreto.',
+      'Sin color por debajo de 5 dBZ. En una hora corriente nueve d\u00e9cimas partes del dominio no tienen eco, y pintarlas taparía lo poco que importa.'
+    ],
+    method: 'Campo nativo de AROME, sin c\u00e1lculo propio: MeteoLabX solo lo recorta al dominio y lo sirve. La escala va por clases de 5 dBZ, como la de un radar, en vez de un degradado continuo.',
+    equations: [],
+    steps: [
+      'Cobertura REFLECTIVITY_MAX_DBZ sobre la superficie, una por hora.',
+      'Clases de 5 en 5 dBZ hasta 70; por debajo de 5 no se pinta.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
   'mslp-theta-e-850': {
     what: 'Temperatura potencial equivalente en 850 hPa, en \u00b0C, con la presi\u00f3n al nivel del mar en isobaras y sus centros marcados. La theta-e resume en un solo n\u00famero el calor y la humedad que trae el aire, y se conserva tanto si la masa sube seca como si condensa: por eso identifica a la masa misma y no al term\u00f3metro de un momento.',
     interpretation: [

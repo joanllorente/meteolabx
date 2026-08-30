@@ -388,7 +388,7 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 28
+    assert len(selected_ids) == 29
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 
