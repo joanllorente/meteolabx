@@ -1755,6 +1755,19 @@ def main() -> int:
         help="Aísla diagnósticos derivados para poder terminarlos si se bloquean.",
     )
     parser.add_argument(
+        "--ecmwf-max-frames",
+        type=int,
+        default=int(os.getenv(
+            "METEOLABX_ECMWF_MAX_FRAMES_PER_CYCLE",
+            "12" if os.getenv("METEOLABX_ENABLE_ECMWF", "").lower()
+            in {"1", "true", "yes"} else "-1",
+        )),
+        help=(
+            "Frames de ECMWF por ciclo; 0 los hace todos y -1 desactiva el "
+            "modelo."
+        ),
+    )
+    parser.add_argument(
         "--watch",
         action="store_true",
         default=os.getenv("METEOLABX_FORECAST_WORKER_WATCH", "").lower()
@@ -1771,6 +1784,19 @@ def main() -> int:
     _configure_logging()
 
     def run_cycle() -> dict[str, Any]:
+        # ECMWF va primero y aparte: son frames de segundos que no compiten por
+        # el grafo de trabajos de AROME, y un fallo suyo no puede tumbar la
+        # pasada convectiva, que es lo caro.
+        if args.ecmwf_max_frames >= 0:
+            try:
+                # Importación tardía: con el modelo oculto el worker ni
+                # carga sus dependencias ni abre conexiones hacia ECMWF.
+                from server.services.ecmwf_forecast import run_cycle as ecmwf_cycle
+
+                resultado = ecmwf_cycle(max_frames=max(0, args.ecmwf_max_frames))
+                logger.info("Ciclo ECMWF terminado: %s", resultado)
+            except Exception:
+                logger.exception("El ciclo de ECMWF ha fallado; sigue AROME.")
         return run_incremental_cycle(
             max_hours=max(0, args.max_hours),
             diagnostic_max_hours=max(0, args.diagnostic_max_hours),

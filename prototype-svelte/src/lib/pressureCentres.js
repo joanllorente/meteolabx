@@ -21,8 +21,17 @@ export const CENTRE_SIGMA_KM = 40;
 export const CENTRE_RADIUS_KM = 200;
 /** Prominencia mínima para dibujar un centro, en hPa. */
 export const CENTRE_PROMINENCE_HPA = 2;
-/** Cierre mínimo para que un centro sea principal, en hPa. */
-export const CENTRE_MAIN_DEPTH_HPA = 4;
+/**
+ * Cierre mínimo para que un centro sea principal, en hPa.
+ *
+ * Tres cuartos del intervalo entre isobaras, que es de cuatro: con ese cierre
+ * el centro tiene su propia isobara cerrada casi en cualquier fase, y sin él
+ * es un abombamiento del campo. El cuatro de antes se ajustó cuando la medida
+ * del cierre estaba rota —el nivel del agua no era monótono y devolvía
+ * centésimas donde había hectopascales—, así que era un umbral calibrado
+ * contra números que no medían nada.
+ */
+export const CENTRE_MAIN_DEPTH_HPA = 3;
 /** Radio equivalente mínimo de un centro principal, en km. */
 export const CENTRE_MAIN_RADIUS_KM = 150;
 /**
@@ -34,6 +43,19 @@ export const CENTRE_MAIN_RADIUS_KM = 150;
  * dibujaban por duplicado.
  */
 export const CENTRE_SEPARATION_KM = 300;
+/**
+ * Radio equivalente que hace principal a un centro cuya cuenca se sale del mapa.
+ *
+ * Cuando la inundación llega al borde del dominio, la profundidad medida es una
+ * cota inferior, no una medida: el anticiclón de Azores cierra de verdad muy por
+ * debajo de lo que se puede ver en una ventana que acaba en 80° W, porque su
+ * dorsal sigue hacia el Caribe. Exigirle los 4 hPa lo dejaba en minúscula
+ * mandando sobre medio Atlántico. Por eso una cuenca abierta tiene una segunda
+ * puerta, la del tamaño, que sí se ha medido; se pide mucho para pasar por
+ * ella: mil kilómetros de radio equivalente son tres millones de km², que ya no
+ * es un centro secundario de nada.
+ */
+export const CENTRE_MAIN_OPEN_RADIUS_KM = 1000;
 
 function coarsen(field, width, height, block) {
   const cols = Math.floor(width / block);
@@ -130,7 +152,13 @@ export function closureDepth(field, width, height, start, sign, maxCells = 30000
 
   while (monton.size) {
     const [valor, index] = monton.pop();
-    nivel = valor;
+    // El nivel del agua solo sube. Al inundar se encuentran celdas por debajo
+    // del frente —el fondo de una cubeta lateral que se acaba de destapar— y
+    // asignarles el nivel lo hacía bajar: la profundidad devuelta era la del
+    // último pop, no la que había alcanzado el agua. Una borrasca con 2.183
+    // celdas cerradas se anunciaba con 0,06 hPa de cierre y se descartaba por
+    // poco marcada; con el nivel monótono son 5,45.
+    nivel = Math.max(nivel, valor);
     celdas += 1;
     if (celdas > maxCells) break;
     const x = index % width;
@@ -177,6 +205,7 @@ export function pressureCentres(field, {
   prominenceHpa = CENTRE_PROMINENCE_HPA,
   mainDepthHpa = CENTRE_MAIN_DEPTH_HPA,
   mainRadiusKm = CENTRE_MAIN_RADIUS_KM,
+  mainOpenRadiusKm = CENTRE_MAIN_OPEN_RADIUS_KM,
   separationKm = CENTRE_SEPARATION_KM
 } = {}) {
   if (!field) return [];
@@ -244,7 +273,18 @@ export function pressureCentres(field, {
       type: centro.type,
       // Principal el que cierra de verdad y ocupa lo que debe; relativo el
       // resto, en minúscula, como en los mapas de AEMET.
-      main: cierre.depth >= mainDepthHpa && radiusKm >= mainRadiusKm,
+      //
+      // Las dos condiciones son suficientes, no alternativas. Cuando la cuenca
+      // se sale del mapa lo medido es una cota inferior: si aun así llega a los
+      // 4 hPa, el centro cierra de sobra y no hay nada que discutir —es el caso
+      // de una borrasca en el dominio pequeño de AROME, donde el agua alcanza
+      // el borde con siete hectopascales encima—; y si no llega, todavía puede
+      // salvarlo el tamaño, que sí se ha medido. Ponerlo como disyuntiva era un
+      // error: el tope de 30.000 celdas de la inundación deja el radio de AROME
+      // en 977 km como mucho, así que la regla del tamaño no se cumplía nunca
+      // ahí y una borrasca de manual se quedaba en minúscula.
+      main: (cierre.depth >= mainDepthHpa && radiusKm >= mainRadiusKm)
+        || (cierre.open && radiusKm >= mainOpenRadiusKm),
       x: centro.x * block + block / 2,
       y: centro.y * block + block / 2,
       // El valor se lee del campo suavizado a propósito: el crudo tiene ruido

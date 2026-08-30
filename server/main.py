@@ -22,6 +22,7 @@ y dejar ``/v1/...`` con el comportamiento antiguo durante una ventana.
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -125,6 +126,13 @@ def create_app() -> FastAPI:
     app.include_router(ranking.router, prefix=api_prefix)
     app.include_router(stats.router, prefix=api_prefix)
     app.include_router(forecast.router, prefix=api_prefix)
+    # El código de ECMWF puede desplegarse sin publicar el modelo. Hasta que
+    # se active expresamente no existe siquiera una ruta HTTP que permita
+    # acceder a sus mapas adivinando la URL.
+    if os.getenv("METEOLABX_ENABLE_ECMWF", "").lower() in {"1", "true", "yes"}:
+        from server.routers import ecmwf
+
+        app.include_router(ecmwf.router, prefix=api_prefix)
 
     return app
 

@@ -1,5 +1,37 @@
 import { forecastProductGuides } from './forecastProductGuides.js';
 
+// Modelos conectados. El identificador es también el trozo de ruta de la API
+// —`/v1/forecast/<id>/…`— y el namespace del almacén, así que separar un
+// modelo del otro se hace en un solo sitio.
+const connectedForecastModels = [
+  {
+    id: 'arome',
+    label: 'AROME 0,025°',
+    short: 'AROME',
+    origin: 'Météo-France',
+    domain: 'Francia y entorno · 2,5 km',
+    horizon: '+51 h'
+  },
+  {
+    id: 'ecmwf',
+    label: 'ECMWF IFS 0,25°',
+    short: 'ECMWF',
+    origin: 'ECMWF · open data',
+    domain: 'Euroatlántico · 25 km',
+    horizon: '+144 h'
+  }
+];
+
+// ECMWF puede viajar en el mismo despliegue sin quedar expuesto antes de
+// tiempo. Vite sustituye esta bandera al compilar; si no se declara, el
+// selector y toda la navegación pública siguen siendo exclusivamente AROME.
+const ecmwfPublic = import.meta.env.VITE_ENABLE_ECMWF === 'true';
+export const forecastModels = connectedForecastModels.filter(
+  (model) => model.id !== 'ecmwf' || ecmwfPublic
+);
+
+export const DEFAULT_FORECAST_MODEL = 'arome';
+
 export const forecastCategories = [
   { id: 'temperature', label: 'Temperatura' },
   { id: 'precipitation', label: 'Precipitación' },
@@ -11,6 +43,26 @@ export const forecastCategories = [
 ];
 
 const allForecastProducts = [
+  {
+    id: 'z500-mslp', model: 'ecmwf', category: 'dynamics',
+    label: 'Geopotencial 500 hPa y presión al nivel del mar', short: 'Z500 · MSLP', kind: 'native',
+    unit: 'dam', min: 480, max: 600, palette: 'temperature', accent: '#7aa2f7', vectors: false,
+    contents: 'Altura geopotencial · Presión',
+    // Isobaras cada 4 hPa y una de cada cinco marcada. Aquí sí se suavizan, al
+    // revés que en el mapa de masas de aire de AROME: allí no hacía falta
+    // porque una celda mide 2,5 km, y aquí mide 25, así que las marcas de la
+    // rejilla se ven como dientes en la línea. Sigma de 2 celdas son unos 50 km
+    // sobre un campo cuyas estructuras miden más de mil: el giro mediano entre
+    // tramos cae de 33° a 18° y el campo se mueve 0,33 hPa de media cuadrática,
+    // un 8 % del intervalo entre isobaras.
+    overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 2, overlay: '',
+    overlayLayerLabel: 'Isobaras',
+    pressureCentres: true,
+    nationalBoundariesOnly: true,
+    description: 'Altura geopotencial de 500 hPa en color, con la presión al nivel del mar en isobaras. Es el mapa sinóptico de referencia: arriba la onda que dirige el tiempo, abajo los centros de acción que la acompañan en superficie.',
+    method: 'Dos mensajes del open data de ECMWF por plazo, leídos por rango de bytes del GRIB2 global: altura geopotencial en 500 hPa, que se pasa de gpm a decámetros, y presión al nivel del mar, de Pa a hPa.',
+    coverage: 'ECMWF IFS 0,25° · gh 500 hPa · msl'
+  },
   {
     id: 'temperature-2m', category: 'temperature', label: 'Temperatura a 2 m', short: 'T 2 m', kind: 'native',
     unit: '°C', min: -8, max: 42, palette: 'temperature', accent: '#ff8a5b', vectors: false,
@@ -318,6 +370,7 @@ const allForecastProducts = [
 // Selección inicial deliberadamente corta. El catálogo completo queda listo para
 // incorporar nuevos mapas cuando se decida qué variables formarán el producto.
 const initialProductIds = [
+  'z500-mslp',
   'vertical-totals',
   'reflectivity',
   'mslp-theta-e-850',
@@ -351,11 +404,22 @@ const initialProductIds = [
 
 export const forecastProducts = initialProductIds.map((id) => {
   const product = allForecastProducts.find((item) => item.id === id);
-  return { ...product, guide: forecastProductGuides[id] };
+  // Sin `model` declarado, el mapa es de AROME: es de donde vienen todos menos
+  // los que se han ido añadiendo después.
+  return { model: DEFAULT_FORECAST_MODEL, ...product, guide: forecastProductGuides[id] };
 });
 
-export const forecastCatalogSummary = {
-  selectedNative: forecastProducts.filter((item) => item.kind === 'native').length,
-  selectedDerived: forecastProducts.filter((item) => item.kind === 'derived').length,
-  approximateNativeTotal: 35
-};
+export function productsForModel(modelId = DEFAULT_FORECAST_MODEL) {
+  return forecastProducts.filter((item) => item.model === modelId);
+}
+
+export function catalogSummaryFor(modelId = DEFAULT_FORECAST_MODEL) {
+  const products = productsForModel(modelId);
+  return {
+    total: products.length,
+    selectedNative: products.filter((item) => item.kind === 'native').length,
+    selectedDerived: products.filter((item) => item.kind === 'derived').length
+  };
+}
+
+export const forecastCatalogSummary = catalogSummaryFor(DEFAULT_FORECAST_MODEL);

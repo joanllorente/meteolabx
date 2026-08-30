@@ -1,3 +1,8 @@
+const ECMWF_OPEN_DATA = {
+  label: 'ECMWF · Real-time open data',
+  url: 'https://www.ecmwf.int/en/forecasts/datasets/open-data'
+};
+
 const MF_API = {
   label: 'Météo-France · API ciblée modèles (WCS/WMS)',
   url: 'https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/854032416/API+Cibl+e+Mod+les'
@@ -59,6 +64,27 @@ const CELL_MOTION = {
 };
 
 export const forecastProductGuides = {
+  'z500-mslp': {
+    what: 'Altura geopotencial de 500 hPa en color y presión al nivel del mar en isobaras, sobre el Atlántico y Europa. Es el par clásico del análisis sinóptico: la altura de la superficie de 500 hPa dibuja la onda que dirige el tiempo a varios días vista, y la presión en superficie dice dónde acaba apoyándose.',
+    interpretation: [
+      'Los valores altos son dorsal —aire cálido y una columna dilatada, tiempo estable— y los bajos, vaguada o depresión en altura. Lo que importa no es tanto el valor como la forma: dónde se curva la onda y hacia dónde avanza.',
+      'Las isobaras se leen encima, no aparte. Un mínimo de geopotencial justo sobre una baja en superficie es un sistema maduro y vertical, ya sin apenas recorrido; desplazado al oeste de ella, es un sistema todavía en desarrollo.',
+      'El gradiente entre isohipsas es proporcional al viento en 500 hPa: donde se aprietan está la corriente en chorro, y con ella la banda por donde viajan las borrascas.',
+      'A +144 h el mapa no es un pronóstico de detalle sino de patrón. Sirve para ver si se instala una dorsal o entra una vaguada, no para decidir a qué hora llueve.'
+    ],
+    method: 'Dos mensajes por plazo del open data de ECMWF, leídos por rango de bytes del GRIB2 global de 0,25° con el índice que el propio ECMWF publica al lado. La altura geopotencial de 500 hPa se pasa de metros geopotenciales a decámetros y la presión al nivel del mar de pascales a hectopascales; el recorte al dominio euroatlántico se hace al leer, no después.',
+    equations: [
+      { label: 'Altura geopotencial en decámetros', latex: String.raw`Z_{500}[\mathrm{dam}]=\frac{Z_{500}[\mathrm{gpm}]}{10}` },
+      { label: 'Presión al nivel del mar', latex: String.raw`p_{\mathrm{mar}}[\mathrm{hPa}]=\frac{p_{\mathrm{mar}}[\mathrm{Pa}]}{100}` }
+    ],
+    steps: [
+      'Índice `.index` del plazo: una línea JSON por mensaje, con desplazamiento y longitud.',
+      'Descarga parcial de los dos mensajes: gh en 500 hPa y msl en superficie.',
+      'Recorte a la ventana euroatlántica y empaquetado en el mismo formato de rejilla que usan los mapas de AROME.'
+    ],
+    sources: [ECMWF_OPEN_DATA]
+  },
+
   'temperature-2m': {
     what: 'Temperatura del aire prevista a 2 m sobre la superficie del modelo. Es el campo de referencia para describir el ambiente térmico próximo al suelo, pero no equivale a la temperatura de la piel del terreno.',
     interpretation: [

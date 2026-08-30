@@ -1,5 +1,5 @@
 /**
- * Contrato de acceso al futuro backend AROME.
+ * Contrato de acceso al backend de predicción, un modelo por ruta.
  *
  * La vista usa datos de demostración mientras estos endpoints no estén
  * publicados. Mantener el cliente separado permite conectar el motor Python
@@ -14,7 +14,10 @@ const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
 // `immutable` y un año de caché, así que sin tocar esto un navegador que ya
 // tenga la hora guardada seguiría enseñando la versión anterior —sin la capa
 // de geopotencial, en este caso— y ni recargando ni reiniciando la cambiaría.
-const FORECAST_DATA_REVISION = 'forecast-fields-v17';
+const FORECAST_DATA_REVISION = 'forecast-fields-v18';
+// Modelo por defecto: el visor nació con AROME y las llamadas que no lo
+// dicen siguen siendo suyas.
+const DEFAULT_MODEL = 'arome';
 const FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024;
 const frameCache = new Map();
 const geometryCache = new Map();
@@ -23,11 +26,13 @@ const geometryCache = new Map();
 const pendingFrames = new Map();
 let frameCacheBytes = 0;
 
-function frameCacheKey({ product, validTime, run, verticalKind, level } = {}) {
-  return [FORECAST_DATA_REVISION, run || '', product || '', validTime || '', verticalKind || '', level ?? ''].join('|');
+function frameCacheKey({ model, product, validTime, run, verticalKind, level } = {}) {
+  // El modelo entra en la clave: dos modelos pueden publicar el mismo
+  // producto a la misma hora y no son el mismo mapa.
+  return [FORECAST_DATA_REVISION, model || DEFAULT_MODEL, run || '', product || '', validTime || '', verticalKind || '', level ?? ''].join('|');
 }
 
-export function getCachedAromeFrame(options = {}) {
+export function getCachedForecastFrame(options = {}) {
   const key = frameCacheKey(options);
   const entry = frameCache.get(key);
   if (!entry) return null;
@@ -37,7 +42,7 @@ export function getCachedAromeFrame(options = {}) {
   return entry.frame;
 }
 
-function rememberAromeFrame(options, frame) {
+function rememberForecastFrame(options, frame) {
   const key = frameCacheKey(options);
   const previous = frameCache.get(key);
   if (previous) frameCacheBytes -= previous.bytes;
@@ -55,9 +60,10 @@ function rememberAromeFrame(options, frame) {
   return frame;
 }
 
-// Las fronteras son idénticas para todos los mapas. Desde el formato 3 no
-// viajan dentro del frame: se piden una vez y se reutilizan.
-let boundariesRequest = null;
+// Las fronteras son idénticas para todos los mapas de un mismo modelo. Desde
+// el formato 3 no viajan dentro del frame: se piden una vez por dominio y se
+// reutilizan. ECMWF no comparte dominio con AROME, así que van por modelo.
+const boundariesRequests = new Map();
 
 /**
  * Convierte el `detail` de la API en algo legible.
@@ -78,22 +84,22 @@ function describeApiDetail(detail) {
   return partes.join(' · ');
 }
 
-function fetchDomainBoundaries() {
-  if (!boundariesRequest) {
-    boundariesRequest = getJson('/v1/forecast/arome/boundaries')
+function fetchDomainBoundaries(model = DEFAULT_MODEL) {
+  if (!boundariesRequests.has(model)) {
+    boundariesRequests.set(model, getJson(`/v1/forecast/${model}/boundaries`)
       .then((payload) => payload.boundaries || [])
       .catch((error) => {
         // Sin contornos el mapa sigue siendo legible; se reintenta al siguiente.
-        boundariesRequest = null;
+        boundariesRequests.delete(model);
         throw error;
-      });
+      }));
   }
-  return boundariesRequest;
+  return boundariesRequests.get(model);
 }
 
 function shareFrameGeometry(header) {
   if (!header.boundaries?.length) return header;
-  const key = [header.calculation_scope || '', header.width, header.height, ...(header.bounds || [])].join('|');
+  const key = [header.forecast_model || '', header.calculation_scope || '', header.width, header.height, ...(header.bounds || [])].join('|');
   const shared = geometryCache.get(key);
   if (shared) header.boundaries = shared;
   else geometryCache.set(key, header.boundaries);
@@ -168,13 +174,13 @@ async function getJson(path, { signal } = {}) {
   return response.json();
 }
 
-export function fetchAromeCatalog({ signal } = {}) {
-  return getJson('/v1/forecast/arome/catalog', { signal });
+export function fetchForecastCatalog({ model = DEFAULT_MODEL, signal } = {}) {
+  return getJson(`/v1/forecast/${model}/catalog`, { signal });
 }
 
-export function fetchAromeFrame({ product, validTime, run, verticalKind, level, signal } = {}) {
-  const options = { product, validTime, run, verticalKind, level };
-  const cached = getCachedAromeFrame(options);
+export function fetchForecastFrame({ model = DEFAULT_MODEL, product, validTime, run, verticalKind, level, signal } = {}) {
+  const options = { model, product, validTime, run, verticalKind, level };
+  const cached = getCachedForecastFrame(options);
   if (cached) return Promise.resolve(cached);
   const cacheKey = frameCacheKey(options);
   // Solo se comparten las descargas de precarga, que nunca se abortan; colgar
@@ -189,7 +195,7 @@ export function fetchAromeFrame({ product, validTime, run, verticalKind, level, 
   if (run) params.set('run', run);
   if (verticalKind) params.set('vertical_kind', verticalKind);
   if (level != null) params.set('level', String(level));
-  const request = fetch(`${API_BASE}/v1/forecast/arome/frames.grid?${params}`, {
+  const request = fetch(`${API_BASE}/v1/forecast/${model}/frames.grid?${params}`, {
     headers: { Accept: 'application/vnd.meteolabx.arome-grid' },
     signal
   }).then(async (response) => {
@@ -209,9 +215,9 @@ export function fetchAromeFrame({ product, validTime, run, verticalKind, level, 
     const header = shareFrameGeometry(JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLength))));
     if (!header.boundaries?.length) {
       // Formato 3 en adelante: los contornos llegan por su propio endpoint.
-      header.boundaries = await fetchDomainBoundaries().catch(() => []);
+      header.boundaries = await fetchDomainBoundaries(header.forecast_model || model).catch(() => []);
     }
-    return rememberAromeFrame(options, decodeFrameBody(buffer, header, 4 + headerLength));
+    return rememberForecastFrame(options, decodeFrameBody(buffer, header, 4 + headerLength));
   });
   if (!signal) {
     pendingFrames.set(cacheKey, request);
@@ -230,11 +236,11 @@ export function fetchAromeFrame({ product, validTime, run, verticalKind, level, 
  * debe ensuciar la vista, y al seleccionarla se pedirá de nuevo mostrando el
  * estado que corresponda.
  */
-export function prefetchAromeFrames(optionsList = []) {
+export function prefetchForecastFrames(optionsList = []) {
   for (const options of optionsList) {
     if (!options?.product || !options?.validTime) continue;
-    if (getCachedAromeFrame(options) || pendingFrames.has(frameCacheKey(options))) continue;
-    fetchAromeFrame(options).catch(() => {});
+    if (getCachedForecastFrame(options) || pendingFrames.has(frameCacheKey(options))) continue;
+    fetchForecastFrame(options).catch(() => {});
   }
 }
 

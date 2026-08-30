@@ -72,6 +72,16 @@ from tabs.arome_forecast import (
 
 
 
+from server.services.forecast_grid import (
+    GRID_FORMAT_VERSION,
+    MAX_QUANTIZATION_CODE,
+    QUANTIZATION_LEVELS,
+    pack_grid,
+    quantization_step,
+    quantize_array,
+)
+
+
 logger = logging.getLogger("meteolabx.arome_forecast")
 
 
@@ -285,6 +295,23 @@ def domain_boundaries(scope: str = "") -> list[dict[str, Any]]:
     )
 
 
+def boundaries_for_bounds(
+    bounds: tuple[float, float, float, float],
+    *,
+    scope: str,
+    include_admin1: bool = True,
+    simplify: float = 0.0012,
+) -> list[dict[str, Any]]:
+    """Fronteras de un dominio cualquiera, no solo del de AROME.
+
+    ECMWF cubre medio Atlántico: ahí las divisiones administrativas de medio
+    mundo son ruido y varios megas de payload, así que se pueden dejar fuera.
+    """
+    return _boundary_payload_from_disk(
+        tuple(float(valor) for valor in bounds), scope, include_admin1, simplify
+    )
+
+
 def _domain_boundary_payload(
     bounds: tuple[float, float, float, float], scope: str
 ) -> list[dict[str, Any]]:
@@ -295,15 +322,19 @@ def _domain_boundary_payload(
     anillos. Cada trabajo del worker es un proceso nuevo, así que el resultado
     se deja en disco y los siguientes solo leen eso.
     """
-    return _boundary_payload_from_disk(bounds, scope)
+    return _boundary_payload_from_disk(bounds, scope, True, 0.0012)
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def _boundary_payload_from_disk(
-    bounds: tuple[float, float, float, float], scope: str
+    bounds: tuple[float, float, float, float],
+    scope: str,
+    include_admin1: bool,
+    simplify: float,
 ) -> list[dict[str, Any]]:
     firma = hashlib.sha1(
-        f"{scope}|{'|'.join(f'{value:.4f}' for value in bounds)}".encode()
+        f"{scope}|{int(include_admin1)}|{simplify:.5f}|"
+        f"{'|'.join(f'{value:.4f}' for value in bounds)}".encode()
     ).hexdigest()[:16]
     cache_path = _boundary_cache_dir() / f"boundaries-{firma}.json"
     try:
@@ -311,7 +342,12 @@ def _boundary_payload_from_disk(
     except (OSError, ValueError):
         pass
     payload = _boundary_payload(
-        _model_boundary_geojson(_load_forecast_regions_geojson(), bounds)
+        _model_boundary_geojson(
+            _load_forecast_regions_geojson(),
+            bounds,
+            include_admin1=include_admin1,
+            simplify=simplify,
+        )
     )
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -362,7 +398,11 @@ def _admin1_boundaries_geojson() -> dict[str, Any]:
 
 
 def _model_boundary_geojson(
-    regions_geojson: dict[str, Any], bounds: tuple[float, float, float, float]
+    regions_geojson: dict[str, Any],
+    bounds: tuple[float, float, float, float],
+    *,
+    include_admin1: bool = True,
+    simplify: float = 0.0012,
 ) -> dict[str, Any]:
     """Fronteras nacionales y divisiones administrativas visibles en el dominio."""
     viewport = box(*bounds)
@@ -373,7 +413,7 @@ def _model_boundary_geojson(
             continue
         # Natural Earth 1:10m: conservar detalle suficiente para que costas y
         # fronteras sigan siendo suaves incluso al zoom máximo del visor.
-        clipped = geometry.intersection(viewport).simplify(0.0012, preserve_topology=True)
+        clipped = geometry.intersection(viewport).simplify(simplify, preserve_topology=True)
         if clipped.is_empty:
             continue
         properties = feature.get("properties") or {}
@@ -385,7 +425,7 @@ def _model_boundary_geojson(
             },
             "geometry": mapping(clipped),
         })
-    for feature in _admin1_boundaries_geojson().get("features", ()):
+    for feature in (_admin1_boundaries_geojson().get("features", ()) if include_admin1 else ()):
         geometry = shape(feature.get("geometry") or {})
         if geometry.is_empty or not geometry.intersects(viewport):
             continue
@@ -2143,61 +2183,12 @@ def frame_png(
     return _render_png(field, float(config["vmax"])), headers
 
 
-GRID_FORMAT_VERSION = 3
-QUANTIZATION_LEVELS = 4096
-MAX_QUANTIZATION_CODE = 65534
-
-
-def _quantization_step(span: float) -> float:
-    """Mayor paso 1/2/5·10^k que divide el rango del producto en ≥4096 niveles.
-
-    Al reducir el número de códigos distintos el plano de bytes altos queda casi
-    constante, y ahí está la ganancia frente a Float32, cuya mantisa es
-    prácticamente ruido incompresible. Medido sobre un frame real de viento:
-    un tercio del tamaño, con el valor del tooltip intacto en el 97,6 % de las
-    celdas y un error máximo de 0,007 m/s.
-    """
-    if not np.isfinite(span) or span <= 0:
-        return 1.0
-    target = span / QUANTIZATION_LEVELS
-    base = 10.0 ** math.floor(math.log10(target))
-    for factor in (5.0, 2.0, 1.0):
-        if factor * base <= target:
-            return factor * base
-    return base
-
-
-def _quantize_array(array: np.ndarray) -> tuple[bytes, dict[str, Any]]:
-    """Codifica a uint16 con planos de byte separados; 0 marca «sin dato».
-
-    Cada matriz se escala por su propio rango: el overlay (índice de elevación)
-    no comparte magnitud con el escalar que acompaña, y heredar su paso
-    deformaría los contornos.
-
-    Separar el byte alto del bajo agrupa los bytes suaves y deja el ruido de
-    baja magnitud en un bloque aparte, que gzip comprime mucho mejor que la
-    secuencia intercalada.
-    """
-    finite = np.isfinite(array)
-    if not finite.any():
-        codes = np.zeros(array.shape, dtype="<u2")
-        return codes.tobytes(), {"offset": 0.0, "step": 1.0}
-    offset = float(np.nanmin(array))
-    span = float(np.nanmax(array)) - offset
-    step = _quantization_step(span)
-    # Un rango muy amplio no cabe en 16 bits con el paso preferido.
-    if span / step > MAX_QUANTIZATION_CODE - 1:
-        step = span / (MAX_QUANTIZATION_CODE - 1)
-    codes = np.zeros(array.shape, dtype="<u2")
-    codes[finite] = 1 + np.round((array[finite] - offset) / step).astype("<u2")
-    # Se emiten los bytes altos y luego los bajos, en ese orden explícito, para
-    # que el visor no dependa del orden de bytes de la máquina que sirvió.
-    high = (codes >> 8).astype("u1")
-    low = (codes & 0xFF).astype("u1")
-    return high.tobytes(order="C") + low.tobytes(order="C"), {
-        "offset": offset,
-        "step": step,
-    }
+# El formato de rejilla vive en `forecast_grid`: lo comparten AROME y ECMWF, y
+# tenerlo en un solo sitio evita que una mejora del empaquetado llegue a un
+# modelo y no al otro. Los nombres antiguos se mantienen como alias porque los
+# usan los tests y el resto del módulo.
+_quantization_step = quantization_step
+_quantize_array = quantize_array
 
 
 # Ya serializado y comprimido: barato de guardar, pero tampoco sin límite.
@@ -2382,11 +2373,9 @@ def _serialize_grid(
             _catalonia_only_geojson(_load_forecast_regions_geojson())
         )
         values = np.asarray(_mask_to_catalonia(field, geometry), dtype="<f4")
-        boundary_bounds = AROME_MODEL_GRID_BOUNDS
     else:
         # El dominio completo no necesita los GeoJSON en memoria: sus fronteras
         # se sirven ya recortadas desde la caché.
-        boundary_bounds = tuple(float(value) for value in field.bounds)
         values = np.asarray(field.data, dtype="<f4")
     inside = np.isfinite(values)
     arrays = [values]
@@ -2409,61 +2398,33 @@ def _serialize_grid(
         values = arrays[0]
         output_bounds = AROME_MODEL_GRID_BOUNDS
 
-    height, width = values.shape
     west, south, east, north = output_bounds
-    # Cuando el escalar es el módulo del vector, el visor lo reconstruye y así
-    # se ahorra un tercio del cuerpo sin ninguna pérdida.
-    names = [
-        "value",
-        *(["u", "v"] if has_vectors else []),
-        *(["overlay"] if has_overlay else []),
-    ]
-    value_source = None
-    if has_vectors:
-        finite = np.isfinite(arrays[0])
-        modulus = np.hypot(arrays[1], arrays[2])
-        if np.allclose(arrays[0][finite], modulus[finite], rtol=0, atol=1e-4):
-            value_source = "hypot"
-            arrays = arrays[1:]
-            names = names[1:]
 
-    encoded_arrays = []
-    body_chunks = []
-    for name, array in zip(names, arrays):
-        chunk, scale = _quantize_array(array)
-        body_chunks.append(chunk)
-        encoded_arrays.append({"name": name, **scale})
-
-    metadata = {
-        "version": GRID_FORMAT_VERSION,
-        "encoding": "u16-planes",
-        "arrays": encoded_arrays,
-        "value_source": value_source,
-        "product": product_id,
-        "width": width,
-        "height": height,
-        "bounds": [west, south, east, north],
-        "vmin": float(config.get("vmin", 0.0)),
-        "vmax": float(config["vmax"]),
-        "unit": str(config["unit"]),
-        "run": headers["X-AROME-Run"],
-        "valid_time": headers["X-AROME-Valid-Time"],
-        "maximum": float(headers["X-AROME-Max"]),
-        "vertical_kind": headers.get("X-AROME-Level-Type"),
-        "level": float(headers["X-AROME-Level"]) if "X-AROME-Level" in headers else None,
-        "calculation_scope": calculation_scope,
-        # Las fronteras ya no viajan aquí: eran los mismos 293 KB repetidos en
-        # cada frame, un cuarto del volumen y del tráfico. El visor las pide
-        # una vez por dominio y las reutiliza.
-        "boundary_scope": calculation_scope,
-        "has_vectors": has_vectors,
-        "has_overlay": has_overlay,
-        "overlay_unit": field.overlay_units if has_overlay else None,
-        "array_order": names,
-    }
-    encoded_header = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
-    body = bytearray(struct.pack("<I", len(encoded_header)))
-    body.extend(encoded_header)
-    for chunk in body_chunks:
-        body.extend(chunk)
-    return bytes(body)
+    return pack_grid(
+        product_id,
+        values,
+        bounds=(west, south, east, north),
+        unit=str(config["unit"]),
+        vmin=float(config.get("vmin", 0.0)),
+        vmax=float(config["vmax"]),
+        vector_u=arrays[1] if has_vectors else None,
+        vector_v=arrays[2] if has_vectors else None,
+        overlay=arrays[-1] if has_overlay else None,
+        overlay_unit=field.overlay_units if has_overlay else None,
+        metadata={
+            # El máximo sale de la cabecera HTTP, que ya lo calculó sobre el
+            # campo sin recortar: recalcularlo aquí daría otro número en el
+            # recorte catalán.
+            "maximum": float(headers["X-AROME-Max"]),
+            "run": headers["X-AROME-Run"],
+            "valid_time": headers["X-AROME-Valid-Time"],
+            "vertical_kind": headers.get("X-AROME-Level-Type"),
+            "level": float(headers["X-AROME-Level"]) if "X-AROME-Level" in headers else None,
+            "calculation_scope": calculation_scope,
+            "forecast_model": "arome",
+            # Las fronteras ya no viajan aquí: eran los mismos 293 KB repetidos
+            # en cada frame, un cuarto del volumen y del tráfico. El visor las
+            # pide una vez por dominio y las reutiliza.
+            "boundary_scope": calculation_scope,
+        },
+    )

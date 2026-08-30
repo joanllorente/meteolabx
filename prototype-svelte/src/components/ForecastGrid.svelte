@@ -9,6 +9,7 @@
   import {
     CENTRE_PROMINENCE_HPA, pressureCentres as detectPressureCentres,
   } from '../lib/pressureCentres.js';
+  import { colorDeFondo, mezclaSobre, tintaLegible } from '../lib/ink.js';
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
 
   // `formatProbe` trae ya la unidad elegida en la leyenda; sin ella se cae a la
@@ -21,6 +22,7 @@
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
     troughAxes = false, overlayLabel = '',
     pressureCentres = false, overlaySmoothing = 4, overlayLayerLabel = '',
+    onink = null,
   } = $props();
 
   // Isotermas notables: la del cero es la que separa nieve de lluvia y helada
@@ -41,6 +43,45 @@
   )));
   const showIsotherms = $derived(contourStep > 0 && layerPreferences.isotherms);
   const showIsohypses = $derived(overlayStep > 0 && layerPreferences.isohypses);
+
+  // Ancho de rejilla con el que se ajustaron los rótulos: el dominio nativo de
+  // AROME.
+  const LABEL_REFERENCE_WIDTH = 1121;
+  /**
+   * Escala de todo lo que se midió en celdas y se mira en píxeles.
+   *
+   * La capa vectorial usa como unidad la celda del modelo, así que un modelo
+   * con menos columnas la dibuja todo más grande: los 11 px del CSS son 11
+   * celdas, y una celda de ECMWF ocupa en pantalla el doble que una de AROME.
+   * Los rótulos salían del tamaño de un titular y el hueco de 230 unidades que
+   * se reserva alrededor de cada uno —el 46 % del ancho de ese mapa— dejaba
+   * casi todas las isobaras sin etiquetar. Referenciarlo al ancho de AROME
+   * deja su aspecto intacto y hace que cualquier otro modelo mida lo mismo.
+   */
+  const labelScale = $derived(frame.width / LABEL_REFERENCE_WIDTH);
+
+  /**
+   * Tamaño de celda del modelo, en km.
+   *
+   * La detección de centros razona en kilómetros —200 de radio, 300 de
+   * separación— y los convierte a celdas con esto. Estaba fijo en el 2,5 de
+   * AROME, así que en una rejilla de 0,25° cada radio salía diez veces más
+   * grande de lo que decía: un centro tenía que ganarle al entorno en 2.000 km
+   * a la redonda y el mapa entero se quedaba en un solo anticiclón relativo.
+   *
+   * Se calcula con la misma regla con la que se fijó aquel 2,5 —un grado, unos
+   * 100 km—, de modo que AROME sigue dando exactamente 2,5 y no se mueve nada
+   * de lo que ya estaba ajustado sobre él.
+   */
+  // El respaldo evita una división por cero si un frame llegara sin límites:
+  // la detección los usa como divisor y saldrían radios infinitos.
+  const cellKm = $derived(
+    (frame.bounds?.[3] - frame.bounds?.[1]) / frame.height * 100 || 2.5
+  );
+  // El engrosado previo buscaba bloques de unos 10 km, que es lo que valían
+  // las cuatro celdas de AROME. Donde la celda ya mide más, no hay nada que
+  // engrosar.
+  const centreBlock = $derived(Math.max(1, Math.round(10 / cellKm)));
   const showTroughs = $derived(troughAxes && layerPreferences.troughs);
   const showCentres = $derived(pressureCentres && layerPreferences.centres);
 
@@ -120,6 +161,58 @@
       bands[index] = lut[bandPosition(index, count)];
     }
     return bands;
+  }
+
+  // Recuadro de la esquina inferior izquierda del mapa, que es donde va la
+  // marca de agua: 14 px desde el borde izquierdo y 13 desde el de abajo, con
+  // el alto de sus dos líneas y el logo.
+  const MARCA = { izquierda: 14, abajo: 13, ancho: 210, alto: 30 };
+
+  /**
+   * Color legible sobre lo que haya debajo de la marca de agua.
+   *
+   * La marca se imprime encima del campo, y el campo cambia de color con la
+   * hora, con el producto y con el encuadre: un tono fijo se pierde tarde o
+   * temprano contra un fondo del mismo valor. Se mide lo que hay debajo y se
+   * devuelve blanco o negro, que es lo que más contraste da contra cualquier
+   * cosa.
+   *
+   * Se muestrea el propio ráster porque es el color que se ve. Donde no llega
+   * —con el mapa sin ampliar la esquina cae fuera de la rejilla— manda el
+   * fondo del contenedor, y donde el campo es translúcido se mezclan los dos.
+   */
+  function tintaDeLaMarca() {
+    const area = layer?.parentElement;
+    if (!raster || !area) return null;
+    const areaCaja = area.getBoundingClientRect();
+    const rasterCaja = raster.getBoundingClientRect();
+    if (!rasterCaja.width || !rasterCaja.height) return null;
+    const fondo = colorDeFondo(getComputedStyle(area).backgroundColor);
+
+    const muestras = [];
+    for (let fila = 0; fila < 3; fila += 1) {
+      for (let columna = 0; columna < 7; columna += 1) {
+        const x = areaCaja.left + MARCA.izquierda + (columna + 0.5) * MARCA.ancho / 7;
+        const y = areaCaja.bottom - MARCA.abajo - MARCA.alto + (fila + 0.5) * MARCA.alto / 3;
+        muestras.push(colorEnPantalla(x, y, rasterCaja, fondo));
+      }
+    }
+    return tintaLegible(muestras);
+  }
+
+  /** Color del ráster en un punto de la pantalla, mezclado con el fondo. */
+  function colorEnPantalla(x, y, rasterCaja, fondo) {
+    if (x < rasterCaja.left || x >= rasterCaja.right || y < rasterCaja.top || y >= rasterCaja.bottom) {
+      return fondo;
+    }
+    const columna = Math.floor((x - rasterCaja.left) / rasterCaja.width * raster.width);
+    const fila = Math.floor((y - rasterCaja.top) / rasterCaja.height * raster.height);
+    try {
+      const [r, g, b, a] = raster.getContext('2d').getImageData(columna, fila, 1, 1).data;
+      return mezclaSobre([r, g, b, a / 255], fondo);
+    } catch {
+      return fondo;
+    }
   }
 
   function renderGrid() {
@@ -382,10 +475,16 @@
         // El geopotencial sí se suaviza, que es liso de verdad y sus dientes
         // vienen del escalón de la cuantización.
         sigma: overlaySmoothing,
-        minRingArea: 40,
-        tolerance: overlaySmoothing > 0 ? 1.6 : 0.8,
-        labelMinLength: 90,
-        labelSpacing: 70
+        // En celdas, todos: un anillo o un tramo mínimo que valen para 2,5 km
+        // piden diez veces más recorrido real en una rejilla de 25.
+        minRingArea: 40 * labelScale * labelScale,
+        // La mitad que antes: la simplificación es de dibujo, no de dato, y
+        // desde que la isolínea se traza como curva los vértices de más no
+        // ensucian nada —la acercan al contorno calculado— mientras que los
+        // de menos dejaban cuerdas rectas de veinte celdas entre esquinas.
+        tolerance: (overlaySmoothing > 0 ? 0.8 : 0.4) * labelScale,
+        labelMinLength: 90 * labelScale,
+        labelSpacing: 70 * labelScale
       });
     }
     return contourLines(frame.overlay, {
@@ -442,6 +541,8 @@
       ? detectPressureCentres(frame.overlay, {
           width: frame.width,
           height: frame.height,
+          cellKm,
+          block: centreBlock,
           prominenceHpa: Math.max(1, CENTRE_PROMINENCE_HPA / Math.min(2.5, viewZoom))
         })
       : []
@@ -586,8 +687,8 @@
         contours: contourPaths,
         format: (level) => `${level} ${frame.overlay_unit || ''}`.trim(),
         // Un rótulo de isohipsa es más largo y pide más aire alrededor.
-        gapX: 230 / viewZoom,
-        gapY: 118 / viewZoom,
+        gapX: 230 * labelScale / viewZoom,
+        gapY: 118 * labelScale / viewZoom,
         priority: (level) => (isMajorOverlay(level) ? 3 : 1)
       });
     }
@@ -596,8 +697,8 @@
         kind: 'value',
         contours: valueContours,
         format: formatContour,
-        gapX: 170 / viewZoom,
-        gapY: 92 / viewZoom,
+        gapX: 170 * labelScale / viewZoom,
+        gapY: 92 * labelScale / viewZoom,
         priority: (level) => (emphasis(level) > 0 ? 2 : 0)
       });
     }
@@ -727,6 +828,23 @@
     renderGrid();
   });
 
+  // La tinta de la marca de agua se mide después de pintar, en el fotograma
+  // siguiente: si se calculara dentro del mismo efecto se leerían los píxeles
+  // del frame anterior, y la marca iría siempre una hora por detrás del fondo
+  // que tiene debajo.
+  $effect(() => {
+    frame;
+    viewZoom;
+    viewPanX;
+    viewPanY;
+    if (!onink) return;
+    const pendiente = requestAnimationFrame(() => {
+      const tinta = tintaDeLaMarca();
+      if (tinta) onink(tinta);
+    });
+    return () => cancelAnimationFrame(pendiente);
+  });
+
   // Solo se reencuadra cuando cambia de verdad el mapa mostrado. El efecto se
   // reevalúa también cuando llega un frame equivalente —al refrescarse el
   // catálogo, por ejemplo—, y reiniciar ahí devolvía el zoom del usuario a 1.
@@ -821,7 +939,7 @@
           <path class="trough-axis" d={axisPath(axis)} />
         {/each}
         {#each centres as centre}
-          <g transform={`translate(${centre.x.toFixed(1)} ${centre.y.toFixed(1)}) scale(${(1 / zoom).toFixed(5)})`}>
+          <g transform={`translate(${centre.x.toFixed(1)} ${centre.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
             <text
               class="pressure-centre"
               class:relative={!centre.main}
@@ -836,12 +954,12 @@
           </g>
         {/each}
         {#each showTroughs ? troughs.lows : [] as low}
-          <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(1 / zoom).toFixed(5)})`}>
+          <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
             <text class="closed-low" text-anchor="middle" dominant-baseline="central">B</text>
           </g>
         {/each}
         {#each mapLabels as label}
-          <g transform={`translate(${label.x.toFixed(1)} ${label.y.toFixed(1)}) scale(${(1 / zoom).toFixed(5)})`}>
+          <g transform={`translate(${label.x.toFixed(1)} ${label.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
             <text
               class={label.kind === 'height' ? 'height-label' : 'contour-label'}
               class:major={label.kind === 'height' && isMajorOverlay(label.level)}
@@ -893,6 +1011,10 @@
 
 <style>
   .grid-layer{position:absolute;inset:4% 6%;z-index:4;display:grid;place-items:center;pointer-events:none}
+  /* El tema oscurece la interfaz, no el papel cartográfico. Los campos
+     discontinuos dejan el cero transparente (precipitación, reflectividad,
+     nieve…); sin este fondo heredaban el azul casi negro del visor y costas,
+     fronteras y zonas sin fenómeno se fundían con él. */
   .map-surface{position:relative;max-width:100%;max-height:100%;width:auto;height:100%;aspect-ratio:var(--grid-ratio);filter:drop-shadow(0 12px 24px rgba(0,0,0,.24));pointer-events:auto;cursor:grab;touch-action:none}
   .map-surface.dragging{cursor:grabbing}
   .vector-overlay{position:absolute;inset:0;display:block;width:100%;height:100%}

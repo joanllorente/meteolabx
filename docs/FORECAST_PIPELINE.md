@@ -1,8 +1,63 @@
-# Pipeline incremental AROME
+# Pipeline incremental de predicción
 
 MeteoLabX puede publicar los diagnósticos propios hora a hora mientras
 Météo-France completa un RUN. El navegador no ejecuta cálculos: consume las
 rejillas generadas por `scripts/forecast_worker.py`.
+
+## Modelos y separación en el almacén
+
+El visor sirve más de un modelo. Cada uno tiene su namespace de claves, su
+manifiesto y su rotación de pasadas, de modo que ninguno puede pisar ni contar
+dentro del otro:
+
+| Modelo | Ruta de la API | Claves del volumen |
+| --- | --- | --- |
+| AROME 0,025° | `/v1/forecast/arome/…` | `forecast/runs/…`, `forecast/manifests/…` |
+| ECMWF IFS 0,25° | `/v1/forecast/ecmwf/…` | `forecast/models/ecmwf/runs/…`, `forecast/models/ecmwf/manifests/…` |
+
+AROME se queda sin prefijo a propósito: el volumen de producción ya tiene sus
+pasadas escritas ahí y moverlas las dejaría huérfanas —invisibles para el visor
+y fuera del alcance de la poda, que es lo único que impide que el volumen se
+llene—. Cualquier modelo nuevo va bajo `forecast/models/<id>/`.
+
+El formato binario de las rejillas sí lo comparten: vive en
+`server/services/forecast_grid.py` y lo escriben los dos. Un cambio ahí obliga
+a subir `FORECAST_DATA_REVISION` en `services/forecastApi.js`.
+
+## ECMWF IFS 0,25°
+
+Un solo mapa por ahora: geopotencial de 500 hPa en color con la presión al
+nivel del mar en isobaras.
+
+- **Origen**: open data de ECMWF, sin clave. Cada plazo es un GRIB2 global de
+  unos 140 MB con 184 mensajes; se lee el `.index` que ECMWF publica al lado y
+  se bajan por rango de bytes solo los dos mensajes del mapa, ~0,9 MB. Bajar el
+  fichero entero costaría más que toda la pasada de AROME.
+- **Dominio**: la rejilla nativa es global (1440 × 721 = 1.038.240 celdas), pero
+  se recorta al leer a una ventana euroatlántica de 501 × 241. El frame queda en
+  ~150 KB comprimidos y la pasada entera en unos 7 MB.
+- **Coste**: entre uno y tres segundos por frame —descarga y decodificación, sin
+  perfiles verticales—. Una pasada completa de 49 plazos son unos 80 segundos.
+- **Alcance**: hasta +144 h cada 3 h, que es lo que publican las cuatro pasadas.
+  Las 00 y 12Z llegan a +360 h; ese tramo se deja fuera por defecto.
+- **Worker**: va primero en cada ciclo y aparte del grafo de trabajos de AROME.
+  Un fallo suyo se registra y el ciclo sigue con la pasada convectiva, que es la
+  cara.
+
+Variables de entorno:
+
+| Variable | Por defecto | Para qué |
+| --- | --- | --- |
+| `METEOLABX_ECMWF_MAX_FRAMES_PER_CYCLE` | `12` | Frames por ciclo; `0` los hace todos y `-1` desactiva el modelo. |
+| `METEOLABX_ECMWF_MAX_HORIZON_H` | `144` | Alcance en horas. |
+| `METEOLABX_ECMWF_DOMAIN` | `-80.125,14.875,45.125,75.125` | Recorte «oeste,sur,este,norte». |
+| `METEOLABX_ECMWF_TIMEOUT_S` | `120` | Espera de lectura del open data. |
+
+Para publicar unos cuantos frames sin arrancar el worker entero:
+
+```bash
+python -c "from server.services.ecmwf_forecast import run_cycle; print(run_cycle(max_frames=3))"
+```
 
 ## Arquitectura Railway
 

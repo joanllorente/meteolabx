@@ -106,9 +106,23 @@ CAPPED_FORECAST_PRODUCTS = tuple(
 )
 
 
+# Un solo mapa para empezar: geopotencial de 500 hPa en color con la presión
+# al nivel del mar en isobaras. Es el mapa sinóptico de referencia y sale de
+# dos mensajes GRIB por plazo, así que sirve para medir el coste real del
+# modelo antes de ampliarlo.
+ECMWF_FORECAST_PRODUCTS = ("z500-mslp",)
+
+# Qué publica cada modelo. El almacén deja de asumir que todo lo que hay en el
+# volumen es AROME: las claves y los manifiestos van por modelo, y así una
+# pasada de ECMWF no puede pisar ni contarse dentro de otra.
+FORECAST_MODEL_PRODUCTS: dict[str, tuple[str, ...]] = {
+    "arome": PERSISTED_FORECAST_PRODUCTS,
+    "ecmwf": ECMWF_FORECAST_PRODUCTS,
+}
+DEFAULT_FORECAST_MODEL = "arome"
+
+
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9._/-]+$")
-LATEST_MANIFEST_KEY = "forecast/manifests/latest.json"
-RUN_SLOTS_KEY = "forecast/manifests/slots.json"
 
 
 class ObjectStore(Protocol):
@@ -124,6 +138,49 @@ def _validate_key(key: str) -> str:
     if not value or not _SAFE_KEY.fullmatch(value) or ".." in value.split("/"):
         raise ValueError("Clave de almacenamiento de predicción no válida.")
     return value
+
+
+def forecast_models() -> tuple[str, ...]:
+    """Modelos que el almacén sabe separar, en orden de publicación."""
+    return tuple(FORECAST_MODEL_PRODUCTS)
+
+
+def persisted_products(model: str = DEFAULT_FORECAST_MODEL) -> tuple[str, ...]:
+    """Productos que ese modelo persiste; vacío si el modelo no existe."""
+    return FORECAST_MODEL_PRODUCTS.get(_validate_model(model), ())
+
+
+def _validate_model(model: str | None) -> str:
+    name = str(model or DEFAULT_FORECAST_MODEL).strip().lower()
+    if name not in FORECAST_MODEL_PRODUCTS:
+        raise ValueError(f"El modelo de predicción «{model}» no está registrado.")
+    return name
+
+
+def _model_prefix(model: str | None) -> str:
+    """Trozo de clave que separa un modelo de otro.
+
+    AROME se queda sin prefijo a propósito: el volumen de producción ya tiene
+    sus pasadas escritas en `forecast/runs/...`, y moverlas las dejaría
+    huérfanas —invisibles para el visor y, peor, fuera del alcance de la poda,
+    que es lo único que impide que el volumen se llene.
+    """
+    name = _validate_model(model)
+    return "" if name == DEFAULT_FORECAST_MODEL else f"models/{name}/"
+
+
+def latest_manifest_key(model: str = DEFAULT_FORECAST_MODEL) -> str:
+    return f"forecast/{_model_prefix(model)}manifests/latest.json"
+
+
+def run_slots_key(model: str = DEFAULT_FORECAST_MODEL) -> str:
+    return f"forecast/{_model_prefix(model)}manifests/slots.json"
+
+
+# Se conservan como constantes porque media base de código las importa; son
+# las de AROME, que es el modelo sin prefijo.
+LATEST_MANIFEST_KEY = latest_manifest_key()
+RUN_SLOTS_KEY = run_slots_key()
 
 
 @dataclass(frozen=True)
@@ -295,7 +352,9 @@ def frame_key(
     scope: str = "model",
     vertical_kind: str | None = None,
     level: float | None = None,
+    model: str = DEFAULT_FORECAST_MODEL,
 ) -> str:
+    model_prefix = _model_prefix(model)
     scope_prefix = "" if scope == "model" else f"scopes/{_validate_key(scope)}/"
     product_slug = _validate_key(product)
     if product == "wind-level":
@@ -303,11 +362,19 @@ def frame_key(
         numeric_level = 10.0 if level is None else float(level)
         level_slug = f"{numeric_level:g}".replace(".", "p")
         product_slug = f"{product_slug}--{kind}--{level_slug}"
-    return f"forecast/{scope_prefix}runs/{run_slug(run_iso)}/{product_slug}/{valid_slug(valid_iso)}.grid.gz"
+    return (
+        f"forecast/{model_prefix}{scope_prefix}runs/{run_slug(run_iso)}"
+        f"/{product_slug}/{valid_slug(valid_iso)}.grid.gz"
+    )
 
 
-def run_manifest_key(run_iso: str) -> str:
-    return f"forecast/manifests/{run_slug(run_iso)}.json"
+def run_manifest_key(run_iso: str, *, model: str = DEFAULT_FORECAST_MODEL) -> str:
+    return f"forecast/{_model_prefix(model)}manifests/{run_slug(run_iso)}.json"
+
+
+def manifest_model(manifest: dict[str, Any] | None) -> str:
+    """Modelo de un manifiesto. Los escritos antes de separarlos son AROME."""
+    return _validate_model((manifest or {}).get("forecast_model"))
 
 
 def read_json(store: ObjectStore, key: str) -> dict[str, Any] | None:
@@ -347,11 +414,19 @@ def new_manifest(
     *,
     scope: str = "model",
     catalog_products: dict[str, Any] | None = None,
+    model: str = DEFAULT_FORECAST_MODEL,
+    model_label: str = "",
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    etiquetas = {"arome": "AROME France 0,025°", "ecmwf": "ECMWF IFS 0,25°"}
+    nombre = _validate_model(model)
     return {
         "version": 1,
-        "model": "AROME France 0,025°",
+        # `model` era el rótulo que lee el visor y ahora convive con el
+        # identificador que separa las claves: uno se enseña, el otro se
+        # escribe en el volumen.
+        "model": model_label or etiquetas.get(nombre, nombre.upper()),
+        "forecast_model": nombre,
         "run": run_iso,
         "calculation_scope": scope,
         "status": "publishing",
@@ -359,7 +434,10 @@ def new_manifest(
         "updated_at": now,
         "expected_times": sorted(set(expected_times)),
         "catalog_products": catalog_products or {},
-        "products": {product: {"available_times": [], "errors": {}} for product in PERSISTED_FORECAST_PRODUCTS},
+        "products": {
+            product: {"available_times": [], "errors": {}}
+            for product in persisted_products(nombre)
+        },
         "progress": {
             "frames_available": 0,
             "frames_total": 0,
@@ -382,15 +460,17 @@ def cycle_slot(run_iso: str) -> str:
 def register_run_slot(store: ObjectStore, manifest: dict[str, Any]) -> str | None:
     """Publica el RUN en su turno 00/06/12/18 y devuelve el sustituido."""
     run_iso = str(manifest["run"])
+    model = manifest_model(manifest)
     slot = cycle_slot(run_iso)
-    index = read_json(store, RUN_SLOTS_KEY) or {"version": 1, "slots": {}}
+    slots_key = run_slots_key(model)
+    index = read_json(store, slots_key) or {"version": 1, "slots": {}}
     previous = (index.get("slots", {}).get(slot) or {}).get("run")
     index.setdefault("slots", {})[slot] = {
         "run": run_iso,
-        "manifest": run_manifest_key(run_iso),
+        "manifest": run_manifest_key(run_iso, model=model),
         "updated_at": manifest.get("updated_at"),
     }
-    write_json(store, RUN_SLOTS_KEY, index)
+    write_json(store, slots_key, index)
     return str(previous) if previous and previous != run_iso else None
 
 
@@ -402,14 +482,20 @@ def retained_run_limit() -> int:
         return 3
 
 
-def prune_retained_runs(store: ObjectStore, keep: int | None = None) -> list[str]:
+def prune_retained_runs(
+    store: ObjectStore,
+    keep: int | None = None,
+    *,
+    model: str = DEFAULT_FORECAST_MODEL,
+) -> list[str]:
     """Deja solo las pasadas más recientes y borra las demás del volumen.
 
     Cada pasada ocupa más de un gigabyte, así que retener las cuatro del día
     desbordaba el volumen y el worker se quedaba sin poder escribir.
     """
     limit = retained_run_limit() if keep is None else max(1, keep)
-    index = read_json(store, RUN_SLOTS_KEY) or {}
+    slots_key = run_slots_key(model)
+    index = read_json(store, slots_key) or {}
     slots = dict(index.get("slots") or {})
     ordered = sorted(
         (
@@ -421,20 +507,25 @@ def prune_retained_runs(store: ObjectStore, keep: int | None = None) -> list[str
     )
     removed: list[str] = []
     for run_iso, slot in ordered[limit:]:
-        manifest = read_json(store, run_manifest_key(run_iso)) or {}
+        manifest = read_json(store, run_manifest_key(run_iso, model=model)) or {}
         delete_run(
-            store, run_iso, scope=str(manifest.get("calculation_scope", "model"))
+            store,
+            run_iso,
+            scope=str(manifest.get("calculation_scope", "model")),
+            model=model,
         )
         slots.pop(slot, None)
         removed.append(run_iso)
     if removed:
         index["slots"] = slots
-        write_json(store, RUN_SLOTS_KEY, index)
+        write_json(store, slots_key, index)
     return removed
 
 
-def retained_manifests(store: ObjectStore) -> list[dict[str, Any]]:
-    index = read_json(store, RUN_SLOTS_KEY) or {}
+def retained_manifests(
+    store: ObjectStore, *, model: str = DEFAULT_FORECAST_MODEL
+) -> list[dict[str, Any]]:
+    index = read_json(store, run_slots_key(model)) or {}
     manifests = []
     for item in (index.get("slots") or {}).values():
         manifest = read_json(store, str(item.get("manifest", "")))
@@ -443,11 +534,22 @@ def retained_manifests(store: ObjectStore) -> list[dict[str, Any]]:
     return sorted(manifests, key=lambda item: str(item.get("run", "")), reverse=True)
 
 
-def delete_run(store: ObjectStore, run_iso: str, *, scope: str = "model") -> None:
+def delete_run(
+    store: ObjectStore,
+    run_iso: str,
+    *,
+    scope: str = "model",
+    model: str = DEFAULT_FORECAST_MODEL,
+) -> None:
     slug = run_slug(run_iso)
-    prefix = f"forecast/runs/{slug}" if scope == "model" else f"forecast/scopes/{_validate_key(scope)}/runs/{slug}"
+    base = f"forecast/{_model_prefix(model)}"
+    prefix = (
+        f"{base}runs/{slug}"
+        if scope == "model"
+        else f"{base}scopes/{_validate_key(scope)}/runs/{slug}"
+    )
     store.delete_prefix(prefix)
-    store.delete(run_manifest_key(run_iso))
+    store.delete(run_manifest_key(run_iso, model=model))
 
 
 def mark_available(manifest: dict[str, Any], product: str, valid_iso: str) -> None:

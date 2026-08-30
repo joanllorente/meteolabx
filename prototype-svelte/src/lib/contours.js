@@ -211,6 +211,30 @@ export function polylineLength(points) {
   return total;
 }
 
+/**
+ * Distancia de un punto al segmento, no a la recta que lo contiene.
+ *
+ * La diferencia solo importa cuando el pie de la perpendicular cae fuera del
+ * segmento, y hay un caso en el que cae siempre: un anillo cerrado empieza y
+ * acaba en el mismo punto, así que su segmento base mide cero. Con la fórmula
+ * de la recta infinita el numerador se anula y todos los vértices quedaban a
+ * distancia cero del «segmento», ninguno superaba la tolerancia y el anillo
+ * entero se reducía a sus dos extremos coincidentes: un trazo de longitud
+ * cero. Es lo que borraba del mapa la isobara que rodea a cada centro —la de
+ * 1024 alrededor de un anticiclón de 1026, o las de 996 a 1008 alrededor de
+ * una borrasca de 992—, que es justo la línea que dice de qué centro se trata.
+ */
+function distanceToSegment(x, y, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const largo = dx * dx + dy * dy;
+  // Segmento degenerado: la distancia es al propio punto.
+  const t = largo > 0
+    ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / largo))
+    : 0;
+  return Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy));
+}
+
 /** Douglas-Peucker iterativo: la recursión desborda con miles de vértices. */
 export function simplify(points, tolerance) {
   if (points.length < 3 || !(tolerance > 0)) return points;
@@ -223,16 +247,11 @@ export function simplify(points, tolerance) {
     if (last <= first + 1) continue;
     const [x1, y1] = points[first];
     const [x2, y2] = points[last];
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const norm = Math.hypot(dx, dy) || 1e-9;
     let worst = 0;
     let worstIndex = -1;
     for (let index = first + 1; index < last; index += 1) {
       const [x, y] = points[index];
-      // Distancia al segmento, no a la recta infinita: en un anillo los dos
-      // extremos coinciden y la recta degenera.
-      const distance = Math.abs(dy * x - dx * y + x2 * y1 - y2 * x1) / norm;
+      const distance = distanceToSegment(x, y, x1, y1, x2, y2);
       if (distance > worst) {
         worst = distance;
         worstIndex = index;
@@ -269,10 +288,45 @@ export function anchorsAlong(points, spacing) {
   return anchors;
 }
 
-function toPath(points) {
+/**
+ * Traza la polilínea como curva, no como cadena de rectas.
+ *
+ * Marching squares deja los vértices sobre las aristas de las celdas, así que
+ * una isolínea es una escalera de segmentos rectos. Con celdas de 2,5 km no se
+ * nota; con las de 25 km de una rejilla global, la isobara sale con esquinas.
+ *
+ * Catmull-Rom pasada a Bézier, igual que los ejes de vaguada: la curva pasa por
+ * todos los vértices —no se separa del dato en ninguno— y llega a cada uno con
+ * la pendiente que marcan el anterior y el siguiente. En un anillo cerrado los
+ * vecinos se buscan dando la vuelta, para que no quede un pico donde se cierra.
+ */
+function toPath(points, closed = false) {
+  const punto = (index) => {
+    if (closed) {
+      // El último vértice repite el primero: el ciclo son los demás.
+      const vueltas = points.length - 1;
+      return points[((index % vueltas) + vueltas) % vueltas];
+    }
+    return points[Math.max(0, Math.min(points.length - 1, index))];
+  };
   let path = `M${points[0][0].toFixed(2)},${points[0][1].toFixed(2)}`;
-  for (let index = 1; index < points.length; index += 1) {
-    path += `L${points[index][0].toFixed(2)},${points[index][1].toFixed(2)}`;
+  if (points.length < 3) {
+    for (let index = 1; index < points.length; index += 1) {
+      path += `L${points[index][0].toFixed(2)},${points[index][1].toFixed(2)}`;
+    }
+    return path;
+  }
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const [x0, y0] = punto(index - 1);
+    const [x1, y1] = punto(index);
+    const [x2, y2] = punto(index + 1);
+    const [x3, y3] = punto(index + 2);
+    const c1x = x1 + (x2 - x0) / 6;
+    const c1y = y1 + (y2 - y0) / 6;
+    const c2x = x2 - (x3 - x1) / 6;
+    const c2y = y2 - (y3 - y1) / 6;
+    path += `C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)}`
+      + ` ${x2.toFixed(2)},${y2.toFixed(2)}`;
   }
   return path;
 }
@@ -330,7 +384,7 @@ export function contourLines(field, {
       if (points.length < 2) continue;
       const length = polylineLength(points);
       if (!line.closed && length < 2) continue;
-      paths.push(toPath(points));
+      paths.push(toPath(points, line.closed));
       if (length >= labelMinLength) {
         for (const anchor of anchorsAlong(points, labelSpacing)) anchors.push(anchor);
       }
