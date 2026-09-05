@@ -829,7 +829,9 @@ def test_post_current_processed_returns_observation_derivatives_and_warnings() -
     obs = body["observation"]
     assert obs["Tc"] == 22.0
     assert obs["RH"] == 65.0
-    assert obs["heat_index"] is not None
+    # A 22 °C no hay heat index: la regresión de Rothfusz solo es válida desde
+    # HEAT_INDEX_MIN_TEMP (25 °C) y por debajo devuelve valores sin sentido.
+    assert obs["heat_index"] is None
     assert obs["feels_like"] is not None
     # Td (calculado) sobrescribe al del payload
     assert obs["Td"] is not None

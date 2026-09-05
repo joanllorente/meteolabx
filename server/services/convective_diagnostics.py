@@ -365,6 +365,68 @@ def _level_of_free_convection(
     return lfc_height, lfc_pressure
 
 
+def _parcel_energy(pressure, height, buoyancy, origin_pressure, lfc_height):
+    """Integra B dz entre origen/NCL/último EL con extremos interpolados.
+
+    Se conserva el área con signo entre el primer NCL y el último EL (incluidas
+    las bolsas negativas intermedias). Sin NCL, CAPE y CIN son cero. Si la
+    parcela sigue flotando al terminar el perfil, CAPE llega al techo disponible
+    pero EL queda indefinido: no sirve como altura de tormenta para EBWD.
+    """
+    shape = height.shape[1:]
+    el_z = np.full(shape, np.nan)
+    el_p = np.full(shape, np.nan)
+    has_layer = np.zeros(shape, dtype=bool)
+    incomplete = np.zeros(shape, dtype=bool)
+    top = np.full(shape, -np.inf)
+    for i in range(len(height) - 1):
+        z0, z1 = height[i], height[i + 1]
+        p0, p1 = pressure[i], pressure[i + 1]
+        b0, b1 = buoyancy[i], buoyancy[i + 1]
+        above_origin = p0 <= origin_pressure + 0.5
+        layer = above_origin & (p0 > p1)
+        valid = layer & (z1 > z0) & np.isfinite(z0) & np.isfinite(z1) & np.isfinite(b0) & np.isfinite(b1)
+        incomplete |= layer & ~valid
+        has_layer |= valid
+        top = np.where(valid, z1, top)
+        above_lfc = valid & (z1 > lfc_height)
+        # Una nueva capa positiva por encima de un EL anterior lo invalida
+        # hasta observar su siguiente cruce descendente.
+        el_z = np.where(above_lfc & (b1 > 0), np.nan, el_z)
+        el_p = np.where(above_lfc & (b1 > 0), np.nan, el_p)
+        crossing = above_lfc & (b0 > 0) & (b1 <= 0)
+        f = np.divide(b0, b0 - b1, out=np.zeros(shape), where=crossing)
+        el_z = np.where(crossing, z0 + f * (z1 - z0), el_z)
+        el_p = np.where(crossing, p0 * np.power(p1 / p0, f), el_p)
+
+    cape = np.zeros(shape)
+    cin = np.zeros(shape)
+    ceiling = np.where(np.isfinite(el_z), el_z, top)
+    for i in range(len(height) - 1):
+        z0, z1 = height[i], height[i + 1]
+        b0, b1 = buoyancy[i], buoyancy[i + 1]
+        dz = z1 - z0
+        valid = (pressure[i] <= origin_pressure + 0.5) & (dz > 0) & np.isfinite(b0) & np.isfinite(b1)
+
+        def energy(lower, upper):
+            start = np.maximum(z0, lower)
+            end = np.minimum(z1, upper)
+            inside = valid & (end > start)
+            f0 = np.divide(start - z0, dz, out=np.zeros(shape), where=inside)
+            f1 = np.divide(end - z0, dz, out=np.zeros(shape), where=inside)
+            return np.where(inside, (b0 + 0.5 * (f0 + f1) * (b1 - b0)) * (end - start), 0.)
+
+        cape += energy(lfc_height, ceiling)
+        cin += energy(z0, lfc_height)
+    usable = has_layer & ~incomplete
+    return (
+        np.where(usable, np.maximum(cape, 0.), np.nan),
+        np.where(usable, np.minimum(cin, 0.), np.nan),
+        np.where(usable, el_z, np.nan),
+        np.where(usable, el_p, np.nan),
+    )
+
+
 def parcel_diagnostics(
     pressure_hpa: np.ndarray,
     environmental_temperature_k: np.ndarray,
@@ -399,36 +461,11 @@ def parcel_diagnostics(
     parcel_virtual = virtual_temperature_k(parcel_temperature, parcel_ratio)
     buoyancy = GRAVITY * (parcel_virtual - env_virtual) / env_virtual
 
-    delta_z = np.diff(height, axis=0)
-    layer_energy = 0.5 * (buoyancy[:-1] + buoyancy[1:]) * delta_z
-    valid_layer = (
-        np.isfinite(layer_energy)
-        & np.isfinite(delta_z)
-        & (delta_z > 0)
-    )
-    positive = valid_layer & (layer_energy > 0)
-    before_lfc = np.cumsum(positive, axis=0) == 0
-    cape = np.sum(np.where(positive, layer_energy, 0.0), axis=0)
-    cin = np.sum(
-        np.where(valid_layer & before_lfc & (layer_energy < 0), layer_energy, 0.0),
-        axis=0,
-    )
-    has_profile = np.any(valid_layer, axis=0)
-    cape = np.where(has_profile, cape, np.nan)
-    cin = np.where(has_profile, cin, np.nan)
-
-    has_positive = np.any(positive, axis=0)
-    positive_top = np.where(positive, height[1:], -np.inf)
-    equilibrium_height = np.max(positive_top, axis=0)
-    equilibrium_height = np.where(has_positive, equilibrium_height, np.nan)
-    positive_top_pressure = np.where(positive, pressure[1:], np.inf)
-    equilibrium_pressure = np.min(positive_top_pressure, axis=0)
-    equilibrium_pressure = np.where(has_positive, equilibrium_pressure, np.nan)
-
-    # El NCL/LFC no coincide normalmente con un nivel isobárico del modelo:
-    # es el primer cruce B=0 por encima del LCL y se interpola dentro de la capa.
     lfc_height, lfc_pressure = _level_of_free_convection(
         pressure, height, buoyancy, plcl
+    )
+    cape, cin, equilibrium_height, equilibrium_pressure = _parcel_energy(
+        pressure, height, buoyancy, parcel_pressure_hpa, lfc_height
     )
 
     pressure_1d = pressure[:, 0, 0]
@@ -627,6 +664,7 @@ def pressure_weighted_layer_mean(
     bottom = np.asarray(bottom_pressure_hpa, dtype=float)
     top = np.asarray(top_pressure_hpa, dtype=float)
     integral = np.zeros(bottom.shape)
+    covered = np.zeros(bottom.shape)
     for index in range(pressure.shape[0] - 1):
         layer_bottom = pressure[index]
         layer_top = pressure[index + 1]
@@ -663,12 +701,13 @@ def pressure_weighted_layer_mean(
             overlap_bottom - overlap_top
         )
         integral = np.where(valid, integral + contribution, integral)
+        covered += np.where(valid, overlap_bottom - overlap_top, 0.)
     depth = bottom - top
     return np.divide(
         integral,
         depth,
         out=np.full(bottom.shape, np.nan),
-        where=np.isfinite(depth) & (depth > 0.0),
+        where=np.isfinite(depth) & (depth > 0.0) & np.isclose(covered, depth, rtol=1e-7, atol=1e-6),
     )
 
 
@@ -1145,24 +1184,21 @@ def storm_relative_helicity(
     tierra— no aportan nada.
     """
     z0, z1 = height_agl_m[:-1], height_agl_m[1:]
-    espesor = z1 - z0
-    valido = np.isfinite(espesor) & (espesor > 0) & (z0 < depth_m)
-    # Qué parte del tramo entra: 1 si cabe entero, menos si cruza el techo.
-    fraccion = np.clip(
-        np.divide(
-            depth_m - z0, espesor, out=np.zeros_like(espesor), where=espesor > 0
-        ),
-        0.0,
-        1.0,
-    )
-    u_techo = u[:-1] + fraccion * (u[1:] - u[:-1])
-    v_techo = v[:-1] + fraccion * (v[1:] - v[:-1])
-    ur0, vr0 = u[:-1] - storm_u[None, ...], v[:-1] - storm_v[None, ...]
-    ur1, vr1 = u_techo - storm_u[None, ...], v_techo - storm_v[None, ...]
-    aporte = ur1 * vr0 - ur0 * vr1
-    hay = np.any(valido & np.isfinite(aporte), axis=0)
-    total = np.sum(np.where(valido & np.isfinite(aporte), aporte, 0.0), axis=0)
-    return np.where(hay, total, np.nan)
+    dz = z1 - z0
+    start = np.maximum(z0, 0.)
+    end = np.minimum(z1, depth_m)
+    inside = np.isfinite(dz) & (dz > 0) & (end > start)
+    f0 = np.divide(start - z0, dz, out=np.zeros_like(dz), where=inside)
+    f1 = np.divide(end - z0, dz, out=np.zeros_like(dz), where=inside)
+    ur0 = u[:-1] + f0 * (u[1:] - u[:-1]) - storm_u[None, ...]
+    vr0 = v[:-1] + f0 * (v[1:] - v[:-1]) - storm_v[None, ...]
+    ur1 = u[:-1] + f1 * (u[1:] - u[:-1]) - storm_u[None, ...]
+    vr1 = v[:-1] + f1 * (v[1:] - v[:-1]) - storm_v[None, ...]
+    contribution = ur1 * vr0 - ur0 * vr1
+    valid = inside & np.isfinite(contribution)
+    covered = np.sum(np.where(valid, end - start, 0.), axis=0)
+    total = np.sum(np.where(valid, contribution, 0.), axis=0)
+    return np.where((depth_m > 0) & np.isclose(covered, depth_m, rtol=1e-7, atol=1e-6), total, np.nan)
 
 
 def effective_bulk_wind_difference(

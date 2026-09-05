@@ -3,7 +3,6 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-import scripts.build_seo_pages as seo_builder
 from scripts.build_seo_pages import build_pages, load_stations
 
 
@@ -76,7 +75,8 @@ def _catalog(path: Path) -> None:
     connection.close()
 
 
-def test_builds_indexable_station_pages_and_sitemap(tmp_path: Path):
+def test_builds_directories_that_link_to_the_observation_routes(tmp_path: Path):
+    """Los índices estáticos ya solo enlazan; las fichas las sirve SvelteKit."""
     database = tmp_path / "stations.sqlite"
     output = tmp_path / "static"
     _catalog(database)
@@ -92,105 +92,86 @@ def test_builds_indexable_station_pages_and_sitemap(tmp_path: Path):
         "providers": 2,
         "cities": 1,
         "languages": 6,
-        "pages": 42,
-        "sitemap_urls": 44,
+        "pages": 30,
+        "sitemap_urls": 30,
     }
-    station_page = (
-        output
-        / "es"
-        / "estaciones"
-        / "aemet"
-        / "barcelona-drassanes-0201x.html"
-    )
-    page = station_page.read_text(encoding="utf-8")
-    assert "<h1>Barcelona Drassanes</h1>" in page
-    assert "Estación meteorológica Barcelona Drassanes" in page
-    assert '<link rel="canonical" href="https://www.meteolabx.com/es/estaciones/aemet/barcelona-drassanes-0201x.html">' in page
-    assert "temperatura, humedad, presión atmosférica" in page
-    assert "Observación interactiva de Barcelona Drassanes" not in page
-    assert "Consulta las últimas observaciones disponibles" not in page
-    assert '<div class="observation-grid"' in page
-    assert page.count('data-observation-slot="') == 6
-    assert page.count('class="obs-extremes"') == 6
-    assert '<iframe class="observation-loader"' in page
-    assert '<iframe class="live-frame"' not in page
-    assert "e=AEMET~barcelona-drassanes&amp;sid=0201X&amp;tab=observacion&amp;lang=es&amp;embed=seo" in page
-    assert "Datos avanzados" not in page
-    assert 'data-maximum-label="Máx."' in page
-    assert 'data-minimum-label="Mín."' in page
-    assert "Abrir panel completo" in page
-    assert "tab=observacion&amp;lang=es&amp;from=seo" in page
-    assert page.count("from=seo") == 2
-    assert "tab=historico&amp;lang=es&amp;from=seo" not in page
-    assert '<link rel="stylesheet" href="/seo-pages.css?v=1">' in page
-    assert '<script src="/seo-observation.js?v=1" defer></script>' in page
-    assert 'data-seo-provider="AEMET"' in page
-    assert 'data-seo-station-id="0201X"' in page
-    assert 'data-seo-language="es"' in page
-    assert "syncObservation" not in page
-    observation_script = (output / "seo-observation.js").read_text(encoding="utf-8")
-    assert "syncObservation" in observation_script
-    assert "/v1/stats/seo-view" in observation_script
-    assert "<h2 id=\"history\">Histórico meteorológico de Barcelona Drassanes</h2>" in page
-    assert "tab=historico" in page
-    assert "/es/estaciones/meteocat/barcelona-el-raval-x4.html" in page
-    assert page.count('rel="alternate" hreflang=') == 7
-    assert 'hreflang="en" href="https://www.meteolabx.com/en/weather-stations/aemet/barcelona-drassanes-0201x.html"' in page
-    assert 'hreflang="x-default" href="https://www.meteolabx.com/es/estaciones/aemet/barcelona-drassanes-0201x.html"' in page
 
-    english_page = (
-        output
-        / "en"
-        / "weather-stations"
-        / "aemet"
-        / "barcelona-drassanes-0201x.html"
-    ).read_text(encoding="utf-8")
-    assert '<html lang="en">' in english_page
-    assert "<h2 id=\"profile\">Station profile</h2>" in english_page
-    assert "temperature, humidity, atmospheric pressure" in english_page
-    assert "lang=en" in english_page
-    assert '<link rel="canonical" href="https://www.meteolabx.com/en/weather-stations/aemet/barcelona-drassanes-0201x.html">' in english_page
-    assert "Historical weather data for Barcelona Drassanes" in english_page
+    # Ni una sola ficha de estación en disco: eran 300.000 ficheros que ahora
+    # responde el frontend con los datos ya renderizados.
+    assert not (output / "es" / "estaciones" / "aemet").exists()
+    assert not list(output.rglob("*-0201x.html"))
 
-    city_page = (output / "es" / "tiempo" / "barcelona.html").read_text(
+    provider_index = (output / "es" / "estaciones" / "aemet.html").read_text(
         encoding="utf-8"
     )
+    assert 'href="/es/observation/barcelona-drassanes-0201x"' in provider_index
+    assert "barcelona-drassanes-0201x.html" not in provider_index
+    assert '<link rel="canonical" href="https://www.meteolabx.com/es/estaciones/aemet.html">' in provider_index
+
+    english_index = (output / "en" / "weather-stations" / "aemet.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'href="/en/observation/barcelona-drassanes-0201x"' in english_index
+
+    city_page = (output / "es" / "tiempo" / "barcelona.html").read_text(encoding="utf-8")
     assert "<h1>Tiempo y estaciones meteorológicas en Barcelona</h1>" in city_page
-    assert "Barcelona Drassanes" in city_page
-    assert "Barcelona - el Raval" in city_page
+    assert 'href="/es/observation/barcelona-el-raval-x4"' in city_page
     assert "Datos observados, no predicción" in city_page
-    assert '<link rel="canonical" href="https://www.meteolabx.com/es/tiempo/barcelona.html">' in city_page
     assert 'hreflang="en" href="https://www.meteolabx.com/en/weather/barcelona.html"' in city_page
 
     city_directory = (output / "ca" / "temps.html").read_text(encoding="utf-8")
     assert "Temps i estacions per ciutat" in city_directory
     assert "/ca/temps/barcelona.html" in city_directory
 
-    catalan_page = (
-        output
-        / "ca"
-        / "estacions"
-        / "meteocat"
-        / "barcelona-el-raval-x4.html"
-    ).read_text(encoding="utf-8")
-    assert '<html lang="ca">' in catalan_page
-    assert "Fitxa de l&#x27;estació" in catalan_page
+    # El script que copiaba valores del iframe de Streamlit se fue con las fichas.
+    assert not (output / "seo-observation.js").exists()
+    assert "seo-observation.js" not in provider_index
 
-    sitemap = (output / "sitemap.xml").read_text(encoding="utf-8")
-    assert sitemap.count("<url>") == 44
-    assert sitemap.count("<xhtml:link") == 294
+
+def test_sitemap_keeps_only_the_pages_that_remain_static(tmp_path: Path):
+    """``sitemap.xml`` y ``robots.txt`` los publica ahora el frontend."""
+    database = tmp_path / "stations.sqlite"
+    output = tmp_path / "static"
+    _catalog(database)
+
+    build_pages(database=database, output=output, providers=("AEMET", "METEOCAT"))
+
+    assert not (output / "sitemap.xml").exists()
+    assert not (output / "robots.txt").exists()
+    assert not list(output.glob("sitemap-*.xml"))
+
+    sitemap = (output / "directories-sitemap.xml").read_text(encoding="utf-8")
+    assert sitemap.count("<url>") == 30
     assert 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' in sitemap
     assert "https://www.meteolabx.com/es/estaciones/aemet.html" in sitemap
     assert "https://www.meteolabx.com/fr/stations-meteo/aemet.html" in sitemap
     assert "https://www.meteolabx.com/es/tiempo/barcelona.html" in sitemap
-    assert "https://www.meteolabx.com/pt/tempo/barcelona.html" in sitemap
-    assert "<loc>https://www.meteolabx.com/forecast</loc>" in sitemap
-    assert '<a href="/forecast">AROME</a>' in page
     assert 'hreflang="x-default" href="https://www.meteolabx.com/es/estaciones.html"' in sitemap
+    # Las fichas viajan en el sitemap del frontend, no en este.
+    assert "/observation/" not in sitemap
     assert "https://meteolabx.com" not in sitemap
-    assert (output / "robots.txt").read_text(encoding="utf-8").endswith(
-        "Sitemap: https://www.meteolabx.com/sitemap.xml\n"
-    )
+
+
+def test_stale_station_pages_are_removed_on_rebuild(tmp_path: Path):
+    """Un despliegue anterior dejó fichas en disco; hay que barrerlas.
+
+    Si sobrevivieran, seguirían sirviéndose tal cual desde el paquete de
+    Streamlit y competirían con la URL nueva por el mismo contenido.
+    """
+    database = tmp_path / "stations.sqlite"
+    output = tmp_path / "static"
+    _catalog(database)
+
+    stale = output / "es" / "estaciones" / "aemet" / "barcelona-drassanes-0201x.html"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("ficha antigua", encoding="utf-8")
+    stale_sitemap = output / "sitemap-1.xml"
+    stale_sitemap.write_text("<urlset/>", encoding="utf-8")
+
+    build_pages(database=database, output=output, providers=("AEMET", "METEOCAT"))
+
+    assert not stale.exists()
+    assert not stale_sitemap.exists()
 
 
 def test_excludes_hidden_and_coordinate_less_stations(tmp_path: Path):
@@ -205,7 +186,7 @@ def test_excludes_hidden_and_coordinate_less_stations(tmp_path: Path):
     ]
 
 
-def test_builds_localized_international_station_and_excludes_disallowed_networks(tmp_path: Path):
+def test_localizes_only_the_languages_of_each_country(tmp_path: Path):
     database = tmp_path / "stations.sqlite"
     output = tmp_path / "static"
     _catalog(database)
@@ -220,43 +201,25 @@ def test_builds_localized_international_station_and_excludes_disallowed_networks
     assert summary["stations"] == 1
     assert summary["providers"] == 1
     assert summary["cities"] == 1
-    assert summary["pages"] == 18
 
-    french_page = (
-        output / "fr" / "stations-meteo" / "meteofrance" / "tour-eiffel-75107005.html"
-    ).read_text(encoding="utf-8")
-    assert "Tour Eiffel, Paris" in french_page
-    assert "France" in french_page
-    assert "sid=75107005" in french_page
+    french_index = (output / "fr" / "stations-meteo" / "meteofrance.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'href="/fr/observation/tour-eiffel-75107005"' in french_index
 
     paris_page = (output / "fr" / "meteo" / "paris.html").read_text(encoding="utf-8")
     assert "Tour Eiffel" in paris_page
-    assert not (output / "it" / "stazioni-meteo" / "meteofrance" / "tour-eiffel-75107005.html").exists()
-    assert not (output / "ca" / "estacions" / "meteofrance" / "tour-eiffel-75107005.html").exists()
+    assert 'href="/fr/observation/tour-eiffel-75107005"' in paris_page
+
+    # Una estación francesa no se publica en catalán ni en italiano.
+    assert not (output / "it" / "stazioni-meteo" / "meteofrance.html").exists()
+    assert not (output / "ca" / "estacions" / "meteofrance.html").exists()
 
     us_output = tmp_path / "us-static"
-    us_summary = build_pages(database=database, output=us_output, providers=("NWS",))
-    assert us_summary["stations"] == 1
-    assert (us_output / "en" / "weather-stations" / "nws" / "central-park-knyc.html").exists()
-    assert (us_output / "es" / "estaciones" / "nws" / "central-park-knyc.html").exists()
-    assert not (us_output / "fr" / "stations-meteo" / "nws" / "central-park-knyc.html").exists()
-    assert not (us_output / "ca" / "estacions" / "nws" / "central-park-knyc.html").exists()
-    assert not (us_output / "it" / "stazioni-meteo" / "nws" / "central-park-knyc.html").exists()
-    assert not (us_output / "pt" / "estacoes-meteorologicas" / "nws" / "central-park-knyc.html").exists()
-
-
-def test_splits_large_sitemap_into_an_index(tmp_path: Path, monkeypatch):
-    database = tmp_path / "stations.sqlite"
-    output = tmp_path / "static"
-    _catalog(database)
-    monkeypatch.setattr(seo_builder, "SITEMAP_URL_LIMIT", 10)
-
-    summary = build_pages(database=database, output=output, providers=("METEOFRANCE",))
-
-    sitemap_index = (output / "sitemap.xml").read_text(encoding="utf-8")
-    assert summary["sitemap_urls"] == 20
-    assert "<sitemapindex" in sitemap_index
-    assert sitemap_index.count("<sitemap>") == 2
-    for index in range(1, 3):
-        child = (output / f"sitemap-{index}.xml").read_text(encoding="utf-8")
-        assert child.count("<url>") <= 10
+    build_pages(database=database, output=us_output, providers=("NWS",))
+    english_index = (us_output / "en" / "weather-stations" / "nws.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'href="/en/observation/central-park-knyc"' in english_index
+    assert (us_output / "es" / "estaciones" / "nws.html").exists()
+    assert not (us_output / "fr" / "stations-meteo" / "nws.html").exists()

@@ -40,9 +40,9 @@ METRICS = ("tmax", "tmin", "gust", "rain")
 METRIC_REDUCER = {"tmax": "max", "tmin": "min", "gust": "max", "rain": "sum"}
 # Orden del ranking: Tmín asciende (la más baja primero), el resto desciende.
 METRIC_DESC = {"tmax": True, "tmin": False, "gust": True, "rain": True}
-_QUALITY_FILTER_SCHEMA = 1
+_QUALITY_FILTER_SCHEMA = 4
 _QUALITY_FILTER_PROVIDERS = frozenset({
-    "ECCC", "SMHI", "FROST", "METEOGALICIA", "METEOCAT",
+    "ECCC", "SMHI", "FROST", "METEOGALICIA", "METEOCAT", "METEOHUB_IT", "IEM",
 })
 
 # Huso local por proveedor: define el "día en curso" del ranking.
@@ -588,6 +588,63 @@ def _mh_networks() -> List[str]:
     return sorted({str(r.get("network")) for r in rows if r.get("network")})
 
 
+_TEMPORAL_TMAX_MIN_SAMPLES = 6
+_TEMPORAL_TMAX_SUSPECT_FLOOR_C = 45.0
+_TEMPORAL_TMAX_MIN_DELTA_C = 8.0
+
+
+def _daily_temperature_max_from_series(values: List[float]) -> Optional[float]:
+    """Máxima diaria sin picos cálidos altos claramente aislados.
+
+    Una temperatura real extrema forma una meseta: las lecturas contiguas y
+    la segunda máxima quedan cerca. Algunos sensores, en cambio, insertan una
+    única muestra absurda (p. ej. 56,9 °C entre valores de unos 35 °C). Solo
+    retiramos el máximo cuando hay muestra suficiente, supera 45 °C y queda al
+    menos 8 °C por encima tanto de sus vecinas temporales disponibles como de
+    cualquier otra lectura del día. Así no se recortan máximas normales ni un
+    episodio de calor alto sostenido.
+    """
+    series: List[Optional[float]] = []
+    for value in values:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            series.append(None)
+            continue
+        series.append(number if math.isfinite(number) else None)
+
+    valid = [(index, value) for index, value in enumerate(series) if value is not None]
+    if not valid:
+        return None
+
+    max_index, max_value = max(valid, key=lambda item: item[1])
+    if len(valid) < _TEMPORAL_TMAX_MIN_SAMPLES or max_value < _TEMPORAL_TMAX_SUSPECT_FLOOR_C:
+        return round(max_value, 1)
+
+    remaining = [value for index, value in valid if index != max_index]
+    second = max(remaining)
+    if max_value < second + _TEMPORAL_TMAX_MIN_DELTA_C:
+        return round(max_value, 1)
+
+    before = next(
+        (series[index] for index in range(max_index - 1, -1, -1) if series[index] is not None),
+        None,
+    )
+    after = next(
+        (series[index] for index in range(max_index + 1, len(series)) if series[index] is not None),
+        None,
+    )
+    neighbors = [value for value in (before, after) if value is not None]
+    if neighbors and all(max_value >= value + _TEMPORAL_TMAX_MIN_DELTA_C for value in neighbors):
+        logger.info(
+            "ranking: temperatura máxima aislada descartada %.1f °C; siguiente %.1f °C",
+            max_value,
+            second,
+        )
+        return round(second, 1)
+    return round(max_value, 1)
+
+
 def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Optional[StationDaily]:
     from server.services import meteohub as mh
 
@@ -638,7 +695,7 @@ def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Opt
         locality="",
         lat=float(lat) if isinstance(lat, (int, float)) else None,
         lon=float(lon) if isinstance(lon, (int, float)) else None,
-        tmax=round(max(temps), 1) if temps else None,
+        tmax=_daily_temperature_max_from_series(temps),
         tmin=round(min(temps), 1) if temps else None,
         gust=None,  # MeteoHub no reporta ráfaga
         rain=round(sum(precs), 1) if precs else None,
@@ -1806,11 +1863,13 @@ _WORLD_TMAX_RECORD_C = 59.0   # récord mundial 56,7°C + margen (clima cambiant
 _TMAX_CEIL_TROPICAL_C = 50.0
 _MAX_DIURNAL_RANGE_C = 40.0   # salto diurno máx−mín imposible (real ≲30°C)
 _WORLD_GUST_RECORD_KMH = 420.0  # récord mundial 408 km/h (Barrow I.) + margen
-# El lado FRÍO no se filtra: el suelo por latitud (``_tmin_floor``) anulaba
-# frío extremo REAL (IEM ya recorta a ~−73°C en BUFR y las bases antárticas de
-# meseta bajan de −80). Un sensor roto en frío es mucho más raro que en calor
-# y el coste de tragar un pico frío es menor que perder un récord real.
+_SUSPECT_GUST_FLOOR_KMH = 180.0
+_SUSPECT_GUST_MIN_DELTA_KMH = 150.0
+_SUSPECT_GUST_MAX_RATIO = 10.0
 _TROPICAL_LAT = 25.0
+_TROPICAL_LOWLAND_MAX_ELEVATION_M = 2500.0
+_TROPICAL_LOWLAND_TMIN_FLOOR_C = -10.0
+_MIDLAT_TMIN_FLOOR_C = -50.0
 
 
 def _tmax_ceiling(lat: Optional[float]) -> float:
@@ -1829,6 +1888,10 @@ def _clean_iem_extremes(
     gust: Optional[float],
     lat: Optional[float],
     tcur: Optional[float],
+    *,
+    elevation_m: Optional[float] = None,
+    country: str = "",
+    max_wind: Optional[float] = None,
 ) -> tuple:
     """Anula extremos físicamente imposibles (sensores rotos de IEM) sin tocar
     extremos reales. Devuelve ``(tmax, tmin, gust)`` saneados."""
@@ -1838,9 +1901,27 @@ def _clean_iem_extremes(
     if tcur is None:
         tmax = tmin = None
     else:
-        # 1) La mínima NO se filtra por frío (ver nota junto a _TROPICAL_LAT):
-        #    el suelo por latitud y la incoherencia con la actual anulaban
-        #    récords de frío reales (bases antárticas).
+        reported_tmax, reported_tmin = tmax, tmin
+        # 1) Mínima incoherente. Combinamos contexto temporal, amplitud diaria
+        #    y clima: así caen los −72,8°C de Pensilvania y −38,2°C de
+        #    Camboya sin imponer un suelo global que borraría la Antártida.
+        polar_country = str(country or "").upper() in {"AQ", "GL"}
+        if tmin is not None and not polar_country:
+            if (tcur - tmin) > _MAX_DIURNAL_RANGE_C:
+                tmin = None
+            elif reported_tmax is not None and (reported_tmax - tmin) > _MAX_DIURNAL_RANGE_C:
+                tmin = None
+            elif (
+                lat is not None
+                and abs(lat) < _TROPICAL_LAT
+                and elevation_m is not None
+                and elevation_m < _TROPICAL_LOWLAND_MAX_ELEVATION_M
+                and tmin < _TROPICAL_LOWLAND_TMIN_FLOOR_C
+            ):
+                tmin = None
+            elif lat is not None and abs(lat) < 55.0 and tmin < _MIDLAT_TMIN_FLOOR_C:
+                tmin = None
+
         # 2) Máxima imposible: por encima del techo por latitud (trópico ≤50°C,
         #    récord mundial fuera), o un rango diurno imposible respecto a la
         #    mínima (pico de la máxima). El techo tropical pilla la
@@ -1849,10 +1930,22 @@ def _clean_iem_extremes(
         if tmax is not None:
             if tmax > _tmax_ceiling(lat):
                 tmax = None
-            elif tmin is not None and (tmax - tmin) > _MAX_DIURNAL_RANGE_C:
+            elif reported_tmin is not None and (tmax - reported_tmin) > _MAX_DIURNAL_RANGE_C:
                 tmax = None
-    # 3) Ráfaga por encima del récord mundial = anemómetro roto (Waco 468 km/h).
+    # 3) Ráfaga por encima del récord mundial = anemómetro roto. Entre
+    #    180 y 420 km/h solo se anula si además queda >150 km/h y >10 veces
+    #    por encima del viento sostenido máximo diario. El factor 10 conserva
+    #    ráfagas tornádicas muy breves (p. ej. 250 frente a 30 km/h), pero
+    #    descarta Atlantic City (370,4 frente a 18,5 km/h).
     if gust is not None and gust > _WORLD_GUST_RECORD_KMH:
+        gust = None
+    elif (
+        gust is not None
+        and gust >= _SUSPECT_GUST_FLOOR_KMH
+        and max_wind is not None
+        and gust - max_wind > _SUSPECT_GUST_MIN_DELTA_KMH
+        and gust > max_wind * _SUSPECT_GUST_MAX_RATIO
+    ):
         gust = None
     return tmax, tmin, gust
 
@@ -1884,6 +1977,7 @@ def _parse_iem_network(
     network: str,
     rows: List[dict],
     station_countries: Dict[str, str],
+    station_elevations: Optional[Dict[str, float]] = None,
 ) -> List[StationDaily]:
     network = str(network).strip()
     drop_rain = _IEM_NO_RAIN_NETWORK_TOKEN in network
@@ -1916,9 +2010,13 @@ def _parse_iem_network(
             _knots_to_kmh_num(row.get("max_gust")),
             _num(row.get("lat")),
             tcur,
+            elevation_m=(station_elevations or {}).get(station_id),
+            country=rec_country,
+            max_wind=_knots_to_kmh_num(row.get("max_sknt")),
         )
         # Plausibilidad física de la instantánea (sensores rotos de IEM).
-        # Solo techo de calor; el lado frío no se filtra (récords antárticos).
+        # La actual solo necesita techo de calor; el QA frío usa la coherencia
+        # entre actual y mínima en ``_clean_iem_extremes``.
         if tcur is not None and tcur > _WORLD_TMAX_RECORD_C:
             tcur = None
         tcur_at = None
@@ -1972,6 +2070,7 @@ async def fetch_iem_daily(
         return []
     # País real por coordenadas (point-in-polygon) de cada estación, precalculado.
     station_countries = stations_svc.iem_station_countries()
+    station_elevations = stations_svc.iem_station_elevations()
 
     owns = client is None
     if owns:
@@ -2016,7 +2115,7 @@ async def fetch_iem_daily(
                         lon=_num(row.get("lon")),
                         values={"rain": rain_hour, "rain_at": observed_at},
                     )
-            return _parse_iem_network(network, rows, station_countries)
+            return _parse_iem_network(network, rows, station_countries, station_elevations)
 
     try:
         chunks = await asyncio.gather(*[_one(net) for net in networks])
@@ -2314,8 +2413,9 @@ class RankingStore:
 
         self._daily = daily
         self._hourly = hourly
-        if payload.get("quality_filter_schema") != _QUALITY_FILTER_SCHEMA:
-            self._discard_legacy_quality_state()
+        previous_quality_schema = payload.get("quality_filter_schema")
+        if previous_quality_schema != _QUALITY_FILTER_SCHEMA:
+            self._discard_legacy_quality_state(previous_quality_schema)
         raw_updated = payload.get("updated_at")
         try:
             self.updated_at = datetime.fromisoformat(raw_updated) if raw_updated else None
@@ -2329,15 +2429,27 @@ class RankingStore:
         )
         return True
 
-    def _discard_legacy_quality_state(self) -> None:
+    def _discard_legacy_quality_state(self, previous_schema: object = None) -> None:
         """Descarta agregados anteriores a los filtros QA por proveedor.
 
         El snapshot antiguo no conservaba las etiquetas originales, así que no
         puede separar a posteriori valores válidos y erróneos. Esta migración
         se ejecuta una sola vez; el siguiente snapshot lleva su versión QA.
         """
-        daily_keys = [key for key in self._daily if key[0] in _QUALITY_FILTER_PROVIDERS]
-        hourly_keys = [key for key in self._hourly if key[0] in _QUALITY_FILTER_PROVIDERS]
+        # Cada versión invalida solo las fuentes cuyo QA cambió: schema 2
+        # incorporó el filtro temporal de MeteoHub; schema 3, el de mínimas
+        # IEM; schema 4, la coherencia ráfaga/viento de IEM. Un snapshot sin
+        # versión se considera anterior a todos.
+        if isinstance(previous_schema, int):
+            affected_providers = set()
+            if previous_schema < 2:
+                affected_providers.add("METEOHUB_IT")
+            if previous_schema < 4:
+                affected_providers.add("IEM")
+        else:
+            affected_providers = set(_QUALITY_FILTER_PROVIDERS)
+        daily_keys = [key for key in self._daily if key[0] in affected_providers]
+        hourly_keys = [key for key in self._hourly if key[0] in affected_providers]
         for key in daily_keys:
             self._daily.pop(key, None)
         for key in hourly_keys:

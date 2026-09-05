@@ -13,6 +13,7 @@ a proveedores en la request (eso lo hace el job) → respuestas baratas.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Dict, Optional
 
@@ -100,6 +101,7 @@ async def get_ranking(
 
     metrics_out = {}
     seen_providers: set = set()
+    rows_by_metric = {}
     for metric in ranking_svc.METRICS:
         rows = store.top(
             metric,
@@ -110,22 +112,37 @@ async def get_ranking(
             limit=limit,
             descending=order_map.get(metric),
         )
+        rows_by_metric[metric] = rows
+        seen_providers.update(r.provider for r in rows)
+
+    # Los slugs se resuelven de una vez para las cuatro métricas: así cada fila
+    # puede enlazar a la ficha de su estación sin cuarenta consultas sueltas.
+    from server.services import stations as stations_svc
+
+    details = await asyncio.to_thread(
+        stations_svc.catalog_details_for,
+        [(r.provider, r.station_id) for rows in rows_by_metric.values() for r in rows],
+    )
+    for metric, rows in rows_by_metric.items():
         metrics_out[metric] = [
             RankingEntry(
                 rank=i + 1,
                 station_id=r.station_id,
                 name=r.name,
-                locality=r.locality,
                 provider=r.provider,
                 country=r.country,
                 local_time=r.local_time,
                 value=round(float(r.value(metric)), 1),
                 lat=r.lat,
                 lon=r.lon,
+                url_slug=meta.get("url_slug", ""),
+                region=meta.get("region", ""),
+                locality=r.locality or meta.get("locality", ""),
+                elevation=meta.get("elevation"),
             )
             for i, r in enumerate(rows)
+            for meta in (details.get((r.provider, r.station_id), {}),)
         ]
-        seen_providers.update(r.provider for r in rows)
 
     if country_filter:
         # Con filtro de país, los proveedores presentes salen de los resultados.

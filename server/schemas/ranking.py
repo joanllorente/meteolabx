@@ -12,12 +12,30 @@ class RankingEntry(BaseModel):
     station_id: str
     name: str
     locality: str = ""
+    region: str = Field(
+        default="",
+        description="Región administrativa del catálogo, si la publica la red.",
+    )
+    elevation: Optional[float] = Field(
+        default=None,
+        description=(
+            "Altitud en metros. En un ranking de temperatura cambia el "
+            "sentido del dato: 42 °C a 1.500 m no es lo mismo que en la costa."
+        ),
+    )
     provider: str
     country: str = Field(default="", description="ISO2 del país de la estación.")
     local_time: str = Field(default="", description="Hora local de la lectura (HH:MM).")
     value: float = Field(description="Valor de la métrica (unidad en el padre).")
     lat: Optional[float] = None
     lon: Optional[float] = None
+    url_slug: str = Field(
+        default="",
+        description=(
+            "Slug de la ficha pública de la estación, si está en el catálogo "
+            "indexable. Vacío para las redes que no se publican (IEM, PWS)."
+        ),
+    )
 
 
 class RankingResponse(BaseModel):

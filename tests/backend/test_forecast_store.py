@@ -1063,6 +1063,7 @@ def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
     que hay que fijar es que la resta va en el orden correcto y que la unidad
     no la altera —en kelvin o en grados la diferencia es la misma—.
     """
+    from types import SimpleNamespace
     import numpy as np
     from rasterio.crs import CRS
     from rasterio.transform import from_bounds
@@ -1088,7 +1089,8 @@ def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
     )
     config = arome_forecast.PRODUCTS["vertical-totals"]
     campo = arome_forecast._level_difference_field(
-        None, None, {}, config,
+        SimpleNamespace(get_field=lambda *a: RasterField(np.full((3, 4), 1000.), *geometria, "hPa")),
+        None, {"surface_pressure": "PS"}, config,
         arome_forecast._parse_time("2026-08-26T06:00:00Z"),
         arome_forecast._parse_time("2026-08-26T09:00:00Z"),
     )
@@ -1103,6 +1105,7 @@ def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
 
 def test_vertical_totals_falls_back_to_the_wcs_without_the_package(monkeypatch):
     """Sin IP1 se piden los dos niveles al WCS, que son dos peticiones."""
+    from types import SimpleNamespace
     import numpy as np
     from rasterio.crs import CRS
     from rasterio.transform import from_bounds
@@ -1121,17 +1124,19 @@ def test_vertical_totals_falls_back_to_the_wcs_without_the_package(monkeypatch):
         def get_field(self, catalog, prefix, run, valid_time, level, kind, **k):
             pedidos.append(level)
             # 285 K a 850 y 253 K a 500: VT = 32.
+            if prefix == "PS":
+                return RasterField(np.full((3, 4), 1000.), *geometria, "hPa")
             valor = 285.0 if level == 850.0 else 253.0
             return RasterField(np.full((3, 4), valor), *geometria, "K")
 
     campo = arome_forecast._level_difference_field(
-        ClienteFalso(), None, {"field": "x"},
+        ClienteFalso(), None, {"field": "x", "surface_pressure": "PS"},
         arome_forecast.PRODUCTS["vertical-totals"],
         arome_forecast._parse_time("2026-08-26T06:00:00Z"),
         arome_forecast._parse_time("2026-08-26T09:00:00Z"),
     )
 
-    assert pedidos == [850.0, 500.0]
+    assert pedidos == [850.0, 500.0, None]
     assert np.allclose(campo.data, 32.0), "la unidad no debe alterar la diferencia"
 
 

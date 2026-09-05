@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="theme-color" content="#080d17" />
+    <!-- La tipografía se sirve desde aquí (ver `app.css`). Se precarga el
+         subset latino, que es el que necesita casi toda visita: sin esto el
+         navegador no descubre la fuente hasta haber leído el CSS. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script>
+      // El tema se aplica antes de pintar para que no haya un fogonazo
+      // blanco al recargar en oscuro. El HTML llega del servidor sin saber
+      // qué eligió esta persona, así que lo resolvemos aquí, síncrono.
+      try {
+        var saved = localStorage.getItem('mlx-theme-2');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.dataset.theme = saved;
+        } else if (window.matchMedia) {
+          // Manda el dispositivo. Si no expresa preferencia —lo raro, pero
+          // existe—, se decide por la hora local: de día claro, de noche
+          // oscuro, que es lo que haría cualquiera.
+          var light = window.matchMedia('(prefers-color-scheme: light)').matches;
+          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var hour = new Date().getHours();
+          document.documentElement.dataset.theme =
+            light ? 'light' : dark ? 'dark' : hour >= 8 && hour < 20 ? 'light' : 'dark';
+        }
+      } catch (error) {
+        /* navegación privada o cookies bloqueadas: se queda el oscuro */
+      }
+    </script>
+    <script>
+      // La zona horaria de este navegador, para que el servidor sepa desde
+      // dónde se mira. El mapa y el ranking ya la buscaban en esta cookie
+      // —de ahí sale el país que abren por defecto—, pero nadie la escribía:
+      // caían siempre en el país del idioma, y quien mira en español desde
+      // México veía España.
+      //
+      // Solo el nombre del huso («Europe/Madrid»), que no identifica a nadie,
+      // y sin salir del sitio: las dos páginas se sirven como privadas, así
+      // que no hay caché compartida que pueda mezclar países.
+      try {
+        var zone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        if (zone && document.cookie.indexOf('mlx_tz=' + zone) === -1) {
+          document.cookie =
+            'mlx_tz=' + encodeURIComponent(zone) + ';path=/;max-age=31536000;samesite=lax';
+        }
+      } catch (error) {
+        /* sin husos que valgan, el idioma decide como hasta ahora */
+      }
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

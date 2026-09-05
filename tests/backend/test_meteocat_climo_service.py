@@ -252,10 +252,11 @@ async def test_multiple_months_keep_characteristic_night_counts() -> None:
     from server.services.meteocat_climo import fetch_climo_dataset
 
     def routes(kind, var, params):
-        if kind == "mensuals" and var == P.STAT_MO_TEMP_MEAN:
-            return _monthly_payload(("2025-06", 22.0), ("2025-07", 25.0))
-        if kind == "mensuals" and var == P.STAT_MO_FROST_DAYS:
-            return _monthly_payload(("2025-06", 0.0), ("2025-07", 0.0))
+        if kind == "diaris" and var == P.STAT_TEMP_MEAN:
+            if params.get("mes") == "06":
+                return _daily_payload(("2025-06-01", 21.0), ("2025-06-02", 22.0))
+            if params.get("mes") == "07":
+                return _daily_payload(("2025-07-01", 27.0), ("2025-07-02", 28.0))
         if kind == "diaris" and var == P.STAT_TEMP_MIN:
             if params.get("mes") == "06":
                 return _daily_payload(("2025-06-01", 19.0), ("2025-06-02", 20.0))
@@ -277,9 +278,35 @@ async def test_multiple_months_keep_characteristic_night_counts() -> None:
             selected_years=[2025],
         )
 
-    assert df["tropical_nights"].sum(min_count=1) == pytest.approx(3.0)
-    assert df["torrid_nights"].sum(min_count=1) == pytest.approx(2.0)
-    assert df["frost_nights"].sum(min_count=1) == pytest.approx(0.0)
+    assert len(df) == 4
+    assert df["temp_min"].tolist() == [19.0, 20.0, 25.0, 26.0]
+    assert df["temp_mean"].tolist() == [21.0, 22.0, 27.0, 28.0]
+
+
+@pytest.mark.asyncio
+async def test_discontinuous_months_do_not_fetch_or_include_months_between_them() -> None:
+    from server.services.meteocat_climo import fetch_daily_history_for_periods
+
+    requested = []
+
+    def routes(kind, var, params):
+        if kind != "diaris":
+            return {"valors": []}
+        requested.append((params.get("any"), params.get("mes")))
+        if var == P.STAT_TEMP_MEAN:
+            year = params.get("any")
+            return _daily_payload((f"{year}-08-01", 25.0))
+        return {"valors": []}
+
+    periods = [
+        (date(2021, 8, 1), date(2021, 8, 31)),
+        (date(2025, 8, 1), date(2025, 8, 31)),
+    ]
+    async with _mock_client(routes) as client:
+        df = await fetch_daily_history_for_periods(client, STATION, "K", periods)
+
+    assert sorted(set(requested)) == [("2021", "08"), ("2025", "08")]
+    assert df["date"].dt.strftime("%Y-%m-%d").tolist() == ["2021-08-01", "2025-08-01"]
 
 
 @pytest.mark.asyncio

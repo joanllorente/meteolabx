@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import contextlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from io import BytesIO
 import hashlib
@@ -522,6 +522,8 @@ def _product_context(
         # La diferencia entre dos niveles usa un solo campo, como los nativos:
         # lo que cambia es que se pide dos veces, a alturas distintas.
         prefixes = {"field": catalog.resolve(str(config["prefix_kind"]))}
+        if config["kind"] == "level_difference":
+            prefixes["surface_pressure"] = catalog.resolve("surface_pressure")
         if config.get("overlay_prefix_kind"):
             prefixes["overlay"] = catalog.resolve(str(config["overlay_prefix_kind"]))
     elif config["kind"] == "theta_e":
@@ -768,6 +770,28 @@ def _as_hpa(values: np.ndarray, units: str) -> np.ndarray:
     return data
 
 
+def _as_percent(values: np.ndarray, units: str) -> np.ndarray:
+    """Respeta unidades explícitas; WCS AROME usa % si no etiqueta la banda."""
+    unit = units.strip().lower().strip("[]").strip()
+    if unit in {"1", "0-1", "fraction", "dimensionless", "proportion", "(0 - 1)"}:
+        values = values * 100.
+    elif unit not in {"", "%", "percent", "percentage", "pct"}:
+        raise AromeError(f"Unidad de porcentaje no reconocida: {units!r}")
+    return np.clip(values, 0., 100.)
+
+
+def _complete_hourly_times(run: datetime, end: datetime, available) -> list[datetime]:
+    """Exige cada incremento horario: una hora ausente nunca equivale a cero."""
+    seconds = (end - run).total_seconds()
+    if seconds < 0 or seconds % 3600:
+        raise AromeError("El acumulado debe terminar en un plazo horario de la pasada.")
+    expected = [run + timedelta(hours=h) for h in range(1, int(seconds / 3600) + 1)]
+    missing = set(expected) - set(available)
+    if missing:
+        raise AromeError(f"Faltan incrementos horarios para el acumulado: {min(missing).isoformat()}")
+    return expected
+
+
 def _pressure_levels(client, catalog, prefix: str, run: datetime) -> list[float]:
     metadata = client.describe(catalog.coverage_id(prefix, run))
     axis = metadata.vertical_axis()
@@ -949,6 +973,8 @@ def _convective_outputs(
         out=np.full(shape, np.nan),
         where=layer_depth > 0,
     )
+    # Un 700 hPa sustituido por superficie no es el gradiente 700–500.
+    lapse_rate = np.where(pressure[0] > 700., lapse_rate, np.nan)
     freezing_agl = freezing_level_m(temperature, height)
     ship = significant_hail_parameter_sharppy(
         diagnostics.mucape,
@@ -1614,7 +1640,7 @@ def _convective_frames(
         # Con el rocío derivado de la humedad de IP1 —o el exacto de IP3— no
         # hace falta pedir nada al WCS por niveles: 24 descargas menos por hora.
         level_variables = (
-            ("dewpoint",) if exact_dewpoint and not package_dewpoint else ()
+            ("dewpoint",) if exact_dewpoint else ()
         )
     else:
         level_variables = ("temperature", "dewpoint", "u", "v")
@@ -1643,6 +1669,8 @@ def _convective_frames(
             tasks[executor.submit(throttled, fetch_surface, name)] = (name, None)
         for level_hpa in levels:
             for variable in level_variables:
+                if variable == "dewpoint" and package_dewpoint and level_hpa in package_dewpoint:
+                    continue
                 tasks[executor.submit(throttled, fetch_level, variable, level_hpa)] = (variable, level_hpa)
         for future in as_completed(tasks):
             fetched[tasks[future]] = future.result()
@@ -1918,6 +1946,11 @@ def _level_difference_field(
     valores = _as_kelvin(
         np.asarray(campo_bajo.data, dtype=float), campo_bajo.units
     ) - _as_kelvin(_align(campo_bajo, campo_alto), campo_alto.units)
+    surface = client.get_field(
+        catalog, prefixes["surface_pressure"], run, valid_time, None, None
+    )
+    surface_hpa = _as_hpa(_align(campo_bajo, surface), surface.units)
+    valores = np.where(surface_hpa > max(bajo, alto), valores, np.nan)
     return RasterField(
         valores,
         campo_bajo.transform,
@@ -2049,7 +2082,7 @@ def _computed_frame(
             # TOTAL_PRECIPITATION PT1H es un incremento horario. Para el
             # acumulado del RUN sumamos H+01..H+n sobre la misma rejilla; H+00
             # no pertenece al periodo de predicción iniciado por esta pasada.
-            field_times = [value for value in times if run < value <= valid_time]
+            field_times = _complete_hourly_times(run, valid_time, times)
             if not field_times:
                 field_times = [valid_time]
         field = client.get_field(
@@ -2085,10 +2118,7 @@ def _computed_frame(
         if value_mode == "temperature_c":
             values = _as_kelvin(values, field.units) - 273.15
         elif value_mode == "percent":
-            finite_values = values[np.isfinite(values)]
-            if finite_values.size and float(np.nanmax(np.abs(finite_values))) <= 1.5:
-                values = values * 100.0
-            values = np.clip(values, 0.0, 100.0)
+            values = _as_percent(values, field.units)
         else:
             values = np.maximum(values, 0.0)
         values = values * float(config.get("scale", 1.0))
@@ -2259,7 +2289,7 @@ def accumulated_precip_series(
         return
     # La serie necesita cada hora desde la pasada, aunque no todas se publiquen.
     horizon = max(increments)
-    ordered = [value for value in times if run < value <= horizon]
+    ordered = _complete_hourly_times(run, horizon, times)
 
     reference: RasterField | None = None
     accumulated: np.ndarray | None = None

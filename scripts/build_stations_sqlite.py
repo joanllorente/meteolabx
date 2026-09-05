@@ -191,6 +191,7 @@ SELECT s.*
 FROM stations s
 LEFT JOIN station_visibility_overrides v USING(station_pk)
 WHERE s.provider <> 'IEM'
+  AND (s.provider <> 'NWS' OR COALESCE(s.online, 1) = 1)
   AND COALESCE(v.hidden, 0) = 0;
 """
 
@@ -307,6 +308,14 @@ def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] |
     region = _nested_name(region)
     locality = _nested_name(locality)
     online_raw = _first(row, "online", "active_now")
+    # El inventario NWS conserva el resultado de su última comprobación de
+    # observaciones. Un 404 ahí significa que la ficha puede seguir existiendo
+    # en weather.gov, pero no sirve datos para el panel interactivo. Marcarla
+    # como no conectable evita ofrecer al usuario una estación que sabemos que
+    # fallará; una futura actualización del inventario la reactivará en cuanto
+    # el sondeo vuelva a responder correctamente.
+    if provider == "NWS" and str(row.get("sensor_probe_error") or "").lstrip().startswith("404"):
+        online_raw = False
     online = int(bool(online_raw)) if online_raw is not None else None
     # Flags por fila (GEOSPHERE marca histórico/manual estación a estación)
     # además de los criterios por proveedor/red.

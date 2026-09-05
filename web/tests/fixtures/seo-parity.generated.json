@@ -1,0 +1,342 @@
+{
+  "site_url": "https://www.meteolabx.com",
+  "cases": [
+    {
+      "station": {
+        "provider": "AEMET",
+        "station_id": "0201X",
+        "name": "BARCELONA  DRASSANES",
+        "lat": 41.374998,
+        "lon": 2.173886,
+        "elevation": 11.0,
+        "catalog_country": "ES",
+        "region": "",
+        "locality": "",
+        "has_historical": true,
+        "sensors": {
+          "thermometer": true,
+          "hygrometer": true,
+          "barometer": true
+        }
+      },
+      "url_slug": "barcelona-drassanes-0201x",
+      "display_name": "Barcelona Drassanes",
+      "language_codes": [
+        "es",
+        "ca",
+        "en",
+        "fr",
+        "it",
+        "pt"
+      ],
+      "alternate_order": [
+        "es",
+        "ca",
+        "en",
+        "fr",
+        "it",
+        "pt"
+      ],
+      "languages": {
+        "es": {
+          "title": "Estación meteorológica Barcelona Drassanes (AEMET) | MeteoLabX",
+          "description": "Consulta la estación meteorológica Barcelona Drassanes de AEMET en España: ubicación, altitud, sensores y acceso a sus datos en MeteoLabX.",
+          "lede": "Datos meteorológicos de Barcelona Drassanes, estación de AEMET situada en España.",
+          "location": "España",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "temperatura, humedad, presión atmosférica",
+          "place_name": "Estación meteorológica Barcelona Drassanes"
+        },
+        "ca": {
+          "title": "Estació meteorològica Barcelona Drassanes (AEMET) | MeteoLabX",
+          "description": "Consulta l'estació meteorològica Barcelona Drassanes de AEMET a Espanya: ubicació, altitud, sensors i accés a les dades a MeteoLabX.",
+          "lede": "Dades meteorològiques de Barcelona Drassanes, estació de AEMET situada a Espanya.",
+          "location": "Espanya",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "temperatura, humitat, pressió atmosfèrica",
+          "place_name": "Estació meteorològica Barcelona Drassanes"
+        },
+        "en": {
+          "title": "Barcelona Drassanes weather station (AEMET) | MeteoLabX",
+          "description": "Explore the Barcelona Drassanes weather station from AEMET in Spain: location, elevation, sensors and access to its data in MeteoLabX.",
+          "lede": "Weather data from Barcelona Drassanes, a AEMET station in Spain.",
+          "location": "Spain",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "temperature, humidity, atmospheric pressure",
+          "place_name": "Weather station Barcelona Drassanes"
+        },
+        "fr": {
+          "title": "Station météo Barcelona Drassanes (AEMET) | MeteoLabX",
+          "description": "Consultez la station météo Barcelona Drassanes du réseau AEMET à Espagne : emplacement, altitude, capteurs et accès à ses données dans MeteoLabX.",
+          "lede": "Données météo de Barcelona Drassanes, station du réseau AEMET située à Espagne.",
+          "location": "Espagne",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "température, humidité, pression atmosphérique",
+          "place_name": "Station météorologique Barcelona Drassanes"
+        },
+        "it": {
+          "title": "Stazione meteo Barcelona Drassanes (AEMET) | MeteoLabX",
+          "description": "Consulta la stazione meteo Barcelona Drassanes della rete AEMET a Spagna: posizione, altitudine, sensori e accesso ai dati in MeteoLabX.",
+          "lede": "Dati meteo di Barcelona Drassanes, stazione della rete AEMET situata a Spagna.",
+          "location": "Spagna",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "temperatura, umidità, pressione atmosferica",
+          "place_name": "Stazione meteorologica Barcelona Drassanes"
+        },
+        "pt": {
+          "title": "Estação meteorológica Barcelona Drassanes (AEMET) | MeteoLabX",
+          "description": "Consulte a estação meteorológica Barcelona Drassanes da rede AEMET em Espanha: localização, altitude, sensores e acesso aos dados no MeteoLabX.",
+          "lede": "Dados meteorológicos de Barcelona Drassanes, estação da rede AEMET situada em Espanha.",
+          "location": "Espanha",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "temperatura, humidade, pressão atmosférica",
+          "place_name": "Estação meteorológica Barcelona Drassanes"
+        }
+      }
+    },
+    {
+      "station": {
+        "provider": "METEOCAT",
+        "station_id": "D5",
+        "name": "Barcelona - Observatori Fabra",
+        "lat": 41.4184,
+        "lon": 2.1239,
+        "elevation": 411.0,
+        "catalog_country": "ES",
+        "region": "Catalunya",
+        "locality": "Barcelona",
+        "has_historical": true,
+        "sensors": {
+          "thermometer": true,
+          "anemometer": true
+        }
+      },
+      "url_slug": "barcelona-observatori-fabra-d5",
+      "display_name": "Barcelona - Observatori Fabra",
+      "language_codes": [
+        "es",
+        "ca",
+        "en",
+        "fr",
+        "it",
+        "pt"
+      ],
+      "alternate_order": [
+        "es",
+        "ca",
+        "en",
+        "fr",
+        "it",
+        "pt"
+      ],
+      "languages": {
+        "es": {
+          "title": "Estación meteorológica Observatorio Fabra (Meteocat) | MeteoLabX",
+          "description": "Consulta la estación meteorológica Observatorio Fabra de Meteocat en Barcelona, Catalunya, España: ubicación, altitud, sensores y acceso a sus datos en MeteoLabX.",
+          "lede": "Datos meteorológicos de Observatorio Fabra, estación de Meteocat situada en Barcelona, Catalunya, España.",
+          "location": "Barcelona, Catalunya, España",
+          "search_name": "Observatorio Fabra",
+          "sensors": "temperatura, velocidad del viento",
+          "place_name": "Estación meteorológica Barcelona - Observatori Fabra"
+        },
+        "ca": {
+          "title": "Estació meteorològica Barcelona - Observatori Fabra (Meteocat) | MeteoLabX",
+          "description": "Consulta l'estació meteorològica Barcelona - Observatori Fabra de Meteocat a Barcelona, Catalunya, Espanya: ubicació, altitud, sensors i accés a les dades a MeteoLabX.",
+          "lede": "Dades meteorològiques de Barcelona - Observatori Fabra, estació de Meteocat situada a Barcelona, Catalunya, Espanya.",
+          "location": "Barcelona, Catalunya, Espanya",
+          "search_name": "Barcelona - Observatori Fabra",
+          "sensors": "temperatura, velocitat del vent",
+          "place_name": "Estació meteorològica Barcelona - Observatori Fabra"
+        },
+        "en": {
+          "title": "Fabra Observatory weather station (Meteocat) | MeteoLabX",
+          "description": "Explore the Fabra Observatory weather station from Meteocat in Barcelona, Catalunya, Spain: location, elevation, sensors and access to its data in MeteoLabX.",
+          "lede": "Weather data from Fabra Observatory, a Meteocat station in Barcelona, Catalunya, Spain.",
+          "location": "Barcelona, Catalunya, Spain",
+          "search_name": "Fabra Observatory",
+          "sensors": "temperature, wind speed",
+          "place_name": "Weather station Barcelona - Observatori Fabra"
+        },
+        "fr": {
+          "title": "Station météo Observatoire Fabra (Meteocat) | MeteoLabX",
+          "description": "Consultez la station météo Observatoire Fabra du réseau Meteocat à Barcelona, Catalunya, Espagne : emplacement, altitude, capteurs et accès à ses données dans MeteoLabX.",
+          "lede": "Données météo de Observatoire Fabra, station du réseau Meteocat située à Barcelona, Catalunya, Espagne.",
+          "location": "Barcelona, Catalunya, Espagne",
+          "search_name": "Observatoire Fabra",
+          "sensors": "température, vitesse du vent",
+          "place_name": "Station météorologique Barcelona - Observatori Fabra"
+        },
+        "it": {
+          "title": "Stazione meteo Osservatorio Fabra (Meteocat) | MeteoLabX",
+          "description": "Consulta la stazione meteo Osservatorio Fabra della rete Meteocat a Barcelona, Catalunya, Spagna: posizione, altitudine, sensori e accesso ai dati in MeteoLabX.",
+          "lede": "Dati meteo di Osservatorio Fabra, stazione della rete Meteocat situata a Barcelona, Catalunya, Spagna.",
+          "location": "Barcelona, Catalunya, Spagna",
+          "search_name": "Osservatorio Fabra",
+          "sensors": "temperatura, velocità del vento",
+          "place_name": "Stazione meteorologica Barcelona - Observatori Fabra"
+        },
+        "pt": {
+          "title": "Estação meteorológica Observatório Fabra (Meteocat) | MeteoLabX",
+          "description": "Consulte a estação meteorológica Observatório Fabra da rede Meteocat em Barcelona, Catalunya, Espanha: localização, altitude, sensores e acesso aos dados no MeteoLabX.",
+          "lede": "Dados meteorológicos de Observatório Fabra, estação da rede Meteocat situada em Barcelona, Catalunya, Espanha.",
+          "location": "Barcelona, Catalunya, Espanha",
+          "search_name": "Observatório Fabra",
+          "sensors": "temperatura, velocidade do vento",
+          "place_name": "Estação meteorológica Barcelona - Observatori Fabra"
+        }
+      }
+    },
+    {
+      "station": {
+        "provider": "METEOFRANCE",
+        "station_id": "75107005",
+        "name": "TOUR EIFFEL",
+        "lat": 48.8584,
+        "lon": 2.2945,
+        "elevation": null,
+        "catalog_country": "FR",
+        "region": "Île-de-France",
+        "locality": "Paris",
+        "has_historical": false,
+        "sensors": {}
+      },
+      "url_slug": "tour-eiffel-75107005",
+      "display_name": "Tour Eiffel",
+      "language_codes": [
+        "fr",
+        "en",
+        "es"
+      ],
+      "alternate_order": [
+        "es",
+        "en",
+        "fr"
+      ],
+      "languages": {
+        "fr": {
+          "title": "Station météo Tour Eiffel, Paris (Météo-France) | MeteoLabX",
+          "description": "Consultez la station météo Tour Eiffel, Paris du réseau Météo-France à Paris, France : emplacement, altitude, capteurs et accès à ses données dans MeteoLabX.",
+          "lede": "Données météo de Tour Eiffel, Paris, station du réseau Météo-France située à Paris, France.",
+          "location": "Paris, France",
+          "search_name": "Tour Eiffel, Paris",
+          "sensors": "Aucun inventaire détaillé",
+          "place_name": "Station météorologique Tour Eiffel"
+        },
+        "en": {
+          "title": "Eiffel Tower, Paris weather station (Météo-France) | MeteoLabX",
+          "description": "Explore the Eiffel Tower, Paris weather station from Météo-France in Paris, France: location, elevation, sensors and access to its data in MeteoLabX.",
+          "lede": "Weather data from Eiffel Tower, Paris, a Météo-France station in Paris, France.",
+          "location": "Paris, France",
+          "search_name": "Eiffel Tower, Paris",
+          "sensors": "No detailed inventory",
+          "place_name": "Weather station Tour Eiffel"
+        },
+        "es": {
+          "title": "Estación meteorológica Torre Eiffel, París (Météo-France) | MeteoLabX",
+          "description": "Consulta la estación meteorológica Torre Eiffel, París de Météo-France en París, Francia: ubicación, altitud, sensores y acceso a sus datos en MeteoLabX.",
+          "lede": "Datos meteorológicos de Torre Eiffel, París, estación de Météo-France situada en París, Francia.",
+          "location": "París, Francia",
+          "search_name": "Torre Eiffel, París",
+          "sensors": "Sin inventario detallado",
+          "place_name": "Estación meteorológica Tour Eiffel"
+        }
+      }
+    },
+    {
+      "station": {
+        "provider": "NWS",
+        "station_id": "KNYC",
+        "name": "Central Park",
+        "lat": 40.7789,
+        "lon": -73.9692,
+        "elevation": 48.0,
+        "catalog_country": "US",
+        "region": "New York",
+        "locality": "New York",
+        "has_historical": true,
+        "sensors": {
+          "thermometer": true
+        }
+      },
+      "url_slug": "central-park-knyc",
+      "display_name": "Central Park",
+      "language_codes": [
+        "en",
+        "es"
+      ],
+      "alternate_order": [
+        "es",
+        "en"
+      ],
+      "languages": {
+        "en": {
+          "title": "Central Park weather station (National Weather Service) | MeteoLabX",
+          "description": "Explore the Central Park weather station from National Weather Service in New York, United States: location, elevation, sensors and access to its data in MeteoLabX.",
+          "lede": "Weather data from Central Park, a National Weather Service station in New York, United States.",
+          "location": "New York, United States",
+          "search_name": "Central Park",
+          "sensors": "temperature",
+          "place_name": "Weather station Central Park"
+        },
+        "es": {
+          "title": "Estación meteorológica Central Park (National Weather Service) | MeteoLabX",
+          "description": "Consulta la estación meteorológica Central Park de National Weather Service en New York, Estados Unidos: ubicación, altitud, sensores y acceso a sus datos en MeteoLabX.",
+          "lede": "Datos meteorológicos de Central Park, estación de National Weather Service situada en New York, Estados Unidos.",
+          "location": "New York, Estados Unidos",
+          "search_name": "Central Park",
+          "sensors": "temperatura",
+          "place_name": "Estación meteorológica Central Park"
+        }
+      }
+    },
+    {
+      "station": {
+        "provider": "CLIMANTARTIDE",
+        "station_id": "MZS",
+        "name": "Mario Zucchelli",
+        "lat": -74.6961,
+        "lon": 164.1122,
+        "elevation": 15.0,
+        "catalog_country": "AQ",
+        "region": "",
+        "locality": "",
+        "has_historical": false,
+        "sensors": {
+          "thermometer": true,
+          "anemometer": true,
+          "wind_vane": true
+        }
+      },
+      "url_slug": "mario-zucchelli-mzs",
+      "display_name": "Mario Zucchelli",
+      "language_codes": [
+        "en",
+        "es"
+      ],
+      "alternate_order": [
+        "es",
+        "en"
+      ],
+      "languages": {
+        "en": {
+          "title": "Mario Zucchelli weather station (ClimAntartide) | MeteoLabX",
+          "description": "Explore the Mario Zucchelli weather station from ClimAntartide in Antarctica: location, elevation, sensors and access to its data in MeteoLabX.",
+          "lede": "Weather data from Mario Zucchelli, a ClimAntartide station in Antarctica.",
+          "location": "Antarctica",
+          "search_name": "Mario Zucchelli",
+          "sensors": "temperature, wind speed, wind direction",
+          "place_name": "Weather station Mario Zucchelli"
+        },
+        "es": {
+          "title": "Estación meteorológica Mario Zucchelli (ClimAntartide) | MeteoLabX",
+          "description": "Consulta la estación meteorológica Mario Zucchelli de ClimAntartide en Antártida: ubicación, altitud, sensores y acceso a sus datos en MeteoLabX.",
+          "lede": "Datos meteorológicos de Mario Zucchelli, estación de ClimAntartide situada en Antártida.",
+          "location": "Antártida",
+          "search_name": "Mario Zucchelli",
+          "sensors": "temperatura, velocidad del viento, dirección del viento",
+          "place_name": "Estación meteorológica Mario Zucchelli"
+        }
+      }
+    }
+  ]
+}

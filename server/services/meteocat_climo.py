@@ -137,11 +137,15 @@ async def fetch_daily_history_for_periods(
         return P.empty_daily_df()
 
     stats = _StatsClient(client, code, api_key)
-    start = min(p[0] for p in periods)
-    end = max(p[1] for p in periods)
-
     rows_by_day: Dict[str, Dict[str, Any]] = {}
-    months = list(P.iter_months(start, end))
+    # Los periodos pueden ser discontinuos (p. ej. agosto de cinco años).
+    # Recorrer desde el primero hasta el último descargaría también los 55
+    # meses intermedios y, peor aún, acabaría incluyéndolos en el histograma.
+    months = sorted({
+        month
+        for period_start, period_end in periods
+        for month in P.iter_months(period_start, period_end)
+    })
 
     async def _resolve_month(yy: int, mm: int) -> Dict[str, Dict[str, float]]:
         out: Dict[str, Dict[str, float]] = {}
@@ -193,7 +197,9 @@ async def fetch_daily_history_for_periods(
     frame["precip_total"] = frame["precip_total"].clip(lower=0)
     frame["precip_rate_max"] = frame["precip_rate_max"].clip(lower=0)
     frame = frame.sort_values("date").reset_index(drop=True)
-    mask = frame["date"].between(pd.to_datetime(start), pd.to_datetime(end))
+    mask = pd.Series(False, index=frame.index)
+    for period_start, period_end in periods:
+        mask |= frame["date"].between(pd.to_datetime(period_start), pd.to_datetime(period_end))
     return frame.loc[mask].copy()[P.CLIMO_DAILY_SCHEMA]
 
 
@@ -538,14 +544,12 @@ async def fetch_climo_dataset(
         return df, None
 
     if summary_mode == "monthly":
-        if len(periods) == 1:
-            df = await fetch_daily_history_for_periods(client, station_code, api_key, periods)
-            extremes = _daily_extremes_from_frame(df)
-        else:
-            df = await fetch_monthly_history_for_periods(client, station_code, api_key, periods)
-            extremes = await fetch_daily_extremes_for_periods(client, station_code, api_key, periods)
-        if len(periods) > 1:
-            df = _add_characteristic_counts(df, extremes)
+        # Meteocat publica estadísticas diarias para cada mes solicitado. Las
+        # filas mensuales siguen construyéndose después en ``climograms``, de
+        # modo que conservar aquí los días alimenta tanto el histograma real
+        # como el mismo climograma/resumen mensual de antes.
+        df = await fetch_daily_history_for_periods(client, station_code, api_key, periods)
+        extremes = _daily_extremes_from_frame(df)
         return df, (extremes or None)
 
     df = await fetch_daily_history_for_periods(client, station_code, api_key, periods)

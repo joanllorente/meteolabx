@@ -395,6 +395,32 @@ def _iter_date_chunks(start_date: date, end_date: date, max_days: int = 150) -> 
         cursor = chunk_end + timedelta(days=1)
 
 
+def complete_daily_frame(base: pd.DataFrame, extra: pd.DataFrame) -> pd.DataFrame:
+    """Completa los huecos de ``base`` con lo que traiga ``extra``, día a día.
+
+    Nace de las series históricas locales: cubren desde 1950, pero solo con
+    precipitación, máxima, mínima e insolación. OpenData no llega tan atrás y
+    sí publica viento. Deduplicar quedándose con una de las dos fuentes tira
+    datos en cualquiera de los dos sentidos; aquí se conserva lo de ``base`` y
+    se rellena únicamente donde falta.
+    """
+    frames = [f for f in (base, extra) if isinstance(f, pd.DataFrame) and not f.empty]
+    if not frames:
+        return _empty_climo_dataframe(include_extras=False)
+    if len(frames) == 1:
+        return frames[0].reset_index(drop=True)
+
+    def indexed(frame: pd.DataFrame) -> pd.DataFrame:
+        out = frame.copy()
+        out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.normalize()
+        return out.dropna(subset=["date"]).drop_duplicates(subset=["date"], keep="last").set_index("date")
+
+    merged = indexed(base).combine_first(indexed(extra))
+    merged = merged.sort_index().reset_index()
+    columns = [c for c in CLIMO_DAILY_SCHEMA + ["solar_hours"] if c in merged.columns]
+    return merged[columns]
+
+
 def _merge_daily_chunks(chunks: List[pd.DataFrame]) -> pd.DataFrame:
     """Concatena chunks diarios normalizados, deduplica por fecha (último gana)."""
     non_empty = [c for c in chunks if isinstance(c, pd.DataFrame) and not c.empty]

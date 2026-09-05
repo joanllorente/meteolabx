@@ -1,3 +1,40 @@
+/* ── Inter, la misma que sirve el resto del sitio ───────────────────────────
+   El visor nunca la declaró: `forecast.html` no la enlaza —solo lo hacía el
+   prototipo—, así que dependía de que el sistema tuviera Inter instalada. En
+   un Mac que la tiene, el nombre de la barra salía un pelo distinto al del
+   resto de la web; en uno que no, cambiaba toda la interfaz.
+
+   Solo los tres subsets que usa: latino, latino extendido y griego, este
+   último por las thetas de los títulos.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+
 /* ── Tokens y base globales ──────────────────────────────────────────────── */
 :root {
   --font: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -11,7 +48,7 @@
 }
 
 /* Tema oscuro (por defecto) — navy de marca */
-:root, .theme-dark {
+:root, .theme-dark, [data-theme='dark'] {
   --bg: #080d17;
   --bg-grad-1: rgba(62, 142, 208, 0.07);
   --bg-grad-2: rgba(62, 142, 208, 0.04);
@@ -35,7 +72,7 @@
   --grid-line: rgba(120, 160, 205, 0.1);
 }
 
-.theme-light {
+.theme-light, [data-theme='light'] {
   --bg: #eaeef4;
   --bg-grad-1: rgba(62, 142, 208, 0.1);
   --bg-grad-2: rgba(62, 142, 208, 0.06);

@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
-# Arranque de producción: FastAPI (backend, interno), Streamlit (frontend,
-# público) y el worker AROME persistente en un solo servicio.
+# Arranque de producción del servicio Python: FastAPI y el worker AROME.
 #
-# Railway enruta el tráfico HTTP al puerto $PORT → ahí escucha Streamlit.
-# FastAPI queda interno en 127.0.0.1:8000; el frontend lo consume vía
-# METEOLABX_API_URL (por defecto http://127.0.0.1:8000). El worker y la web
-# comparten ${RAILWAY_VOLUME_MOUNT_PATH}/forecast. Si cualquiera de los tres
-# procesos muere, el script sale con error y Railway reinicia el servicio
-# entero (restartPolicyType=ON_FAILURE).
+# Streamlit se retiró con la 2.0.0: la web es el servicio SvelteKit, que vive
+# aparte y solo necesita esta API. Por eso FastAPI escucha ahora en el puerto
+# público ($PORT) en vez de quedarse dentro del contenedor, y el healthcheck
+# de Railway —/v1/health— lo contesta él mismo en lugar de un proxy dentro de
+# Streamlit.
+#
+# El worker y la API comparten ${RAILWAY_VOLUME_MOUNT_PATH}/forecast. Si
+# cualquiera de los dos procesos muere, el script sale con error y Railway
+# reinicia el servicio (restartPolicyType=ON_FAILURE).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-STREAMLIT_PORT="${PORT:-8501}"
-BACKEND_HOST="127.0.0.1"
-BACKEND_PORT="8000"
-export METEOLABX_API_URL="${METEOLABX_API_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}}"
+# El frontend vive en otro servicio y llama por la red privada de Railway,
+# que es IPv6: `::` escucha en todas las interfaces, no solo dentro del
+# contenedor. En local, 127.0.0.1 basta.
+BACKEND_HOST="${METEOLABX_BACKEND_HOST:-127.0.0.1}"
+BACKEND_PORT="${PORT:-8000}"
+export METEOLABX_API_URL="${METEOLABX_API_URL:-http://127.0.0.1:${BACKEND_PORT}}"
 if [ -n "${PYTHON_BIN:-}" ]; then
   PYTHON="${PYTHON_BIN}"
 elif [ -x ".venv/bin/python" ]; then
@@ -79,11 +83,10 @@ nice -n "${METEOLABX_FORECAST_WORKER_NICE:-10}" \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
 FORECAST_WORKER_PID=$!
 
-STREAMLIT_PID=""
 BACKEND_READY_PID=""
 cleanup() {
   trap - EXIT TERM INT
-  for pid in "${BACKEND_READY_PID}" "${STREAMLIT_PID}" "${FORECAST_WORKER_PID}" "${UVICORN_PID}"; do
+  for pid in "${BACKEND_READY_PID}" "${FORECAST_WORKER_PID}" "${UVICORN_PID}"; do
     if [ -n "${pid}" ]; then
       kill -TERM "${pid}" 2>/dev/null || true
     fi
@@ -93,29 +96,19 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 0' TERM INT
 
-# 3) Frontend Streamlit en el puerto público.
-# No bloqueamos la exposición del frontend esperando al health del backend:
-# en cold starts de producción eso deja al navegador sin respuesta mientras
-# arrancan dos procesos Python. La UI puede pintar su estado inicial aunque la
-# API tarde unos segundos más; si el backend muere, el wait final reinicia todo.
-"${PYTHON}" scripts/patch_streamlit_index.py
+# 3) Preparativos de la web, que sirve el servicio SvelteKit.
 "${PYTHON}" scripts/install_forecast_frontend.py
-# Paginas SEO estaticas: directorio e indices de estaciones publicas. Se
-# escriben en el mismo directorio del paquete Streamlit que sirve el frontend,
-# por lo que las URLs limpias funcionan sin proxy ni proceso adicional.
-if ! "${PYTHON}" scripts/build_seo_pages.py; then
-  echo "[start_web] AVISO: no se pudieron generar las paginas SEO; la app interactiva continuara disponible" >&2
+# Tabla que traduce el slug de una URL indexable a su estacion. La consulta
+# /v1/stations/by-url-slug, que es como el frontend SvelteKit resuelve
+# /{idioma}/observation/{slug}. Sin ella esas fichas devuelven 404.
+if ! "${PYTHON}" scripts/build_station_url_slugs.py; then
+  echo "[start_web] AVISO: no se pudo construir la tabla de slugs; las fichas de observacion no resolveran" >&2
 fi
+
+# Los directorios, los indices de red y las paginas de ciudad ya no se generan
+# aqui: viajan como estaticos del servicio SvelteKit, que es quien los sirve.
+# Se construyen con `scripts/build_seo_pages.py` antes de publicar.
 export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
-# fileWatcherType=none: en producción no hay recarga en caliente y, sin
-# watchdog instalado, Streamlit cae a un watcher por polling que consume
-# CPU de forma continua en la instancia compartida.
-"${PYTHON}" scripts/run_streamlit.py meteolabx.py \
-  --server.port="${STREAMLIT_PORT}" \
-  --server.address=0.0.0.0 \
-  --server.headless=true \
-  --server.fileWatcherType=none &
-STREAMLIT_PID=$!
 
 echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."
 (
@@ -136,7 +129,7 @@ echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."
 ) &
 BACKEND_READY_PID=$!
 
-# Si cualquiera de los tres cae, salimos → Railway reinicia el servicio.
-wait -n "${UVICORN_PID}" "${STREAMLIT_PID}" "${FORECAST_WORKER_PID}"
-echo "✗ Un proceso (backend, frontend o worker AROME) terminó; reiniciando servicio" >&2
+# Si cualquiera de los dos cae, salimos → Railway reinicia el servicio.
+wait -n "${UVICORN_PID}" "${FORECAST_WORKER_PID}"
+echo "✗ Un proceso (backend o worker AROME) terminó; reiniciando servicio" >&2
 exit 1

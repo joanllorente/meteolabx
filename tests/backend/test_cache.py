@@ -215,6 +215,44 @@ async def test_fetcher_exception_propagates_to_all_followers() -> None:
 
 
 @pytest.mark.asyncio
+async def test_expired_value_is_returned_when_refresh_fails_inside_stale_window() -> None:
+    cache: AsyncTTLCache[str] = AsyncTTLCache(
+        default_ttl_s=0.02,
+        stale_if_error_s=0.3,
+    )
+
+    async def initial_fetch() -> str:
+        return "last-known-good"
+
+    async def failing_refresh() -> str:
+        raise RuntimeError("provider temporarily unavailable")
+
+    assert await cache.get_or_fetch("k", initial_fetch) == "last-known-good"
+    await asyncio.sleep(0.04)
+    assert await cache.get_or_fetch("k", failing_refresh) == "last-known-good"
+    assert cache.stats()["stale_hits"] == 1
+
+
+@pytest.mark.asyncio
+async def test_expired_value_is_not_returned_after_stale_window() -> None:
+    cache: AsyncTTLCache[str] = AsyncTTLCache(
+        default_ttl_s=0.02,
+        stale_if_error_s=0.02,
+    )
+
+    async def initial_fetch() -> str:
+        return "old"
+
+    async def failing_refresh() -> str:
+        raise RuntimeError("provider unavailable")
+
+    await cache.get_or_fetch("k", initial_fetch)
+    await asyncio.sleep(0.06)
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        await cache.get_or_fetch("k", failing_refresh)
+
+
+@pytest.mark.asyncio
 async def test_lru_eviction_when_max_entries_exceeded() -> None:
     cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=100.0, max_entries=2)
 
@@ -284,8 +322,8 @@ async def test_invalidate_returns_true_for_existing_and_false_for_missing() -> N
 def test_clear_empties_cache() -> None:
     cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=10.0)
     # Acceso directo a _store solo para test del clear
-    cache._store["a"] = (time.time() + 100, "A")
-    cache._store["b"] = (time.time() + 100, "B")
+    cache._store["a"] = (time.time() + 100, time.time() + 100, "A")
+    cache._store["b"] = (time.time() + 100, time.time() + 100, "B")
     cache.clear()
     assert cache.stats()["entries"] == 0
 
@@ -297,6 +335,8 @@ def test_invalid_params_raise() -> None:
         AsyncTTLCache(default_ttl_s=-1)
     with pytest.raises(ValueError):
         AsyncTTLCache(default_ttl_s=1, max_entries=0)
+    with pytest.raises(ValueError):
+        AsyncTTLCache(default_ttl_s=1, stale_if_error_s=-1)
 
 
 # =====================================================================

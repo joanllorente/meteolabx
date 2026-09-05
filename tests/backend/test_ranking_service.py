@@ -3,7 +3,30 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from server.services.ranking import RankingStore, StationDaily, _daily_gust_max_from_series
+from server.services.ranking import (
+    RankingStore,
+    StationDaily,
+    _daily_gust_max_from_series,
+    _daily_temperature_max_from_series,
+)
+
+
+def test_daily_temperature_max_discards_isolated_hot_spike():
+    values = [34.2, 35.1, 56.9, 35.4, 36.0, 35.7]
+
+    assert _daily_temperature_max_from_series(values) == pytest.approx(36.0)
+
+
+def test_daily_temperature_max_keeps_sustained_extreme_heat():
+    values = [43.8, 46.1, 48.7, 50.1, 49.6, 47.4]
+
+    assert _daily_temperature_max_from_series(values) == pytest.approx(50.1)
+
+
+def test_daily_temperature_max_keeps_ordinary_jump_below_suspect_floor():
+    values = [18.0, 19.1, 29.0, 20.2, 21.0, 22.0]
+
+    assert _daily_temperature_max_from_series(values) == pytest.approx(29.0)
 
 
 def test_daily_gust_max_discards_isolated_temporal_spike():
@@ -119,16 +142,24 @@ def test_tropical_tmax_ceiling_drops_broken_spikes_keeps_real_heat():
     assert _clean_iem_extremes(37.6, 10.9, None, 40.6, 12.4)[0] == 37.6
 
 
-def test_cold_minima_never_filtered():
-    """El lado FRÍO no se filtra en ningún saneador: el suelo por latitud
-    anulaba récords antárticos reales (Concordia −84°C, que IEM ya recorta
-    a ~−73 en BUFR y solo llega vía Climantartide)."""
+def test_cold_minima_filter_sensor_failures_but_keep_polar_records():
+    """Descarta frío incoherente en IEM sin borrar récords polares reales."""
     from server.services.ranking import _clean_iem_extremes, _sanitize_record_extremes
 
     # IEM: mínima antártica extrema con actual coherente → intacta.
     assert _clean_iem_extremes(-77.9, -84.0, None, -75.1, -79.1)[1] == -84.0
-    # Incluso una mínima "sospechosa" en latitudes templadas se conserva.
-    assert _clean_iem_extremes(20.0, -40.0, None, 45.0, 18.0)[1] == -40.0
+    # Biglerville (Pensilvania): salto de 90° respecto a la actual → sensor roto.
+    assert _clean_iem_extremes(
+        20.0, -72.8, None, 39.94, 18.0, elevation_m=720, country="US"
+    )[1] is None
+    # Pursat (Camboya): baja altitud tropical y −38,2°C → imposible.
+    assert _clean_iem_extremes(
+        32.0, -38.2, None, 12.55, 29.0, elevation_m=19, country="KH"
+    )[1] is None
+    # Una estación tropical de alta montaña no queda sujeta al suelo de −10°C.
+    assert _clean_iem_extremes(
+        5.0, -20.0, None, -16.4, -5.0, elevation_m=4100, country="BO"
+    )[1] == -20.0
 
     rec = StationDaily(
         provider="CLIMANTARTIDE", station_id="Concordia",
@@ -137,6 +168,27 @@ def test_cold_minima_never_filtered():
     )
     _sanitize_record_extremes(rec)
     assert rec.tmin == -84.0
+
+
+def test_iem_gust_coherence_uses_ratio_ten_to_preserve_brief_tornadoes():
+    from server.services.ranking import _clean_iem_extremes
+
+    # Atlantic City: 200 kt frente a 10 kt sostenidos → dato espurio.
+    assert _clean_iem_extremes(
+        26.1, 21.1, 370.4, 39.46, 23.9,
+        country="US", max_wind=18.5,
+    )[2] is None
+    # Una ráfaga tornádica breve puede superar ampliamente la media: 250/30
+    # es 8,3 veces, por debajo del factor 10, y debe conservarse.
+    assert _clean_iem_extremes(
+        30.0, 20.0, 250.0, 35.0, 25.0,
+        country="US", max_wind=30.0,
+    )[2] == 250.0
+    # Sin viento sostenido de referencia no inventamos una cuarentena.
+    assert _clean_iem_extremes(
+        30.0, 20.0, 250.0, 35.0, 25.0,
+        country="US", max_wind=None,
+    )[2] == 250.0
 
 
 def test_fetch_climantartide_daily_parses_jsonp_and_buckets_by_local_day():

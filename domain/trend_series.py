@@ -202,6 +202,8 @@ def derive_trend_series(
         lon = _number(station_lon)
     theoretical_solar = [float("nan")] * count
     result.update(
+        solar_day_epochs=[],
+        solar_day_theoretical=[],
         sunrise_epoch=None,
         sunset_epoch=None,
         solar_altitude=None,
@@ -238,6 +240,25 @@ def derive_trend_series(
             result["is_nighttime"] = is_nighttime(
                 lat, float(reference_epoch), lon, tz_name=station_tz,
             )
+
+            # Curva teórica de la jornada entera, no solo de las horas ya
+            # medidas. Es una curva astronómica: existe aunque la estación
+            # todavía no haya publicado la tarde, y dibujarla completa es lo
+            # que permite ver cuánto se aparta lo medido de un cielo limpio.
+            if result["sunrise_epoch"] and result["sunset_epoch"]:
+                first = int(result["sunrise_epoch"])
+                last = int(result["sunset_epoch"])
+                step = 300  # cinco minutos: la curva sale suave sin engordar
+                grid = list(range(first, last + 1, step))
+                if grid and grid[-1] != last:
+                    grid.append(last)
+                result["solar_day_epochs"] = grid
+                result["solar_day_theoretical"] = [
+                    solar_radiation_max_wm2(
+                        lat, elevation, float(epoch), longitude_deg=lon, period_minutes=1.0,
+                    )
+                    for epoch in grid
+                ]
 
     humidity_mask = [not math.isnan(value) for value in humidities]
     source_step = _typical_step_minutes(epochs)

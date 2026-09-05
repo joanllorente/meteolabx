@@ -460,7 +460,7 @@ def test_parcel_reports_the_level_of_free_convection():
     """
     from server.services.convective_diagnostics import parcel_diagnostics
 
-    # Perfil con inversión hasta 850 y flotabilidad entre 800 y 500.
+    # Perfil con flotabilidad en altura que sigue abierta al terminar a 400 hPa.
     pressure = np.asarray([1000., 900., 850., 800., 700., 600., 500., 400.])[:, None, None]
     height = np.asarray([100., 1000., 1500., 2000., 3000., 4200., 5600., 7200.])[:, None, None]
     # Entorno cálido abajo (frena) y frío arriba (deja subir).
@@ -475,9 +475,10 @@ def test_parcel_reports_the_level_of_free_convection():
 
     assert np.isfinite(resultado.lfc_pressure_hpa).all()
     assert np.isfinite(resultado.lfc_height_m).all()
-    # El LFC va por debajo del EL: más presión y menos altura.
-    assert resultado.lfc_pressure_hpa.item() > resultado.equilibrium_pressure_hpa.item()
-    assert resultado.lfc_height_m.item() < resultado.equilibrium_height_m.item()
+    # Este perfil termina aún flotante a 400 hPa: no se ha observado EL.
+    assert np.isnan(resultado.equilibrium_pressure_hpa).all()
+    assert np.isnan(resultado.equilibrium_height_m).all()
+    assert resultado.cape.item() > 0
 
 
 def test_a_profile_without_buoyancy_has_no_lfc():

@@ -194,10 +194,18 @@ def _erythemal_metrics(epochs: List[Any], uv_values: List[Any], *, now_epoch: in
     points: List[Tuple[int, float]] = []
     for epoch, value in zip(epochs, uv_values):
         try:
-            ep, uv_index = int(epoch), max(0.0, float(value))
+            ep, raw_uv = int(epoch), float(value)
         except (TypeError, ValueError):
             continue
-        if uv_index == uv_index and 0 < ep <= now_epoch:
+        # NaN es «esta estación no mide UV», y hay que descartarlo ANTES del
+        # recorte a cero: ``max(0.0, nan)`` devuelve 0.0 en Python, así que
+        # cada hueco de la serie entraba como un cero medido y una estación
+        # sin sensor —Meteocat, por ejemplo— acababa publicando una dosis
+        # eritemática de 0,00 SED en vez de no publicar ninguna.
+        if raw_uv != raw_uv:
+            continue
+        uv_index = max(0.0, raw_uv)
+        if 0 < ep <= now_epoch:
             points.append((ep, uv_index))
     points.sort()
     if not points:

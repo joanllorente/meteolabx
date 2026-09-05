@@ -503,7 +503,10 @@ def test_production_streamlit_runner_registers_clean_forecast_route_first():
     assert "decompress_response=False" in runner
     assert '"Content-Encoding"' in runner
     assert '"Accept-Encoding"' in runner
-    assert 'scripts/run_streamlit.py meteolabx.py' in start
+    # El arranque de producción ya no levanta Streamlit —la web es el servicio
+    # SvelteKit—, así que la ruta limpia del visor solo se comprueba en el
+    # lanzador local, que sí lo sigue usando para las pestañas antiguas.
+    assert "scripts/install_forecast_frontend.py" in start
     assert 'scripts/run_streamlit.py meteolabx.py' in local_start
 
 

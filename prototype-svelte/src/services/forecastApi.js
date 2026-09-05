@@ -14,7 +14,7 @@ const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
 // `immutable` y un año de caché, así que sin tocar esto un navegador que ya
 // tenga la hora guardada seguiría enseñando la versión anterior —sin la capa
 // de geopotencial, en este caso— y ni recargando ni reiniciando la cambiaría.
-const FORECAST_DATA_REVISION = 'forecast-fields-v18';
+const FORECAST_DATA_REVISION = 'forecast-fields-v19';
 // Modelo por defecto: el visor nació con AROME y las llamadas que no lo
 // dicen siguen siendo suyas.
 const DEFAULT_MODEL = 'arome';

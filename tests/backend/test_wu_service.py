@@ -127,20 +127,20 @@ def test_daily_extremes_use_native_high_low_not_chart_averages() -> None:
 
 def test_normalize_heat_index_filter_low_temp() -> None:
     """
-    Si Tc < HEAT_INDEX_MIN_TEMP (25 °C), el heat_index reportado por WU
-    se descarta porque queda fuera del rango válido NOAA.
+    Si Tc < HEAT_INDEX_MIN_TEMP (25 °C), no hay heat index.
+
+    La regresión de Rothfusz es una interpolación de la tabla del NWS, que
+    empieza en 80 °F: aplicarla en frío devuelve números sin sentido —a −19 °C
+    daba 146 °C— y disparaba el aviso de calor extremo en la Antártida.
     """
     obs = {"epoch": 0, "humidity": 50, "winddir": 0}
     # Aunque WU reporte heatIndex en su payload, lo IGNORAMOS y lo calculamos
-    # nosotros con Rothfusz. Para Tc=20 y RH=50, Rothfusz da un valor positivo
-    # razonable (la fórmula es polinómica y no tiene "filtro" duro a 25 °C —
-    # solo es físicamente significativa con calor + humedad altos).
+    # nosotros con Rothfusz, que fuera de rango no devuelve nada.
     metric = {"temp": 20.0, "heatIndex": 99.0, "windSpeed": 0, "windGust": 0}
 
     result = wu._normalize_current_observation(obs, metric)
 
-    # heat_index calculado nuestro != el inventado en metric ("99.0")
-    assert not math.isnan(result["heat_index"])
+    assert math.isnan(result["heat_index"])
     assert result["heat_index"] != pytest.approx(99.0)
 
 

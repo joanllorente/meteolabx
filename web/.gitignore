@@ -1,0 +1,6 @@
+node_modules/
+.svelte-kit/
+build/
+
+# Copia del worker de MapLibre para desarrollo (ver scripts/copy-maplibre-worker.mjs)
+static/maplibre/

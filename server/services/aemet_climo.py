@@ -34,6 +34,7 @@ from server.schemas.errors import ProviderError
 from server.services.aemet import _fetch_aemet_two_step
 from domain.parsing.aemet_climo import (
     CLIMO_DAILY_SCHEMA,
+    complete_daily_frame,
     CLIMO_EXTRA_SCHEMA,
     _aemet_daily_record_to_row,
     _bucket_monthlyannual_records,
@@ -55,6 +56,11 @@ LEGACY_DAILY_FILES = {
     "9771C": "baic0012d.txt",  # Lleida
     "9981A": "baic0005d.txt",  # Tortosa / Observatori de l'Ebre
 }
+
+# Desde cuándo se le piden diarios a OpenData para completar las series
+# locales. Estas llegan a 1950, OpenData no: pedirle 1950 es una ronda de
+# peticiones para nada. 1990 es el primer año que ofrece el selector.
+OPENDATA_DAILY_FROM = date(1990, 1, 1)
 
 # Concurrencia máxima contra OpenData (ratelimit agresivo).
 _MAX_CONCURRENT = 2
@@ -186,6 +192,30 @@ def _periods_outside_legacy_coverage(
     return [(start, end) for start, end in output if start <= end]
 
 
+def _legacy_periods_to_complete(
+    idema: str,
+    periods: Sequence[Tuple[date, date]],
+) -> List[Tuple[date, date]]:
+    """Tramos que cubre la serie local y que OpenData puede completar.
+
+    La serie local no publica viento ni rumbo. Para los años en los que
+    OpenData también tiene datos se le piden igualmente y se fusionan: si no,
+    el aeropuerto —que sí mide viento— sale sin él por venir de la serie
+    larga.
+    """
+    coverage = _legacy_coverage(idema)
+    if coverage is None:
+        return []
+    coverage_start, coverage_end = coverage
+    output: List[Tuple[date, date]] = []
+    for start, end in periods:
+        first = max(start, coverage_start, OPENDATA_DAILY_FROM)
+        last = min(end, coverage_end)
+        if first <= last:
+            output.append((first, last))
+    return output
+
+
 def _year_is_covered_by_legacy(idema: str, year: int) -> bool:
     coverage = _legacy_coverage(idema)
     if coverage is None:
@@ -298,7 +328,14 @@ async def fetch_climo_daily_for_periods(
         return _empty_climo_dataframe(include_extras=False)
 
     legacy_df = _legacy_daily_for_periods(station, periods)
-    api_periods = merge_date_periods(_periods_outside_legacy_coverage(station, periods))
+    # Fuera de la serie local no hay más remedio que preguntar; dentro de ella
+    # se pregunta igual, porque la serie local no trae viento y OpenData sí.
+    api_periods = merge_date_periods(
+        [
+            *_periods_outside_legacy_coverage(station, periods),
+            *_legacy_periods_to_complete(station, periods),
+        ]
+    )
     if not api_periods:
         return legacy_df if not legacy_df.empty else _empty_climo_dataframe(include_extras=False)
 
@@ -333,7 +370,10 @@ async def fetch_climo_daily_for_periods(
         return _normalize_climo_daily_rows(rows)
 
     chunks = await asyncio.gather(*(_chunk_df(s, e) for s, e in windows))
-    return _merge_daily_chunks([legacy_df, *chunks])
+    api_df = _merge_daily_chunks(list(chunks))
+    # OpenData manda donde llega —trae viento y rumbo—; la serie local sostiene
+    # el resto de la historia y rellena los días que OpenData no publique.
+    return complete_daily_frame(api_df, legacy_df)
 
 
 async def _fetch_monthlyannual_raw(

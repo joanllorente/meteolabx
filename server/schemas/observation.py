@@ -164,8 +164,14 @@ class CurrentObservationRequest(_ProviderStationRequest):
     """Petición de observación actual para ``POST /v1/observations/current``."""
 
 
-class TodaySeriesRequest(_ProviderStationRequest):
-    """Petición de series del día para ``POST /v1/observations/series/today``."""
+class TodaySeriesRequest(_ProviderStationRequest, _CalibrationRequestMixin):
+    """
+    Petición de series del día para ``POST /v1/observations/series/today``.
+
+    Acepta ``calibration`` (WU) por el mismo motivo que la serie reciente: los
+    gráficos del día y las tarjetas de Observación salen del mismo aparato, y
+    calibrar solo unas dejaba la pestaña de Tendencias contando otra cosa.
+    """
 
     station_elevation: Optional[float] = Field(
         default=None,
@@ -379,6 +385,10 @@ class TodaySeries(BaseModel):
     theoretical_solar_radiations: List[Optional[float]] = Field(default_factory=list, description="Irradiancia teórica de cielo despejado (W/m²).")
     wind_u: List[Optional[float]] = Field(default_factory=list, description="Componente zonal del viento (km/h).")
     wind_v: List[Optional[float]] = Field(default_factory=list, description="Componente meridional del viento (km/h).")
+    # La curva teórica de todo el día, con su propia rejilla: la de arriba va
+    # alineada con las medidas y por eso acaba donde acaba la estación.
+    solar_day_epochs: List[int] = Field(default_factory=list)
+    solar_day_theoretical: List[Optional[float]] = Field(default_factory=list)
     sunrise_epoch: Optional[int] = None
     sunset_epoch: Optional[int] = None
     solar_altitude: Optional[float] = None
@@ -417,6 +427,10 @@ class TodaySeries(BaseModel):
             saturation_pressures=aligned("saturation_pressures"),
             theoretical_solar_radiations=aligned("theoretical_solar_radiations"),
             wind_u=aligned("wind_u"), wind_v=aligned("wind_v"),
+            solar_day_epochs=[int(value) for value in (data.get("solar_day_epochs") or [])],
+            solar_day_theoretical=[
+                _nan_to_none(value) for value in (data.get("solar_day_theoretical") or [])
+            ],
             sunrise_epoch=data.get("sunrise_epoch"),
             sunset_epoch=data.get("sunset_epoch"),
             solar_altitude=_nan_to_none(data.get("solar_altitude")),

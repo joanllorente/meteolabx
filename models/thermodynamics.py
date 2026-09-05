@@ -5,7 +5,10 @@ Todas las ecuaciones calculadas a partir de T, HR y p_abs
 según especificación del documento de referencia.
 """
 import math
-from config import G0, RD, RV, EPSILON, CP, LV, KAPPA, TV_COEF, LCL_FACTOR
+from config import (
+    G0, RD, RV, EPSILON, CP, LV, KAPPA, TV_COEF, LCL_FACTOR,
+    HEAT_INDEX_MIN_TEMP,
+)
 
 def is_nan(x):
     return x != x
@@ -354,9 +357,15 @@ def heat_index_rothfusz(T_celsius: float, RH_pct: float) -> float:
         T_celsius: Temperatura en °C
         RH_pct: Humedad relativa en %
     Returns:
-        Heat Index en °C
+        Heat Index en °C, o NaN por debajo de ``HEAT_INDEX_MIN_TEMP``.
     """
     if is_nan(T_celsius) or is_nan(RH_pct):
+        return float("nan")
+    # La regresión de Rothfusz solo es válida en calor: el NWS la aplica a
+    # partir de 80 °F. Fuera de rango devuelve disparates —a −19 °C con 41 %
+    # de humedad daba 146 °C— que además disparaban el aviso de peligro por
+    # calor en plena Antártida. El umbral ya estaba en `config`, esperando.
+    if T_celsius < HEAT_INDEX_MIN_TEMP:
         return float("nan")
     T = T_celsius
     RH = RH_pct

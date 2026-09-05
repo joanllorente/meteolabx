@@ -75,6 +75,18 @@ from server.services.cache import AsyncTTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
 
+# TTL del caché de la observación actual, cuando 30 s son demasiados.
+#
+# Las redes de credencial propia publican con cada envío de la consola —diez o
+# quince segundos en Weather Underground—, así que media vida de caché se comía
+# la frescura por la que se paga: el navegador preguntaba cada 30 s y podía
+# recibir un dato de hace otros 30. Aquí la clave del caché lleva la credencial
+# de quien pregunta, de modo que las llamadas extra las gasta su propia cuota.
+CURRENT_TTL_BY_PROVIDER = {
+    "WU": 10.0,
+    "WEATHERLINK": 30.0,
+}
+
 
 _LOOKBACK_SERIES_FIELDS = (
     "temps",
@@ -721,7 +733,9 @@ async def _fetch_current_dispatch(
         body, http, settings,
     )
     key = make_cache_key(body.provider, "current", body.station_id, cache_secret)
-    return await cache.get_or_fetch(key, current_fetcher)
+    return await cache.get_or_fetch(
+        key, current_fetcher, ttl_s=CURRENT_TTL_BY_PROVIDER.get(body.provider),
+    )
 
 
 @router.post(
@@ -756,6 +770,14 @@ async def post_today_series(
     )
     key = make_cache_key(body.provider, "series_today", body.station_id, cache_secret)
     raw = await cache.get_or_fetch(key, series_fetcher)
+
+    # La caché guarda siempre el dato crudo: los offsets son de quien pregunta
+    # y se aplican sobre una copia, igual que en ``/current/processed``.
+    if body.provider == "WU" and body.calibration:
+        from domain.wu_calibration import apply_wu_series_calibration
+
+        raw = apply_wu_series_calibration(raw, body.calibration)
+
     lookback_hours = int(body.lookback_hours or 0)
     if lookback_hours > 0 and raw.get("has_data", False):
         try:
@@ -766,6 +788,7 @@ async def post_today_series(
                 api_secret=body.api_secret,
                 days_back=1,
                 station_elevation=body.station_elevation,
+                calibration=body.calibration,
             )
             recent_secret, recent_fetcher = _resolve_recent_fetcher(
                 recent_body, http, settings, fine=True,
@@ -874,7 +897,9 @@ async def post_current_processed(
     else:
         # Para el resto de proveedores current y serie siguen siendo fuentes
         # distintas. Se lanzan en paralelo y pasan por sus cachés respectivas.
-        current_task = current_cache.get_or_fetch(current_key, current_fetcher)
+        current_task = current_cache.get_or_fetch(
+            current_key, current_fetcher, ttl_s=CURRENT_TTL_BY_PROVIDER.get(body.provider),
+        )
         series_task = series_cache.get_or_fetch(series_key, series_fetcher)
         current_raw, series_result = await asyncio.gather(
             current_task,

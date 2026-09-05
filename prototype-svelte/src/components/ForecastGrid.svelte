@@ -11,12 +11,13 @@
   } from '../lib/pressureCentres.js';
   import { colorDeFondo, mezclaSobre, tintaLegible } from '../lib/ink.js';
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
+  import { forecastLayerLabel, forecastText } from '../lib/forecast-i18n.js';
 
   // `formatProbe` trae ya la unidad elegida en la leyenda; sin ella se cae a la
   // que manda el backend en la cabecera del frame. `scaleBreaks` y `zeroFloor`
   // vienen del producto: con clases, el ráster deja de escalarse linealmente.
   let {
-    frame, productLabel, resetKey = 0, formatProbe = null,
+    frame, productLabel, language = 'es', resetKey = 0, formatProbe = null,
     scaleBreaks = null, zeroFloor = 0,
     displayMin = null, displayMax = null, contourStep = 0, formatContour = null,
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
@@ -873,7 +874,7 @@
     class="map-surface"
     bind:this={surface}
     role="application"
-    aria-label={`Mapa interactivo de ${productLabel}`}
+    aria-label={forecastText(language, 'interactiveMap', { product: productLabel })}
     class:dragging
     onwheel={zoomWithWheel}
     onpointerdown={beginDrag}
@@ -988,7 +989,7 @@
     </div>
   {/if}
   {#if availableLayers.length}
-    <div class="layer-panel" role="group" aria-label="Capas del mapa">
+    <div class="layer-panel" role="group" aria-label={forecastText(language, 'layers')}>
       {#each availableLayers as capa}
         <label>
           <input
@@ -996,15 +997,15 @@
             checked={layerPreferences[capa.id]}
             onchange={() => toggleLayer(capa.id)}
           />
-          <span>{capa.label}</span>
+          <span>{forecastLayerLabel(language, capa.id, capa.label)}</span>
         </label>
       {/each}
     </div>
   {/if}
-  <div class="zoom-controls" aria-label="Controles de zoom">
-    <button type="button" onclick={() => setZoom(zoom * 1.35)} aria-label="Acercar mapa"><Plus size={15} /></button>
-    <button type="button" onclick={() => setZoom(zoom / 1.35)} aria-label="Alejar mapa" disabled={zoom <= 1}><Minus size={15} /></button>
-    <button type="button" onclick={resetView} aria-label="Restablecer encuadre"><Locate size={15} /></button>
+  <div class="zoom-controls" aria-label={forecastText(language, 'zoom')}>
+    <button type="button" onclick={() => setZoom(zoom * 1.35)} aria-label={forecastText(language, 'zoomIn')}><Plus size={15} /></button>
+    <button type="button" onclick={() => setZoom(zoom / 1.35)} aria-label={forecastText(language, 'zoomOut')} disabled={zoom <= 1}><Minus size={15} /></button>
+    <button type="button" onclick={resetView} aria-label={forecastText(language, 'resetView')}><Locate size={15} /></button>
     <span>{Math.round(zoom * 100)}%</span>
   </div>
 </div>

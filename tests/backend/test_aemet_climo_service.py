@@ -153,7 +153,14 @@ async def test_legacy_txt_station_served_without_aemet_api_calls() -> None:
 
 
 @pytest.mark.asyncio
-async def test_legacy_txt_station_uses_aemet_api_only_outside_local_coverage() -> None:
+async def test_legacy_txt_station_also_asks_the_api_inside_local_coverage() -> None:
+    """La serie local no publica viento, así que se pregunta igual.
+
+    Antes solo se pedía a OpenData lo que caía fuera de la serie local. Con
+    eso, el aeropuerto de Barcelona —que sí mide viento— salía sin él en toda
+    su cobertura local, hasta 2025. Ahora se piden los dos tramos y se
+    fusionan.
+    """
     from server.services.aemet_climo import fetch_climo_daily_for_periods
 
     records = [
@@ -182,8 +189,12 @@ async def test_legacy_txt_station_uses_aemet_api_only_outside_local_coverage() -
             client, "9771C", "K", [(date(2025, 12, 31), date(2026, 1, 1))],
         )
 
+    # Los dos tramos son contiguos, así que se piden en una sola ventana: lo
+    # que importa es que ahora empiece dentro de la serie local —el 31— y no
+    # el 1 de enero como antes.
     assert len(calls) == 2
-    assert "2026-01-01T00%3A00%3A00UTC" in calls[0]
+    assert any("2025-12-31T00%3A00%3A00UTC" in call for call in calls)
+    assert any("2026-01-01T23%3A59%3A59UTC" in call for call in calls)
     assert len(df) == 2
     assert df.iloc[0]["date"].strftime("%Y-%m-%d") == "2025-12-31"
     assert df.iloc[1]["date"].strftime("%Y-%m-%d") == "2026-01-01"

@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import sqlite3
+import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Any, Dict, List, Optional
 
 import data_files
 
+
+logger = logging.getLogger(__name__)
 
 SENSOR_KEYS = (
     "thermometer", "hygrometer", "barometer", "anemometer",
@@ -594,6 +597,31 @@ LEFT JOIN station_visibility_overrides svo USING(station_pk)
 _VISIBLE = " AND COALESCE(svo.hidden, 0) = 0"
 
 
+def _meteohub_canonical_id(station_id: str) -> str:
+    """Deja un identificador de MeteoHub como lo guarda el catálogo.
+
+    Su identificador es ``red|lat|lon|nombre``, y cada fuente lo escribe a su
+    manera: el catálogo redondea las coordenadas a cinco decimales y convierte
+    el nombre en slug —``dpcn-puglia|41.88050|16.17583|vieste``—, mientras el
+    ranking usa lo que trae el feed —``dpcn-puglia|41.8805|16.17583|vieste``, y
+    ``buttigliera d'asti`` con espacio y apóstrofo—. Eran la misma estación
+    escrita de dos formas, así que pulsarla en el ranking llevaba a un 404: 21
+    de los 30 enlaces del ranking italiano estaban rotos.
+    """
+    from utils.station_slug import slugify
+
+    parts = str(station_id or "").split("|")
+    if len(parts) < 4:
+        return station_id
+    try:
+        lat = f"{float(parts[1]):.5f}"
+        lon = f"{float(parts[2]):.5f}"
+    except (TypeError, ValueError):
+        return station_id
+    name = slugify("|".join(parts[3:]))
+    return f"{parts[0].strip().lower()}|{lat}|{lon}|{name}"
+
+
 def get_station(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
     """Return one connectable station by case-insensitive provider identity."""
     provider = str(provider or "").strip().upper()
@@ -604,6 +632,9 @@ def get_station(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
         return _netatmo_get_station(station_id)
     if provider not in CATALOG_PROVIDERS or not station_id:
         return None
+    if provider == "METEOHUB_IT":
+        station_id = _meteohub_canonical_id(station_id)
+
     network = ""
     if provider == "IEM" and "|" in station_id:
         network, station_id = (part.strip() for part in station_id.split("|", 1))
@@ -621,7 +652,46 @@ def get_station(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
                 _SELECT + " WHERE s.provider = ? AND s.station_id = ? COLLATE NOCASE" + _VISIBLE + " LIMIT 1",
                 (provider, station_id),
             ).fetchone()
-    return _record(row) if row is not None else None
+    if row is not None:
+        return _record(row)
+
+    # MeteoHub publica en su feed estaciones que el inventario local todavía
+    # no tiene, y su identificador ya lleva dentro todo lo que hace falta para
+    # abrirla: red, coordenadas y nombre. Rechazarlas con un 404 era negar una
+    # estación que el ranking acababa de enseñar y que el servicio de
+    # observación sabe consultar.
+    if provider == "METEOHUB_IT":
+        return _meteohub_station_from_id(station_id)
+    return None
+
+
+def _meteohub_station_from_id(station_id: str) -> Optional[Dict[str, Any]]:
+    parts = str(station_id or "").split("|")
+    if len(parts) < 4:
+        return None
+    try:
+        lat, lon = float(parts[1]), float(parts[2])
+    except (TypeError, ValueError):
+        return None
+    name = parts[3].replace("-", " ").strip()
+    return {
+        "provider": "METEOHUB_IT",
+        "station_id": station_id,
+        "name": name.title() if name.islower() else name,
+        "locality": "",
+        "region": "",
+        "country": "IT",
+        "lat": lat,
+        "lon": lon,
+        "elevation": None,
+        "tz": "Europe/Rome",
+        "manual": False,
+        "online": True,
+        "has_historical": False,
+        "sensors": {},
+        "url_slug": "",
+        "distance_km": 0.0,
+    }
 
 
 def find_by_slug(provider: str, slug: str) -> Optional[Dict[str, Any]]:
@@ -656,6 +726,260 @@ def find_by_slug(provider: str, slug: str) -> Optional[Dict[str, Any]]:
         if slugify(row["name"]) == target:
             return _record(row)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Slug de URL indexable (``/{idioma}/observation/{slug}``)
+# ---------------------------------------------------------------------------
+
+_URL_SLUG_SELECT = """
+SELECT s.*, ss.station_pk AS sensor_station_pk,
+       ss.thermometer, ss.hygrometer, ss.barometer, ss.anemometer,
+       ss.wind_vane, ss.rain_gauge, ss.pyranometer, ss.uv,
+       u.url_slug, u.indexable
+FROM station_url_slugs u
+JOIN stations s USING(station_pk)
+LEFT JOIN station_sensors ss USING(station_pk)
+"""
+
+
+def _url_slug_table_missing(error: sqlite3.OperationalError) -> bool:
+    return "no such table" in str(error).lower()
+
+
+def find_by_url_slug(slug: str) -> Optional[Dict[str, Any]]:
+    """Ficha de estación a partir del slug de su URL indexable.
+
+    El slug (``barcelona-drassanes-0201x``) sale de ``utils.station_url`` y
+    vive materializado en ``station_url_slugs``; lo escribe
+    ``scripts/build_station_url_slugs.py`` al arrancar el servicio.
+
+    Devuelve el registro habitual más ``url_slug`` e ``indexable``. Las
+    estaciones no indexables —ocultas, sin coordenadas o fuera de servicio—
+    se siguen resolviendo: sus URLs pueden estar ya en el índice de Google y
+    preferimos servir la ficha con ``noindex`` antes que un 404. Quien
+    consuma esto decide qué hacer con la bandera.
+    """
+    target = str(slug or "").strip().lower()
+    if not target:
+        return None
+    with _connect() as connection:
+        try:
+            row = connection.execute(
+                _URL_SLUG_SELECT + " WHERE u.url_slug = ? LIMIT 1", (target,)
+            ).fetchone()
+        except sqlite3.OperationalError as error:
+            if not _url_slug_table_missing(error):
+                raise
+            logger.warning(
+                "station_url_slugs no existe todavía; ejecuta "
+                "scripts/build_station_url_slugs.py"
+            )
+            return None
+    if row is None:
+        return None
+    record = _record(row)
+    record["url_slug"] = row["url_slug"]
+    record["indexable"] = bool(row["indexable"])
+    # País TAL CUAL está en el catálogo, sin las correcciones que ``_record``
+    # aplica por proveedor. El generador SEO decide con este valor en qué
+    # idiomas existe cada ficha, y las alternates ya indexadas dependen de él.
+    record["catalog_country"] = str(row["country"] or "").strip().upper()
+    return record
+
+
+def url_slug_for(provider: str, station_id: str) -> Optional[str]:
+    """Slug de URL de una estación ya identificada (para canonical y enlaces)."""
+    provider = str(provider or "").strip().upper()
+    station_id = str(station_id or "").strip()
+    if not provider or not station_id:
+        return None
+    with _connect() as connection:
+        try:
+            row = connection.execute(
+                """
+                SELECT u.url_slug FROM station_url_slugs u
+                JOIN stations s USING(station_pk)
+                WHERE s.provider = ? AND s.station_id = ? COLLATE NOCASE
+                LIMIT 1
+                """,
+                (provider, station_id),
+            ).fetchone()
+        except sqlite3.OperationalError as error:
+            if not _url_slug_table_missing(error):
+                raise
+            return None
+    return row["url_slug"] if row is not None else None
+
+
+def indexable_url_slugs(
+    *, offset: int = 0, limit: int = 50_000
+) -> List[Dict[str, Any]]:
+    """Página del catálogo indexable, ordenada, para construir el sitemap."""
+    with _connect() as connection:
+        try:
+            rows = connection.execute(
+                """
+                SELECT u.url_slug, s.provider, s.country
+                FROM station_url_slugs u
+                JOIN stations s USING(station_pk)
+                WHERE u.indexable = 1
+                ORDER BY u.url_slug
+                LIMIT ? OFFSET ?
+                """,
+                (int(limit), int(offset)),
+            ).fetchall()
+        except sqlite3.OperationalError as error:
+            if not _url_slug_table_missing(error):
+                raise
+            return []
+    return [
+        {
+            "url_slug": row["url_slug"],
+            "provider": row["provider"],
+            # Sin normalizar: el sitemap tiene que elegir los mismos idiomas
+            # que eligió el generador estático, que lee esta misma columna.
+            "catalog_country": str(row["country"] or "").strip().upper(),
+        }
+        for row in rows
+    ]
+
+
+def catalog_details_for(
+    pairs: List[tuple[str, str]]
+) -> Dict[tuple[str, str], Dict[str, Any]]:
+    """Slug, región y localidad de varias estaciones en una sola consulta.
+
+    Lo usa el ranking: sus filas identifican la estación por el ID de su red
+    y necesita saber a qué URL enlazar y de qué provincia o comunidad es. Una
+    consulta por fila multiplicaría por cuarenta el coste de pintar la tabla.
+
+    El ``LEFT JOIN`` con la tabla de slugs es intencionado: las redes que no
+    se publican siguen devolviendo región y localidad, solo que sin slug.
+    """
+    wanted = [
+        (str(provider or "").strip().upper(), str(station_id or "").strip())
+        for provider, station_id in pairs
+    ]
+    wanted = [pair for pair in wanted if pair[0] and pair[1]]
+    if not wanted:
+        return {}
+
+    placeholders = ",".join("(?, ?)" for _ in wanted)
+    flat: List[str] = [value for pair in wanted for value in pair]
+    with _connect() as connection:
+        try:
+            rows = connection.execute(
+                f"""
+                SELECT s.provider, s.station_id, s.region, s.locality,
+                       s.elevation_m, u.url_slug
+                FROM stations s
+                LEFT JOIN station_url_slugs u USING(station_pk)
+                WHERE (s.provider, s.station_id) IN (VALUES {placeholders})
+                """,
+                flat,
+            ).fetchall()
+        except sqlite3.OperationalError as error:
+            if not _url_slug_table_missing(error):
+                raise
+            return {}
+    return {
+        (row["provider"], row["station_id"]): {
+            "url_slug": row["url_slug"] or "",
+            "region": row["region"] or "",
+            "locality": row["locality"] or "",
+            "elevation": row["elevation_m"],
+        }
+        for row in rows
+    }
+
+
+def url_slugs_for(pairs: List[tuple[str, str]]) -> Dict[tuple[str, str], str]:
+    """Solo los slugs, para quien no necesita el resto de la ficha."""
+    return {
+        key: details["url_slug"]
+        for key, details in catalog_details_for(pairs).items()
+        if details["url_slug"]
+    }
+
+
+def indexable_stations_near(
+    lat: float,
+    lon: float,
+    *,
+    exclude: Optional[tuple[str, str]] = None,
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    """Las estaciones indexables más cercanas a un punto, con su slug.
+
+    Alimenta el bloque de «estaciones cercanas» de cada ficha, que es el
+    enlazado interno que hoy reparte autoridad entre las páginas. Se busca
+    en una caja creciente en vez de recorrer el catálogo entero: en zonas
+    densas la primera vuelta ya trae de sobra.
+    """
+    try:
+        origin_lat = float(lat)
+        origin_lon = float(lon)
+    except (TypeError, ValueError):
+        return []
+
+    excluded_provider, excluded_station = (exclude or ("", ""))
+    found: List[Dict[str, Any]] = []
+    with _connect() as connection:
+        for span in (0.35, 1.0, 3.0, 8.0):
+            try:
+                rows = connection.execute(
+                    """
+                    SELECT s.provider, s.station_id, s.name, s.latitude, s.longitude,
+                           u.url_slug
+                    FROM station_url_slugs u
+                    JOIN stations s USING(station_pk)
+                    WHERE u.indexable = 1
+                      AND s.latitude BETWEEN ? AND ?
+                      AND s.longitude BETWEEN ? AND ?
+                    """,
+                    (
+                        origin_lat - span, origin_lat + span,
+                        origin_lon - span, origin_lon + span,
+                    ),
+                ).fetchall()
+            except sqlite3.OperationalError as error:
+                if not _url_slug_table_missing(error):
+                    raise
+                return []
+            found = [
+                {
+                    "provider": row["provider"],
+                    "station_id": row["station_id"],
+                    "name": row["name"],
+                    "url_slug": row["url_slug"],
+                    "distance_km": _haversine_km(
+                        origin_lat, origin_lon, row["latitude"], row["longitude"]
+                    ),
+                }
+                for row in rows
+                if not (
+                    row["provider"] == excluded_provider
+                    and str(row["station_id"]) == str(excluded_station)
+                )
+            ]
+            if len(found) >= limit:
+                break
+    found.sort(key=lambda item: item["distance_km"])
+    return found[:limit]
+
+
+def indexable_url_slug_count() -> int:
+    with _connect() as connection:
+        try:
+            row = connection.execute(
+                "SELECT COUNT(*) AS total FROM station_url_slugs WHERE indexable = 1"
+            ).fetchone()
+        except sqlite3.OperationalError as error:
+            if not _url_slug_table_missing(error):
+                raise
+            return 0
+    return int(row["total"])
 
 
 # Países con proveedor de ranking DEDICADO (con bulk propio) → se EXCLUYEN de
@@ -810,6 +1134,7 @@ def country_for_point(lat: float, lon: float, *, tolerance: float = 0.35) -> Opt
 
 
 _IEM_STATION_COUNTRIES_CACHE: Optional[Dict[str, str]] = None
+_IEM_STATION_ELEVATIONS_CACHE: Optional[Dict[str, float]] = None
 
 
 def iem_station_countries() -> Dict[str, str]:
@@ -860,6 +1185,35 @@ def iem_station_countries() -> Dict[str, str]:
         if iso and iso not in excluded:
             out[f"{network}|{row['station_id']}"] = iso
     _IEM_STATION_COUNTRIES_CACHE = out
+    return out
+
+
+def iem_station_elevations() -> Dict[str, float]:
+    """Altitud en metros de las estaciones IEM aptas para el ranking."""
+    global _IEM_STATION_ELEVATIONS_CACHE
+    if _IEM_STATION_ELEVATIONS_CACHE is not None:
+        return _IEM_STATION_ELEVATIONS_CACHE
+    networks = set(iem_ranking_networks())
+    out: Dict[str, float] = {}
+    with _connect() as connection:
+        rows = connection.execute(
+            "SELECT network_code, station_id, elevation_m FROM stations "
+            "WHERE provider = 'IEM' AND online = 1 "
+            "  AND network_code IS NOT NULL AND station_id IS NOT NULL "
+            "  AND elevation_m IS NOT NULL"
+        ).fetchall()
+    for row in rows:
+        network = str(row["network_code"]).strip()
+        station_id = f"{network}|{row['station_id']}"
+        if network not in networks:
+            continue
+        if _is_dcp_scan(network) and station_id not in _IEM_DCP_SCAN_KEEP:
+            continue
+        try:
+            out[station_id] = float(row["elevation_m"])
+        except (TypeError, ValueError):
+            continue
+    _IEM_STATION_ELEVATIONS_CACHE = out
     return out
 
 
@@ -927,7 +1281,26 @@ def provider_counts() -> Dict[str, int]:
     return {provider: counts.get(provider, 0) for provider in CATALOG_PROVIDERS}
 
 
+# Cuántas estaciones tiene cada país, con su fecha de cálculo.
+#
+# El recuento agrupa las 230.000 filas del catálogo y tarda cuatro décimas:
+# poco para una consulta suelta, demasiado para pagarlo en cada carga del mapa,
+# que lo pide dos veces —una para el selector de países y otra para el total—.
+# El catálogo es un fichero de solo lectura, así que el resultado aguanta;
+# el plazo existe porque el recuento de las redes de particulares depende de
+# cuáles siguen publicando, y eso sí cambia con las horas.
+_COUNTRY_COUNTS_TTL_S = 600.0
+_country_counts_cache: Dict[tuple, tuple[float, Dict[str, int]]] = {}
+
+
 def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
+    cache_key = tuple(sorted(
+        str(value).strip().upper() for value in (providers or list(CATALOG_PROVIDERS))
+    ))
+    cached = _country_counts_cache.get(cache_key)
+    if cached is not None and (time.time() - cached[0]) < _COUNTRY_COUNTS_TTL_S:
+        return dict(cached[1])
+
     requested_providers = [
         str(value).strip().upper()
         for value in (providers or list(CATALOG_PROVIDERS))
@@ -988,6 +1361,8 @@ def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
         for row in rows:
             country = _normalize_country_code(row["country"])
             counts[country] = counts.get(country, 0) + int(row["station_count"])
+
+    _country_counts_cache[cache_key] = (time.time(), dict(counts))
     return counts
 
 

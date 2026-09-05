@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     entre frescura y consumo de API key.
     """
 
+    cache_stale_current_s: float = 900.0
+    """Ventana máxima para reutilizar un current reciente si falla el proveedor."""
+
+    cache_stale_series_s: float = 3600.0
+    """Ventana máxima para reutilizar una serie reciente si falla el proveedor."""
+
     cache_max_entries: int = 500
     """
     Tope global de entradas por caché. Con 500 estaciones distintas

@@ -5,6 +5,8 @@
     "flatlined_series": "⚠️ Windy is returning one or more variables with no variation for several hours. The chart shows the received data, but affected highs and lows are hidden because they are unreliable."
   },
   "tabs": {
+    "current": "Current",
+    "trend": "Trend",
     "observation": "Observation",
     "trends": "Trends",
     "historical": "History",
@@ -104,88 +106,6 @@
     "whats_new": "What's new",
     "improvements_title": "Improvements",
     "fixes_title": "Fixes",
-    "release_140_improvements": [
-      "New card-based interface for the Historical tab.",
-      "New wind information added to Historical.",
-      "New ‘Numerical forecast’ section with custom maps for the AROME model."
-    ],
-    "release_140_fixes": [
-      "Fixed an issue that prevented accumulated values from being displayed correctly in precipitation charts."
-    ],
-    "release_135_improvements": [
-      "Improved interpolation on the global temperature map.",
-      "More stable and faster startup.",
-      "Optimized tab navigation on mobile devices."
-    ],
-    "release_135_fixes": [
-      "Fixed a visual issue on the station map.",
-      "Fixed an issue that prevented the precipitation chart from correctly displaying accumulated data."
-    ],
-    "release_134_improvements": [
-      "Added observation quality control for ECCC, SMHI, Frost, MeteoGalicia, Meteocat, and NWS."
-    ],
-    "release_134_fixes": [
-      "Fixed NETATMO station connection issues."
-    ],
-    "release_133_improvements": [
-      "Smoother tab navigation and optimized map loading."
-    ],
-    "release_132_improvements": [
-      "Optimized connections to Meteocat stations."
-    ],
-    "release_131_improvements": [
-      "New Climantartide provider for Antarctic base stations."
-    ],
-    "improvements": [
-      "Complete, functional migration to FastAPI mode.",
-      "New Ranking tab, with temperature, wind and precipitation rankings by country and globally.",
-      "New IEM provider, adding more than 100,000 stations worldwide.",
-      "Complete redesign of the Map tab.",
-      "New country filter on the map.",
-      "New filter for available sensors on the map.",
-      "Available sensors are now shown as metadata for each station.",
-      "New filter to show stations with historical data available on the map.",
-      "Historical data is now available for the WeatherLink network."
-    ],
-    "fixes": [
-      "Fixed an error that prevented wind values from being shown even when the provider measured them.",
-      "Fixed an error in the count of tropical and torrid nights in the Historical tab.",
-      "Fixed an issue that prevented the full pressure trend from being calculated correctly.",
-      "Fixed an error that caused AEMET and MeteoGalicia temperature highs and lows to show incorrect values.",
-      "Fixed an error that caused MeteoGalicia maximum gust values to show incorrectly."
-    ],
-    "release_130_improvements": [
-      "New worldwide map of current temperature.",
-      "New worldwide map of wind speed and direction.",
-      "New worldwide map of accumulated precipitation.",
-      "New personal weather station providers: Netatmo and Windy.",
-      "New official providers: IPMA (Portugal), GEOSPHERE (Austria), SMHI (Sweden), and ECCC (Canada).",
-      "Up to 30% faster initial website loading.",
-      "New language available: Portuguese."
-    ],
-    "release_130_fixes": [
-      "MeteoLabX now automatically recognizes the browser language.",
-      "The selected language is remembered between visits."
-    ],
-    "previous_improvements": [
-      "Two new data providers added: Met Office and MeteoHub Italy.",
-      "A favourites system has been added for quick access to any station.",
-      "A new precipitation chart has been added.",
-      "WeatherLink support has been added.",
-      "The weekly charts display has been improved.",
-      "The Sky clarity card now shows twilights.",
-      "The initial loading time of the web app has been reduced.",
-      "Definitions have been added to the charts in the Trends tab."
-    ],
-    "previous_fixes": [
-      "Fixed an error that showed incorrect data in the Puertos del Estado tide gauges.",
-      "Fixed caching issues when switching between stations.",
-      "Fixed an error that prevented the synoptic series in the Trends tab from being shown, even when the provider returned the data.",
-      "Fixed an error that prevented trend charts from some providers from being displayed.",
-      "Fixed an error that prevented sunrise and sunset from being shown in local time.",
-      "Fixed an error that showed incorrect temperature and humidity highs and lows in Meteocat.",
-      "Fixed an error that prevented querying the current year's history in Weather Underground."
-    ],
     "sources": "Sources",
     "unaffiliated": "Not affiliated",
     "privacy": "Privacy",
@@ -194,12 +114,16 @@
     "privacy_cookies_title": "Cookies and tracking",
     "privacy_cookies": [
       "MeteoLabX does not use advertising cookies, tracking pixels or external analytics services such as Google Analytics, and it does not display advertising.",
-      "The application may use cookies or technical mechanisms that are strictly necessary for its operation and security. These mechanisms are not used for advertising or to track your activity on other websites, so they do not require consent and you will not see a cookie banner."
+      "The application may use cookies or technical mechanisms that are strictly necessary for its operation and security. These mechanisms are not used for advertising or to track your activity on other websites, so they do not require consent and you will not see a cookie banner.",
+      "To open the map and the ranking in the country you are browsing from, MeteoLabX stores a technical cookie with the name of your time zone (for example, “Europe/Madrid”). It contains neither your exact location nor any identifier.",
+      "The interface typeface is served from MeteoLabX's own domain: browsing the site makes no requests to third-party servers, apart from the map's base layer described below."
     ],
     "privacy_browser_title": "Preferences stored in your browser",
     "privacy_browser": [
-      "So that you do not have to configure MeteoLabX on every visit, some preferences, such as the selected units or your favourite stations, are stored locally in your browser.",
+      "So that you do not have to configure MeteoLabX on every visit, some preferences are stored locally in your browser: the units, the light or dark theme, your favourite stations, the last station you connected to and, if you enable it, the one that should open on arrival.",
+      "If you connect your own station, its altitude and the calibration of its sensors are also stored locally. They are sent to the server solely to compute the values shown.",
       "The credentials you enter for providers such as Weather Underground or WeatherLink are also stored locally in your browser. They are used exclusively to perform the requests you make and are not added to MeteoLabX's statistics or kept in its database.",
+      "Other preferences, such as the map or ranking filters, are kept only while the tab stays open and disappear when you close it.",
       "You can remove this information at any time by clearing the browsing data associated with MeteoLabX."
     ],
     "privacy_log_title": "Technical query log",
@@ -207,7 +131,8 @@
     "privacy_log_items": [
       "The provider, identifier and name of the station consulted.",
       "The date and time of the query.",
-      "If the query fails, the category of the error, such as a timeout, rejected credentials or a communication failure with the provider, and, where applicable, the HTTP status code."
+      "If the query fails, the category of the error, such as a timeout, rejected credentials or a communication failure with the provider, and, where applicable, the HTTP status code.",
+      "The language in which the page is being displayed."
     ],
     "privacy_log_notes": [
       "This log is not linked to any user account, session identifier or visitor profile. MeteoLabX does not add the visitor's IP address, location, credentials or any information intended to identify them to these statistics.",
@@ -224,7 +149,8 @@
     "privacy_infra_title": "Infrastructure and security logs",
     "privacy_infra": [
       "The providers used to host, protect and deliver MeteoLabX may temporarily process technical information, such as the IP address, the browser used and the date and time of access, in order to provide the service, prevent abuse and guarantee its security.",
-      "These providers act exclusively as technical infrastructure providers and do not receive the data to use it for their own advertising purposes."
+      "These providers act exclusively as technical infrastructure providers and do not receive the data to use it for their own advertising purposes.",
+      "The map uses CARTO's base layer. When you open that tab, your browser requests the map tiles and fonts directly from its servers, so CARTO may process your IP address and the area of the map you are viewing. MeteoLabX does not send it any other information."
     ],
     "privacy_retention_title": "Retention and access",
     "privacy_retention": [
@@ -232,7 +158,20 @@
       "The logs are accessible exclusively to the MeteoLabX administrator and to the technical providers when necessary to provide or protect the service."
     ],
     "privacy_contact_title": "Contact",
-    "privacy_contact": "For any question about privacy or about how this information is handled, you can write to"
+    "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_200_improvements": [
+      "Completely redesigned interface: clearer, more modern and more consistent.",
+      "New Forecast tab, with AROME model maps and MeteoLabX's own diagnostics.",
+      "The Historical section now offers more complete information.",
+      "New wind chart in Historical."
+    ],
+    "release_200_fixes": [
+      "When the station is calm no wind direction is shown: the vane stays stuck on the last heading and measures nothing.",
+      "The UV index and the erythemal dose no longer report residual values with the Sun below the horizon.",
+      "The heat and wet-bulb warnings each appear on their own card and say which measurement they refer to.",
+      "The historical tab no longer shows empty cards when the network does not publish that measurement.",
+      "Fixed the ranking links to MeteoHub Italia stations."
+    ]
   },
   "cards": {
     "help_aria": "Help for {title}",
@@ -293,6 +232,9 @@
     },
     "calibration": {
       "title": "Sensor calibration",
+      "description": "Adjust this station’s readings.",
+      "requires_connection": "Connect the station to calibrate it.",
+      "close": "Close calibration",
       "loading": "Loading Weather Underground sensors...",
       "range_help": "Allowed range: {min} to {max} {unit}",
       "save": "Save calibration",
@@ -310,6 +252,8 @@
     },
     "units": {
       "title": "Units",
+      "description": "These preferences apply across MeteoLabX.",
+      "close": "Close units",
       "fields": {
         "temperature": "Temperature",
         "wind": "Wind",

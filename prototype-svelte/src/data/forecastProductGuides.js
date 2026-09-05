@@ -537,7 +537,7 @@ export const forecastProductGuides = {
     steps: [
       'Seleccionar la parcela MU. Se busca el máximo θe dentro de los 300 hPa inferiores.',
       'Elevar la parcela. El ascenso es seco hasta el LCL y pseudoadiabático por encima, con el condensado eliminado y sin entrainment.',
-      'Integrar la CAPE. Se suman en altura las capas con flotabilidad virtual positiva; las alturas proceden de integración hipsométrica.',
+      'Integrar la CAPE entre el primer NCL y el último nivel de equilibrio, interpolando los cruces de flotabilidad e incluyendo las bolsas negativas intermedias. Si el perfil termina aún flotante, la integral llega al techo disponible y el nivel de equilibrio queda sin definir. Las alturas proceden de integración hipsométrica.',
       'Calcular MULI. Se resta la temperatura de la parcela MU a la ambiental en 500 hPa.'
     ],
     sources: [NOAA_CAPE, NOAA_LI, SHARPPY]

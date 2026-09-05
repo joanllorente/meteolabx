@@ -115,10 +115,12 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.cache_current = AsyncTTLCache[dict](
         default_ttl_s=settings.cache_ttl_current_s,
         max_entries=settings.cache_max_entries,
+        stale_if_error_s=settings.cache_stale_current_s,
     )
     app.state.cache_series = AsyncTTLCache[dict](
         default_ttl_s=settings.cache_ttl_series_s,
         max_entries=settings.cache_max_entries,
+        stale_if_error_s=settings.cache_stale_series_s,
     )
 
     # Ranking diario: store en memoria + job horario que rellena los

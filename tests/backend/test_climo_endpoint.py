@@ -30,6 +30,7 @@ SAMPLE_DF = pd.DataFrame(
         "temp_mean": [21.5, float("nan")],
         "temp_max": [27.0, 26.0],
         "temp_min": [16.0, 15.5],
+        "wind_mean": [8.0, 10.0],
         "precip_total": [0.0, 4.2],
     }
 )
@@ -172,6 +173,92 @@ def test_climo_dataset_empty_dataframe_has_no_data() -> None:
     body = response.json()
     assert body["has_data"] is False
     assert body["dataset"] is None
+
+
+def test_climo_summary_includes_daily_temperature_distribution_and_coverage() -> None:
+    body = _request_body("METEOCAT")
+    body.update(
+        {
+            "language": "es",
+            "unit_preferences": {"temperature": "c"},
+            "periods": [
+                {"label": "dos días", "start": "2025-06-01", "end": "2025-06-02"}
+            ],
+        }
+    )
+
+    with patch(_ASYNC_TARGET, side_effect=_async_return((SAMPLE_DF, None))):
+        with _client() as client:
+            response = client.post("/v1/climo/summary", json=body)
+
+    assert response.status_code == 200
+    distribution = response.json()["temperature_distribution"]
+    assert distribution["expected_days"] == 2
+    assert distribution["unit"] == "°C"
+    assert distribution["temp_max"]["sample_count"] == 2
+    assert sum(distribution["temp_max"]["counts"]) == 2
+    assert sum(distribution["temp_max"]["percentages"]) == pytest.approx(100.0)
+
+
+def test_climo_summary_does_not_invent_daily_distribution_for_frost_normals() -> None:
+    body = _request_body("FROST")
+    body["periods"] = [
+        {"label": "1991/2020", "start": "2025-01-01", "end": "2025-12-31"}
+    ]
+
+    with patch("server.services.frost_climo.fetch_climo_dataset", side_effect=_async_return(SAMPLE_DF)):
+        with _client() as client:
+            response = client.post("/v1/climo/summary", json=body)
+
+    assert response.status_code == 200
+    distribution = response.json()["temperature_distribution"]
+    assert distribution["temp_max"]["sample_count"] == 0
+    assert distribution["temp_min"]["sample_count"] == 0
+
+
+def test_climo_summary_hides_distribution_for_annual_aggregates() -> None:
+    body = _request_body("METEOCAT")
+    body.update({"summary_mode": "annual", "selected_years": [2024, 2025]})
+
+    with patch(_ASYNC_TARGET, side_effect=_async_return((SAMPLE_DF, None))):
+        with _client() as client:
+            response = client.post("/v1/climo/summary", json=body)
+
+    assert response.status_code == 200
+    distribution = response.json()["temperature_distribution"]
+    assert distribution["temp_max"]["sample_count"] == 0
+    assert distribution["temp_min"]["sample_count"] == 0
+
+
+def test_climo_summary_counts_daily_samples_across_months() -> None:
+    body = _request_body("METEOCAT")
+    body["periods"] = [
+        {"label": "ago 2024", "start": "2024-08-01", "end": "2024-08-31"},
+        {"label": "ago 2025", "start": "2025-08-01", "end": "2025-08-31"},
+    ]
+
+    with patch(_ASYNC_TARGET, side_effect=_async_return((SAMPLE_DF, None))):
+        with _client() as client:
+            response = client.post("/v1/climo/summary", json=body)
+
+    assert response.status_code == 200
+    distribution = response.json()["temperature_distribution"]
+    assert distribution["expected_days"] == 62
+    assert distribution["temp_max"]["sample_count"] == 2
+
+
+def test_temperature_distribution_coverage_counts_twenty_years_with_leap_days() -> None:
+    from server.routers.climo import _requested_day_count
+    from server.schemas.climo import ClimoSummaryRequest
+
+    body = ClimoSummaryRequest(
+        provider="IEM",
+        station_id="TEST",
+        selected_years=list(range(2006, 2026)),
+        summary_mode="annual",
+    )
+
+    assert _requested_day_count(body) == 7305
 
 
 def test_climo_dataset_unsupported_provider() -> None:

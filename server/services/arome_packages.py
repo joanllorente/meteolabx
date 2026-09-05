@@ -58,7 +58,8 @@ IP1_ELEMENTS = {
 # variantes y se registra lo que trae el fichero cuando no aparece ninguna.
 IP3_ELEMENTS: dict[str, tuple[str, ...]] = {
     # Rocío isobárico: el único campo por el que DCAPE seguía pidiendo al WCS.
-    "dewpoint": ("DPT", "TD", "DEPR"),
+    # DEPR es T−Td: no puede leerse como Td sin la temperatura ambiental.
+    "dewpoint": ("DPT", "TD"),
     # Velocidad vertical geométrica, en m/s (positiva hacia arriba).
     "vertical_velocity": ("DZDT", "VV2", "WZ", "W"),
 }

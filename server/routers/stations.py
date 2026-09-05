@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import OrderedDict
 from typing import Dict, List, Optional
 
@@ -25,6 +26,12 @@ from fastapi.responses import Response
 from server.schemas.errors import ErrorResponse, ProviderError
 from server.schemas.observation import StationInfo
 from server.schemas.stations import (
+    IndexableCatalogResponse,
+    IndexableStation,
+    IndexableStationSlug,
+    MapCatalogResponse,
+    NearbyIndexableResponse,
+    NearbyIndexableStation,
     StationSearchResponse,
     StationWithDistance,
     GeocodeResponse,
@@ -446,6 +453,7 @@ async def get_stations_near(
     sensors: str = Query(default="", description="Lista separada por comas; vacío = sin filtro."),
     has_historical: bool = Query(default=False, description="Si true, solo estaciones con histórico disponible."),
     hide_historical_only: bool = Query(default=False, description="Si true, oculta estaciones archivadas sin observación actual."),
+    hide_amateur: bool = Query(default=False, description="Si true, deja fuera las redes de particulares."),
     limit: int = Query(default=200, ge=1, le=50000),
 ) -> StationSearchResponse:
     provider_list: Optional[List[str]] = [
@@ -457,6 +465,15 @@ async def get_stations_near(
     country_list: Optional[List[str]] = [
         c for c in (item.strip().upper() for item in countries.split(",")) if c
     ] or None
+    if hide_amateur:
+        # Como lista blanca, no recortando después: el límite se aplica en la
+        # consulta, y si las más cercanas son todas de particulares, filtrar
+        # al final dejaba la búsqueda vacía.
+        allowed = [
+            provider for provider in (provider_list or list(stations.CATALOG_PROVIDERS))
+            if provider not in AMATEUR_PROVIDERS
+        ]
+        provider_list = allowed or None
 
     results = stations.search_near(
         lat, lon,
@@ -541,6 +558,224 @@ async def post_weatherlink_stations(
         body.api_key, body.api_secret, client=http,
     )
     return WeatherLinkStationsResponse(stations=station_rows)
+
+
+@router.get(
+    "/by-url-slug/{slug}",
+    response_model=IndexableStation,
+    summary="Ficha de una estación por el slug de su URL indexable",
+    description=(
+        "Resuelve ``/{idioma}/observation/{slug}``: el slug es "
+        "``nombre-identificador`` (``barcelona-drassanes-0201x``) y sale de "
+        "``utils.station_url``, el mismo módulo que alimenta el sitemap.\n\n"
+        "Las estaciones ocultas o fuera de servicio se resuelven igual, con "
+        "``indexable=false``, para que una URL ya indexada no acabe en 404."
+    ),
+    responses={404: {"model": ErrorResponse, "description": "Ningún slug coincide."}},
+)
+async def get_station_by_url_slug(slug: str) -> IndexableStation:
+    record = stations.find_by_url_slug(slug)
+    if record is None:
+        raise ProviderError(
+            "station_not_found",
+            provider="CATALOG",
+            detail=f"No station matches url slug: {slug}",
+            status_code=404,
+        )
+    return IndexableStation(**{k: v for k, v in record.items() if k != "distance_km"})
+
+
+@router.get(
+    "/indexable",
+    response_model=IndexableCatalogResponse,
+    summary="Catálogo de estaciones indexables (para el sitemap)",
+    description=(
+        "Lista paginada de los slugs publicables junto con el país que "
+        "decide en qué idiomas existe cada ficha. La consume el generador "
+        "de ``sitemap.xml`` del frontend."
+    ),
+)
+async def get_indexable_catalog(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=10_000, ge=1, le=50_000),
+) -> IndexableCatalogResponse:
+    rows = await asyncio.to_thread(
+        stations.indexable_url_slugs, offset=offset, limit=limit
+    )
+    total = await asyncio.to_thread(stations.indexable_url_slug_count)
+    return IndexableCatalogResponse(
+        total=total,
+        offset=offset,
+        count=len(rows),
+        stations=[IndexableStationSlug(**row) for row in rows],
+    )
+
+
+# Redes de estaciones particulares. Son las que engordan el catálogo —Netatmo
+# aporta 6.465 de las 7.866 españolas— y las que menos se buscan en el mapa,
+# así que salen solo si se piden.
+AMATEUR_PROVIDERS = ("NETATMO", "WINDY")
+
+
+# Catálogo del mapa ya filtrado, por combinación de filtros.
+#
+# Es una lectura de un fichero estático: la misma vista —los mismos países con
+# los mismos filtros— devuelve lo mismo hasta que se regenera el catálogo, y
+# repetirla costaba dos décimas cada vez que alguien abría la pestaña o tocaba
+# una casilla. Se guardan pocas combinaciones y solo las de tamaño razonable:
+# una selección de veinte países son cientos de miles de filas que no caben en
+# memoria a cambio de nada.
+_CATALOG_TTL_S = 600.0
+_CATALOG_MAX_ROWS = 30_000
+_CATALOG_MAX_ENTRIES = 8
+_catalog_cache: dict[tuple, tuple[float, list, int]] = {}
+
+
+def _catalog_cached(key: tuple) -> tuple[list, int] | None:
+    entry = _catalog_cache.get(key)
+    if entry is None or (time.time() - entry[0]) >= _CATALOG_TTL_S:
+        return None
+    return entry[1], entry[2]
+
+
+def _catalog_store(key: tuple, rows: list, total: int) -> None:
+    if len(rows) > _CATALOG_MAX_ROWS:
+        return
+    if len(_catalog_cache) >= _CATALOG_MAX_ENTRIES:
+        # La más vieja se va: son vistas equivalentes, no hay ninguna que
+        # merezca quedarse más que otra.
+        oldest = min(_catalog_cache, key=lambda item: _catalog_cache[item][0])
+        _catalog_cache.pop(oldest, None)
+    _catalog_cache[key] = (time.time(), rows, total)
+
+
+@router.get(
+    "/map-catalog",
+    response_model=MapCatalogResponse,
+    summary="Catálogo compacto para el mapa, con los filtros de la pestaña",
+    description=(
+        "Estaciones de uno o varios países con lo justo para pintarlas: "
+        "posición, red, identificador y nombre, en arrays paralelos.\n\n"
+        "Acepta los mismos filtros que la pestaña de mapa: sensores exigidos, "
+        "solo con histórico, ocultar archivadas, ocultar manuales y ocultar "
+        "las redes de particulares."
+    ),
+)
+async def get_map_catalog(
+    countries: str = Query(min_length=2, description="ISO2 separados por comas."),
+    providers: str = Query(default="", description="Lista separada por comas; vacío = todos."),
+    sensors: str = Query(
+        default="",
+        description=(
+            "Sensores exigidos, separados por comas. La estación debe "
+            "declararlos TODOS."
+        ),
+    ),
+    has_historical: bool = Query(default=False),
+    hide_historical_only: bool = Query(default=False),
+    hide_manual: bool = Query(default=False),
+    hide_amateur: bool = Query(default=False),
+    limit: int = Query(default=60_000, ge=1, le=250_000),
+) -> MapCatalogResponse:
+    country_list = [
+        code for code in (item.strip().upper() for item in countries.split(",")) if code
+    ]
+    provider_list = [
+        code for code in (item.strip().upper() for item in providers.split(",")) if code
+    ] or None
+    sensor_list = [
+        code for code in (item.strip().lower() for item in sensors.split(",")) if code
+    ] or None
+
+    cache_key = (
+        tuple(country_list), tuple(provider_list or ()), tuple(sensor_list or ()),
+        has_historical, hide_historical_only, hide_manual, hide_amateur, limit,
+    )
+    cached = _catalog_cached(cache_key)
+
+    def _load() -> tuple[list[dict], int]:
+        counts = stations.country_counts()
+        rows = stations.search_catalog(
+            countries=country_list,
+            providers=provider_list,
+            sensors=sensor_list,
+            has_historical=has_historical,
+            hide_historical_only=hide_historical_only,
+            limit=limit,
+        )
+        if hide_amateur:
+            rows = [row for row in rows if row.get("provider") not in AMATEUR_PROVIDERS]
+        if hide_manual:
+            # Observador humano: publica una lectura al día, no está en directo.
+            rows = [row for row in rows if not row.get("manual")]
+        total = sum(int(counts.get(code, 0)) for code in country_list)
+        return rows, total
+
+    if cached is not None:
+        rows, total = cached
+    else:
+        rows, total = await asyncio.to_thread(_load)
+        _catalog_store(cache_key, rows, total)
+
+    return MapCatalogResponse(
+        countries=country_list,
+        count=len(rows),
+        total=total,
+        truncated=len(rows) >= limit,
+        lat=[float(row["lat"]) for row in rows],
+        lon=[float(row["lon"]) for row in rows],
+        name=[str(row.get("name") or "") for row in rows],
+        provider=[str(row.get("provider") or "") for row in rows],
+        station_id=[str(row.get("station_id") or "") for row in rows],
+    )
+
+
+@router.get(
+    "/url-slug",
+    response_model=Dict[str, str],
+    summary="Slug de la URL pública de una estación",
+    description=(
+        "Traduce ``proveedor`` + ``station_id`` al slug de su ficha. Lo usa "
+        "el mapa: sus puntos vienen del ranking, que identifica las "
+        "estaciones por su ID de red, y al pinchar una hay que saber a qué "
+        "URL ir. Devuelve cadena vacía si la estación no se publica."
+    ),
+)
+async def get_station_url_slug(
+    provider: str = Query(min_length=1, max_length=32),
+    station_id: str = Query(min_length=1, max_length=64),
+) -> Dict[str, str]:
+    slug = await asyncio.to_thread(stations.url_slug_for, provider, station_id)
+    return {"url_slug": slug or ""}
+
+
+@router.get(
+    "/indexable-near",
+    response_model=NearbyIndexableResponse,
+    summary="Estaciones indexables más cercanas a un punto",
+    description=(
+        "Vecinas publicables de una ficha, con el slug de su URL. Es el "
+        "bloque de «estaciones cercanas» que enlaza unas fichas con otras."
+    ),
+)
+async def get_indexable_stations_near(
+    lat: float = Query(ge=-90.0, le=90.0),
+    lon: float = Query(ge=-180.0, le=180.0),
+    limit: int = Query(default=6, ge=1, le=50),
+    exclude_provider: str = Query(default=""),
+    exclude_station_id: str = Query(default=""),
+) -> NearbyIndexableResponse:
+    rows = await asyncio.to_thread(
+        stations.indexable_stations_near,
+        lat,
+        lon,
+        exclude=(exclude_provider.strip().upper(), exclude_station_id.strip()),
+        limit=limit,
+    )
+    return NearbyIndexableResponse(
+        count=len(rows),
+        stations=[NearbyIndexableStation(**row) for row in rows],
+    )
 
 
 @router.get(

@@ -5,6 +5,8 @@
     "flatlined_series": "⚠️ Windy retorna una o diverses variables sense cap variació durant hores. El gràfic mostra les dades rebudes, però s’oculten els màxims i mínims afectats perquè no són fiables."
   },
   "tabs": {
+    "current": "Actual",
+    "trend": "Tendència",
     "observation": "Observació",
     "trends": "Tendències",
     "historical": "Històric",
@@ -104,88 +106,6 @@
     "whats_new": "Novetats",
     "improvements_title": "Millores",
     "fixes_title": "Correccions",
-    "release_140_improvements": [
-      "Nova interfície basada en targetes per a la pestanya Històric.",
-      "S'afegeix nova informació sobre el vent a Històric.",
-      "Nova secció «Predicció numèrica» amb mapes propis per al model AROME."
-    ],
-    "release_140_fixes": [
-      "Corregit un error que impedia que es mostrés correctament l'acumulat als gràfics de precipitació."
-    ],
-    "release_135_improvements": [
-      "Millorada la interpolació del mapa global de temperatura.",
-      "Arrencada més estable i ràpida.",
-      "Navegació entre pestanyes optimitzada en dispositius mòbils."
-    ],
-    "release_135_fixes": [
-      "Corregit un problema visual al mapa d'estacions.",
-      "Corregit un error que impedia que el gràfic de precipitació representés correctament les dades acumulades."
-    ],
-    "release_134_improvements": [
-      "Afegit el control de qualitat de les observacions per a ECCC, SMHI, Frost, MeteoGalicia, Meteocat i NWS."
-    ],
-    "release_134_fixes": [
-      "Corregits els problemes de connexió de les estacions NETATMO."
-    ],
-    "release_133_improvements": [
-      "Navegació entre pestanyes més fluida i càrrega del mapa optimitzada."
-    ],
-    "release_132_improvements": [
-      "Optimització de la connexió a les estacions de Meteocat."
-    ],
-    "release_131_improvements": [
-      "Nou proveïdor Climantartide per a estacions de bases antàrtiques."
-    ],
-    "improvements": [
-      "Migració completa i funcional al mode FastAPI.",
-      "Nova pestanya Rànquing, amb classificacions de temperatura, vent i precipitació per país i globals.",
-      "Nou proveïdor IEM, amb més de 100.000 estacions arreu del món.",
-      "Redisseny complet de la pestanya Mapa.",
-      "Nou filtre de país al mapa.",
-      "Nou filtre per als sensors disponibles al mapa.",
-      "Els sensors disponibles ara es mostren com a metadades de cada estació.",
-      "Nou filtre per mostrar al mapa les estacions amb dades històriques disponibles.",
-      "Les dades històriques ara estan disponibles per a la xarxa WeatherLink."
-    ],
-    "fixes": [
-      "Corregit un error que impedia mostrar valors de vent encara que el proveïdor els mesurés.",
-      "Corregit un error en el recompte de nits tropicals i tòrrides a la pestanya Històric.",
-      "Corregit un problema que impedia calcular correctament la tendència completa de la pressió.",
-      "Corregit un error que feia que AEMET i MeteoGalicia mostressin màximes i mínimes de temperatura incorrectes.",
-      "Corregit un error que feia que MeteoGalicia mostrés incorrectament els valors de ratxa màxima."
-    ],
-    "release_130_improvements": [
-      "Nou mapa mundial de la temperatura actual.",
-      "Nou mapa mundial de vent i direcció.",
-      "Nou mapa mundial de precipitació acumulada.",
-      "Nous proveïdors d’estacions particulars: Netatmo i Windy.",
-      "Nous proveïdors oficials: IPMA (Portugal), GEOSPHERE (Àustria), SMHI (Suècia) i ECCC (Canadà).",
-      "Càrrega inicial del web fins a un 30% més ràpida.",
-      "Nou idioma disponible: portuguès."
-    ],
-    "release_130_fixes": [
-      "Ara MeteoLabX reconeix automàticament l’idioma del navegador.",
-      "L’idioma seleccionat es recorda entre visites."
-    ],
-    "previous_improvements": [
-      "S’han afegit dos nous proveïdors de dades: Met Office i MeteoHub Italy.",
-      "S’ha afegit un sistema de preferits per accedir ràpidament a qualsevol estació.",
-      "S’ha afegit un nou gràfic de precipitació.",
-      "S’ha afegit suport per a WeatherLink.",
-      "S’ha millorat la visualització dels gràfics setmanals.",
-      "La targeta Claredat del cel ara mostra els crepuscles.",
-      "S’ha reduït el temps de càrrega inicial de la web app.",
-      "S’han afegit definicions als gràfics de la pestanya Tendències."
-    ],
-    "previous_fixes": [
-      "Corregit un error que mostrava dades incorrectes als mareògrafs de Puertos del Estado.",
-      "Corregits problemes de cache en canviar d’estació.",
-      "Corregit un error que impedia mostrar la sèrie sinòptica a la pestanya Tendències encara que el proveïdor retornés dades.",
-      "Corregit un error que impedia visualitzar gràfics de tendència d’alguns proveïdors.",
-      "Corregit un error que impedia mostrar la sortida i la posta de sol en hora local.",
-      "Corregit un error que mostrava màximes i mínimes incorrectes de temperatura i humitat a Meteocat.",
-      "Corregit un error que impedia consultar l’històric de l’any actual a Weather Underground."
-    ],
     "sources": "Fonts",
     "unaffiliated": "No afiliat",
     "privacy": "Privacitat",
@@ -194,12 +114,16 @@
     "privacy_cookies_title": "Galetes i seguiment",
     "privacy_cookies": [
       "MeteoLabX no utilitza galetes publicitàries, píxels de seguiment ni serveis externs d'analítica com Google Analytics, i no mostra publicitat.",
-      "L'aplicació pot utilitzar galetes o mecanismes tècnics estrictament necessaris per al seu funcionament i seguretat. Aquests mecanismes no s'utilitzen per a publicitat ni per seguir la teva activitat en altres llocs web, per la qual cosa no requereixen consentiment ni veuràs cap bàner de galetes."
+      "L'aplicació pot utilitzar galetes o mecanismes tècnics estrictament necessaris per al seu funcionament i seguretat. Aquests mecanismes no s'utilitzen per a publicitat ni per seguir la teva activitat en altres llocs web, per la qual cosa no requereixen consentiment ni veuràs cap bàner de galetes.",
+      "Per obrir el mapa i el rànquing al país des del qual consultes, MeteoLabX desa una galeta tècnica amb el nom de la teva zona horària (per exemple, «Europe/Madrid»). No conté la teva ubicació exacta ni cap identificador.",
+      "La tipografia de la interfície se serveix des del domini mateix de MeteoLabX: navegar pel web no genera peticions a servidors de tercers, tret del fons cartogràfic del mapa que es descriu més avall."
     ],
     "privacy_browser_title": "Preferències desades al navegador",
     "privacy_browser": [
-      "Per evitar que hagis de configurar MeteoLabX a cada visita, algunes preferències, com les unitats seleccionades o les estacions preferides, es desen localment al teu navegador.",
+      "Per evitar que hagis de configurar MeteoLabX a cada visita, algunes preferències es desen localment al teu navegador: les unitats, el tema clar o fosc, les estacions preferides, l'última estació consultada i, si l'actives, la que s'ha d'obrir en entrar.",
+      "Si connectes una estació pròpia, també es desen localment la seva altitud i el calibratge dels seus sensors. S'envien al servidor únicament per calcular els valors que es mostren.",
       "Les credencials que introdueixis per a proveïdors com Weather Underground o WeatherLink també s'emmagatzemen localment al teu navegador. S'utilitzen únicament per fer les consultes sol·licitades i no s'incorporen a les estadístiques de MeteoLabX ni es conserven a la seva base de dades.",
+      "Altres preferències, com els filtres del mapa o del rànquing, es desen només mentre la pestanya roman oberta i desapareixen en tancar-la.",
       "Pots eliminar aquesta informació en qualsevol moment esborrant les dades de navegació associades a MeteoLabX."
     ],
     "privacy_log_title": "Registre tècnic de consultes",
@@ -207,7 +131,8 @@
     "privacy_log_items": [
       "El proveïdor, identificador i nom de l'estació consultada.",
       "La data i hora de la consulta.",
-      "Si la consulta falla, la categoria de l'error produït, com ara temps d'espera esgotat, credencials rebutjades o error de comunicació amb el proveïdor, i, si escau, el codi d'estat HTTP."
+      "Si la consulta falla, la categoria de l'error produït, com ara temps d'espera esgotat, credencials rebutjades o error de comunicació amb el proveïdor, i, si escau, el codi d'estat HTTP.",
+      "L'idioma en què s'està mostrant la pàgina."
     ],
     "privacy_log_notes": [
       "Aquest registre no es vincula a cap compte d'usuari, identificador de sessió o perfil del visitant. MeteoLabX no incorpora a aquestes estadístiques l'adreça IP, la ubicació del visitant, les seves credencials ni informació destinada a identificar-lo.",
@@ -224,7 +149,8 @@
     "privacy_infra_title": "Infraestructura i registres de seguretat",
     "privacy_infra": [
       "Els proveïdors utilitzats per allotjar, protegir i distribuir MeteoLabX poden processar temporalment informació tècnica, com l'adreça IP, el navegador utilitzat i la data i hora d'accés, per prestar el servei, prevenir abusos i garantir-ne la seguretat.",
-      "Aquests proveïdors actuen exclusivament com a proveïdors tècnics d'infraestructura i no reben les dades per utilitzar-les amb finalitats publicitàries pròpies."
+      "Aquests proveïdors actuen exclusivament com a proveïdors tècnics d'infraestructura i no reben les dades per utilitzar-les amb finalitats publicitàries pròpies.",
+      "El mapa utilitza el fons cartogràfic de CARTO. En obrir aquesta pestanya, el teu navegador demana les tessel·les i les tipografies del mapa directament als seus servidors, de manera que CARTO pot tractar la teva adreça IP i la zona del mapa que consultes. MeteoLabX no li transmet cap altra informació."
     ],
     "privacy_retention_title": "Conservació i accés",
     "privacy_retention": [
@@ -232,7 +158,20 @@
       "Els registres són accessibles exclusivament per a l'administrador de MeteoLabX i per als proveïdors tècnics quan sigui necessari per prestar o protegir el servei."
     ],
     "privacy_contact_title": "Contacte",
-    "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a"
+    "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_200_improvements": [
+      "Interfície completament renovada, més clara, moderna i coherent.",
+      "Nova pestanya de Predicció, amb mapes del model AROME i diagnòstics propis de MeteoLabX.",
+      "La secció Històric ofereix ara informació més completa.",
+      "Nou gràfic de vent a Històric."
+    ],
+    "release_200_fixes": [
+      "Amb l'estació en calma ja no es mostra cap direcció de vent: el penell es queda clavat en l'últim rumb i no mesura res.",
+      "L'índex UV i la dosi eritemàtica deixen de marcar valors residuals amb el Sol sota l'horitzó.",
+      "Els avisos per calor i per bulb humit apareixen cadascun a la seva targeta i diuen a quina mesura es refereixen.",
+      "L'històric ja no mostra targetes buides quan la xarxa no publica aquella mesura.",
+      "Corregits els enllaços del rànquing a les estacions de MeteoHub Itàlia."
+    ]
   },
   "cards": {
     "help_aria": "Ajuda per a {title}",
@@ -293,6 +232,9 @@
     },
     "calibration": {
       "title": "Calibratge de sensors",
+      "description": "Ajusta les lectures d’aquesta estació.",
+      "requires_connection": "Connecta l’estació per calibrar-la.",
+      "close": "Tanca el calibratge",
       "loading": "Carregant sensors Weather Underground...",
       "range_help": "Interval permès: de {min} a {max} {unit}",
       "save": "Desa calibratge",
@@ -310,6 +252,8 @@
     },
     "units": {
       "title": "Unitats",
+      "description": "Aquestes preferències s’apliquen a tot MeteoLabX.",
+      "close": "Tanca les unitats",
       "fields": {
         "temperature": "Temperatura",
         "wind": "Vent",

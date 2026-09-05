@@ -15,6 +15,12 @@
   import { bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
   import { fetchForecastCatalog, fetchForecastFrame, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
+  import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
+  import { loadForecastGuides, localizedForecastGuide } from '../lib/forecast-guides.svelte.js';
+
+  let { language = 'es' } = $props();
+  const tr = $derived((key, params = {}) => forecastText(language, key, params));
+  const locale = $derived(forecastLocale(language));
 
   const assetBase = import.meta.env.BASE_URL;
   const hours = Array.from({ length: 18 }, (_, i) => ({
@@ -79,10 +85,11 @@
   }
 
   const model = $derived(forecastModels.find((item) => item.id === selectedModel) || forecastModels[0]);
-  const modelProducts = $derived(productsForModel(selectedModel));
+  const modelProducts = $derived(localizedForecastProducts(productsForModel(selectedModel), language));
+  const categories = $derived(localizedForecastCategories(forecastCategories, language));
   const modelSummary = $derived(catalogSummaryFor(selectedModel));
   const product = $derived(modelProducts.find((item) => item.id === selectedProduct) || modelProducts[0]);
-  const guide = $derived(product.guide || {
+  const rawGuide = $derived(product.guide || {
     what: product.description,
     interpretation: [product.description],
     method: product.method,
@@ -90,6 +97,9 @@
     steps: [],
     sources: []
   });
+  // Las guías del idioma se piden al vuelo la primera vez que hacen falta.
+  $effect(() => loadForecastGuides(language));
+  const guide = $derived(localizedForecastGuide(rawGuide, product, language));
   const runCatalogs = $derived(catalog?.runs?.length ? catalog.runs : (catalog ? [{
     run: Object.values(catalog.products || {})[0]?.run || '',
     products: catalog.products || {},
@@ -104,8 +114,8 @@
     return {
       iso: value,
       horizon: Math.round((date - run) / 3_600_000),
-      day: new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: '2-digit', timeZone: 'UTC' }).format(date),
-      time: new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(date)
+      day: new Intl.DateTimeFormat(locale, { weekday: 'short', day: '2-digit', timeZone: 'UTC' }).format(date),
+      time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(date)
     };
   }) : hours);
   const valid = $derived(activeHours[Math.min(hourIndex, activeHours.length - 1)] || hours[0]);
@@ -113,7 +123,7 @@
     !precomputedOnly
       || (connectedProduct?.available_times || []).includes(valid?.iso)
   );
-  const selectedCategory = $derived(forecastCategories.find((item) => item.id === product.category));
+  const selectedCategory = $derived(categories.find((item) => item.id === product.category));
   // Qué enseña el mapa. Por defecto su categoría, que para la mayoría es
   // descripción bastante; los que llevan más de un campo encima lo dicen.
   const productContents = $derived(product.contents || selectedCategory?.label || '');
@@ -155,13 +165,12 @@
     (value) => `${formatValue(value, product, displayUnit, product.id === 'ship' ? 2 : undefined)} ${displayUnitLabel}`.trim()
   );
   const runLabel = $derived(connectedProduct
-    ? `${new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(connectedProduct.run))} UTC`
+    ? `${new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(connectedProduct.run))} UTC`
     : '24/08 · 03:00 UTC');
   const latestRunLabel = $derived(runCatalogs[0]?.run
-    ? `${new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(runCatalogs[0].run))} UTC`
+    ? `${new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(runCatalogs[0].run))} UTC`
     : runLabel);
   const latestProgress = $derived(runCatalogs[0]?.publication?.progress || null);
-  const activeJobsCount = $derived(latestProgress?.active_jobs?.length || (latestProgress?.current_job ? 1 : 0));
   const currentJobLabel = $derived.by(() => {
     const current = latestProgress?.current_job;
     if (!current) return '';
@@ -173,12 +182,24 @@
     if (grupos[current.product]) return grupos[current.product];
     return modelProducts.find((item) => item.id === current.product)?.label || current.product;
   });
+  const latestRunShortLabel = $derived(
+    runCatalogs[0]?.run ? shortRunLabel(runCatalogs[0].run) : latestRunLabel
+  );
+  const latestStatusLabel = $derived.by(() => {
+    if (catalogError) return tr('backendUnavailable', { model: model.short });
+    if (!catalog) return tr('connecting');
+    if (!latestProgress?.frames_total) return tr('available');
+    const complete = latestProgress.frames_available >= latestProgress.frames_total;
+    if (complete) return tr('complete');
+    const percent = Number(latestProgress.percent || 0).toLocaleString(locale);
+    return currentJobLabel ? `${percent} % · ${currentJobLabel}` : `${percent} %`;
+  });
   const visibleCategories = $derived.by(() => {
-    const term = search.trim().toLocaleLowerCase('es');
-    return forecastCategories
+    const term = search.trim().toLocaleLowerCase(locale);
+    return categories
       .map((category) => ({
         ...category,
-        products: modelProducts.filter((item) => item.category === category.id && (!term || `${item.label} ${item.short}`.toLocaleLowerCase('es').includes(term)))
+        products: modelProducts.filter((item) => item.category === category.id && (!term || `${item.label} ${item.short}`.toLocaleLowerCase(locale).includes(term)))
       }))
       .filter((category) => category.products.length);
   });
@@ -248,7 +269,7 @@
       total,
       percent,
       state: total > 0 && available >= total ? 'complete' : available > 0 ? 'partial' : 'pending',
-      label: total > 0 && available >= total ? 'Completo' : available > 0 ? `${percent} %` : 'Pendiente'
+      label: total > 0 && available >= total ? tr('completed') : available > 0 ? `${percent} %` : tr('pending')
     };
   }
 
@@ -317,7 +338,7 @@
       })
       .catch((error) => {
         if (requestedModel !== selectedModel) return;
-        if (timedOut) catalogError = `El catálogo de ${requestedModel.toUpperCase()} ha tardado demasiado`;
+        if (timedOut) catalogError = tr('catalogTimeout', { model: requestedModel.toUpperCase() });
         else if (error.name !== 'AbortError') catalogError = error.message;
       })
       .finally(() => window.clearTimeout(timeout));
@@ -446,48 +467,39 @@
 />
 
 <section class="forecast-head">
-  <div class="forecast-heading">
-    <span class="meteorological-symbol" aria-hidden="true">∂</span>
-    <span>Predicción numérica</span>
-    <span class="beta-badge">Beta</span>
-  </div>
-  <div class="run-status">
-    <span class="status-dot" class:error={catalogError}></span>
-    <div>
-      <small>{catalogError ? `Backend ${model.short} no disponible` : 'Último RUN disponible'}</small>
-      <strong>{catalogError ? 'Pulsa para reintentar' : catalog ? latestRunLabel : 'Conectando…'}</strong>
-      {#if !catalogError && latestProgress?.frames_total}
-        <span class="progress-summary">
-          <span><i style:--progress={`${latestProgress.percent || 0}%`}></i></span>
-          <em>{latestProgress.frames_available} / {latestProgress.frames_total} · {Number(latestProgress.percent || 0).toLocaleString('es-ES')} %</em>
-        </span>
-        {#if currentJobLabel}<small>Ahora: {activeJobsCount > 1 ? `${activeJobsCount} cálculos simultáneos · ` : ''}{currentJobLabel} · {latestProgress.current_job.valid_time.slice(11, 16)} UTC</small>{/if}
-      {/if}
+  <div>
+    <div class="forecast-title">
+      <h2>{tr('title')}</h2>
+      <span class="beta-badge">Beta</span>
     </div>
-    <button type="button" aria-label="Actualizar RUN" onclick={refreshCatalog}><RefreshCw size={15} /></button>
+    <p>{tr('subtitle')}</p>
   </div>
 </section>
 
-<section class="control-bar" aria-label="Configuración del modelo">
-  <label><Calendar size={14} /><span>RUN</span><select value={selectedRun} onchange={(event) => selectRun(event.currentTarget.value)}>{#each runCatalogs as item}<option value={item.run}>{new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(item.run))} UTC · {runProgress(item).toLocaleString('es-ES')} %</option>{/each}</select></label>
-  <label><Layers size={14} /><span>Modelo</span><select value={selectedModel} onchange={(event) => selectModel(event.currentTarget.value)}>{#each forecastModels as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
-  <div class="run-progress-list" aria-label="Progreso de cada RUN">
-    {#each runCatalogs as item}
-      <button type="button" class:active={selectedRunCatalog?.run === item.run} onclick={() => selectRun(item.run)}>
-        <span>{shortRunLabel(item.run)}</span>
-        <strong>{runProgress(item).toLocaleString('es-ES')} %</strong>
-        <i><b style:--run-progress={`${runProgress(item)}%`}></b></i>
-      </button>
-    {/each}
+<section class="control-bar" aria-label={tr('modelConfig')}>
+  <label><Calendar size={14} /><span>RUN</span><select value={selectedRun} onchange={(event) => selectRun(event.currentTarget.value)}>{#each runCatalogs as item}<option value={item.run}>{new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(item.run))} UTC · {runProgress(item).toLocaleString(locale)} %</option>{/each}</select></label>
+  <label><Layers size={14} /><span>{tr('model')}</span><select value={selectedModel} onchange={(event) => selectModel(event.currentTarget.value)}>{#each forecastModels as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
+  <div
+    class="run-summary"
+    title={latestProgress?.frames_total
+      ? tr('mapsAvailable', { available: latestProgress.frames_available, total: latestProgress.frames_total })
+      : latestStatusLabel}
+  >
+    <span class="status-dot" class:error={catalogError}></span>
+    <span class="run-summary-copy">
+      <small>{tr('latestRun')}</small>
+      <strong>{latestRunShortLabel} · {latestStatusLabel}</strong>
+    </span>
+    <button type="button" aria-label={tr('refreshRun')} onclick={refreshCatalog}><RefreshCw size={15} /></button>
   </div>
 </section>
 
 <div class="forecast-layout">
-  <aside class="product-selector" aria-label="Selector de mapas">
+  <aside class="product-selector" aria-label={tr('mapSelector')}>
     <header>
-      <div><span>Mapas</span><small>{modelSummary.total} seleccionados</small></div>
-      <p>{modelSummary.selectedNative} campos {model.short}{modelSummary.selectedDerived ? ` · ${modelSummary.selectedDerived} diagnósticos MLX` : ''}</p>
-      <label class="search-box"><Search size={14} /><input bind:value={search} type="search" placeholder="Buscar variable…" aria-label="Buscar mapa" /></label>
+      <div><span>{tr('maps')}</span><small>{modelSummary.total} {tr('selected')}</small></div>
+      <p>{modelSummary.selectedNative} {tr('fields')} {model.short}{modelSummary.selectedDerived ? ` · ${modelSummary.selectedDerived} ${tr('diagnostics')}` : ''}</p>
+      <label class="search-box"><Search size={14} /><input bind:value={search} type="search" placeholder={tr('search')} aria-label={tr('searchMap')} /></label>
     </header>
 
     <div class="category-list">
@@ -517,11 +529,11 @@
                   <span class="product-meta">
                     <span
                       class="product-status {availability.state}"
-                      aria-label={`${availability.label}: ${availability.available} de ${availability.total} horas disponibles`}
-                      title={`${availability.available} de ${availability.total} horas disponibles`}
+                      aria-label={`${availability.label}: ${tr('hoursAvailable', { available: availability.available, total: availability.total })}`}
+                      title={tr('hoursAvailable', { available: availability.available, total: availability.total })}
                     >{availability.state === 'complete' ? '✓' : availability.state === 'partial' ? `${availability.percent}%` : '·'}</span>
                     {#if item.kind === 'derived'}
-                      <img src={`${assetBase}mlx-logo.png`} alt="Calculado por MeteoLabX" title="Diagnóstico calculado por MeteoLabX" />
+                      <img src={`${assetBase}mlx-logo.png`} alt={tr('calculatedBy')} title={tr('mlxDiagnostic')} />
                     {/if}
                   </span>
                 </button>
@@ -534,17 +546,17 @@
 
     <footer>
       <img src={`${assetBase}mlx-logo.png`} alt="" />
-      <span>El símbolo MLX identifica los mapas calculados por MeteoLabX.</span>
+      <span>{tr('mlxSymbol')}</span>
     </footer>
   </aside>
 
   <main class="viewer-column">
     {#if !selectedProduct}
-      <section class="map-card empty-map-card" aria-label="Ningún mapa seleccionado">
+      <section class="map-card empty-map-card" aria-label={tr('noneSelected')}>
         <div class="empty-forecast">
           <img src={`${assetBase}mlx-logo.png`} alt="" />
           <strong>METEOLABX</strong>
-          <span>Predicción numérica</span>
+          <span>{tr('title')}</span>
         </div>
       </section>
     {:else}
@@ -555,29 +567,29 @@
           <div>
             <span class="product-title">
               <strong>{product.label}</strong>
-              {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt="Calculado por MeteoLabX" />{/if}
+              {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt={tr('calculatedBy')} />{/if}
             </span>
-            <small>{productContents}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · Válido {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
+            <small>{productContents}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · {tr('valid')} {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
           </div>
         </div>
         <div class="map-actions">
           {#if exportError}<small class="export-error">{exportError}</small>{/if}
           <button
             type="button"
-            title="Descargar PNG"
-            aria-label="Descargar el mapa en PNG"
+            title={tr('downloadPng')}
+            aria-label={tr('downloadMapPng')}
             disabled={!frameData || exporting}
             onclick={downloadPng}
           ><Download size={16} /></button>
-          <button type="button" title="Pantalla completa" onclick={toggleFullscreen}><Maximize2 size={16} /></button>
+          <button type="button" title={tr('fullscreen')} onclick={toggleFullscreen}><Maximize2 size={16} /></button>
         </div>
       </header>
 
       <div class="forecast-map palette-{product.palette}" bind:this={mapContainer} style:--map-ink={mapInk || null}>
-        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} zeroFloor={product.zeroFloor || 0} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} zeroFloor={product.zeroFloor || 0} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
-          <aside class="level-rail" aria-label="Nivel vertical del viento">
-            <header><strong>Nivel</strong><small>{windLevelKind === 'height' ? 'Sobre terreno' : 'Isobárico'}</small></header>
+          <aside class="level-rail" aria-label={tr('windLevel')}>
+            <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
             <div class="level-kind">
               <button type="button" class:active={windLevelKind === 'height'} onclick={() => selectWindKind('height')}>m AGL</button>
               <button type="button" class:active={windLevelKind === 'isobaric'} onclick={() => selectWindKind('isobaric')}>hPa</button>
@@ -590,13 +602,13 @@
           </aside>
         {/if}
 
-        {#if frameLoading}<div class="frame-state"><span class="spinner"></span><strong>Cargando {product.short}</strong><small>Descargando el mapa ya calculado…</small></div>{/if}
-        {#if framePending}<div class="frame-state"><span class="spinner"></span><strong>Calculando {product.short}</strong><small>AROME ya ha publicado esta hora. MeteoLabX la añadirá automáticamente al terminar el worker.</small></div>{/if}
-        {#if frameError}<div class="frame-state error"><strong>No se pudo cargar el mapa real</strong><small>{frameError}</small><button type="button" onclick={() => (hourIndex = Math.max(0, hourIndex - 1))}>Probar la hora anterior</button></div>{/if}
+        {#if frameLoading}<div class="frame-state"><span class="spinner"></span><strong>{tr('loading', { product: product.short })}</strong><small>{tr('downloading')}</small></div>{/if}
+        {#if framePending}<div class="frame-state"><span class="spinner"></span><strong>{tr('calculating', { product: product.short })}</strong><small>{tr('workerPending')}</small></div>{/if}
+        {#if frameError}<div class="frame-state error"><strong>{tr('loadError')}</strong><small>{frameError}</small><button type="button" onclick={() => (hourIndex = Math.max(0, hourIndex - 1))}>{tr('previousHourTry')}</button></div>{/if}
         {#if frameData}
           <div class="map-watermark" aria-hidden="true">
             <img src={`${assetBase}mlx-logo.png`} alt="" />
-            <span><strong>METEOLABX</strong><small>Predicción numérica</small></span>
+            <span><strong>METEOLABX</strong><small>{tr('title')}</small></span>
           </div>
           <div class="legend" class:legend-classes={legendBands.length > 0}>
             {#if legendBands.length}
@@ -619,14 +631,14 @@
                   class:open={unitMenuOpen}
                   aria-haspopup="menu"
                   aria-expanded={unitMenuOpen}
-                  title="Cambiar unidades"
+                  title={tr('changeUnits')}
                   onclick={(event) => { event.stopPropagation(); unitMenuOpen = !unitMenuOpen; }}
                 >
                   <span>{displayUnitLabel}</span>
                   <ChevronDown size={11} />
                 </button>
                 {#if unitMenuOpen}
-                  <div class="unit-menu" role="menu" aria-label="Unidades">
+                  <div class="unit-menu" role="menu" aria-label={tr('units')}>
                     {#each displayUnitOptions as option}
                       <button
                         type="button"
@@ -647,16 +659,16 @@
       </div>
 
       <div class="timeline">
-        <button type="button" onclick={() => step(-1)} disabled={hourIndex === 0} aria-label="Hora anterior"><ChevronLeft size={17} /></button>
-        <button class="play" class:active={playing} type="button" onclick={togglePlayback} aria-label={playing ? 'Pausar' : 'Reproducir'}>
+        <button type="button" onclick={() => step(-1)} disabled={hourIndex === 0} aria-label={tr('previousHour')}><ChevronLeft size={17} /></button>
+        <button class="play" class:active={playing} type="button" onclick={togglePlayback} aria-label={playing ? tr('pause') : tr('play')}>
           {#if playing}<Pause size={16} />{:else}<Play size={16} />{/if}
         </button>
         <div class="time-range">
           <div class="time-labels"><span>{activeHours[0].day} · {activeHours[0].time} UTC</span><strong>{valid.day} · {valid.time} UTC</strong><span>{activeHours.at(-1).day} · {activeHours.at(-1).time} UTC</span></div>
-          <input type="range" min="0" max={activeHours.length - 1} bind:value={hourIndex} aria-label="Hora prevista" />
-          <div class="ticks">{#each activeHours as hour, index}<i class:major={index % 6 === 0} class:ready={hourIsReady(hour)} class:pending={!hourIsReady(hour)} title={hourIsReady(hour) ? `${hour.time} UTC disponible` : `${hour.time} UTC pendiente`}></i>{/each}</div>
+          <input type="range" min="0" max={activeHours.length - 1} bind:value={hourIndex} aria-label={tr('forecastHour')} />
+          <div class="ticks">{#each activeHours as hour, index}<i class:major={index % 6 === 0} class:ready={hourIsReady(hour)} class:pending={!hourIsReady(hour)} title={tr(hourIsReady(hour) ? 'hourAvailable' : 'hourPending', { time: hour.time })}></i>{/each}</div>
         </div>
-        <button type="button" onclick={() => step(1)} disabled={hourIndex === activeHours.length - 1} aria-label="Hora siguiente"><ChevronRight size={17} /></button>
+        <button type="button" onclick={() => step(1)} disabled={hourIndex === activeHours.length - 1} aria-label={tr('nextHour')}><ChevronRight size={17} /></button>
       </div>
     </section>
 
@@ -665,24 +677,29 @@
         <div class="explainer-identity">
           <span class="explainer-icon"><Info size={18} /></span>
           <div>
-            <small>Mapa visualizado · {productContents}</small>
+            <small>{tr('viewedMap')} · {productContents}</small>
             <span class="product-title">
               <h3>{product.label}</h3>
-              {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt="Calculado por MeteoLabX" />{/if}
+              {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt={tr('calculatedBy')} />{/if}
             </span>
           </div>
         </div>
-        <span class:derived={product.kind === 'derived'} class="source-tag">{product.kind === 'derived' ? 'Diagnóstico MLX' : 'Campo AROME'}</span>
+        <span class:derived={product.kind === 'derived'} class="source-tag">{product.kind === 'derived' ? tr('diagnostics') : tr('nativeField', { model: model.short })}</span>
       </header>
+      <!-- Mientras el idioma no tenga su guía, se enseña la castellana con su
+           aviso: incompleta, pero es la explicación de verdad. -->
+      {#if guide.untranslated}
+        <p class="guide-untranslated">{tr('guideUntranslated')}</p>
+      {/if}
       <div class="explanation-overview">
-        <section class="what"><h4>Qué representa</h4><p>{guide.what}</p></section>
+        <section class="what"><h4>{tr('what')}</h4><p>{guide.what}</p></section>
         <section class="interpretation">
-          <h4>Interpretación</h4>
+          <h4>{tr('interpretation')}</h4>
           <ul>{#each guide.interpretation as paragraph}<li>{paragraph}</li>{/each}</ul>
         </section>
       </div>
       <section class="calculation-detail">
-        <h4>Cálculo</h4>
+        <h4>{tr('calculation')}</h4>
         <div class="calculation-copy">
           <p>{guide.method}</p>
           {#if guide.equations?.length}
@@ -698,7 +715,7 @@
       </section>
       {#if guide.sources?.length}
         <footer class="technical-sources">
-          <strong>Base documental</strong>
+          <strong>{tr('sources')}</strong>
           <div>
             {#each guide.sources as source}
               <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a>
@@ -713,8 +730,8 @@
 </div>
 
 <style>
-  .forecast-head{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:18px}.forecast-heading{display:flex;align-items:center;gap:9px;color:#74bfff;font-size:1rem;font-weight:780;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}.meteorological-symbol{font-family:Georgia,"Times New Roman",serif;font-size:1.72rem;font-weight:700;line-height:.8;transform:translateY(-.02em)}.beta-badge{display:inline-flex;align-items:center;margin-left:2px;padding:.12rem .35rem;border:1px solid rgba(255,75,75,.42);border-radius:999px;background:rgba(255,75,75,.1);color:#ff4b4b;font-size:.58rem;font-weight:700;line-height:1;letter-spacing:.04em;text-transform:none}.run-status{display:flex;align-items:center;gap:10px;min-width:300px;padding:11px 12px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}.status-dot{width:8px;height:8px;border-radius:50%;background:#43c98a;box-shadow:0 0 0 4px rgba(67,201,138,.14)}.status-dot.error{background:#ef6f76;box-shadow:0 0 0 4px rgba(239,111,118,.14)}.run-status div{display:flex;flex:1;flex-direction:column;gap:2px}.run-status small{color:var(--muted);font-size:.61rem}.run-status strong{font-size:.75rem}.progress-summary{display:grid;grid-template-columns:1fr auto;align-items:center;gap:7px;margin-top:4px}.progress-summary>span{height:4px;border-radius:99px;background:var(--panel-2);overflow:hidden}.progress-summary i{display:block;width:var(--progress);height:100%;border-radius:inherit;background:#43c98a}.progress-summary em{color:var(--muted);font-size:.54rem;font-style:normal;font-variant-numeric:tabular-nums}.run-status button,.map-actions button,.timeline>button{display:grid;place-items:center;border:1px solid var(--border);color:var(--ink-2);background:var(--card)}.run-status button{width:31px;height:31px;border-radius:8px}
-  .control-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.control-bar label{display:flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2);font-size:.66rem}.control-bar select{max-width:205px;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-weight:650}.run-progress-list{display:flex;min-width:0;flex:1;justify-content:flex-end;gap:6px}.run-progress-list button{display:grid;grid-template-columns:auto auto;align-items:center;gap:2px 8px;min-width:94px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;color:var(--muted);background:var(--panel-2);font-size:.53rem;text-align:left}.run-progress-list button.active{border-color:color-mix(in srgb,var(--accent) 38%,var(--border));color:var(--ink);background:var(--card)}.run-progress-list strong{font-size:.56rem;font-variant-numeric:tabular-nums;text-align:right}.run-progress-list i{grid-column:1/-1;height:3px;border-radius:99px;background:var(--border);overflow:hidden}.run-progress-list b{display:block;width:var(--run-progress);height:100%;border-radius:inherit;background:#43c98a}
+  .forecast-head{margin-bottom:16px}.forecast-title{display:flex;align-items:center;gap:8px}.forecast-title h2{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}.forecast-head p{margin-top:4px;color:var(--muted);font-size:.8rem;text-wrap:balance}.beta-badge{display:inline-flex;align-items:center;padding:.12rem .35rem;border:1px solid rgba(255,75,75,.42);border-radius:999px;background:rgba(255,75,75,.1);color:#ff4b4b;font-size:.58rem;font-weight:700;line-height:1}.status-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#43c98a;box-shadow:0 0 0 4px rgba(67,201,138,.14)}.status-dot.error{background:#ef6f76;box-shadow:0 0 0 4px rgba(239,111,118,.14)}.run-summary button,.map-actions button,.timeline>button{display:grid;place-items:center;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--card);transition:border-color .15s ease,color .15s ease,background .15s ease}.run-summary button:hover,.map-actions button:hover,.timeline>button:hover:not(:disabled){border-color:var(--border-2);color:var(--ink);background:var(--panel-2)}
+  .control-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.control-bar label{display:flex;align-items:center;gap:7px;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--panel-2);font-size:.76rem;transition:border-color .15s ease,background .15s ease}.control-bar label:hover,.control-bar label:focus-within{border-color:var(--border-2);background:var(--card)}.control-bar select{height:100%;max-width:220px;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-weight:650;cursor:pointer}.run-summary{display:flex;align-items:center;gap:10px;height:40px;margin-left:auto;padding:0 4px 0 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-2)}.run-summary-copy{display:flex;min-width:0;flex-direction:column;gap:1px}.run-summary small{color:var(--ink-2);font-size:.62rem;line-height:1}.run-summary strong{max-width:330px;overflow:hidden;color:var(--ink);font-size:.71rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}.run-summary button{width:32px;height:32px}
   .forecast-layout{display:grid;grid-template-columns:260px minmax(0,1fr);align-items:start;gap:14px}.product-selector,.map-card,.product-explainer{border:1px solid var(--border);border-radius:15px;background:var(--panel);overflow:hidden}.product-selector{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}.product-selector>header{padding:15px;border-bottom:1px solid var(--border)}.product-selector>header>div{display:flex;align-items:baseline;justify-content:space-between}.product-selector>header span{font-size:.82rem;font-weight:720}.product-selector>header small,.product-selector>header p{color:var(--muted);font-size:.57rem}.product-selector>header p{margin:5px 0 11px}.search-box{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2)}.search-box input{min-width:0;width:100%;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-size:.66rem}.category-list{overflow-y:auto;padding:7px}.category{border-bottom:1px solid var(--border)}.category:last-child{border:0}.category-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 8px;border:0;color:var(--ink-2);background:transparent;font-size:.68rem;font-weight:680;text-align:left}.category-toggle span{display:flex;align-items:center;gap:6px}.category-toggle small{display:grid;place-items:center;min-width:18px;height:18px;border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:.52rem}.category-toggle :global(svg){transition:transform .18s}.category-toggle :global(svg.open){transform:rotate(180deg)}.product-list{display:flex;flex-direction:column;gap:2px;padding:0 2px 8px}.product-list button{display:grid;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 7px;border:1px solid transparent;border-radius:8px;color:var(--muted);background:transparent;font-size:.63rem;text-align:left}.product-list button:hover{color:var(--ink);background:var(--panel-2)}.product-list button.active{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--ink);background:var(--card)}.product-list>button>i{width:3px;height:20px;border-radius:4px;background:var(--accent)}.product-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px}.product-list img{width:20px;height:20px;border-radius:6px}.product-status{display:grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border-radius:6px;font-size:.48rem;font-weight:780;font-variant-numeric:tabular-nums}.product-status.complete{color:#143c2b;background:rgba(67,201,138,.78)}.product-status.partial{color:#5a3a09;background:rgba(240,178,78,.82)}.product-status.pending{color:var(--muted);background:var(--panel-2);font-size:.82rem}.product-selector>footer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);background:var(--panel-2);font-size:.55rem;line-height:1.35}.product-selector>footer img{width:22px;height:22px;border-radius:6px}
   .viewer-column{min-width:0}.empty-map-card{display:grid;place-items:center;min-height:clamp(620px,64vh,780px);background:var(--panel)}.empty-forecast{display:flex;align-items:center;flex-direction:column;color:var(--ink);text-align:center}.empty-forecast img{width:62px;height:62px;margin-bottom:18px;border-radius:16px;opacity:.88}.empty-forecast strong{font-size:1.72rem;letter-spacing:.14em}.empty-forecast span{margin-top:7px;color:var(--muted);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase}.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}.map-product{display:flex;align-items:center;gap:10px}.product-mark{width:4px;height:35px;border-radius:5px;background:var(--product-accent);box-shadow:0 0 16px color-mix(in srgb,var(--product-accent) 45%,transparent)}.product-title{display:flex;align-items:center;gap:7px}.product-title strong{font-size:.82rem}.product-title img{width:21px;height:21px;border-radius:6px}.map-head small{display:block;margin-top:3px;color:var(--muted);font-size:.61rem;font-variant-numeric:tabular-nums}.map-actions{display:flex;align-items:center;gap:5px}.map-actions button{width:31px;height:31px;border-radius:8px}.map-actions button:disabled{opacity:.45}.export-error{max-width:210px;color:#e8846b;font-size:.52rem;line-height:1.25}
   .forecast-map{position:relative;min-height:clamp(620px,64vh,780px);overflow:hidden;background:#0b1926}:global(.theme-light) .forecast-map{background:#d5e1e6}.real-frame{position:absolute;inset:5% 7%;z-index:3;width:86%;height:90%;object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.25))}.frame-state{position:absolute;left:50%;top:50%;z-index:9;display:flex;align-items:center;flex-direction:column;gap:6px;width:min(280px,70%);padding:16px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#eaf3f8;background:rgba(6,16,25,.82);backdrop-filter:blur(10px);text-align:center}.frame-state strong{font-size:.72rem}.frame-state small{color:rgba(235,244,251,.65);font-size:.58rem;line-height:1.4}.frame-state.error{border-color:rgba(239,111,118,.32)}.frame-state button{margin-top:4px;padding:6px 9px;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#dceaf2;background:rgba(255,255,255,.06);font-size:.57rem}.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.18);border-top-color:#70b9ef;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.legend{position:absolute;right:12px;bottom:12px;z-index:18;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:rgba(235,244,251,.8);background:rgba(6,16,25,.62);font-size:.6rem}.legend i{width:130px;height:8px;border-radius:99px;background:linear-gradient(90deg,#3b4cc0,#3288bd,#66c2a5,#e6f598,#fdae61,#d73027,#762a83)}
@@ -743,8 +760,43 @@
   .level-rail{position:absolute;right:12px;top:58px;bottom:54px;z-index:14;display:flex;width:92px;flex-direction:column;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8f2f7;background:rgba(5,14,22,.78);backdrop-filter:blur(10px);overflow:hidden}.level-rail header{padding:9px 9px 7px;border-bottom:1px solid rgba(255,255,255,.1)}.level-rail header strong,.level-rail header small{display:block}.level-rail header strong{font-size:.62rem}.level-rail header small{margin-top:2px;color:rgba(235,244,251,.55);font-size:.47rem}.level-kind{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px}.level-kind button,.level-list button{border:0;color:rgba(235,244,251,.62);background:transparent;font-size:.5rem}.level-kind button{padding:5px 2px;border-radius:5px}.level-kind button.active{color:#06131c;background:#68bdf1;font-weight:750}.level-list{display:flex;min-height:0;flex:1;flex-direction:column;overflow-y:auto;padding:2px 5px 6px}.level-list button{flex:0 0 25px;border-left:2px solid transparent;text-align:right}.level-list button:hover{color:#fff;background:rgba(255,255,255,.06)}.level-list button.active{border-left-color:#68bdf1;border-radius:4px;color:#8ed3ff;background:rgba(76,163,219,.12);font-weight:750}
   .timeline{display:grid;grid-template-columns:34px 34px 1fr 34px;align-items:center;gap:7px;padding:12px 14px 14px;border-top:1px solid var(--border)}.timeline>button{width:34px;height:34px;border-radius:9px}.timeline>button:disabled{opacity:.35;cursor:default}.timeline .play{color:#76bfff}.timeline .play.active{color:#08141f;background:#76bfff}.time-range{min-width:0;padding:0 5px}.time-labels{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.57rem}.time-labels strong{color:var(--ink);font-size:.63rem}.time-range input{width:100%;margin:9px 0 2px;accent-color:#5faeea}.ticks{display:flex;justify-content:space-between;padding:0 3px}.ticks i{width:2px;height:4px;border-radius:2px;background:var(--border-2)}.ticks i.major{height:7px}.ticks i.ready{background:#43c98a}.ticks i.pending{background:var(--border-2);opacity:.62}
   .product-explainer{margin-top:14px;padding:17px}.product-explainer>header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.explainer-identity{display:flex;align-items:center;gap:11px}.explainer-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;color:#6ab7ef;background:rgba(62,142,208,.11)}.explainer-identity small{display:block;margin-bottom:3px;color:var(--muted);font-size:.56rem}.explainer-identity h3{font-size:.88rem}.source-tag{padding:5px 8px;border-radius:6px;color:#78baf0;background:rgba(62,142,208,.11);font-size:.55rem;font-weight:740;text-transform:uppercase}.source-tag.derived{color:#f08b9d;background:rgba(240,112,134,.1)}.product-explainer h4{margin-bottom:7px;color:var(--ink-2);font-size:.61rem;text-transform:uppercase;letter-spacing:.065em}.explanation-overview{display:grid;grid-template-columns:1fr;gap:19px;padding-top:17px}.explanation-overview p,.interpretation li,.calculation-detail p,.calculation-detail li{color:var(--muted);font-size:.65rem;line-height:1.62}.interpretation ul{display:grid;gap:8px;margin:0;padding-left:17px}.interpretation li::marker,.calculation-copy li::marker{color:#67b7ef}.calculation-detail{margin-top:19px;padding-top:17px;border-top:1px solid var(--border)}.calculation-copy{min-width:0}.calculation-copy ol{display:grid;gap:5px;margin:11px 0 0;padding-left:18px}.calculation-copy code{display:block;margin-top:12px;padding:7px 9px;border-radius:7px;color:#70b9ef;background:var(--panel-2);font-size:.52rem;overflow-wrap:anywhere}.technical-sources{display:grid;grid-template-columns:1fr;gap:12px;margin-top:17px;padding-top:14px;border-top:1px solid var(--border)}.technical-sources>strong{color:var(--ink-2);font-size:.58rem;text-transform:uppercase;letter-spacing:.055em}.technical-sources>div{display:flex;flex-wrap:wrap;gap:6px}.technical-sources a{padding:5px 7px;border:1px solid var(--border);border-radius:6px;color:#6db5e9;background:var(--panel-2);font-size:.53rem;line-height:1.35;text-decoration:none}.technical-sources a:hover{border-color:rgba(109,181,233,.42);color:#8bcbf8}
+  /* Igualamos la escala tipográfica con el resto de MeteoLabX. El mapa
+     conserva todo su espacio: solo crecen los rótulos y controles que antes
+     quedaban por debajo del tamaño habitual de la aplicación. */
+  .product-selector>header span{font-size:.92rem}
+  .product-selector>header small,.product-selector>header p{color:var(--ink-2);font-size:.67rem}
+  .search-box{color:var(--ink-2)}
+  .search-box input{font-size:.76rem}
+  .category-toggle{font-size:.77rem}
+  .category-toggle small{color:var(--ink-2);font-size:.61rem}
+  .product-list button{min-height:40px;color:var(--ink-2);font-size:.72rem}
+  .product-status{font-size:.56rem}
+  .product-selector>footer{color:var(--ink-2);font-size:.64rem}
+  .product-title strong{font-size:.9rem}
+  .map-head small{color:var(--ink-2);font-size:.7rem}
+  .frame-state strong{font-size:.82rem}
+  .frame-state small{font-size:.68rem}
+  .frame-state button{font-size:.67rem}
+  .legend{font-size:.68rem}
+  .band-marks span{font-size:.5rem}
+  .unit-button,.unit-menu button{font-size:.68rem}
+  .level-rail header strong{font-size:.7rem}
+  .level-rail header small{font-size:.56rem}
+  .level-kind button,.level-list button{font-size:.59rem}
+  .time-labels{color:var(--ink-2);font-size:.66rem}
+  .time-labels strong{font-size:.72rem}
+  .explainer-identity small{color:var(--ink-2);font-size:.66rem}
+  .explainer-identity h3{font-size:.96rem}
+  .source-tag{font-size:.64rem}
+  .product-explainer h4{font-size:.7rem}
+  .guide-untranslated{margin:0 0 12px;padding:8px 12px;border-radius:8px;background:var(--panel-2);color:var(--muted);font-size:.78rem;font-style:italic}
+  .explanation-overview p,.interpretation li,.calculation-detail p,.calculation-detail li{color:var(--ink-2);font-size:.75rem}
+  .calculation-copy code{font-size:.62rem}
+  .technical-sources>strong{font-size:.67rem}
+  .technical-sources a{font-size:.63rem}
+
   @media(max-width:980px){.forecast-layout{grid-template-columns:220px minmax(0,1fr)}.forecast-map{min-height:440px}}
-  @media(max-width:760px){.forecast-head{align-items:stretch;flex-direction:column}.forecast-heading{align-self:flex-start}.run-status{min-width:0}.control-bar{flex-wrap:wrap}.run-progress-list{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto}.run-progress-list button{flex:0 0 auto}.forecast-layout{grid-template-columns:1fr}.product-selector{position:static;max-height:none}.category-list{max-height:360px}.forecast-map{min-height:390px}.map-head{align-items:flex-start}.map-actions button:nth-child(2){display:none}}
+  @media(max-width:760px){.control-bar{flex-wrap:wrap}.run-summary{order:3;width:100%;margin-left:0}.forecast-layout{grid-template-columns:1fr}.product-selector{position:static;max-height:none}.category-list{max-height:360px}.forecast-map{min-height:390px}.map-head{align-items:flex-start}.map-actions button:nth-child(2){display:none}}
   @media(max-width:640px){.bands{width:158px}.band-marks span:nth-child(even){display:none}}
-  @media(max-width:480px){.control-bar label{flex:1}.control-bar label>span{display:none}.forecast-map{min-height:330px}.legend i{width:76px}.timeline{grid-template-columns:32px 32px minmax(150px,1fr) 32px;padding-inline:8px}.timeline>button{width:32px;height:32px}.time-labels>span{display:none}.time-labels{justify-content:center}.product-explainer>header{align-items:flex-start;flex-direction:column}.source-tag{margin-left:47px}}
+  @media(max-width:480px){.control-bar label{min-width:0;flex:1}.control-bar label>span{display:none}.control-bar select{min-width:0;width:100%}.run-summary strong{max-width:220px}.forecast-map{min-height:330px}.legend i{width:76px}.timeline{grid-template-columns:32px 32px minmax(150px,1fr) 32px;padding-inline:8px}.timeline>button{width:32px;height:32px}.time-labels>span{display:none}.time-labels{justify-content:center}.product-explainer>header{align-items:flex-start;flex-direction:column}.source-tag{margin-left:47px}}
 </style>

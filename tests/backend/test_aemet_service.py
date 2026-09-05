@@ -133,8 +133,10 @@ def test_normalize_aemet_record_basic_shape() -> None:
     # Derivados (calculados por add_basic_derived, no del API)
     assert not math.isnan(result["Td"]),  "Td debe calcularse desde Tc+RH"
     assert not math.isnan(result["feels_like"]),  "feels_like (Steadman) debe calcularse"
-    # heat_index Rothfusz es polinómico, devuelve un float (no NaN aunque T sea baja)
-    assert not math.isnan(result["heat_index"])
+    # A 22,4 °C no hay heat index: la regresión de Rothfusz interpola la tabla
+    # del NWS, que arranca en 80 °F, y por debajo de HEAT_INDEX_MIN_TEMP
+    # devolvía valores sin sentido (146 °C a −19 °C).
+    assert math.isnan(result["heat_index"])
 
     # AEMET no reporta radiación
     assert math.isnan(result["solar_radiation"])

@@ -1,0 +1,22 @@
+# Configuración del servicio web (SvelteKit). El servicio Python conserva la
+# suya en la raíz del repositorio.
+#
+# En Railway: Root Directory = `web`.
+#
+# Variables necesarias:
+#   METEOLABX_API_URL         backend FastAPI. Por red privada,
+#                             http://<servicio>.railway.internal:8000 — y el
+#                             backend tiene que escuchar en `::` para eso
+#                             (METEOLABX_BACKEND_HOST=:: en el servicio Python).
+#   METEOLABX_LEGACY_ORIGIN   servicio actual (Streamlit). Todo lo que aún no
+#                             está migrado se reenvía ahí, WebSocket incluido.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/robots.txt"
+healthcheckTimeout = 60

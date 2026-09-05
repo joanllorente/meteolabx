@@ -118,7 +118,7 @@ def test_load_ignores_unknown_station_fields(tmp_path):
         json.dump(
             {
                 "version": 1,
-                "quality_filter_schema": 1,
+                "quality_filter_schema": 2,
                 "updated_at": None,
                 "daily": [["METEOGALICIA", "2026-07-02", {"10045": record}]],
                 "hourly": [],
@@ -179,3 +179,41 @@ def test_load_discards_legacy_provider_state_without_quality_schema(tmp_path):
     assert restored.accumulated_hours("ECCC", day) == set()
     assert restored.top("rain", providers=["ECCC"], day=day, limit=5) == []
     assert restored.accumulated_hours("AEMET", day) == {f"{day}T06"}
+
+
+def test_schema_four_migration_discards_only_iem_state(tmp_path):
+    """El QA de ráfagas refetchea IEM sin vaciar los demás proveedores."""
+    import gzip
+    import json
+
+    path = str(tmp_path / "ranking_state.json.gz")
+    store = RankingStore()
+    day = "2026-09-02"
+    store.replace_daily(
+        "IEM",
+        [StationDaily(
+            provider="IEM", station_id="bad", name="Bad",
+            tmin=-72.8, local_date=day,
+        )],
+    )
+    store.replace_daily(
+        "METEOGALICIA",
+        [StationDaily(
+            provider="METEOGALICIA", station_id="good", name="Good",
+            tmax=31.0, local_date=day,
+        )],
+    )
+    store.save_to_disk(path)
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    payload["quality_filter_schema"] = 3
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+
+    restored = RankingStore()
+    assert restored.load_from_disk(path) is True
+    assert restored.top("tmin", providers=["IEM"], day=day) == []
+    assert [
+        row.station_id
+        for row in restored.top("tmax", providers=["METEOGALICIA"], day=day)
+    ] == ["good"]

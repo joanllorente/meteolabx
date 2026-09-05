@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Genera páginas HTML indexables y multilingües para estaciones públicas.
+"""Genera los índices HTML indexables de estaciones públicas.
 
-Las páginas se escriben en el directorio estático del paquete Streamlit para
-que rutas como ``/en/weather-stations/aemet/barcelona-drassanes-0201x.html``
-se sirvan como HTML completo, sin ejecutar JavaScript ni abrir una sesión de
-Streamlit. Cada página publica canonical propio, alternates ``hreflang`` para
-los seis idiomas de la aplicación y datos estructurados localizados.
+Escribe directorios, índices por red y páginas de ciudad en el directorio
+estático del paquete Streamlit, de modo que rutas como
+``/en/weather-stations/aemet.html`` se sirven como HTML completo, sin
+ejecutar JavaScript ni abrir una sesión de Streamlit. Cada página publica
+canonical propio, alternates ``hreflang`` para los seis idiomas de la
+aplicación y datos estructurados localizados.
+
+Las **fichas de estación** ya no salen de aquí: las sirve el frontend
+SvelteKit en ``/{idioma}/observation/{slug}`` con la observación renderizada
+en servidor. Este script solo produce los enlaces hacia ellas, y su sitemap
+—``directories-sitemap.xml``— cubre lo que sigue siendo estático; el índice
+``sitemap.xml`` lo publica el frontend.
 
 El catálogo incluye redes públicas españolas e internacionales. Las estaciones
 marcadas como inactivas se excluyen para evitar páginas de poco valor, al igual
@@ -16,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-import hashlib
 import html
 import json
 import math
@@ -38,10 +44,17 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.seo_pages_i18n import DEFAULT_LANGUAGE, LANGUAGES, LanguageSpec
 from utils.station_slug import slugify
+from utils.station_url import url_slug_map
 
 
 SITE_URL = "https://www.meteolabx.com"
-STATIC_SITEMAP_URLS = (f"{SITE_URL}/", f"{SITE_URL}/forecast")
+# Segmento de las fichas en el frontend nuevo. Vive también en
+# ``web/src/lib/seo/ownership.js``; si cambia, cambia en los dos sitios.
+OBSERVATION_SEGMENT = "observation"
+# Las fichas de estación ya no son ficheros: las publica SvelteKit y su
+# sitemap. Aquí solo quedan los directorios, los índices de red y las
+# ciudades, que siguen siendo HTML estático.
+DIRECTORY_SITEMAP_NAME = "directories-sitemap.xml"
 DEFAULT_PROVIDERS = (
     "AEMET",
     "METEOCAT",
@@ -97,7 +110,6 @@ LANGUAGES_BY_COUNTRY = {
     "SE": ("en", "es"),
     "AQ": ("en", "es"),
 }
-SITEMAP_URL_LIMIT = 50_000
 SEO_STYLESHEET = """
 :root{color-scheme:dark;--bg:#0e1117;--card:#171b24;--line:#2a3240;--text:#f5f7fb;--muted:#a9b4c4;--blue:#5da8ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.58}a{color:var(--blue)}
@@ -105,17 +117,6 @@ header,main,footer{width:min(1040px,calc(100% - 32px));margin:auto}header{displa
 .breadcrumbs{color:var(--muted);font-size:.9rem;margin:18px 0}.breadcrumbs a{color:var(--muted)}h1{line-height:1.14;font-size:clamp(2rem,5vw,3.25rem);margin:.35em 0}h2{margin-top:2rem;line-height:1.25}.lede{color:var(--muted);font-size:1.12rem;max-width:760px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:24px 0}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}.label{display:block;color:var(--muted);font-size:.82rem;margin-bottom:3px}.value{font-weight:700}.cta{display:inline-block;padding:12px 18px;border-radius:12px;background:#2384ff;color:#fff;font-weight:750;text-decoration:none;margin:10px 0}.cta.secondary{background:transparent;color:var(--blue);border:1px solid var(--line)}.actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 8px}
 .live-panel{margin:24px 0 34px}.observation-status{color:var(--muted);margin:12px 0;min-height:1.4em}.observation-status.error{color:#ef7373}.observation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}.observation-card{min-height:132px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px}.observation-card .obs-label{color:var(--muted);font-size:.78rem;font-weight:750;letter-spacing:.035em;text-transform:uppercase}.observation-card .obs-value{display:block;margin-top:7px;font-size:1.65rem;line-height:1.15;font-weight:800}.observation-card .obs-detail{color:var(--muted);font-size:.84rem;line-height:1.38;margin-top:9px}.observation-card .obs-extremes{color:var(--text);font-size:.8rem;font-weight:650;margin-top:8px}.observation-loader{position:fixed;left:-10000px;top:0;width:1280px;height:1200px;border:0;opacity:.01;pointer-events:none}.fallback{color:var(--muted);font-size:.9rem}ul.links{padding-left:1.2rem;columns:2;column-gap:32px}ul.links li{break-inside:avoid;margin:.5rem 0}footer{color:var(--muted);border-top:1px solid var(--line);margin-top:52px;padding:26px 0 42px;font-size:.9rem}
 @media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f7f9fc;--card:#fff;--line:#dbe2ec;--text:#101620;--muted:#596779;--blue:#176fce}}@media(max-width:760px){.header-links>a{display:none}ul.links{columns:1}.observation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.actions .cta{width:100%;text-align:center}}@media(max-width:430px){.observation-grid{grid-template-columns:1fr}}
-""".strip()
-SEO_OBSERVATION_SCRIPT = r"""
-document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('.live-panel').forEach(section=>{
-const pageView={provider:section.dataset.seoProvider||'',station_id:section.dataset.seoStationId||'',name:section.dataset.seoStationName||'',language:section.dataset.seoLanguage||''};
-if(pageView.provider&&pageView.station_id&&!section.dataset.seoViewSent){section.dataset.seoViewSent='1';fetch('/v1/stats/seo-view',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pageView),keepalive:true}).catch(()=>{})}
-const frame=section.querySelector('.observation-loader'),status=section.querySelector('[data-observation-status]'),slots=Array.from(section.querySelectorAll('[data-observation-slot]'));
-const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
-const syncObservation=()=>{try{const doc=frame.contentDocument;if(!doc)return false;const grid=Array.from(doc.querySelectorAll('.grid.grid-3')).find(item=>item.querySelectorAll(':scope > .card .card-value').length>=6);if(!grid){const alert=doc.querySelector('[data-testid="stAlert"]');if(alert){status.textContent=clean(alert.innerText).slice(0,260);status.classList.add('error')}return false}
-Array.from(grid.querySelectorAll(':scope > .card')).slice(0,6).forEach((source,index)=>{const target=slots[index];if(!target)return;const value=clean(source.querySelector('.card-value')?.innerText),detail=clean(source.querySelector('.subtitle')?.innerText),unit=clean(source.querySelector('.unit')?.innerText),side=clean(source.querySelector('.side-col')?.innerText),extremes=side.replace(',','.').match(/-?\d+(?:\.\d+)?/g)||[],current=value.replace(',','.').match(/-?\d+(?:\.\d+)?/);if(current&&extremes.length){const number=Number(current[0]);if(Number.isFinite(number)&&number>Number(extremes[0]))extremes[0]=current[0];if(extremes.length>=2&&Number.isFinite(number)&&number<Number(extremes[1]))extremes[1]=current[0]}target.querySelector('.obs-value').textContent=value&&!value.startsWith('—')?value:'—';target.querySelector('.obs-detail').textContent=detail;const withUnit=number=>unit?`${number} ${unit}`:number;target.querySelector('.obs-extremes').textContent=extremes.length>=2?`${section.dataset.maximumLabel} ${withUnit(extremes[0])} · ${section.dataset.minimumLabel} ${withUnit(extremes[1])}`:extremes.length===1?`${section.dataset.maximumLabel} ${withUnit(extremes[0])}`:''});
-const meta=doc.querySelector('.meta .mlbx-live-age')?.closest('.meta');status.textContent=clean(meta?.innerText)||section.dataset.updatedLabel;status.classList.remove('error');return true}catch(error){return false}};
-frame.addEventListener('load',syncObservation);let attempts=0;const timer=window.setInterval(()=>{attempts+=1;if(syncObservation()||attempts>=120)window.clearInterval(timer)},250);window.setInterval(syncObservation,60000);syncObservation()}));
 """.strip()
 SENSOR_KEYS = (
     "thermometer",
@@ -160,10 +161,13 @@ class StationPage:
         return LANGUAGES_BY_COUNTRY.get(self.country, ("en", "es"))
 
     def path(self, language: LanguageSpec) -> str:
-        return (
-            f"/{language.code}/{language.directory_slug}/"
-            f"{self.provider_slug}/{self.url_slug}.html"
-        )
+        """Ruta pública de la ficha, ya servida por el frontend SvelteKit.
+
+        Antes era ``/{idioma}/{directorio}/{red}/{slug}.html``. Esa URL sigue
+        respondiendo, pero con un 301 hacia esta: el slug no cambia, así que
+        la traducción es directa y el frontend la resuelve sin consultar nada.
+        """
+        return f"/{language.code}/{OBSERVATION_SEGMENT}/{self.url_slug}"
 
     def canonical_url(self, language: LanguageSpec) -> str:
         return f"{SITE_URL}{self.path(language)}"
@@ -184,38 +188,6 @@ class StationPage:
             if clean and clean not in parts:
                 parts.append(clean)
         return ", ".join(parts)
-
-    def app_url(
-        self,
-        language: LanguageSpec,
-        *,
-        tab: str = "observacion",
-        from_seo: bool = False,
-    ) -> str:
-        # ``lang`` se consume una sola vez por la app y luego se limpia de la
-        # barra de direcciones; ``e`` mantiene el deep link existente.
-        params = {
-                "e": f"{self.provider}~{slugify(self.name)}",
-                "sid": self.station_id,
-                "tab": tab,
-                "lang": language.code,
-            }
-        if from_seo:
-            params["from"] = "seo"
-        query = urlencode(params)
-        return f"{SITE_URL}/?{query}"
-
-    def embedded_app_path(self, language: LanguageSpec) -> str:
-        query = urlencode(
-            {
-                "e": f"{self.provider}~{slugify(self.name)}",
-                "sid": self.station_id,
-                "tab": "observacion",
-                "lang": language.code,
-                "embed": "seo",
-            }
-        )
-        return f"/?{query}"
 
 
 @dataclass(frozen=True)
@@ -338,31 +310,18 @@ def _display_name(value: object) -> str:
     return clean
 
 
-def _streamlit_static_dir() -> Path:
-    import streamlit
+def _default_output_dir() -> Path:
+    """Dónde se publican los directorios, los índices y las ciudades.
 
-    return Path(streamlit.__file__).resolve().parent / "static"
+    Los sirve el frontend SvelteKit desde sus estáticos: son las últimas
+    páginas que quedaban en Streamlit y, al retirarlo, sin este destino se
+    convertirían en 404 —unas doscientas URLs indexadas—.
 
-
-def _unique_url_slugs(rows: Sequence[sqlite3.Row]) -> dict[int, str]:
-    """Construye slugs legibles y estables, resolviendo colisiones raras."""
-    candidates: dict[int, str] = {}
-    owners: dict[tuple[str, str], list[sqlite3.Row]] = {}
-    for row in rows:
-        name_slug = slugify(row["name"])[:88] or "station"
-        identity_slug = slugify(row["station_id"])[:36] or str(row["station_pk"])
-        candidate = f"{name_slug}-{identity_slug}"
-        owners.setdefault((str(row["provider"]), candidate), []).append(row)
-
-    for (provider, candidate), matches in owners.items():
-        if len(matches) == 1:
-            candidates[int(matches[0]["station_pk"])] = candidate
-            continue
-        for row in matches:
-            identity = f"{provider}|{row['network_code']}|{row['station_id']}".encode()
-            suffix = hashlib.sha1(identity).hexdigest()[:8]
-            candidates[int(row["station_pk"])] = f"{candidate}-{suffix}"
-    return candidates
+    Se generan aquí y viajan en el repositorio, como el visor de Predicción:
+    el frontend vive en otro servicio y no ve el catálogo SQLite, así que no
+    puede construirlas en su propio despliegue.
+    """
+    return Path(__file__).resolve().parents[1] / "web" / "static"
 
 
 def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]:
@@ -400,7 +359,7 @@ def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]
     finally:
         connection.close()
 
-    url_slugs = _unique_url_slugs(rows)
+    url_slugs = url_slug_map(rows)
     return [
         StationPage(
             station_pk=int(row["station_pk"]),
@@ -421,86 +380,6 @@ def load_stations(database: Path, providers: Sequence[str]) -> list[StationPage]
         )
         for row in rows
     ]
-
-
-def _nearest_stations(
-    station: StationPage,
-    stations: Sequence[StationPage],
-    *,
-    limit: int = 6,
-) -> list[tuple[StationPage, float]]:
-    if station.latitude is None or station.longitude is None:
-        return []
-    results: list[tuple[StationPage, float]] = []
-    for candidate in stations:
-        if candidate.station_pk == station.station_pk:
-            continue
-        if candidate.latitude is None or candidate.longitude is None:
-            continue
-        distance = _distance_km(
-            station.latitude,
-            station.longitude,
-            candidate.latitude,
-            candidate.longitude,
-        )
-        results.append((candidate, distance))
-    results.sort(key=lambda item: (item[1], item[0].name.casefold()))
-    return results[:limit]
-
-
-def _nearest_station_map(
-    stations: Sequence[StationPage],
-    *,
-    limit: int = 6,
-) -> dict[int, list[tuple[StationPage, float]]]:
-    """Find nearby stations with a spatial grid instead of an O(n²) scan."""
-    buckets: dict[tuple[int, int], list[StationPage]] = defaultdict(list)
-    for station in stations:
-        if station.latitude is None or station.longitude is None:
-            continue
-        buckets[(math.floor(station.latitude), math.floor(station.longitude))].append(station)
-
-    result: dict[int, list[tuple[StationPage, float]]] = {}
-    for station in stations:
-        if station.latitude is None or station.longitude is None:
-            result[station.station_pk] = []
-            continue
-        origin_lat = math.floor(station.latitude)
-        origin_lon = math.floor(station.longitude)
-        candidates: dict[int, StationPage] = {}
-        for ring in range(0, 4):
-            for lat_cell in range(origin_lat - ring, origin_lat + ring + 1):
-                if lat_cell < -90 or lat_cell > 90:
-                    continue
-                for lon_cell in range(origin_lon - ring, origin_lon + ring + 1):
-                    if ring and (
-                        lat_cell not in {origin_lat - ring, origin_lat + ring}
-                        and lon_cell not in {origin_lon - ring, origin_lon + ring}
-                    ):
-                        continue
-                    wrapped_lon = ((lon_cell + 180) % 360) - 180
-                    for candidate in buckets.get((lat_cell, wrapped_lon), ()):
-                        if candidate.station_pk != station.station_pk:
-                            candidates[candidate.station_pk] = candidate
-            if len(candidates) >= limit:
-                break
-
-        distances = [
-            (
-                candidate,
-                _distance_km(
-                    station.latitude,
-                    station.longitude,
-                    candidate.latitude,
-                    candidate.longitude,
-                ),
-            )
-            for candidate in candidates.values()
-            if candidate.latitude is not None and candidate.longitude is not None
-        ]
-        distances.sort(key=lambda item: (item[1], item[0].name.casefold()))
-        result[station.station_pk] = distances[:limit]
-    return result
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -772,218 +651,12 @@ def _page_shell(
 <meta property="og:locale" content="{language.og_locale}"><meta property="og:url" content="{safe_canonical}">
 <meta property="og:title" content="{safe_title}"><meta property="og:description" content="{safe_description}">
 <meta property="og:image" content="{SITE_URL}/og-image.png?v=12"><meta name="twitter:card" content="summary_large_image">
-{json_ld}<script src="/seo-observation.js?v=1" defer></script></head><body><header><a class="brand" href="/">MeteoLabX</a><div class="header-links">
+{json_ld}</head><body><header><a class="brand" href="/">MeteoLabX</a><div class="header-links">
 <a href="{_city_directory_path(language)}">{html.escape(language.t('cities'))}</a>
 <a href="{_directory_path(language)}">{html.escape(language.t('stations'))}</a>
 <a href="/forecast">AROME</a>
 <a href="/">{html.escape(language.t('panel'))}</a>{_language_navigation(language, alternates)}</div></header>
 <main>{body}</main><footer>{html.escape(language.t('footer'))}</footer></body></html>"""
-
-
-def _station_html(
-    station: StationPage,
-    language: LanguageSpec,
-    nearby: Sequence[tuple[StationPage, float]],
-) -> str:
-    search_name = _station_search_name(station, language)
-    location = station.location_label(language) or language.t("fallback_location")
-    title = language.t(
-        "station_title", name=search_name, provider=station.provider_label
-    )
-    description = language.t(
-        "station_description",
-        name=search_name,
-        provider=station.provider_label,
-        location=location,
-    )
-    coordinates = f"{station.latitude:.5f}, {station.longitude:.5f}"
-    elevation = (
-        f"{station.elevation_m:.0f} m"
-        if station.elevation_m is not None
-        else language.t("not_available")
-    )
-    sensors = ", ".join(language.sensors[key] for key in station.sensor_keys)
-    sensors = sensors or language.t("sensor_unknown")
-    history = language.t("available" if station.has_historical else "current_only")
-    panel_url = station.app_url(language, from_seo=True)
-    embedded_url = station.embedded_app_path(language)
-    observation_labels = (
-        language.t("obs_temperature"),
-        language.t("obs_humidity"),
-        language.t("obs_dew_point"),
-        language.t("obs_pressure"),
-        language.t("obs_wind"),
-        language.t("obs_precipitation"),
-    )
-    observation_cards = "".join(
-        f"""<div class="observation-card" data-observation-slot="{index}">
-          <span class="obs-label">{html.escape(label)}</span>
-          <span class="obs-value">—</span>
-          <div class="obs-detail"></div>
-          <div class="obs-extremes"></div>
-        </div>"""
-        for index, label in enumerate(observation_labels)
-    )
-    history_section = ""
-    if station.has_historical:
-        history_section = f"""
-    <section aria-labelledby="history"><h2 id="history">{html.escape(language.t('history_title', name=search_name))}</h2>
-      <p>{html.escape(language.t('history_text'))}</p>
-      <a class="cta" href="{html.escape(station.app_url(language, tab='historico'), quote=True)}">{html.escape(language.t('history_cta'))}</a></section>
-        """
-    nearby_items = "".join(
-        f'<li><a href="{html.escape(other.path(language), quote=True)}">{html.escape(other.name)}</a> '
-        f'<span class="label">{distance:.1f} km · {html.escape(other.provider_label)}</span></li>'
-        for other, distance in nearby
-    )
-    directory_path = _directory_path(language)
-    provider_path = _provider_path(station.provider, language)
-    canonical = station.canonical_url(language)
-    alternates = _station_alternates(station)
-    body = f"""
-    <div class="breadcrumbs"><a href="{directory_path}">{html.escape(language.t('stations'))}</a> / <a href="{provider_path}">{html.escape(station.provider_label)}</a> / {html.escape(station.name)}</div>
-    <p class="label">{html.escape(language.t('station_type'))} · {html.escape(station.provider_label)}</p>
-    <h1>{html.escape(station.name)}</h1>
-    <p class="lede">{html.escape(language.t('station_lede', name=search_name, provider=station.provider_label, location=location))}</p>
-    <section class="live-panel" aria-label="{html.escape(language.t('current_title', name=search_name), quote=True)}"
-      data-seo-provider="{html.escape(station.provider, quote=True)}"
-      data-seo-station-id="{html.escape(station.station_id, quote=True)}"
-      data-seo-station-name="{html.escape(station.name, quote=True)}"
-      data-seo-language="{html.escape(language.code, quote=True)}"
-      data-maximum-label="{html.escape(language.t('maximum'), quote=True)}"
-      data-minimum-label="{html.escape(language.t('minimum'), quote=True)}"
-      data-updated-label="{html.escape(language.t('observation_updated'), quote=True)}">
-      <div class="observation-status" data-observation-status>{html.escape(language.t('live_panel_loading'))}</div>
-      <div class="observation-grid" aria-live="polite">
-        {observation_cards}
-      </div>
-      <iframe class="observation-loader" src="{html.escape(embedded_url, quote=True)}"
-        title="" tabindex="-1" aria-hidden="true" loading="eager"
-        referrerpolicy="same-origin"></iframe>
-      <script>
-      (() => {{
-        const section = document.currentScript.closest('.live-panel');
-        const frame = section.querySelector('.observation-loader');
-        const status = section.querySelector('[data-observation-status]');
-        const slots = Array.from(section.querySelectorAll('[data-observation-slot]'));
-        const maximumLabel = {json.dumps(language.t('maximum'), ensure_ascii=False)};
-        const minimumLabel = {json.dumps(language.t('minimum'), ensure_ascii=False)};
-
-        const clean = value => String(value || '').replace(/\\s+/g, ' ').trim();
-
-        const syncObservation = () => {{
-          try {{
-            const doc = frame.contentDocument;
-            if (!doc) return false;
-            const primaryGrid = Array.from(doc.querySelectorAll('.grid.grid-3')).find(
-              grid => grid.querySelectorAll(':scope > .card .card-value').length >= 6
-            );
-            if (!primaryGrid) {{
-              const alert = doc.querySelector('[data-testid="stAlert"]');
-              if (alert) {{
-                status.textContent = clean(alert.innerText).slice(0, 260);
-                status.classList.add('error');
-              }}
-              return false;
-            }}
-
-            const sourceCards = Array.from(primaryGrid.querySelectorAll(':scope > .card')).slice(0, 6);
-            sourceCards.forEach((source, index) => {{
-              const target = slots[index];
-              if (!target) return;
-              const value = clean(source.querySelector('.card-value')?.innerText);
-              const detail = clean(source.querySelector('.subtitle')?.innerText);
-              const unit = clean(source.querySelector('.unit')?.innerText);
-              const side = clean(source.querySelector('.side-col')?.innerText);
-              const extremes = side.replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/g) || [];
-              const currentMatch = value.replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/);
-              if (currentMatch && extremes.length) {{
-                const currentNumber = Number(currentMatch[0]);
-                if (Number.isFinite(currentNumber) && currentNumber > Number(extremes[0])) {{
-                  extremes[0] = currentMatch[0];
-                }}
-                if (extremes.length >= 2 && Number.isFinite(currentNumber) && currentNumber < Number(extremes[1])) {{
-                  extremes[1] = currentMatch[0];
-                }}
-              }}
-              target.querySelector('.obs-value').textContent = value && !value.startsWith('—') ? value : '—';
-              target.querySelector('.obs-detail').textContent = detail;
-              const withUnit = number => unit ? `${{number}} ${{unit}}` : number;
-              let extremesText = '';
-              if (extremes.length >= 2) {{
-                extremesText = `${{maximumLabel}} ${{withUnit(extremes[0])}} · ${{minimumLabel}} ${{withUnit(extremes[1])}}`;
-              }} else if (extremes.length === 1) {{
-                extremesText = `${{maximumLabel}} ${{withUnit(extremes[0])}}`;
-              }}
-              target.querySelector('.obs-extremes').textContent = extremesText;
-            }});
-
-            const meta = doc.querySelector('.meta .mlbx-live-age')?.closest('.meta');
-            status.textContent = clean(meta?.innerText) || {json.dumps(language.t('observation_updated'), ensure_ascii=False)};
-            status.classList.remove('error');
-
-            return true;
-          }} catch (error) {{
-            return false;
-          }}
-        }};
-
-        frame.addEventListener('load', syncObservation);
-        let attempts = 0;
-        const initialTimer = window.setInterval(() => {{
-          attempts += 1;
-          if (syncObservation() || attempts >= 120) window.clearInterval(initialTimer);
-        }}, 250);
-        window.setInterval(syncObservation, 60000);
-        syncObservation();
-      }})();
-      </script>
-      <div class="actions">
-        <a class="cta" href="{html.escape(panel_url, quote=True)}" target="_top">{html.escape(language.t('open_full_panel'))}</a>
-      </div>
-      <noscript><p><a href="{html.escape(panel_url, quote=True)}">{html.escape(language.t('open_full_panel'))}</a></p></noscript>
-    </section>
-    <section aria-labelledby="profile"><h2 id="profile">{html.escape(language.t('station_sheet'))}</h2><div class="grid">
-      <div class="card"><span class="label">{html.escape(language.t('network'))}</span><span class="value">{html.escape(station.provider_label)}</span></div>
-      <div class="card"><span class="label">{html.escape(language.t('identifier'))}</span><span class="value">{html.escape(station.station_id)}</span></div>
-      <div class="card"><span class="label">{html.escape(language.t('location'))}</span><span class="value">{html.escape(location)}</span></div>
-      <div class="card"><span class="label">{html.escape(language.t('altitude'))}</span><span class="value">{elevation}</span></div>
-      <div class="card"><span class="label">{html.escape(language.t('coordinates'))}</span><span class="value">{coordinates}</span></div>
-      <div class="card"><span class="label">{html.escape(language.t('historical'))}</span><span class="value">{html.escape(history)}</span></div>
-    </div></section>
-    <section aria-labelledby="variables"><h2 id="variables">{html.escape(language.t('variables'))}</h2>
-      <p>{html.escape(language.t('sensor_text', sensors=sensors))}</p></section>
-    {history_section}
-    <section aria-labelledby="nearby"><h2 id="nearby">{html.escape(language.t('nearby'))}</h2><ul class="links">{nearby_items}</ul></section>
-    """
-    body = re.sub(r"\s*<script>\s*\(\(\) => \{.*?</script>", "", body, flags=re.DOTALL)
-    breadcrumb = {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        "inLanguage": language.code,
-        "itemListElement": [
-            {"@type":"ListItem","position":1,"name":language.t("stations"),"item":f"{SITE_URL}{directory_path}"},
-            {"@type":"ListItem","position":2,"name":station.provider_label,"item":f"{SITE_URL}{provider_path}"},
-            {"@type":"ListItem","position":3,"name":station.name,"item":canonical},
-        ],
-    }
-    place: dict[str, object] = {
-        "@context":"https://schema.org", "@type":"Place",
-        "name":f"{language.t('station_type')} {station.name}",
-        "url":canonical, "identifier":station.station_id, "inLanguage":language.code,
-        "geo": {
-            "@type":"GeoCoordinates", "latitude":station.latitude,
-            "longitude":station.longitude,
-            **({"elevation":station.elevation_m} if station.elevation_m is not None else {}),
-        },
-    }
-    if search_name != station.name:
-        place["alternateName"] = search_name
-    return _page_shell(
-        language=language, title=title, description=description,
-        canonical_url=canonical, alternates=alternates, body=body,
-        structured_data=(breadcrumb, place),
-    )
 
 
 def _provider_index_html(
@@ -1177,9 +850,9 @@ def _xml_alternate_links(alternates: Mapping[str, str]) -> str:
 
 
 def _sitemap(alternate_groups: Sequence[Mapping[str, str]]) -> str:
-    entries = [
-        f"  <url><loc>{xml_escape(url)}</loc></url>" for url in STATIC_SITEMAP_URLS
-    ]
+    # Sin las URLs sueltas del sitio: la portada y el visor los publica
+    # sitemap-static.xml, en el frontend.
+    entries: list[str] = []
     for alternates in alternate_groups:
         alternate_links = _xml_alternate_links(alternates)
         for url in alternates.values():
@@ -1195,54 +868,25 @@ def _sitemap(alternate_groups: Sequence[Mapping[str, str]]) -> str:
     )
 
 
-def _plain_sitemap(urls: Sequence[str]) -> str:
-    entries = "\n".join(
-        f"  <url><loc>{xml_escape(url)}</loc></url>" for url in urls
-    )
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"{entries}\n</urlset>\n"
-    )
-
-
-def _sitemap_index(names: Sequence[str]) -> str:
-    entries = "\n".join(
-        f"  <sitemap><loc>{SITE_URL}/{xml_escape(name)}</loc></sitemap>"
-        for name in names
-    )
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"{entries}\n</sitemapindex>\n"
-    )
-
-
 def _write_sitemaps(
     output: Path,
     alternate_groups: Sequence[Mapping[str, str]],
 ) -> int:
-    sitemap_url_count = len(STATIC_SITEMAP_URLS) + sum(
-        len(group) for group in alternate_groups
-    )
-    for stale in output.glob("sitemap-*.xml"):
-        stale.unlink()
-    if sitemap_url_count <= SITEMAP_URL_LIMIT:
-        _write_text(output / "sitemap.xml", _sitemap(alternate_groups))
-        return sitemap_url_count
+    """Sitemap de los directorios, los índices de red y las ciudades.
 
-    urls = list(STATIC_SITEMAP_URLS)
-    urls.extend(url for group in alternate_groups for url in group.values())
-    names: list[str] = []
-    for index, offset in enumerate(range(0, len(urls), SITEMAP_URL_LIMIT), start=1):
-        name = f"sitemap-{index}.xml"
-        names.append(name)
-        _write_text(
-            output / name,
-            _plain_sitemap(urls[offset : offset + SITEMAP_URL_LIMIT]),
-        )
-    _write_text(output / "sitemap.xml", _sitemap_index(names))
-    return sitemap_url_count
+    Ya no lleva fichas de estación: esas las publica el frontend nuevo en
+    ``/sitemap-observation-N.xml``. Lo que queda cabe de sobra en un solo
+    fichero, así que se conserva el formato con alternates ``hreflang``, que
+    es el que Google lleva leyendo desde el principio.
+
+    El nombre tampoco es ``sitemap.xml``: ese lo sirve ahora el frontend, y su
+    índice enlaza este fichero para que estas páginas no se caigan del mapa.
+    """
+    for stale in (*output.glob("sitemap-*.xml"), output / "sitemap.xml"):
+        if stale.is_file():
+            stale.unlink()
+    _write_text(output / DIRECTORY_SITEMAP_NAME, _sitemap(alternate_groups))
+    return sum(len(group) for group in alternate_groups)
 
 
 def build_pages(
@@ -1253,14 +897,12 @@ def build_pages(
 ) -> dict[str, int]:
     output.mkdir(parents=True, exist_ok=True)
     _write_text(output / "seo-pages.css", SEO_STYLESHEET + "\n")
-    _write_text(output / "seo-observation.js", SEO_OBSERVATION_SCRIPT + "\n")
     stations = load_stations(database, providers)
     by_provider = {
         provider: [station for station in stations if station.provider == provider]
         for provider in providers
     }
     by_provider = {provider: rows for provider, rows in by_provider.items() if rows}
-    nearby_by_station = _nearest_station_map(stations)
     city_matches = {
         city: matches
         for city in CITIES
@@ -1311,41 +953,27 @@ def build_pages(
                     _city_html(city, matches, language),
                 )
         for provider, provider_stations in localized_by_provider.items():
-            provider_root = generated_root / slugify(provider)
+            # Solo el índice de la red. Las fichas las sirve el frontend
+            # SvelteKit desde /{idioma}/observation/{slug}, con los datos ya
+            # renderizados en vez de un iframe que copia el DOM de Streamlit.
             _write_text(
                 generated_root / f"{slugify(provider)}.html",
                 _provider_index_html(provider, provider_stations, language),
             )
-            for station in provider_stations:
-                _write_text(
-                    provider_root / f"{station.url_slug}.html",
-                    _station_html(
-                        station,
-                        language,
-                        [
-                            item
-                            for item in nearby_by_station[station.station_pk]
-                            if language.code in item[0].language_codes
-                        ],
-                    ),
-                )
 
+    # Las URLs de las fichas ya no salen de aquí: las publica el sitemap del
+    # frontend, que las genera desde el catálogo indexable del backend.
     alternate_groups: list[Mapping[str, str]] = [_directory_alternates()]
     alternate_groups.extend(
         _provider_alternates(provider, provider_stations)
         for provider, provider_stations in by_provider.items()
     )
-    alternate_groups.extend(_station_alternates(station) for station in stations)
     if city_matches:
         alternate_groups.append(_city_directory_alternates(city_matches))
         alternate_groups.extend(
             _city_alternates(city, matches) for city, matches in city_matches.items()
         )
     sitemap_url_count = _write_sitemaps(output, alternate_groups)
-    _write_text(
-        output / "robots.txt",
-        "User-agent: *\nAllow: /\n\nSitemap: https://www.meteolabx.com/sitemap.xml\n",
-    )
     localized_pages = sum(len(group) for group in alternate_groups)
     return {
         "stations": len(stations),
@@ -1376,7 +1004,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    output = (args.output or _streamlit_static_dir()).resolve()
+    output = (args.output or _default_output_dir()).resolve()
     try:
         summary = build_pages(
             database=args.database.resolve(),

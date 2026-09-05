@@ -221,7 +221,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "2.0.0"
 APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
@@ -3912,7 +3912,7 @@ st.markdown(html_clean("""
     filter: none;
   }
 
-  /* Histórico: selector compacto y tarjetas de hitos de la v1.4.0 */
+  /* Histórico: selector compacto y tarjetas de hitos */
   .historical-selector-anchor{
     display: none;
   }
@@ -5503,46 +5503,10 @@ def _whats_new_footer_html() -> str:
     # Botones de pestaña controlados en el documento padre. Esto evita que los
     # reruns de Streamlit restauren el radio marcado por defecto.
     return (
-        "<div class='mlx-wn-tabs' role='tablist'>"
-        "<button type='button' class='mlx-wn-tab' role='tab' "
-        "data-mlbx-whats-new-version='110'>1.1.0</button>"
-        "<button type='button' class='mlx-wn-tab' role='tab' "
-        "data-mlbx-whats-new-version='120'>1.2.0</button>"
-        "<button type='button' class='mlx-wn-tab' role='tab' "
-        "data-mlbx-whats-new-version='130'>1.3.5</button>"
-        "<button type='button' class='mlx-wn-tab is-active' role='tab' "
-        "data-mlbx-whats-new-version='140' aria-selected='true'>1.4.0</button>"
-        "</div>"
-        "<div class='mlx-wn-pane mlx-wn-pane-110'>"
-        + _release("footer.previous_improvements", "footer.previous_fixes")
-        + "</div>"
-        "<div class='mlx-wn-pane mlx-wn-pane-120'>"
-        + _release("footer.improvements", "footer.fixes")
-        + "</div>"
-        "<div class='mlx-wn-pane mlx-wn-pane-130'>"
-        f"<div class='mlx-wn-version'>1.3.5 "
+        "<div class='mlx-wn-pane mlx-wn-pane-200 is-active'>"
+        f"<div class='mlx-wn-version'>2.0.0 "
         f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
-        + _release("footer.release_135_improvements", "footer.release_135_fixes")
-        + "<hr class='mlx-wn-sep'>"
-        "<div class='mlx-wn-version'>1.3.4</div>"
-        + _release("footer.release_134_improvements", "footer.release_134_fixes")
-        + "<hr class='mlx-wn-sep'>"
-        "<div class='mlx-wn-version'>1.3.3</div>"
-        + _section(t("footer.improvements_title"), "footer.release_133_improvements")
-        + "<hr class='mlx-wn-sep'>"
-        "<div class='mlx-wn-version'>1.3.2</div>"
-        + _section(t("footer.improvements_title"), "footer.release_132_improvements")
-        + "<hr class='mlx-wn-sep'>"
-        "<div class='mlx-wn-version'>1.3.1</div>"
-        + _section(t("footer.improvements_title"), "footer.release_131_improvements")
-        + "<hr class='mlx-wn-sep'>"
-        "<div class='mlx-wn-version'>1.3.0</div>"
-        + _release("footer.release_130_improvements", "footer.release_130_fixes")
-        + "</div>"
-        "<div class='mlx-wn-pane mlx-wn-pane-140 is-active'>"
-        f"<div class='mlx-wn-version'>1.4.0 "
-        f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
-        + _release("footer.release_140_improvements", "footer.release_140_fixes")
+        + _release("footer.release_200_improvements", "footer.release_200_fixes")
         + "</div>"
     )
 

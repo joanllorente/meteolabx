@@ -122,6 +122,42 @@ FORECAST_MODEL_PRODUCTS: dict[str, tuple[str, ...]] = {
 DEFAULT_FORECAST_MODEL = "arome"
 
 
+# Revisión científica independiente del formato binario. Solo invalida los
+# productos que cambian: los demás conservan sus frames y su disponibilidad.
+AROME_CALCULATION_REVISION = 1
+REVISED_AROME_PRODUCTS = frozenset({
+    "mucape-muli", "mlcape-mlli", "sbcape-sbli", "ebwd", "ship",
+    "ordinary-cell-motion", "srh-01", "srh-03", "dcape", "vv-lfc",
+    "relative-humidity-700", "cloud-cover", "accumulated-precip", "vertical-totals",
+})
+
+
+def _upgrade_calculation_manifest(payload: dict[str, Any]) -> dict[str, Any]:
+    if ("run" not in payload or "products" not in payload
+            or payload.get("forecast_model", "arome") != "arome"
+            or payload.get("calculation_revision") == AROME_CALCULATION_REVISION):
+        return payload
+    removed = 0
+    for product in REVISED_AROME_PRODUCTS:
+        state = payload["products"].get(product)
+        if state is not None:
+            removed += len(state.get("available_times", ()))
+            state["available_times"] = []
+            state["errors"] = {}
+    progress = payload.get("progress")
+    if progress:
+        progress["frames_available"] = max(0, progress.get("frames_available", 0) - removed)
+        total = progress.get("frames_total", 0)
+        progress["percent"] = 100 * progress["frames_available"] / total if total else 0.
+        progress["active_jobs"] = []
+        progress["current_job"] = None
+        progress["last_completed"] = None
+        progress["error_count"] = sum(len(state.get("errors", {})) for state in payload["products"].values())
+    payload["status"] = "publishing"
+    payload["calculation_revision"] = AROME_CALCULATION_REVISION
+    return payload
+
+
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 
@@ -357,6 +393,8 @@ def frame_key(
     model_prefix = _model_prefix(model)
     scope_prefix = "" if scope == "model" else f"scopes/{_validate_key(scope)}/"
     product_slug = _validate_key(product)
+    if _validate_model(model) == "arome" and product in REVISED_AROME_PRODUCTS:
+        product_slug += f"--calc{AROME_CALCULATION_REVISION}"
     if product == "wind-level":
         kind = "height" if vertical_kind not in {"height", "isobaric"} else vertical_kind
         numeric_level = 10.0 if level is None else float(level)
@@ -379,7 +417,7 @@ def manifest_model(manifest: dict[str, Any] | None) -> str:
 
 def read_json(store: ObjectStore, key: str) -> dict[str, Any] | None:
     content = store.get(key)
-    return json.loads(content) if content is not None else None
+    return _upgrade_calculation_manifest(json.loads(content)) if content is not None else None
 
 
 def write_json(store: ObjectStore, key: str, payload: dict[str, Any]) -> None:
@@ -427,6 +465,7 @@ def new_manifest(
         # escribe en el volumen.
         "model": model_label or etiquetas.get(nombre, nombre.upper()),
         "forecast_model": nombre,
+        "calculation_revision": AROME_CALCULATION_REVISION if nombre == "arome" else 0,
         "run": run_iso,
         "calculation_scope": scope,
         "status": "publishing",

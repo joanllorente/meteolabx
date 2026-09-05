@@ -92,6 +92,38 @@ def test_build_catalog_without_iem_marks_metadata(tmp_path):
         ).fetchone()[0] == "false"
 
 
+def test_build_catalog_excludes_nws_stations_with_confirmed_observation_404(tmp_path):
+    nws = tmp_path / "nws.json"
+    nws.write_text(json.dumps([
+        {
+            "id": "GOOD1", "name": "Active NWS", "lat": 40, "lon": -75,
+            "sensors": {"thermometer": True},
+        },
+        {
+            "id": "GONE1", "name": "Unavailable NWS", "lat": 41, "lon": -76,
+            "sensors": {"thermometer": False},
+            "sensor_probe_error": (
+                "404 Client Error: Not Found for url: "
+                "https://api.weather.gov/stations/GONE1/observations/latest"
+            ),
+        },
+    ]), encoding="utf-8")
+    target = tmp_path / "stations.sqlite"
+
+    result = build_database(target, provider_files={"NWS": nws})
+
+    assert result["records"] == 2
+    assert result["connectable"] == 1
+    with sqlite3.connect(target) as connection:
+        rows = connection.execute(
+            "SELECT station_id, online FROM stations ORDER BY station_id"
+        ).fetchall()
+        assert rows == [("GONE1", 0), ("GOOD1", None)]
+        assert connection.execute(
+            "SELECT station_id FROM connectable_stations"
+        ).fetchall() == [("GOOD1",)]
+
+
 def test_build_catalog_hides_confirmed_crozet_iem_duplicate(tmp_path, monkeypatch):
     meteofrance = tmp_path / "meteofrance.json"
     iem = tmp_path / "iem.json"
