@@ -38,6 +38,16 @@ function valid(value) {
  */
 const CALM_KMH = 2;
 
+/**
+ * Calma: lo que la tarjeta enseña como 0 km/h.
+ *
+ * Por debajo de medio km/h una veleta no arranca —su umbral típico ronda el
+ * kilómetro por hora—, así que el rumbo que llega ahí no es una medida del
+ * momento: es la veleta clavada donde sopló por última vez. Ni la tarjeta ni
+ * la gráfica del día lo dibujan.
+ */
+const CALM_WIND_KMH = 0.5;
+
 function windRose(series, language) {
   const dirs = series?.wind_dirs || [];
   const speeds = series?.winds || [];
@@ -181,10 +191,7 @@ export function observationModel(payload, station, language, rawPreferences = nu
   const rate = valid(derivatives.inst_mm_h) ?? valid(observation.precip_rate);
   const dewPoint = valid(observation.Td) ?? valid(derivatives.Td_calc);
 
-  // Calma: lo que la tarjeta enseña como 0 km/h. Por debajo de medio km/h una
-  // veleta no arranca —su umbral típico ronda el kilómetro por hora—, así que
-  // el rumbo que llega ahí no es una medida del momento.
-  const calm = isNumber(observation.wind) && observation.wind < 0.5;
+  const calm = isNumber(observation.wind) && observation.wind < CALM_WIND_KMH;
 
   /**
    * Ultravioleta solo cuando hay Sol sobre el horizonte.
@@ -465,7 +472,22 @@ export function observationModel(payload, station, language, rawPreferences = nu
         const built = dayChart(series, ['winds', 'gusts'], dayOptions);
         return built && { ...built, data: built.data.map((values) => convertSeries(values, 'wind', preferences)) };
       })(),
-      windDirection: dayChart(series, ['winds', 'gusts', 'wind_dirs'], dayOptions),
+      windDirection: (() => {
+        const built = dayChart(series, ['winds', 'gusts', 'wind_dirs'], dayOptions);
+        if (!built) return null;
+        // Los rumbos de las calmas se borran aquí, con la serie de viento
+        // todavía en km/h: pasado el conversor, el umbral ya no valdría. Lo
+        // que quedaba si no era una fila de puntos alineados en el rumbo en el
+        // que la veleta se quedó parada, leídos como si fueran viento.
+        const [speeds, gusts, degrees] = built.data;
+        const rumbos = degrees.map((value, index) =>
+          isNumber(speeds[index]) && speeds[index] < CALM_WIND_KMH ? null : value
+        );
+        // Un día entero en calma deja la serie sin un solo rumbo: entonces no
+        // hay dirección que ofrecer, y el interruptor de la leyenda tampoco.
+        if (!rumbos.some(isNumber)) return null;
+        return { ...built, data: [speeds, gusts, rumbos] };
+      })(),
       irradiance: (() => {
         const built = solarChart(series, dayOptions);
         return built && { ...built, data: built.data.map((values) => convertSeries(values, 'radiation', preferences)) };

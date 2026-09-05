@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "build:forecast": "vite build --config vite.forecast.config.js",
+    "postbuild:forecast": "cd .. && python3 scripts/install_forecast_frontend.py --web-only",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.mjs"
   },

@@ -43,6 +43,8 @@ from server.services.convective_diagnostics import (
     updraft_helicity,
     downdraft_cape,
     storm_relative_helicity,
+    supercell_composite_parameter,
+    significant_tornado_parameter,
     diagnose_convection,
     effective_bulk_wind_difference,
     freezing_level_m,
@@ -170,6 +172,9 @@ PRODUCTS = {
         "vmin": -10.0, "vmax": 60.0, "unit": "°C",
         "overlay_unit": "hPa",
     },
+    "esrh": {"kind": "convective", "diagnostic": "esrh", "vmin": -300.0, "vmax": 600.0, "unit": "m²/s²"},
+    "stp": {"kind": "convective", "diagnostic": "stp", "vmin": 0.0, "vmax": 10.0, "unit": ""},
+    "scp": {"kind": "convective", "diagnostic": "scp", "vmin": 0.0, "vmax": 20.0, "unit": ""},
     "srh-03": {
         "kind": "convective",
         "diagnostic": "srh_03",
@@ -903,7 +908,7 @@ def _convective_outputs(
                     "mucape", "muli", "mlcape", "mlli", "sbcape", "sbli",
                     "cell_u", "cell_v", "cell_speed",
                     "ebwd", "ebwd_u", "ebwd_v", "ship",
-                    "srh_01", "srh_03", "bunkers_u", "bunkers_v",
+                    "srh_01", "srh_03", "esrh", "scp", "stp", "bunkers_u", "bunkers_v",
                     "vv_lfc", "ml_lfc_height",
                 )
             },
@@ -959,6 +964,17 @@ def _convective_outputs(
         height_agl, u_profile, v_profile, bunkers_u, bunkers_v, 3_000.0
     )
 
+    esrh = storm_relative_helicity(
+        height_agl, u_profile, v_profile, bunkers_u, bunkers_v,
+        diagnostics.effective_top_height_m - diagnostics.effective_base_height_m,
+        bottom_m=diagnostics.effective_base_height_m - terrain,
+    )
+    scp = supercell_composite_parameter(diagnostics.mucape, esrh, ebwd)
+    stp = significant_tornado_parameter(
+        diagnostics.mlcape, diagnostics.mlcin, diagnostics.ml_lcl_height_m,
+        esrh, ebwd, diagnostics.effective_base_height_m - terrain,
+    )
+
     six_km_height = terrain + 6_000.0
     u_6km = interpolate_profile_at_height(height, u_profile, six_km_height)
     v_6km = interpolate_profile_at_height(height, v_profile, six_km_height)
@@ -1002,6 +1018,9 @@ def _convective_outputs(
         "ship": ship,
         "srh_01": srh_01,
         "srh_03": srh_03,
+        "esrh": esrh,
+        "scp": scp,
+        "stp": stp,
         "vv_lfc": vv_lfc,
         "ml_lfc_height": diagnostics.ml_lfc_height_m,
         "bunkers_u": bunkers_u,
@@ -1908,6 +1927,12 @@ def _convective_frames(
             outputs["srh_01"], *common, "m²/s²",
             vector_u=outputs["bunkers_u"], vector_v=outputs["bunkers_v"],
         ),
+        "esrh": RasterField(
+            outputs["esrh"], *common, "m²/s²",
+            vector_u=outputs["bunkers_u"], vector_v=outputs["bunkers_v"],
+        ),
+        "scp": RasterField(outputs["scp"], *common, ""),
+        "stp": RasterField(outputs["stp"], *common, ""),
         "srh-03": RasterField(
             outputs["srh_03"], *common, "m²/s²",
             vector_u=outputs["bunkers_u"], vector_v=outputs["bunkers_v"],

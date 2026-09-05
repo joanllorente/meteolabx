@@ -71,14 +71,16 @@
     // identificador y viaja con cada consulta.
     const calibration = calibrationPayload(stationId);
 
-    fetchPersonalObservation({
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    const initial = fetchPersonalObservation({
       provider,
       stationId,
       apiKey: credentials.apiKey,
       apiSecret: credentials.apiSecret || '',
       elevation: Number.isFinite(credentials.elevation) ? credentials.elevation : null,
       calibration
-    })
+    }, { signal: controller.signal })
       .then((payload) => {
         if (cancelled) return;
         personal = {
@@ -101,7 +103,7 @@
       });
 
     // Y a partir de aquí se refresca sola, con la misma credencial.
-    const stop = startLiveObservation(
+    const startUpdates = () => startLiveObservation(
       {
         provider,
         stationId,
@@ -115,9 +117,17 @@
       }
     );
 
+    let stop = () => {};
+    initial.finally(() => {
+      clearTimeout(timeout);
+      if (!cancelled) stop = startUpdates();
+    });
+
     // Al cambiar de estación, la respuesta anterior ya no vale.
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
       stop();
     };
   });

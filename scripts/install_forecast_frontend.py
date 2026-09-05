@@ -92,7 +92,11 @@ def main() -> int:
         type=Path,
         help="Directorio static alternativo (útil para pruebas).",
     )
+    parser.add_argument("--web-only", action="store_true", help="Instalar solo en SvelteKit, sin depender de Streamlit.")
     args = parser.parse_args()
+    if args.web_only:
+        print(f"[forecast] Visor publicado en {install_forecast_web()}")
+        return 0
     target = install_forecast_frontend(args.target_static_dir)
     print(f"[forecast] Frontend Svelte instalado en {target}")
     if args.target_static_dir is None:

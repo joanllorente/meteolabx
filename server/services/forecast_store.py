@@ -39,6 +39,9 @@ DERIVED_FORECAST_PRODUCTS = (
     "ship",
     "srh-01",
     "srh-03",
+    "esrh",
+    "scp",
+    "stp",
 )
 
 PERSISTED_FORECAST_PRODUCTS = (
@@ -66,6 +69,9 @@ PERSISTED_FORECAST_PRODUCTS = (
     "ship",
     "srh-01",
     "srh-03",
+    "esrh",
+    "scp",
+    "stp",
     "vv-lfc",
     "updraft-helicity",
     "mslp-theta-e-850",
@@ -87,6 +93,9 @@ CONVECTIVE_FORECAST_PRODUCTS = (
     "vv-lfc",
     "updraft-helicity",
     "srh-03",
+    "esrh",
+    "scp",
+    "stp",
     "ship",
 )
 

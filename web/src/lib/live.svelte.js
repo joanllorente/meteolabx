@@ -23,15 +23,22 @@ export function startLiveObservation(request, onData) {
   const period = refreshSecondsFor(request.provider) * 1000;
   let stopped = false;
   let timer = null;
+  let active = null;
 
   const tick = async () => {
-    if (stopped || document.hidden) return;
+    if (stopped || document.hidden || active) return;
+    const controller = new AbortController();
+    active = controller;
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const payload = await fetchPersonalObservation(request);
-      if (!stopped && payload) onData(payload);
+      const payload = await fetchPersonalObservation(request, { signal: controller.signal });
+      if (!stopped && !controller.signal.aborted && payload) onData(payload);
     } catch {
       // Un fallo puntual no rompe nada: se conserva lo último bueno y se
       // vuelve a intentar en el siguiente ciclo.
+    } finally {
+      clearTimeout(timeout);
+      active = null;
     }
   };
 
@@ -47,6 +54,7 @@ export function startLiveObservation(request, onData) {
   return () => {
     stopped = true;
     clearInterval(timer);
+    active?.abort();
     document.removeEventListener('visibilitychange', onVisible);
   };
 }

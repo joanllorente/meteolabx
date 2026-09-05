@@ -64,6 +64,34 @@ const CELL_MOTION = {
 };
 
 export const forecastProductGuides = {
+  'stp': {
+    what: 'Significant Tornado Parameter de capa efectiva con CIN: índice adimensional que resume ingredientes del entorno asociados a tornados significativos en supercélulas derechas.',
+    interpretation: ['Un valor alto indica coincidencia de ingredientes, no una probabilidad ni la garantía de que se forme un tornado. Depende también de la iniciación y del modo convectivo.', 'La base efectiva debe llegar al suelo. Si está elevada, el índice se anula; una base desconocida queda sin dato.', 'Las bases nubosas altas y la inhibición fuerte reducen el índice. Un valor bajo no descarta tornados en configuraciones que este compuesto no representa.'],
+    method: 'STP efectivo del SPC con MLCAPE y MLCIN de la parcela mezclada en los 100 hPa inferiores, altura de su LCL en metros AGL, ESRH y EBWD. Todos los ingredientes se reutilizan del mismo perfil y plazo.',
+    equations: [{ label: 'STP efectivo con CIN', latex: String.raw`\mathrm{STP}=\frac{\mathrm{MLCAPE}}{1500}\frac{\mathrm{ESRH}}{150}\,f_{\mathrm{LCL}}\,f_{\mathrm{EBWD}}\,f_{\mathrm{CIN}}` }],
+    steps: ['LCL: factor (2000 − MLLCL)/1000, limitado entre cero y uno; alturas en metros sobre el terreno.', 'CIN: factor (MLCIN + 200)/150, limitado entre cero y uno; CIN negativa en J/kg.', 'EBWD: cero bajo 12,5 m/s, EBWD/20 hasta 30 m/s y un máximo de 1,5.', 'Con base efectiva elevada, STP cero. Ingredientes ausentes mantienen el resultado sin dato. El índice se limita al rango no negativo para Bunkers derecho.'],
+    sources: [{ label: 'SPC · Definición del STP efectivo', url: 'https://origin-west-www-spc.woc.noaa.gov/exper/mesoanalysis/help/begin.html' }, { label: 'NOAA · Umbrales del STP', url: 'https://vlab.noaa.gov/web/oclo/nsharp-hail-and-tornado-reference' }]
+  },
+  'esrh': {
+    what: 'Helicidad relativa a la tormenta en la capa efectiva de alimentación (ESRH), en m²/s². La base puede estar elevada sobre el terreno.',
+    interpretation: [
+      'Valores positivos indican helicidad favorable a la supercélula derecha de Bunkers. El signo se conserva; las flechas representan su movimiento estimado.',
+      'La capa efectiva selecciona aire capaz de alimentar convección. No equivale a SRH 0–1 ni 0–3 km, y no es por sí sola una predicción de tornados.',
+      'Sin una capa de espesor positivo y límites definidos, o sin cobertura completa de viento, no se publica valor.'
+    ],
+    method: 'Se busca desde superficie hasta 500 hPa la primera secuencia continua de parcelas con CAPE ≥ 100 J/kg y CIN ≥ −250 J/kg. Base y techo son el primer y último nivel que cumplen, cerrando al encontrar el siguiente nivel que falla. Un techo no observado queda sin dato. La integral usa todos los tramos del hodógrafo, recortados a ambos límites, y el movimiento Bunkers ya calculado.',
+    equations: [{ label: 'Helicidad efectiva', latex: String.raw`\mathrm{ESRH}=\int_{z_b}^{z_t}\left[(v-C_v)\frac{\partial u}{\partial z}-(u-C_u)\frac{\partial v}{\partial z}\right]dz` }],
+    steps: ['Reutilizar las parcelas superficial y MU; calcular otros orígenes solo en columnas pendientes.', 'Conservar la base efectiva usada por EBWD y determinar el techo en el mismo recorrido.', 'Integrar el viento relativo a Bunkers entre ambos límites sin descargas adicionales.'],
+    sources: [{ label: 'SPC · Effective storm-relative helicity', url: 'https://www.spc.noaa.gov/exper/mesoanalysis/help/help_esrh.html' }]
+  },
+  'scp': {
+    what: 'Supercell Composite Parameter de capa efectiva: índice adimensional que combina inestabilidad, helicidad efectiva y cizalladura efectiva.',
+    interpretation: ['Valores positivos crecientes indican mayor coincidencia de ingredientes favorables a supercélulas derechas; no representan una probabilidad.', 'No garantiza iniciación ni un modo de tormenta aislado. Debe leerse junto al forzamiento, la inhibición y la evolución prevista.', 'La escala muestra el rango positivo. El diagnóstico conserva el signo de ESRH y los datos ausentes; un ingrediente ausente no se sustituye por cero.'],
+    method: 'Formulación SPC de capa efectiva, calculada directamente con MUCAPE, ESRH y EBWD compartidos. El factor de cizalladura es cero para EBWD < 10 m/s, EBWD/20 entre 10 y 20 m/s y uno para EBWD > 20 m/s.',
+    equations: [{ label: 'SCP', latex: String.raw`\mathrm{SCP}=\frac{\mathrm{MUCAPE}}{1000\,\mathrm{J\,kg^{-1}}}\frac{\mathrm{ESRH}}{50\,\mathrm{m^2\,s^{-2}}}f(\mathrm{EBWD})` }],
+    steps: ['Obtener los tres ingredientes del mismo plazo, perfil y rejilla.', 'Aplicar los umbrales de EBWD en m/s y multiplicar los factores normalizados.'],
+    sources: [{ label: 'MetPy · SCP y formulación SPC', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.supercell_composite.html' }]
+  },
   'z500-mslp': {
     what: 'Altura geopotencial de 500 hPa en color y presión al nivel del mar en isobaras, sobre el Atlántico y Europa. Es el par clásico del análisis sinóptico: la altura de la superficie de 500 hPa dibuja la onda que dirige el tiempo a varios días vista, y la presión en superficie dice dónde acaba apoyándose.',
     interpretation: [

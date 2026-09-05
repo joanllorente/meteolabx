@@ -6,6 +6,12 @@
  * Nada de esto llega al navegador: las llamadas se hacen durante el `load`.
  */
 import { env } from '$env/dynamic/private';
+import { createMetadataCache } from './metadata-cache.js';
+
+const metadataCache = createMetadataCache();
+function publicMetadata(path, options) {
+  return metadataCache(`${apiBaseUrl()}${path}`, () => request(path, options));
+}
 
 const DEFAULT_API_URL = 'http://127.0.0.1:8000';
 
@@ -44,7 +50,7 @@ async function request(path, { method = 'GET', body, fetch: fetchImpl = fetch, t
 
 /** Ficha completa de una estación por red e identificador. */
 export function fetchStation(provider, stationId, options = {}) {
-  return request(
+  return publicMetadata(
     `/v1/stations/${encodeURIComponent(provider)}/${encodeURIComponent(stationId)}`,
     options
   );
@@ -52,7 +58,7 @@ export function fetchStation(provider, stationId, options = {}) {
 
 /** Ficha de catálogo a partir del slug de la URL indexable. */
 export function fetchStationByUrlSlug(slug, options = {}) {
-  return request(`/v1/stations/by-url-slug/${encodeURIComponent(slug)}`, options);
+  return publicMetadata(`/v1/stations/by-url-slug/${encodeURIComponent(slug)}`, options);
 }
 
 /**
@@ -214,12 +220,12 @@ export function fetchMapCatalog(filters, options = {}) {
  * usuario: `Europe/Madrid` → ES. Cobertura mundial y sin pedir permisos.
  */
 export function fetchCountryByTimezone(timezone, options = {}) {
-  return request(`/v1/stations/country-by-tz?tz=${encodeURIComponent(timezone)}`, options);
+  return publicMetadata(`/v1/stations/country-by-tz?tz=${encodeURIComponent(timezone)}`, options);
 }
 
 /** Países con estaciones en el catálogo, con su recuento. */
 export function fetchStationCountries(options = {}) {
-  return request('/v1/stations/countries', options);
+  return publicMetadata('/v1/stations/countries', options);
 }
 
 export function fetchStationsNear(

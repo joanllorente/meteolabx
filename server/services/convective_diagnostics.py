@@ -44,6 +44,7 @@ class ParcelDiagnostics:
     # para que la convección se dispare sola.
     lfc_height_m: np.ndarray
     lfc_pressure_hpa: np.ndarray
+    lcl_height_m: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -62,9 +63,12 @@ class ConvectiveDiagnostics:
     mu_mixing_ratio_gkg: np.ndarray
     mu_equilibrium_height_m: np.ndarray
     effective_base_height_m: np.ndarray
+    effective_top_height_m: np.ndarray
     # Altura AGL del nivel de convección libre de la parcela de capa mezclada:
     # hasta dónde tiene que llegar el ascenso forzado para que se dispare.
     ml_lfc_height_m: np.ndarray
+    mlcin: np.ndarray
+    ml_lcl_height_m: np.ndarray
 
 
 def saturation_vapor_pressure_hpa(temperature_k: np.ndarray) -> np.ndarray:
@@ -262,23 +266,12 @@ def parcel_temperature_profile_k(
     return np.where(valid, result, np.nan)
 
 
-def _level_of_free_convection(
-    pressure_hpa: np.ndarray,
-    height_m: np.ndarray,
-    buoyancy_ms2: np.ndarray,
-    lcl_pressure_hpa: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Interpola el primer cruce de flotabilidad positiva por encima del LCL.
-
-    El recorrido nivel a nivel evita crear varias matrices 3-D auxiliares, que
-    penalizarían mucho el pico de memoria sobre la rejilla AROME completa.
-    """
-    pressure = np.asarray(pressure_hpa, dtype=float)
-    height = np.asarray(height_m, dtype=float)
-    buoyancy = np.asarray(buoyancy_ms2, dtype=float)
-    lcl_pressure = np.asarray(lcl_pressure_hpa, dtype=float)
+def height_at_pressure_m(
+    pressure: np.ndarray, height: np.ndarray, target_pressure: np.ndarray,
+) -> np.ndarray:
+    """Altura interpolada en log(p), sin extrapolar fuera del perfil."""
+    lcl_pressure = np.asarray(target_pressure, dtype=float)
     shape = pressure.shape[1:]
-
     lcl_height = np.full(shape, np.nan)
     for index in range(pressure.shape[0] - 1):
         p0 = pressure[index]
@@ -306,6 +299,32 @@ def _level_of_free_convection(
             )
         candidate = z0 + np.clip(fraction, 0.0, 1.0) * (z1 - z0)
         lcl_height = np.where(valid, candidate, lcl_height)
+
+    return lcl_height
+
+
+def _level_of_free_convection(
+    pressure_hpa: np.ndarray,
+    height_m: np.ndarray,
+    buoyancy_ms2: np.ndarray,
+    lcl_pressure_hpa: np.ndarray,
+    lcl_height_m: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Interpola el primer cruce de flotabilidad positiva por encima del LCL.
+
+    El recorrido nivel a nivel evita crear varias matrices 3-D auxiliares, que
+    penalizarían mucho el pico de memoria sobre la rejilla AROME completa.
+    """
+    pressure = np.asarray(pressure_hpa, dtype=float)
+    height = np.asarray(height_m, dtype=float)
+    buoyancy = np.asarray(buoyancy_ms2, dtype=float)
+    lcl_pressure = np.asarray(lcl_pressure_hpa, dtype=float)
+    shape = pressure.shape[1:]
+
+    lcl_height = (
+        height_at_pressure_m(pressure, height, lcl_pressure)
+        if lcl_height_m is None else lcl_height_m
+    )
 
     lfc_height = np.full(shape, np.nan)
     lfc_pressure = np.full(shape, np.nan)
@@ -461,8 +480,9 @@ def parcel_diagnostics(
     parcel_virtual = virtual_temperature_k(parcel_temperature, parcel_ratio)
     buoyancy = GRAVITY * (parcel_virtual - env_virtual) / env_virtual
 
+    lcl_height = height_at_pressure_m(pressure, height, plcl)
     lfc_height, lfc_pressure = _level_of_free_convection(
-        pressure, height, buoyancy, plcl
+        pressure, height, buoyancy, plcl, lcl_height_m=lcl_height
     )
     cape, cin, equilibrium_height, equilibrium_pressure = _parcel_energy(
         pressure, height, buoyancy, parcel_pressure_hpa, lfc_height
@@ -480,6 +500,7 @@ def parcel_diagnostics(
         equilibrium_pressure,
         lfc_height,
         lfc_pressure,
+        lcl_height,
     )
 
 
@@ -528,7 +549,7 @@ def diagnose_convection(
     height_m: np.ndarray,
     include_dcape: bool = True,
 ) -> ConvectiveDiagnostics:
-    """Calcula MU parcel y base efectiva para una matriz completa de perfiles."""
+    """Calcula parcelas y capa efectiva para una matriz completa de perfiles."""
     pressure = np.asarray(pressure_hpa, dtype=float)
     temperature = np.asarray(temperature_k, dtype=float)
     dewpoint = np.asarray(dewpoint_k, dtype=float)
@@ -608,30 +629,9 @@ def diagnose_convection(
         else np.full(pressure.shape[1:], np.nan)
     )
 
-    effective_base = np.full(surface_pressure.shape, np.nan)
-    unresolved = np.isfinite(surface_pressure)
-    for index in range(pressure.shape[0]):
-        parcel_pressure = pressure[index]
-        eligible_origin = (
-            unresolved
-            & np.isfinite(parcel_pressure)
-            & (parcel_pressure <= surface_pressure + 0.5)
-            & (parcel_pressure >= 500.0)
-        )
-        if not np.any(eligible_origin):
-            continue
-        parcel = parcel_diagnostics(
-            pressure,
-            temperature,
-            dewpoint,
-            height,
-            np.where(eligible_origin, parcel_pressure, np.nan),
-            np.where(eligible_origin, temperature[index], np.nan),
-            np.where(eligible_origin, dewpoint[index], np.nan),
-        )
-        qualifies = eligible_origin & (parcel.cape >= 100.0) & (parcel.cin >= -250.0)
-        effective_base = np.where(qualifies, height[index], effective_base)
-        unresolved &= ~qualifies
+    effective_base, effective_top = effective_inflow_layer(
+        pressure, temperature, dewpoint, height, surface, mu, mu_index
+    )
 
     return ConvectiveDiagnostics(
         mucape=mu.cape,
@@ -648,8 +648,98 @@ def diagnose_convection(
         mu_mixing_ratio_gkg=mu_ratio,
         mu_equilibrium_height_m=mu.equilibrium_height_m,
         effective_base_height_m=effective_base,
+        effective_top_height_m=effective_top,
         ml_lfc_height_m=mixed.lfc_height_m - height[0],
+        mlcin=mixed.cin,
+        ml_lcl_height_m=mixed.lcl_height_m - height[0],
     )
+
+
+def effective_inflow_layer(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    height: np.ndarray,
+    surface: ParcelDiagnostics,
+    mu: ParcelDiagnostics,
+    mu_index: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """First contiguous CAPE >=100 / CIN >=-250 layer, at native levels.
+
+    Reuse SB and MU parcels. Compact remaining columns before parcel ascent;
+    stop each column at the first failing origin above the base. An unobserved
+    top (missing data or the 500 hPa search limit) remains undefined.
+    """
+    base = np.full(pressure.shape[1:], np.nan)
+    top = np.full_like(base, np.nan)
+    last = np.full_like(base, np.nan)
+    pending = np.isfinite(pressure[0])
+    for index in range(len(pressure)):
+        if not np.any(pending):
+            break
+        eligible = (
+            pending & (pressure[index] >= 500.)
+            & (pressure[index] <= pressure[0] + 0.5)
+            & np.isfinite(height[index])
+        )
+        pending &= eligible
+        if not np.any(eligible):
+            continue
+        cape = np.full_like(base, np.nan)
+        cin = np.full_like(base, np.nan)
+        cached = eligible & (mu_index == index)
+        cape[cached], cin[cached] = mu.cape[cached], mu.cin[cached]
+        if index == 0:
+            cape[eligible], cin[eligible] = surface.cape[eligible], surface.cin[eligible]
+        else:
+            todo = eligible & ~cached
+            if np.any(todo):
+                parcel = parcel_diagnostics(
+                    *(field[:, todo, None] for field in (pressure, temperature, dewpoint, height)),
+                    *(field[index][todo, None] for field in (pressure, temperature, dewpoint)),
+                )
+                cape[todo], cin[todo] = parcel.cape[:, 0], parcel.cin[:, 0]
+        known = np.isfinite(cape) & np.isfinite(cin)
+        qualifies = eligible & known & (cape >= 100.) & (cin >= -250.)
+        closes = eligible & known & ~qualifies & np.isfinite(base)
+        top[closes] = last[closes]
+        starts = qualifies & ~np.isfinite(base)
+        base[starts] = height[index][starts]
+        last[qualifies] = height[index][qualifies]
+        pending &= ~(closes | (eligible & ~known & np.isfinite(base)))
+    return base, top
+
+
+def supercell_composite_parameter(
+    mucape: np.ndarray, effective_srh: np.ndarray, ebwd: np.ndarray,
+) -> np.ndarray:
+    """SPC effective-layer SCP for Bunkers right movers (dimensionless).
+
+    Preserve helicity sign and missing ingredients; the display selects the
+    positive range. EBWD contributes zero below 10 m/s and saturates at 20.
+    """
+    shear_term = np.where(ebwd < 10., 0., np.minimum(ebwd / 20., 1.))
+    return (mucape / 1000.) * (effective_srh / 50.) * shear_term
+
+
+def significant_tornado_parameter(
+    mlcape: np.ndarray, mlcin: np.ndarray, ml_lcl_agl_m: np.ndarray,
+    effective_srh: np.ndarray, ebwd: np.ndarray, effective_base_agl_m: np.ndarray,
+) -> np.ndarray:
+    """STP de capa efectiva con CIN, formulación SPC (adimensional).
+
+    La convección con base efectiva elevada produce cero; ingredientes
+    ausentes siguen ausentes. Se muestra el potencial de Bunkers derecho.
+    """
+    lcl_term = np.clip((2000. - ml_lcl_agl_m) / 1000., 0., 1.)
+    cin_term = np.clip((mlcin + 200.) / 150., 0., 1.)
+    shear_term = np.where(ebwd < 12.5, 0., np.minimum(ebwd / 20., 1.5))
+    result = (mlcape / 1500.) * lcl_term * (effective_srh / 150.) * shear_term * cin_term
+    valid = (
+        np.isfinite(result) & np.isfinite(effective_base_agl_m)
+        & (effective_base_agl_m >= 0.) & (ml_lcl_agl_m >= 0.)
+    )
+    return np.where(valid, np.where(effective_base_agl_m > 0., 0., np.maximum(result, 0.)), np.nan)
 
 
 def pressure_weighted_layer_mean(
@@ -1169,9 +1259,12 @@ def storm_relative_helicity(
     v: np.ndarray,
     storm_u: np.ndarray,
     storm_v: np.ndarray,
-    depth_m: float,
+    depth_m: float | np.ndarray,
+    bottom_m: float | np.ndarray = 0.0,
 ) -> np.ndarray:
-    """Helicidad relativa a la tormenta entre el suelo y `depth_m`, en m²/s².
+    """Helicidad relativa en una capa de espesor `depth_m`, en m²/s².
+
+    `bottom_m` permite una base variable por columna (capa efectiva).
 
     Suma el área que el hodógrafo barre alrededor del vector de movimiento,
     tramo a tramo:
@@ -1185,8 +1278,8 @@ def storm_relative_helicity(
     """
     z0, z1 = height_agl_m[:-1], height_agl_m[1:]
     dz = z1 - z0
-    start = np.maximum(z0, 0.)
-    end = np.minimum(z1, depth_m)
+    start = np.maximum(z0, bottom_m)
+    end = np.minimum(z1, bottom_m + depth_m)
     inside = np.isfinite(dz) & (dz > 0) & (end > start)
     f0 = np.divide(start - z0, dz, out=np.zeros_like(dz), where=inside)
     f1 = np.divide(end - z0, dz, out=np.zeros_like(dz), where=inside)

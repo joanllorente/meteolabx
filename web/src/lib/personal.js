@@ -54,9 +54,10 @@ export async function fetchPersonalObservation({
   apiSecret = '',
   elevation = null,
   calibration = null
-}) {
+}, { signal } = {}) {
   const response = await fetch('/v1/observations/current/processed', {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       provider,

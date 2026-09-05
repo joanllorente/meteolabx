@@ -39,9 +39,8 @@ const MAX_STATIONS = 60_000;
  */
 export async function load({ params, url, fetch, cookies, setHeaders }) {
   const layer = LAYERS[url.searchParams.get('capa') || ''] || 'stations';
-  const filters = await readFilters(url.searchParams, params.lang, cookies, fetch);
-
   const countriesPromise = fetchStationCountries({ fetch }).catch(() => ({}));
+  const filters = await readFilters(url.searchParams, params.lang, cookies, fetch);
 
   let catalog = null;
   let points = [];

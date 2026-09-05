@@ -345,6 +345,27 @@ const allForecastProducts = [
     coverage: 'Perfil de viento AROME · 0–1 km AGL'
   },
   {
+    id: 'esrh', category: 'convection', label: 'Helicidad efectiva', short: 'ESRH', kind: 'derived',
+    unit: 'm²/s²', min: -300, max: 600, palette: 'shear', accent: '#a855f7', vectors: true,
+    description: 'Helicidad relativa a Bunkers derecho integrada en la capa efectiva de alimentación, incluso cuando es elevada.',
+    method: 'Primera capa continua de parcelas con CAPE ≥ 100 J/kg y CIN ≥ −250 J/kg. Se reutilizan los perfiles, las parcelas y Bunkers; las flechas muestran el movimiento de la tormenta.',
+    coverage: 'Diagnóstico MeteoLabX · capa efectiva AROME'
+  },
+  {
+    id: 'stp', category: 'convection', label: 'STP efectivo (con CIN)', short: 'STP efectivo', kind: 'derived',
+    unit: '', min: 0, max: 10, palette: 'hail', accent: '#ef476f', vectors: false,
+    description: 'Índice de entorno favorable a tornados significativos: STP de capa efectiva con inhibición, referido a Bunkers derecho.',
+    method: 'Combina MLCAPE, MLCIN, altura del LCL mezclado sobre el terreno, ESRH y EBWD. Se anula cuando la base efectiva está elevada.',
+    coverage: 'Diagnóstico MeteoLabX · STP efectivo con CIN · formulación SPC'
+  },
+  {
+    id: 'scp', category: 'convection', label: 'Supercell Composite Parameter', short: 'SCP', kind: 'derived',
+    unit: '', min: 0, max: 20, palette: 'hail', accent: '#f07086', vectors: false,
+    description: 'Índice compuesto del entorno favorable a supercélulas derechas, combinando MUCAPE, helicidad efectiva y EBWD.',
+    method: '(MUCAPE / 1000) × (ESRH / 50) × factor EBWD: cero por debajo de 10 m/s, EBWD / 20 entre 10 y 20 m/s y uno por encima.',
+    coverage: 'Diagnóstico MeteoLabX · formulación SPC sobre perfiles AROME'
+  },
+  {
     id: 'srh-03', category: 'convection', label: 'Helicidad relativa 0–3 km', short: 'SRH 0–3', kind: 'derived',
     unit: 'm²/s²', min: -300, max: 600, palette: 'shear', accent: '#a855f7', vectors: true,
     description: 'Helicidad relativa a la tormenta en los tres primeros kilómetros, referida al movimiento de la supercélula derecha de Bunkers. Es la capa habitual para valorar el potencial de rotación de una supercélula.',
@@ -376,6 +397,9 @@ const initialProductIds = [
   'mslp-theta-e-850',
   'srh-01',
   'srh-03',
+  'esrh',
+  'scp',
+  'stp',
   'vv-lfc',
   'updraft-helicity',
   'temperature-2m',

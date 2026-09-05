@@ -18,6 +18,7 @@
 import { createServer } from 'node:http';
 
 import httpProxy from 'http-proxy';
+import { createApiAgent } from './src/lib/server/proxy-agent.js';
 
 import { handler } from './build/handler.js';
 import { normalizeBasePath, withLegacyBase } from './src/lib/legacy-path.js';
@@ -50,6 +51,7 @@ const proxy = LEGACY_ORIGIN
 
 const apiProxy = httpProxy.createProxyServer({
   target: API_ORIGIN,
+  agent: createApiAgent(API_ORIGIN),
   changeOrigin: true,
   xfwd: true
 });
