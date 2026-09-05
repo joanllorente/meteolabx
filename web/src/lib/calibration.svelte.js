@@ -12,6 +12,7 @@
  * tenga sus offsets ajustados no los pierda al cambiar de interfaz.
  */
 import { CALIBRATION_ORDER, CALIBRATION_SPECS, normalizeCalibration } from './calibration.js';
+import { readSharedLegacyKey } from './legacy-storage.js';
 
 export { CALIBRATION_ORDER, CALIBRATION_SPECS, normalizeCalibration };
 
@@ -21,9 +22,10 @@ let stored = $state({});
 
 function read() {
   try {
-    const raw = localStorage.getItem(KEY);
-    const value = raw ? JSON.parse(raw) : null;
-    return value && typeof value === 'object' ? value : {};
+    // Misma clave que la interfaz anterior, pero aquella la guardaba envuelta
+    // en un objeto con la propia clave dentro; sin pelarla, la calibración de
+    // cada estación no aparecía por ningún lado.
+    return readSharedLegacyKey(KEY) || {};
   } catch {
     // Almacenamiento bloqueado: se sigue sin memoria, sin calibrar.
     return {};

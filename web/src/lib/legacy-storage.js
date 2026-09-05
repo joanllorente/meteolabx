@@ -12,7 +12,16 @@
  * sensores no aparecen aquí porque comparten clave y formato: esas se
  * conservan solas.
  */
-const HECHA = 'mlx-legacy-imported';
+/**
+ * El centinela lleva un 2: la primera versión leía las claves antiguas como si
+ * guardaran el valor pelado y no traía nada, pero se marcaba igual y no
+ * volvía a intentarlo. Cambiar el nombre da una segunda pasada a quien ya
+ * entró con la versión rota.
+ */
+const HECHA = 'mlx-legacy-imported-2';
+
+/** Valor con el que la interfaz anterior marcaba «esto ya no está». */
+const OLVIDADO = '__MLX_FORGOTTEN__';
 
 const ANTIGUAS = {
   favoritos: 'meteolabx_favorites',
@@ -40,15 +49,48 @@ function leer(clave) {
   }
 }
 
-function leerJson(clave) {
+/**
+ * Lee una clave antigua y le quita el envoltorio del puente de Streamlit.
+ *
+ * El componente que escribía en `localStorage` no guardaba el valor a secas:
+ * lo metía dentro de un objeto con la propia clave como campo, de modo que
+ * `meteolabx_favorites` contiene `{"meteolabx_favorites":"[…]"}` y no la
+ * lista. Encima el valor de dentro es texto —Python serializaba antes de
+ * pasárselo—, así que hay que parsear dos veces. Leerlo como si fuera la
+ * lista devolvía un objeto, `Array.isArray` decía que no y la migración se
+ * marcaba como hecha sin haber traído un solo favorito.
+ */
+function leerAntigua(clave) {
   const crudo = leer(clave);
   if (!crudo) return null;
+
+  let valor;
   try {
-    return JSON.parse(crudo);
+    valor = JSON.parse(crudo);
   } catch {
     // La interfaz anterior guardaba algunos valores como texto pelado.
-    return crudo;
+    valor = crudo;
   }
+
+  if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+    const claves = Object.keys(valor);
+    if (Object.prototype.hasOwnProperty.call(valor, clave)) valor = valor[clave];
+    else if (claves.length === 1) valor = valor[claves[0]];
+  }
+
+  if (typeof valor === 'string') {
+    if (valor === OLVIDADO) return null;
+    const texto = valor.trim();
+    if (texto.startsWith('[') || texto.startsWith('{')) {
+      try {
+        return JSON.parse(texto);
+      } catch {
+        return valor;
+      }
+    }
+  }
+
+  return valor;
 }
 
 function escribir(clave, valor) {
@@ -59,15 +101,44 @@ function escribir(clave, valor) {
   }
 }
 
+/**
+ * Lee una clave que las dos interfaces comparten —las unidades y la
+ * calibración de sensores—, quitando el envoltorio del puente si lo lleva.
+ *
+ * Estas dos no se migran, se leen en el sitio: la clave y el contenido son los
+ * mismos. Lo que no era el mismo es la cáscara, y sin quitarla la interfaz
+ * nueva encontraba un objeto con una sola clave donde esperaba las
+ * preferencias, y volvía a los valores de fábrica.
+ */
+export function readSharedLegacyKey(clave) {
+  const valor = leerAntigua(clave);
+  return valor && typeof valor === 'object' && !Array.isArray(valor) ? valor : null;
+}
+
+/**
+ * Lo que guarda la interfaz nueva, sin desenvolver nada: aquí el valor es lo
+ * que se escribió, y desenvolver un objeto de un solo campo —unas credenciales
+ * con solo WU, por ejemplo— confundiría el contenido con el envoltorio.
+ */
+function leerNueva(clave) {
+  const crudo = leer(clave);
+  if (!crudo) return null;
+  try {
+    return JSON.parse(crudo);
+  } catch {
+    return crudo;
+  }
+}
+
 function vacia(clave) {
-  const valor = leerJson(clave);
+  const valor = leerNueva(clave);
   if (valor === null || valor === '') return true;
   return Array.isArray(valor) ? valor.length === 0 : Object.keys(valor).length === 0;
 }
 
 /** Altitud: la interfaz anterior la guardaba como texto. */
 function altitud(clave) {
-  const valor = Number(String(leerJson(clave) ?? '').replace(',', '.'));
+  const valor = Number(String(leerAntigua(clave) ?? '').replace(',', '.'));
   return Number.isFinite(valor) ? valor : null;
 }
 
@@ -114,7 +185,7 @@ export async function importLegacyStorage(language = 'es', fetchImpl = fetch) {
   const traido = { favoritos: 0, credenciales: [], autoconexion: '' };
 
   // 1. Favoritos.
-  const antiguos = leerJson(ANTIGUAS.favoritos);
+  const antiguos = leerAntigua(ANTIGUAS.favoritos);
   if (Array.isArray(antiguos) && antiguos.length && vacia(NUEVAS.favoritos)) {
     const traducidos = [];
     for (const entrada of antiguos) {
@@ -131,8 +202,8 @@ export async function importLegacyStorage(language = 'es', fetchImpl = fetch) {
   //    tenía en el navegador ya había aceptado conservarlas.
   if (vacia(NUEVAS.credenciales)) {
     const credenciales = {};
-    const wuKey = String(leerJson(ANTIGUAS.wuKey) || '').trim();
-    const wuStation = String(leerJson(ANTIGUAS.wuStation) || '').trim();
+    const wuKey = String(leerAntigua(ANTIGUAS.wuKey) || '').trim();
+    const wuStation = String(leerAntigua(ANTIGUAS.wuStation) || '').trim();
     if (wuKey && wuStation) {
       credenciales.WU = {
         stationId: wuStation.toUpperCase(),
@@ -140,11 +211,11 @@ export async function importLegacyStorage(language = 'es', fetchImpl = fetch) {
         elevation: altitud(ANTIGUAS.wuAltitud)
       };
     }
-    const wlKey = String(leerJson(ANTIGUAS.wlKey) || '').trim();
-    const wlSecret = String(leerJson(ANTIGUAS.wlSecret) || '').trim();
+    const wlKey = String(leerAntigua(ANTIGUAS.wlKey) || '').trim();
+    const wlSecret = String(leerAntigua(ANTIGUAS.wlSecret) || '').trim();
     if (wlKey && wlSecret) {
       credenciales.WEATHERLINK = {
-        stationId: String(leerJson(ANTIGUAS.wlStation) || '').trim(),
+        stationId: String(leerAntigua(ANTIGUAS.wlStation) || '').trim(),
         apiKey: wlKey,
         apiSecret: wlSecret,
         elevation: altitud(ANTIGUAS.wlAltitud)
@@ -157,7 +228,7 @@ export async function importLegacyStorage(language = 'es', fetchImpl = fetch) {
   }
 
   // 3. La estación que se abría al entrar.
-  const objetivo = String(leerJson(ANTIGUAS.autoconexion) || '').trim();
+  const objetivo = String(leerAntigua(ANTIGUAS.autoconexion) || '').trim();
   if (objetivo && vacia(NUEVAS.autoconexion)) {
     escribir(NUEVAS.autoconexion, objetivo);
     traido.autoconexion = objetivo;

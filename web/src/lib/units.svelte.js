@@ -4,6 +4,7 @@ import {
   normalizeUnitPreferences,
   unitOptions
 } from './units.js';
+import { readSharedLegacyKey } from './legacy-storage.js';
 
 export * from './units.js';
 
@@ -12,12 +13,11 @@ export const UNIT_STORAGE_KEY = 'meteolabx_unit_preferences';
 export const unitPreferences = $state({ ...defaultUnitPreferences });
 
 export function loadUnitPreferences() {
-  let stored = {};
-  try {
-    stored = JSON.parse(localStorage.getItem(UNIT_STORAGE_KEY) || '{}');
-  } catch {
-    stored = {};
-  }
+  // La clave es la misma que usaba la interfaz anterior, pero aquella la
+  // guardaba envuelta en un objeto con la propia clave dentro: hay que pelarla
+  // o las unidades elegidas se leen como desconocidas y vuelven a las de
+  // fábrica.
+  const stored = readSharedLegacyKey(UNIT_STORAGE_KEY) || {};
   Object.assign(unitPreferences, normalizeUnitPreferences(stored));
 }
 

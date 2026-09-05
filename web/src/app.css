@@ -162,6 +162,28 @@ body {
   text-rendering: optimizeLegibility;
 }
 button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+/* Safari pinta los controles con el aspecto del sistema y, mientras lo hace,
+   ignora `padding`, `border` y `border-radius`: los botones salían cuadrados y
+   sin holgura, y el `<input type="search">` de la caja de conexión aparecía
+   con la cajita de búsqueda nativa —encogida y con su lupa—, sin respetar ni
+   el ancho ni el borde. Chrome sí atiende esas propiedades sin pedir nada, y
+   por eso solo se veía mal en Safari.
+
+   Checkbox y radio quedan fuera: sin aspecto nativo desaparecerían. El
+   `<select>` del ranking también, que perdería su flecha, y el
+   `input[type=range]`, que se quedaría sin barra ni tirador. */
+button,
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+textarea {
+  appearance: none;
+  -webkit-appearance: none;
+}
+/* La lupa y la aspa del campo de búsqueda son piezas aparte en WebKit. */
+input[type='search']::-webkit-search-decoration,
+input[type='search']::-webkit-search-results-button,
+input[type='search']::-webkit-search-cancel-button { -webkit-appearance: none; }
+input, textarea { font: inherit; }
 a { color: inherit; }
 h1, h2, h3, h4, p { margin: 0; }
 ::selection { background: rgba(62, 142, 208, 0.32); }

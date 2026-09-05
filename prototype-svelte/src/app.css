@@ -108,6 +108,20 @@ body {
   text-rendering: optimizeLegibility;
 }
 button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+/* Mismo reset que el resto del sitio: sin esto Safari pinta sus controles con
+   el aspecto del sistema y, mientras lo hace, ignora `padding`, `border` y
+   `border-radius`. Aquí lo sufrían el buscador de variables y los botones de
+   la barra del mapa. Checkbox y radio quedan fuera, que sin aspecto nativo
+   desaparecerían; el `input[type=range]` de la línea temporal también, que se
+   quedaría sin barra ni tirador. */
+button,
+input:not([type='checkbox']):not([type='radio']):not([type='range']),
+textarea {
+  appearance: none;
+  -webkit-appearance: none;
+}
+input, textarea { font: inherit; }
 a { color: inherit; }
 h1, h2, h3, h4, p { margin: 0; }
 ::selection { background: rgba(62, 142, 208, 0.32); }
