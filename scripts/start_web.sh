@@ -20,6 +20,11 @@ cd "$(dirname "$0")/.."
 BACKEND_HOST="${METEOLABX_BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${PORT:-8000}"
 export METEOLABX_API_URL="${METEOLABX_API_URL:-http://127.0.0.1:${BACKEND_PORT}}"
+case "${BACKEND_HOST}" in
+  "::") BACKEND_HEALTHCHECK_HOST="::1" ;;
+  "0.0.0.0") BACKEND_HEALTHCHECK_HOST="127.0.0.1" ;;
+  *) BACKEND_HEALTHCHECK_HOST="${BACKEND_HOST}" ;;
+esac
 if [ -n "${PYTHON_BIN:-}" ]; then
   PYTHON="${PYTHON_BIN}"
 elif [ -x ".venv/bin/python" ]; then
@@ -110,10 +115,10 @@ fi
 # Se construyen con `scripts/build_seo_pages.py` antes de publicar.
 export MLX_BOOT_PROFILE="${MLX_BOOT_PROFILE:-0}"
 
-echo "⏳ Backend FastAPI arrancando en ${METEOLABX_API_URL} ..."
+echo "⏳ Backend FastAPI arrancando en ${BACKEND_HOST}:${BACKEND_PORT} ..."
 (
   for _ in $(seq 1 30); do
-    if "${PYTHON}" -c "import urllib.request; urllib.request.urlopen('${METEOLABX_API_URL}/v1/health', timeout=2)" 2>/dev/null; then
+    if "${PYTHON}" -c "import http.client; c = http.client.HTTPConnection('${BACKEND_HEALTHCHECK_HOST}', ${BACKEND_PORT}, timeout=2); c.request('GET', '/v1/health'); r = c.getresponse(); raise SystemExit(0 if 200 <= r.status < 300 else 1)" 2>/dev/null; then
       echo "✓ Backend FastAPI listo"
       exit 0
     fi
