@@ -66,9 +66,13 @@ for src, dst in CATALOGS:
 PY
 
 # 1) Backend FastAPI en segundo plano (interno).
-"${PYTHON}" -m uvicorn server.main:app \
-  --host "${BACKEND_HOST}" \
-  --port "${BACKEND_PORT}" &
+if [ "${BACKEND_HOST}" = "::" ]; then
+  "${PYTHON}" -m scripts.run_uvicorn_dual_stack &
+else
+  "${PYTHON}" -m uvicorn server.main:app \
+    --host "${BACKEND_HOST}" \
+    --port "${BACKEND_PORT}" &
+fi
 UVICORN_PID=$!
 
 # 2) Worker AROME en segundo plano. Comprueba el catálogo cada cinco minutos,
