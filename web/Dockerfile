@@ -26,6 +26,7 @@ COPY --from=build /app/build ./build
 # tiene que viajar también a la imagen final.
 COPY server.js ./
 COPY src/lib/legacy-path.js ./src/lib/legacy-path.js
+COPY src/lib/server/proxy-agent.js ./src/lib/server/proxy-agent.js
 COPY src/lib/seo ./src/lib/seo
 
 EXPOSE 3000
