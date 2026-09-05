@@ -467,14 +467,22 @@
       const maplibre = await import('maplibre-gl');
       ({ Map: MapConstructor, NavigationControl } = maplibre);
 
-      // En desarrollo Vite inyecta su cliente HMR en todo lo que sirve desde
-      // `node_modules`, worker incluido, y dentro de un Web Worker eso muere
-      // en silencio: las teselas no se parsean y el mapa se queda negro. La
-      // copia de `static/` se sirve sin transformar; en producción Rollup ya
-      // empaqueta el worker bien.
-      if (import.meta.env.DEV) {
-        maplibre.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
-      }
+      // El worker, siempre desde `static/`, en desarrollo y en producción.
+      //
+      // En desarrollo, porque Vite inyecta su cliente HMR en todo lo que sirve
+      // desde `node_modules`, worker incluido, y dentro de un Web Worker eso
+      // muere en silencio.
+      //
+      // En producción, porque MapLibre 6 no deja que Rollup empaquete el
+      // worker: lo resuelve al arrancar como `./maplibre-gl-worker.mjs` junto
+      // al módulo, leyendo `import.meta.url`. Rollup no ve ese import y no
+      // emite el fichero, así que la petición acababa en un 404 dentro de
+      // `_app/immutable/chunks/` y el mapa se quedaba sin worker: en blanco en
+      // Chrome, y en «Cargando el mapa…» eterno donde `style.load` no llega.
+      //
+      // `scripts/copy-maplibre-worker.mjs` deja el worker y su módulo
+      // compartido en `static/maplibre/` antes de cada build.
+      maplibre.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
     } catch (error) {
       console.error('[mapa] no se pudo cargar MapLibre', error);
       failed = true;

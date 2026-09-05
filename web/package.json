@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run maplibre:worker && vite dev --host 0.0.0.0",
-    "build": "vite build",
+    "build": "npm run maplibre:worker && vite build",
     "preview": "node server.js",
     "start": "node server.js",
     "test": "node --import ./tests/alias.mjs --test tests/*.test.mjs",

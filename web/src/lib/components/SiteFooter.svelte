@@ -11,6 +11,7 @@
    * El contenido sigue saliendo en el HTML del servidor, pero se presenta en
    * diálogos modales para no alargar ni desplazar la página.
    */
+  import { onMount } from 'svelte';
   import app from '$lib/i18n/app-i18n.generated.js';
 
   let { language = 'es' } = $props();
@@ -46,6 +47,28 @@
   const activeId = $derived(activeRelease?.id || '');
 
   const PRIVACY_EMAIL = 'meteolabx@gmail.com';
+
+  /**
+   * El correo se escribe al montar, no en el servidor.
+   *
+   * Cloudflare tiene activada la ofuscación de direcciones: cuando encuentra
+   * un `mailto:` en el HTML lo sustituye por un enlace a `/cdn-cgi/l/…` y un
+   * `<span class="__cf_email__">`, y además cuela un `<script>` dentro del
+   * contenedor. El marcado que llega al navegador deja entonces de coincidir
+   * con el que Svelte espera al hidratar, y Svelte responde tirando el render
+   * del servidor y remontando la aplicacion entera en el cliente. Eso repinta
+   * la página de golpe —la caja de conexión se veía un instante sin estilos— y
+   * deja al mapa construido sobre un contenedor ya descartado, con
+   * «Cargando el mapa…» para siempre.
+   *
+   * Sin dirección en el HTML del servidor no hay nada que reescribir. El
+   * diálogo de privacidad solo se abre con `showModal()`, así que quien no
+   * tenga JavaScript no lo ve de todos modos.
+   */
+  let mounted = $state(false);
+  onMount(() => {
+    mounted = true;
+  });
 
   const privacySections = $derived(
     [
@@ -181,7 +204,7 @@
           <p>
             <!-- El espacio va explícito: entre la llave y el bloque `#if` no
                  sobrevive ninguno, y quedaba «escribir ameteolabx@gmail.com». -->
-            {item}{#if section.email}{' '}<a href={`mailto:${section.email}`}>{section.email}</a>.{/if}
+            {item}{#if section.email && mounted}{' '}<a href={`mailto:${section.email}`}>{section.email}</a>.{/if}
           </p>
         {/each}
         {#each asList(section.notes) as note (note)}<p class="note">{note}</p>{/each}
