@@ -30,6 +30,7 @@
   import { observationModel } from '$lib/observation/model.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
+  import { hasUnreliableData } from '$lib/observation/warnings.js';
   import { displayName, providerLabel } from '$lib/seo/i18n.js';
   import { appTabs, observationTabs } from '$lib/tabs.js';
 
@@ -244,6 +245,13 @@
     <!-- Igual que en la ficha por slug: si la red rechazó la petición, se
          dice, en vez de culpar a una estación que sí está publicando. -->
     <p class="offline">{ui(lang, unavailableKey(observation?.unavailable))}</p>
+  {/if}
+
+  <!-- El backend distingue cada avería del sensor porque necesita saber cuál
+       es para decidir qué excluye del ranking; al visitante le basta con saber
+       que no se fíe. Sale una sola vez aunque fallen varias variables. -->
+  {#if hasUnreliableData(model.warnings)}
+    <p class="offline">⚠️ {ui(lang, 'unreliable_data')}</p>
   {/if}
 
   {#if data.personal && personal.error}

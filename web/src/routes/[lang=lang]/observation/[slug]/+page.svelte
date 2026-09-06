@@ -8,6 +8,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import { observationModel } from '$lib/observation/model.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
+  import { hasUnreliableData } from '$lib/observation/warnings.js';
   import { displayName } from '$lib/seo/i18n.js';
   import {
     classifyEntry,
@@ -146,6 +147,13 @@
     <!-- El motivo importa: un 401 de la red no es una estación callada, y
          decirlo igual manda a buscar el fallo donde no está. -->
     <p class="offline">{ui(lang, unavailableKey(observation?.unavailable))}</p>
+  {/if}
+
+  <!-- El backend distingue cada avería del sensor porque necesita saber cuál
+       es para decidir qué excluye del ranking; al visitante le basta con saber
+       que no se fíe. Sale una sola vez aunque fallen varias variables. -->
+  {#if hasUnreliableData(model.warnings)}
+    <p class="offline">⚠️ {ui(lang, 'unreliable_data')}</p>
   {/if}
 
   <ObservationPanel {model} language={lang} stationName={meta.name} />
