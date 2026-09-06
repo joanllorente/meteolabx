@@ -393,6 +393,16 @@ def _finalize_stations(stations_by_key: Dict[str, Dict[str, Any]]) -> List[Dict[
         station["has_wind"] = bool(
             capabilities.get("wind_speed") or capabilities.get("wind_direction")
         )
+        station["sensors"] = {
+            "thermometer": bool(capabilities.get("temperature")),
+            "hygrometer": bool(capabilities.get("relative_humidity")),
+            "barometer": bool(capabilities.get("pressure")),
+            "anemometer": bool(capabilities.get("wind_speed")),
+            "wind_vane": bool(capabilities.get("wind_direction")),
+            "rain_gauge": bool(capabilities.get("precipitation")),
+            "pyranometer": False,
+            "uv": False,
+        }
         station["products"] = sorted(str(code) for code in station.get("products", []))
 
     stations.sort(
@@ -404,6 +414,64 @@ def _finalize_stations(stations_by_key: Dict[str, Dict[str, Any]]) -> List[Dict[
         )
     )
     return stations
+
+
+def _location_key(station: Dict[str, Any]) -> Tuple[str, float, float]:
+    return (
+        str(station.get("network") or "").strip(),
+        round(float(station.get("lat") or 0.0), 4),
+        round(float(station.get("lon") or 0.0), 4),
+    )
+
+
+def merge_existing_inventory(
+    current: List[Dict[str, Any]],
+    existing: List[Dict[str, Any]],
+    *,
+    checked_at: str,
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
+    """Keep unconfirmed absences while replacing renamed locations."""
+    old_by_id = {str(row.get("id") or ""): row for row in existing if row.get("id")}
+    current_by_id = {str(row.get("id") or ""): row for row in current if row.get("id")}
+    current_locations = {_location_key(row) for row in current}
+    merged: List[Dict[str, Any]] = []
+
+    for station_id, fresh in current_by_id.items():
+        old = old_by_id.get(station_id, {})
+        row = dict(old)
+        row.update(fresh)
+        starts = [str(value) for value in (old.get("observed_start"), fresh.get("observed_start")) if value]
+        if starts:
+            row["observed_start"] = min(starts)
+        row["active_now"] = True
+        row["status"] = "active"
+        row["missing_checks"] = 0
+        row["last_inventory_check_at"] = checked_at
+        merged.append(row)
+
+    missing_ids: List[str] = []
+    renamed_ids: List[str] = []
+    for station_id, old in old_by_id.items():
+        if station_id in current_by_id:
+            continue
+        if _location_key(old) in current_locations:
+            renamed_ids.append(station_id)
+            continue
+        row = dict(old)
+        row["active_now"] = False
+        row["status"] = "unconfirmed_missing"
+        row["missing_checks"] = int(old.get("missing_checks") or 0) + 1
+        row["last_inventory_check_at"] = checked_at
+        merged.append(row)
+        missing_ids.append(station_id)
+
+    merged.sort(key=lambda row: str(row.get("id") or ""))
+    report = {
+        "added": sorted(set(current_by_id) - set(old_by_id)),
+        "unconfirmed_missing": sorted(missing_ids),
+        "renamed_or_rekeyed": sorted(renamed_ids),
+    }
+    return merged, report
 
 
 def _capability_counts(stations: Iterable[Dict[str, Any]]) -> Dict[str, int]:
@@ -450,6 +518,13 @@ def build_inventory(args: argparse.Namespace) -> List[Dict[str, Any]]:
     print(f"Networks: {len(selected_networks)} | products: {len(selected_products)}")
     print(f"Date window: {observed_start} 00:00 -> {observed_end} 23:59")
     print(f"Request cap: {args.max_requests} non-cached calls")
+
+    output_path = Path(args.output).resolve()
+    existing: List[Dict[str, Any]] = []
+    if args.merge_existing and output_path.exists():
+        payload = _load_json_file(output_path)
+        if isinstance(payload, list):
+            existing = [row for row in payload if isinstance(row, dict)]
 
     stations_by_key: Dict[str, Dict[str, Any]] = {}
     api_calls = 0
@@ -526,7 +601,12 @@ def build_inventory(args: argparse.Namespace) -> List[Dict[str, Any]]:
 
     _save_cache(args.cache, cache)
     stations = _finalize_stations(stations_by_key)
-    output_path = Path(args.output).resolve()
+    if args.merge_existing:
+        stations, report = merge_existing_inventory(
+            stations, existing, checked_at=_now_iso(),
+        )
+        for key, values in report.items():
+            print(f"{key} ({len(values)}): {', '.join(values) or '-'}")
     _save_json_file(output_path, stations)
 
     counts = _capability_counts(stations)
@@ -619,6 +699,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sleep", type=float, default=0.1)
     parser.add_argument("--progress-every", type=int, default=10)
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--merge-existing",
+        action="store_true",
+        help="Preserve stations absent from this scan as unconfirmed_missing.",
+    )
     parser.add_argument("--check-config", action="store_true")
     return parser
 
