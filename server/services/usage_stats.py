@@ -584,3 +584,165 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
         ],
         "sections": sections,
     }
+
+
+def station_detail(
+    provider: str,
+    station_id: str,
+    *,
+    settings=None,
+    limit: int = 60,
+) -> Optional[Dict[str, Any]]:
+    """Detalle de una estación: agregados, últimas visitas y últimos errores.
+
+    El resumen del panel dice cuántos errores ha habido, pero no cuándo ni de
+    qué tipo. Esto abre esa caja: los eventos recientes con su fecha, más el
+    reparto de errores por tipo.
+
+    Devuelve ``None`` si la estación no tiene ni una visita ni un error
+    registrados.
+    """
+    provider = str(provider or "").strip().upper()
+    station_id = str(station_id or "").strip()
+    if not provider or not station_id:
+        return None
+    limit = max(1, min(int(limit), 200))
+    now = int(time.time())
+    clave = (provider, station_id)
+    ventanas = (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"])
+
+    def _ventanas(tabla: str, connection) -> Dict[str, int]:
+        row = connection.execute(
+            f"""
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM {tabla}
+            WHERE provider = ? AND station_id = ?
+            """,
+            (*ventanas, *clave),
+        ).fetchone()
+        return {
+            "d1": int(row["d1"] or 0),
+            "d7": int(row["d7"] or 0),
+            "d30": int(row["d30"] or 0),
+            "total": int(row["total"] or 0),
+            "last_epoch": int(row["last_epoch"] or 0),
+        }
+
+    with _connect(settings) as connection:
+        connection.row_factory = sqlite3.Row
+        visits = _ventanas("station_visits", connection)
+        errors = _ventanas("station_errors", connection)
+        seo_views = _ventanas("seo_page_views", connection)
+        panel_clicks = _ventanas("seo_panel_clicks", connection)
+        if not (visits["total"] or errors["total"] or seo_views["total"] or panel_clicks["total"]):
+            return None
+        name_row = connection.execute(
+            """
+            SELECT name FROM (
+                SELECT name, epoch FROM station_visits
+                 WHERE provider = ? AND station_id = ? AND name <> ''
+                UNION ALL
+                SELECT name, epoch FROM station_errors
+                 WHERE provider = ? AND station_id = ? AND name <> ''
+                UNION ALL
+                SELECT name, epoch FROM seo_page_views
+                 WHERE provider = ? AND station_id = ? AND name <> ''
+            ) ORDER BY epoch DESC LIMIT 1
+            """,
+            (*clave, *clave, *clave),
+        ).fetchone()
+        by_source_rows = connection.execute(
+            """
+            SELECT source,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM station_visits
+            WHERE provider = ? AND station_id = ?
+            GROUP BY source
+            """,
+            (now - WINDOWS["d30"], *clave),
+        ).fetchall()
+        error_kind_rows = connection.execute(
+            """
+            SELECT error_kind,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM station_errors
+            WHERE provider = ? AND station_id = ?
+            GROUP BY error_kind
+            ORDER BY total DESC
+            """,
+            (now - WINDOWS["d30"], *clave),
+        ).fetchall()
+        recent_visit_rows = connection.execute(
+            f"""
+            SELECT epoch, source FROM station_visits
+            WHERE provider = ? AND station_id = ?
+            ORDER BY epoch DESC LIMIT {limit}
+            """,
+            clave,
+        ).fetchall()
+        recent_error_rows = connection.execute(
+            f"""
+            SELECT epoch, error_kind, status_code FROM station_errors
+            WHERE provider = ? AND station_id = ?
+            ORDER BY epoch DESC LIMIT {limit}
+            """,
+            clave,
+        ).fetchall()
+        recent_seo_rows = connection.execute(
+            f"""
+            SELECT epoch, language FROM seo_page_views
+            WHERE provider = ? AND station_id = ?
+            ORDER BY epoch DESC LIMIT {limit}
+            """,
+            clave,
+        ).fetchall()
+
+    by_source = {source: {"d30": 0, "total": 0} for source in ("app", "seo", "legacy")}
+    for row in by_source_rows:
+        by_source[str(row["source"] or "app")] = {
+            "d30": int(row["d30"] or 0),
+            "total": int(row["total"] or 0),
+        }
+
+    return {
+        "provider": provider,
+        "station_id": station_id,
+        "name": (name_row["name"] if name_row else "") or station_id,
+        "visits": visits,
+        "visits_by_source": by_source,
+        "errors": errors,
+        "seo_views": seo_views,
+        "panel_clicks": panel_clicks,
+        "error_kinds": [
+            {
+                "kind": str(row["error_kind"]),
+                "d30": int(row["d30"] or 0),
+                "total": int(row["total"] or 0),
+                "last_epoch": int(row["last_epoch"] or 0),
+            }
+            for row in error_kind_rows
+        ],
+        "recent_visits": [
+            {"epoch": int(row["epoch"] or 0), "source": str(row["source"] or "app")}
+            for row in recent_visit_rows
+        ],
+        "recent_errors": [
+            {
+                "epoch": int(row["epoch"] or 0),
+                "kind": str(row["error_kind"] or ""),
+                "status_code": (int(row["status_code"]) if row["status_code"] is not None else None),
+            }
+            for row in recent_error_rows
+        ],
+        "recent_seo_views": [
+            {"epoch": int(row["epoch"] or 0), "language": str(row["language"] or "")}
+            for row in recent_seo_rows
+        ],
+    }

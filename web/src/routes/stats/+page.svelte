@@ -63,6 +63,81 @@
   const fecha = (epoch) =>
     epoch ? new Date(epoch * 1000).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—';
   const numero = (valor) => new Intl.NumberFormat('es-ES').format(valor || 0);
+
+  // Columnas de la tabla de estaciones: etiqueta, valor con el que se ordena y
+  // si es texto (se ordena alfabéticamente y empieza ascendente) o número.
+  const COLUMNAS = [
+    { clave: 'nombre', etiqueta: 'Estación', texto: true, valor: (f) => f.name || f.station_id || '' },
+    { clave: 'red', etiqueta: 'Red', texto: true, valor: (f) => f.provider || '' },
+    { clave: 'd1', etiqueta: 'Hoy', valor: (f) => f.d1 || 0 },
+    { clave: 'd7', etiqueta: '7 d', valor: (f) => f.d7 || 0 },
+    { clave: 'd30', etiqueta: '30 d', valor: (f) => f.d30 || 0 },
+    { clave: 'total', etiqueta: 'Total', valor: (f) => f.total || 0 },
+    { clave: 'errores', etiqueta: 'Errores (30 d)', valor: (f) => f.errors?.d30 || 0 },
+    { clave: 'visita', etiqueta: 'Última visita', valor: (f) => f.last_epoch || 0 }
+  ];
+
+  // Sin columna elegida se respeta el orden que manda el servidor.
+  let orden = $state(null);
+
+  function ordenarPor(columna) {
+    if (orden?.clave === columna.clave) {
+      // Tercer clic: se vuelve al orden del servidor.
+      orden = orden.ascendente === columna.texto ? { clave: columna.clave, ascendente: !orden.ascendente } : null;
+    } else {
+      orden = { clave: columna.clave, ascendente: !!columna.texto };
+    }
+  }
+
+  // Detalle de una estación: la fila abierta y lo que ha respondido la API.
+  // Se cachea por estación para que cerrar y volver a abrir no vuelva a pedirlo.
+  let abierta = $state('');
+  let detalles = $state({});
+
+  const claveDe = (fila) => `${fila.provider}|${fila.station_id}`;
+
+  async function alternarDetalle(fila) {
+    const clave = claveDe(fila);
+    if (abierta === clave) {
+      abierta = '';
+      return;
+    }
+    abierta = clave;
+    if (detalles[clave]?.datos) return;
+    detalles = { ...detalles, [clave]: { cargando: true, error: '', datos: null } };
+    try {
+      const parametros = new URLSearchParams({
+        provider: fila.provider,
+        station_id: fila.station_id
+      });
+      const respuesta = await fetch(`/v1/stats/station?${parametros}`, {
+        headers: { 'X-Stats-Password': password.trim() }
+      });
+      if (!respuesta.ok) throw new Error('fallo');
+      const datos = await respuesta.json();
+      detalles = { ...detalles, [clave]: { cargando: false, error: '', datos } };
+    } catch {
+      detalles = { ...detalles, [clave]: { cargando: false, error: 'fallo', datos: null } };
+    }
+  }
+
+  const FUENTES = { app: 'Aplicación', seo: 'Ficha indexable', legacy: 'Aplicación anterior' };
+
+  const colacion = new Intl.Collator('es-ES', { sensitivity: 'base', numeric: true });
+
+  const estaciones = $derived.by(() => {
+    const filas = data?.stations ?? [];
+    if (!orden) return filas;
+    const columna = COLUMNAS.find((c) => c.clave === orden.clave);
+    if (!columna) return filas;
+    const signo = orden.ascendente ? 1 : -1;
+    return [...filas].sort((a, b) => {
+      const x = columna.valor(a);
+      const y = columna.valor(b);
+      const cmp = columna.texto ? colacion.compare(x, y) : x - y;
+      return cmp * signo;
+    });
+  });
 </script>
 
 <svelte:head>
@@ -150,14 +225,27 @@
     <table>
       <thead>
         <tr>
-          <th>Estación</th><th>Red</th><th>Hoy</th><th>7 d</th><th>30 d</th><th>Total</th>
-          <th>Errores (30 d)</th><th>Última visita</th>
+          {#each COLUMNAS as columna (columna.clave)}
+            <th class:num={!columna.texto} aria-sort={orden?.clave === columna.clave
+              ? (orden.ascendente ? 'ascending' : 'descending')
+              : 'none'}>
+              <button type="button" onclick={() => ordenarPor(columna)}>
+                {columna.etiqueta}
+                <span class="flecha" aria-hidden="true"
+                  >{orden?.clave === columna.clave ? (orden.ascendente ? '▲' : '▼') : ''}</span>
+              </button>
+            </th>
+          {/each}
         </tr>
       </thead>
       <tbody>
-        {#each data.stations as fila (fila.provider + fila.station_id)}
-          <tr>
-            <td>{fila.name || fila.station_id}</td>
+        {#each estaciones as fila (claveDe(fila))}
+          {@const clave = claveDe(fila)}
+          <tr class:abierta={abierta === clave}>
+            <td>
+              <button type="button" class="nombre" onclick={() => alternarDetalle(fila)}
+                aria-expanded={abierta === clave}>{fila.name || fila.station_id}</button>
+            </td>
             <td class="red">{fila.provider}</td>
             <td class="n">{numero(fila.d1)}</td>
             <td class="n">{numero(fila.d7)}</td>
@@ -166,6 +254,116 @@
             <td class="n" class:mal={fila.errors?.d30 > 0}>{numero(fila.errors?.d30)}</td>
             <td class="fecha">{fecha(fila.last_epoch)}</td>
           </tr>
+          {#if abierta === clave}
+            {@const detalle = detalles[clave]}
+            <tr class="detalle">
+              <td colspan={COLUMNAS.length}>
+                {#if detalle?.cargando}
+                  <p class="aviso">Consultando…</p>
+                {:else if detalle?.error}
+                  <p class="aviso error">No se pudo consultar el detalle de la estación.</p>
+                {:else if detalle?.datos}
+                  {@const d = detalle.datos}
+                  <div class="ficha">
+                    <p class="identificador">{d.provider} · {d.station_id}</p>
+
+                    <div class="resumen">
+                      {#each [
+                        ['Visitas', d.visits],
+                        ['Errores', d.errors],
+                        ['Fichas indexables', d.seo_views],
+                        ['Aperturas del panel', d.panel_clicks]
+                      ] as [etiqueta, bloque] (etiqueta)}
+                        <article>
+                          <span>{etiqueta}</span>
+                          <strong>{numero(bloque?.total)}</strong>
+                          <small>
+                            {numero(bloque?.d1)} hoy · {numero(bloque?.d7)} en 7 d ·
+                            {numero(bloque?.d30)} en 30 d
+                          </small>
+                          <small>Último: {fecha(bloque?.last_epoch)}</small>
+                        </article>
+                      {/each}
+                    </div>
+
+                    <div class="columnas">
+                      <section>
+                        <h3>Visitas por origen</h3>
+                        <table>
+                          <thead><tr><th>Origen</th><th>30 d</th><th>Total</th></tr></thead>
+                          <tbody>
+                            {#each Object.entries(FUENTES) as [fuente, etiqueta] (fuente)}
+                              <tr>
+                                <td>{etiqueta}</td>
+                                <td class="n">{numero(d.visits_by_source?.[fuente]?.d30)}</td>
+                                <td class="n">{numero(d.visits_by_source?.[fuente]?.total)}</td>
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+
+                        <h3>Errores por tipo</h3>
+                        {#if d.error_kinds?.length}
+                          <table>
+                            <thead><tr><th>Tipo</th><th>30 d</th><th>Total</th><th>Último</th></tr></thead>
+                            <tbody>
+                              {#each d.error_kinds as tipo (tipo.kind)}
+                                <tr>
+                                  <td>{tipo.kind}</td>
+                                  <td class="n">{numero(tipo.d30)}</td>
+                                  <td class="n">{numero(tipo.total)}</td>
+                                  <td class="fecha">{fecha(tipo.last_epoch)}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {:else}
+                          <p class="aviso">Sin errores registrados.</p>
+                        {/if}
+                      </section>
+
+                      <section>
+                        <h3>Últimos errores</h3>
+                        {#if d.recent_errors?.length}
+                          <table>
+                            <thead><tr><th>Cuándo</th><th>Tipo</th><th>Código</th></tr></thead>
+                            <tbody>
+                              {#each d.recent_errors as evento, i (evento.epoch + '|' + i)}
+                                <tr>
+                                  <td class="fecha">{fecha(evento.epoch)}</td>
+                                  <td>{evento.kind}</td>
+                                  <td class="n">{evento.status_code ?? '—'}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {:else}
+                          <p class="aviso">Sin errores registrados.</p>
+                        {/if}
+
+                        <h3>Últimas visitas</h3>
+                        {#if d.recent_visits?.length}
+                          <table>
+                            <thead><tr><th>Cuándo</th><th>Origen</th></tr></thead>
+                            <tbody>
+                              {#each d.recent_visits as evento, i (evento.epoch + '|' + i)}
+                                <tr>
+                                  <td class="fecha">{fecha(evento.epoch)}</td>
+                                  <td>{FUENTES[evento.source] || evento.source}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {:else}
+                          <p class="aviso">Sin visitas registradas.</p>
+                        {/if}
+                      </section>
+                    </div>
+                  </div>
+                {/if}
+              </td>
+            </tr>
+          {/if}
         {/each}
       </tbody>
     </table>
@@ -203,8 +401,48 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
   th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
   th { font-size: 0.66rem; color: var(--muted); font-weight: 650; }
+  th button {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    padding: 0; border: 0; border-radius: 0; background: none;
+    color: inherit; font: inherit; cursor: pointer;
+  }
+  th button:hover { color: var(--ink); }
+  th.num { text-align: right; }
+  th.num button { flex-direction: row-reverse; }
+  th .flecha { font-size: 0.6em; }
   .n { text-align: right; font-variant-numeric: tabular-nums; }
   .n.mal { color: var(--alert-danger-fg); font-weight: 700; }
   .red { color: var(--muted); }
   .fecha { color: var(--muted); white-space: nowrap; }
+
+  .nombre {
+    padding: 0; border: 0; border-radius: 0; background: none;
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .nombre:hover { color: var(--accent); }
+  tr.abierta { background: var(--panel-2); }
+  tr.abierta .nombre { font-weight: 700; }
+
+  td[colspan] { padding: 0; }
+  .ficha {
+    padding: 14px 10px 20px;
+    background: var(--panel-2);
+    border-left: 2px solid var(--accent);
+  }
+  .identificador { font-size: 0.7rem; color: var(--muted); margin-bottom: 10px; }
+  .resumen { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .resumen article {
+    flex: 1 1 180px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+  }
+  .resumen span { display: block; font-size: 0.64rem; color: var(--muted); font-weight: 650; }
+  .resumen strong { font-size: 1.15rem; font-weight: 720; font-variant-numeric: tabular-nums; }
+  .resumen small { display: block; font-size: 0.62rem; color: var(--muted); }
+  .columnas { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .columnas section { flex: 1 1 320px; min-width: 0; }
+  .ficha h3 { font-size: 0.7rem; font-weight: 700; margin: 0 0 6px; }
+  .ficha h3 + table { margin-bottom: 14px; }
+  .ficha table + h3 { margin-top: 4px; }
+  .aviso { font-size: 0.72rem; color: var(--muted); margin-bottom: 14px; }
+  .aviso.error { color: var(--alert-danger-fg); }
 </style>

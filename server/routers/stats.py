@@ -6,8 +6,10 @@ Router de estadísticas internas de uso.
 ``POST /v1/stats/panel-click`` que esa ficha ha abierto el panel completo.
 ``POST /v1/stats/error`` registra fallos y ``POST /v1/stats/section`` las
 transiciones reales de navegación (todos fire-and-forget). ``GET
-/v1/stats/stations`` alimenta el panel interno y exige la contraseña de administración
-(``METEOLABX_STATS_ADMIN_PASSWORD``) en el header ``X-Stats-Password``.
+/v1/stats/stations`` alimenta el panel interno y ``GET /v1/stats/station`` el
+detalle de una sola (visitas y errores recientes, con fecha y tipo); ambos
+exigen la contraseña de administración (``METEOLABX_STATS_ADMIN_PASSWORD``) en
+el header ``X-Stats-Password``.
 
 El backend no está expuesto públicamente (escucha en 127.0.0.1; solo el
 frontend lo alcanza), pero la contraseña se comprueba igualmente: defensa
@@ -157,6 +159,14 @@ def post_seo_page_view(
     return Response(status_code=204)
 
 
+def _check_password(settings: Settings, given: str) -> None:
+    expected = str(getattr(settings, "stats_admin_password", "") or "")
+    if not expected:
+        raise HTTPException(status_code=404, detail="stats disabled")
+    if not hmac.compare_digest(given.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="bad password")
+
+
 @router.get("/stations", summary="Visitas y errores agregados por estación (panel interno)")
 def get_station_stats(
     settings: Settings = Depends(get_settings),
@@ -164,9 +174,25 @@ def get_station_stats(
 ) -> dict:
     from server.services import usage_stats
 
-    expected = str(getattr(settings, "stats_admin_password", "") or "")
-    if not expected:
-        raise HTTPException(status_code=404, detail="stats disabled")
-    if not hmac.compare_digest(x_stats_password.encode(), expected.encode()):
-        raise HTTPException(status_code=401, detail="bad password")
+    _check_password(settings, x_stats_password)
     return usage_stats.visit_summary(settings=settings)
+
+
+@router.get("/station", summary="Detalle de una estación (panel interno)")
+def get_station_detail(
+    provider: str,
+    station_id: str,
+    settings: Settings = Depends(get_settings),
+    x_stats_password: str = Header(default=""),
+) -> dict:
+    """Visitas y errores recientes de una estación, con fecha y tipo.
+
+    El resumen dice cuántos errores hay; esto dice cuándo y de qué clase.
+    """
+    from server.services import usage_stats
+
+    _check_password(settings, x_stats_password)
+    detail = usage_stats.station_detail(provider, station_id, settings=settings)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="unknown station")
+    return detail

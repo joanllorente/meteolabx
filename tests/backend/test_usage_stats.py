@@ -303,3 +303,62 @@ def test_stats_disabled_without_password(tmp_path, monkeypatch):
     with TestClient(app) as client:
         response = client.get("/v1/stats/stations", headers={"X-Stats-Password": ""})
     assert response.status_code == 404
+
+
+def test_station_detail_endpoint(stats_client):
+    """El detalle dice cuándo y de qué tipo fueron los errores."""
+    assert stats_client.post(
+        "/v1/stats/visit",
+        json={"provider": "METEOCAT", "station_id": "X4", "name": "Tarragona", "source": "app"},
+    ).status_code == 204
+    assert stats_client.post(
+        "/v1/stats/error",
+        json={
+            "provider": "METEOCAT",
+            "station_id": "X4",
+            "name": "Tarragona",
+            "error_kind": "timeout",
+            "status_code": 504,
+        },
+    ).status_code == 204
+    assert stats_client.post(
+        "/v1/stats/error",
+        json={"provider": "METEOCAT", "station_id": "X4", "error_kind": "network"},
+    ).status_code == 204
+
+    consulta = {"provider": "METEOCAT", "station_id": "X4"}
+    # La contraseña también se exige aquí.
+    assert stats_client.get("/v1/stats/station", params=consulta).status_code == 401
+    assert stats_client.get(
+        "/v1/stats/station", params=consulta, headers={"X-Stats-Password": "mala"}
+    ).status_code == 401
+
+    respuesta = stats_client.get(
+        "/v1/stats/station", params=consulta, headers={"X-Stats-Password": "s3creto"}
+    )
+    assert respuesta.status_code == 200
+    detalle = respuesta.json()
+    assert detalle["name"] == "Tarragona"
+    assert detalle["visits"]["total"] == 1
+    assert detalle["visits"]["last_epoch"] > 0
+    assert detalle["visits_by_source"]["app"]["total"] == 1
+    assert detalle["errors"]["total"] == 2
+    assert {tipo["kind"] for tipo in detalle["error_kinds"]} == {"timeout", "network"}
+    assert len(detalle["recent_errors"]) == 2
+    assert all(evento["epoch"] > 0 for evento in detalle["recent_errors"])
+    codigos = {evento["kind"]: evento["status_code"] for evento in detalle["recent_errors"]}
+    assert codigos == {"timeout": 504, "network": None}
+    assert len(detalle["recent_visits"]) == 1
+
+    # El identificador se normaliza igual que al registrar (red en mayúsculas).
+    assert stats_client.get(
+        "/v1/stats/station",
+        params={"provider": "meteocat", "station_id": "X4"},
+        headers={"X-Stats-Password": "s3creto"},
+    ).status_code == 200
+    # Estación sin ningún evento → 404, no una ficha vacía.
+    assert stats_client.get(
+        "/v1/stats/station",
+        params={"provider": "AEMET", "station_id": "no-existe"},
+        headers={"X-Stats-Password": "s3creto"},
+    ).status_code == 404
