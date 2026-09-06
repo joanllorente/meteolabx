@@ -44,6 +44,29 @@
     }
   });
 
+  let cuarentena = $state(null);
+
+  /** Días completos que lleva marcada, para saber si es crónica o de un rato. */
+  const duracion = (fila) => {
+    const dias = Number(fila?.days_total || 0);
+    if (dias > 1) return `${dias} días`;
+    const desde = Number(fila?.first_seen || 0);
+    const hasta = Number(fila?.last_seen || 0);
+    const horas = desde && hasta ? Math.round((hasta - desde) / 3600) : 0;
+    return horas >= 1 ? `${horas} h` : 'menos de 1 h';
+  };
+
+  const MOTIVOS = {
+    frozen: 'lleva horas sin variar',
+    impossible: 'imposible para su latitud y época',
+    range: 'máxima y mínima incompatibles'
+  };
+  const motivo = (fila) => {
+    const clave = fila?.params?.reason || Object.keys(fila?.reasons || {})[0] || '';
+    return MOTIVOS[clave] || clave || '—';
+  };
+  const VARIABLES = { temperature: 'Temperatura', rain: 'Precipitación' };
+
   async function consultar(event) {
     event?.preventDefault();
     if (!password.trim()) return;
@@ -57,6 +80,13 @@
       if (respuesta.status === 404) throw new Error('desactivado');
       if (!respuesta.ok) throw new Error('fallo');
       data = await respuesta.json();
+      // La cuarentena vive en memoria del backend, no en la base de uso, así
+      // que va en su propia llamada. Que falle no debe tumbar el panel.
+      cuarentena = await fetch('/v1/stats/quarantine', {
+        headers: { 'X-Stats-Password': password.trim() }
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
       // Dura lo que la pestaña: recargar no obliga a escribirla otra vez, y
       // cerrarla no la deja puesta en el navegador.
       try {
@@ -271,6 +301,59 @@
         {/each}
       </tbody>
     </table>
+
+    {#if cuarentena}
+      <h2>
+        En cuarentena
+        <small>({cuarentena.active?.length || 0})</small>
+      </h2>
+      {#if cuarentena.active?.length}
+        <table>
+          <thead>
+            <tr>
+              <th>Estación</th><th>Red</th><th>Variable</th>
+              <th>Motivo</th><th>Lleva</th><th>Desde</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each cuarentena.active as fila (fila.provider + fila.station_id + fila.variable)}
+              <tr>
+                <td>{fila.station_id}</td>
+                <td>{fila.provider}</td>
+                <td>{VARIABLES[fila.variable] || fila.variable}</td>
+                <td>{motivo(fila)}</td>
+                <td>{duracion(fila)}</td>
+                <td class="fecha">{fecha(fila.first_seen)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="vacio">Ninguna estación en cuarentena ahora mismo.</p>
+      {/if}
+
+      <!-- El historial incluye las que ya salieron: una que reaparece cada
+           pocos días no se ve en la tabla de arriba, pero aquí acumula. -->
+      {#if cuarentena.history?.length}
+        <h3 class="sub">Han pasado por cuarentena ({cuarentena.history.length})</h3>
+        <table>
+          <thead>
+            <tr><th>Estación</th><th>Red</th><th>Variable</th><th>Días</th><th>Última vez</th></tr>
+          </thead>
+          <tbody>
+            {#each cuarentena.history as fila (fila.provider + fila.station_id + fila.variable)}
+              <tr>
+                <td>{fila.station_id}</td>
+                <td>{fila.provider}</td>
+                <td>{VARIABLES[fila.variable] || fila.variable}</td>
+                <td class="n">{fila.days_total}</td>
+                <td class="fecha">{fecha(fila.last_seen)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    {/if}
 
     {#if data.error_kinds?.length}
       <h2>Tipos de error</h2>
@@ -589,6 +672,8 @@
      Va solo en el cuerpo: las cabeceras no son filas de datos. Y se declara
      ANTES de `tr.abierta` para que la fila desplegada conserve su fondo. */
   tbody tr:hover { background: var(--fila-hover); }
+  .vacio { margin: 0 0 18px; font-size: 0.78rem; color: var(--muted); }
+  h3.sub { margin: 22px 0 8px; font-size: 0.82rem; color: var(--ink-2); }
   tr.abierta,
   tr.abierta:hover { background: var(--panel-2); }
   tr.abierta .nombre { font-weight: 700; }

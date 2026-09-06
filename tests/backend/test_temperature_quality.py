@@ -133,3 +133,81 @@ def test_temperature_and_rain_quarantines_are_independent() -> None:
     ranking._drop_quarantined_variables(rec)
     assert rec.rain is None
     assert rec.tmax == pytest.approx(20.0)  # la temperatura no se toca
+
+
+# =====================================================================
+# El ranking juzga por su cuenta, y la cuarentena lleva historial
+# =====================================================================
+
+def test_the_ranking_flags_without_anyone_opening_the_card() -> None:
+    """Antes la cuarentena solo se levantaba al abrir la ficha: una estación
+    que nadie visita no se marcaba nunca, y cada medianoche local volvía a
+    estar limpia. El bulk ve todas las estaciones en cada ciclo."""
+    gettysburg = ranking.StationDaily(
+        provider="IEM", station_id="SD_ASOS|0D8", name="Gettysburg", locality="SD",
+        lat=44.9866, lon=-99.9528, tmax=23.0, tmin=-22.0, tcur=-21.0,
+        gust=37.0, local_date="2026-09-06",
+    )
+    squaw = ranking.StationDaily(
+        provider="IEM", station_id="CA_DCP|SQBC1", name="Squaw Valley", locality="CA",
+        lat=39.2, lon=-120.23, tmax=-73.3, tmin=-73.3, tcur=-73.3,
+        local_date="2026-09-06",
+    )
+    ilirnej = ranking.StationDaily(
+        provider="IEM", station_id="WMO_BUFR_SRF|0-643-0-248", name="Ilirnej",
+        locality="", lat=67.25, lon=167.97, tmax=-6.1, tmin=-7.8, tcur=-6.1,
+        local_date="2026-09-06",
+    )
+    assert ranking._flag_suspect_temperature(gettysburg) == "range"
+    assert ranking._flag_suspect_temperature(squaw) == "impossible"
+    assert ranking._flag_suspect_temperature(ilirnej) is None
+
+    # La racha de Gettysburg sobrevive: solo cae la variable acusada.
+    ranking._drop_quarantined_variables(gettysburg)
+    assert gettysburg.tmax is None and gettysburg.tmin is None
+    assert gettysburg.gust == pytest.approx(37.0)
+
+
+def test_the_history_tells_a_bad_afternoon_from_a_broken_sensor() -> None:
+    """``days_total`` es lo que distingue el fallo puntual del crónico."""
+    dia = 24 * 3600
+    for jornada in range(5):
+        suspect_data.flag(
+            "IEM", "CA_DCP|SQBC1", f"2026-09-0{jornada + 1}",
+            suspect_data.TEMPERATURE, params={"reason": "impossible"},
+            now=1_000_000_000 + jornada * dia,
+        )
+    suspect_data.flag(
+        "IEM", "SD_ASOS|0D8", "2026-09-05", suspect_data.TEMPERATURE,
+        params={"reason": "range"}, now=1_000_000_000 + 4 * dia,
+    )
+
+    historial = {fila["station_id"]: fila for fila in suspect_data.history()}
+    assert historial["CA_DCP|SQBC1"]["days_total"] == 5   # crónica
+    assert historial["SD_ASOS|0D8"]["days_total"] == 1    # una tarde
+    # Ordenado de más crónica a menos, que es como se lee el panel.
+    assert suspect_data.history()[0]["station_id"] == "CA_DCP|SQBC1"
+
+    activas = suspect_data.active("2026-09-05")
+    assert {fila["station_id"] for fila in activas} == {"CA_DCP|SQBC1", "SD_ASOS|0D8"}
+    assert activas[0]["days_total"] == 5
+
+
+def test_the_quarantine_survives_a_restart() -> None:
+    """Sin persistencia, un redespliegue diario dejaba el historial a cero y
+    nunca se veía una estación crónica."""
+    import json
+
+    suspect_data.flag(
+        "IEM", "CA_DCP|SQBC1", "2026-09-06", suspect_data.TEMPERATURE,
+        params={"reason": "impossible"}, now=1_000_000_000,
+    )
+    exportado = json.loads(json.dumps(suspect_data.export_state()))
+    suspect_data.clear()
+    assert suspect_data.history() == []
+
+    suspect_data.import_state(exportado)
+    assert suspect_data.is_flagged("IEM", "CA_DCP|SQBC1", "2026-09-06", "temperature")
+    assert suspect_data.history()[0]["days_total"] == 1
+    # Un estado ilegible no revienta el arranque.
+    assert suspect_data.import_state("basura") == 0

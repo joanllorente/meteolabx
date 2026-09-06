@@ -225,6 +225,34 @@ def get_station_stats(
     return usage_stats.visit_summary(settings=settings)
 
 
+@router.get("/quarantine", summary="Estaciones con variables en cuarentena (panel interno)")
+def get_quarantine(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    x_stats_password: str = Header(default=""),
+) -> dict:
+    """Qué hay en cuarentena hoy y cuánto lleva cada cosa.
+
+    Sirve para distinguir el sensor que falló una tarde del que lleva semanas
+    roto: ``days_total`` cuenta los días locales en que esa variable estuvo
+    marcada, y ``first_seen`` dice desde cuándo.
+    """
+    from datetime import datetime, timezone
+
+    from server.services import suspect_data
+
+    _check_password(settings, x_stats_password)
+    store = getattr(request.app.state, "ranking_store", None)
+    # El día que enseña el panel es el del ranking; sin store, el día UTC.
+    hoy = datetime.now(tz=timezone.utc).date().isoformat()
+    dias = {hoy}
+    if store is not None:
+        dias.update({clave[1] for clave in getattr(store, "_daily", {})})
+    activas = [fila for dia in sorted(dias, reverse=True)[:2]
+               for fila in suspect_data.active(dia)]
+    return {"day": hoy, "active": activas, "history": suspect_data.history()}
+
+
 @router.get("/station", summary="Detalle de una estación (panel interno)")
 def get_station_detail(
     provider: str,

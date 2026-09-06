@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from server.services import station_silence
+from server.services import station_silence, suspect_data
 
 logger = logging.getLogger(__name__)
 
@@ -1988,6 +1988,46 @@ def _sanitize_record_extremes(rec: StationDaily) -> None:
         rec.rain = None
 
 
+def _flag_suspect_temperature(rec: StationDaily) -> Optional[str]:
+    """Juzga la temperatura de un registro del bulk y la pone en cuarentena.
+
+    Hasta ahora la cuarentena solo se levantaba al abrir la ficha, así que una
+    estación que nadie visita nunca se marcaba por rota que estuviera, y cada
+    medianoche local volvía a estar limpia. El bulk ve TODAS las estaciones en
+    cada ciclo, así que aquí se aplican los dos criterios que no necesitan la
+    serie: la amplitud diurna imposible y el frío que ese lugar no da en ese
+    mes. El de serie congelada sigue siendo cosa de la ficha, porque el bulk no
+    trae series.
+    """
+    from domain.temperature_quality import (
+        is_climatologically_impossible,
+        is_diurnal_range_impossible,
+    )
+
+    if not rec.local_date:
+        return None
+    try:
+        month = int(rec.local_date[5:7])
+    except (TypeError, ValueError):
+        return None
+
+    if is_diurnal_range_impossible(rec.tmax, rec.tmin):
+        razon = "range"
+    elif any(
+        is_climatologically_impossible(valor, rec.lat, month)
+        for valor in (rec.tmin, rec.tcur, rec.tmax)
+    ):
+        razon = "impossible"
+    else:
+        return None
+
+    suspect_data.flag(
+        rec.provider, rec.station_id, rec.local_date,
+        suspect_data.TEMPERATURE, params={"reason": razon},
+    )
+    return razon
+
+
 def _drop_quarantined_variables(rec: StationDaily) -> None:
     """Deja fuera del ranking las variables en cuarentena de esa estación ese día.
 
@@ -1997,8 +2037,6 @@ def _drop_quarantined_variables(rec: StationDaily) -> None:
     nunca al récord de 24 h, así que ``_sanitize_record_extremes`` no lo ve).
     Solo cae la variable afectada: temperatura, viento y presión de esa misma
     estación siguen clasificando. Muta el registro in situ."""
-    from server.services import suspect_data
-
     if not rec.local_date:
         return
     if suspect_data.is_flagged(
@@ -2421,6 +2459,10 @@ class RankingStore:
             # memoria pura, la ocultación no llegaba a activarse nunca en un
             # servicio que se reinicia a diario.
             "silence": station_silence.export_state(),
+            # La cuarentena viaja con el snapshot por lo mismo que el silencio:
+            # su historial responde a «¿cuánto lleva rota?», y un redespliegue
+            # diario lo dejaba siempre a cero.
+            "quarantine": suspect_data.export_state(),
         }
         parent = os.path.dirname(path)
         if parent:
@@ -2470,6 +2512,7 @@ class RankingStore:
         self._daily = daily
         self._hourly = hourly
         restored_silence = station_silence.import_state(payload.get("silence"))
+        suspect_data.import_state(payload.get("quarantine"))
         previous_quality_schema = payload.get("quality_filter_schema")
         if previous_quality_schema != _QUALITY_FILTER_SCHEMA:
             self._discard_legacy_quality_state(previous_quality_schema)
@@ -2555,6 +2598,7 @@ class RankingStore:
             _sanitize_record_extremes(r)
             day = self._bucket_day(provider, r, fallback_day)
             r.local_date = day
+            _flag_suspect_temperature(r)
             _drop_quarantined_variables(r)
             by_day[day][r.station_id] = r
         for day, recs in by_day.items():
@@ -2888,6 +2932,7 @@ class RankingStore:
                 _sanitize_record_extremes(r)  # imposibilidad física (todos)
                 day = self._bucket_day(provider, r, fallback_day)
                 r.local_date = day
+                _flag_suspect_temperature(r)
                 _drop_quarantined_variables(r)
                 self._daily.setdefault((provider, day), {})[r.station_id] = r
             self._prune_days(provider)
