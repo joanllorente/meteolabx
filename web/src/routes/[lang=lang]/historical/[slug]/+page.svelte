@@ -1,5 +1,6 @@
 <script>
   import { forgetConnection, rememberConnection } from '$lib/connection.svelte.js';
+  import { afterNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
   import AppShell from '$lib/components/AppShell.svelte';
   import HistoricalPanel from '$lib/components/HistoricalPanel.svelte';
@@ -23,7 +24,10 @@
     rememberConnection({ slug, name: meta.name, provider: meta.provider });
   });
 
-  onMount(() => recordSection('historical'));
+  // `afterNavigate`, no `onMount`: al saltar de una estación a otra el
+  // componente se reutiliza y el montaje no vuelve a ocurrir, así que esas
+  // visitas no llegaban a contarse.
+  afterNavigate(() => recordSection('historical'));
 </script>
 
 <svelte:head>

@@ -9,7 +9,13 @@
   import { observationModel } from '$lib/observation/model.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
   import { displayName } from '$lib/seo/i18n.js';
-  import { classifyEntry, recordConnectionError, recordSeoView, recordVisit } from '$lib/stats.js';
+  import {
+    classifyEntry,
+    recordConnectionError,
+    recordSection,
+    recordSeoView,
+    recordVisit
+  } from '$lib/stats.js';
   import { startLiveObservation } from '$lib/live.svelte.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { appTabs, observationTabs, stationStripe } from '$lib/tabs.js';
@@ -49,6 +55,10 @@
   // `document.referrer` sigue siendo el de la primera carga.
   afterNavigate(({ from }) => {
     const estacion = { provider: station.provider, stationId: station.station_id, name: meta.name };
+    // La ficha indexable es la puerta principal, pero era la única vista que
+    // no declaraba su sección: el panel contaba en «observación» solo las
+    // redes sin slug, 41 frente a 804 conexiones el mismo día.
+    recordSection('observation');
     // El contador de visitas SEO que ya alimentaban las páginas estáticas.
     recordSeoView({ ...estacion, language: lang });
     // Y la conexión en sí, que hasta ahora solo contaba la aplicación

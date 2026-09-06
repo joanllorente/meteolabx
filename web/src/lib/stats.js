@@ -143,9 +143,8 @@ function currentDevice() {
 /**
  * Alguien ha abierto la ficha de una estación.
  *
- * `language` es el idioma en el que se leyó, que es también el que eligió
- * quien llegó desde un buscador, y `entry` de dónde venía: el panel los usa
- * para ver si Google sirve la variante que toca y por dónde entra la gente.
+ * `language` es el idioma declarado por el componente, no la nacionalidad
+ * del visitante. Se contrasta con la URL y la lista de idiomas del navegador.
  */
 export function recordVisit({
   provider,
@@ -162,6 +161,7 @@ export function recordVisit({
     name,
     source,
     language,
+    ...visitLanguageContext(),
     entry: entry?.kind || '',
     referrer_domain: entry?.domain || '',
     device: currentDevice()
@@ -196,4 +196,15 @@ export function recordSection(section) {
 export function recordSeoView({ provider, stationId, name = '', language = '' }) {
   if (!provider || !stationId) return;
   send('/v1/stats/seo-view', { provider, station_id: stationId, name, language });
+}
+
+/** Solo etiquetas de idioma; nunca se envía la URL completa ni sus filtros. */
+export function visitLanguageContext(browser = globalThis.navigator, url = globalThis.location) {
+  const valid = (value) => /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(String(value || ''));
+  const languages = browser?.languages?.length ? browser.languages : [browser?.language];
+  const urlLanguage = String(url?.pathname || '').split('/')[1] || '';
+  return {
+    browser_languages: [...new Set(Array.from(languages || []).filter(valid))].slice(0, 6).join(',').slice(0, 200),
+    url_language: ['es', 'ca', 'en', 'fr', 'it', 'pt'].includes(urlLanguage) ? urlLanguage : ''
+  };
 }

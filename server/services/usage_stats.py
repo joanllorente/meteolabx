@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS station_visits (
     -- Idioma en el que se leyó la ficha, añadido en v1.3.5. Las visitas
     -- anteriores lo llevan vacío: no se puede reconstruir.
     language TEXT NOT NULL DEFAULT '',
+    browser_languages TEXT NOT NULL DEFAULT '',
+    request_languages TEXT NOT NULL DEFAULT '',
+    saved_language TEXT NOT NULL DEFAULT '',
+    url_language TEXT NOT NULL DEFAULT '',
     -- Por dónde entró: buscador, enlace externo, navegación interna o
     -- directa. `referrer_domain` guarda solo el dominio que enlazó
     -- (`google.es`), nunca la URL: interesa quién enlaza, no qué se lee.
@@ -151,7 +155,8 @@ def _connect(settings=None) -> sqlite3.Connection:
         connection.execute(
             "ALTER TABLE station_visits ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'"
         )
-    for columna in ("language", "entry", "referrer_domain", "device"):
+    for columna in ("language", "entry", "referrer_domain", "device",
+                    "browser_languages", "request_languages", "saved_language", "url_language"):
         if columna not in visit_columns:
             connection.execute(
                 f"ALTER TABLE station_visits ADD COLUMN {columna} TEXT NOT NULL DEFAULT ''"
@@ -169,6 +174,10 @@ def record_visit(
     entry: str = "",
     referrer_domain: str = "",
     device: str = "",
+    browser_languages: str = "",
+    request_languages: str = "",
+    saved_language: str = "",
+    url_language: str = "",
     settings=None,
 ) -> None:
     provider = str(provider or "").strip().upper()
@@ -189,8 +198,8 @@ def record_visit(
         connection.execute(
             "INSERT INTO station_visits"
             "(provider, station_id, name, source, language, entry, referrer_domain,"
-            " device, epoch)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " device, browser_languages, request_languages, saved_language, url_language, epoch)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 provider,
                 station_id,
@@ -200,6 +209,10 @@ def record_visit(
                 entry,
                 dominio,
                 device,
+                language_tags(browser_languages),
+                language_tags(request_languages),
+                saved_language if saved_language in SUPPORTED_LANGUAGES else "",
+                url_language if url_language in SUPPORTED_LANGUAGES else "",
                 int(time.time()),
             ),
         )
@@ -783,7 +796,8 @@ def station_detail(
         ).fetchall()
         recent_visit_rows = connection.execute(
             f"""
-            SELECT epoch, source, language, entry, referrer_domain, device
+            SELECT epoch, source, language, entry, referrer_domain, device,
+                   browser_languages, request_languages, saved_language, url_language
             FROM station_visits
             WHERE provider = ? AND station_id = ?
             ORDER BY epoch DESC LIMIT {limit}
@@ -873,6 +887,8 @@ def station_detail(
                 "entry": str(row["entry"] or ""),
                 "referrer_domain": str(row["referrer_domain"] or ""),
                 "device": str(row["device"] or ""),
+                **{key: str(row[key] or "") for key in (
+                    "browser_languages", "request_languages", "saved_language", "url_language")},
             }
             for row in recent_visit_rows
         ],
@@ -889,3 +905,27 @@ def station_detail(
             for row in recent_seo_rows
         ],
     }
+
+
+SUPPORTED_LANGUAGES = {"es", "ca", "en", "fr", "it", "pt"}
+
+
+def language_tags(value: str) -> str:
+    """Lista acotada de etiquetas, ordenada por prioridad HTTP; sin datos libres."""
+    import re
+    tags = []
+    for chunk in str(value or "")[:512].split(","):
+        tag, *params = chunk.strip().split(";")
+        if not re.fullmatch(r"[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*", tag):
+            continue
+        quality = 1.0
+        for param in params:
+            if param.strip().startswith("q="):
+                try:
+                    quality = float(param.strip()[2:])
+                except ValueError:
+                    quality = 0
+        if 0 < quality <= 1:
+            tags.append((quality, tag.lower()))
+    ordered = dict.fromkeys(tag for _, tag in sorted(tags, key=lambda pair: -pair[0]))
+    return ",".join(list(ordered)[:6])[:200]

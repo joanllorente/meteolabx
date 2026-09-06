@@ -416,3 +416,42 @@ def test_station_detail_endpoint(stats_client):
         params={"provider": "AEMET", "station_id": "no-existe"},
         headers={"X-Stats-Password": "s3creto"},
     ).status_code == 404
+
+
+def test_visit_language_diagnostics(stats_client):
+    response = stats_client.post('/v1/stats/visit',
+        headers={'Accept-Language': 'it;q=0.5,es-ES;q=0.9', 'Cookie': 'meteolabx_language=fr'},
+        json={'provider': 'AEMET', 'station_id': '3386A', 'language': 'fr',
+              'browser_languages': 'es-ES,es', 'url_language': 'fr'})
+    assert response.status_code == 204
+    detail = stats_client.get('/v1/stats/station',
+        params={'provider': 'AEMET', 'station_id': '3386A'},
+        headers={'X-Stats-Password': 's3creto'}).json()
+    visit = detail['recent_visits'][0]
+    assert visit['language'] == 'fr'
+    assert visit['url_language'] == 'fr'
+    assert visit['browser_languages'] == 'es-es,es'
+    assert visit['request_languages'] == 'es-es,it'
+    assert visit['saved_language'] == 'fr'
+
+
+def test_language_diagnostics_discard_free_text():
+    assert usage_stats.language_tags('es,secret@example.com,/private,pt-BR;q=0.9,en;q=0') == 'es,pt-br'
+    assert usage_stats.language_tags('es;q=NaN,fr;q=inf,it;q=oops') == ''
+
+
+def test_language_diagnostics_migrate_without_rewriting_history(tmp_path):
+    import sqlite3
+    from types import SimpleNamespace
+    path = tmp_path / 'old-stats.sqlite'
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE station_visits (visit_pk INTEGER PRIMARY KEY, provider TEXT, station_id TEXT, name TEXT, source TEXT, language TEXT, entry TEXT, referrer_domain TEXT, device TEXT, epoch INTEGER)")
+        connection.execute("INSERT INTO station_visits VALUES (1, 'AEMET', '3386A', 'Navalvillar', 'app', 'fr', 'direct', '', 'mobile', 1788710000)")
+    settings = SimpleNamespace(usage_stats_path=str(path))
+    detail = usage_stats.station_detail('AEMET', '3386A', settings=settings)
+    assert detail['visits']['total'] == 1
+    old = detail['recent_visits'][0]
+    assert old['language'] == 'fr'
+    assert old['browser_languages'] == old['request_languages'] == old['saved_language'] == old['url_language'] == ''
+    usage_stats.record_visit('AEMET', '3386A', language='es', browser_languages='es-ES', url_language='es', settings=settings)
+    assert usage_stats.station_detail('AEMET', '3386A', settings=settings)['visits']['total'] == 2

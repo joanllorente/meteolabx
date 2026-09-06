@@ -414,7 +414,7 @@
                           <p class="aviso">Sin dispositivo registrado todavía.</p>
                         {/if}
 
-                        <h3>Visitas por idioma</h3>
+                        <h3>Visitas por idioma mostrado</h3>
                         {#if d.visits_by_language?.some((fila) => fila.language)}
                           <table>
                             <thead><tr><th>Idioma</th><th>30 d</th><th>Total</th></tr></thead>
@@ -472,16 +472,30 @@
                         {/if}
 
                         <h3>Últimas visitas</h3>
+                        <p class="aviso">El idioma mostrado no indica el país del visitante. Las visitas antiguas no incluyen la comprobación del navegador.</p>
                         {#if d.recent_visits?.length}
                           <table>
                             <thead>
-                              <tr><th>Cuándo</th><th>Idioma</th><th>Dispositivo</th><th>Entrada</th></tr>
+                              <tr><th>Cuándo</th><th>Idioma mostrado</th><th>Comprobación</th><th>Dispositivo</th><th>Entrada</th></tr>
                             </thead>
                             <tbody>
                               {#each d.recent_visits as evento, i (evento.epoch + '|' + i)}
                                 <tr>
                                   <td class="fecha">{fecha(evento.epoch)}</td>
                                   <td>{idioma(evento.language)}</td>
+                                  <td>
+                                    {#if evento.url_language || evento.browser_languages || evento.request_languages}
+                                      <details>
+                                        <summary>Ver idiomas</summary>
+                                        <div>URL: {idioma(evento.url_language)}</div>
+                                        <div>Navegador: {evento.browser_languages || '—'}</div>
+                                        <div>Petición del registro: {evento.request_languages || '—'}</div>
+                                        <div>Elección guardada: {evento.saved_language ? idioma(evento.saved_language) : 'Ninguna'}</div>
+                                      </details>
+                                    {:else}
+                                      Sin datos de diagnóstico
+                                    {/if}
+                                  </td>
                                   <td>{dispositivo(evento.device)}</td>
                                   <td>{evento.referrer_domain || entrada(evento.entry)}</td>
                                 </tr>

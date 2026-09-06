@@ -1,8 +1,12 @@
 <script>
   import { forgetConnection, rememberConnection } from '$lib/connection.svelte.js';
+  import { afterNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
 
-  onMount(() => recordSection('observation'));
+  // `afterNavigate`, no `onMount`: al saltar de una estación a otra el
+  // componente se reutiliza y el montaje no vuelve a ocurrir, así que esas
+  // visitas no llegaban a contarse.
+  afterNavigate(() => recordSection('observation'));
 
   onMount(() => {
     loadCredentials();

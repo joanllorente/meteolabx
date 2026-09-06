@@ -7,6 +7,7 @@
    * selección sigue viajando en la URL —el formulario navega—, así que una
    * consulta concreta se puede enlazar y recargar sin repetirla a ciegas.
    */
+  import { afterNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
 
   import AppShell from '$lib/components/AppShell.svelte';
@@ -24,7 +25,10 @@
   // `localStorage` no existe en el servidor: las credenciales se leen al
   // montar. Sin esto, entrar directo por esta URL —un enlace, un favorito—
   // decía que faltaba la credencial teniéndola guardada.
-  onMount(() => recordSection('historical'));
+  // `afterNavigate`, no `onMount`: al saltar de una estación a otra el
+  // componente se reutiliza y el montaje no vuelve a ocurrir, así que esas
+  // visitas no llegaban a contarse.
+  afterNavigate(() => recordSection('historical'));
 
   onMount(loadCredentials);
 

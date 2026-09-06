@@ -22,7 +22,7 @@ import hmac
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from server.config import Settings, get_settings
@@ -38,6 +38,8 @@ class VisitRequest(BaseModel):
     name: str = Field(default="", max_length=200)
     source: Literal["app", "seo"] = "app"
     language: str = Field(default="", max_length=8)
+    browser_languages: str = Field(default="", max_length=200)
+    url_language: str = Field(default="", max_length=8)
     # De dónde llegó. Lo decide el navegador, que es quien ve el referente.
     entry: Literal["", "search", "external", "internal", "direct"] = ""
     referrer_domain: str = Field(default="", max_length=120)
@@ -45,7 +47,7 @@ class VisitRequest(BaseModel):
 
 
 @router.post("/visit", status_code=204, summary="Registrar una conexión a estación")
-def post_visit(body: VisitRequest, settings: Settings = Depends(get_settings)) -> Response:
+def post_visit(body: VisitRequest, request: Request, settings: Settings = Depends(get_settings)) -> Response:
     from server.services import usage_stats
 
     try:
@@ -54,6 +56,10 @@ def post_visit(body: VisitRequest, settings: Settings = Depends(get_settings)) -
             source=body.source, language=body.language,
             entry=body.entry, referrer_domain=body.referrer_domain,
             device=body.device,
+            browser_languages=body.browser_languages,
+            url_language=body.url_language,
+            request_languages=request.headers.get("accept-language", ""),
+            saved_language=request.cookies.get("meteolabx_language", ""),
             settings=settings,
         )
     except Exception:
