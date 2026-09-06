@@ -13,6 +13,7 @@
   import WindChart from './WindChart.svelte';
   import WindRose from './WindRose.svelte';
   import { families } from '$lib/families.js';
+  import { chartHeight, loadViewport } from '$lib/viewport.svelte.js';
   import { num, stationTime } from '$lib/format.js';
 
   import app from '$lib/i18n/app-i18n.generated.js';
@@ -26,6 +27,12 @@
   const pngName = $derived(
     (key) => `meteolabx ${ui(language, key)} ${stationName}`.trim()
   );
+
+  // En el móvil las gráficas se dibujan más altas: el lienzo se escala al
+  // ancho disponible, y con el de escritorio quedaban aplastadas. A lo ancho
+  // no se toca —ahí está la resolución temporal—.
+  $effect(loadViewport);
+  const tall = $derived((base) => chartHeight(base));
 
   const charts = $derived(model.charts);
   const tick = $derived((value, decimals = 1) => num(value, { language, decimals }));
@@ -102,7 +109,10 @@
   {/if}
 {/snippet}
 
-<div class="bento">
+<!-- Sin sol —de noche, o en estaciones sin piranómetro ni sensor UV— la
+     tarjeta de radiación no existe, y su hueco en la retícula tampoco debe:
+     de lo alto quedaba un vacío entre precipitación y presión. -->
+<div class="bento" class:no-uv={!model.radiationTile.present}>
   <!-- Temperatura -->
   <article class="tile temp t-hero" style:--fam={families.temperature.color}>
     <header>
@@ -224,7 +234,12 @@
         <span class="help" tabindex="0" role="note" aria-label={help('precipitacion hoy')}>?</span>
         <span class="bubble">{help('precipitacion hoy')}</span>
       {/if}
-      <span class="chip note">{model.precipitation.label}</span>
+      <!-- Dos versiones del mismo distintivo: a media anchura, en el móvil,
+           «Sin precipitación» no cabe y se cortaba a la mitad. -->
+      <span class="chip note">
+        <span class="long">{model.precipitation.label}</span>
+        <span class="short">{model.precipitation.labelShort}</span>
+      </span>
     </header>
     <div class="val tnum">{model.precipitation.value}<span>{model.precipitation.unit}</span></div>
     {#if model.precipitation.rate}
@@ -298,6 +313,8 @@
   <div class="sec-head">
     <h2>{ui(language, 'section_charts')}</h2>
     <span class="rule"></span>
+    <!-- Que se pueden ampliar no se ve por ninguna parte: se dice. -->
+    <span class="meta">{ui(language, 'chart_zoom_hint')}</span>
   </div>
   <div class="charts">
     {#if charts.temperature}
@@ -315,7 +332,7 @@
           exportName={pngName('chart_temperature')}
           exportLabel={ui(language, 'download_png')}
           formatTick={tick}
-          height={180}
+          height={tall(180)}
         />
       </section>
     {/if}
@@ -345,7 +362,7 @@
           exportLabel={ui(language, 'download_png')}
           formatTick={tick}
           fillArea={false}
-          height={176}
+          height={tall(176)}
         />
       </section>
     {/if}
@@ -365,7 +382,7 @@
           exportName={pngName('chart_precip')}
           exportLabel={ui(language, 'download_png')}
           formatTick={tick}
-          height={176}
+          height={tall(176)}
         />
       </section>
     {/if}
@@ -407,7 +424,7 @@
           dir={charts.windDirection ? charts.windDirection.data[2] : []}
           exportName={pngName('chart_wind')}
           exportLabel={ui(language, 'download_png')}
-          height={180}
+          height={tall(180)}
         />
       </section>
     {/if}
@@ -466,7 +483,7 @@
           exportLabel={ui(language, 'download_png')}
           formatTick={tick}
           fillArea={false}
-          height={176}
+          height={tall(176)}
         />
       </section>
     {/if}
@@ -542,6 +559,12 @@
       "temp temp wind precip"
       "press press wind uv";
   }
+  .bento.no-uv {
+    grid-template-areas:
+      "temp temp hum    dew"
+      "temp temp precip wind"
+      "press press press wind";
+  }
   .t-hero { grid-area: temp; } .t-a { grid-area: hum; } .t-b { grid-area: dew; }
   .t-tall { grid-area: wind; } .t-c { grid-area: precip; }
   .t-wide { grid-area: press; } .t-d { grid-area: uv; }
@@ -558,6 +581,7 @@
   .ic { display: grid; place-items: center; width: 29px; height: 29px; flex: none; border-radius: 8px; color: var(--fam); background: color-mix(in srgb, var(--fam) 15%, transparent); }
   .tile h3 { font-size: 0.8rem; font-weight: 600; }
   .chip { margin-left: auto; padding: 3px 8px; border-radius: 999px; font-size: 0.6rem; font-weight: 700; white-space: nowrap; }
+  .chip .short { display: none; }
   .chip.warn { color: var(--chip-warn-fg); background: var(--chip-warn-bg); }
   .chip.note { color: var(--chip-note-fg); background: var(--chip-note-bg); }
 
@@ -660,7 +684,7 @@
     }
     .bento {
       grid-template-columns: repeat(2, 1fr);
-      grid-auto-rows: 120px;
+      grid-auto-rows: minmax(120px, auto);
       grid-template-areas:
         "temp temp"
         "temp temp"
@@ -669,15 +693,124 @@
         "wind uv"
         "press press";
     }
+    .bento.no-uv {
+      grid-template-areas:
+        "temp temp"
+        "temp temp"
+        "hum  dew"
+        "wind precip"
+        "wind press";
+    }
     .grid.compact { grid-template-columns: repeat(2, 1fr); }
     .t-wide { flex-direction: column; align-items: flex-start; }
     .press-stats { margin-left: 0; margin-top: 12px; gap: 22px; }
     .charts { grid-template-columns: 1fr; }
     .hero-bottom { grid-template-columns: minmax(0, 1fr) minmax(155px, 0.8fr); gap: 12px; }
   }
-  @media (max-width: 440px) {
-    .bento { grid-template-columns: 1fr; grid-template-areas: "temp" "temp" "hum" "dew" "wind" "precip" "uv" "press"; }
-    .grid.compact { grid-template-columns: 1fr; }
+  /* Un móvil de pie no da para dos columnas de tarjetas grandes: el viento
+     necesita su rosa y la presión sus tres cifras, y a media anchura una
+     estiraba a la otra. Las de las secciones siguientes sí caben de dos en
+     dos: son una cifra y un pie. */
+  @media (max-width: 560px) {
+    .bento {
+      /* A lo ancho las grandes; de dos en dos las simples —humedad con punto
+         de rocío, precipitación con radiación—: son una cifra y un pie, y en
+         pareja ahorran un pantallazo entero. */
+      grid-template-columns: repeat(2, 1fr);
+      /* Con la altura fija la tarjeta de viento —rosa de 118 px más su pie—
+         salía recortada, y las que llevan pie se pegaban al borde de abajo.
+         La fila crece con lo que lleva dentro. */
+      grid-auto-rows: minmax(118px, auto);
+      grid-template-areas:
+        "temp temp"
+        "temp temp"
+        "hum  dew"
+        "wind wind"
+        "precip uv"
+        "press press";
+    }
+    .bento.no-uv {
+      grid-template-areas:
+        "temp temp"
+        "temp temp"
+        "hum  dew"
+        "wind wind"
+        "precip precip"
+        "press press";
+    }
+    /* Dos columnas también en el móvil: son tarjetas de una cifra y un pie,
+       y en una sola columna la sección se volvía un rollo interminable. */
+    /* La presión recupera su forma ancha: los tres datos al lado del valor,
+       no debajo. Apilados le costaban media tarjeta de alto para dejar un
+       vacío a la derecha del número. Van más pequeños porque ahora comparten
+       línea, y envuelven si alguna etiqueta larga no cabe. */
+    .t-wide { flex-direction: row; align-items: stretch; gap: 14px; }
+    /* El título arranca arriba, a la altura del de las demás tarjetas, y el
+       valor cae al fondo con los tres datos a su lado. Alineando la fila
+       entera por abajo, en cambio, la cabecera bajaba con ella y la tarjeta
+       nacía con un dedo de aire en la frente. */
+    .pw-left { flex: 1 1 auto; }
+    .pw-left .val { margin-top: auto; font-size: 1.55rem; }
+    .press-stats {
+      align-self: flex-end;
+      margin-left: auto; margin-top: 0;
+      gap: 12px; flex-wrap: wrap; justify-content: flex-end;
+    }
+    .press-stats small { font-size: 0.56rem; letter-spacing: 0.03em; }
+    .press-stats b { font-size: 0.8rem; }
+
+    /* Racha y rumbo se ponen al lado de la rosa, no debajo: a lo ancho de la
+       pantalla sobraba sitio a la derecha del número y la tarjeta gastaba un
+       renglón entero en dos datos cortos. */
+    .wind {
+      display: grid;
+      /* Partida por la mitad justa: la línea cae en el centro de la tarjeta. */
+      grid-template-columns: 1fr 1fr;
+      grid-template-areas: "head head" "rose sub";
+      align-items: center;
+    }
+    .wind header { grid-area: head; }
+    /* La rosa y su número, centrados en su mitad; para caber en ella, ambos
+       algo más contenidos. */
+    .wind .compass { grid-area: rose; gap: 12px; justify-content: center; }
+    .wind .compass svg { width: 112px; height: 112px; }
+    .wind .c-read strong { font-size: 1.6rem; }
+    /* La tarjeta queda partida en dos por la línea: la rosa con su número a la
+       izquierda, racha y rumbo uno debajo del otro a la derecha. En fila, esos
+       dos datos o se amontonaban a un lado o dejaban un claro en medio. */
+    .wind-sub {
+      grid-area: sub;
+      flex-direction: column; gap: 12px;
+      margin-top: 0; padding: 0 0 0 18px;
+      border-top: none; border-left: 1px solid var(--border);
+    }
+
+    /* Y lo mismo en las cuatro tarjetas con pie: el dato secundario se pone
+       al lado del valor en vez de debajo. Cada una se ahorra un renglón, y
+       entre las cuatro filas es lo que hace que el bloque de Observado quepa
+       de una vez en la pantalla. */
+    .t-a, .t-b, .t-c, .t-d {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas: "head head" "val foot";
+      align-items: center;
+    }
+    .t-a header, .t-b header, .t-c header, .t-d header { grid-area: head; }
+    .t-a .val, .t-b .val, .t-c .val, .t-d .val {
+      grid-area: val; margin-top: 0; font-size: 1.65rem;
+    }
+    .t-a .foot, .t-b .foot, .t-c .foot, .t-d .foot {
+      grid-area: foot;
+      flex-direction: column; align-items: flex-start; gap: 2px;
+      margin-top: 0; padding: 0 0 0 12px;
+      border-top: none; border-left: 1px solid var(--border);
+      font-size: 0.66rem;
+    }
+    /* El distintivo de la precipitación sí hay que acortarlo cuando comparte
+       fila; sin radiación vuelve al ancho completo y cabe entero. */
+    .bento:not(.no-uv) .chip .long { display: none; }
+    .bento:not(.no-uv) .chip .short { display: inline; }
+    .grid.compact { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .hero-bottom { grid-template-columns: minmax(0, 1fr) minmax(130px, 0.85fr); gap: 8px; }
     .alert-band { padding: 8px 10px; font-size: 0.7rem; }
   }

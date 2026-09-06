@@ -7,6 +7,8 @@
    * periodos de distinta duración sigan siendo comparables.
    */
   import ChartFrame from './ChartFrame.svelte';
+  import { pointerFraction } from '$lib/observation/pointer.js';
+
   import Watermark from './Watermark.svelte';
 
   let {
@@ -70,14 +72,14 @@
   const xCenter = (index) => pad.l + (index + 0.5) * slot;
   const yValue = (value) => pad.t + ih - (Number(value || 0) / yMax) * ih;
 
-  let svg;
   let active = $state(null);
 
   function pointerMove(event) {
-    const rect = svg?.getBoundingClientRect();
-    if (!rect?.width || !percentages.length) return;
-    const x = ((event.clientX - rect.left) / rect.width) * W;
-    active = Math.max(0, Math.min(percentages.length - 1, Math.floor((x - pad.l) / slot)));
+    if (!percentages.length) return;
+    const along = pointerFraction(event.currentTarget, event);
+    if (along === null) return;
+    const index = Math.floor((along * iw) / slot);
+    active = Math.max(0, Math.min(percentages.length - 1, index));
   }
 
   const rangeText = (index) =>
@@ -105,10 +107,13 @@
       class="histogram"
       role="img"
       aria-label={`${label} · ${choice.label}`}
-      bind:this={svg}
       onpointermove={pointerMove}
       onpointerleave={() => (active = null)}
     >
+    <!-- Extremos del eje horizontal: las referencias con las que se sitúa el
+         puntero, giren o escalen con la gráfica. No se pintan. -->
+    <circle data-axis-end cx={pad.l} cy={pad.t} r="1" fill="none" />
+    <circle data-axis-end cx={W - pad.r} cy={pad.t} r="1" fill="none" />
       {#each ticks as tick}
         <line x1={pad.l} x2={W - pad.r} y1={yValue(tick)} y2={yValue(tick)} stroke="var(--grid-line)" />
         <text x={pad.l - 8} y={yValue(tick) + 3.5} class="axis" text-anchor="end">{formatNumber(tick)}%</text>

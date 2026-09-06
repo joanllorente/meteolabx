@@ -152,3 +152,15 @@ test('fileSlug produce un nombre de fichero utilizable', async () => {
   // Largo acotado: hay estaciones con nombres kilométricos.
   assert.ok(fileSlug('x'.repeat(200)).length <= 80);
 });
+
+test('sin escala mínima, el eje simétrico sale de los datos y nunca es plano', async () => {
+  const { symmetricRange } = await import('../src/lib/observation/scale.js');
+  // Viento y presión no fijan suelo: mandan los datos, pero con los dos lados
+  // iguales para que una racha del sur no parezca mayor que la del norte. El
+  // borde sigue cayendo en marca redonda, como en los otros dos gráficos.
+  assert.deepEqual(symmetricRange([9.4, -2.1], 0), [-20, 20]);
+  assert.deepEqual(symmetricRange([-9.4, 2.1], 0), [-20, 20]);
+  assert.deepEqual(symmetricRange([2.1, -0.4], 0), [-4, 4]);
+  // Una serie plana en cero seguiría teniendo eje.
+  assert.deepEqual(symmetricRange([0, 0, 0], 0), [-1, 1]);
+});

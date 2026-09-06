@@ -161,6 +161,10 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para cualquier consulta sobre privacidad o sobre el tratamiento de la información, puedes escribir a",
+    "release_201_improvements": [
+      "Mejoras en la visualización en dispositivos móviles.",
+      "Mejoras en la visualización de los gráficos de tendencias."
+    ],
     "release_200_improvements": [
       "Interfaz completamente renovada, más clara, moderna y coherente.",
       "Nueva pestaña de Predicción, con mapas del modelo AROME y diagnósticos propios de MeteoLabX.",

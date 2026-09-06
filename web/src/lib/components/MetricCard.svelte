@@ -136,4 +136,19 @@
   .arw { margin-right: 4px; font-size: 0.6rem; }
   .arw.up { color: #43c98a; }
   .arw.down { color: #e8686b; }
+
+  /* A media pantalla la tarjeta mide unos 200 px: el número baja de cuerpo
+     para que quepan cuatro cifras. */
+  @media (max-width: 560px) {
+    .card { gap: 10px; padding: 13px 13px 12px; }
+    header { gap: 7px; }
+    .ic { width: 26px; height: 26px; }
+    h3 { font-size: 0.76rem; }
+    .chip { padding: 2px 7px; font-size: 0.58rem; }
+    .val { font-size: 1.6rem; }
+    .unit { font-size: 0.76rem; }
+    .sub { padding-top: 9px; gap: 6px; }
+    /* Igual que en las tarjetas de arriba: el pie parte solo si no cabe. */
+    .sub li { flex-wrap: wrap; gap: 0 10px; }
+  }
 </style>

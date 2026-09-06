@@ -417,6 +417,7 @@ export function observationModel(payload, station, language, rawPreferences = nu
       unit: precipUnit,
       rate: valueWithUnit(rate, 'precip', preferences.precip === 'in' ? 2 : 1, '/h'),
       label: rainIntensity(rate, language),
+      labelShort: rainIntensity(rate, language, true),
       rate5: valueWithUnit(derivatives.r5_mm_h, 'precip', preferences.precip === 'in' ? 2 : 1, '/h'),
       rate10: valueWithUnit(derivatives.r10_mm_h, 'precip', preferences.precip === 'in' ? 2 : 1, '/h')
     },

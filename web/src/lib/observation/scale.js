@@ -26,6 +26,9 @@ export function symmetricRange(values, minimumAbs) {
   // que la escala mínima de cada magnitud se sigue respetando.
   const step = niceStep(limit * 2);
   const aligned = Math.ceil(limit / step - 1e-9) * step;
+  // Una serie enteramente plana en cero no da eje: se le pone uno mínimo, o el
+  // gráfico saldría con el techo y el suelo en la misma línea.
+  if (aligned <= 0) return [-step, step];
   return [-aligned, aligned];
 }
 

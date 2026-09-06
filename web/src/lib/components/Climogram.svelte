@@ -1,5 +1,7 @@
 <script>
   import ChartFrame from './ChartFrame.svelte';
+  import { pointerFraction } from '$lib/observation/pointer.js';
+
   import Watermark from './Watermark.svelte';
   import { niceStep, niceTicks, tickDecimals } from '$lib/observation/scale.js';
   /**
@@ -105,15 +107,16 @@
   // El eje X de un climograma es discreto —meses o días—, así que el punto
   // señalado es el más cercano en horizontal, sin tolerancias: siempre hay
   // uno debajo del cursor.
-  let svg;
   let active = $state(null);
 
   function pointerMove(event) {
-    const rect = svg?.getBoundingClientRect();
-    if (!rect?.width || !months.length) return;
-    const x = ((event.clientX - rect.left) / rect.width) * W;
-    const slot = Math.floor(((x - pad.l) / iw) * n);
-    active = Math.max(0, Math.min(n - 1, slot));
+    // Sobre el lienzo que recibe el gesto y midiendo entre las marcas del
+    // eje: con el visor a pantalla completa abierto la gráfica está dibujada
+    // dos veces, y allí además puede ir girada.
+    if (!months.length) return;
+    const along = pointerFraction(event.currentTarget, event);
+    if (along === null) return;
+    active = Math.max(0, Math.min(n - 1, Math.floor(along * n)));
   }
 
   /** Las series que tienen dato en el punto señalado, con su color. */
@@ -167,10 +170,13 @@
   class="climo"
   role="img"
   aria-label={label}
-  bind:this={svg}
   onpointermove={pointerMove}
   onpointerleave={() => (active = null)}
 >
+  <!-- Extremos del eje horizontal: las referencias con las que se sitúa el
+       puntero, giren o escalen con la gráfica. No se pintan. -->
+  <circle data-axis-end cx={pad.l} cy={pad.t} r="1" fill="none" />
+  <circle data-axis-end cx={W - pad.r} cy={pad.t} r="1" fill="none" />
   {#each tTicks as tv}
     <line x1={pad.l} x2={W - pad.r} y1={yT(tv)} y2={yT(tv)} stroke="var(--grid-line)" />
     <text x={pad.l - 7} y={yT(tv) + 3.5} class="axis" text-anchor="end">{formatTick(tv, tDecimals)}</text>

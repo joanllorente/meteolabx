@@ -2,6 +2,7 @@
   import ChartFrame from './ChartFrame.svelte';
   import Watermark from './Watermark.svelte';
   import { nearestIndex } from '$lib/observation/cursor.js';
+  import { pointerFraction } from '$lib/observation/pointer.js';
   import { niceStep, niceTicks, tickDecimals } from '$lib/observation/scale.js';
   // Gráfica de líneas con ejes, rejilla y relleno. Admite 1-2 series.
   // series: [{ data:[], color, label }]
@@ -39,11 +40,13 @@
     exportLabel = 'Descargar PNG'
   } = $props();
 
-  const W = width;
-  const H = height;
+  // Derivados, no constantes: el lienzo se estrecha al hidratar en un móvil
+  // y al girarlo, y con él todo lo que se mide en sus unidades.
+  const W = $derived(width);
+  const H = $derived(height);
   const pad = { t: 14, r: 16, b: 26, l: 54 };
-  const iw = W - pad.l - pad.r;
-  const ih = H - pad.t - pad.b;
+  const iw = $derived(W - pad.l - pad.r);
+  const ih = $derived(H - pad.t - pad.b);
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
   // Las series del día llegan sobre un eje fijo de 24 h: lo que aún no ha
@@ -66,7 +69,6 @@
 
   const activeIndex = $derived(nearestIndex(epochs, activeEpoch));
 
-  let svg;
 
   /** Instante de la ranura señalada, o el de la que tenga dato más cerca. */
   function nearestFilled(index) {
@@ -81,13 +83,15 @@
 
   /** Traduce la posición del ratón al instante del punto más cercano. */
   function pointerMove(event) {
+    // El lienzo es el que ha recibido el gesto, no una referencia guardada:
+    // la gráfica se dibuja dos veces —en su tarjeta y, si está abierto, en el
+    // visor a pantalla completa—, y con una sola referencia el cursor medía
+    // sobre la copia equivocada y se quedaba clavado en el primer dato.
+    const svg = event.currentTarget;
     if (!onHover || !svg || !epochs.length) return;
-    const rect = svg.getBoundingClientRect();
-    if (!rect.width) return;
-    // El SVG se escala al ancho del contenedor: hay que volver a sus unidades.
-    const x = ((event.clientX - rect.left) / rect.width) * W;
-    const position = Math.round(((x - pad.l) / iw) * (epochs.length - 1));
-    const index = Math.max(0, Math.min(epochs.length - 1, position));
+    const along = pointerFraction(svg, event);
+    if (along === null) return;
+    const index = Math.round(along * (epochs.length - 1));
     const epoch = nearestFilled(index);
     if (epoch !== null) onHover(epoch);
   }
@@ -148,10 +152,14 @@
   viewBox="0 0 {W} {H}"
   class="chart"
   role="img"
-  bind:this={svg}
   onpointermove={pointerMove}
   onpointerleave={() => onHover?.(null)}
 >
+  <!-- Los dos extremos del eje del tiempo, marcados sobre el propio lienzo:
+       son las referencias con las que se sitúa el puntero, y por eso viajan
+       con la gráfica aunque el visor la muestre girada. No se pintan. -->
+  <circle data-axis-end cx={pad.l} cy={pad.t} r="1" fill="none" />
+  <circle data-axis-end cx={W - pad.r} cy={pad.t} r="1" fill="none" />
   <!-- rejilla + eje Y -->
   {#each ticks as tv}
     <line x1={pad.l} x2={W - pad.r} y1={yOf(tv)} y2={yOf(tv)} stroke="var(--grid-line)" stroke-width="1" />

@@ -161,6 +161,10 @@
     ],
     "privacy_contact_title": "Contacte",
     "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_201_improvements": [
+      "Millores en la visualització en dispositius mòbils.",
+      "Millores en la visualització dels gràfics de tendències."
+    ],
     "release_200_improvements": [
       "Interfície completament renovada, més clara, moderna i coherent.",
       "Nova pestanya de Predicció, amb mapes del model AROME i diagnòstics propis de MeteoLabX.",

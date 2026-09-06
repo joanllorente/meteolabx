@@ -34,14 +34,18 @@ def test_whats_new_uses_one_modal_opened_from_header_and_footer():
 
 
 def test_release_200_is_current_and_localized():
-    """La 2.0.0 es la única nota: la serie 1 hablaba de una interfaz retirada."""
+    """La serie 2.0 es la única nota: la 1 hablaba de una interfaz retirada.
+
+    Sus revisiones —2.0.0, 2.0.1…— se leen seguidas en la misma hoja: lo que
+    abre pestaña es el cambio de serie, no cada arreglo.
+    """
     root = Path(__file__).resolve().parents[1]
     source = (root / "meteolabx.py").read_text(encoding="utf-8")
     server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'APP_VERSION = "2.0.0"' in source
+    assert 'APP_VERSION = "2.0.1"' in source
     assert "APP_BUILD = app_build_id()" in source
-    assert '__version__ = "2.0.0"' in server_source
+    assert '__version__ = "2.0.1"' in server_source
     assert "mlx-wn-pane-200 is-active" in source
     assert "Build {html.escape(APP_BUILD)}" in source
     assert ".mlx-wn-build{" in source
@@ -59,6 +63,8 @@ def test_release_200_is_current_and_localized():
         footer = datos["footer"]
         assert esperado in footer["release_200_improvements"], idioma
         assert footer["release_200_fixes"], f"{idioma}: la 2.0.0 sin correcciones"
+        # La revisión al día también tiene sus notas, en los seis idiomas.
+        assert footer["release_201_improvements"], f"{idioma}: la 2.0.1 sin mejoras"
         # Ninguna nota de la serie 1 debe quedar suelta en los locales.
         assert not [clave for clave in footer if clave.startswith("release_1")], idioma
 

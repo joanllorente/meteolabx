@@ -22,6 +22,16 @@
   );
 
   /**
+   * El commit que está sirviendo el navegador.
+   *
+   * Lo mismo que enseñaba el modal de novedades de la interfaz anterior: con
+   * varios despliegues seguidos la versión no cambia y el commit sí, así que
+   * es la única forma de saber si lo que se está viendo ya lleva el arreglo.
+   * Lo calcula Vite al construir (`__APP_BUILD__`).
+   */
+  const build = typeof __APP_BUILD__ === 'string' ? __APP_BUILD__ : '';
+
+  /**
    * Las versiones publicadas, con la actual delante.
    *
    * La lista sale de los textos generados —`app.releases`—, no de una copia
@@ -34,10 +44,24 @@
     fixes: texts[`release_${key}_fixes`] || []
   });
 
+  /**
+   * Una pestaña por serie, no por revisión.
+   *
+   * Las 2.0.x se leen seguidas en la misma página —son la misma interfaz con
+   * arreglos encima— y lo que separa pestañas es el cambio de serie: 2.0
+   * frente a 2.1. Vienen ordenadas de la más reciente a la más antigua, y así
+   * se apilan dentro de su pestaña.
+   */
   const releaseGroups = $derived(
-    (app.releases || [])
-      .map((key) => ({ id: key, label: `${key[0]}.${key[1]}.${key[2]}`, entries: [releaseEntry(key)] }))
-      .filter((group) => group.entries.some((entry) => entry.improvements.length || entry.fixes.length))
+    (app.releases || []).reduce((groups, key) => {
+      const entry = releaseEntry(key);
+      if (!entry.improvements.length && !entry.fixes.length) return groups;
+      const id = key.slice(0, 2);
+      const group = groups.find((candidate) => candidate.id === id);
+      if (group) group.entries.push(entry);
+      else groups.push({ id, label: `${id[0]}.${id[1]}`, entries: [entry] });
+      return groups;
+    }, [])
   );
 
   let selectedRelease = $state('');
@@ -167,7 +191,12 @@
       {/if}
       {#each activeRelease?.entries || [] as release (release.number)}
         <section>
-          <h3 class="rel">{release.number}</h3>
+          <h3 class="rel">
+            {release.number}
+            <!-- Solo en la versión que se está sirviendo: el commit de una
+                 versión anterior no es un dato, es una confusión. -->
+            {#if build && release.number === app.app_version}<span class="build">Build {build}</span>{/if}
+          </h3>
           {#if release.improvements.length}
             <h4>{texts.improvements_title}</h4>
             <ul>{#each release.improvements as item (item)}<li>{item}</li>{/each}</ul>
@@ -214,6 +243,12 @@
 </dialog>
 
 <style>
+  .build {
+    margin-left: 8px;
+    color: var(--muted-2); font-size: 0.72rem; font-weight: 600;
+    font-family: var(--mono); letter-spacing: 0.02em;
+  }
+
   .foot { margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--border); }
   .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
   .version { color: var(--muted); font-size: 0.86rem; font-weight: 700; white-space: nowrap; }

@@ -743,4 +743,25 @@
   tbody tr:hover td { background: var(--card-hover); }
 
   .empty { padding: 32px 0; color: var(--muted); font-size: 0.9rem; }
+
+  /* En el móvil, de dos en dos. Son tarjetas de una cifra y una fecha: en una
+     sola columna la lista de hitos pedía cuatro pantallazos para nada. A media
+     anchura la tarjeta mide unos 190 px, así que el número baja de cuerpo y el
+     pie se parte solo si el idioma no lo deja en una línea. */
+  @media (max-width: 560px) {
+    .cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .card { gap: 10px; padding: 13px 13px 12px; }
+    .card header { gap: 7px; }
+    .ic { width: 26px; height: 26px; }
+    .card h3 { font-size: 0.74rem; }
+    .val { font-size: 1.55rem; }
+    .duo .val { font-size: 1.2rem; }
+    .readout.duo { gap: 14px; }
+    .unit { font-size: 0.72rem; }
+    .date { font-size: 0.62rem; }
+    .dir { font-size: 0.8rem; }
+    .sub { padding-top: 9px; gap: 5px; }
+    .sub li { flex-wrap: wrap; gap: 0 10px; }
+    .lbl, .sub .v { font-size: 0.68rem; }
+  }
 </style>

@@ -12,6 +12,8 @@
    * «NNE» viene del nornoreste.
    */
   import ChartFrame from './ChartFrame.svelte';
+  import { pointerFraction } from '$lib/observation/pointer.js';
+
   import Watermark from './Watermark.svelte';
   import { niceStep, niceTicks, tickDecimals } from '$lib/observation/scale.js';
 
@@ -85,16 +87,14 @@
   const cardinalOf = (degrees) => cardinals[Math.round(((degrees % 360) / 22.5)) % 16];
 
   // --- Lectura al pasar el ratón -------------------------------------------
-  let svg;
   let active = $state(null);
   const readValue = $derived(formatValue || formatTick);
 
   function pointerMove(event) {
-    const rect = svg?.getBoundingClientRect();
-    if (!rect?.width || !labels.length) return;
-    const x = ((event.clientX - rect.left) / rect.width) * W;
-    const slot = Math.floor(((x - pad.l) / iw) * n);
-    active = Math.max(0, Math.min(n - 1, slot));
+    if (!labels.length) return;
+    const along = pointerFraction(event.currentTarget, event);
+    if (along === null) return;
+    active = Math.max(0, Math.min(n - 1, Math.floor(along * n)));
   }
 
   const reading = $derived.by(() => {
@@ -138,10 +138,13 @@
   class="wind"
   role="img"
   aria-label={label}
-  bind:this={svg}
   onpointermove={pointerMove}
   onpointerleave={() => (active = null)}
 >
+  <!-- Extremos del eje horizontal: las referencias con las que se sitúa el
+       puntero, giren o escalen con la gráfica. No se pintan. -->
+  <circle data-axis-end cx={pad.l} cy={pad.t} r="1" fill="none" />
+  <circle data-axis-end cx={W - pad.r} cy={pad.t} r="1" fill="none" />
   {#each ticks as tv}
     <line x1={pad.l} x2={W - pad.r} y1={yV(tv)} y2={yV(tv)} stroke="var(--grid-line)" />
     <text x={pad.l - 8} y={yV(tv) + 3.5} class="axis" text-anchor="end">{formatTick(tv, decimals)}</text>

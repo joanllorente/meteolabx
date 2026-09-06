@@ -161,6 +161,10 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_201_improvements": [
+      "Improved display on mobile devices.",
+      "Improved display of the trend charts."
+    ],
     "release_200_improvements": [
       "Completely redesigned interface: clearer, more modern and more consistent.",
       "New Forecast tab, with AROME model maps and MeteoLabX's own diagnostics.",

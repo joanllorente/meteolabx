@@ -138,8 +138,16 @@
   .languages a:hover { color: var(--ink); background: var(--card); }
   .languages a[aria-current='page'] { color: var(--ink); background: var(--card); }
 
+  /* Igual que la barra de `web/`: en una pantalla estrecha las pestañas no
+     caben en la fila —tienen desplazamiento propio, así que el navegador las
+     encogía hasta hacerlas desaparecer— y bajan a una segunda, a lo ancho. El
+     nombre deja sitio: el logotipo ya identifica la aplicación. Los idiomas se
+     quedan, que ahí sí caben y en el resto del sitio están. */
   @media (max-width: 760px) {
-    .topnav { gap: 12px; }
-    .languages { display: none; }
+    .topnav { flex-wrap: wrap; gap: 10px; padding: 9px 12px 0; }
+    .brand-txt { display: none; }
+    .right { gap: 8px; }
+    .tabs { order: 3; width: 100%; margin: 0; padding-bottom: 7px; }
   }
+
 </style>

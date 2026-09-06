@@ -551,6 +551,27 @@
   @media (max-width: 900px) {
     .txt { display: none; }
   }
+
+  /* En el móvil vuelve: con las pestañas en su propia fila sobra sitio en la
+     primera, y un «+» a secas no dice a qué invita. Por debajo de 400 px no
+     cabe, y ahí se queda solo el signo. */
+  @media (min-width: 400px) and (max-width: 760px) {
+    .txt { display: inline; }
+  }
+  /* En un móvil el desplegable no puede colgar del botón: la barra tiene sus
+     controles a media anchura, y un panel de 340 px anclado a su derecha se
+     sale por el borde izquierdo de la pantalla —el nombre de la estación
+     quedaba cortado a mitad de letra—. Se ancla a la ventana: `fixed` con los
+     dos lados sujetos y sin `top`, que conserva la altura que le tocaba, justo
+     debajo del botón. */
+  @media (max-width: 760px) {
+    .panel {
+      position: fixed; top: auto; left: 12px; right: 12px;
+      width: auto; margin-top: 7px;
+      max-height: calc(100dvh - 130px); overflow-y: auto;
+    }
+  }
+
   @media (max-width: 560px) {
     .calibration-backdrop { padding: 10px; }
     .calibration-modal { padding: 16px; border-radius: 13px; }

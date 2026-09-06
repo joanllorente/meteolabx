@@ -221,7 +221,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
@@ -5547,9 +5547,15 @@ def _whats_new_footer_html() -> str:
     # Botones de pestaña controlados en el documento padre. Esto evita que los
     # reruns de Streamlit restauren el radio marcado por defecto.
     return (
+        # Las revisiones de una misma serie van seguidas en la misma hoja, de
+        # la más reciente a la más antigua; lo que separa pestañas es el
+        # cambio de serie. El identificador de compilación acompaña solo a la
+        # que se está sirviendo.
         "<div class='mlx-wn-pane mlx-wn-pane-200 is-active'>"
-        f"<div class='mlx-wn-version'>2.0.0 "
+        f"<div class='mlx-wn-version'>{html.escape(APP_VERSION)} "
         f"<span class='mlx-wn-build'>Build {html.escape(APP_BUILD)}</span></div>"
+        + _release("footer.release_201_improvements", "footer.release_201_fixes")
+        + "<div class='mlx-wn-version'>2.0.0</div>"
         + _release("footer.release_200_improvements", "footer.release_200_fixes")
         + "</div>"
     )

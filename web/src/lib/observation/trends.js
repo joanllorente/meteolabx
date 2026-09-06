@@ -111,12 +111,19 @@ export function trendsModel(series, station, language, { span = 'day', preferenc
         epochs: built.epochs,
         nowIndex: built.nowIndex,
         minutes: minutes || 0,
-        range: definition.minimumAbs
+        // Eje simétrico siempre que el gráfico tenga línea de cero: son
+        // magnitudes con signo —sube y baja, sopla de un lado o del otro— y
+        // con los bordes descuadrados una racha del sur parece mayor que la
+        // misma racha del norte. Las que fijan escala mínima la conservan
+        // como suelo; el resto arranca en lo que midan los datos.
+        range: definition.zero
           ? symmetricRange(
               flat,
-              convertUnit(definition.minimumAbs, definition.family, preferences, {
-                delta: Boolean(definition.delta)
-              })
+              definition.minimumAbs
+                ? convertUnit(definition.minimumAbs, definition.family, preferences, {
+                    delta: Boolean(definition.delta)
+                  })
+                : 0
             )
           : null,
         series: converted.map((data, index) => ({

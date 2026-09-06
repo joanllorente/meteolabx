@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.0.0",
+  "app_version": "2.0.1",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -451,6 +451,10 @@ export default {
         "La secció Històric ofereix ara informació més completa.",
         "Nou gràfic de vent a Històric."
       ],
+      "release_201_improvements": [
+        "Millores en la visualització en dispositius mòbils.",
+        "Millores en la visualització dels gràfics de tendències."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -523,6 +527,10 @@ export default {
         "New Forecast tab, with AROME model maps and MeteoLabX's own diagnostics.",
         "The Historical section now offers more complete information.",
         "New wind chart in Historical."
+      ],
+      "release_201_improvements": [
+        "Improved display on mobile devices.",
+        "Improved display of the trend charts."
       ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
@@ -597,6 +605,10 @@ export default {
         "La sección Histórico ofrece ahora información más completa.",
         "Nuevo gráfico de viento en Histórico."
       ],
+      "release_201_improvements": [
+        "Mejoras en la visualización en dispositivos móviles.",
+        "Mejoras en la visualización de los gráficos de tendencias."
+      ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
       "version": "Versión {version}",
@@ -669,6 +681,10 @@ export default {
         "Nouvel onglet Prévision, avec les cartes du modèle AROME et les diagnostics propres à MeteoLabX.",
         "La section Historique propose désormais des informations plus complètes.",
         "Nouveau graphique de vent dans Historique."
+      ],
+      "release_201_improvements": [
+        "Améliorations de l’affichage sur les appareils mobiles.",
+        "Améliorations de l’affichage des graphiques de tendances."
       ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
@@ -743,6 +759,10 @@ export default {
         "La sezione Storico offre ora informazioni più complete.",
         "Nuovo grafico del vento nello Storico."
       ],
+      "release_201_improvements": [
+        "Migliorata la visualizzazione sui dispositivi mobili.",
+        "Migliorata la visualizzazione dei grafici di tendenza."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -815,6 +835,10 @@ export default {
         "Novo separador de Previsão, com mapas do modelo AROME e diagnósticos próprios do MeteoLabX.",
         "A secção Histórico oferece agora informação mais completa.",
         "Novo gráfico de vento no Histórico."
+      ],
+      "release_201_improvements": [
+        "Melhorias na visualização em dispositivos móveis.",
+        "Melhorias na visualização dos gráficos de tendências."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -1936,6 +1960,7 @@ export default {
     }
   },
   "releases": [
+    "201",
     "200"
   ],
   "trends": {

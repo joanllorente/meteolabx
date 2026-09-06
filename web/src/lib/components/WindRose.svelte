@@ -50,10 +50,13 @@
    * clavarles el ratón encima. Así responde todo el sector, tenga el tamaño
    * que tenga, que es lo que se quiere leer.
    */
-  let svg;
   let active = $state(null);
 
   function onMove(event) {
+    // El lienzo es el que recibe el gesto: la rosa se dibuja dos veces cuando
+    // el visor a pantalla completa está abierto, y una referencia guardada
+    // apuntaría a la copia equivocada.
+    const svg = event.currentTarget;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
     if (!rect.width) return;
@@ -83,9 +86,8 @@
   });
 </script>
 
-<ChartFrame name={exportName} label={exportLabel}>
+<ChartFrame name={exportName} label={exportLabel} wide={false}>
 <svg
-  bind:this={svg}
   class="rose"
   viewBox="0 0 {size} {size}"
   aria-label="Rosa de viento"

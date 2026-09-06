@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   /**
    * El armazón de la aplicación: barra superior, pestañas y cinta de estación.
    *
@@ -39,6 +39,16 @@
     onDisconnect = null,
     children
   } = $props();
+
+  /**
+   * El idioma, al alcance de cualquier componente de dentro.
+   *
+   * Se pasa como función para que siga siendo el vigente si cambia sin
+   * recargar. Lo usan piezas hondas —el marco de las gráficas— a las que
+   * llevarlo por props obligaría a atravesar media docena de componentes que
+   * no tienen nada que ver con el idioma.
+   */
+  setContext('mlx-language', () => language);
 
   /**
    * Cuánto hace de la última medida.
@@ -437,7 +447,26 @@
   .wrap { width: min(1240px, calc(100% - 40px)); margin: auto; padding: 26px 0 40px; }
 
   @media (max-width: 760px) {
-    .s-facts { gap: 16px; }
-    .s-live { margin-left: 0; }
+    /* Los cuatro datos de la estación y la línea de estado se reparten el
+       ancho de la cinta en vez de apelotonarse a la izquierda: ahí no compiten
+       con nada, y así se leen sin acercar la vista. */
+    .s-facts { width: 100%; justify-content: space-between; gap: 10px; }
+    .s-live { width: 100%; margin-left: 0; justify-content: space-between; }
+    .disconnect { margin-left: auto; }
+
+    /* En una pantalla estrecha la barra no cabe en una sola fila: las
+       pestañas quedaban encogidas hasta desaparecer —tienen scroll propio,
+       así que el navegador las reducía a cero— y no había forma de llegar al
+       mapa ni al ranking. Se bajan a una segunda fila, a lo ancho. */
+    .topnav { flex-wrap: wrap; gap: 10px; padding: 9px 12px 0; }
+    /* El nombre deja sitio: el logotipo ya identifica la aplicación, y el
+       hueco se aprovecha mejor con el rótulo del botón de conectar. */
+    .brand-txt { display: none; }
+    .right { gap: 8px; }
+    .tabs {
+      order: 3; width: 100%;
+      margin: 0; padding-bottom: 7px;
+    }
   }
+
 </style>

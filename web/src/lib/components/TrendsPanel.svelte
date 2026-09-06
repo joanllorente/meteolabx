@@ -2,10 +2,24 @@
   import TrendChart from './TrendChart.svelte';
   import { num, stationTime } from '$lib/format.js';
   import { ui } from '$lib/i18n/ui.js';
+  import { chartHeight, isNarrow, loadViewport } from '$lib/viewport.svelte.js';
 
   let { charts, language, range, ranges, timeZone = 'UTC', stationName = '' } = $props();
 
   const tick = $derived((value, decimals = 1) => num(value, { language, decimals }));
+
+  /**
+   * El lienzo, a la medida de la pantalla.
+   *
+   * Estos son los gráficos más panorámicos del sitio —1180 × 190, seis veces
+   * más anchos que altos— porque en un escritorio ocupan la fila entera. En un
+   * móvil esa proporción los deja en una raya: escalados al ancho disponible
+   * quedan de dos dedos de alto, y a pantalla completa, girados, en una tira
+   * estrecha. Ahí el lienzo se acorta y se engorda.
+   */
+  $effect(loadViewport);
+  const canvasWidth = $derived(isNarrow() ? 640 : 1180);
+  const canvasHeight = $derived(chartHeight(190));
 
   /**
    * Instante señalado por el cursor, compartido por los cuatro gráficos.
@@ -71,8 +85,8 @@
           formatValue={(value) => tick(value, 1)}
           exportName={`meteolabx ${item.title} ${stationName}`}
           exportLabel={ui(language, 'download_png')}
-          width={1180}
-          height={190}
+          width={canvasWidth}
+          height={canvasHeight}
           fillArea={item.series.length === 1 && !item.zero}
         />
       </section>

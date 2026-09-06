@@ -64,8 +64,13 @@ export function pressureTrend(dp3, language) {
 }
 
 /** Intensidad de lluvia con los umbrales de `config.py`. */
-export function rainIntensity(mmPerHour, language) {
-  if (!isNumber(mmPerHour) || mmPerHour <= 0) return ui(language, 'rain_none');
+export function rainIntensity(mmPerHour, language, short = false) {
+  // Sin lluvia, la etiqueta larga es la única que no cabe en una tarjeta a
+  // media anchura: «Sin precipitación», «Nessuna precipitazione». El resto de
+  // la escala ya son una o dos palabras.
+  if (!isNumber(mmPerHour) || mmPerHour <= 0) {
+    return ui(language, short ? 'rain_none_short' : 'rain_none');
+  }
   const scale = [
     [0.4, 'rain_trace'],
     [1.0, 'rain_very_light'],

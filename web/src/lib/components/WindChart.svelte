@@ -1,5 +1,6 @@
 <script>
   import { nearestIndex } from '$lib/observation/cursor.js';
+  import { pointerFraction } from '$lib/observation/pointer.js';
   import { niceStep, niceTicks, tickDecimals } from '$lib/observation/scale.js';
   import ChartFrame from './ChartFrame.svelte';
   import Watermark from './Watermark.svelte';
@@ -20,13 +21,17 @@
     // Qué series se pintan. Se apagan desde la leyenda: con tres magnitudes
     // encima, aislar una es la única forma de leerla.
     visible = { speed: true, gust: true, dir: true },
+    // Ancho del lienzo: más corto en pantallas estrechas, para que al
+    // escalarlo el texto de los ejes no quede diminuto.
+    width = 620,
     unit = ''
   } = $props();
 
-  const W = 620, H = height;
+  const W = $derived(width);
+  const H = $derived(height);
   const pad = { t: 14, r: 46, b: 26, l: 54 };
-  const iw = W - pad.l - pad.r;
-  const ih = H - pad.t - pad.b;
+  const iw = $derived(W - pad.l - pad.r);
+  const ih = $derived(H - pad.t - pad.b);
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
   // Eje fijo de 24 h: lo que aún no ha ocurrido llega como `null`.
@@ -38,7 +43,6 @@
 
   const activeIndex = $derived(nearestIndex(epochs, activeEpoch));
 
-  let svg;
 
   /** Instante de la ranura señalada, o el de la más cercana con dato. */
   function nearestFilled(index) {
@@ -52,12 +56,15 @@
   }
 
   function pointerMove(event) {
+    // El lienzo es el que ha recibido el gesto, no una referencia guardada:
+    // la gráfica se dibuja dos veces —en su tarjeta y, si está abierto, en el
+    // visor a pantalla completa—, y con una sola referencia el cursor medía
+    // sobre la copia equivocada y se quedaba clavado en el primer dato.
+    const svg = event.currentTarget;
     if (!onHover || !svg || !epochs.length) return;
-    const rect = svg.getBoundingClientRect();
-    if (!rect.width) return;
-    const x = ((event.clientX - rect.left) / rect.width) * W;
-    const position = Math.round(((x - pad.l) / iw) * (epochs.length - 1));
-    const epoch = nearestFilled(Math.max(0, Math.min(epochs.length - 1, position)));
+    const along = pointerFraction(svg, event);
+    if (along === null) return;
+    const epoch = nearestFilled(Math.round(along * (epochs.length - 1)));
     if (epoch !== null) onHover(epoch);
   }
 
@@ -159,9 +166,11 @@
 <svg
   viewBox="0 0 {W} {H}"
   class="wchart"
-  bind:this={svg}
   onpointermove={pointerMove}
   onpointerleave={() => onHover?.(null)} role="img" aria-label="Viento y rachas">
+  <!-- Extremos del eje del tiempo: las referencias del cursor. No se pintan. -->
+  <circle data-axis-end cx={pad.l} cy={pad.t} r="1" fill="none" />
+  <circle data-axis-end cx={W - pad.r} cy={pad.t} r="1" fill="none" />
   {#each sTicks as tv}
     <line x1={pad.l} x2={W - pad.r} y1={yS(tv)} y2={yS(tv)} stroke="var(--grid-line)" />
     <text x={pad.l - 7} y={yS(tv) + 3.5} class="axis" text-anchor="end">{tv.toFixed(sDecimals)}</text>

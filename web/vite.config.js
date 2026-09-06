@@ -1,7 +1,31 @@
+import { execSync } from 'node:child_process';
+
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
+/**
+ * Qué código está sirviendo el navegador, en siete caracteres.
+ *
+ * Es el mismo dato que enseñaba el modal de novedades de Streamlit —de donde
+ * viene `utils/build_info.py`— y la primera pregunta cuando se despliega
+ * varias veces seguidas: la versión no cambia y el commit sí. En Railway lo
+ * pone la propia plataforma; en local se pregunta a git, y si no hay ninguno
+ * de los dos se queda en «local», que también es una respuesta.
+ */
+function buildId() {
+  const railway = (process.env.RAILWAY_GIT_COMMIT_SHA || '').trim();
+  if (railway) return railway.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short=7 HEAD', { encoding: 'utf8', timeout: 1000 }).trim() || 'local';
+  } catch {
+    return 'local';
+  }
+}
+
 export default defineConfig({
+  define: {
+    __APP_BUILD__: JSON.stringify(buildId())
+  },
   plugins: [sveltekit()],
   optimizeDeps: {
     // MapLibre parsea las teselas en un Web Worker que carga con
