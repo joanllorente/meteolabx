@@ -11,6 +11,9 @@ detalle de una sola (visitas y errores recientes, con fecha y tipo); ambos
 exigen la contraseña de administración (``METEOLABX_STATS_ADMIN_PASSWORD``) en
 el header ``X-Stats-Password``.
 
+Ninguno de los cinco POST registra nada cuando quien llama se declara
+rastreador: son estadísticas de uso, y el paso de un bot no es uso.
+
 El backend no está expuesto públicamente (escucha en 127.0.0.1; solo el
 frontend lo alcanza), pero la contraseña se comprueba igualmente: defensa
 en profundidad por si algún día se publica la API.
@@ -30,6 +33,18 @@ from server.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stats", tags=["stats"])
+
+
+def _is_crawler(request: Request) -> bool:
+    """El paso de un rastreador no es uso: no se registra en ninguna tabla.
+
+    Googlebot renderiza la ficha, así que ejecutaba estos mismos avisos y se
+    mezclaba con las visitas de personas. Se descarta al entrar, antes de
+    tocar la base de datos, para que ni engorde ni desvíe los recuentos.
+    """
+    from server.services import usage_stats
+
+    return usage_stats.is_crawler(request.headers.get("user-agent", ""))
 
 
 class VisitRequest(BaseModel):
@@ -52,6 +67,8 @@ class VisitRequest(BaseModel):
 def post_visit(body: VisitRequest, request: Request, settings: Settings = Depends(get_settings)) -> Response:
     from server.services import usage_stats
 
+    if _is_crawler(request):
+        return Response(status_code=204)
     try:
         usage_stats.record_visit(
             body.provider, body.station_id, body.name,
@@ -112,10 +129,12 @@ class SeoPageViewRequest(SeoPanelClickRequest):
 
 @router.post("/error", status_code=204, summary="Registrar un error de conexión a estación")
 def post_connection_error(
-    body: ConnectionErrorRequest, settings: Settings = Depends(get_settings)
+    body: ConnectionErrorRequest, request: Request, settings: Settings = Depends(get_settings)
 ) -> Response:
     from server.services import usage_stats
 
+    if _is_crawler(request):
+        return Response(status_code=204)
     try:
         usage_stats.record_error(
             body.provider,
@@ -132,10 +151,12 @@ def post_connection_error(
 
 @router.post("/section", status_code=204, summary="Registrar entrada a una pestaña o mapa")
 def post_section_visit(
-    body: SectionVisitRequest, settings: Settings = Depends(get_settings)
+    body: SectionVisitRequest, request: Request, settings: Settings = Depends(get_settings)
 ) -> Response:
     from server.services import usage_stats
 
+    if _is_crawler(request):
+        return Response(status_code=204)
     try:
         usage_stats.record_section_visit(body.section, settings=settings)
     except Exception:
@@ -145,10 +166,12 @@ def post_section_visit(
 
 @router.post("/panel-click", status_code=204, summary="Registrar apertura del panel desde una ficha SEO")
 def post_seo_panel_click(
-    body: SeoPanelClickRequest, settings: Settings = Depends(get_settings)
+    body: SeoPanelClickRequest, request: Request, settings: Settings = Depends(get_settings)
 ) -> Response:
     from server.services import usage_stats
 
+    if _is_crawler(request):
+        return Response(status_code=204)
     try:
         usage_stats.record_seo_panel_click(
             body.provider,
@@ -164,10 +187,12 @@ def post_seo_panel_click(
 
 @router.post("/seo-view", status_code=204, summary="Registrar apertura de una ficha SEO")
 def post_seo_page_view(
-    body: SeoPageViewRequest, settings: Settings = Depends(get_settings)
+    body: SeoPageViewRequest, request: Request, settings: Settings = Depends(get_settings)
 ) -> Response:
     from server.services import usage_stats
 
+    if _is_crawler(request):
+        return Response(status_code=204)
     try:
         usage_stats.record_seo_page_view(
             body.provider,

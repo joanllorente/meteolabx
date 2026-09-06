@@ -3,6 +3,7 @@ import { languageDecision } from '$lib/server/language.js';
 import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
 
 import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
+import { contentEtag, observationVersion } from '$lib/server/etag.js';
 import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import {
   observationPath,
@@ -64,12 +65,21 @@ export async function load({ params, request, cookies, fetch, setHeaders }) {
         unavailable: describeFailure(cause)
       }));
 
-  // Un minuto en CDN y cinco sirviendo el anterior mientras se revalida: las
-  // estaciones publican cada 10-30 minutos, así que no hay nada que ganar
-  // pegándole al proveedor en cada visita.
-  setHeaders({ 'cache-control': 'public, max-age=60, stale-while-revalidate=300' });
+  const decision = languageDecision({ request, cookies }, LANGUAGE_CODES, lang);
 
-  return { languageDecision: languageDecision({ request, cookies }, LANGUAGE_CODES, lang), lang, slug: station.url_slug, station, meta, observation, replacementPath };
+  // Una hora en CDN y cinco minutos sirviendo el anterior mientras se
+  // revalida: las estaciones publican cada 10-60 minutos, así que no hay nada
+  // que ganar pegándole al proveedor en cada visita. El ETag cierra el resto:
+  // quien ya tenga la ficha con esta misma observación recibe un 304.
+  const version = observationVersion(observation);
+  setHeaders({
+    'cache-control': 'public, max-age=3600, stale-while-revalidate=300',
+    ...(version
+      ? { etag: contentEtag('observation', lang, station.url_slug, decision.language, version, replacementPath) }
+      : {})
+  });
+
+  return { languageDecision: decision, lang, slug: station.url_slug, station, meta, observation, replacementPath };
 }
 
 function describeFailure(cause) {

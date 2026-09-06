@@ -324,6 +324,24 @@ def record_section_visit(section: str, *, settings=None) -> None:
         )
 
 
+def purge_crawler_visits(*, settings=None) -> int:
+    """Borra las visitas que ya se guardaron identificadas como rastreador.
+
+    Desde que los endpoints las descartan al entrar, esta tabla solo recibe
+    visitas sin identificar; lo anterior sigue ahí, engordando los recuentos
+    por idioma y por estación. Devuelve cuántas filas se han eliminado.
+
+    Solo se puede limpiar ``station_visits``: es la única tabla que guardó de
+    qué cliente venía cada fila. Los errores, las secciones y las aperturas de
+    ficha no lo anotaron, así que su histórico se queda con el ruido dentro.
+    """
+    with _connect(settings) as connection:
+        cursor = connection.execute(
+            "DELETE FROM station_visits WHERE request_client != '' AND request_client != 'unidentified'"
+        )
+        return int(cursor.rowcount or 0)
+
+
 def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
     """Conexiones, errores y secciones agregados por ventanas temporales."""
     now = int(time.time())
@@ -957,3 +975,19 @@ def request_client(user_agent: str) -> str:
     if re.search(r"bot\b|crawler|spider|headlesschrome", agent):
         return "other_bot"
     return "unidentified"
+
+
+def is_crawler(user_agent: str) -> bool:
+    """¿Se declara rastreador? Entonces su paso no cuenta como uso.
+
+    Googlebot ejecuta el JavaScript de la ficha, así que llegaba a los mismos
+    endpoints que una persona y contaminaba justo lo que se mira para decidir:
+    de qué idioma se sirve cada visita y qué estaciones fallan. Una estación
+    rota que el rastreador visita mil veces parecía mil errores.
+
+    Descartar por user-agent es asimétrico a propósito: quien se declara bot
+    lo hace por convención y no gana nada mintiendo hacia ese lado. Lo que no
+    se declara sigue contando, aunque no haya forma de confirmar que es una
+    persona —de ahí que su categoría se llame `unidentified` y no `human`.
+    """
+    return request_client(user_agent) != "unidentified"

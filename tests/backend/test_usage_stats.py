@@ -460,7 +460,7 @@ def test_language_diagnostics_migrate_without_rewriting_history(tmp_path):
 def test_page_request_and_renderer_request_are_distinct(stats_client):
     assert stats_client.post('/v1/stats/visit', headers={
         'Accept-Language': 'en-US',
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'},
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15'},
         json={'provider': 'AEMET', 'station_id': '3386A', 'language': 'es',
               'url_language': 'es', 'browser_languages': 'en-US',
               'page_request_languages': '', 'language_reason': 'url'}).status_code == 204
@@ -471,7 +471,7 @@ def test_page_request_and_renderer_request_are_distinct(stats_client):
     assert visit['language_reason'] == 'url'
     assert visit['request_languages'] == visit['browser_languages'] == 'en-us'
     assert visit['language'] == visit['url_language'] == 'es'
-    assert visit['request_client'] == 'googlebot'
+    assert visit['request_client'] == 'unidentified'
 
 
 def test_client_classification_never_claims_human_identity():
@@ -479,3 +479,63 @@ def test_client_classification_never_claims_human_identity():
     assert usage_stats.request_client('') == 'unidentified'
     assert usage_stats.request_client('bingbot/2.0') == 'bingbot'
     assert usage_stats.request_client('HeadlessChrome/140') == 'other_bot'
+
+
+def test_only_self_declared_crawlers_are_discarded():
+    assert usage_stats.is_crawler('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
+    assert usage_stats.is_crawler('bingbot/2.0')
+    assert usage_stats.is_crawler('HeadlessChrome/140')
+    # Lo que no se declara sigue contando: no hay forma de confirmar que sea
+    # una persona, y descartar por sospecha perdería visitas reales.
+    assert not usage_stats.is_crawler('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1')
+    assert not usage_stats.is_crawler('')
+
+
+GOOGLEBOT = {'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
+
+
+def test_crawler_visits_never_reach_any_table(stats_client):
+    """Googlebot renderiza la ficha y llegaba a los mismos avisos que una persona."""
+    station = {'provider': 'AEMET', 'station_id': '3386A', 'name': 'REUS'}
+    assert stats_client.post('/v1/stats/visit', headers=GOOGLEBOT,
+                             json={**station, 'language': 'es', 'language_reason': 'url'}).status_code == 204
+    assert stats_client.post('/v1/stats/error', headers=GOOGLEBOT,
+                             json={**station, 'error_kind': 'timeout'}).status_code == 204
+    assert stats_client.post('/v1/stats/seo-view', headers=GOOGLEBOT,
+                             json={**station, 'language': 'es'}).status_code == 204
+    assert stats_client.post('/v1/stats/panel-click', headers=GOOGLEBOT,
+                             json={**station, 'language': 'es'}).status_code == 204
+    assert stats_client.post('/v1/stats/section', headers=GOOGLEBOT,
+                             json={'section': 'observation'}).status_code == 204
+
+    # Sin una sola fila registrada, la estación ni siquiera existe para el panel.
+    assert stats_client.get('/v1/stats/station', params={'provider': 'AEMET', 'station_id': '3386A'},
+                            headers={'X-Stats-Password': 's3creto'}).status_code == 404
+
+
+def test_purge_removes_crawler_visits_already_stored(tmp_path):
+    settings = _settings(tmp_path)
+    usage_stats.record_visit('AEMET', '3386A', 'REUS', request_client='googlebot', settings=settings)
+    usage_stats.record_visit('AEMET', '3386A', 'REUS', request_client='bingbot', settings=settings)
+    usage_stats.record_visit('AEMET', '3386A', 'REUS', request_client='other_bot', settings=settings)
+    usage_stats.record_visit('AEMET', '3386A', 'REUS', request_client='unidentified', settings=settings)
+    # Las visitas anteriores a que se registrara el cliente lo llevan vacío:
+    # no se sabe qué eran, así que se conservan.
+    usage_stats.record_visit('AEMET', '3386A', 'REUS', settings=settings)
+
+    assert usage_stats.purge_crawler_visits(settings=settings) == 3
+    detail = usage_stats.station_detail('AEMET', '3386A', settings=settings)
+    assert detail['visits']['total'] == 2
+    assert usage_stats.purge_crawler_visits(settings=settings) == 0
+
+
+def test_discarding_crawlers_does_not_touch_real_visits(stats_client):
+    station = {'provider': 'AEMET', 'station_id': '3386A', 'name': 'REUS'}
+    persona = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1'}
+    assert stats_client.post('/v1/stats/visit', headers=persona,
+                             json={**station, 'language': 'es'}).status_code == 204
+    assert stats_client.post('/v1/stats/visit', headers=GOOGLEBOT,
+                             json={**station, 'language': 'es'}).status_code == 204
+    detail = stats_client.get('/v1/stats/station', params={'provider': 'AEMET', 'station_id': '3386A'},
+                              headers={'X-Stats-Password': 's3creto'}).json()
+    assert detail['visits']['total'] == 1

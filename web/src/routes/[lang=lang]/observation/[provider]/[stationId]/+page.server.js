@@ -3,6 +3,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { ApiError, fetchProcessedObservation, fetchStation } from '$lib/server/api.js';
 import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import { observationPath } from '$lib/seo/station.js';
+import { contentEtag, observationVersion } from '$lib/server/etag.js';
 
 // Redes con credencial personal; se resuelven en el navegador.
 const PERSONAL_PROVIDERS = ['WU', 'WEATHERLINK'];
@@ -56,7 +57,11 @@ export async function load({ params, fetch, setHeaders }) {
         unavailable: describeRequestFailure(cause, { ApiError })
       }));
 
-  setHeaders({ 'cache-control': 'public, max-age=60, stale-while-revalidate=300' });
+  const version = observationVersion(observation);
+  setHeaders({
+    'cache-control': 'public, max-age=3600, stale-while-revalidate=300',
+    ...(version ? { etag: contentEtag('observation', lang, provider, stationId, version) } : {})
+  });
 
   return { lang, provider, stationId, station, observation, personal: false };
 }

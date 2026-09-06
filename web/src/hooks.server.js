@@ -4,6 +4,7 @@ import { parseLegacyStationPath } from '$lib/seo/ownership.js';
 import { observationPath } from '$lib/seo/station.js';
 import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
 import { LANGUAGE_COOKIE, visitorLanguage } from '$lib/server/language.js';
+import { matchesEtag } from '$lib/server/etag.js';
 
 /**
  * Las fichas estáticas antiguas redirigen a su equivalente nueva.
@@ -54,11 +55,42 @@ export async function handle({ event, resolve }) {
   if (localized || event.url.pathname === '/') {
     // Estas respuestas incluyen decisiones personales, también en las
     // navegaciones de SvelteKit. Nunca compartirlas entre visitantes.
-    response.headers.set('cache-control', 'private, no-store');
+    //
+    // La excepción son las fichas de observación, que piden `public` a
+    // propósito: son el grueso de lo que rastrea Google y no tiene sentido
+    // prohibir que se guarden. Lo personal que llevan —la decisión de idioma—
+    // queda cubierto por el `Vary`, que separa la copia de cada combinación de
+    // cookie e idioma en lugar de mezclarlas.
+    if (!isPubliclyCacheable(response)) response.headers.set('cache-control', 'private, no-store');
     const vary = response.headers.get('vary');
     response.headers.set('vary', [vary, 'Cookie', 'Accept-Language'].filter(Boolean).join(', '));
   }
-  return response;
+  return notModified(event, response) || response;
+}
+
+/** Solo la ruta que sirve la página sabe si su contenido es compartible. */
+function isPubliclyCacheable(response) {
+  return (response.headers.get('cache-control') || '').includes('public');
+}
+
+/**
+ * GET condicional: si el cliente ya tiene esta versión, se le ahorra el HTML.
+ *
+ * Es lo que convierte las revisitas de Googlebot a fichas que no han cambiado
+ * en una respuesta vacía. Las cabeceras que describen la copia viajan igual en
+ * el 304 —sin ellas el cliente no sabría cuánto vale ni bajo qué condiciones.
+ */
+function notModified(event, response) {
+  if (event.request.method !== 'GET' && event.request.method !== 'HEAD') return null;
+  if (response.status !== 200) return null;
+  const etag = response.headers.get('etag');
+  if (!matchesEtag(event.request.headers.get('if-none-match'), etag)) return null;
+  const headers = new Headers();
+  for (const name of ['cache-control', 'etag', 'vary', 'content-language']) {
+    const value = response.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(null, { status: 304, headers });
 }
 
 function languageRedirect(target) {

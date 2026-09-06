@@ -36,14 +36,54 @@ test('selector guarda elección y no vuelve al idioma del navegador', async () =
   input.url.searchParams.delete('set_language');
   assert.equal((await handle({ event: input, resolve })).status, 200);
 });
-test('sin idioma compatible conserva URL y no comparte caché', async () => {
+test('sin idioma compatible conserva URL y separa la caché por visitante', async () => {
   for (const language of ['', 'de-DE']) {
     const response = await handle({ event: event('/it/observation/tivissa', language), resolve });
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get('cache-control'), 'private, no-store');
     assert.match(response.headers.get('vary'), /Cookie/);
     assert.match(response.headers.get('vary'), /Accept-Language/);
   }
+});
+
+test('una página localizada que no se declara pública no se comparte', async () => {
+  const privada = async () => new Response('page');
+  const response = await handle({ event: event('/it/observation/tivissa', 'it'), resolve: privada });
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+});
+
+test('las fichas que piden caché pública la conservan: son lo que rastrea Google', async () => {
+  const response = await handle({ event: event('/it/observation/tivissa', 'it'), resolve });
+  assert.equal(response.headers.get('cache-control'), 'public, max-age=60');
+  assert.match(response.headers.get('vary'), /Cookie/);
+});
+
+test('quien ya tiene la versión recibe un 304 vacío', async () => {
+  const etag = 'W/"abc-12"';
+  const conEtag = async () => new Response('page', {
+    headers: { 'cache-control': 'public, max-age=3600', etag }
+  });
+  const input = event('/it/observation/tivissa', 'it');
+  input.request = new Request('https://example.com', {
+    headers: { 'accept-language': 'it', 'if-none-match': etag }
+  });
+  const response = await handle({ event: input, resolve: conEtag });
+  assert.equal(response.status, 304);
+  assert.equal(await response.text(), '');
+  assert.equal(response.headers.get('etag'), etag);
+  assert.match(response.headers.get('vary'), /Cookie/);
+});
+
+test('con otra versión se sirve la página entera', async () => {
+  const conEtag = async () => new Response('page', {
+    headers: { 'cache-control': 'public, max-age=3600', etag: 'W/"nueva"' }
+  });
+  const input = event('/it/observation/tivissa', 'it');
+  input.request = new Request('https://example.com', {
+    headers: { 'accept-language': 'it', 'if-none-match': 'W/"vieja"' }
+  });
+  const response = await handle({ event: input, resolve: conEtag });
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), 'page');
 });
 test('cookie inválida no se acepta y abrir enlaces no guarda preferencias', async () => {
   const input = event('/it/map', 'es', 'invalid');
