@@ -12,6 +12,14 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+
+# Qué commit se está sirviendo, para el modal de novedades. Railway expone sus
+# variables al build como argumentos; dentro del contenedor no hay ni `git` ni
+# el repositorio —el contexto es `web/`—, así que sin esto el pie decía
+# «Build local» en producción.
+ARG RAILWAY_GIT_COMMIT_SHA=""
+ENV RAILWAY_GIT_COMMIT_SHA=$RAILWAY_GIT_COMMIT_SHA
+
 RUN npm run build
 
 FROM node:22-alpine AS runtime

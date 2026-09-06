@@ -9,16 +9,19 @@ import { defineConfig } from 'vite';
  * Es el mismo dato que enseñaba el modal de novedades de Streamlit —de donde
  * viene `utils/build_info.py`— y la primera pregunta cuando se despliega
  * varias veces seguidas: la versión no cambia y el commit sí. En Railway lo
- * pone la propia plataforma; en local se pregunta a git, y si no hay ninguno
- * de los dos se queda en «local», que también es una respuesta.
+ * pone la propia plataforma —y el Dockerfile la pasa al build como argumento,
+ * que dentro del contenedor no hay repositorio—; en local se pregunta a git. Si
+ * no hay ninguno de los dos, el pie se calla.
  */
 function buildId() {
   const railway = (process.env.RAILWAY_GIT_COMMIT_SHA || '').trim();
   if (railway) return railway.slice(0, 7);
   try {
-    return execSync('git rev-parse --short=7 HEAD', { encoding: 'utf8', timeout: 1000 }).trim() || 'local';
+    return execSync('git rev-parse --short=7 HEAD', { encoding: 'utf8', timeout: 1000 }).trim();
   } catch {
-    return 'local';
+    // Ni variable ni repositorio: el pie se calla en vez de anunciar «local»,
+    // que no le dice nada a quien mira la web.
+    return '';
   }
 }
 

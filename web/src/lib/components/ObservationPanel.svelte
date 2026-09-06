@@ -715,9 +715,7 @@
     .bento {
       /* A lo ancho las grandes; de dos en dos las simples —humedad con punto
          de rocío, precipitación con radiación—: son una cifra y un pie, y en
-         pareja ahorran un pantallazo entero. Debajo de 480 px ya no: ahí la
-         mitad de la tarjeta no da ni para el título con su máximo y su mínimo,
-         que salían cortados a mitad de cifra. */
+         pareja ahorran un pantallazo entero. */
       grid-template-columns: repeat(2, 1fr);
       /* Con la altura fija la tarjeta de viento —rosa de 118 px más su pie—
          salía recortada, y las que llevan pie se pegaban al borde de abajo.
@@ -809,23 +807,4 @@
     .alert-band { padding: 8px 10px; font-size: 0.7rem; }
   }
 
-  /* Un iPhone de los estrechos deja unos 165 px por tarjeta emparejada, y con
-     eso no hay formato que valga: cada tarjeta vuelve a ocupar el ancho, con
-     su máximo y su mínimo en la esquina y el dato de apoyo debajo, como en el
-     escritorio. Las de Termodinámica y Radiación sí siguen en pareja: no
-     llevan ni extremos ni título de dos líneas. */
-  @media (max-width: 480px) {
-    .bento {
-      grid-template-columns: 1fr;
-      grid-template-areas: "temp" "temp" "hum" "dew" "wind" "precip" "uv" "press";
-    }
-    .bento.no-uv {
-      grid-template-areas: "temp" "temp" "hum" "dew" "wind" "precip" "press";
-    }
-    /* Con la tarjeta entera para ella, la precipitación vuelve a decirlo con
-       todas las letras. */
-    .bento .chip .long { display: inline; }
-    .bento .chip .short { display: none; }
-    .grid.compact { gap: 10px; }
-  }
 </style>
