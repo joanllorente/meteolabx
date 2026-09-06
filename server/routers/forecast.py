@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from functools import lru_cache
 import gzip
 import json
 
@@ -160,22 +161,38 @@ def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/boundaries", summary="Contornos del dominio AROME")
-def get_boundaries() -> Response:
-    """Fronteras compartidas por todos los frames.
+@lru_cache(maxsize=4)
+def _boundaries_gzip() -> bytes:
+    """Cuerpo comprimido de las fronteras, calculado una sola vez.
 
-    Antes viajaban dentro de cada rejilla: los mismos contornos repetidos en
-    miles de ficheros. Se sirven una vez y el visor los reutiliza.
+    Serializar y comprimir 0,8 MB de anillos cuesta ~60 ms de CPU en el
+    proceso que además sirve los frames, y el resultado es byte a byte el
+    mismo en cada petición: se guarda hecho.
     """
     payload = json.dumps(
         {"boundaries": domain_boundaries()}, separators=(",", ":")
     ).encode("utf-8")
+    return gzip.compress(payload, compresslevel=6)
+
+
+@router.get("/boundaries", summary="Contornos del dominio AROME")
+def get_boundaries(revision: str = Query(default="", max_length=40)) -> Response:
+    """Fronteras compartidas por todos los frames.
+
+    Antes viajaban dentro de cada rejilla: los mismos contornos repetidos en
+    miles de ficheros. Se sirven una vez y el visor los reutiliza.
+
+    Con `revision` la respuesta es inmutable: la geometría de una revisión
+    dada no cambia nunca, así que la CDN puede quedársela y los visitantes
+    dejan de ir hasta el servidor a por el mismo megabyte de costas.
+    """
+    cache = "public, max-age=31536000, immutable" if revision else "public, max-age=86400"
     return Response(
-        content=gzip.compress(payload, compresslevel=6),
+        content=_boundaries_gzip(),
         media_type="application/json",
         headers=_http_headers({
             "Content-Encoding": "gzip",
-            "Cache-Control": "public, max-age=86400",
+            "Cache-Control": cache,
             "Vary": "Accept-Encoding",
         }),
     )

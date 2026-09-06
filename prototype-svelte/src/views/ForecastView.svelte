@@ -13,7 +13,7 @@
   import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
   import { bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
-  import { fetchForecastCatalog, fetchForecastFrame, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
+  import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
   import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
   import { loadForecastGuides, localizedForecastGuide } from '../lib/forecast-guides.svelte.js';
@@ -229,6 +229,7 @@
     catalog = null;
     frameData = null;
     catalogError = '';
+    fetchDomainBoundaries(modelId).catch(() => {});
     refreshCatalog();
   }
 
@@ -345,6 +346,10 @@
   }
 
   onMount(() => {
+    // Las fronteras se piden a la vez que el catálogo, no cuando ya ha
+    // llegado el primer frame: son las mismas para todas las horas y así
+    // están listas antes de que haya un mapa que enmarcar.
+    fetchDomainBoundaries(selectedModel).catch(() => {});
     refreshCatalog();
     const catalogTimer = window.setInterval(refreshCatalog, 30_000);
     return () => {

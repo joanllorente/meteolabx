@@ -84,9 +84,12 @@ function describeApiDetail(detail) {
   return partes.join(' · ');
 }
 
-function fetchDomainBoundaries(model = DEFAULT_MODEL) {
+export function fetchDomainBoundaries(model = DEFAULT_MODEL) {
   if (!boundariesRequests.has(model)) {
-    boundariesRequests.set(model, getJson(`/v1/forecast/${model}/boundaries`)
+    // La revisión va en la URL para que la respuesta pueda declararse
+    // inmutable y quedarse en la CDN: la geometría de una revisión dada no
+    // cambia, y así el visitante no cruza el Atlántico a por las mismas costas.
+    boundariesRequests.set(model, getJson(`/v1/forecast/${model}/boundaries?revision=${FORECAST_DATA_REVISION}`)
       .then((payload) => payload.boundaries || [])
       .catch((error) => {
         // Sin contornos el mapa sigue siendo legible; se reintenta al siguiente.

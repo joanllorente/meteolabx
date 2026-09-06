@@ -9,6 +9,7 @@ namespace del almacén: los frames y el manifiesto de ECMWF viven bajo
 from __future__ import annotations
 
 from copy import deepcopy
+from functools import lru_cache
 import gzip
 import json
 import re
@@ -146,17 +147,25 @@ def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/boundaries", summary="Contornos del dominio ECMWF")
-def get_boundaries() -> Response:
+@lru_cache(maxsize=4)
+def _boundaries_gzip() -> bytes:
+    """Cuerpo comprimido de las fronteras, hecho una vez por proceso."""
     payload = json.dumps(
         {"boundaries": domain_boundaries()}, separators=(",", ":")
     ).encode("utf-8")
+    return gzip.compress(payload, compresslevel=6)
+
+
+@router.get("/boundaries", summary="Contornos del dominio ECMWF")
+def get_boundaries(revision: str = Query(default="", max_length=40)) -> Response:
+    """Fronteras del dominio; con `revision`, cacheables para siempre."""
+    cache = "public, max-age=31536000, immutable" if revision else "public, max-age=86400"
     return Response(
-        content=gzip.compress(payload, compresslevel=6),
+        content=_boundaries_gzip(),
         media_type="application/json",
         headers=_http_headers({
             "Content-Encoding": "gzip",
-            "Cache-Control": "public, max-age=86400",
+            "Cache-Control": cache,
             "Vary": "Accept-Encoding",
         }),
     )
