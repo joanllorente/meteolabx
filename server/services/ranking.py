@@ -568,9 +568,17 @@ async def fetch_meteocat_daily(
                             sum(max(0.0, value) for _epoch, value in rows),
                             max(epoch for epoch, _value in rows),
                         )
-            return _mc_build_records(
+            records = _mc_build_records(
                 raw, instant, wind_instant, direction_instant, rolling,
             )
+            # El día que se PIDIÓ, no aquel en que se pide. De madrugada la
+            # llamada de abajo cae a ayer, y sin esta marca el store archivaba
+            # sus máximas en el día de hoy: a las 00:15 el ranking mundial se
+            # llenaba con los 42 °C de la tarde anterior en Cataluña. Los demás
+            # adaptadores con este mismo fallback ya la estampaban.
+            for record in records:
+                record.local_date = day.isoformat()
+            return records
 
         recs = await _day(today)
         if sum(1 for r in recs if _station_has_data(r)) < 15:
@@ -2028,6 +2036,51 @@ def _flag_suspect_temperature(rec: StationDaily) -> Optional[str]:
     return razon
 
 
+# Estaciones apartadas del ranking a mano, hasta la fecha local indicada
+# (exclusive). Es un parche, no un mecanismo: sirve para tapar un sensor que
+# lleva días falseando una lista mientras se arregla el control automático que
+# debería haberlo cazado.
+#
+# La fecha de caducidad es obligatoria a propósito. Una lista de excepciones
+# sin plazo se convierte en permanente: nadie vuelve a mirarla y la estación
+# queda apartada años después de que la arreglaran.
+#
+#   - Buttigliera d'Asti: 43,1 °C con la segunda de Italia en 29,6, y 55 °C el
+#     día anterior. No la caza ningún control porque `is_climatologically_
+#     impossible` solo mira el suelo de frío —no hay techo de calor— y la
+#     amplitud diurna se queda por debajo de los 40 °C del umbral.
+RANKING_MANUAL_EXCLUSIONS: Dict[Tuple[str, str], str] = {
+    ("METEOHUB_IT", "dpcn-piemonte|45.02083|7.93389|buttigliera d'asti"): "2026-09-15",
+}
+
+
+def _is_manually_excluded(rec: StationDaily) -> bool:
+    """¿Está esta estación apartada a mano y sigue vigente la exclusión?"""
+    hasta = RANKING_MANUAL_EXCLUSIONS.get((rec.provider, rec.station_id))
+    if not hasta:
+        return False
+    # Un registro sin fecha local no puede compararse con la caducidad, y se
+    # aparta igual: dejar entrar a una estación que sabemos rota es peor que
+    # apartarla de más. En el flujo real no ocurre, el store asigna el día
+    # antes de filtrar.
+    return str(rec.local_date or "") < hasta
+
+
+def _drop_manually_excluded(rec: StationDaily) -> None:
+    """Vacía las medidas de una estación apartada a mano.
+
+    Se vacían todas, no solo la temperatura: si el aparato miente en una
+    variable no hay razón para fiarse del resto, y estas exclusiones se ponen
+    justamente cuando no se sabe qué le pasa.
+    """
+    if not _is_manually_excluded(rec):
+        return
+    rec.tmax = rec.tmin = rec.tcur = rec.tcur_at = None
+    rec.rain = rec.rain_24h = rec.rain_24h_at = None
+    rec.gust = None
+    rec.wind = rec.wind_dir = rec.wind_at = None
+
+
 def _drop_quarantined_variables(rec: StationDaily) -> None:
     """Deja fuera del ranking las variables en cuarentena de esa estación ese día.
 
@@ -2600,6 +2653,7 @@ class RankingStore:
             r.local_date = day
             _flag_suspect_temperature(r)
             _drop_quarantined_variables(r)
+            _drop_manually_excluded(r)
             by_day[day][r.station_id] = r
         for day, recs in by_day.items():
             self._daily[(provider, day)] = recs
@@ -2934,6 +2988,7 @@ class RankingStore:
                 r.local_date = day
                 _flag_suspect_temperature(r)
                 _drop_quarantined_variables(r)
+                _drop_manually_excluded(r)
                 self._daily.setdefault((provider, day), {})[r.station_id] = r
             self._prune_days(provider)
         if staged:  # no avanzar la marca si un reintento no consiguió nada
