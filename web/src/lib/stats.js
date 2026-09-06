@@ -11,8 +11,52 @@
  * y las entradas a cada pestaña dejaron de contarse y el panel se quedaba
  * enseñando solo las aperturas de ficha.
  */
+/**
+ * Interruptor para no contarse a uno mismo.
+ *
+ * Probar la aplicación —abrir la misma estación cinco veces para ver cómo va
+ * de rápida, saltar entre pestañas— ensucia las cifras del panel. Con
+ * `?stats=off` en cualquier URL este navegador deja de registrar nada, y con
+ * `?stats=on` vuelve a hacerlo. La decisión vive en `localStorage`: no viaja
+ * al servidor, no es una cuenta ni una cookie, y hay que repetirla en cada
+ * navegador o dispositivo desde el que se pruebe.
+ */
+const OPT_OUT = 'mlx-stats-off';
+
+/** Qué hacer con el parámetro de la URL y lo que ya había guardado. */
+export function resolveOptOut(parametro, guardado) {
+  if (parametro === 'off') return { excluido: true, guardar: true };
+  if (parametro === 'on') return { excluido: false, guardar: false };
+  return { excluido: guardado === '1', guardar: guardado === '1' };
+}
+
+export function statsExcluded() {
+  if (typeof localStorage === 'undefined' || typeof location === 'undefined') return false;
+  try {
+    const parametro = new URLSearchParams(location.search).get('stats');
+    const { excluido, guardar } = resolveOptOut(parametro, localStorage.getItem(OPT_OUT));
+    if (guardar) localStorage.setItem(OPT_OUT, '1');
+    else localStorage.removeItem(OPT_OUT);
+    return excluido;
+  } catch {
+    // Navegador sin almacenamiento: se cuenta, como siempre.
+    return false;
+  }
+}
+
+/** Enciende o apaga el registro en este navegador. Lo usa el panel interno. */
+export function setStatsExcluded(excluido) {
+  try {
+    if (excluido) localStorage.setItem(OPT_OUT, '1');
+    else localStorage.removeItem(OPT_OUT);
+  } catch {
+    /* sin almacenamiento no hay nada que recordar */
+  }
+}
+
 function send(path, body) {
   if (typeof fetch !== 'function') return;
+  if (statsExcluded()) return;
   fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -23,10 +67,80 @@ function send(path, body) {
   }).catch(() => {});
 }
 
-/** Alguien ha abierto la ficha de una estación. */
-export function recordVisit({ provider, stationId, name = '', source = 'app' }) {
+/**
+ * Buscadores que reconocemos por su dominio. Google tiene un dominio por
+ * país (`google.es`, `google.it`…), de ahí la comprobación aparte.
+ */
+const BUSCADORES = [
+  'bing.com',
+  'duckduckgo.com',
+  'ecosia.org',
+  'search.yahoo.com',
+  'search.brave.com',
+  'qwant.com',
+  'startpage.com',
+  'yandex.com',
+  'yandex.ru',
+  'baidu.com',
+  'seznam.cz',
+  'naver.com',
+  'mojeek.com'
+];
+
+const esGoogle = (host) => host === 'google.com' || /^google\.[a-z.]+$/.test(host);
+
+/**
+ * De dónde llegó quien abre una ficha.
+ *
+ * `interna` la pone el enrutador cuando el salto ocurre dentro de la
+ * aplicación; el resto sale del referente que da el navegador. Ojo con
+ * `directa`: ahí caen la barra de direcciones y los marcadores, pero también
+ * WhatsApp, el correo y cualquier sitio que no mande referente. Es «no se
+ * sabe», no «escribió la URL».
+ *
+ * Del referente se guarda solo el dominio, nunca la URL completa: el panel
+ * quiere saber qué sitios enlazan, no qué páginas lee nadie.
+ */
+export function classifyEntry(referrer, host, { interna = false } = {}) {
+  if (interna) return { kind: 'internal', domain: '' };
+  let origen = '';
+  try {
+    origen = new URL(String(referrer || '')).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    origen = '';
+  }
+  if (!origen) return { kind: 'direct', domain: '' };
+  const propio = String(host || '').toLowerCase().replace(/^www\./, '');
+  if (origen === propio) return { kind: 'internal', domain: '' };
+  const buscador = esGoogle(origen) || BUSCADORES.some((s) => origen === s || origen.endsWith(`.${s}`));
+  return { kind: buscador ? 'search' : 'external', domain: origen.slice(0, 120) };
+}
+
+/**
+ * Alguien ha abierto la ficha de una estación.
+ *
+ * `language` es el idioma en el que se leyó, que es también el que eligió
+ * quien llegó desde un buscador, y `entry` de dónde venía: el panel los usa
+ * para ver si Google sirve la variante que toca y por dónde entra la gente.
+ */
+export function recordVisit({
+  provider,
+  stationId,
+  name = '',
+  source = 'app',
+  language = '',
+  entry = null
+}) {
   if (!provider || !stationId) return;
-  send('/v1/stats/visit', { provider, station_id: stationId, name, source });
+  send('/v1/stats/visit', {
+    provider,
+    station_id: stationId,
+    name,
+    source,
+    language,
+    entry: entry?.kind || '',
+    referrer_domain: entry?.domain || ''
+  });
 }
 
 /**

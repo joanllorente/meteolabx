@@ -13,6 +13,8 @@
    */
   import { onMount } from 'svelte';
 
+  import { setStatsExcluded, statsExcluded } from '$lib/stats.js';
+
   let password = $state('');
   let data = $state(null);
   let error = $state('');
@@ -20,7 +22,17 @@
 
   const KEY = 'mlx-stats-password';
 
+  // Si este navegador ya está fuera del recuento, el panel lo dice y deja
+  // volver atrás sin tener que recordar el parámetro de la URL.
+  let excluido = $state(false);
+
+  function alternarExclusion() {
+    excluido = !excluido;
+    setStatsExcluded(excluido);
+  }
+
   onMount(() => {
+    excluido = statsExcluded();
     try {
       const guardada = sessionStorage.getItem(KEY);
       if (guardada) {
@@ -122,6 +134,24 @@
   }
 
   const FUENTES = { app: 'Aplicación', seo: 'Ficha indexable', legacy: 'Aplicación anterior' };
+  const IDIOMAS = {
+    es: 'Castellano',
+    ca: 'Catalán',
+    en: 'Inglés',
+    fr: 'Francés',
+    it: 'Italiano',
+    pt: 'Portugués'
+  };
+  // Las visitas anteriores a que se registrara el idioma lo llevan vacío.
+  const idioma = (codigo) => IDIOMAS[codigo] || (codigo ? codigo : '—');
+
+  const ENTRADAS = {
+    search: 'Buscador',
+    external: 'Enlace externo',
+    internal: 'Dentro de la aplicación',
+    direct: 'Directa o desconocida'
+  };
+  const entrada = (codigo) => ENTRADAS[codigo] || (codigo ? codigo : '—');
 
   const colacion = new Intl.Collator('es-ES', { sensitivity: 'base', numeric: true });
 
@@ -147,6 +177,15 @@
 
 <main>
   <h1>Uso interno</h1>
+
+  <p class="exclusion">
+    {excluido
+      ? 'Este navegador no cuenta en las estadísticas.'
+      : 'Este navegador cuenta en las estadísticas.'}
+    <button type="button" onclick={alternarExclusion}>
+      {excluido ? 'Volver a contarlo' : 'Dejar de contarlo'}
+    </button>
+  </p>
 
   {#if !data}
     <form onsubmit={consultar}>
@@ -271,8 +310,7 @@
                       {#each [
                         ['Visitas', d.visits],
                         ['Errores', d.errors],
-                        ['Fichas indexables', d.seo_views],
-                        ['Aperturas del panel', d.panel_clicks]
+                        ['Fichas indexables', d.seo_views]
                       ] as [etiqueta, bloque] (etiqueta)}
                         <article>
                           <span>{etiqueta}</span>
@@ -288,9 +326,44 @@
 
                     <div class="columnas">
                       <section>
-                        <h3>Visitas por origen</h3>
+                        <h3>Visitas por entrada</h3>
+                        {#if d.visits_by_entry?.some((fila) => fila.entry)}
+                          <table>
+                            <thead><tr><th>Entrada</th><th>30 d</th><th>Total</th></tr></thead>
+                            <tbody>
+                              {#each d.visits_by_entry as fila (fila.entry)}
+                                <tr>
+                                  <td>{entrada(fila.entry)}</td>
+                                  <td class="n">{numero(fila.d30)}</td>
+                                  <td class="n">{numero(fila.total)}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {:else}
+                          <p class="aviso">Sin entrada registrada todavía.</p>
+                        {/if}
+
+                        {#if d.referrers?.length}
+                          <h3>Quién enlaza</h3>
+                          <table>
+                            <thead><tr><th>Dominio</th><th>30 d</th><th>Total</th><th>Último</th></tr></thead>
+                            <tbody>
+                              {#each d.referrers as fila (fila.domain)}
+                                <tr>
+                                  <td>{fila.domain}</td>
+                                  <td class="n">{numero(fila.d30)}</td>
+                                  <td class="n">{numero(fila.total)}</td>
+                                  <td class="fecha">{fecha(fila.last_epoch)}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {/if}
+
+                        <h3>Visitas por versión</h3>
                         <table>
-                          <thead><tr><th>Origen</th><th>30 d</th><th>Total</th></tr></thead>
+                          <thead><tr><th>Versión</th><th>30 d</th><th>Total</th></tr></thead>
                           <tbody>
                             {#each Object.entries(FUENTES) as [fuente, etiqueta] (fuente)}
                               <tr>
@@ -301,6 +374,24 @@
                             {/each}
                           </tbody>
                         </table>
+
+                        <h3>Visitas por idioma</h3>
+                        {#if d.visits_by_language?.some((fila) => fila.language)}
+                          <table>
+                            <thead><tr><th>Idioma</th><th>30 d</th><th>Total</th></tr></thead>
+                            <tbody>
+                              {#each d.visits_by_language as fila (fila.language)}
+                                <tr>
+                                  <td>{idioma(fila.language)}</td>
+                                  <td class="n">{numero(fila.d30)}</td>
+                                  <td class="n">{numero(fila.total)}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {:else}
+                          <p class="aviso">Sin idioma registrado todavía.</p>
+                        {/if}
 
                         <h3>Errores por tipo</h3>
                         {#if d.error_kinds?.length}
@@ -344,12 +435,13 @@
                         <h3>Últimas visitas</h3>
                         {#if d.recent_visits?.length}
                           <table>
-                            <thead><tr><th>Cuándo</th><th>Origen</th></tr></thead>
+                            <thead><tr><th>Cuándo</th><th>Idioma</th><th>Entrada</th></tr></thead>
                             <tbody>
                               {#each d.recent_visits as evento, i (evento.epoch + '|' + i)}
                                 <tr>
                                   <td class="fecha">{fecha(evento.epoch)}</td>
-                                  <td>{FUENTES[evento.source] || evento.source}</td>
+                                  <td>{idioma(evento.language)}</td>
+                                  <td>{evento.referrer_domain || entrada(evento.entry)}</td>
                                 </tr>
                               {/each}
                             </tbody>
@@ -388,6 +480,16 @@
     background: var(--accent); color: #fff; font-size: 0.8rem; font-weight: 700;
   }
   .error { margin-top: 12px; font-size: 0.8rem; color: var(--alert-danger-fg); }
+
+  .exclusion {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 18px; font-size: 0.74rem; color: var(--muted);
+  }
+  .exclusion button {
+    padding: 5px 10px; background: var(--panel-2); color: var(--ink);
+    border: 1px solid var(--border); font-size: 0.72rem; font-weight: 650;
+    cursor: pointer;
+  }
 
   .totales { display: flex; flex-wrap: wrap; gap: 10px; }
   .totales article {

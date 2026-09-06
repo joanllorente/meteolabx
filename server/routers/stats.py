@@ -37,6 +37,10 @@ class VisitRequest(BaseModel):
     station_id: str = Field(min_length=1, max_length=128)
     name: str = Field(default="", max_length=200)
     source: Literal["app", "seo"] = "app"
+    language: str = Field(default="", max_length=8)
+    # De dónde llegó. Lo decide el navegador, que es quien ve el referente.
+    entry: Literal["", "search", "external", "internal", "direct"] = ""
+    referrer_domain: str = Field(default="", max_length=120)
 
 
 @router.post("/visit", status_code=204, summary="Registrar una conexión a estación")
@@ -46,7 +50,9 @@ def post_visit(body: VisitRequest, settings: Settings = Depends(get_settings)) -
     try:
         usage_stats.record_visit(
             body.provider, body.station_id, body.name,
-            source=body.source, settings=settings,
+            source=body.source, language=body.language,
+            entry=body.entry, referrer_domain=body.referrer_domain,
+            settings=settings,
         )
     except Exception:
         # Las estadísticas nunca deben tumbar una conexión: log y a seguir.

@@ -37,6 +37,14 @@ CREATE TABLE IF NOT EXISTS station_visits (
     station_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'app',
+    -- Idioma en el que se leyó la ficha, añadido en v1.3.5. Las visitas
+    -- anteriores lo llevan vacío: no se puede reconstruir.
+    language TEXT NOT NULL DEFAULT '',
+    -- Por dónde entró: buscador, enlace externo, navegación interna o
+    -- directa. `referrer_domain` guarda solo el dominio que enlazó
+    -- (`google.es`), nunca la URL: interesa quién enlaza, no qué se lee.
+    entry TEXT NOT NULL DEFAULT '',
+    referrer_domain TEXT NOT NULL DEFAULT '',
     epoch INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_visits_station ON station_visits(provider, station_id);
@@ -99,6 +107,10 @@ TRACKED_SECTIONS = (
 )
 _TRACKED_SECTION_SET = frozenset(TRACKED_SECTIONS)
 
+# De dónde llegó una visita. Se decide en el navegador, que es el único que
+# ve el referente; aquí solo se valida.
+ENTRY_POINTS = ("search", "external", "internal", "direct")
+
 # Ventanas del panel (etiqueta → segundos). "total" va aparte.
 WINDOWS = {
     "d1": 24 * 3600,
@@ -129,6 +141,11 @@ def _connect(settings=None) -> sqlite3.Connection:
         connection.execute(
             "ALTER TABLE station_visits ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'"
         )
+    for columna in ("language", "entry", "referrer_domain"):
+        if columna not in visit_columns:
+            connection.execute(
+                f"ALTER TABLE station_visits ADD COLUMN {columna} TEXT NOT NULL DEFAULT ''"
+            )
     return connection
 
 
@@ -138,6 +155,9 @@ def record_visit(
     name: str = "",
     *,
     source: str = "app",
+    language: str = "",
+    entry: str = "",
+    referrer_domain: str = "",
     settings=None,
 ) -> None:
     provider = str(provider or "").strip().upper()
@@ -146,10 +166,27 @@ def record_visit(
         return
     source = str(source or "").strip().lower()
     source = source if source in {"app", "seo"} else "app"
+    entry = str(entry or "").strip().lower()
+    entry = entry if entry in ENTRY_POINTS else ""
+    # El dominio solo tiene sentido cuando alguien nos enlazó de verdad.
+    dominio = str(referrer_domain or "").strip().lower()[:120]
+    if entry not in {"search", "external"}:
+        dominio = ""
     with _connect(settings) as connection:
         connection.execute(
-            "INSERT INTO station_visits(provider, station_id, name, source, epoch) VALUES (?, ?, ?, ?, ?)",
-            (provider, station_id, str(name or "").strip()[:120], source, int(time.time())),
+            "INSERT INTO station_visits"
+            "(provider, station_id, name, source, language, entry, referrer_domain, epoch)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                provider,
+                station_id,
+                str(name or "").strip()[:120],
+                source,
+                str(language or "").strip().lower()[:8],
+                entry,
+                dominio,
+                int(time.time()),
+            ),
         )
 
 
@@ -679,9 +716,47 @@ def station_detail(
             """,
             (now - WINDOWS["d30"], *clave),
         ).fetchall()
+        by_language_rows = connection.execute(
+            """
+            SELECT language,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM station_visits
+            WHERE provider = ? AND station_id = ?
+            GROUP BY language
+            ORDER BY total DESC
+            """,
+            (now - WINDOWS["d30"], *clave),
+        ).fetchall()
+        by_entry_rows = connection.execute(
+            """
+            SELECT entry,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM station_visits
+            WHERE provider = ? AND station_id = ?
+            GROUP BY entry
+            ORDER BY total DESC
+            """,
+            (now - WINDOWS["d30"], *clave),
+        ).fetchall()
+        referrer_rows = connection.execute(
+            """
+            SELECT referrer_domain,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM station_visits
+            WHERE provider = ? AND station_id = ? AND referrer_domain <> ''
+            GROUP BY referrer_domain
+            ORDER BY total DESC
+            LIMIT 20
+            """,
+            (now - WINDOWS["d30"], *clave),
+        ).fetchall()
         recent_visit_rows = connection.execute(
             f"""
-            SELECT epoch, source FROM station_visits
+            SELECT epoch, source, language, entry, referrer_domain FROM station_visits
             WHERE provider = ? AND station_id = ?
             ORDER BY epoch DESC LIMIT {limit}
             """,
@@ -729,8 +804,39 @@ def station_detail(
             }
             for row in error_kind_rows
         ],
+        "visits_by_language": [
+            {
+                "language": str(row["language"] or ""),
+                "d30": int(row["d30"] or 0),
+                "total": int(row["total"] or 0),
+            }
+            for row in by_language_rows
+        ],
+        "visits_by_entry": [
+            {
+                "entry": str(row["entry"] or ""),
+                "d30": int(row["d30"] or 0),
+                "total": int(row["total"] or 0),
+            }
+            for row in by_entry_rows
+        ],
+        "referrers": [
+            {
+                "domain": str(row["referrer_domain"] or ""),
+                "d30": int(row["d30"] or 0),
+                "total": int(row["total"] or 0),
+                "last_epoch": int(row["last_epoch"] or 0),
+            }
+            for row in referrer_rows
+        ],
         "recent_visits": [
-            {"epoch": int(row["epoch"] or 0), "source": str(row["source"] or "app")}
+            {
+                "epoch": int(row["epoch"] or 0),
+                "source": str(row["source"] or "app"),
+                "language": str(row["language"] or ""),
+                "entry": str(row["entry"] or ""),
+                "referrer_domain": str(row["referrer_domain"] or ""),
+            }
             for row in recent_visit_rows
         ],
         "recent_errors": [

@@ -73,7 +73,9 @@ test('canonical y alternates apuntan a las URLs nuevas', () => {
         meta.alternates.map((entry) => entry.code),
         item.alternate_order
       );
-      assert.equal(meta.xDefault, observationUrl(item.language_codes.includes('es') ? 'es' : item.language_codes[0], item.url_slug));
+      // El `x-default` es el idioma principal del país de la estación: la
+      // francesa manda a `/fr/`, no al castellano.
+      assert.equal(meta.xDefault, observationUrl(item.language_codes[0], item.url_slug));
     }
   }
 });

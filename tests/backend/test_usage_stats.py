@@ -309,7 +309,31 @@ def test_station_detail_endpoint(stats_client):
     """El detalle dice cuándo y de qué tipo fueron los errores."""
     assert stats_client.post(
         "/v1/stats/visit",
-        json={"provider": "METEOCAT", "station_id": "X4", "name": "Tarragona", "source": "app"},
+        json={
+            "provider": "METEOCAT",
+            "station_id": "X4",
+            "name": "Tarragona",
+            "source": "app",
+            "language": "ca",
+            "entry": "search",
+            "referrer_domain": "google.es",
+        },
+    ).status_code == 204
+    # Una entrada que no reconocemos no se guarda, y el dominio solo tiene
+    # sentido cuando alguien enlazó de verdad.
+    assert stats_client.post(
+        "/v1/stats/visit",
+        json={"provider": "METEOCAT", "station_id": "X4", "entry": "inventada"},
+    ).status_code == 422
+    assert stats_client.post(
+        "/v1/stats/visit",
+        json={
+            "provider": "METEOCAT",
+            "station_id": "X4",
+            "language": "es",
+            "entry": "direct",
+            "referrer_domain": "google.es",
+        },
     ).status_code == 204
     assert stats_client.post(
         "/v1/stats/error",
@@ -339,16 +363,35 @@ def test_station_detail_endpoint(stats_client):
     assert respuesta.status_code == 200
     detalle = respuesta.json()
     assert detalle["name"] == "Tarragona"
-    assert detalle["visits"]["total"] == 1
+    assert detalle["visits"]["total"] == 2
     assert detalle["visits"]["last_epoch"] > 0
-    assert detalle["visits_by_source"]["app"]["total"] == 1
+    assert detalle["visits_by_source"]["app"]["total"] == 2
     assert detalle["errors"]["total"] == 2
     assert {tipo["kind"] for tipo in detalle["error_kinds"]} == {"timeout", "network"}
     assert len(detalle["recent_errors"]) == 2
     assert all(evento["epoch"] > 0 for evento in detalle["recent_errors"])
     codigos = {evento["kind"]: evento["status_code"] for evento in detalle["recent_errors"]}
     assert codigos == {"timeout": 504, "network": None}
-    assert len(detalle["recent_visits"]) == 1
+    assert len(detalle["recent_visits"]) == 2
+    # El idioma y la entrada viajan con la visita. Las dos caen en el mismo
+    # segundo, así que se busca por su contenido y no por su posición.
+    desde_google = next(v for v in detalle["recent_visits"] if v["entry"] == "search")
+    assert desde_google["language"] == "ca"
+    assert desde_google["referrer_domain"] == "google.es"
+    directa = next(v for v in detalle["recent_visits"] if v["entry"] == "direct")
+    assert directa["referrer_domain"] == ""
+    assert sorted(detalle["visits_by_language"], key=lambda f: f["language"]) == [
+        {"language": "ca", "d30": 1, "total": 1},
+        {"language": "es", "d30": 1, "total": 1},
+    ]
+    assert sorted(detalle["visits_by_entry"], key=lambda f: f["entry"]) == [
+        {"entry": "direct", "d30": 1, "total": 1},
+        {"entry": "search", "d30": 1, "total": 1},
+    ]
+    # La visita directa no arrastra el dominio que venía en el cuerpo.
+    assert detalle["referrers"] == [
+        {"domain": "google.es", "d30": 1, "total": 1, "last_epoch": desde_google["epoch"]}
+    ]
 
     # El identificador se normaliza igual que al registrar (red en mayúsculas).
     assert stats_client.get(

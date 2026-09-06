@@ -83,7 +83,14 @@ export function stationMeta(station, language, slug) {
   const location = stationLocationLabel(station, language) || t(language, 'fallback_location');
   const canonical = observationUrl(language, slug);
   const alternates = stationAlternates(station, slug);
+  // El `x-default` es a quién manda Google cuando ninguna variante le encaja.
+  // Tiene que ser el idioma del país de la estación —una de Cremona pide la
+  // italiana—, no el castellano: apuntando siempre a `es` acabábamos con
+  // fichas italianas indexadas en castellano y ofrecidas con «traducir esta
+  // página» a quien busca en italiano.
+  const principal = primaryLanguage(station);
   const xDefault =
+    alternates.find((item) => item.code === principal)?.url ||
     alternates.find((item) => item.code === DEFAULT_LANGUAGE)?.url ||
     alternates[0]?.url ||
     canonical;

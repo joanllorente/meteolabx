@@ -1,6 +1,6 @@
 <script>
   import { forgetConnection, rememberConnection } from '$lib/connection.svelte.js';
-  import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
 
   import AppShell from '$lib/components/AppShell.svelte';
   import ObservationPanel from '$lib/components/ObservationPanel.svelte';
@@ -8,7 +8,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import { observationModel } from '$lib/observation/model.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
-  import { recordConnectionError, recordSeoView, recordVisit } from '$lib/stats.js';
+  import { classifyEntry, recordConnectionError, recordSeoView, recordVisit } from '$lib/stats.js';
   import { startLiveObservation } from '$lib/live.svelte.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { appTabs, observationTabs, stationStripe } from '$lib/tabs.js';
@@ -39,13 +39,22 @@
   const tabs = $derived(appTabs({ language: lang, slug }));
   const stripe = $derived(stationStripe(station, meta));
 
-  onMount(() => {
+  // `afterNavigate`, no `onMount`: al saltar de una estación a otra el
+  // componente se reutiliza y el montaje no vuelve a ocurrir, así que esas
+  // visitas no se contaban. Además trae `from`, que es lo único que
+  // distingue un salto dentro de la aplicación de una entrada desde fuera:
+  // `document.referrer` sigue siendo el de la primera carga.
+  afterNavigate(({ from }) => {
     const estacion = { provider: station.provider, stationId: station.station_id, name: meta.name };
     // El contador de visitas SEO que ya alimentaban las páginas estáticas.
     recordSeoView({ ...estacion, language: lang });
     // Y la conexión en sí, que hasta ahora solo contaba la aplicación
     // anterior: sin esto el panel interno se queda sin la mitad de la foto.
-    recordVisit(estacion);
+    recordVisit({
+      ...estacion,
+      language: lang,
+      entry: classifyEntry(document.referrer, location.host, { interna: Boolean(from) })
+    });
     if (!model.available) {
       recordConnectionError({
         ...estacion,
