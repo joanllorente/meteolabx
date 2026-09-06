@@ -530,6 +530,23 @@ def _record(row: sqlite3.Row) -> Dict[str, Any]:
         timezone_key = str(row["timezone"] or "").strip()
         country = IEM_COUNTRY_TIMEZONE_OVERRIDES.get((country_key, timezone_key), country)
     country = _catalog_country(row["provider"], country, row["latitude"])
+    lifecycle: Dict[str, Any] = {}
+    if "raw_json" in row.keys():
+        try:
+            raw = json.loads(row["raw_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw = {}
+        if isinstance(raw, dict):
+            lifecycle = {
+                "status": str(raw.get("status") or "").strip() or None,
+                "status_reason": str(raw.get("status_reason") or "").strip() or None,
+                "replacement_station_id": (
+                    str(raw.get("replacement_station_id") or "").strip() or None
+                ),
+                "replacement_station_name": (
+                    str(raw.get("replacement_station_name") or "").strip() or None
+                ),
+            }
     return {
         "provider": row["provider"],
         "network": row["network_code"],
@@ -553,6 +570,7 @@ def _record(row: sqlite3.Row) -> Dict[str, Any]:
         # son automáticas).
         "manual": bool(row["manual"]) if "manual" in row.keys() else False,
         "sensors": _sensors(row),
+        **lifecycle,
     }
 
 
@@ -588,9 +606,11 @@ def _effective_country_sql() -> str:
 _SELECT = """
 SELECT s.*, ss.station_pk AS sensor_station_pk,
        ss.thermometer, ss.hygrometer, ss.barometer, ss.anemometer,
-       ss.wind_vane, ss.rain_gauge, ss.pyranometer, ss.uv
+       ss.wind_vane, ss.rain_gauge, ss.pyranometer, ss.uv,
+       sir.raw_json
 FROM stations s
 LEFT JOIN station_sensors ss USING(station_pk)
+LEFT JOIN station_inventory_records sir ON sir.record_pk = s.source_record_pk
 LEFT JOIN station_visibility_overrides svo USING(station_pk)
 """
 

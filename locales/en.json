@@ -2,7 +2,9 @@
   "warnings": {
     "data_age": "⚠️ {provider} data is {minutes} minutes old. The station may not be reporting.",
     "missing_elevation": "⚠️ Elevation is missing. Absolute pressure and thermodynamics were computed with elevation 0; enter the elevation in the sidebar for better accuracy.",
-    "flatlined_series": "⚠️ Windy is returning one or more variables with no variation for several hours. The chart shows the received data, but affected highs and lows are hidden because they are unreliable."
+    "flatlined_series": "⚠️ Windy is returning one or more variables with no variation for several hours. The chart shows the received data, but affected highs and lows are hidden because they are unreliable.",
+    "historical_station": "⚠️ This is a historical station and it no longer publishes current observations. You can view its series in the History tab.",
+    "historical_station_replacement": "This station has moved. The current station is {station_link}."
   },
   "tabs": {
     "current": "Current",

@@ -2,7 +2,9 @@
   "warnings": {
     "data_age": "⚠️ Dados de {provider} com {minutes} minutos de antiguidade. A estação pode não estar a reportar.",
     "missing_elevation": "⚠️ Falta o valor da altitude. A pressão absoluta e a termodinâmica foram calculadas com altitude 0; introduza a altitude no painel lateral para maior precisão.",
-    "flatlined_series": "⚠️ O Windy devolve uma ou várias variáveis sem qualquer variação durante horas. O gráfico mostra os dados recebidos, mas os máximos e mínimos afetados são ocultados por não serem fiáveis."
+    "flatlined_series": "⚠️ O Windy devolve uma ou várias variáveis sem qualquer variação durante horas. O gráfico mostra os dados recebidos, mas os máximos e mínimos afetados são ocultados por não serem fiáveis.",
+    "historical_station": "⚠️ Esta estação é histórica e já não publica observações atuais. Pode consultar a respetiva série no separador Histórico.",
+    "historical_station_replacement": "Esta estação foi deslocada. A estação atual é {station_link}."
   },
   "tabs": {
     "current": "Atual",

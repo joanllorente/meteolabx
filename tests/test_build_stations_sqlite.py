@@ -92,6 +92,42 @@ def test_build_catalog_without_iem_marks_metadata(tmp_path):
         ).fetchone()[0] == "false"
 
 
+def test_aemet_historical_station_exposes_replacement_metadata(tmp_path, monkeypatch):
+    source = tmp_path / "aemet.json"
+    source.write_text(json.dumps({
+        "estaciones": [
+            {
+                "idema": "5000C", "nombre": "CEUTA", "lat": 35.88,
+                "lon": -5.34, "online": False, "status": "historical",
+                "status_reason": "relocated",
+                "replacement_station_id": "5000D",
+                "replacement_station_name": "CEUTA LOMA LARGA",
+            },
+            {
+                "idema": "5000D", "nombre": "CEUTA LOMA LARGA",
+                "lat": 35.89, "lon": -5.34, "online": True,
+                "status": "active",
+            },
+        ],
+    }), encoding="utf-8")
+    target = tmp_path / "stations.sqlite"
+    build_database(target, provider_files={"AEMET": source})
+
+    monkeypatch.setattr(stations.data_files, "STATIONS_DB_PATH", target)
+    archived = stations.get_station("AEMET", "5000C")
+    active = stations.get_station("AEMET", "5000D")
+
+    assert archived is not None
+    assert archived["is_historical_only"] is True
+    assert archived["status"] == "historical"
+    assert archived["status_reason"] == "relocated"
+    assert archived["replacement_station_id"] == "5000D"
+    assert archived["replacement_station_name"] == "CEUTA LOMA LARGA"
+    assert active is not None
+    assert active["is_historical_only"] is False
+    assert active["status"] == "active"
+
+
 def test_build_catalog_excludes_nws_stations_with_confirmed_observation_404(tmp_path):
     nws = tmp_path / "nws.json"
     nws.write_text(json.dumps([

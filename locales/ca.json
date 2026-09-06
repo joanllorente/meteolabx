@@ -2,7 +2,9 @@
   "warnings": {
     "data_age": "⚠️ Les dades de {provider} tenen {minutes} minuts d’antiguitat. Pot ser que l’estació no estigui transmetent.",
     "missing_elevation": "⚠️ Falta l’altitud. La pressió absoluta i la termodinàmica s’han calculat amb altitud 0; introdueix l’altitud a la barra lateral per obtenir més precisió.",
-    "flatlined_series": "⚠️ Windy retorna una o diverses variables sense cap variació durant hores. El gràfic mostra les dades rebudes, però s’oculten els màxims i mínims afectats perquè no són fiables."
+    "flatlined_series": "⚠️ Windy retorna una o diverses variables sense cap variació durant hores. El gràfic mostra les dades rebudes, però s’oculten els màxims i mínims afectats perquè no són fiables.",
+    "historical_station": "⚠️ Aquesta estació és històrica i ja no publica observacions actuals. Pots consultar-ne la sèrie a la pestanya Històric.",
+    "historical_station_replacement": "Aquesta estació s’ha traslladat. L’estació actual és {station_link}."
   },
   "tabs": {
     "current": "Actual",

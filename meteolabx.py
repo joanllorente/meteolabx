@@ -533,6 +533,42 @@ def _max_data_age_minutes(provider_id: str) -> float:
     return float(_PROVIDER_MAX_DATA_AGE_MINUTES.get(key, MAX_DATA_AGE_MINUTES))
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _catalog_station_lifecycle(provider_id: str, station_id: str) -> dict:
+    """Obtiene el estado operativo canónico sin consultar al proveedor."""
+    from utils.api_client import fetch_station_by_id_via_api
+
+    try:
+        return dict(fetch_station_by_id_via_api(provider_id, station_id) or {})
+    except BackendApiError:
+        return {}
+
+
+def _render_historical_station_notice(station: dict) -> None:
+    """Aviso común de archivo y, cuando existe, su estación sustituta."""
+    st.warning(t("warnings.historical_station"))
+    replacement_id = str(station.get("replacement_station_id") or "").strip()
+    replacement_name = str(station.get("replacement_station_name") or "").strip()
+    if replacement_id:
+        from urllib.parse import quote
+
+        from utils.station_slug import slugify
+
+        provider_id = str(station.get("provider") or "").strip().upper()
+        replacement_label = f"{replacement_id} — {replacement_name or replacement_id}"
+        replacement_url = (
+            f"?e={quote(provider_id, safe='')}~{quote(slugify(replacement_name or replacement_id), safe='-')}"
+            f"&sid={quote(replacement_id, safe='')}&tab=observacion"
+        )
+        replacement_link = f"[{replacement_label}]({replacement_url})"
+        st.info(
+            t(
+                "warnings.historical_station_replacement",
+                station_link=replacement_link,
+            )
+        )
+
+
 def _process_standard_provider_connection(provider_id: str):
     provider_id = coerce_str(provider_id, upper=True)
     config = _standard_provider_runtime_config().get(provider_id)
@@ -546,6 +582,14 @@ def _process_standard_provider_connection(provider_id: str):
         station_id = _get_provider_station_id(provider_id)
         if not station_id:
             raise BackendApiError("missing_station")
+
+        station_lifecycle = _catalog_station_lifecycle(provider_id, station_id)
+        if bool(station_lifecycle.get("is_historical_only", False)):
+            _render_historical_station_notice(station_lifecycle)
+            st.session_state[CONNECTED] = True
+            st.session_state.pop(CONNECTION_LOADING, None)
+            clear_connection_loading_overlay()
+            return None, {}
 
         credentials = {}
         if provider_id == "WEATHERLINK":

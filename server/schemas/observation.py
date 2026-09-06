@@ -633,6 +633,22 @@ class StationInfo(BaseModel):
         default=False,
         description="Indica si la estación está archivada: tiene histórico, pero no observación actual.",
     )
+    status: Optional[str] = Field(
+        default=None,
+        description="Estado operativo declarado por el inventario (por ejemplo, active o historical).",
+    )
+    status_reason: Optional[str] = Field(
+        default=None,
+        description="Motivo normalizado del estado operativo, si está declarado.",
+    )
+    replacement_station_id: Optional[str] = Field(
+        default=None,
+        description="ID de la estación operativa que sustituye a esta estación histórica.",
+    )
+    replacement_station_name: Optional[str] = Field(
+        default=None,
+        description="Nombre de la estación operativa sustituta.",
+    )
     manual: bool = Field(
         default=False,
         description=(

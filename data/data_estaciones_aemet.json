@@ -1,8 +1,9 @@
 {
   "version": "1.1",
   "fecha_generacion": "2026-02-06 22:31:47",
+  "fecha_actualizacion": "2026-09-06 12:51:36",
   "fecha_limpieza": "2026-02-06",
-  "total_estaciones": 821,
+  "total_estaciones": 822,
   "fuente": "AEMET OpenData",
   "estaciones": [
     {
@@ -4059,10 +4060,16 @@
     {
       "idema": "5000C",
       "nombre": "CEUTA",
-      "provincia": "",
+      "provincia": "CEUTA",
       "lat": 35.888727,
       "lon": -5.346967,
       "alt": 87.0,
+      "online": false,
+      "status": "historical",
+      "status_reason": "relocated",
+      "historical_only": true,
+      "replacement_station_id": "5000D",
+      "replacement_station_name": "CEUTA LOMA LARGA",
       "sensors": {
         "thermometer": false,
         "hygrometer": false,
@@ -4070,6 +4077,31 @@
         "anemometer": false,
         "wind_vane": false,
         "rain_gauge": false,
+        "pyranometer": false,
+        "uv": false
+      }
+    },
+    {
+      "idema": "5000D",
+      "nombre": "CEUTA LOMA LARGA",
+      "provincia": "CEUTA",
+      "municipality": "CEUTA",
+      "country_code": "ES",
+      "lat": 35.889167,
+      "lon": -5.340556,
+      "alt": 55.4,
+      "tz": "Europe/Madrid",
+      "online": true,
+      "status": "active",
+      "replacement_for_station_id": "5000C",
+      "metadata_verified_at": "2026-09-06",
+      "sensors": {
+        "thermometer": true,
+        "hygrometer": true,
+        "barometer": true,
+        "anemometer": true,
+        "wind_vane": true,
+        "rain_gauge": true,
         "pyranometer": false,
         "uv": false
       }
