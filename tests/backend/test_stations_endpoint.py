@@ -226,7 +226,9 @@ def test_country_counts_and_iem_country_filter() -> None:
     )
     providers = {row["provider"] for row in spain_results}
     assert "AEMET" in providers
-    assert "IEM" in providers
+    # España tiene bulk propio y las de IEM eran casi todas duplicados suyos:
+    # no se enseñan mientras no exista la deduplicación.
+    assert "IEM" not in providers
     assert len(providers) >= 4
 
 
@@ -348,7 +350,9 @@ def test_stations_catalog_endpoint_filters_country_without_spatial_clipping() ->
     body = response.json()
     providers = {row["provider"] for row in body["stations"]}
     assert body["count"] >= 1400
-    assert {"AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM", "IEM"} <= providers
+    # IEM no sale: España tiene bulk propio y sus estaciones de IEM eran casi
+    # todas duplicados de AEMET con otro identificador.
+    assert {"AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM"} <= providers
     assert all(row["country"] == "ES" for row in body["stations"])
     assert "QBB" not in {row["station_id"] for row in body["stations"]}
 

@@ -30,6 +30,13 @@ CONNECTABLE_PROVIDERS = (
 )
 CATALOG_PROVIDERS = CONNECTABLE_PROVIDERS
 PWS_CATALOG_PROVIDERS = ("WINDY", "NETATMO")
+
+# Agregadores: reexponen redes ajenas y por volumen tapan a todo lo demás.
+# IEM son 194.000 estaciones solo en Estados Unidos, así que con el tope del
+# mapa —60.000— se quedaba con el cupo entero y ni una sola del NWS, de
+# Netatmo o de Windy llegaba a dibujarse. Van los últimos: lo que aportan es
+# cobertura de relleno, no la red que alguien busca por su nombre.
+AGGREGATOR_CATALOG_PROVIDERS = ("IEM",)
 OFFICIAL_CATALOG_PROVIDERS = tuple(
     provider for provider in CATALOG_PROVIDERS
     if provider not in PWS_CATALOG_PROVIDERS
@@ -52,6 +59,28 @@ PROVIDER_COUNTRIES = {
     "ECCC": "CA",
     "CLIMANTARTIDE": "AQ",
 }
+
+# Antártida: la excepción. CLIMANTARTIDE solo cubre las bases italianas —11 de
+# las 51 que hay— y quitar IEM dejaría el continente casi vacío, así que allí
+# conviven las dos redes y el solapamiento se resuelve estación por estación
+# (``_IEM_SUPERSEDED_BY_CLIMANTARTIDE``).
+_IEM_KEEP_DESPITE_OWN_PROVIDER = ("AQ",)
+
+# Donde hay red propia, IEM no se enseña: es casi todo duplicado, la misma
+# estación con otro identificador y otro nombre. Vale para el mapa y para la
+# búsqueda por cercanía.
+#
+# Que la red propia tenga bulk o no es indiferente aquí. Eso decide de dónde
+# salen los datos del RANKING —sin bulk, como NWS o el Met Office, lo cubre
+# IEM (:data:`IEM_RANKING_EXCLUDE_COUNTRIES`)—, pero el catálogo enseña la red
+# del país en cualquier caso.
+#
+# Provisional mientras no exista la deduplicación: cuando esté, habrá que
+# decidir si IEM vuelve al mapa y a la búsqueda de estos países.
+COUNTRIES_WITH_OWN_NETWORK = tuple(sorted(
+    set(PROVIDER_COUNTRIES.values()) - set(_IEM_KEEP_DESPITE_OWN_PROVIDER)
+))
+
 
 HISTORICAL_PROVIDER_IDS = {"AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA"}
 IEM_HISTORICAL_NETWORK_MARKERS = ("ASOS", "AWOS", "METAR")
@@ -1527,9 +1556,63 @@ def search_near(
             sensors=wanted_sensors, limit=limit,
         ))
     results.sort(key=lambda item: item["distance_km"])
-    # Se filtra ANTES de recortar: si no, una estación muda ocuparía una de las
-    # plazas del límite y devolveríamos menos resultados de los pedidos.
-    return _drop_silent_stations(results)[:max(1, int(limit))]
+    # Se filtra ANTES de recortar: si no, una estación muda —o un duplicado de
+    # IEM— ocuparía una de las plazas del límite y devolveríamos menos
+    # resultados de los pedidos.
+    return drop_redundant_iem(
+        _drop_silent_stations(results), requested_providers=providers,
+    )[:max(1, int(limit))]
+
+
+def drop_redundant_iem(
+    results: List[Dict[str, Any]], *, requested_providers: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """Quita las estaciones de IEM allí donde el proveedor propio ya las trae.
+
+    En España IEM era casi todo duplicado: la misma estación de AEMET otra vez,
+    con otro identificador y otro nombre. Mientras no haya deduplicación, en
+    los países con bulk propio se enseña solo la red del país.
+
+    El país sale del registro, no del filtro de la consulta: una búsqueda por
+    cercanía cerca de una frontera devuelve estaciones de varios países y cada
+    una se juzga por el suyo.
+
+    Pedir IEM por su nombre lo desactiva. Esto esconde los duplicados de las
+    vistas generales —mapa y búsqueda—, no bloquea una consulta dirigida:
+    quien pregunta por IEM quiere ver IEM, y devolverle una lista vacía sería
+    contestar otra cosa.
+    """
+    if requested_providers and any(
+        str(provider).strip().upper() in AGGREGATOR_CATALOG_PROVIDERS
+        for provider in requested_providers
+    ):
+        return results
+    excluded = set(COUNTRIES_WITH_OWN_NETWORK)
+    return [
+        item for item in results
+        if not (
+            str(item.get("provider") or "") in AGGREGATOR_CATALOG_PROVIDERS
+            and str(item.get("country") or "").strip().upper() in excluded
+        )
+    ]
+
+
+def catalog_sort_key(item: Dict[str, Any]) -> tuple:
+    """Quién sobrevive al recorte de ``limit``, de más específico a más genérico.
+
+    Primero las redes oficiales de cada país, luego las de particulares y al
+    final los agregadores. Ordenar solo por nombre de proveedor no bastaba:
+    entre los oficiales el criterio era alfabético, IEM va antes que NWS y con
+    sus 194.000 estaciones estadounidenses agotaba las 60.000 que carga el
+    mapa sin dejar sitio a ninguna otra red del país.
+    """
+    provider = str(item.get("provider") or "")
+    return (
+        provider in AGGREGATOR_CATALOG_PROVIDERS,
+        provider in PWS_CATALOG_PROVIDERS,
+        provider,
+        str(item.get("station_id") or "").casefold(),
+    )
 
 
 def search_catalog(
@@ -1618,14 +1701,10 @@ def search_catalog(
             sensors=wanted_sensors,
             limit=limit,
         ))
-    # PWS al final: con ``limit`` justo, los catálogos masivos (Netatmo)
-    # no deben expulsar a los proveedores oficiales del resultado.
-    results.sort(key=lambda item: (
-        item["provider"] in PWS_CATALOG_PROVIDERS,
-        item["provider"],
-        item["station_id"].casefold(),
-    ))
-    return _drop_silent_stations(results)[:max(1, int(limit))]
+    results.sort(key=catalog_sort_key)
+    return drop_redundant_iem(
+        _drop_silent_stations(results), requested_providers=providers,
+    )[:max(1, int(limit))]
 
 
 def raw_metadata(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
