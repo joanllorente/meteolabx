@@ -31,10 +31,17 @@ test('sin diagnóstico o sin lectura reciente, la estación está callada', () =
 });
 
 const languages = ['es', 'ca', 'en', 'fr', 'it', 'pt'];
-const keys = ['data_unavailable', 'provider_unauthorized', 'provider_timeout', 'provider_unreachable'];
+const keys = [
+  'data_unavailable',
+  'historical_station',
+  'historical_station_relocated',
+  'provider_unauthorized',
+  'provider_timeout',
+  'provider_unreachable'
+];
 
 for (const language of languages) {
-  test(`los cuatro motivos están traducidos al ${language}`, () => {
+  test(`los avisos de indisponibilidad e histórica están traducidos al ${language}`, () => {
     for (const key of keys) {
       const text = ui(language, key);
       assert.equal(typeof text, 'string');

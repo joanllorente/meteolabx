@@ -523,6 +523,25 @@ def _is_connectable(row: sqlite3.Row) -> bool:
     return True
 
 
+def _lifecycle_metadata(raw_json: Any) -> Dict[str, Any]:
+    try:
+        raw = json.loads(raw_json or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raw = {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        "status": str(raw.get("status") or "").strip() or None,
+        "status_reason": str(raw.get("status_reason") or "").strip() or None,
+        "replacement_station_id": (
+            str(raw.get("replacement_station_id") or "").strip() or None
+        ),
+        "replacement_station_name": (
+            str(raw.get("replacement_station_name") or "").strip() or None
+        ),
+    }
+
+
 def _record(row: sqlite3.Row) -> Dict[str, Any]:
     country = PROVIDER_COUNTRIES.get(row["provider"]) or row["country"]
     if row["provider"] == "IEM":
@@ -530,23 +549,7 @@ def _record(row: sqlite3.Row) -> Dict[str, Any]:
         timezone_key = str(row["timezone"] or "").strip()
         country = IEM_COUNTRY_TIMEZONE_OVERRIDES.get((country_key, timezone_key), country)
     country = _catalog_country(row["provider"], country, row["latitude"])
-    lifecycle: Dict[str, Any] = {}
-    if "raw_json" in row.keys():
-        try:
-            raw = json.loads(row["raw_json"] or "{}")
-        except (TypeError, ValueError, json.JSONDecodeError):
-            raw = {}
-        if isinstance(raw, dict):
-            lifecycle = {
-                "status": str(raw.get("status") or "").strip() or None,
-                "status_reason": str(raw.get("status_reason") or "").strip() or None,
-                "replacement_station_id": (
-                    str(raw.get("replacement_station_id") or "").strip() or None
-                ),
-                "replacement_station_name": (
-                    str(raw.get("replacement_station_name") or "").strip() or None
-                ),
-            }
+    lifecycle = _lifecycle_metadata(row["raw_json"]) if "raw_json" in row.keys() else {}
     return {
         "provider": row["provider"],
         "network": row["network_code"],
@@ -796,9 +799,23 @@ def find_by_url_slug(slug: str) -> Optional[Dict[str, Any]]:
                 "scripts/build_station_url_slugs.py"
             )
             return None
+        raw_json = None
+        if row is not None and "source_record_pk" in row.keys():
+            try:
+                source = connection.execute(
+                    "SELECT raw_json FROM station_inventory_records WHERE record_pk = ?",
+                    (row["source_record_pk"],),
+                ).fetchone()
+                raw_json = source["raw_json"] if source is not None else None
+            except sqlite3.OperationalError:
+                # Compatibilidad con catálogos mínimos/antiguos que todavía
+                # no conservan el JSON de inventario.
+                pass
     if row is None:
         return None
     record = _record(row)
+    if raw_json is not None:
+        record.update(_lifecycle_metadata(raw_json))
     record["url_slug"] = row["url_slug"]
     record["indexable"] = bool(row["indexable"])
     # País TAL CUAL está en el catálogo, sin las correcciones que ``_record``

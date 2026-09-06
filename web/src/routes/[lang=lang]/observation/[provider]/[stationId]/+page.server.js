@@ -49,12 +49,14 @@ export async function load({ params, fetch, setHeaders }) {
     redirect(301, observationPath(lang, slugPayload.url_slug));
   }
 
-  const observation = await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
-    unavailable: {
-      status: cause instanceof ApiError ? cause.status : 0,
-      code: cause instanceof ApiError ? cause.body?.error_code || 'provider_error' : 'unreachable'
-    }
-  }));
+  const observation = station.is_historical_only
+    ? { unavailable: { status: 410, code: 'historical_station' } }
+    : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
+        unavailable: {
+          status: cause instanceof ApiError ? cause.status : 0,
+          code: cause instanceof ApiError ? cause.body?.error_code || 'provider_error' : 'unreachable'
+        }
+      }));
 
   setHeaders({ 'cache-control': 'public, max-age=60, stale-while-revalidate=300' });
 

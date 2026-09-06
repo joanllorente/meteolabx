@@ -2,6 +2,7 @@ import json
 import sqlite3
 
 from scripts.build_stations_sqlite import build_database
+from scripts.build_station_url_slugs import build_url_slugs
 from server.services import stations
 
 
@@ -112,10 +113,12 @@ def test_aemet_historical_station_exposes_replacement_metadata(tmp_path, monkeyp
     }), encoding="utf-8")
     target = tmp_path / "stations.sqlite"
     build_database(target, provider_files={"AEMET": source})
+    build_url_slugs(target)
 
     monkeypatch.setattr(stations.data_files, "STATIONS_DB_PATH", target)
     archived = stations.get_station("AEMET", "5000C")
     active = stations.get_station("AEMET", "5000D")
+    archived_by_slug = stations.find_by_url_slug("ceuta-5000c")
 
     assert archived is not None
     assert archived["is_historical_only"] is True
@@ -123,6 +126,10 @@ def test_aemet_historical_station_exposes_replacement_metadata(tmp_path, monkeyp
     assert archived["status_reason"] == "relocated"
     assert archived["replacement_station_id"] == "5000D"
     assert archived["replacement_station_name"] == "CEUTA LOMA LARGA"
+    assert archived_by_slug is not None
+    assert archived_by_slug["is_historical_only"] is True
+    assert archived_by_slug["replacement_station_id"] == "5000D"
+    assert archived_by_slug["replacement_station_name"] == "CEUTA LOMA LARGA"
     assert active is not None
     assert active["is_historical_only"] is False
     assert active["status"] == "active"

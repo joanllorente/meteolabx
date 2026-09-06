@@ -159,7 +159,8 @@
 
   $effect(() => {
     // Las redes con credencial ya tienen su propio ciclo más abajo.
-    if (data.personal || !data.station) return;
+    live = null;
+    if (data.personal || !data.station || data.station.is_historical_only) return;
     return startLiveObservation(
       {
         provider: data.station.provider,
@@ -229,7 +230,9 @@
   disconnectHref="/"
   onDisconnect={forgetConnection}
 >
-  {#if data.personal && personal.loading}
+  {#if station.is_historical_only}
+    <p class="offline">{ui(lang, 'historical_station')}</p>
+  {:else if data.personal && personal.loading}
     <!-- Mientras se consulta no se sabe si hay datos: decir que no los hay es
          mentir a medias, y es lo que se veía al conectar una estación propia. -->
     <p class="offline">{ui(lang, 'loading_station')}</p>

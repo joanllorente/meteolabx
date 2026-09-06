@@ -8,6 +8,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import { observationModel } from '$lib/observation/model.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
+  import { displayName } from '$lib/seo/i18n.js';
   import { classifyEntry, recordConnectionError, recordSeoView, recordVisit } from '$lib/stats.js';
   import { startLiveObservation } from '$lib/live.svelte.js';
   import { unitPreferences } from '$lib/units.svelte.js';
@@ -26,16 +27,18 @@
   const observation = $derived(live || data.observation);
   const model = $derived(observationModel(observation, station, lang, unitPreferences));
 
-  $effect(() =>
-    startLiveObservation(
+  $effect(() => {
+    live = null;
+    if (station.is_historical_only) return;
+    return startLiveObservation(
       {
         provider: station.provider,
         stationId: station.station_id,
         elevation: station.elevation ?? null
       },
       (payload) => (live = payload)
-    )
-  );
+    );
+  });
   const tabs = $derived(appTabs({ language: lang, slug }));
   const stripe = $derived(stationStripe(station, meta));
 
@@ -55,7 +58,7 @@
       language: lang,
       entry: classifyEntry(document.referrer, location.host, { interna: Boolean(from) })
     });
-    if (!model.available) {
+    if (!model.available && !station.is_historical_only) {
       recordConnectionError({
         ...estacion,
         kind: unavailableKey(observation?.unavailable),
@@ -118,7 +121,17 @@
   disconnectHref="/"
   onDisconnect={forgetConnection}
 >
-  {#if !model.available}
+  {#if station.is_historical_only}
+    <p class="offline">{ui(lang, 'historical_station')}</p>
+    {#if data.replacementPath && station.replacement_station_id}
+      <p class="replacement">
+        {ui(lang, 'historical_station_relocated')}{' '}
+        <a href={data.replacementPath}>
+          {station.replacement_station_id} — {displayName(station.replacement_station_name)}
+        </a>.
+      </p>
+    {/if}
+  {:else if !model.available}
     <!-- El motivo importa: un 401 de la red no es una estación callada, y
          decirlo igual manda a buscar el fallo donde no está. -->
     <p class="offline">{ui(lang, unavailableKey(observation?.unavailable))}</p>
@@ -135,6 +148,18 @@
     border: 1px solid var(--border); border-radius: var(--r-sm);
     background: var(--chip-warn-bg); color: var(--chip-warn-fg);
     font-size: 0.84rem; font-weight: 600;
+  }
+
+  .replacement {
+    margin: -8px 0 20px; padding: 12px 15px;
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--panel); color: var(--ink);
+    font-size: 0.84rem; font-weight: 600;
+  }
+
+  .replacement a {
+    color: var(--accent); text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
 </style>

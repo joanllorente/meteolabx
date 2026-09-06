@@ -45,18 +45,35 @@ export async function load({ params, fetch, setHeaders }) {
 
   const meta = stationMeta(station, lang, station.url_slug);
 
+  let replacementPath = '';
+  if (station.is_historical_only && station.replacement_station_id) {
+    const replacement = await fetch(
+      `/v1/stations/url-slug?${new URLSearchParams({
+        provider: station.provider,
+        station_id: station.replacement_station_id
+      })}`
+    )
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null);
+    if (replacement?.url_slug) {
+      replacementPath = observationPath(lang, replacement.url_slug);
+    }
+  }
+
   // Que el proveedor falle no puede tumbar la página: la ficha se sirve
   // igual y el panel lo dice.
-  const observation = await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
-    unavailable: describeFailure(cause)
-  }));
+  const observation = station.is_historical_only
+    ? { unavailable: { status: 410, code: 'historical_station' } }
+    : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
+        unavailable: describeFailure(cause)
+      }));
 
   // Un minuto en CDN y cinco sirviendo el anterior mientras se revalida: las
   // estaciones publican cada 10-30 minutos, así que no hay nada que ganar
   // pegándole al proveedor en cada visita.
   setHeaders({ 'cache-control': 'public, max-age=60, stale-while-revalidate=300' });
 
-  return { lang, slug: station.url_slug, station, meta, observation };
+  return { lang, slug: station.url_slug, station, meta, observation, replacementPath };
 }
 
 function describeFailure(cause) {
