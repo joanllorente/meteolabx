@@ -48,10 +48,13 @@
   // Recorte del campo global que publica el backend: lo fija
   // `render_global_grid_png`.
   const FIELD_BOUNDS = { west: -180, east: 180, north: 85, south: -60 };
+  // WebP sin pérdida, no PNG: es el mismo dibujo pixel a pixel, pero 0,7 MB
+  // en vez de 2 MB. Con la textura mundial pesando lo que pesa, esos megas
+  // eran los segundos que el fondo tardaba en aparecer sobre el basemap.
   const FIELD_URL = {
-    temperature: '/v1/stations/temperature-field.png',
-    wind: '/v1/stations/wind-field.png',
-    precipitation: '/v1/stations/precipitation-field.png'
+    temperature: '/v1/stations/temperature-field.webp',
+    wind: '/v1/stations/wind-field.webp',
+    precipitation: '/v1/stations/precipitation-field.webp'
   };
   const CARTO = {
     dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',

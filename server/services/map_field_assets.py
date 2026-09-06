@@ -287,6 +287,17 @@ def build_map_field_assets(store: Any) -> dict[str, Any]:
             digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:16]
             mode_started = time.perf_counter()
             png = spec["renderer"](points)
+            # La misma textura que servirá la API: sin dársela hecha, el
+            # primer visitante tras el refresco vuelve a interpolarla entera.
+            try:
+                from server.routers.stations import prime_field_cache
+
+                prime_field_cache(mode, store, points, png)
+            except Exception:
+                logger.warning(
+                    "mapas: no se pudo precalentar la textura %s de la API",
+                    mode, exc_info=True,
+                )
             tiles = _write_split_tiles(
                 png,
                 prefix=str(spec["prefix"]),

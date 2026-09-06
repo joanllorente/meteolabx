@@ -54,18 +54,131 @@ _temperature_field_cache: Dict[str, object] = {
     "data_key": None,
     "grid": None,
     "images": OrderedDict(),
+    "webp": {},
 }
+# Peso de las texturas mundiales: el PNG RGBA de 7200x2900 son ~2 MB por
+# capa, y en una conexión mediocre eso son los segundos que el usuario ve
+# pasar antes de que aparezca el fondo del mapa. El mismo dibujo en WebP sin
+# pérdida —ni un pixel distinto— baja al 37 %.
+_FIELD_HEADERS = {"Cache-Control": "public, max-age=600"}
+
+
+def _snapshot_key(store, points) -> str:
+    return store.updated_at.isoformat() if store.updated_at else str(len(points))
+
+
+def _temperature_data_key(store, points) -> str:
+    from server.services.temperature_field import (
+        COLOR_SCALE_VERSION,
+        FIELD_ALGORITHM_VERSION,
+    )
+
+    return (
+        f"field-{FIELD_ALGORITHM_VERSION}:"
+        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}"
+    )
+
+
+def _wind_data_key(store, points) -> str:
+    from server.services.wind_field import COLOR_SCALE_VERSION, FIELD_ALGORITHM_VERSION
+
+    return (
+        f"wind-field-{FIELD_ALGORITHM_VERSION}:"
+        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}:{len(points)}"
+    )
+
+
+def _precipitation_data_key(store, points) -> str:
+    from server.services.precipitation_field import (
+        COLOR_SCALE_VERSION,
+        FIELD_ALGORITHM_VERSION,
+    )
+
+    return (
+        f"precipitation-field-{FIELD_ALGORITHM_VERSION}:"
+        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}:{len(points)}"
+    )
+
+
+def prime_field_cache(mode: str, store, points, png: bytes) -> None:
+    """Guarda la textura que el job del ranking acaba de renderizar.
+
+    El prebuild horario interpola exactamente la misma rejilla mundial que
+    pediría el primer visitante tras el refresco. Sin esto ese visitante la
+    volvía a pagar entera —unos cuatro segundos de espera— y el contenedor
+    hacía dos veces el mismo trabajo. La rejilla no se guarda: solo la
+    necesitan los recortes por viewport, que el mapa normal no pide.
+    """
+    from server.services.temperature_field import GLOBAL_RENDER_SIZE
+
+    webp = _as_webp(png, method=1)
+    if mode == "temperature":
+        global_key = ("global", *GLOBAL_RENDER_SIZE)
+        _temperature_field_cache["data_key"] = _temperature_data_key(store, points)
+        _temperature_field_cache["grid"] = None
+        _temperature_field_cache["images"] = OrderedDict({global_key: png})
+        _temperature_field_cache["webp"] = {global_key: webp}
+    elif mode == "wind":
+        _wind_field_cache["data_key"] = _wind_data_key(store, points)
+        _wind_field_cache["png"] = png
+        _wind_field_cache["webp"] = webp
+    elif mode == "precipitation":
+        _precipitation_field_cache["data_key"] = _precipitation_data_key(store, points)
+        _precipitation_field_cache["png"] = png
+        _precipitation_field_cache["webp"] = webp
+
+
+async def _field_response(request: Request, png: bytes, cache: Dict, key: object) -> Response:
+    """PNG o WebP según la ruta pedida, recodificando una vez por textura."""
+    if not request.url.path.endswith(".webp"):
+        return Response(content=png, media_type="image/png", headers=_FIELD_HEADERS)
+    encoded = cache.get(key)
+    if encoded is None:
+        encoded = await asyncio.to_thread(_as_webp, png)
+        cache[key] = encoded
+    return Response(content=encoded, media_type="image/webp", headers=_FIELD_HEADERS)
+
+
+def _as_webp(png: bytes, *, method: int = 0) -> bytes:
+    """Recodifica a WebP sin pérdida la textura ya renderizada.
+
+    Sin pérdida y no lossy a propósito: en un campo de bandas el color ES el
+    dato, y los artefactos de una compresión con pérdida correrían la lectura
+    de la escala. ``method`` es cuánto se esfuerza en comprimir: 0 tarda 0,7 s
+    y deja el fichero en el 37 % del PNG, 1 baja al 24 % pero cuesta 5 s. El
+    job del ranking, que va sobrado de tiempo, usa el segundo; una petición
+    que llegue antes de que esté hecho se conforma con el primero.
+    """
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.open(io.BytesIO(png)).save(
+        buffer, "WEBP", lossless=True, quality=100, method=method
+    )
+    return buffer.getvalue()
 _temperature_field_lock = asyncio.Lock()
 _TEMPERATURE_FIELD_VIEWPORT_CACHE_SIZE = 12
 _wind_field_cache: Dict[str, object] = {
     "data_key": None,
     "png": None,
+    "webp": None,
 }
 _wind_field_lock = asyncio.Lock()
-_precipitation_field_cache: Dict[str, object] = {"data_key": None, "png": None}
+_precipitation_field_cache: Dict[str, object] = {
+    "data_key": None,
+    "png": None,
+    "webp": None,
+}
 _precipitation_field_lock = asyncio.Lock()
 
 
+@router.get(
+    "/temperature-field.webp",
+    summary="Campo mundial de temperatura interpolado (WebP sin pérdida)",
+    include_in_schema=False,
+)
 @router.get(
     "/temperature-field.png",
     summary="Campo mundial de temperatura interpolado (PNG RGBA)",
@@ -123,11 +236,7 @@ async def get_temperature_field(
                 status_code=400,
             )
 
-    snapshot_key = store.updated_at.isoformat() if store.updated_at else str(len(points))
-    data_key = (
-        f"field-{FIELD_ALGORITHM_VERSION}:"
-        f"palette-{COLOR_SCALE_VERSION}:{snapshot_key}"
-    )
+    data_key = _temperature_data_key(store, points)
     image_key = (
         ("global", *GLOBAL_RENDER_SIZE)
         if bounds is None
@@ -147,7 +256,17 @@ async def get_temperature_field(
                 mask.astype("float16", copy=False),
             )
             _temperature_field_cache["images"] = OrderedDict()
+            _temperature_field_cache["webp"] = {}
             _temperature_field_cache["data_key"] = data_key
+
+        if bounds is not None and _temperature_field_cache["grid"] is None:
+            # El job deja hecha la textura mundial, pero no la rejilla: un
+            # recorte llegado después la vuelve a necesitar.
+            temp, mask = await asyncio.to_thread(interpolate_grid, points)
+            _temperature_field_cache["grid"] = (
+                temp.astype("float32", copy=False),
+                mask.astype("float16", copy=False),
+            )
 
         images = _temperature_field_cache["images"]
         png = images.get(image_key)
@@ -168,11 +287,7 @@ async def get_temperature_field(
             images.move_to_end(image_key)
             while len(images) > _TEMPERATURE_FIELD_VIEWPORT_CACHE_SIZE:
                 images.popitem(last=False)
-    return Response(
-        content=png,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=600"},
-    )
+    return await _field_response(request, png, _temperature_field_cache["webp"], image_key)
 
 
 @router.get(
@@ -209,6 +324,11 @@ async def get_current_temperatures(request: Request) -> Dict[str, object]:
 
 
 @router.get(
+    "/wind-field.webp",
+    summary="Campo mundial de velocidad del viento (WebP sin pérdida)",
+    include_in_schema=False,
+)
+@router.get(
     "/wind-field.png",
     summary="Campo mundial de velocidad del viento interpolado (PNG RGBA)",
     responses={404: {"model": ErrorResponse, "description": "Aún no hay viento reciente."}},
@@ -233,11 +353,7 @@ async def get_wind_field(request: Request) -> Response:
             "no_data", provider="RANKING",
             detail="No hay vectores de viento recientes todavía", status_code=404,
         )
-    snapshot_key = store.updated_at.isoformat() if store.updated_at else str(len(points))
-    data_key = (
-        f"wind-field-{FIELD_ALGORITHM_VERSION}:"
-        f"palette-{COLOR_SCALE_VERSION}:{snapshot_key}:{len(points)}"
-    )
+    data_key = _wind_data_key(store, points)
     async with _wind_field_lock:
         if _wind_field_cache["data_key"] != data_key:
             speed, mask = await asyncio.to_thread(interpolate_wind_grid, points)
@@ -252,12 +368,9 @@ async def get_wind_field(request: Request) -> Response:
             )
             _wind_field_cache["data_key"] = data_key
             _wind_field_cache["png"] = png
+            _wind_field_cache["webp"] = None
         png = _wind_field_cache["png"]
-    return Response(
-        content=png,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=600"},
-    )
+    return await _field_response(request, png, _wind_field_cache, "webp")
 
 
 @router.get(
@@ -294,6 +407,11 @@ async def get_current_winds(request: Request) -> Dict[str, object]:
 
 
 @router.get(
+    "/precipitation-field.webp",
+    summary="Precipitacion acumulada en las ultimas 24 h (WebP sin perdida)",
+    include_in_schema=False,
+)
+@router.get(
     "/precipitation-field.png",
     summary="Precipitacion acumulada en las ultimas 24 h (PNG RGBA)",
     responses={404: {"model": ErrorResponse, "description": "Aun no hay acumulados 24 h."}},
@@ -315,11 +433,7 @@ async def get_precipitation_field(request: Request) -> Response:
             "no_data", provider="RANKING",
             detail="No hay acumulados moviles de 24 horas todavia", status_code=404,
         )
-    snapshot_key = store.updated_at.isoformat() if store.updated_at else str(len(points))
-    data_key = (
-        f"precipitation-field-{FIELD_ALGORITHM_VERSION}:"
-        f"palette-{COLOR_SCALE_VERSION}:{snapshot_key}:{len(points)}"
-    )
+    data_key = _precipitation_data_key(store, points)
     async with _precipitation_field_lock:
         if _precipitation_field_cache["data_key"] != data_key:
             amount, mask = await asyncio.to_thread(interpolate_precipitation_grid, points)
@@ -335,12 +449,9 @@ async def get_precipitation_field(request: Request) -> Response:
             )
             _precipitation_field_cache["data_key"] = data_key
             _precipitation_field_cache["png"] = png
+            _precipitation_field_cache["webp"] = None
         png = _precipitation_field_cache["png"]
-    return Response(
-        content=png,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=600"},
-    )
+    return await _field_response(request, png, _precipitation_field_cache, "webp")
 
 
 @router.get(
