@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS station_visits (
     -- (`google.es`), nunca la URL: interesa quién enlaza, no qué se lee.
     entry TEXT NOT NULL DEFAULT '',
     referrer_domain TEXT NOT NULL DEFAULT '',
+    -- Móvil, tableta o escritorio. Lo decide el navegador por el tipo de
+    -- puntero; aquí no se guarda el «user agent».
+    device TEXT NOT NULL DEFAULT '',
     epoch INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_visits_station ON station_visits(provider, station_id);
@@ -111,6 +114,9 @@ _TRACKED_SECTION_SET = frozenset(TRACKED_SECTIONS)
 # ve el referente; aquí solo se valida.
 ENTRY_POINTS = ("search", "external", "internal", "direct")
 
+# Con qué se mira. Igual que la entrada, lo decide el navegador.
+DEVICES = ("mobile", "tablet", "desktop")
+
 # Ventanas del panel (etiqueta → segundos). "total" va aparte.
 WINDOWS = {
     "d1": 24 * 3600,
@@ -141,7 +147,7 @@ def _connect(settings=None) -> sqlite3.Connection:
         connection.execute(
             "ALTER TABLE station_visits ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'"
         )
-    for columna in ("language", "entry", "referrer_domain"):
+    for columna in ("language", "entry", "referrer_domain", "device"):
         if columna not in visit_columns:
             connection.execute(
                 f"ALTER TABLE station_visits ADD COLUMN {columna} TEXT NOT NULL DEFAULT ''"
@@ -158,6 +164,7 @@ def record_visit(
     language: str = "",
     entry: str = "",
     referrer_domain: str = "",
+    device: str = "",
     settings=None,
 ) -> None:
     provider = str(provider or "").strip().upper()
@@ -172,11 +179,14 @@ def record_visit(
     dominio = str(referrer_domain or "").strip().lower()[:120]
     if entry not in {"search", "external"}:
         dominio = ""
+    device = str(device or "").strip().lower()
+    device = device if device in DEVICES else ""
     with _connect(settings) as connection:
         connection.execute(
             "INSERT INTO station_visits"
-            "(provider, station_id, name, source, language, entry, referrer_domain, epoch)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(provider, station_id, name, source, language, entry, referrer_domain,"
+            " device, epoch)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 provider,
                 station_id,
@@ -185,6 +195,7 @@ def record_visit(
                 str(language or "").strip().lower()[:8],
                 entry,
                 dominio,
+                device,
                 int(time.time()),
             ),
         )
@@ -740,6 +751,18 @@ def station_detail(
             """,
             (now - WINDOWS["d30"], *clave),
         ).fetchall()
+        by_device_rows = connection.execute(
+            """
+            SELECT device,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM station_visits
+            WHERE provider = ? AND station_id = ?
+            GROUP BY device
+            ORDER BY total DESC
+            """,
+            (now - WINDOWS["d30"], *clave),
+        ).fetchall()
         referrer_rows = connection.execute(
             """
             SELECT referrer_domain,
@@ -756,7 +779,8 @@ def station_detail(
         ).fetchall()
         recent_visit_rows = connection.execute(
             f"""
-            SELECT epoch, source, language, entry, referrer_domain FROM station_visits
+            SELECT epoch, source, language, entry, referrer_domain, device
+            FROM station_visits
             WHERE provider = ? AND station_id = ?
             ORDER BY epoch DESC LIMIT {limit}
             """,
@@ -820,6 +844,14 @@ def station_detail(
             }
             for row in by_entry_rows
         ],
+        "visits_by_device": [
+            {
+                "device": str(row["device"] or ""),
+                "d30": int(row["d30"] or 0),
+                "total": int(row["total"] or 0),
+            }
+            for row in by_device_rows
+        ],
         "referrers": [
             {
                 "domain": str(row["referrer_domain"] or ""),
@@ -836,6 +868,7 @@ def station_detail(
                 "language": str(row["language"] or ""),
                 "entry": str(row["entry"] or ""),
                 "referrer_domain": str(row["referrer_domain"] or ""),
+                "device": str(row["device"] or ""),
             }
             for row in recent_visit_rows
         ],

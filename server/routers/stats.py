@@ -41,6 +41,7 @@ class VisitRequest(BaseModel):
     # De dónde llegó. Lo decide el navegador, que es quien ve el referente.
     entry: Literal["", "search", "external", "internal", "direct"] = ""
     referrer_domain: str = Field(default="", max_length=120)
+    device: Literal["", "mobile", "tablet", "desktop"] = ""
 
 
 @router.post("/visit", status_code=204, summary="Registrar una conexión a estación")
@@ -52,6 +53,7 @@ def post_visit(body: VisitRequest, settings: Settings = Depends(get_settings)) -
             body.provider, body.station_id, body.name,
             source=body.source, language=body.language,
             entry=body.entry, referrer_domain=body.referrer_domain,
+            device=body.device,
             settings=settings,
         )
     except Exception:

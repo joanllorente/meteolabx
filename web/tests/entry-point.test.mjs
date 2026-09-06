@@ -56,3 +56,16 @@ test('el interruptor de exclusión recuerda la decisión y sabe deshacerla', asy
   // Sin parámetro ni marca previa se cuenta, que es lo normal.
   assert.deepEqual(resolveOptOut(null, null), { excluido: false, guardar: false });
 });
+
+test('el dispositivo se decide por el puntero, no por el ancho', async () => {
+  const { deviceKind } = await import('../src/lib/stats.js');
+  // Un ratón es escritorio aunque la ventana sea estrecha.
+  assert.equal(deviceKind({ coarse: false, width: 380 }), 'desktop');
+  assert.equal(deviceKind({ coarse: false, width: 1600 }), 'desktop');
+  // Con el dedo, el ancho separa el móvil de la tableta.
+  assert.equal(deviceKind({ coarse: true, width: 390 }), 'mobile');
+  assert.equal(deviceKind({ coarse: true, width: 820 }), 'tablet');
+  // Sin datos no se inventa una tableta.
+  assert.equal(deviceKind({ coarse: true }), 'mobile');
+  assert.equal(deviceKind(), 'desktop');
+});

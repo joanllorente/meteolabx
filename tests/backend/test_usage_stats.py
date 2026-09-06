@@ -317,6 +317,7 @@ def test_station_detail_endpoint(stats_client):
             "language": "ca",
             "entry": "search",
             "referrer_domain": "google.es",
+            "device": "mobile",
         },
     ).status_code == 204
     # Una entrada que no reconocemos no se guarda, y el dominio solo tiene
@@ -324,6 +325,10 @@ def test_station_detail_endpoint(stats_client):
     assert stats_client.post(
         "/v1/stats/visit",
         json={"provider": "METEOCAT", "station_id": "X4", "entry": "inventada"},
+    ).status_code == 422
+    assert stats_client.post(
+        "/v1/stats/visit",
+        json={"provider": "METEOCAT", "station_id": "X4", "device": "nevera"},
     ).status_code == 422
     assert stats_client.post(
         "/v1/stats/visit",
@@ -378,8 +383,14 @@ def test_station_detail_endpoint(stats_client):
     desde_google = next(v for v in detalle["recent_visits"] if v["entry"] == "search")
     assert desde_google["language"] == "ca"
     assert desde_google["referrer_domain"] == "google.es"
+    assert desde_google["device"] == "mobile"
     directa = next(v for v in detalle["recent_visits"] if v["entry"] == "direct")
     assert directa["referrer_domain"] == ""
+    assert directa["device"] == ""
+    assert sorted(detalle["visits_by_device"], key=lambda f: f["device"]) == [
+        {"device": "", "d30": 1, "total": 1},
+        {"device": "mobile", "d30": 1, "total": 1},
+    ]
     assert sorted(detalle["visits_by_language"], key=lambda f: f["language"]) == [
         {"language": "ca", "d30": 1, "total": 1},
         {"language": "es", "d30": 1, "total": 1},

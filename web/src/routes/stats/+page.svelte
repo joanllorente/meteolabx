@@ -153,6 +153,9 @@
   };
   const entrada = (codigo) => ENTRADAS[codigo] || (codigo ? codigo : '—');
 
+  const DISPOSITIVOS = { mobile: 'Móvil', tablet: 'Tableta', desktop: 'Escritorio' };
+  const dispositivo = (codigo) => DISPOSITIVOS[codigo] || (codigo ? codigo : '—');
+
   const colacion = new Intl.Collator('es-ES', { sensitivity: 'base', numeric: true });
 
   const estaciones = $derived.by(() => {
@@ -375,6 +378,24 @@
                           </tbody>
                         </table>
 
+                        <h3>Visitas por dispositivo</h3>
+                        {#if d.visits_by_device?.some((fila) => fila.device)}
+                          <table>
+                            <thead><tr><th>Dispositivo</th><th>30 d</th><th>Total</th></tr></thead>
+                            <tbody>
+                              {#each d.visits_by_device as fila (fila.device)}
+                                <tr>
+                                  <td>{dispositivo(fila.device)}</td>
+                                  <td class="n">{numero(fila.d30)}</td>
+                                  <td class="n">{numero(fila.total)}</td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {:else}
+                          <p class="aviso">Sin dispositivo registrado todavía.</p>
+                        {/if}
+
                         <h3>Visitas por idioma</h3>
                         {#if d.visits_by_language?.some((fila) => fila.language)}
                           <table>
@@ -435,12 +456,15 @@
                         <h3>Últimas visitas</h3>
                         {#if d.recent_visits?.length}
                           <table>
-                            <thead><tr><th>Cuándo</th><th>Idioma</th><th>Entrada</th></tr></thead>
+                            <thead>
+                              <tr><th>Cuándo</th><th>Idioma</th><th>Dispositivo</th><th>Entrada</th></tr>
+                            </thead>
                             <tbody>
                               {#each d.recent_visits as evento, i (evento.epoch + '|' + i)}
                                 <tr>
                                   <td class="fecha">{fecha(evento.epoch)}</td>
                                   <td>{idioma(evento.language)}</td>
+                                  <td>{dispositivo(evento.device)}</td>
                                   <td>{evento.referrer_domain || entrada(evento.entry)}</td>
                                 </tr>
                               {/each}

@@ -117,6 +117,30 @@ export function classifyEntry(referrer, host, { interna = false } = {}) {
 }
 
 /**
+ * Móvil, tableta o escritorio.
+ *
+ * Se mira el puntero, no el ancho ni el «user agent»: un dedo es un puntero
+ * grueso y un ratón uno fino, y eso no cambia al girar la pantalla ni al
+ * estrechar la ventana. El ancho solo separa el móvil de la tableta.
+ */
+export function deviceKind({ coarse = false, width = 0 } = {}) {
+  if (!coarse) return 'desktop';
+  return width && width >= 768 ? 'tablet' : 'mobile';
+}
+
+function currentDevice() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return '';
+  try {
+    return deviceKind({
+      coarse: window.matchMedia('(pointer: coarse)').matches,
+      width: Math.min(window.screen?.width || 0, window.innerWidth || Infinity)
+    });
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Alguien ha abierto la ficha de una estación.
  *
  * `language` es el idioma en el que se leyó, que es también el que eligió
@@ -139,7 +163,8 @@ export function recordVisit({
     source,
     language,
     entry: entry?.kind || '',
-    referrer_domain: entry?.domain || ''
+    referrer_domain: entry?.domain || '',
+    device: currentDevice()
   });
 }
 
