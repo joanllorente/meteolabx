@@ -249,7 +249,7 @@ const UI = {
     trend_steady: 'Estable', trend_rise_weak: 'Subida débil', trend_rise_moderate: 'Subida moderada',
     trend_rise_strong: 'Subida fuerte', trend_fall_weak: 'Bajada débil',
     trend_fall_moderate: 'Bajada moderada', trend_fall_strong: 'Bajada fuerte',
-    rain_none: 'Sin precipitación', rain_none_short: 'Seco', rain_trace: 'Traza', rain_very_light: 'Muy débil',
+    rain_none: 'Sin precipitación', rain_trace: 'Traza', rain_very_light: 'Muy débil',
     rain_light: 'Débil', rain_slight: 'Ligera', rain_moderate: 'Moderada',
     rain_heavy: 'Fuerte', rain_very_heavy: 'Muy fuerte', rain_torrential: 'Torrencial',
     uv_low: 'Bajo', uv_moderate: 'Moderado', uv_high: 'Alto', uv_very_high: 'Muy alto', uv_extreme: 'Extremo'
@@ -482,7 +482,7 @@ const UI = {
     trend_steady: 'Estable', trend_rise_weak: 'Pujada feble', trend_rise_moderate: 'Pujada moderada',
     trend_rise_strong: 'Pujada forta', trend_fall_weak: 'Baixada feble',
     trend_fall_moderate: 'Baixada moderada', trend_fall_strong: 'Baixada forta',
-    rain_none: 'Sense precipitació', rain_none_short: 'Sec', rain_trace: 'Traça', rain_very_light: 'Molt feble',
+    rain_none: 'Sense precipitació', rain_trace: 'Traça', rain_very_light: 'Molt feble',
     rain_light: 'Feble', rain_slight: 'Lleugera', rain_moderate: 'Moderada',
     rain_heavy: 'Forta', rain_very_heavy: 'Molt forta', rain_torrential: 'Torrencial',
     uv_low: 'Baix', uv_moderate: 'Moderat', uv_high: 'Alt', uv_very_high: 'Molt alt', uv_extreme: 'Extrem'
@@ -715,7 +715,7 @@ const UI = {
     trend_steady: 'Steady', trend_rise_weak: 'Rising slowly', trend_rise_moderate: 'Rising',
     trend_rise_strong: 'Rising fast', trend_fall_weak: 'Falling slowly',
     trend_fall_moderate: 'Falling', trend_fall_strong: 'Falling fast',
-    rain_none: 'No precipitation', rain_none_short: 'Dry', rain_trace: 'Trace', rain_very_light: 'Very light',
+    rain_none: 'No precipitation', rain_trace: 'Trace', rain_very_light: 'Very light',
     rain_light: 'Light', rain_slight: 'Slight', rain_moderate: 'Moderate',
     rain_heavy: 'Heavy', rain_very_heavy: 'Very heavy', rain_torrential: 'Torrential',
     uv_low: 'Low', uv_moderate: 'Moderate', uv_high: 'High', uv_very_high: 'Very high', uv_extreme: 'Extreme'
@@ -948,7 +948,7 @@ const UI = {
     trend_steady: 'Stable', trend_rise_weak: 'Légère hausse', trend_rise_moderate: 'Hausse modérée',
     trend_rise_strong: 'Forte hausse', trend_fall_weak: 'Légère baisse',
     trend_fall_moderate: 'Baisse modérée', trend_fall_strong: 'Forte baisse',
-    rain_none: 'Pas de précipitations', rain_none_short: 'Sec', rain_trace: 'Trace', rain_very_light: 'Très faible',
+    rain_none: 'Pas de précipitations', rain_trace: 'Trace', rain_very_light: 'Très faible',
     rain_light: 'Faible', rain_slight: 'Légère', rain_moderate: 'Modérée',
     rain_heavy: 'Forte', rain_very_heavy: 'Très forte', rain_torrential: 'Torrentielle',
     uv_low: 'Faible', uv_moderate: 'Modéré', uv_high: 'Élevé', uv_very_high: 'Très élevé', uv_extreme: 'Extrême'
@@ -1181,7 +1181,7 @@ const UI = {
     trend_steady: 'Stabile', trend_rise_weak: 'Lieve aumento', trend_rise_moderate: 'Aumento moderato',
     trend_rise_strong: 'Forte aumento', trend_fall_weak: 'Lieve calo',
     trend_fall_moderate: 'Calo moderato', trend_fall_strong: 'Forte calo',
-    rain_none: 'Nessuna precipitazione', rain_none_short: 'Asciutto', rain_trace: 'Traccia', rain_very_light: 'Molto debole',
+    rain_none: 'Nessuna precipitazione', rain_trace: 'Traccia', rain_very_light: 'Molto debole',
     rain_light: 'Debole', rain_slight: 'Leggera', rain_moderate: 'Moderata',
     rain_heavy: 'Forte', rain_very_heavy: 'Molto forte', rain_torrential: 'Torrenziale',
     uv_low: 'Basso', uv_moderate: 'Moderato', uv_high: 'Alto', uv_very_high: 'Molto alto', uv_extreme: 'Estremo'
@@ -1414,7 +1414,7 @@ const UI = {
     trend_steady: 'Estável', trend_rise_weak: 'Subida ligeira', trend_rise_moderate: 'Subida moderada',
     trend_rise_strong: 'Subida forte', trend_fall_weak: 'Descida ligeira',
     trend_fall_moderate: 'Descida moderada', trend_fall_strong: 'Descida forte',
-    rain_none: 'Sem precipitação', rain_none_short: 'Seco', rain_trace: 'Vestígios', rain_very_light: 'Muito fraca',
+    rain_none: 'Sem precipitação', rain_trace: 'Vestígios', rain_very_light: 'Muito fraca',
     rain_light: 'Fraca', rain_slight: 'Ligeira', rain_moderate: 'Moderada',
     rain_heavy: 'Forte', rain_very_heavy: 'Muito forte', rain_torrential: 'Torrencial',
     uv_low: 'Baixo', uv_moderate: 'Moderado', uv_high: 'Alto', uv_very_high: 'Muito alto', uv_extreme: 'Extremo'

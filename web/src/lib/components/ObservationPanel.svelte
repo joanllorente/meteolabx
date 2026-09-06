@@ -234,12 +234,7 @@
         <span class="help" tabindex="0" role="note" aria-label={help('precipitacion hoy')}>?</span>
         <span class="bubble">{help('precipitacion hoy')}</span>
       {/if}
-      <!-- Dos versiones del mismo distintivo: a media anchura, en el móvil,
-           «Sin precipitación» no cabe y se cortaba a la mitad. -->
-      <span class="chip note">
-        <span class="long">{model.precipitation.label}</span>
-        <span class="short">{model.precipitation.labelShort}</span>
-      </span>
+      <span class="chip note">{model.precipitation.label}</span>
     </header>
     <div class="val tnum">{model.precipitation.value}<span>{model.precipitation.unit}</span></div>
     {#if model.precipitation.rate}
@@ -581,7 +576,6 @@
   .ic { display: grid; place-items: center; width: 29px; height: 29px; flex: none; border-radius: 8px; color: var(--fam); background: color-mix(in srgb, var(--fam) 15%, transparent); }
   .tile h3 { font-size: 0.8rem; font-weight: 600; }
   .chip { margin-left: auto; padding: 3px 8px; border-radius: 999px; font-size: 0.6rem; font-weight: 700; white-space: nowrap; }
-  .chip .short { display: none; }
   .chip.warn { color: var(--chip-warn-fg); background: var(--chip-warn-bg); }
   .chip.note { color: var(--chip-note-fg); background: var(--chip-note-bg); }
 
@@ -781,27 +775,42 @@
     .wind-sub {
       grid-area: sub;
       flex-direction: column; gap: 12px;
-      margin-top: 0; padding: 0 0 0 18px;
+      /* La línea, un poco a la derecha del centro: pegada al «km/h» parecía
+         subrayarlo en vez de separar las dos mitades. */
+      margin-top: 0; margin-left: 12px; padding: 0 0 0 18px;
       border-top: none; border-left: 1px solid var(--border);
     }
 
-    /* Máximo y mínimo, más ceñidos y sin ceder terreno.
-       La columna de la cifra reservaba 2,5 rem aunque el número midiera menos,
-       y el bloque no encogía al título sino que se salía por el borde: la
-       tarjeta recorta, y se leía «43» donde ponía 43,2. Ahora cada columna
-       mide lo que ocupa, y quien cede es el título, que sí puede partirse. */
-    .t-a header, .t-b header, .t-c header, .t-d header { min-width: 0; }
-    .t-a h3, .t-b h3, .t-c h3, .t-d h3 { min-width: 0; overflow-wrap: anywhere; }
+    /* Máximo y mínimo, ceñidos a lo que miden y sin partir el título.
+       La columna de la cifra reservaba 2,5 rem aunque el número fuera más
+       corto, y el bloque se salía por el borde de una tarjeta que recorta: se
+       leía «43» donde ponía 43,2. Ahora cada columna mide lo que ocupa y, si
+       aun así no cabe junto al título, el bloque baja a la línea siguiente
+       —envuelve la cabecera entera—. Lo que nunca se hace es romper la
+       palabra: «Humedad relativa» en vertical, letra a letra, era ilegible. */
+    /* La cabecera no envuelve: si envuelve, el navegador baja el bloque entero
+       a la línea siguiente —icono arriba, título debajo, extremos más abajo—
+       en vez de estrechar el título, que es lo que se quiere.
+       El título se parte por donde se parten las palabras —«Humedad /
+       relativa»— y para eso tiene que poder encoger: un elemento flex no baja
+       de su contenido si no se le dice. Nunca por letras: eso es lo que hacía
+       `overflow-wrap: anywhere` y dejaba el nombre en vertical. */
+    .t-a h3, .t-b h3, .t-c h3, .t-d h3 { min-width: 0; }
     .t-a .extremes, .t-b .extremes, .t-c .extremes, .t-d .extremes {
       flex: none;
-      grid-template-columns: 0.72rem max-content max-content;
+      grid-template-columns: 0.72rem max-content;
       column-gap: 4px;
     }
+    /* Y las etiquetas «Máx.» y «Mín.» sobran a media anchura: el triángulo
+       rojo hacia arriba y el azul hacia abajo dicen lo mismo en 30 px menos,
+       que es justo lo que le falta al título para caber al lado. */
+    .t-a .extreme-label, .t-b .extreme-label,
+    .t-c .extreme-label, .t-d .extreme-label { display: none; }
 
-    /* El distintivo de la precipitación sí hay que acortarlo cuando comparte
-       fila; sin radiación vuelve al ancho completo y cabe entero. */
-    .bento:not(.no-uv) .chip .long { display: none; }
-    .bento:not(.no-uv) .chip .short { display: inline; }
+    /* Sin el distintivo cualitativo: en una cabecera de media anchura se
+       comía el título y se montaba sobre la ayuda, y los milímetros con su
+       intensidad ya cuentan si llueve y cuánto. */
+    .t-c .chip { display: none; }
     .grid.compact { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .hero-bottom { grid-template-columns: minmax(0, 1fr) minmax(130px, 0.85fr); gap: 8px; }
     .alert-band { padding: 8px 10px; font-size: 0.7rem; }
