@@ -715,7 +715,9 @@
     .bento {
       /* A lo ancho las grandes; de dos en dos las simples —humedad con punto
          de rocío, precipitación con radiación—: son una cifra y un pie, y en
-         pareja ahorran un pantallazo entero. */
+         pareja ahorran un pantallazo entero. Debajo de 480 px ya no: ahí la
+         mitad de la tarjeta no da ni para el título con su máximo y su mínimo,
+         que salían cortados a mitad de cifra. */
       grid-template-columns: repeat(2, 1fr);
       /* Con la altura fija la tarjeta de viento —rosa de 118 px más su pie—
          salía recortada, y las que llevan pie se pegaban al borde de abajo.
@@ -785,27 +787,19 @@
       border-top: none; border-left: 1px solid var(--border);
     }
 
-    /* Y lo mismo en las cuatro tarjetas con pie: el dato secundario se pone
-       al lado del valor en vez de debajo. Cada una se ahorra un renglón, y
-       entre las cuatro filas es lo que hace que el bloque de Observado quepa
-       de una vez en la pantalla. */
-    .t-a, .t-b, .t-c, .t-d {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      grid-template-areas: "head head" "val foot";
-      align-items: center;
+    /* Máximo y mínimo, más ceñidos y sin ceder terreno.
+       La columna de la cifra reservaba 2,5 rem aunque el número midiera menos,
+       y el bloque no encogía al título sino que se salía por el borde: la
+       tarjeta recorta, y se leía «43» donde ponía 43,2. Ahora cada columna
+       mide lo que ocupa, y quien cede es el título, que sí puede partirse. */
+    .t-a header, .t-b header, .t-c header, .t-d header { min-width: 0; }
+    .t-a h3, .t-b h3, .t-c h3, .t-d h3 { min-width: 0; overflow-wrap: anywhere; }
+    .t-a .extremes, .t-b .extremes, .t-c .extremes, .t-d .extremes {
+      flex: none;
+      grid-template-columns: 0.72rem max-content max-content;
+      column-gap: 4px;
     }
-    .t-a header, .t-b header, .t-c header, .t-d header { grid-area: head; }
-    .t-a .val, .t-b .val, .t-c .val, .t-d .val {
-      grid-area: val; margin-top: 0; font-size: 1.65rem;
-    }
-    .t-a .foot, .t-b .foot, .t-c .foot, .t-d .foot {
-      grid-area: foot;
-      flex-direction: column; align-items: flex-start; gap: 2px;
-      margin-top: 0; padding: 0 0 0 12px;
-      border-top: none; border-left: 1px solid var(--border);
-      font-size: 0.66rem;
-    }
+
     /* El distintivo de la precipitación sí hay que acortarlo cuando comparte
        fila; sin radiación vuelve al ancho completo y cabe entero. */
     .bento:not(.no-uv) .chip .long { display: none; }
@@ -813,5 +807,25 @@
     .grid.compact { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .hero-bottom { grid-template-columns: minmax(0, 1fr) minmax(130px, 0.85fr); gap: 8px; }
     .alert-band { padding: 8px 10px; font-size: 0.7rem; }
+  }
+
+  /* Un iPhone de los estrechos deja unos 165 px por tarjeta emparejada, y con
+     eso no hay formato que valga: cada tarjeta vuelve a ocupar el ancho, con
+     su máximo y su mínimo en la esquina y el dato de apoyo debajo, como en el
+     escritorio. Las de Termodinámica y Radiación sí siguen en pareja: no
+     llevan ni extremos ni título de dos líneas. */
+  @media (max-width: 480px) {
+    .bento {
+      grid-template-columns: 1fr;
+      grid-template-areas: "temp" "temp" "hum" "dew" "wind" "precip" "uv" "press";
+    }
+    .bento.no-uv {
+      grid-template-areas: "temp" "temp" "hum" "dew" "wind" "precip" "press";
+    }
+    /* Con la tarjeta entera para ella, la precipitación vuelve a decirlo con
+       todas las letras. */
+    .bento .chip .long { display: inline; }
+    .bento .chip .short { display: none; }
+    .grid.compact { gap: 10px; }
   }
 </style>
