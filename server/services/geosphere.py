@@ -452,8 +452,10 @@ async def fetch_current(
 
     epochs = series.get("epochs") or []
     if not epochs:
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"GeoSphere sin observaciones para {station_id}",
             status_code=502,

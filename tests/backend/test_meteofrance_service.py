@@ -168,14 +168,14 @@ def test_fetch_current_unauthorized_propagates() -> None:
     assert excinfo.value.error_code == "provider_unauthorized"
 
 
-def test_fetch_current_no_data_is_bad_response() -> None:
+def test_fetch_current_no_data_is_a_silent_station() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[])
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
     with pytest.raises(ProviderError) as excinfo:
         _run(meteofrance.fetch_current(STATION, "K", client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 # =====================================================================

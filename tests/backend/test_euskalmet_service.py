@@ -167,11 +167,11 @@ def test_fetch_current_happy_path() -> None:
     assert not math.isnan(result["Td"])  # add_basic_derived aplicado
 
 
-def test_fetch_current_no_data_at_all_raises_bad_response() -> None:
+def test_fetch_current_no_data_at_all_is_a_silent_station() -> None:
     client = _routing_client(responses=[], default_status=404)
     with pytest.raises(ProviderError) as excinfo:
         _run(euskalmet.fetch_current(STATION, "JWT", client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 def test_fetch_current_unauthorized_propagates() -> None:

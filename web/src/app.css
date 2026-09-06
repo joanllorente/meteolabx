@@ -120,6 +120,9 @@
   --alert-danger-border: rgba(248, 113, 113, 0.52);
   --alert-danger-fg: #fee2e2;
   --grid-line: rgba(120, 160, 205, 0.1);
+  /* Realce de la fila bajo el ratón en tablas largas. Translúcido a
+     propósito: así funciona sobre el panel y sobre las filas ya sombreadas. */
+  --fila-hover: rgba(120, 165, 210, 0.09);
 }
 
 .theme-light,
@@ -148,6 +151,7 @@
   --alert-danger-border: rgba(185, 28, 28, 0.42);
   --alert-danger-fg: #7f1d1d;
   --grid-line: rgba(24, 52, 92, 0.08);
+  --fila-hover: rgba(24, 52, 92, 0.05);
 }
 
 * { box-sizing: border-box; }

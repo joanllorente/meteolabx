@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.0.1",
+  "app_version": "2.0.2",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -455,6 +455,12 @@ export default {
         "Millores en la visualització en dispositius mòbils.",
         "Millores en la visualització dels gràfics de tendències."
       ],
+      "release_202_fixes": [
+        "Correcció d’errors."
+      ],
+      "release_202_improvements": [
+        "Actualització de l’inventari d’estacions."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -531,6 +537,12 @@ export default {
       "release_201_improvements": [
         "Improved display on mobile devices.",
         "Improved display of the trend charts."
+      ],
+      "release_202_fixes": [
+        "Bug fixes."
+      ],
+      "release_202_improvements": [
+        "Station inventory updated."
       ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
@@ -609,6 +621,12 @@ export default {
         "Mejoras en la visualización en dispositivos móviles.",
         "Mejoras en la visualización de los gráficos de tendencias."
       ],
+      "release_202_fixes": [
+        "Corrección de errores."
+      ],
+      "release_202_improvements": [
+        "Actualización del inventario de estaciones."
+      ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
       "version": "Versión {version}",
@@ -685,6 +703,12 @@ export default {
       "release_201_improvements": [
         "Améliorations de l’affichage sur les appareils mobiles.",
         "Améliorations de l’affichage des graphiques de tendances."
+      ],
+      "release_202_fixes": [
+        "Correction d’erreurs."
+      ],
+      "release_202_improvements": [
+        "Mise à jour de l’inventaire des stations."
       ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
@@ -763,6 +787,12 @@ export default {
         "Migliorata la visualizzazione sui dispositivi mobili.",
         "Migliorata la visualizzazione dei grafici di tendenza."
       ],
+      "release_202_fixes": [
+        "Correzione di errori."
+      ],
+      "release_202_improvements": [
+        "Aggiornamento dell’inventario delle stazioni."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -839,6 +869,12 @@ export default {
       "release_201_improvements": [
         "Melhorias na visualização em dispositivos móveis.",
         "Melhorias na visualização dos gráficos de tendências."
+      ],
+      "release_202_fixes": [
+        "Correção de erros."
+      ],
+      "release_202_improvements": [
+        "Atualização do inventário de estações."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -1960,6 +1996,7 @@ export default {
     }
   },
   "releases": [
+    "202",
     "201",
     "200"
   ],

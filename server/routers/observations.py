@@ -14,7 +14,7 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -24,6 +24,7 @@ from domain.observation_pipeline import (
     ProcessingContext,
     process_observation,
 )
+from domain.precip_quality import sanitize_precip_series, worst_jump
 from domain.trend_series import derive_trend_series
 from models.thermodynamics import msl_to_absolute
 from server.config import Settings, get_settings
@@ -71,6 +72,7 @@ from server.services import (
     wu,
 )
 from server.services import ranking as ranking_svc
+from server.services import suspect_data
 from server.services.cache import AsyncTTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -187,6 +189,104 @@ def _series_station_elevation(body: _ProviderStationRequest, station: dict) -> f
     except (TypeError, ValueError):
         pass
     return _float_or_nan(station.get("elevation"))
+
+
+def _local_day_for(epoch: int, tz_name: str) -> str:
+    """Fecha local ``YYYY-MM-DD`` de la estación para ese instante."""
+    moment = datetime.fromtimestamp(int(epoch), tz=timezone.utc)
+    tz_token = str(tz_name or "").strip()
+    if tz_token:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            moment = moment.astimezone(ZoneInfo(tz_token))
+        except (ZoneInfoNotFoundError, ValueError):
+            # Zona horaria desconocida: el día local cae a UTC. Es peor clave
+            # de cuarentena, pero nunca deja la estación sin marcar.
+            pass
+    return moment.date().isoformat()
+
+
+def _quarantine_suspect_precipitation(
+    provider: str,
+    station_id: str,
+    series: dict,
+    *,
+    tz_name: str,
+) -> List[Dict[str, Any]]:
+    """Controles de calidad del pluviómetro, para CUALQUIER proveedor.
+
+    Dos capas independientes, porque detectan averías distintas:
+
+    1. Curva intensidad-duración (``domain.precip_quality``): recorta del
+       acumulado los saltos que ni un récord mundial con margen justifica.
+       Pilla al sensor que revienta de golpe.
+    2. Contradicción dentro del propio parte: el proveedor marca la serie con
+       ``precip_contradiction`` cuando su pluviómetro acumula lluvia que
+       ninguna otra parte del parte corrobora. Pilla al sensor que gotea de
+       más sin llegar a ningún récord —que es como fallan de verdad—.
+
+    Cualquiera de las dos pone la precipitación en cuarentena para el día local
+    de la estación (el ranking la deja fuera). Muta ``series`` in situ y
+    devuelve los avisos que verá quien entre en la ficha.
+    """
+    if not isinstance(series, dict):
+        return []
+    warnings: List[Dict[str, Any]] = []
+    epochs = series.get("epochs") or []
+    precips = series.get("precips") or []
+
+    if epochs and precips:
+        cleaned, jumps = sanitize_precip_series(epochs, precips)
+        worst = worst_jump(jumps)
+        if worst is not None:
+            series["precips"] = cleaned
+            for jump in jumps:
+                suspect_data.flag(
+                    provider,
+                    station_id,
+                    _local_day_for(jump.epoch, tz_name),
+                    suspect_data.PRECIPITATION,
+                    params={
+                        "amount_mm": round(jump.amount_mm, 1),
+                        "minutes": round(jump.minutes, 1),
+                    },
+                )
+            logger.info(
+                "Pluviómetro sospechoso %s station=%s: %.1f mm en %.0f min "
+                "(máximo admisible %.1f mm)",
+                provider, station_id, worst.amount_mm, worst.minutes, worst.limit_mm,
+            )
+            warnings.append(
+                observation_warnings.suspect_precipitation(worst.amount_mm, worst.minutes)
+            )
+
+    contradiction = series.get("precip_contradiction")
+    if isinstance(contradiction, dict) and contradiction.get("amount_mm") is not None:
+        amount = float(contradiction["amount_mm"])
+        reports = int(contradiction.get("reports") or 0)
+        last_epoch = next(
+            (int(value) for value in reversed(epochs) if isinstance(value, (int, float))),
+            None,
+        )
+        if last_epoch is not None:
+            suspect_data.flag(
+                provider,
+                station_id,
+                _local_day_for(last_epoch, tz_name),
+                suspect_data.PRECIPITATION,
+                params={"amount_mm": round(amount, 1), "reports": reports},
+            )
+            logger.info(
+                "Pluviómetro sin respaldo %s station=%s: %.1f mm y %d partes sin "
+                "precipitación reportada",
+                provider, station_id, amount, reports,
+            )
+            warnings.append(
+                observation_warnings.unreported_precipitation(amount, reports)
+            )
+
+    return warnings
 
 
 def _daily_extremes_from_ranking_store(
@@ -810,6 +910,12 @@ async def post_today_series(
                 exc_info=True,
             )
     station = stations.get_station(body.provider, body.station_id) or {}
+    # Calidad del pluviómetro (todos los proveedores): recorta los saltos
+    # implausibles del acumulado y deja la estación en cuarentena.
+    raw = dict(raw)
+    _quarantine_suspect_precipitation(
+        body.provider, body.station_id, raw, tz_name=str(station.get("tz") or ""),
+    )
     return TodaySeries.from_provider_dict(derive_trend_series(
         raw,
         period="today",
@@ -954,6 +1060,38 @@ async def post_current_processed(
     if use_ranking_extremes:
         current_raw = _overlay_daily_extremes(current_raw, ranking_extremes)
 
+    # ---- Calidad del pluviómetro (todos los proveedores) ----
+    # Recorta del acumulado los saltos implausibles y deja la precipitación en
+    # cuarentena para el día local de la estación. El acumulado que publica el
+    # proveedor arrastra el mismo salto, así que se rehace desde la serie ya
+    # saneada: si no, la tarjeta contradiría al gráfico.
+    station_record = stations.get_station(body.provider, body.station_id) or {}
+    series_dict = dict(series_dict)
+    precip_warnings = _quarantine_suspect_precipitation(
+        body.provider,
+        body.station_id,
+        series_dict,
+        tz_name=str(station_record.get("tz") or body.sun_tz_name or ""),
+    )
+    if precip_warnings:
+        current_raw = dict(current_raw)
+        sanitized_total = next(
+            (
+                float(value)
+                for value in reversed(series_dict.get("precips", []) or [])
+                if isinstance(value, (int, float)) and not _is_nan_value(float(value))
+            ),
+            None,
+        )
+        if sanitized_total is not None:
+            current_raw["precip_total"] = sanitized_total
+            extremes = current_raw.get("daily_extremes")
+            if isinstance(extremes, dict) and "precip_total" in extremes:
+                current_raw = {
+                    **current_raw,
+                    "daily_extremes": {**extremes, "precip_total": sanitized_total},
+                }
+
     # ---- Glue de presión: garantizar p_abs_hpa para el pipeline ----
     # El pipeline puro espera ``p_abs_hpa`` (presión absoluta) y
     # ``p_hpa`` (MSL). Cada proveedor expone uno u otro nativamente:
@@ -1040,6 +1178,7 @@ async def post_current_processed(
     response_warnings = list(result.warnings)
     if elevation_warning:
         response_warnings.append(elevation_warning)
+    response_warnings.extend(precip_warnings)
     if body.provider == "WINDY" and _windy_flatlined_fields(series_dict):
         response_warnings.append(observation_warnings.flatlined_series())
 

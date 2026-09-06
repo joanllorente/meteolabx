@@ -337,8 +337,10 @@ async def fetch_current(
 
     current_series = tr_series if tr_series.get("has_data") else _pick_graph_series(hourly_series, tr_series)
     if not current_series.get("has_data"):
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"POEM sin datos en endpoints de {station_id}",
             status_code=502,

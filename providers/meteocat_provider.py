@@ -19,7 +19,10 @@ def _load_meteocat_stations(stations_path: str):
 
 def _has_open_status(station: dict) -> bool:
     """
-    Filtra estaciones sin cierre conocido (dataFi nula/vacía).
+    Filtra estaciones con estado operativo Meteocat (código 2) abierto.
+
+    Las desmanteladas mantienen abierto el estado 1, por lo que comprobar
+    únicamente ``dataFi`` las hacía pasar erróneamente como estaciones vivas.
     """
     statuses = station.get("estats", [])
     if not isinstance(statuses, list) or not statuses:
@@ -27,7 +30,7 @@ def _has_open_status(station: dict) -> bool:
     for status in statuses:
         if not isinstance(status, dict):
             continue
-        if status.get("dataFi") in (None, ""):
+        if status.get("codi") == 2 and status.get("dataFi") in (None, ""):
             return True
     return False
 

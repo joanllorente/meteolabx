@@ -154,6 +154,26 @@ def is_station_hidden(provider: Any, station_id: Any) -> bool:
     return identity in hidden_station_identities()
 
 
+def _drop_silent_stations(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Quita las estaciones que el bulk del ranking lleva 24 h sin recibir.
+
+    Solo afecta a las que el bulk observa y cuya propia red sigue contestando
+    sin ellas (``server.services.station_silence``): las de redes que el
+    ranking no recorre, y las de una red caída, se quedan donde están.
+    """
+    from server.services import station_silence
+
+    silent = station_silence.silent_identities()
+    if not silent:
+        return records
+    return [
+        record for record in records
+        if station_silence.canonical_key(
+            record.get("provider"), record.get("station_id"),
+        ) not in silent
+    ]
+
+
 def _pws_fresh_cutoff_iso(hours: int = 3) -> str:
     return datetime.fromtimestamp(
         datetime.now(timezone.utc).timestamp() - max(1, int(hours)) * 3600,
@@ -1507,7 +1527,9 @@ def search_near(
             sensors=wanted_sensors, limit=limit,
         ))
     results.sort(key=lambda item: item["distance_km"])
-    return results[:max(1, int(limit))]
+    # Se filtra ANTES de recortar: si no, una estación muda ocuparía una de las
+    # plazas del límite y devolveríamos menos resultados de los pedidos.
+    return _drop_silent_stations(results)[:max(1, int(limit))]
 
 
 def search_catalog(
@@ -1603,7 +1625,7 @@ def search_catalog(
         item["provider"],
         item["station_id"].casefold(),
     ))
-    return results[:max(1, int(limit))]
+    return _drop_silent_stations(results)[:max(1, int(limit))]
 
 
 def raw_metadata(provider: str, station_id: str) -> Optional[Dict[str, Any]]:

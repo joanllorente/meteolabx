@@ -76,6 +76,24 @@
     epoch ? new Date(epoch * 1000).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—';
   const numero = (valor) => new Intl.NumberFormat('es-ES').format(valor || 0);
 
+  // Nombres legibles de las secciones. El identificador que se guarda es
+  // estable (y así debe seguir, para no partir el histórico), pero leer
+  // «forecast.streamlit» en una tabla no dice gran cosa.
+  const NOMBRES_SECCION = {
+    observation: 'Observación',
+    trends: 'Tendencias',
+    historical: 'Histórico',
+    'map.stations': 'Mapa · estaciones',
+    'map.temperature': 'Mapa · temperatura',
+    'map.wind': 'Mapa · viento',
+    'map.precipitation': 'Mapa · precipitación',
+    'forecast.app': 'Predicción · desde la web',
+    'forecast.streamlit': 'Predicción · desde Streamlit (retirado)',
+    'forecast.direct': 'Predicción · entrada directa',
+    ranking: 'Ranking'
+  };
+  const nombreSeccion = (id) => NOMBRES_SECCION[id] || id;
+
   // Columnas de la tabla de estaciones: etiqueta, valor con el que se ordena y
   // si es texto (se ordena alfabéticamente y empieza ascendente) o número.
   const COLUMNAS = [
@@ -240,7 +258,7 @@
       <tbody>
         {#each data.sections as fila (fila.section)}
           <tr>
-            <td>{fila.section}</td>
+            <td title={fila.section}>{nombreSeccion(fila.section)}</td>
             <td class="n">{numero(fila.d1)}</td>
             <td class="n">{numero(fila.d7)}</td>
             <td class="n">{numero(fila.d30)}</td>
@@ -546,7 +564,13 @@
     color: inherit; font: inherit; text-align: left; cursor: pointer;
   }
   .nombre:hover { color: var(--accent); }
-  tr.abierta { background: var(--panel-2); }
+  /* Seguir una fila de punta a punta en tablas de seis columnas y decenas de
+     filas es incómodo sin una guía; el sombreado al pasar el ratón la marca.
+     Va solo en el cuerpo: las cabeceras no son filas de datos. Y se declara
+     ANTES de `tr.abierta` para que la fila desplegada conserve su fondo. */
+  tbody tr:hover { background: var(--fila-hover); }
+  tr.abierta,
+  tr.abierta:hover { background: var(--panel-2); }
   tr.abierta .nombre { font-weight: 700; }
 
   td[colspan] { padding: 0; }

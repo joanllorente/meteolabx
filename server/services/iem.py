@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -316,6 +317,61 @@ async def _fetch_rows(
     return rows, meta
 
 
+# IEM deja ``tmpf``/``dwpf``/``relh`` a null en los partes especiales
+# intra-horarios de muchas redes ASOS (los que rematan en ``MADISHF``), aunque
+# el METAR crudo sí lleva la temperatura. Sin este respaldo la estación pierde
+# casi todos los puntos de la serie y, si el último parte es uno de esos, la
+# observación actual sale sin temperatura ni humedad.
+_METAR_T_GROUP = re.compile(r"(?:^|\s)T([01])(\d{3})([01])(\d{3})(?=\s|$)")
+_METAR_TD_GROUP = re.compile(r"(?:^|\s)(M?\d{2})/(M?\d{2})\s+[AQ]\d{4}(?=\s|$)")
+
+
+def _metar_signed_int(text: str) -> float:
+    raw = str(text or "").strip()
+    if not raw:
+        return float("nan")
+    negative = raw.startswith("M")
+    digits = raw[1:] if negative else raw
+    if not digits.isdigit():
+        return float("nan")
+    value = float(digits)
+    return -value if negative else value
+
+
+def _metar_temperatures(raw: Any) -> Tuple[float, float]:
+    """Temperatura y rocío (°C) leídos del METAR crudo.
+
+    Prioriza el grupo remarcado ``TsTTTsDDD`` (décimas de grado) y cae al
+    grupo principal ``TT/TD`` —exigiendo el altímetro detrás para no confundirlo
+    con visibilidades fraccionarias o grupos RVR—.
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return float("nan"), float("nan")
+    match = _METAR_T_GROUP.search(text)
+    if match:
+        temp_sign, temp_digits, dew_sign, dew_digits = match.groups()
+        temp = float(temp_digits) / 10.0 * (-1.0 if temp_sign == "1" else 1.0)
+        dewpt = float(dew_digits) / 10.0 * (-1.0 if dew_sign == "1" else 1.0)
+        return temp, dewpt
+    match = _METAR_TD_GROUP.search(text)
+    if match:
+        return _metar_signed_int(match.group(1)), _metar_signed_int(match.group(2))
+    return float("nan"), float("nan")
+
+
+def _rh_from_temp_dewpoint(temp_c: float, dewpt_c: float) -> float:
+    """Humedad relativa (%) desde T y Td con la misma formulación de Magnus
+    que usa el resto de la termodinámica del proyecto."""
+    if _is_nan(temp_c) or _is_nan(dewpt_c):
+        return float("nan")
+    saturation = 6.112 * math.exp(17.67 * temp_c / (temp_c + 243.5))
+    vapour = 6.112 * math.exp(17.67 * dewpt_c / (dewpt_c + 243.5))
+    if saturation <= 0.0:
+        return float("nan")
+    return max(0.0, min(100.0, 100.0 * vapour / saturation))
+
+
 def _plausible_temp_c(value: float, lat: Optional[float]) -> float:
     """Anula (→ NaN) una temperatura climatológicamente IMPOSIBLE POR CALOR
     para la latitud de la estación (techo del ranking, ``_tmax_ceiling``: 50°C
@@ -333,10 +389,21 @@ def _plausible_temp_c(value: float, lat: Optional[float]) -> float:
 
 
 def _row_to_values(row: Dict[str, Any], lat: Optional[float] = None) -> Dict[str, float]:
+    temp = _f_to_c(row.get("tmpf"))
+    dewpt = _f_to_c(row.get("dwpf"))
+    rh = _safe_float(row.get("relh"))
+    if _is_nan(temp) or _is_nan(dewpt):
+        metar_temp, metar_dewpt = _metar_temperatures(row.get("raw"))
+        if _is_nan(temp):
+            temp = metar_temp
+        if _is_nan(dewpt):
+            dewpt = metar_dewpt
+    if _is_nan(rh):
+        rh = _rh_from_temp_dewpoint(temp, dewpt)
     return {
-        "temp": _plausible_temp_c(_f_to_c(row.get("tmpf")), lat),
-        "dewpt": _plausible_temp_c(_f_to_c(row.get("dwpf")), lat),
-        "rh": _safe_float(row.get("relh")),
+        "temp": _plausible_temp_c(temp, lat),
+        "dewpt": _plausible_temp_c(dewpt, lat),
+        "rh": rh,
         "pressure": _inhg_to_hpa(row.get("alti") or row.get("mslp")),
         "wind": _knots_to_kmh(row.get("sknt")),
         "gust": _knots_to_kmh(row.get("gust")),
@@ -369,6 +436,63 @@ def _no_current_detail(station_id: str) -> str:
             f"desde {archive_begin}"
         )
     return f"IEM sin observaciones para {station_id}"
+
+
+# Un pluviómetro averiado no se delata por superar un récord —el acumulado
+# roto se queda muy por debajo del de 24 h—, sino por contradecir al resto del
+# propio parte: en un METAR el pluviómetro y el discriminador de precipitación
+# son instrumentos distintos del mismo aparato, así que una estación que
+# acumula lluvia durante todo el día sin que NINGÚN parte reporte precipitación
+# está mintiendo por el pluviómetro. Es el caso de PAKF (False Pass, Alaska):
+# 255 mm acumulados, 79 partes, cero grupos de lluvia y 7 millas de visibilidad.
+# ``SH``/``TS`` también valen sueltos: ``VCSH`` (chubascos en las inmediaciones)
+# y ``TS`` son grupos completos sin fenómeno de precipitación detrás.
+_METAR_PRECIP_EVIDENCE = re.compile(
+    r"(?:^|\s)(?:[-+]|VC)?(?:"
+    r"(?:MI|PR|BC|DR|BL|SH|TS|FZ)*(?:DZ|RA|SN|SG|PL|GR|GS|UP|IC)+(?:[BE]\d{2,4})*"
+    r"|SH|TS"
+    r")(?=\s|$)"
+)
+# Solo las automáticas AO2 llevan discriminador de precipitación. Una AO1 no
+# puede reportar lluvia aunque esté cayendo, así que su silencio no acusa a
+# nadie y queda fuera de esta comprobación.
+_METAR_PRECIP_DISCRIMINATOR = re.compile(r"(?:^|\s)AO2A?(?=\s|$)")
+# Lluvia diaria por debajo de la cual no se acusa al sensor: un chubasco corto
+# puede colarse entre dos partes horarios sin dejar rastro en el tiempo presente.
+_PRECIP_CONTRADICTION_MIN_MM = 10.0
+# Partes mínimos del día para juzgar: con cuatro lecturas sueltas no hay
+# evidencia suficiente de que el silencio sea anómalo.
+_PRECIP_CONTRADICTION_MIN_ROWS = 6
+
+
+def _precip_contradiction(
+    rows: List[Dict[str, Any]], precip_total_mm: float,
+) -> Optional[Dict[str, Any]]:
+    """El pluviómetro acumula lluvia que ningún parte del día corrobora.
+
+    Devuelve ``{"amount_mm", "reports"}`` cuando la estación tiene
+    discriminador de precipitación, ha acumulado lluvia apreciable y no hay ni
+    un solo parte con tiempo presente de precipitación. ``None`` en cuanto
+    aparece cualquier evidencia de que sí llovía —incluida la de las
+    inmediaciones (``VCSH``) o las marcas de inicio/fin en los remarks—.
+    """
+    if not _valid(precip_total_mm) or float(precip_total_mm) < _PRECIP_CONTRADICTION_MIN_MM:
+        return None
+    if len(rows) < _PRECIP_CONTRADICTION_MIN_ROWS:
+        return None
+
+    has_discriminator = False
+    for row in rows:
+        raw = str(row.get("raw") or "")
+        if str(row.get("wxcodes") or "").strip():
+            return None
+        if _METAR_PRECIP_EVIDENCE.search(raw):
+            return None
+        if _METAR_PRECIP_DISCRIMINATOR.search(raw):
+            has_discriminator = True
+    if not has_discriminator:
+        return None
+    return {"amount_mm": round(float(precip_total_mm), 1), "reports": len(rows)}
 
 
 def _series_from_rows(rows: List[Dict[str, Any]], meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -414,6 +538,8 @@ def _series_from_rows(rows: List[Dict[str, Any]], meta: Dict[str, Any]) -> Dict[
         "lat": meta.get("lat"),
         "lon": meta.get("lon"),
         "has_data": bool(epochs),
+        # Señal para el router, que es quien orquesta la cuarentena y el aviso.
+        "precip_contradiction": _precip_contradiction(rows, precip_total),
     }
 
 
@@ -423,6 +549,7 @@ def _empty_series(meta: Dict[str, Any]) -> Dict[str, Any]:
         "pressures": [], "uv_indexes": [], "solar_radiations": [],
         "winds": [], "gusts": [], "wind_dirs": [], "precips": [],
         "lat": meta.get("lat"), "lon": meta.get("lon"), "has_data": False,
+        "precip_contradiction": None,
     }
 
 

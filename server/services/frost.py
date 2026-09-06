@@ -33,6 +33,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import threading
+import time
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
@@ -62,6 +65,96 @@ LATEST_ELEMENTS = (
     "relative_humidity",
     "air_temperature",
 )
+
+# Sensor del catálogo que respalda a cada elemento de Frost. Sirve para no
+# pedirle a una estación variables que no mide: cuando Frost recibe un elemento
+# que la estación no tiene, rechaza la petición ENTERA con un 412 y hay que
+# reintentar uno por uno, de modo que una ficha pasa de 2 llamadas a 22. Con el
+# rate limit de Frost eso se nota.
+_ELEMENT_SENSOR = {
+    "air_temperature": "thermometer",
+    "relative_humidity": "hygrometer",
+    "surface_air_pressure": "barometer",
+    "wind_speed": "anemometer",
+    "wind_speed_of_gust": "anemometer",
+    "wind_from_direction": "wind_vane",
+    "accumulated(precipitation_amount)": "rain_gauge",
+    "sum(precipitation_amount PT1M)": "rain_gauge",
+    "sum(precipitation_amount PT1H)": "rain_gauge",
+    "precipitation_amount": "rain_gauge",
+}
+
+# Lo que de verdad respondió cada estación, aprendido del fan-out. El catálogo
+# solo conoce los sensores de un tercio de las estaciones noruegas —2.191 de
+# 3.462 los tienen todos a falso—, así que sin esta memoria el 63 % restante
+# seguiría pagando el fan-out completo en cada visita. Clave: estación +
+# conjunto de elementos pedido.
+_WORKING_ELEMENTS_TTL_S = 24 * 60 * 60
+_WORKING_ELEMENTS_MAX = 5000
+_working_elements: "OrderedDict[Tuple[str, str], Tuple[float, Tuple[str, ...]]]" = OrderedDict()
+_working_lock = threading.Lock()
+
+
+def _remember_working(key: Tuple[str, str], elements: Tuple[str, ...]) -> None:
+    with _working_lock:
+        _working_elements[key] = (time.time() + _WORKING_ELEMENTS_TTL_S, elements)
+        _working_elements.move_to_end(key)
+        while len(_working_elements) > _WORKING_ELEMENTS_MAX:
+            _working_elements.popitem(last=False)
+
+
+def _recall_working(key: Tuple[str, str]) -> Optional[Tuple[str, ...]]:
+    with _working_lock:
+        entry = _working_elements.get(key)
+        if entry is None:
+            return None
+        expires_at, elements = entry
+        if expires_at <= time.time():
+            del _working_elements[key]
+            return None
+        _working_elements.move_to_end(key)
+        return elements
+
+
+def _forget_working(key: Tuple[str, str]) -> None:
+    with _working_lock:
+        _working_elements.pop(key, None)
+
+
+def _catalog_sensors(station_id: str) -> Dict[str, bool]:
+    """Sensores que el catálogo atribuye a la estación, o ``{}`` si no consta.
+
+    Import perezoso para no acoplar el servicio al catálogo en tiempo de carga.
+    """
+    try:
+        from server.services import stations as stations_svc
+
+        record = stations_svc.get_station(PROVIDER, station_id) or {}
+    except Exception:  # noqa: BLE001 — el catálogo nunca debe tumbar una consulta
+        return {}
+    sensors = record.get("sensors")
+    return sensors if isinstance(sensors, dict) else {}
+
+
+def _elements_for_station(
+    station_id: str, elements: Tuple[str, ...],
+) -> Tuple[str, ...]:
+    """Recorta la lista a lo que la estación puede medir según el catálogo.
+
+    Si el catálogo no marca NINGÚN sensor no se filtra nada: eso no significa
+    que la estación no mida nada, sino que no lo sabemos, y recortar ahí
+    dejaría sin datos a las dos terceras partes de la red noruega.
+    """
+    sensors = _catalog_sensors(station_id)
+    if not any(bool(value) for value in sensors.values()):
+        return elements
+    filtrados = tuple(
+        element for element in elements
+        if _ELEMENT_SENSOR.get(element) is None
+        or bool(sensors.get(_ELEMENT_SENSOR[element]))
+    )
+    return filtrados or elements
+
 
 _CANONICAL_BY_ELEMENT = {
     "air_temperature": "temp_c",
@@ -431,10 +524,18 @@ async def _request_observations_resilient(
     no existe para la estación), fan-out por-elemento en paralelo
     descartando los que fallen. Auth/ratelimit se propagan siempre.
     """
+    source = str(station_id).strip().upper()
+    # 1) Lo que ya sabemos que contesta esta estación (aprendido de un fan-out
+    #    anterior). 2) Si no, lo que el catálogo dice que mide. 3) Si tampoco,
+    #    la lista entera.
+    memoria_key = (source, ",".join(elements))
+    recordados = _recall_working(memoria_key)
+    pedidos = recordados or _elements_for_station(source, elements)
+
     base_params: Dict[str, Any] = {
-        "sources": str(station_id).strip().upper(),
+        "sources": source,
         "referencetime": referencetime,
-        "elements": ",".join(elements),
+        "elements": ",".join(pedidos),
     }
     if maxage:
         base_params["maxage"] = maxage
@@ -446,6 +547,11 @@ async def _request_observations_resilient(
     except ProviderError as exc:
         if exc.error_code in ("provider_unauthorized", "provider_ratelimit"):
             raise
+        if recordados:
+            # Lo recordado ha dejado de valer (la estación cambió de sensores o
+            # la memoria era de un día raro): se vuelve a partir de cero.
+            _forget_working(memoria_key)
+            pedidos = _elements_for_station(source, elements)
 
     async def _one(element_id: str) -> Optional[Dict[str, Any]]:
         params = dict(base_params)
@@ -460,7 +566,14 @@ async def _request_observations_resilient(
             return None
         return payload if payload.get("data") else None
 
-    results = await asyncio.gather(*(_one(element) for element in elements))
+    results = await asyncio.gather(*(_one(element) for element in pedidos))
+    # Los que han contestado son los que se pedirán la próxima vez: la ficha
+    # pasa de 22 llamadas a 1 mientras la memoria siga viva.
+    funcionan = tuple(
+        element for element, payload in zip(pedidos, results) if payload is not None
+    )
+    if funcionan:
+        _remember_working(memoria_key, funcionan)
     payloads = [payload for payload in results if payload is not None]
     return _merge_payloads(payloads) if payloads else {"data": []}
 
@@ -524,8 +637,10 @@ async def fetch_current(
     today_rows = _bin_rows(today_payload, bin_seconds=600)
 
     if not latest_rows and not today_rows:
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"Frost sin observaciones para {station_id}",
             status_code=502,

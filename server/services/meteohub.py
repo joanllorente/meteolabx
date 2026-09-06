@@ -403,8 +403,10 @@ async def fetch_current(
 
     series = _align_series(_products_by_code(station_block))
     if not series.get("has_data"):
+        # MeteoHub respondió bien; es la estación la que no publica. El código
+        # lo dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"MeteoHub sin observaciones para {station_id}",
             status_code=502,

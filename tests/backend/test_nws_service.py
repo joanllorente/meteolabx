@@ -211,11 +211,11 @@ def test_fetch_current_station_not_found() -> None:
     assert excinfo.value.error_code == "station_not_found"
 
 
-def test_fetch_current_empty_everything_is_bad_response() -> None:
+def test_fetch_current_empty_everything_is_a_silent_station() -> None:
     client = _routing_client(latest={"properties": {}}, observations={"features": []})
     with pytest.raises(ProviderError) as excinfo:
         _run(nws.fetch_current(STATION, client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 # =====================================================================

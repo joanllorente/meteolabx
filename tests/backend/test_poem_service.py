@@ -100,11 +100,11 @@ def test_fetch_current_parses_tr_feed_with_scales() -> None:
     assert math.isnan(result["wind"])
 
 
-def test_fetch_current_empty_feed_is_bad_response() -> None:
+def test_fetch_current_empty_feed_is_a_silent_station() -> None:
     client = _client(payload={"datos": []})
     with pytest.raises(ProviderError) as excinfo:
         _run(poem.fetch_current(STATION, client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 def test_fetch_current_unauthorized_propagates() -> None:
@@ -114,7 +114,7 @@ def test_fetch_current_unauthorized_propagates() -> None:
     assert excinfo.value.error_code == "provider_unauthorized"
 
 
-def test_fetch_current_stale_series_is_bad_response() -> None:
+def test_fetch_current_stale_series_is_a_silent_station() -> None:
     stale = {
         "datos": [
             {"codigo": 1103, "fecha": "2020-01-01T10:00:00", "ts": 180},
@@ -123,7 +123,7 @@ def test_fetch_current_stale_series_is_bad_response() -> None:
     client = _client(payload=stale)
     with pytest.raises(ProviderError) as excinfo:
         _run(poem.fetch_current(STATION, client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 def test_fetch_today_series_clips_to_local_day() -> None:

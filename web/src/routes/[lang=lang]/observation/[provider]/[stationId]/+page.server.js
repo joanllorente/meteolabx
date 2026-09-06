@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 
 import { ApiError, fetchProcessedObservation, fetchStation } from '$lib/server/api.js';
+import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import { observationPath } from '$lib/seo/station.js';
 
 // Redes con credencial personal; se resuelven en el navegador.
@@ -52,10 +53,7 @@ export async function load({ params, fetch, setHeaders }) {
   const observation = station.is_historical_only
     ? { unavailable: { status: 410, code: 'historical_station' } }
     : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
-        unavailable: {
-          status: cause instanceof ApiError ? cause.status : 0,
-          code: cause instanceof ApiError ? cause.body?.error_code || 'provider_error' : 'unreachable'
-        }
+        unavailable: describeRequestFailure(cause, { ApiError })
       }));
 
   setHeaders({ 'cache-control': 'public, max-age=60, stale-while-revalidate=300' });

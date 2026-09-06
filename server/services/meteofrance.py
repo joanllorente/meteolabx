@@ -434,8 +434,10 @@ async def fetch_current(
 
     current = latest_row or (hourly_rows[-1] if hourly_rows else None)
     if current is None:
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"Météo-France sin observaciones para {station_id}",
             status_code=502,

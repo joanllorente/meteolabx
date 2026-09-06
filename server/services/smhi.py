@@ -244,8 +244,10 @@ async def _fetch_manual_current(
     cutoff = int(now_utc.timestamp()) - 7 * 86400
     epochs = [ep for ep in epochs if ep >= cutoff]
     if not epochs:
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"SMHI sin datos recientes para {station_id}",
             status_code=502,
@@ -365,8 +367,10 @@ async def fetch_current(
 
     all_epochs = sorted(set().union(*(series[p].keys() for p in HOURLY_PARAMETERS)))
     if not all_epochs:
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"SMHI sin observaciones para {station_id}",
             status_code=502,

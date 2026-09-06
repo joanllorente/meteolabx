@@ -147,11 +147,15 @@ def test_fetch_current_parses_bufr_units() -> None:
     assert not math.isnan(result["Td"])
 
 
-def test_fetch_current_empty_is_bad_response() -> None:
+def test_fetch_current_empty_is_a_silent_station_not_a_broken_network() -> None:
+    """MeteoHub contesta 200 con la lista vacía cuando la estación lleva días
+    sin publicar (Monte Carpegna, 6/9/26). Marcarlo como ``provider_bad_response``
+    hacía que la ficha dijera «no se ha podido contactar con el proveedor de
+    esta red», culpando a MeteoHub de algo que era de la estación."""
     client = _client(payload={"data": []})
     with pytest.raises(ProviderError) as excinfo:
         _run(meteohub.fetch_current(STATION, client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 def test_fetch_today_series_canonical() -> None:

@@ -33,6 +33,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from server.services import station_silence
+
 logger = logging.getLogger(__name__)
 
 # Métricas del ranking y su reducción diaria a partir de valores horarios.
@@ -41,6 +43,11 @@ METRIC_REDUCER = {"tmax": "max", "tmin": "min", "gust": "max", "rain": "sum"}
 # Orden del ranking: Tmín asciende (la más baja primero), el resto desciende.
 METRIC_DESC = {"tmax": True, "tmin": False, "gust": True, "rain": True}
 _QUALITY_FILTER_SCHEMA = 4
+# Proveedores cuyo bulk se consulta RED POR RED: registran el reloj de
+# silencio dentro de su propio fetcher, una llamada por red. El resto hace una
+# sola petición y se registra al publicar el ciclo.
+_PER_NETWORK_BULK_PROVIDERS = frozenset({"METEOHUB_IT", "IEM"})
+
 _QUALITY_FILTER_PROVIDERS = frozenset({
     "ECCC", "SMHI", "FROST", "METEOGALICIA", "METEOCAT", "METEOHUB_IT", "IEM",
 })
@@ -769,6 +776,14 @@ async def fetch_meteohub_daily(
                     )
                     if rec and rec.station_id and _station_has_data(rec):
                         recs.append(rec)
+                # La red ha contestado con un censo válido (aunque venga
+                # vacío): solo aquí avanza el reloj de silencio de SUS
+                # estaciones. Los `return []` de arriba son fallos y no
+                # registran nada, para no acusar a estaciones sanas de una
+                # caída de la red.
+                station_silence.record_sweep(
+                    "METEOHUB_IT", [rec.station_id for rec in recs], network=net,
+                )
                 return recs
             except Exception as exc:
                 logger.warning("ranking: red MeteoHub %s sin datos (%s)", net, type(exc).__name__)
@@ -1973,6 +1988,29 @@ def _sanitize_record_extremes(rec: StationDaily) -> None:
         rec.rain = None
 
 
+def _drop_quarantined_variables(rec: StationDaily) -> None:
+    """Deja fuera del ranking las variables en cuarentena de esa estación ese día.
+
+    La cuarentena la levanta el control de plausibilidad de
+    ``domain.precip_quality`` cuando el sensor da una intensidad implausible (un
+    pluviómetro de balancín disparándose sube el acumulado a saltos sin llegar
+    nunca al récord de 24 h, así que ``_sanitize_record_extremes`` no lo ve).
+    Solo cae la variable afectada: temperatura, viento y presión de esa misma
+    estación siguen clasificando. Muta el registro in situ."""
+    from server.services import suspect_data
+
+    if not rec.local_date:
+        return
+    if rec.rain is None and rec.rain_24h is None:
+        return
+    if suspect_data.is_flagged(
+        rec.provider, rec.station_id, rec.local_date, suspect_data.PRECIPITATION,
+    ):
+        rec.rain = None
+        rec.rain_24h = None
+        rec.rain_24h_at = None
+
+
 def _parse_iem_network(
     network: str,
     rows: List[dict],
@@ -2115,7 +2153,13 @@ async def fetch_iem_daily(
                         lon=_num(row.get("lon")),
                         values={"rain": rain_hour, "rain_at": observed_at},
                     )
-            return _parse_iem_network(network, rows, station_countries, station_elevations)
+            parsed = _parse_iem_network(network, rows, station_countries, station_elevations)
+            # La red ha contestado: su reloj de silencio avanza. Un fallo sale
+            # por el `return []` de arriba sin registrar nada.
+            station_silence.record_sweep(
+                "IEM", [rec.station_id for rec in parsed], network=network,
+            )
+            return parsed
 
     try:
         chunks = await asyncio.gather(*[_one(net) for net in networks])
@@ -2365,6 +2409,11 @@ class RankingStore:
                 [provider, day, stations]
                 for (provider, day), stations in self._hourly.items()
             ],
+            # Quién ha dejado de reportar. Va aquí porque se alimenta del mismo
+            # ciclo del bulk y necesita sobrevivir a los redespliegues: en
+            # memoria pura, la ocultación no llegaba a activarse nunca en un
+            # servicio que se reinicia a diario.
+            "silence": station_silence.export_state(),
         }
         parent = os.path.dirname(path)
         if parent:
@@ -2413,6 +2462,7 @@ class RankingStore:
 
         self._daily = daily
         self._hourly = hourly
+        restored_silence = station_silence.import_state(payload.get("silence"))
         previous_quality_schema = payload.get("quality_filter_schema")
         if previous_quality_schema != _QUALITY_FILTER_SCHEMA:
             self._discard_legacy_quality_state(previous_quality_schema)
@@ -2424,8 +2474,9 @@ class RankingStore:
         for provider in {key[0] for key in self._daily}:
             self._prune_days(provider)
         logger.info(
-            "ranking: snapshot restaurado de %s · %d buckets diarios, %d acumulables",
-            path, len(self._daily), len(self._hourly),
+            "ranking: snapshot restaurado de %s · %d buckets diarios, %d acumulables, "
+            "%d estaciones observadas",
+            path, len(self._daily), len(self._hourly), restored_silence,
         )
         return True
 
@@ -2497,6 +2548,7 @@ class RankingStore:
             _sanitize_record_extremes(r)
             day = self._bucket_day(provider, r, fallback_day)
             r.local_date = day
+            _drop_quarantined_variables(r)
             by_day[day][r.station_id] = r
         for day, recs in by_day.items():
             self._daily[(provider, day)] = recs
@@ -2829,6 +2881,7 @@ class RankingStore:
                 _sanitize_record_extremes(r)  # imposibilidad física (todos)
                 day = self._bucket_day(provider, r, fallback_day)
                 r.local_date = day
+                _drop_quarantined_variables(r)
                 self._daily.setdefault((provider, day), {})[r.station_id] = r
             self._prune_days(provider)
         if staged:  # no avanzar la marca si un reintento no consiguió nada
@@ -2858,6 +2911,11 @@ class RankingStore:
                     continue
                 if r.country in excluded:
                     continue
+                # También en lectura: una estación puede entrar en cuarentena
+                # (alguien abre su ficha) después de que el ciclo la publicara,
+                # y sin esto seguiría clasificando con su lluvia rota hasta el
+                # refresco siguiente.
+                _drop_quarantined_variables(r)
                 yield d, r
 
     def day_options(
@@ -3047,6 +3105,21 @@ async def refresh_once(
             failed.add(provider)
         else:
             logger.info("ranking: %-12s OK · %d estaciones", provider, len(result))
+            # El proveedor ha contestado: avanza el reloj de silencio de sus
+            # estaciones. Los que consultan RED POR RED (MeteoHub, IEM) ya lo
+            # han registrado por separado dentro de su fetcher, porque ahí una
+            # red puede fallar mientras las demás contestan; aquí solo quedan
+            # los de una única llamada, donde el proveedor entero es la red.
+            if provider not in _PER_NETWORK_BULK_PROVIDERS:
+                # Solo cuentan como "recibidas" las que traen algún valor. No
+                # todos los fetchers descartan por su cuenta los registros
+                # vacíos (lo hacen MeteoHub, IPMA, GeoSphere e IEM; el resto
+                # no), y una estación apagada que llegara aquí como registro
+                # hueco se daría por viva y no se ocultaría nunca.
+                station_silence.record_sweep(
+                    provider,
+                    [rec.station_id for rec in result if _station_has_data(rec)],
+                )
             # Commit incremental: publica ESTE proveedor ya, sin esperar a los
             # demás. ``commit`` es síncrono y atómico por llamada → los lectores
             # ven el pool consistente (nuevos de este proveedor + últimos buenos

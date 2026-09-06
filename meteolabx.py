@@ -138,7 +138,7 @@ from utils.browser_sync import (
     sync_browser_context_early,
 )
 from utils.historical_dispatch import fetch_historical_dataset
-from utils.station_metadata import aemet_series_start, eccc_series_start, geosphere_series_start, iem_series_start, meteocat_series_start, meteofrance_series_start
+from utils.station_metadata import aemet_series_start, eccc_series_start, geosphere_series_start, iem_series_start, meteocat_series_end, meteocat_series_start, meteofrance_series_start
 from utils.station_slug import slugify as _station_slug
 from utils.series_state import (
     chart_series_has_backend_derivatives,
@@ -221,7 +221,7 @@ from components.browser_geolocation import get_browser_geolocation
 _boot_mark("import components.* (header/favs/browser)")
 
 
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 APP_BUILD = app_build_id()
 
 # Las tabs son los módulos más grandes del proyecto (observation, trends,
@@ -312,6 +312,7 @@ SERIES_START_LOADERS = {
     },
     "METEOCAT": {
         "loader": meteocat_series_start,
+        "end_loader": meteocat_series_end,
         "formatter": lambda value: datetime.fromisoformat(value).strftime("%d/%m/%Y"),
     },
     "METEOFRANCE": {
@@ -346,19 +347,37 @@ def _render_historical_provider_series_start(provider_id: str, station_id: str) 
         return
 
     series_start_iso = loader(station_id)
+    series_end_iso = None
+    end_loader = series_loader_meta.get("end_loader")
+    if callable(end_loader):
+        series_end_iso = end_loader(station_id)
     if series_start_iso:
         formatter = series_loader_meta.get("formatter")
         try:
             start_txt = formatter(series_start_iso) if callable(formatter) else str(series_start_iso)
         except Exception:
             start_txt = str(series_start_iso)
-        st.caption(
-            t(
-                "historical.notes.series_start",
-                provider=provider_label,
-                value=start_txt,
+        if series_end_iso:
+            try:
+                end_txt = formatter(series_end_iso) if callable(formatter) else str(series_end_iso)
+            except Exception:
+                end_txt = str(series_end_iso)
+            st.caption(
+                t(
+                    "historical.notes.series_period",
+                    provider=provider_label,
+                    start=start_txt,
+                    end=end_txt,
+                )
             )
-        )
+        else:
+            st.caption(
+                t(
+                    "historical.notes.series_start",
+                    provider=provider_label,
+                    value=start_txt,
+                )
+            )
     else:
         st.caption(t("historical.notes.series_start_unavailable", provider=provider_label))
 

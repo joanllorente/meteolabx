@@ -3,6 +3,8 @@
     "data_age": "⚠️ {provider} data is {minutes} minutes old. The station may not be reporting.",
     "missing_elevation": "⚠️ Elevation is missing. Absolute pressure and thermodynamics were computed with elevation 0; enter the elevation in the sidebar for better accuracy.",
     "flatlined_series": "⚠️ Windy is returning one or more variables with no variation for several hours. The chart shows the received data, but affected highs and lows are hidden because they are unreliable.",
+    "suspect_precipitation": "⚠️ This station's rain gauge recorded {amount} mm in {minutes} minutes, an implausible intensity for a healthy sensor. Today's precipitation data may not be correct: it has been excluded from the ranking and the chart's running total leaves the jump out.",
+    "unreported_precipitation": "⚠️ This station's rain gauge has accumulated {amount} mm today, yet none of its {reports} reports for the day mention any precipitation. The gauge may be faulty: its precipitation data has been excluded from the ranking.",
     "historical_station": "⚠️ This is a historical station and it no longer publishes current observations. You can view its series in the History tab.",
     "historical_station_replacement": "This station has moved. The current station is {station_link}."
   },
@@ -161,6 +163,12 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_202_improvements": [
+      "Station inventory updated."
+    ],
+    "release_202_fixes": [
+      "Bug fixes."
+    ],
     "release_201_improvements": [
       "Improved display on mobile devices.",
       "Improved display of the trend charts."
@@ -318,6 +326,7 @@
       "euskalmet_unavailable": "Euskalmet does not provide the historical and climatological data needed for this section through this service.",
       "implemented_providers": "For now, History is implemented for WU, WeatherLink, IEM, Meteocat, AEMET, Meteo-France, MeteoGalicia and Frost. The shared calculation layer is already in place to extend it to other providers.",
       "series_start": "{provider} series start (inventory): {value}",
+      "series_period": "{provider} series period (inventory): {start}–{end}",
       "series_start_unavailable": "{provider} series start (inventory): unavailable."
     },
     "errors": {

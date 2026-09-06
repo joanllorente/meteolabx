@@ -8,7 +8,8 @@
  * cada familia de fallo dice lo suyo.
  *
  * Solo distingue lo que el visitante puede interpretar: falta de acceso,
- * proveedor lento, proveedor incomunicado y, por defecto, sin datos.
+ * proveedor lento, proveedor limitado, proveedor incomunicado y, por defecto,
+ * sin datos.
  */
 export function unavailableKey(unavailable) {
   // Sin diagnóstico —el proveedor respondió, pero sin lectura reciente—
@@ -22,8 +23,40 @@ export function unavailableKey(unavailable) {
     return 'provider_unauthorized';
   }
   if (code === 'provider_timeout' || status === 504) return 'provider_timeout';
+  // El límite de consultas del proveedor no dice nada de la estación: AEMET
+  // rechaza la petición y Marbella sigue publicando cada diez minutos. Sin
+  // esta rama caía en «no está publicando datos», que es justo la confusión
+  // que este módulo existe para evitar.
+  if (code === 'provider_ratelimit' || status === 429) return 'provider_ratelimit';
+  // El proveedor contestó, y lo que contestó es que esa estación no tiene
+  // lectura reciente. Llega con un 502 —el backend lo usa para «no pude
+  // componer la respuesta»— pero la red está perfectamente: Monte Carpegna
+  // llevaba dos días muda y la ficha culpaba a MeteoHub. Este caso tiene que
+  // ganarle al status, o el 502 se lo lleva a «no se ha podido contactar».
+  if (code === 'provider_no_current_data') return 'data_unavailable';
   if (code === 'unreachable' || code === 'provider_network_error' || status === 502) {
     return 'provider_unreachable';
   }
   return 'data_unavailable';
+}
+
+/**
+ * Traduce el fallo de una petición al backend en un diagnóstico para la ficha.
+ *
+ * La distinción que importa aquí es entre «no llegué» y «me cansé de esperar»:
+ * cuando el reloj de ``request()`` aborta la petición, el error no es un
+ * ApiError y acababa cayendo en ``unreachable`` —«no se ha podido contactar
+ * con el proveedor de esta red»—, cuando lo cierto es que la red contesta y es
+ * este servidor el que ha colgado. Pasó con cuatro estaciones de MeteoGalicia,
+ * que tarda entre cuatro y siete segundos en responder.
+ */
+export function describeRequestFailure(cause, { ApiError } = {}) {
+  if (ApiError && cause instanceof ApiError) {
+    return { status: cause.status, code: cause.body?.error_code || 'provider_error' };
+  }
+  const name = String(cause?.name || '');
+  if (name === 'AbortError' || name === 'TimeoutError') {
+    return { status: 504, code: 'provider_timeout' };
+  }
+  return { status: 0, code: 'unreachable' };
 }

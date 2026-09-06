@@ -28,8 +28,14 @@
   const initialConnection = readConnection();
   let slug = $state(entryParams.get('slug') || initialConnection?.slug || '');
   let observationPath = $state(initialConnection?.path || '');
-  const visitSection = entryParams.get('from') === 'streamlit'
-    ? 'forecast.streamlit'
+  // De dónde llegó la visita. `from=app` lo pone la pestaña Predicción de la
+  // web; `from=streamlit` lo ponía la app antigua, que ya no está en uso: se
+  // sigue reconociendo solo para no reetiquetar enlaces guardados de entonces.
+  // Sin marca, la entrada es directa (una URL escrita o un favorito).
+  const entryFrom = entryParams.get('from');
+  const visitSection =
+    entryFrom === 'app' ? 'forecast.app'
+    : entryFrom === 'streamlit' ? 'forecast.streamlit'
     : 'forecast.direct';
   function updateConnection(connection) {
     slug = connection?.slug || '';

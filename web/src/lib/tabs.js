@@ -19,8 +19,10 @@ function forecastHref(language, slug) {
   const params = new URLSearchParams();
   if (language !== 'es') params.set('lang', language);
   if (slug) params.set('slug', slug);
-  const query = params.toString();
-  return query ? `/forecast?${query}` : '/forecast';
+  // Marca de procedencia para el panel de uso: sin ella, entrar por la pestaña
+  // y teclear la dirección contaban igual («forecast.direct»).
+  params.set('from', 'app');
+  return `/forecast?${params.toString()}`;
 }
 
 export function appTabs({ language, slug = '', observationPath = '' }) {

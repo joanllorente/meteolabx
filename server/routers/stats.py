@@ -79,6 +79,9 @@ class SectionVisitRequest(BaseModel):
         "map.temperature",
         "map.wind",
         "map.precipitation",
+        "forecast.app",
+        # Ya no se emite (la app de Streamlit está fuera de uso); se acepta
+        # para que un enlace guardado de entonces no dé 422.
         "forecast.streamlit",
         "forecast.direct",
         "ranking",

@@ -3,6 +3,8 @@
     "data_age": "⚠️ Les dades de {provider} tenen {minutes} minuts d’antiguitat. Pot ser que l’estació no estigui transmetent.",
     "missing_elevation": "⚠️ Falta l’altitud. La pressió absoluta i la termodinàmica s’han calculat amb altitud 0; introdueix l’altitud a la barra lateral per obtenir més precisió.",
     "flatlined_series": "⚠️ Windy retorna una o diverses variables sense cap variació durant hores. El gràfic mostra les dades rebudes, però s’oculten els màxims i mínims afectats perquè no són fiables.",
+    "suspect_precipitation": "⚠️ El pluviòmetre d'aquesta estació ha registrat {amount} mm en {minutes} minuts, una intensitat implausible per a un sensor en bon estat. Les dades de precipitació d'avui podrien no ser correctes: s'han exclòs del rànquing i l'acumulat del gràfic omet el salt.",
+    "unreported_precipitation": "⚠️ El pluviòmetre d'aquesta estació porta {amount} mm acumulats avui, però cap dels seus {reports} comunicats del dia reporta precipitació. El sensor de pluja podria estar avariat: les seves dades de precipitació s'han exclòs del rànquing.",
     "historical_station": "⚠️ Aquesta estació és històrica i ja no publica observacions actuals. Pots consultar-ne la sèrie a la pestanya Històric.",
     "historical_station_replacement": "Aquesta estació s’ha traslladat. L’estació actual és {station_link}."
   },
@@ -161,6 +163,12 @@
     ],
     "privacy_contact_title": "Contacte",
     "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_202_improvements": [
+      "Actualització de l’inventari d’estacions."
+    ],
+    "release_202_fixes": [
+      "Correcció d’errors."
+    ],
     "release_201_improvements": [
       "Millores en la visualització en dispositius mòbils.",
       "Millores en la visualització dels gràfics de tendències."
@@ -318,6 +326,7 @@
       "euskalmet_unavailable": "Euskalmet no proporciona a través d’aquest servei les dades històriques i climatològiques necessàries per a aquesta secció.",
       "implemented_providers": "De moment, l’Històric està implementat per a WU, WeatherLink, IEM, Meteocat, AEMET, Meteo-France, MeteoGalicia i Frost. La capa de càlcul compartida ja està preparada per estendre-ho a altres proveïdors.",
       "series_start": "Inici de sèrie {provider} (inventari): {value}",
+      "series_period": "Període de la sèrie {provider} (inventari): {start}–{end}",
       "series_start_unavailable": "Inici de sèrie {provider} (inventari): no disponible."
     },
     "errors": {

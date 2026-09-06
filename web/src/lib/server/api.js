@@ -20,7 +20,12 @@ export function apiBaseUrl() {
 }
 
 /** Segundos que esperamos al backend antes de rendirnos y pintar sin datos. */
-const DEFAULT_TIMEOUT_MS = Number(env.METEOLABX_API_TIMEOUT_MS || 8000);
+// Ocho segundos se quedaban cortos: MeteoGalicia tarda entre cuatro y siete en
+// contestar, y `/current/processed` pide observación y serie, así que cuatro de
+// sus estaciones abortaban aquí y la ficha culpaba al proveedor de no
+// responder. El backend ya se concede doce segundos para la observación sola;
+// abortar antes que él solo servía para perder respuestas que venían de camino.
+const DEFAULT_TIMEOUT_MS = Number(env.METEOLABX_API_TIMEOUT_MS || 20000);
 
 export class ApiError extends Error {
   constructor(status, body) {

@@ -3,6 +3,8 @@
     "data_age": "⚠️ Dados de {provider} com {minutes} minutos de antiguidade. A estação pode não estar a reportar.",
     "missing_elevation": "⚠️ Falta o valor da altitude. A pressão absoluta e a termodinâmica foram calculadas com altitude 0; introduza a altitude no painel lateral para maior precisão.",
     "flatlined_series": "⚠️ O Windy devolve uma ou várias variáveis sem qualquer variação durante horas. O gráfico mostra os dados recebidos, mas os máximos e mínimos afetados são ocultados por não serem fiáveis.",
+    "suspect_precipitation": "⚠️ O pluviómetro desta estação registou {amount} mm em {minutes} minutos, uma intensidade implausível para um sensor em bom estado. Os dados de precipitação de hoje podem não estar corretos: foram excluídos do ranking e o acumulado do gráfico omite o salto.",
+    "unreported_precipitation": "⚠️ O pluviómetro desta estação acumula {amount} mm hoje, mas nenhum dos seus {reports} boletins do dia reporta precipitação. O sensor de chuva pode estar avariado: os seus dados de precipitação foram excluídos do ranking.",
     "historical_station": "⚠️ Esta estação é histórica e já não publica observações atuais. Pode consultar a respetiva série no separador Histórico.",
     "historical_station_replacement": "Esta estação foi deslocada. A estação atual é {station_link}."
   },
@@ -161,6 +163,12 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para qualquer questão sobre privacidade ou sobre o tratamento da informação, pode escrever para",
+    "release_202_improvements": [
+      "Atualização do inventário de estações."
+    ],
+    "release_202_fixes": [
+      "Correção de erros."
+    ],
     "release_201_improvements": [
       "Melhorias na visualização em dispositivos móveis.",
       "Melhorias na visualização dos gráficos de tendências."
@@ -318,6 +326,7 @@
       "euskalmet_unavailable": "A Euskalmet não disponibiliza neste serviço os dados históricos e climatológicos necessários para esta secção.",
       "implemented_providers": "Atualmente, o Histórico está implementado para WU, WeatherLink, IEM, Meteocat, AEMET, Meteo-France, MeteoGalicia e Frost. A camada de cálculo já é comum para permitir a sua extensão aos restantes fornecedores.",
       "series_start": "Início da série {provider} (inventário): {value}",
+      "series_period": "Período da série {provider} (inventário): {start}–{end}",
       "series_start_unavailable": "Início da série {provider} (inventário): não disponível."
     },
     "errors": {

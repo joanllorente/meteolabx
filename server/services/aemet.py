@@ -64,6 +64,17 @@ _DAILY_EXTREMES_CACHE = AsyncTTLCache[Dict[str, float]](
     max_entries=1000,
 )
 
+# El gráfico del día LOCAL arranca a las 22:00/23:00 UTC del día anterior, así
+# que la serie necesita también el día UTC de ayer. Ese día ya está CERRADO: no
+# va a cambiar, y volver a descargarlo con el TTL de las series (diez minutos)
+# duplicaba el gasto de la API key de AEMET para traer exactamente los mismos
+# registros. Con seis horas, cada estación lo pide como mucho cuatro veces al
+# día. La clave incluye la fecha, así que al cambiar el día entra sola la nueva.
+_YESTERDAY_SERIES_CACHE = AsyncTTLCache[list](
+    default_ttl_s=6 * 60 * 60,
+    max_entries=1000,
+)
+
 
 # =====================================================================
 # Helpers de parsing (clonados de services/aemet.py legacy y limpiados)
@@ -511,8 +522,15 @@ async def fetch_today_series(
             )
             return payload if isinstance(payload, list) else []
 
+        yesterday_key = make_cache_key(
+            PROVIDER, f"series-yesterday:{yesterday_utc.isoformat()}", station_id, api_key,
+        )
         today_result, yesterday_result = await _asyncio.gather(
-            _fetch(endpoint_today), _fetch(endpoint_yesterday), return_exceptions=True,
+            _fetch(endpoint_today),
+            _YESTERDAY_SERIES_CACHE.get_or_fetch(
+                yesterday_key, lambda: _fetch(endpoint_yesterday),
+            ),
+            return_exceptions=True,
         )
     finally:
         if owns_client:

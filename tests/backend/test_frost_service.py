@@ -256,3 +256,99 @@ def test_fetch_today_series_empty() -> None:
         frost.fetch_today_series(STATION, "ID", "SECRET", client=client, now=NOW_LOCAL)
     )
     assert result["has_data"] is False
+
+
+# =====================================================================
+# Consumo de la API: no pedir elementos que la estación no mide
+# =====================================================================
+
+def _element_counting_handler(counter: list, ausentes: tuple = ()):
+    """Frost rechaza la petición ENTERA con un 412 en cuanto uno de los
+    elementos pedidos no existe para esa estación; los que sí existen se
+    responden con normalidad."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        pedidos = [e for e in request.url.params.get("elements", "").split(",") if e]
+        counter.append(pedidos)
+        if any(element in ausentes for element in pedidos):
+            return httpx.Response(412, json={"error": {"reason": "elemento inexistente"}})
+        return httpx.Response(200, json={"data": [{
+            "referenceTime": "2026-09-06T12:00:00.000Z",
+            "observations": [
+                {"elementId": element, "value": 11.0, "unit": "degC"}
+                for element in pedidos
+            ],
+        }]})
+    return handler
+
+
+def test_elements_are_trimmed_to_what_the_catalogue_knows() -> None:
+    """Frost rechaza la petición ENTERA con un 412 si le cuelas un elemento que
+    la estación no mide, y entonces hay que preguntar uno por uno: de 2
+    llamadas a 22. Con su rate limit eso se paga caro."""
+    todos = frost.LATEST_ELEMENTS
+    # SN1070 mide temperatura y lluvia, no presión ni viento.
+    recortado = frost._elements_for_station("SN1070", todos)
+    assert len(recortado) < len(todos)
+    assert "air_temperature" in recortado
+    assert "surface_air_pressure" not in recortado
+
+
+def test_a_catalogue_that_knows_nothing_does_not_trim() -> None:
+    """2.191 de las 3.462 estaciones noruegas tienen TODOS los sensores a falso.
+    Eso no significa que no midan nada, sino que no lo sabemos: filtrar ahí las
+    dejaría sin un solo dato."""
+    todos = frost.LATEST_ELEMENTS
+    assert frost._elements_for_station("SN52750", todos) == todos
+
+
+def test_the_fan_out_is_learnt_so_it_only_happens_once() -> None:
+    """Como el catálogo solo conoce a un tercio de la red, el resto pagaría el
+    fan-out en cada visita. Lo que contestó se recuerda: la siguiente consulta
+    vuelve a ser una sola llamada."""
+    frost._working_elements.clear()
+    counter: list = []
+    # La estación mide temperatura y humedad, pero no presión.
+    elementos = ("air_temperature", "relative_humidity", "surface_air_pressure")
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            _element_counting_handler(counter, ausentes=("surface_air_pressure",)),
+        ),
+        timeout=5.0,
+    )
+    try:
+        _run(frost._request_observations_resilient(
+            "SN52750", "id", "secret", client,
+            referencetime="latest", elements=elementos, timeout_s=5.0,
+        ))
+        llamadas_primera = len(counter)
+        counter.clear()
+        _run(frost._request_observations_resilient(
+            "SN52750", "id", "secret", client,
+            referencetime="latest", elements=elementos, timeout_s=5.0,
+        ))
+        llamadas_segunda = len(counter)
+    finally:
+        _run(client.aclose())
+        frost._working_elements.clear()
+
+    # Primera: la combinada (412 por la presión) + una por elemento.
+    assert llamadas_primera == 1 + len(elementos)
+    # Segunda: una sola petición, ya sin el elemento que no existe.
+    assert llamadas_segunda == 1
+    assert counter[0] == ["air_temperature", "relative_humidity"]
+
+
+def test_stale_memory_is_dropped_and_relearnt() -> None:
+    """Si lo recordado deja de valer (la estación cambia de sensores), se
+    descarta y se vuelve a aprender en vez de fallar para siempre."""
+    frost._working_elements.clear()
+    key = ("SN52750", "air_temperature")
+    frost._remember_working(key, ("air_temperature",))
+    assert frost._recall_working(key) == ("air_temperature",)
+    frost._forget_working(key)
+    assert frost._recall_working(key) is None
+
+    # Y caduca sola: la entrada lleva su propio vencimiento.
+    frost._working_elements[key] = (0.0, ("air_temperature",))
+    assert frost._recall_working(key) is None
+    frost._working_elements.clear()

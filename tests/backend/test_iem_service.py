@@ -131,6 +131,39 @@ def test_row_and_summary_drop_impossible_tropical_temps() -> None:
     assert extremes["temp_min"] == pytest.approx(-84.1, abs=0.1)
 
 
+def test_row_falls_back_to_raw_metar_when_iem_leaves_temperature_null() -> None:
+    """Los partes especiales intra-horarios de ASOS (los ``MADISHF``) llegan con
+    ``tmpf``/``dwpf``/``relh`` a null aunque el METAR crudo trae la temperatura.
+    Sin este respaldo PAKF perdía 71 de 79 puntos del día y la tarjeta salía sin
+    valor porque el último parte era justamente uno de esos."""
+    row = {
+        "tmpf": None, "dwpf": None, "relh": None, "sknt": 8.0,
+        "raw": (
+            "PAKF 061430Z AUTO 32008KT 10SM BKN022 12/08 A2960 RMK P0099 "
+            "T01200080 WND 29V36 MADISHF"
+        ),
+    }
+    parsed = iem._row_to_values(row, 54.85)
+    assert parsed["temp"] == pytest.approx(12.0)
+    assert parsed["dewpt"] == pytest.approx(8.0)
+    assert parsed["rh"] == pytest.approx(76.5, abs=0.2)
+
+    # Sin el grupo remarcado se usa el grupo principal ``TT/TD``, con el
+    # altímetro detrás para no confundirlo con visibilidades ni con RVR.
+    assert iem._metar_temperatures(
+        "KXXX 061430Z 34012KT 1 1/2SM BR M02/M05 A2960"
+    ) == (pytest.approx(-2.0), pytest.approx(-5.0))
+    assert all(
+        math.isnan(value)
+        for value in iem._metar_temperatures("KXXX 061430Z 34012KT 10SM CLR A2960")
+    )
+
+    # Lo que IEM sí publica manda: el respaldo solo rellena huecos.
+    parsed_reported = iem._row_to_values({**row, "tmpf": 50.0, "relh": 89.0}, 54.85)
+    assert parsed_reported["temp"] == pytest.approx(10.0)
+    assert parsed_reported["rh"] == pytest.approx(89.0)
+
+
 def test_fetch_today_series_is_canonical() -> None:
     client = _client()
     result = _run(iem.fetch_today_series(STATION, client=client, now=NOW_LOCAL))

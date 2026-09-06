@@ -65,11 +65,15 @@ class Settings(BaseSettings):
     proveedor sin ganar frescura visible.
     """
 
-    cache_ttl_series_s: float = 300.0
+    cache_ttl_series_s: float = 600.0
     """
-    TTL del caché de ``/observations/series/today``. Las series del día
-    cambian despacio (5-15 min entre puntos), 5 minutos es buen balance
-    entre frescura y consumo de API key.
+    TTL del caché de ``/observations/series/today``.
+
+    Diez minutos, no cinco: ninguna red publica el gráfico más rápido que eso
+    —AEMET va en pasos de diez minutos y aun así llega con retraso—, así que
+    refrescar cada cinco no añadía ni un punto nuevo y duplicaba el consumo de
+    la API key. AEMET la tiene tan justa que la serie del día se quedaba en
+    429 mientras la observación actual, que gasta una cuarta parte, sí entraba.
     """
 
     cache_stale_current_s: float = 900.0

@@ -163,7 +163,7 @@ def test_fetch_current_without_data_raises() -> None:
 
     with pytest.raises(ProviderError) as excinfo:
         _run(_test())
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 def _climate_payload(days_ago: int):

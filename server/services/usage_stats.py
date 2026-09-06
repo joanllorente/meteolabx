@@ -104,6 +104,10 @@ TRACKED_SECTIONS = (
     "map.temperature",
     "map.wind",
     "map.precipitation",
+    # Predicción, según de dónde se llegue. ``forecast.streamlit`` ya no se
+    # emite —la app de Streamlit está fuera de uso—, pero se conserva para que
+    # el panel siga sumando lo registrado en su día.
+    "forecast.app",
     "forecast.streamlit",
     "forecast.direct",
     "ranking",

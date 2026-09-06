@@ -511,3 +511,97 @@ async def test_ranking_aemet_uses_intra_hour_extremes() -> None:
     assert len(out) == 1
     assert out[0].tmax == pytest.approx(43.2)
     assert out[0].tmin == pytest.approx(41.0)  # min(41.8, fallback ta=41.0)
+
+
+# =====================================================================
+# Caché del día de ayer (consumo de la API key)
+# =====================================================================
+
+def _series_two_step_handler(counter: dict):
+    """Handler diezminutal que cuenta cuántas veces se pide cada día.
+
+    Distingue el endpoint de hoy (``/datos/estacion/``) del datado de ayer
+    (``/datos/fecha/.../estacion/``), que es el que la caché debe ahorrar.
+    """
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/diezminutal/datos/fecha/" in url:
+            counter["yesterday"] = counter.get("yesterday", 0) + 1
+            return httpx.Response(200, json={"estado": 200, "datos": "https://x/ayer"})
+        if "/diezminutal/datos/estacion/" in url:
+            counter["today"] = counter.get("today", 0) + 1
+            return httpx.Response(200, json={"estado": 200, "datos": "https://x/hoy"})
+        return httpx.Response(200, json=[])
+    return handler
+
+
+@pytest.mark.asyncio
+async def test_yesterday_series_is_fetched_once_and_reused() -> None:
+    """El gráfico del día local arranca a las 22:00 UTC de ayer, así que la
+    serie necesita también ese día. Está CERRADO: volver a descargarlo en cada
+    refresco solo gastaba la API key de AEMET, que va tan justa que la serie
+    entera se quedaba en 429 mientras la observación actual sí entraba."""
+    aemet._YESTERDAY_SERIES_CACHE.clear()
+    counter: dict = {}
+    transport = httpx.MockTransport(_series_two_step_handler(counter))
+    client = httpx.AsyncClient(transport=transport, timeout=5.0)
+    try:
+        for _ in range(3):
+            await aemet.fetch_today_series("6076X", "FAKE_KEY", client=client)
+    finally:
+        await client.aclose()
+        aemet._YESTERDAY_SERIES_CACHE.clear()
+
+    assert counter["today"] == 3     # el día en curso sí se refresca
+    assert counter["yesterday"] == 1  # el cerrado, una sola vez
+
+
+@pytest.mark.asyncio
+async def test_yesterday_cache_is_keyed_by_date_and_station() -> None:
+    """La clave lleva la fecha, así que al cambiar el día entra sola la nueva;
+    y dos estaciones no comparten serie."""
+    aemet._YESTERDAY_SERIES_CACHE.clear()
+    counter: dict = {}
+    transport = httpx.MockTransport(_series_two_step_handler(counter))
+    client = httpx.AsyncClient(transport=transport, timeout=5.0)
+    lunes = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc).astimezone(aemet.LOCAL_TZ)
+    martes = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc).astimezone(aemet.LOCAL_TZ)
+    try:
+        await aemet.fetch_today_series("6076X", "FAKE_KEY", client=client, now=lunes)
+        await aemet.fetch_today_series("6076X", "FAKE_KEY", client=client, now=lunes)
+        assert counter["yesterday"] == 1
+        await aemet.fetch_today_series("6076X", "FAKE_KEY", client=client, now=martes)
+        assert counter["yesterday"] == 2
+        await aemet.fetch_today_series("0201X", "FAKE_KEY", client=client, now=martes)
+        assert counter["yesterday"] == 3
+    finally:
+        await client.aclose()
+        aemet._YESTERDAY_SERIES_CACHE.clear()
+
+
+@pytest.mark.asyncio
+async def test_a_failing_yesterday_is_not_cached_and_today_still_serves() -> None:
+    """El día de ayer es best-effort: si falla no se cachea el error (el
+    siguiente refresco vuelve a intentarlo) y el gráfico sale igual."""
+    aemet._YESTERDAY_SERIES_CACHE.clear()
+    counter: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/diezminutal/datos/fecha/" in url:
+            counter["yesterday"] = counter.get("yesterday", 0) + 1
+            return httpx.Response(429, json={"estado": 429, "descripcion": "límite"})
+        if "/diezminutal/datos/estacion/" in url:
+            return httpx.Response(200, json={"estado": 200, "datos": "https://x/hoy"})
+        return httpx.Response(200, json=[REAL_AEMET_RECORD])
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+    try:
+        first = await aemet.fetch_today_series("6076X", "FAKE_KEY", client=client)
+        await aemet.fetch_today_series("6076X", "FAKE_KEY", client=client)
+    finally:
+        await client.aclose()
+        aemet._YESTERDAY_SERIES_CACHE.clear()
+
+    assert counter["yesterday"] == 2  # el fallo no se quedó cacheado 6 horas
+    assert isinstance(first, dict)

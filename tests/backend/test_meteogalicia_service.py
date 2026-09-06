@@ -275,13 +275,13 @@ def test_fetch_current_fails_when_both_endpoints_fail() -> None:
         _run(meteogalicia.fetch_current(STATION, client=client, now=NOW_LOCAL))
 
 
-def test_fetch_current_empty_payloads_is_bad_response() -> None:
+def test_fetch_current_empty_payloads_is_a_silent_station() -> None:
     client = _routing_client(
         tenmin={"listUltimos10min": []}, hourly={"listHorarios": []},
     )
     with pytest.raises(ProviderError) as excinfo:
         _run(meteogalicia.fetch_current(STATION, client=client, now=NOW_LOCAL))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 # =====================================================================

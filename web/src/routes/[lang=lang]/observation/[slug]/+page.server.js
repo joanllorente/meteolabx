@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 
 import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
+import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import {
   observationPath,
   stationMeta
@@ -70,8 +71,5 @@ export async function load({ params, fetch, setHeaders }) {
 }
 
 function describeFailure(cause) {
-  if (cause instanceof ApiError) {
-    return { status: cause.status, code: cause.body?.error_code || 'provider_error' };
-  }
-  return { status: 0, code: 'unreachable' };
+  return describeRequestFailure(cause, { ApiError });
 }

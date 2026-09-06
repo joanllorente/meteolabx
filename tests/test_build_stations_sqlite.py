@@ -93,6 +93,29 @@ def test_build_catalog_without_iem_marks_metadata(tmp_path):
         ).fetchone()[0] == "false"
 
 
+def test_meteocat_closed_station_is_kept_as_historical_only(tmp_path):
+    source = tmp_path / "meteocat.json"
+    source.write_text(json.dumps([
+        {
+            "codi": "AN", "nom": "Barcelona - Av. Lluís Companys",
+            "coordenades": {"latitud": 41.39, "longitud": 2.18},
+            "online": False, "has_historical": True,
+            "estats": [
+                {"codi": 2, "dataInici": "1992-05-11T15:30Z", "dataFi": "2002-10-29T05:00Z"},
+                {"codi": 1, "dataInici": "2002-10-29T05:00Z", "dataFi": None},
+            ],
+        }
+    ]), encoding="utf-8")
+    target = tmp_path / "stations.sqlite"
+
+    build_database(target, provider_files={"METEOCAT": source})
+
+    with sqlite3.connect(target) as connection:
+        assert connection.execute(
+            "SELECT station_id, online, has_historical FROM stations"
+        ).fetchone() == ("AN", 0, 1)
+
+
 def test_aemet_historical_station_exposes_replacement_metadata(tmp_path, monkeypatch):
     source = tmp_path / "aemet.json"
     source.write_text(json.dumps({

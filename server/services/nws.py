@@ -410,8 +410,12 @@ async def fetch_current(
     rows = [] if isinstance(rows_result, BaseException) else rows_result
 
     if not latest_row and not rows:
+        # api.weather.gov contestó bien: ``observations`` devuelve 200 con la
+        # lista vacía y ``observations/latest`` un 404. Es la estación la que
+        # no publica, no la red la que no responde; el código lo dice para que
+        # la ficha no acuse a NWS de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"NWS sin observaciones para {station_id}",
             status_code=502,

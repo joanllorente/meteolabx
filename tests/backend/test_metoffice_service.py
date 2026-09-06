@@ -129,11 +129,11 @@ def test_fetch_current_unauthorized() -> None:
     assert excinfo.value.error_code == "provider_unauthorized"
 
 
-def test_fetch_current_empty_is_bad_response() -> None:
+def test_fetch_current_empty_is_a_silent_station() -> None:
     client = _client(payload={"data": []})
     with pytest.raises(ProviderError) as excinfo:
         _run(metoffice.fetch_current(STATION, "K", client=client))
-    assert excinfo.value.error_code == "provider_bad_response"
+    assert excinfo.value.error_code == "provider_no_current_data"
 
 
 def test_fetch_today_series_clips_to_station_local_day() -> None:

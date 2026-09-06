@@ -579,8 +579,10 @@ def _normalize_current(
         epochs.append(precip_points[-1][0])
 
     if not epochs:
+        # El proveedor contestó; es la estación la que no publica. El código lo
+        # dice para que la ficha no acuse a la red de estar incomunicada.
         raise ProviderError(
-            "provider_bad_response",
+            "provider_no_current_data",
             provider=PROVIDER,
             detail=f"Euskalmet sin lecturas del día para {station_id}",
             status_code=502,

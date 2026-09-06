@@ -50,6 +50,28 @@ def meteocat_series_start(station_id: str) -> str | None:
     return min(candidates) if candidates else None
 
 
+def meteocat_series_end(station_id: str) -> str | None:
+    """End of the operational phase for a closed Meteocat station."""
+    station = _station(METEOCAT_STATIONS_PATH, "codi", station_id)
+    statuses = station.get("estats") if isinstance(station.get("estats"), list) else []
+    operational = [status for status in statuses if isinstance(status, dict) and status.get("codi") == 2]
+    if any(status.get("dataFi") in (None, "") for status in operational):
+        return None
+    candidates: list[str] = []
+    for status in operational:
+        raw = str(status.get("dataFi", "") or "").strip()
+        if not raw:
+            continue
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            candidates.append(parsed.astimezone(timezone.utc).strftime("%Y-%m-%d"))
+        except ValueError:
+            candidates.append(raw.split("T", 1)[0])
+    return max(candidates) if candidates else None
+
+
 def _sqlite_raw_station_payload(provider: str, station_id: str, network_code: str = "") -> dict[str, Any]:
     station = str(station_id or "").strip()
     if not station:
