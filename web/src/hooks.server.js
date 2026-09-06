@@ -61,15 +61,24 @@ export async function handle({ event, resolve }) {
     // prohibir que se guarden. Lo personal que llevan —la decisión de idioma—
     // queda cubierto por el `Vary`, que separa la copia de cada combinación de
     // cookie e idioma en lugar de mezclarlas.
-    if (!isPubliclyCacheable(response)) response.headers.set('cache-control', 'private, no-store');
+    if (!isPubliclyCacheable(event, response)) response.headers.set('cache-control', 'private, no-store');
     const vary = response.headers.get('vary');
     response.headers.set('vary', [vary, 'Cookie', 'Accept-Language'].filter(Boolean).join(', '));
   }
   return notModified(event, response) || response;
 }
 
-/** Solo la ruta que sirve la página sabe si su contenido es compartible. */
-function isPubliclyCacheable(response) {
+/**
+ * Solo las fichas de observación se comparten entre visitantes.
+ *
+ * La excepción es deliberadamente estrecha: hace falta que la ruta sea una
+ * ficha *y* que haya pedido `public` a propósito —las redes con credencial
+ * personal están bajo la misma ruta y piden `no-store`—. Las demás páginas
+ * localizadas declaran `public` para el CDN, pero llevan dentro búsquedas y
+ * filtros del visitante, así que se siguen aplastando.
+ */
+function isPubliclyCacheable(event, response) {
+  if (!/^\/[^/]+\/observation\//.test(event.url.pathname)) return false;
   return (response.headers.get('cache-control') || '').includes('public');
 }
 

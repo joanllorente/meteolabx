@@ -94,3 +94,12 @@ test('recursos sin idioma no se personalizan', async () => {
   const response = await handle({ event: event('/sitemap.xml', 'es'), resolve });
   assert.equal(response.headers.get('cache-control'), 'public, max-age=60');
 });
+
+test('la portada y los mapas siguen sin compartirse aunque pidan caché pública', async () => {
+  // Llevan dentro la búsqueda y los filtros de quien mira: el `public` que
+  // declaran es para el CDN, no para mezclar visitantes.
+  for (const path of ['/', '/it/map', '/it/ranking', '/it/historical/tivissa']) {
+    const response = await handle({ event: event(path, 'it'), resolve });
+    assert.equal(response.headers.get('cache-control'), 'private, no-store', path);
+  }
+});
