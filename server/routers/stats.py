@@ -39,6 +39,8 @@ class VisitRequest(BaseModel):
     source: Literal["app", "seo"] = "app"
     language: str = Field(default="", max_length=8)
     browser_languages: str = Field(default="", max_length=200)
+    page_request_languages: str = Field(default="", max_length=200)
+    language_reason: Literal["", "saved", "browser", "url", "fallback"] = ""
     url_language: str = Field(default="", max_length=8)
     # De dónde llegó. Lo decide el navegador, que es quien ve el referente.
     entry: Literal["", "search", "external", "internal", "direct"] = ""
@@ -57,6 +59,9 @@ def post_visit(body: VisitRequest, request: Request, settings: Settings = Depend
             entry=body.entry, referrer_domain=body.referrer_domain,
             device=body.device,
             browser_languages=body.browser_languages,
+            page_request_languages=body.page_request_languages,
+            language_reason=body.language_reason,
+            request_client=usage_stats.request_client(request.headers.get("user-agent", "")),
             url_language=body.url_language,
             request_languages=request.headers.get("accept-language", ""),
             saved_language=request.cookies.get("meteolabx_language", ""),

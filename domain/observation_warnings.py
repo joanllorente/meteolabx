@@ -34,6 +34,9 @@ SUSPECT_PRECIPITATION = "suspect_precipitation"
 # son instrumentos distintos del mismo aparato, así que el silencio del
 # discriminador de precipitación acusa al pluviómetro.
 UNREPORTED_PRECIPITATION = "unreported_precipitation"
+# El termómetro da valores que su lugar y su época no admiten, que su propia
+# máxima desmiente, o que llevan horas sin moverse.
+SUSPECT_TEMPERATURE = "suspect_temperature"
 
 
 def data_age(provider: str, minutes: float) -> Dict[str, Any]:
@@ -71,3 +74,13 @@ def unreported_precipitation(amount_mm: float, reports: int) -> Dict[str, Any]:
         "code": UNREPORTED_PRECIPITATION,
         "params": {"amount": round(float(amount_mm), 1), "reports": int(reports)},
     }
+
+
+def suspect_temperature(reason: str) -> Dict[str, Any]:
+    """Warning de termómetro que no merece crédito.
+
+    ``reason`` distingue la avería para que el texto lo diga: ``frozen`` (serie
+    congelada), ``impossible`` (frío imposible ahí y en esa época) o ``range``
+    (máxima y mínima incompatibles el mismo día).
+    """
+    return {"code": SUSPECT_TEMPERATURE, "params": {"reason": str(reason)}}

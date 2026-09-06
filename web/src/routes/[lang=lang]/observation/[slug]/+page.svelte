@@ -66,6 +66,7 @@
     recordVisit({
       ...estacion,
       language: lang,
+      decision: data.languageDecision,
       entry: classifyEntry(document.referrer, location.host, { interna: Boolean(from) })
     });
     if (!model.available && !station.is_historical_only) {

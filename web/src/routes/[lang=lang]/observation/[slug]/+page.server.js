@@ -1,4 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
+import { languageDecision } from '$lib/server/language.js';
+import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
 
 import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
 import { describeRequestFailure } from '$lib/observation/unavailable.js';
@@ -16,7 +18,7 @@ import {
  * metadatos y el contenido indexable no dependen de que la estación esté
  * publicando ahora mismo.
  */
-export async function load({ params, fetch, setHeaders }) {
+export async function load({ params, request, cookies, fetch, setHeaders }) {
   const { lang, slug } = params;
 
   let station;
@@ -67,7 +69,7 @@ export async function load({ params, fetch, setHeaders }) {
   // pegándole al proveedor en cada visita.
   setHeaders({ 'cache-control': 'public, max-age=60, stale-while-revalidate=300' });
 
-  return { lang, slug: station.url_slug, station, meta, observation, replacementPath };
+  return { languageDecision: languageDecision({ request, cookies }, LANGUAGE_CODES, lang), lang, slug: station.url_slug, station, meta, observation, replacementPath };
 }
 
 function describeFailure(cause) {

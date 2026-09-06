@@ -5,6 +5,10 @@
     "flatlined_series": "⚠️ Windy is returning one or more variables with no variation for several hours. The chart shows the received data, but affected highs and lows are hidden because they are unreliable.",
     "suspect_precipitation": "⚠️ This station's rain gauge recorded {amount} mm in {minutes} minutes, an implausible intensity for a healthy sensor. Today's precipitation data may not be correct: it has been excluded from the ranking and the chart's running total leaves the jump out.",
     "unreported_precipitation": "⚠️ This station's rain gauge has accumulated {amount} mm today, yet none of its {reports} reports for the day mention any precipitation. The gauge may be faulty: its precipitation data has been excluded from the ranking.",
+    "suspect_temperature": "⚠️ This station's thermometer is reporting unreliable values ({reason}). Today's temperatures have been excluded from the ranking.",
+    "suspect_temperature_reason_frozen": "unchanged for hours",
+    "suspect_temperature_reason_impossible": "impossible for its latitude and time of year",
+    "suspect_temperature_reason_range": "high and low incompatible on the same day",
     "historical_station": "⚠️ This is a historical station and it no longer publishes current observations. You can view its series in the History tab.",
     "historical_station_replacement": "This station has moved. The current station is {station_link}."
   },

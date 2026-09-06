@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 from urllib.parse import quote
@@ -37,11 +39,9 @@ SENSOR_FIELDS = {
     "barometer": ("barometricPressure", "seaLevelPressure"),
     "anemometer": ("windSpeed", "windGust"),
     "wind_vane": ("windDirection",),
-    "rain_gauge": (
-        "precipitationLastHour",
-        "precipitationLast3Hours",
-        "precipitationLast6Hours",
-    ),
+    # Una observación solo incluye precipitación cuando ha llovido; no sirve
+    # para distinguir una estación sin pluviómetro de otra con acumulado cero.
+    "rain_gauge": (),
     "pyranometer": (),
     "uv": (),
 }
@@ -108,13 +108,79 @@ def _fetch_latest(station_id: str) -> Tuple[str, Dict[str, bool], str]:
     return sid, _sensors_from_feature(payload), ""
 
 
-def _selected_stations(stations: List[Dict[str, Any]], *, resume: bool, max_stations: int) -> List[Dict[str, Any]]:
+def _error_kind(error: str) -> str:
+    raw = str(error or "").strip()
+    lowered = raw.lower()
+    if raw.startswith("404"):
+        return "404"
+    if raw.startswith("429") or "too many requests" in lowered:
+        return "rate_limit"
+    if "timed out" in lowered or "timeout" in lowered:
+        return "timeout"
+    if "connection" in lowered or "failed to establish" in lowered:
+        return "network"
+    if raw[:3].isdigit() and raw.startswith("5"):
+        return "server"
+    return "other"
+
+
+def _merge_sensors(previous: Any, detected: Dict[str, bool]) -> Dict[str, bool]:
+    old = previous if isinstance(previous, dict) else {}
+    return {
+        sensor_key: (
+            bool(old.get(sensor_key)) or bool(detected.get(sensor_key))
+            if SENSOR_FIELDS[sensor_key]
+            else False
+        )
+        for sensor_key in SENSOR_FIELDS
+    }
+
+
+def _apply_probe_result(
+    station: Dict[str, Any],
+    sensors: Dict[str, bool],
+    error: str,
+    *,
+    now_iso: str,
+) -> None:
+    station["last_probe_at"] = now_iso
+    if error:
+        kind = _error_kind(error)
+        previous_error = str(station.get("sensor_probe_error") or "")
+        station["sensor_probe_error"] = error
+        station["last_error_kind"] = kind
+        if kind == "404":
+            previous_count = station.get("consecutive_404")
+            if previous_count is None:
+                previous_count = 1 if previous_error.startswith("404") else 0
+            try:
+                station["consecutive_404"] = max(0, int(previous_count)) + 1
+            except (TypeError, ValueError):
+                station["consecutive_404"] = 1
+        return
+
+    station["sensors"] = _merge_sensors(station.get("sensors"), sensors)
+    station.pop("sensor_probe_error", None)
+    station.pop("last_error_kind", None)
+    station["consecutive_404"] = 0
+    station["last_success_at"] = now_iso
+
+
+def _selected_stations(
+    stations: List[Dict[str, Any]],
+    *,
+    resume: bool,
+    retry_errors: bool,
+    max_stations: int,
+) -> List[Dict[str, Any]]:
     selected = [
         station
         for station in stations
         if isinstance(station, dict) and str(station.get("id") or "").strip()
     ]
-    if resume:
+    if retry_errors:
+        selected = [station for station in selected if station.get("sensor_probe_error")]
+    elif resume:
         selected = [station for station in selected if not isinstance(station.get("sensors"), dict)]
     if max_stations > 0:
         selected = selected[:max_stations]
@@ -126,6 +192,7 @@ def enrich_inventory(
     *,
     output_path: Path,
     resume: bool,
+    retry_errors: bool,
     max_workers: int,
     save_every: int,
     max_stations: int,
@@ -135,7 +202,12 @@ def enrich_inventory(
         for station in stations
         if isinstance(station, dict)
     }
-    selected = _selected_stations(stations, resume=resume, max_stations=max_stations)
+    selected = _selected_stations(
+        stations,
+        resume=resume,
+        retry_errors=retry_errors,
+        max_stations=max_stations,
+    )
     total = len(selected)
     if total == 0:
         _save_json(output_path, stations)
@@ -153,12 +225,10 @@ def enrich_inventory(
             station_id, sensors, error = future.result()
             station = by_id.get(station_id)
             if station is not None:
-                station["sensors"] = sensors
+                now_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                _apply_probe_result(station, sensors, error, now_iso=now_iso)
                 if error:
-                    station["sensor_probe_error"] = error
                     errors += 1
-                else:
-                    station.pop("sensor_probe_error", None)
             completed += 1
             if completed % max(1, int(save_every)) == 0:
                 _save_json(output_path, stations)
@@ -180,6 +250,11 @@ def main() -> int:
     parser.add_argument("--input", default=str(NWS_STATIONS_PATH))
     parser.add_argument("--output", default=str(NWS_STATIONS_PATH))
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--retry-errors",
+        action="store_true",
+        help="Probe only stations that currently have sensor_probe_error.",
+    )
     parser.add_argument("--max-workers", type=int, default=8)
     parser.add_argument("--save-every", type=int, default=500)
     parser.add_argument("--max-stations", type=int, default=0)
@@ -196,6 +271,7 @@ def main() -> int:
         stations,
         output_path=output_path,
         resume=bool(args.resume),
+        retry_errors=bool(args.retry_errors),
         max_workers=int(args.max_workers),
         save_every=int(args.save_every),
         max_stations=int(args.max_stations),
@@ -211,9 +287,22 @@ def main() -> int:
         for sensor_key in SENSOR_FIELDS
     }
     errors = sum(1 for station in stations if isinstance(station, dict) and station.get("sensor_probe_error"))
+    error_kinds = {
+        kind: sum(
+            1 for station in stations
+            if isinstance(station, dict) and station.get("last_error_kind") == kind
+        )
+        for kind in ("404", "timeout", "network", "rate_limit", "server", "other")
+    }
+    repeated_404 = sum(
+        1 for station in stations
+        if isinstance(station, dict) and int(station.get("consecutive_404") or 0) >= 2
+    )
     print(f"Saved {len(stations)} stations to {output_path}")
     print(counts)
     print(f"errors: {errors}")
+    print(f"error kinds: {error_kinds}")
+    print(f"stations with consecutive_404 >= 2: {repeated_404}")
     return 0
 
 

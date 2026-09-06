@@ -48,9 +48,20 @@ export function negotiateLanguage(header, supported, fallback = FALLBACK_LANGUAG
 export const LANGUAGE_COOKIE = 'meteolabx_language';
 
 /** Solo el selector guarda preferencias; recibir un enlace nunca las cambia. */
-export function visitorLanguage({ cookies, request }, supported, urlLanguage = '') {
+export function languageDecision({ cookies, request }, supported, urlLanguage = '') {
   const saved = cookies?.get(LANGUAGE_COOKIE);
-  if (supported.includes(saved)) return saved;
-  return negotiateLanguage(request.headers.get('accept-language'), supported,
-    supported.includes(urlLanguage) ? urlLanguage : FALLBACK_LANGUAGE);
+  const preferences = parseAcceptLanguage(request.headers.get('accept-language'));
+  const requestLanguages = preferences.map(({ tag }) => tag)
+    .filter(tag => /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(tag)).slice(0, 6).join(',').slice(0, 200);
+  if (supported.includes(saved)) return { language: saved, reason: 'saved', requestLanguages };
+  for (const { tag } of preferences) {
+    const language = supported.includes(tag) ? tag : tag.split('-')[0];
+    if (supported.includes(language)) return { language, reason: 'browser', requestLanguages };
+  }
+  if (supported.includes(urlLanguage)) return { language: urlLanguage, reason: 'url', requestLanguages };
+  return { language: supported.includes(FALLBACK_LANGUAGE) ? FALLBACK_LANGUAGE : supported[0], reason: 'fallback', requestLanguages };
+}
+
+export function visitorLanguage(event, supported, urlLanguage = '') {
+  return languageDecision(event, supported, urlLanguage).language;
 }

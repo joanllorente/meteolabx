@@ -38,11 +38,9 @@ SENSOR_FIELDS = {
     "barometer": ("barometricPressure", "seaLevelPressure"),
     "anemometer": ("windSpeed", "windGust"),
     "wind_vane": ("windDirection",),
-    "rain_gauge": (
-        "precipitationLastHour",
-        "precipitationLast3Hours",
-        "precipitationLast6Hours",
-    ),
+    # La ausencia del campo solo significa que no llovió en esa observación;
+    # no permite inferir si la estación dispone físicamente de pluviómetro.
+    "rain_gauge": (),
     "pyranometer": (),
     "uv": (),
 }
@@ -68,7 +66,7 @@ def _assumed_catalog_sensors() -> Dict[str, bool]:
         "barometer": True,
         "anemometer": True,
         "wind_vane": True,
-        "rain_gauge": True,
+        "rain_gauge": False,
         "pyranometer": False,
         "uv": False,
     }

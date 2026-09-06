@@ -162,6 +162,9 @@
   };
   // Las visitas anteriores a que se registrara el idioma lo llevan vacío.
   const idioma = (codigo) => IDIOMAS[codigo] || (codigo ? codigo : '—');
+  const MOTIVOS_IDIOMA = { saved: 'Elección guardada al cargar', browser: 'Idioma solicitado al cargar', url: 'URL: la carga no pidió un idioma compatible', fallback: 'Idioma de reserva' };
+  const CLIENTES = { googlebot: 'Se identifica como Googlebot', bingbot: 'Se identifica como Bingbot', other_bot: 'Se identifica como automatización', unidentified: 'No identificado (no confirma que sea una persona)' };
+
 
   const ENTRADAS = {
     search: 'Buscador',
@@ -488,7 +491,10 @@
                                       <details>
                                         <summary>Ver idiomas</summary>
                                         <div>URL: {idioma(evento.url_language)}</div>
-                                        <div>Navegador: {evento.browser_languages || '—'}</div>
+                                        <div>Navegador al registrar: {evento.browser_languages || '—'}</div>
+                                        <div>Petición que cargó la página: {evento.language_reason ? (evento.page_request_languages || 'Sin idioma enviado') : 'No registrada'}</div>
+                                        <div>Motivo: {MOTIVOS_IDIOMA[evento.language_reason] || 'No registrado'}</div>
+                                        <div>Cliente del registro: {CLIENTES[evento.request_client] || 'No registrado'}</div>
                                         <div>Petición del registro: {evento.request_languages || '—'}</div>
                                         <div>Elección guardada: {evento.saved_language ? idioma(evento.saved_language) : 'Ninguna'}</div>
                                       </details>

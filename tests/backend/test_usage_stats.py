@@ -455,3 +455,27 @@ def test_language_diagnostics_migrate_without_rewriting_history(tmp_path):
     assert old['browser_languages'] == old['request_languages'] == old['saved_language'] == old['url_language'] == ''
     usage_stats.record_visit('AEMET', '3386A', language='es', browser_languages='es-ES', url_language='es', settings=settings)
     assert usage_stats.station_detail('AEMET', '3386A', settings=settings)['visits']['total'] == 2
+
+
+def test_page_request_and_renderer_request_are_distinct(stats_client):
+    assert stats_client.post('/v1/stats/visit', headers={
+        'Accept-Language': 'en-US',
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'},
+        json={'provider': 'AEMET', 'station_id': '3386A', 'language': 'es',
+              'url_language': 'es', 'browser_languages': 'en-US',
+              'page_request_languages': '', 'language_reason': 'url'}).status_code == 204
+    detail = stats_client.get('/v1/stats/station', params={'provider': 'AEMET', 'station_id': '3386A'},
+                              headers={'X-Stats-Password': 's3creto'}).json()
+    visit = detail['recent_visits'][0]
+    assert visit['page_request_languages'] == ''
+    assert visit['language_reason'] == 'url'
+    assert visit['request_languages'] == visit['browser_languages'] == 'en-us'
+    assert visit['language'] == visit['url_language'] == 'es'
+    assert visit['request_client'] == 'googlebot'
+
+
+def test_client_classification_never_claims_human_identity():
+    assert usage_stats.request_client('Mozilla/5.0 Safari/605.1.15') == 'unidentified'
+    assert usage_stats.request_client('') == 'unidentified'
+    assert usage_stats.request_client('bingbot/2.0') == 'bingbot'
+    assert usage_stats.request_client('HeadlessChrome/140') == 'other_bot'

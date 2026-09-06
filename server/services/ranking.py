@@ -2001,14 +2001,21 @@ def _drop_quarantined_variables(rec: StationDaily) -> None:
 
     if not rec.local_date:
         return
-    if rec.rain is None and rec.rain_24h is None:
-        return
     if suspect_data.is_flagged(
         rec.provider, rec.station_id, rec.local_date, suspect_data.PRECIPITATION,
     ):
         rec.rain = None
         rec.rain_24h = None
         rec.rain_24h_at = None
+    if suspect_data.is_flagged(
+        rec.provider, rec.station_id, rec.local_date, suspect_data.TEMPERATURE,
+    ):
+        # Un termómetro roto no lo está solo para la máxima: caen los tres
+        # campos, porque los tres salen del mismo sensor.
+        rec.tmax = None
+        rec.tmin = None
+        rec.tcur = None
+        rec.tcur_at = None
 
 
 def _parse_iem_network(

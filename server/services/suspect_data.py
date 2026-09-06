@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 # Variables que pueden entrar en cuarentena. Son los nombres que usa el
 # ranking, para que el consumidor no tenga que traducir nada.
 PRECIPITATION = "rain"
+# La temperatura entra como una sola variable aunque el ranking la publique en
+# tres campos (máxima, mínima y actual): un termómetro que miente no lo hace en
+# uno solo de ellos.
+TEMPERATURE = "temperature"
 
 # Días locales que se conservan. Cuatro es lo mismo que guarda el store del
 # ranking (``RankingStore._KEEP_DAYS``): una fecha local vive ~50 h en algún

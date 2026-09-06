@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS station_visits (
     -- anteriores lo llevan vacío: no se puede reconstruir.
     language TEXT NOT NULL DEFAULT '',
     browser_languages TEXT NOT NULL DEFAULT '',
+    page_request_languages TEXT NOT NULL DEFAULT '',
+    language_reason TEXT NOT NULL DEFAULT '',
+    request_client TEXT NOT NULL DEFAULT '',
     request_languages TEXT NOT NULL DEFAULT '',
     saved_language TEXT NOT NULL DEFAULT '',
     url_language TEXT NOT NULL DEFAULT '',
@@ -156,7 +159,8 @@ def _connect(settings=None) -> sqlite3.Connection:
             "ALTER TABLE station_visits ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy'"
         )
     for columna in ("language", "entry", "referrer_domain", "device",
-                    "browser_languages", "request_languages", "saved_language", "url_language"):
+                    "browser_languages", "request_languages", "saved_language", "url_language",
+                    "page_request_languages", "language_reason", "request_client"):
         if columna not in visit_columns:
             connection.execute(
                 f"ALTER TABLE station_visits ADD COLUMN {columna} TEXT NOT NULL DEFAULT ''"
@@ -175,6 +179,9 @@ def record_visit(
     referrer_domain: str = "",
     device: str = "",
     browser_languages: str = "",
+    page_request_languages: str = "",
+    language_reason: str = "",
+    request_client: str = "",
     request_languages: str = "",
     saved_language: str = "",
     url_language: str = "",
@@ -198,8 +205,8 @@ def record_visit(
         connection.execute(
             "INSERT INTO station_visits"
             "(provider, station_id, name, source, language, entry, referrer_domain,"
-            " device, browser_languages, request_languages, saved_language, url_language, epoch)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " device, browser_languages, request_languages, saved_language, url_language, page_request_languages, language_reason, request_client, epoch)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 provider,
                 station_id,
@@ -213,6 +220,9 @@ def record_visit(
                 language_tags(request_languages),
                 saved_language if saved_language in SUPPORTED_LANGUAGES else "",
                 url_language if url_language in SUPPORTED_LANGUAGES else "",
+                language_tags(page_request_languages),
+                language_reason if language_reason in {"saved", "browser", "url", "fallback"} else "",
+                request_client if request_client in {"googlebot", "bingbot", "other_bot", "unidentified"} else "",
                 int(time.time()),
             ),
         )
@@ -797,7 +807,8 @@ def station_detail(
         recent_visit_rows = connection.execute(
             f"""
             SELECT epoch, source, language, entry, referrer_domain, device,
-                   browser_languages, request_languages, saved_language, url_language
+                   browser_languages, request_languages, saved_language, url_language,
+                   page_request_languages, language_reason, request_client
             FROM station_visits
             WHERE provider = ? AND station_id = ?
             ORDER BY epoch DESC LIMIT {limit}
@@ -888,7 +899,8 @@ def station_detail(
                 "referrer_domain": str(row["referrer_domain"] or ""),
                 "device": str(row["device"] or ""),
                 **{key: str(row[key] or "") for key in (
-                    "browser_languages", "request_languages", "saved_language", "url_language")},
+                    "browser_languages", "request_languages", "saved_language", "url_language",
+                    "page_request_languages", "language_reason", "request_client")},
             }
             for row in recent_visit_rows
         ],
@@ -929,3 +941,19 @@ def language_tags(value: str) -> str:
             tags.append((quality, tag.lower()))
     ordered = dict.fromkeys(tag for _, tag in sorted(tags, key=lambda pair: -pair[0]))
     return ",".join(list(ordered)[:6])[:200]
+
+
+def request_client(user_agent: str) -> str:
+    """Declaración del cliente, no verificación de identidad ni prueba de humanidad.
+
+    Solo se conserva la categoría, nunca el user-agent completo ni la IP.
+    """
+    import re
+    agent = str(user_agent or "")[:1024].lower()
+    if "googlebot" in agent or "google-inspectiontool" in agent:
+        return "googlebot"
+    if "bingbot" in agent or "bingpreview" in agent:
+        return "bingbot"
+    if re.search(r"bot\b|crawler|spider|headlesschrome", agent):
+        return "other_bot"
+    return "unidentified"

@@ -5,6 +5,10 @@
     "flatlined_series": "⚠️ Windy retorna una o diverses variables sense cap variació durant hores. El gràfic mostra les dades rebudes, però s’oculten els màxims i mínims afectats perquè no són fiables.",
     "suspect_precipitation": "⚠️ El pluviòmetre d'aquesta estació ha registrat {amount} mm en {minutes} minuts, una intensitat implausible per a un sensor en bon estat. Les dades de precipitació d'avui podrien no ser correctes: s'han exclòs del rànquing i l'acumulat del gràfic omet el salt.",
     "unreported_precipitation": "⚠️ El pluviòmetre d'aquesta estació porta {amount} mm acumulats avui, però cap dels seus {reports} comunicats del dia reporta precipitació. El sensor de pluja podria estar avariat: les seves dades de precipitació s'han exclòs del rànquing.",
+    "suspect_temperature": "⚠️ El termòmetre d'aquesta estació està donant valors poc fiables ({reason}). Les seves temperatures d'avui s'han exclòs del rànquing.",
+    "suspect_temperature_reason_frozen": "fa hores que no varia",
+    "suspect_temperature_reason_impossible": "impossible per a la seva latitud i època de l’any",
+    "suspect_temperature_reason_range": "màxima i mínima incompatibles el mateix dia",
     "historical_station": "⚠️ Aquesta estació és històrica i ja no publica observacions actuals. Pots consultar-ne la sèrie a la pestanya Històric.",
     "historical_station_replacement": "Aquesta estació s’ha traslladat. L’estació actual és {station_link}."
   },

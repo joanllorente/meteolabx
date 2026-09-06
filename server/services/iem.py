@@ -278,6 +278,50 @@ async def _fetch_date(
     return [row for row in rows if isinstance(row, dict)]
 
 
+# Diferencia máxima admisible entre dos lecturas del MISMO instante. Dos
+# termómetros de la misma estación en el mismo minuto no pueden discrepar así:
+# por encima de esto, una de las dos miente.
+_SAME_INSTANT_MAX_SPREAD_C = 25.0
+
+
+def _drop_contradicted_temperatures(rows: List[Dict[str, Any]]) -> int:
+    """Anula las temperaturas que otra lectura del mismo instante desmiente.
+
+    IEM publica varias filas por hora sinóptica y, en las redes BUFR, una de
+    ellas llega con el centinela clampado: Uhta (``WMO_BUFR_SRF``) daba
+    ``tmpf=-99.04`` (−72,8 °C) a las 00:00 con 11,4 y 12,6 °C en ese mismo
+    sello. La serie arrastraba las cuatro y la mínima del día salía −72,8.
+
+    No se puede filtrar con un suelo por temperatura: las bases antárticas
+    bajan de verdad de −70 y un suelo así les borraría récords reales. Lo que
+    delata al centinela es la CONTRADICCIÓN con otra lectura del mismo
+    instante, que es una imposibilidad física sin depender del clima del sitio.
+
+    Muta ``rows`` in situ y devuelve cuántas lecturas se han anulado.
+    """
+    por_instante: Dict[int, List[Dict[str, Any]]] = {}
+    for row in rows:
+        epoch = _parse_epoch(row)
+        if epoch is None:
+            continue
+        if not _is_nan(_f_to_c(row.get("tmpf"))):
+            por_instante.setdefault(int(epoch), []).append(row)
+
+    anuladas = 0
+    for epoch, grupo in por_instante.items():
+        if len(grupo) < 2:
+            continue  # sin una segunda lectura no hay con qué contradecir
+        temperaturas = sorted(_f_to_c(row.get("tmpf")) for row in grupo)
+        mediana = temperaturas[len(temperaturas) // 2]
+        for row in grupo:
+            if abs(_f_to_c(row.get("tmpf")) - mediana) > _SAME_INSTANT_MAX_SPREAD_C:
+                row["tmpf"] = None
+                # El rocío del mismo parte viene del mismo centinela.
+                row["dwpf"] = None
+                anuladas += 1
+    return anuladas
+
+
 async def _fetch_rows(
     station_id: str,
     client: httpx.AsyncClient,
@@ -314,6 +358,12 @@ async def _fetch_rows(
     if not rows and first_error is not None:
         raise first_error
     rows.sort(key=lambda row: _parse_epoch(row) or 0)
+    anuladas = _drop_contradicted_temperatures(rows)
+    if anuladas:
+        logger.info(
+            "IEM %s|%s: %d lectura(s) de temperatura desmentidas por otra del "
+            "mismo instante", network, station, anuladas,
+        )
     return rows, meta
 
 
@@ -553,6 +603,41 @@ def _empty_series(meta: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _reject_extremes_contradicted_by_series(
+    extremes: Dict[str, float], series: Dict[str, Any],
+) -> List[str]:
+    """Descarta los extremos del resumen que la serie del día desmiente.
+
+    ``currents.json`` sirve como mínima el mismo centinela clampado que
+    ``obhistory``: Uhta daba ``min_tmpf=-99.04`` (−72,8 °C) mientras su serie
+    del día no bajaba de 7,2. La serie ya viene saneada por
+    ``_drop_contradicted_temperatures``, así que es la mejor evidencia de lo
+    que la estación midió de verdad.
+
+    Solo se juzga cuando hay serie con temperaturas: sin ella no hay con qué
+    comparar y el resumen se respeta. Muta ``extremes`` y devuelve las claves
+    descartadas.
+    """
+    temperaturas = [
+        float(value) for value in (series.get("temps") or []) if _valid(value)
+    ]
+    if not temperaturas:
+        return []
+    minimo, maximo = min(temperaturas), max(temperaturas)
+    descartados: List[str] = []
+    if _valid(extremes.get("temp_min")) and minimo - float(
+        extremes["temp_min"]
+    ) > _SAME_INSTANT_MAX_SPREAD_C:
+        extremes.pop("temp_min")
+        descartados.append("temp_min")
+    if _valid(extremes.get("temp_max")) and float(
+        extremes["temp_max"]
+    ) - maximo > _SAME_INSTANT_MAX_SPREAD_C:
+        extremes.pop("temp_max")
+        descartados.append("temp_max")
+    return descartados
+
+
 async def fetch_current(
     station_id: str,
     *,
@@ -625,6 +710,12 @@ async def fetch_current(
         ):
             summary_extremes.pop("temp_max", None)
             summary_extremes.pop("temp_min", None)
+        descartados = _reject_extremes_contradicted_by_series(summary_extremes, series)
+        if descartados:
+            logger.info(
+                "IEM %s: %s del resumen contradicen la serie del día; se usan "
+                "los de la serie", station_id, ", ".join(descartados),
+            )
         daily_extremes.update(summary_extremes)
         if _valid(summary_precip_total):
             precip_total = summary_precip_total

@@ -5,6 +5,10 @@
     "flatlined_series": "⚠️ O Windy devolve uma ou várias variáveis sem qualquer variação durante horas. O gráfico mostra os dados recebidos, mas os máximos e mínimos afetados são ocultados por não serem fiáveis.",
     "suspect_precipitation": "⚠️ O pluviómetro desta estação registou {amount} mm em {minutes} minutos, uma intensidade implausível para um sensor em bom estado. Os dados de precipitação de hoje podem não estar corretos: foram excluídos do ranking e o acumulado do gráfico omite o salto.",
     "unreported_precipitation": "⚠️ O pluviómetro desta estação acumula {amount} mm hoje, mas nenhum dos seus {reports} boletins do dia reporta precipitação. O sensor de chuva pode estar avariado: os seus dados de precipitação foram excluídos do ranking.",
+    "suspect_temperature": "⚠️ O termómetro desta estação está a dar valores pouco fiáveis ({reason}). As suas temperaturas de hoje foram excluídas do ranking.",
+    "suspect_temperature_reason_frozen": "sem variar há horas",
+    "suspect_temperature_reason_impossible": "impossível para a sua latitude e época do ano",
+    "suspect_temperature_reason_range": "máxima e mínima incompatíveis no mesmo dia",
     "historical_station": "⚠️ Esta estação é histórica e já não publica observações atuais. Pode consultar a respetiva série no separador Histórico.",
     "historical_station_replacement": "Esta estação foi deslocada. A estação atual é {station_link}."
   },

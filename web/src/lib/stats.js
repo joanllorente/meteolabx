@@ -152,6 +152,7 @@ export function recordVisit({
   name = '',
   source = 'app',
   language = '',
+  decision = null,
   entry = null
 }) {
   if (!provider || !stationId) return;
@@ -162,6 +163,8 @@ export function recordVisit({
     source,
     language,
     ...visitLanguageContext(),
+    page_request_languages: decision?.requestLanguages || '',
+    language_reason: decision?.reason || '',
     entry: entry?.kind || '',
     referrer_domain: entry?.domain || '',
     device: currentDevice()

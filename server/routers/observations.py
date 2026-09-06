@@ -25,6 +25,11 @@ from domain.observation_pipeline import (
     process_observation,
 )
 from domain.precip_quality import sanitize_precip_series, worst_jump
+from domain.temperature_quality import (
+    flatlined_fields,
+    is_climatologically_impossible,
+    is_diurnal_range_impossible,
+)
 from domain.trend_series import derive_trend_series
 from models.thermodynamics import msl_to_absolute
 from server.config import Settings, get_settings
@@ -287,6 +292,71 @@ def _quarantine_suspect_precipitation(
             )
 
     return warnings
+
+
+def _daily_extremes_mapping(current: dict, series: dict) -> Dict[str, Any]:
+    """Máxima y mínima del día tal como las verá la ficha."""
+    extremos = current.get("daily_extremes")
+    if isinstance(extremos, dict) and extremos:
+        return dict(extremos)
+    temps = [
+        float(value) for value in (series.get("temps") or [])
+        if isinstance(value, (int, float)) and not _is_nan_value(float(value))
+    ]
+    return {"temp_max": max(temps), "temp_min": min(temps)} if temps else {}
+
+
+def _quarantine_suspect_temperature(
+    provider: str,
+    station_id: str,
+    series: dict,
+    extremes: Dict[str, Any],
+    *,
+    latitude: Optional[float],
+    tz_name: str,
+) -> Optional[Dict[str, Any]]:
+    """Controles del termómetro, para CUALQUIER proveedor.
+
+    Tres averías distintas, ninguna cubierta por las otras: la serie que lleva
+    horas sin moverse (Skriveri), el frío que su latitud y su mes no admiten
+    (Squaw Valley) y la máxima y la mínima que no caben en el mismo día
+    (Gettysburg). Pone la temperatura en cuarentena para el día local —el
+    ranking deja fuera sus tres campos— y devuelve el aviso de la ficha.
+    """
+    if not isinstance(series, dict):
+        return None
+    epochs = series.get("epochs") or []
+    temps = series.get("temps") or []
+    last_epoch = next(
+        (int(value) for value in reversed(epochs) if isinstance(value, (int, float))),
+        None,
+    )
+    if last_epoch is None:
+        return None
+    day = _local_day_for(last_epoch, tz_name)
+    month = int(day[5:7]) if len(day) >= 7 else None
+
+    razon: Optional[str] = None
+    if flatlined_fields(epochs, {"temps": temps}):
+        razon = "frozen"
+    elif is_diurnal_range_impossible(extremes.get("temp_max"), extremes.get("temp_min")):
+        razon = "range"
+    else:
+        candidatos = [value for value in temps if isinstance(value, (int, float))]
+        for value in (candidatos + [extremes.get("temp_min")]):
+            if is_climatologically_impossible(value, latitude, month):
+                razon = "impossible"
+                break
+    if razon is None:
+        return None
+
+    suspect_data.flag(
+        provider, station_id, day, suspect_data.TEMPERATURE, params={"reason": razon},
+    )
+    logger.info(
+        "Termómetro sospechoso %s station=%s (%s)", provider, station_id, razon,
+    )
+    return observation_warnings.suspect_temperature(razon)
 
 
 def _daily_extremes_from_ranking_store(
@@ -1179,6 +1249,16 @@ async def post_current_processed(
     if elevation_warning:
         response_warnings.append(elevation_warning)
     response_warnings.extend(precip_warnings)
+    temperature_warning = _quarantine_suspect_temperature(
+        body.provider,
+        body.station_id,
+        series_dict,
+        _daily_extremes_mapping(current_raw, series_dict),
+        latitude=_float_or_nan(base_for_pipeline.get("lat")),
+        tz_name=str(station_record.get("tz") or body.sun_tz_name or ""),
+    )
+    if temperature_warning:
+        response_warnings.append(temperature_warning)
     if body.provider == "WINDY" and _windy_flatlined_fields(series_dict):
         response_warnings.append(observation_warnings.flatlined_series())
 
