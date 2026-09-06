@@ -31,6 +31,24 @@ export function observationUrl(language, slug) {
   return `${SITE_URL}${observationPath(language, slug)}`;
 }
 
+/**
+ * Identidad de una estación dentro de una lista.
+ *
+ * La red hace falta: en IEM el identificador solo es único dentro de la suya,
+ * y cerca de South Lake Tahoe conviven `CA_DCP|TVL` y `CA_ASOS|TVL`. Sin ella
+ * las dos compartían clave, Svelte rechazaba el `{#each}` duplicado y la lista
+ * entera desaparecía al hidratar: el servidor la mandaba y la página se
+ * quedaba en blanco.
+ *
+ * Van unidas por un carácter nulo, que no aparece en ningún identificador:
+ * concatenadas a pelo, `AB` + `C` y `A` + `BC` darían la misma clave.
+ */
+export function stationKey(station) {
+  return [station?.provider, station?.network, station?.station_id]
+    .map((part) => String(part ?? ''))
+    .join('\u0000');
+}
+
 /** Directorio de estaciones de un idioma (sigue siendo la página estática). */
 export function directoryPath(language) {
   return `/${language}/${LANGUAGES[language].directory_slug}.html`;

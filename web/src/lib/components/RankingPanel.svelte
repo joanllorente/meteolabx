@@ -13,6 +13,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import app from '$lib/i18n/app-i18n.generated.js';
   import { providerLabel } from '$lib/seo/i18n.js';
+  import { stationKey } from '$lib/seo/station.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { convertUnit, unitLabel } from '$lib/units.js';
 
@@ -164,7 +165,7 @@
 
   {#if rows.length}
     <ol>
-      {#each rows as row (row.provider + row.station_id)}
+      {#each rows as row (stationKey(row))}
         {@const target = row.url_slug
           ? `/${language}/observation/${row.url_slug}`
           : `/${language}/observation/${encodeURIComponent(row.provider)}/${encodeURIComponent(row.station_id)}`}

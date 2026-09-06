@@ -13,6 +13,7 @@
    */
   import { ui } from '$lib/i18n/ui.js';
   import { providerLabel } from '$lib/seo/i18n.js';
+  import { stationKey } from '$lib/seo/station.js';
 
   let {
     language, query = '', place = '', results = [], failed = false, searched = false,
@@ -89,7 +90,7 @@
         </a>
       </div>
       <ul>
-        {#each results as station (station.provider + station.station_id)}
+        {#each results as station (stationKey(station))}
           {@const target = station.url_slug
             ? `/${language}/observation/${station.url_slug}`
             : `/${language}/observation/${encodeURIComponent(station.provider)}/${encodeURIComponent(station.station_id)}`}
