@@ -12,7 +12,7 @@ import {
   describeSelection,
   resolveSelection
 } from '$lib/historical/selection.js';
-import { primaryLanguage, stationLanguages, stationMeta } from '$lib/seo/station.js';
+import { stationMeta } from '$lib/seo/station.js';
 
 
 /**
@@ -38,10 +38,7 @@ export async function load({ params, url, fetch, setHeaders }) {
   if (station.url_slug !== slug) {
     redirect(301, `/${lang}/historical/${station.url_slug}${url.search}`);
   }
-  const languages = stationLanguages(station);
-  if (!languages.includes(lang)) {
-    redirect(301, `/${primaryLanguage(station)}/historical/${station.url_slug}${url.search}`);
-  }
+
 
   const meta = stationMeta(station, lang, station.url_slug);
   const supported = HISTORICAL_PROVIDERS.has(String(station.provider).toUpperCase());

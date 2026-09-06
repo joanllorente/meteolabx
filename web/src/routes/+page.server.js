@@ -1,6 +1,6 @@
 import { geocode, fetchStationsNear } from '$lib/server/api.js';
 import { LANGUAGES } from '$lib/seo/i18n.js';
-import { negotiateLanguage } from '$lib/server/language.js';
+import { visitorLanguage } from '$lib/server/language.js';
 
 /**
  * La portada: el panel sin ninguna estación conectada.
@@ -10,13 +10,13 @@ import { negotiateLanguage } from '$lib/server/language.js';
  * `?lat=`/`?lon=` —los rellena el botón de geolocalización— se salta el
  * geocodificador y se va directo al catálogo.
  */
-export async function load({ url, params, request, fetch, setHeaders }) {
+export async function load({ url, params, request, cookies, fetch, setHeaders }) {
   const query = (url.searchParams.get('q') || '').trim().slice(0, 120);
   // `/ca`, `/en`… lo dicen en la ruta. La raíz no, y ahí se negocia con la
   // lista de idiomas del navegador: es lo que espera quien llega de fuera, y
   // deja la URL limpia para que sea la versión x-default del sitio.
   const language =
-    params?.lang || negotiateLanguage(request.headers.get('accept-language'), Object.keys(LANGUAGES));
+    params?.lang || visitorLanguage({ request, cookies }, Object.keys(LANGUAGES));
 
   // Ojo con `Number(null)`: vale 0, que es un número perfectamente finito y
   // además una coordenada válida en el Golfo de Guinea. Sin comprobar que el
@@ -54,7 +54,10 @@ export async function load({ url, params, request, fetch, setHeaders }) {
     }
   }
 
-  setHeaders({ 'cache-control': 'public, max-age=120' });
+  setHeaders({
+    'cache-control': 'public, max-age=120',
+    ...(!params?.lang ? { vary: 'Accept-Language' } : {})
+  });
   return {
     language, query, place, results, failed, hideAmateur,
     searched: Boolean(query || coordinates)

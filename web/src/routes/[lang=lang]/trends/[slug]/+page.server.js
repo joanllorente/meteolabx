@@ -6,7 +6,7 @@ import {
   fetchStationByUrlSlug,
   fetchTodaySeries
 } from '$lib/server/api.js';
-import { observationPath, primaryLanguage, stationLanguages, stationMeta } from '$lib/seo/station.js';
+import { observationPath, stationMeta } from '$lib/seo/station.js';
 
 const DAYS_BACK = 7;
 
@@ -34,10 +34,7 @@ export async function load({ params, url, fetch, setHeaders }) {
   if (station.url_slug !== slug) {
     redirect(301, `/${lang}/trends/${station.url_slug}${url.search}`);
   }
-  const languages = stationLanguages(station);
-  if (!languages.includes(lang)) {
-    redirect(301, `/${primaryLanguage(station)}/trends/${station.url_slug}${url.search}`);
-  }
+
 
   // Si el proveedor no sirve el rango pedido, la página se pinta igual con el
   // aviso: una tendencia ausente no es un error de la aplicación.

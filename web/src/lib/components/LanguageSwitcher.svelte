@@ -1,41 +1,32 @@
 <script>
-  /**
-   * Los mismos idiomas que declaran los `hreflang` de la página.
-   *
-   * Las fichas de estación traen sus alternativas ya calculadas —son las que
-   * ve Google—, pero el mapa, el ranking y el histórico no tienen `hreflang`
-   * y se quedaban sin selector: cambiar de pestaña era perder el idioma. Ahí
-   * se derivan de la propia ruta, cambiándole el prefijo.
-   */
   import { page } from '$app/state';
   import { LANGUAGES } from '$lib/seo/i18n.js';
 
-  let { alternates = [], current } = $props();
+  let { current } = $props();
 
   const codes = Object.keys(LANGUAGES);
 
   const options = $derived.by(() => {
-    if (alternates?.length) {
-      return alternates.map((entry) => ({
-        code: entry.code,
-        href: new URL(entry.url).pathname,
-        title: LANGUAGES[entry.code]?.language_label || entry.code
-      }));
-    }
     const path = page?.url?.pathname || '/';
     const [, first, ...rest] = path.split('/');
     const search = page?.url?.search || '';
+    const hash = page?.url?.hash || '';
+    const selection = (path, code) => {
+      const target = new URL(path, page.url);
+      target.searchParams.set('set_language', code);
+      return target.pathname + target.search + hash;
+    };
     // La raíz no lleva prefijo: cada idioma tiene su propia portada.
     if (!codes.includes(first)) {
       return codes.map((code) => ({
         code,
-        href: `/${code}${search}`,
+        href: selection(`/${code}${search}`, code),
         title: LANGUAGES[code]?.language_label || code
       }));
     }
     return codes.map((code) => ({
       code,
-      href: `/${[code, ...rest].join('/')}${search}`,
+      href: selection(`/${[code, ...rest].join('/')}${search}`, code),
       title: LANGUAGES[code]?.language_label || code
     }));
   });
@@ -46,6 +37,9 @@
     {#each options as option (option.code)}
       <a
         href={option.href}
+        data-sveltekit-reload
+        data-sveltekit-preload-data="off"
+        rel="nofollow"
         hreflang={option.code}
         lang={option.code}
         title={option.title}

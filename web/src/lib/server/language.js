@@ -1,11 +1,9 @@
 /**
- * Idioma con el que responder cuando la URL no lo dice.
- *
- * Solo pasa en la raíz del sitio: el resto de páginas lo llevan en la ruta.
+ * Negociación del idioma del visitante, también en enlaces compartidos.
  * El navegador no manda un idioma sino una lista con prioridades —
  * `ru-RU,ru;q=0.9,en-US;q=0.8` —, así que se negocia con la lista entera: un
  * visitante ruso con inglés de segunda recibe inglés, no el idioma por
- * defecto del sitio.
+ * de reserva.
  */
 /**
  * Último recurso.
@@ -37,12 +35,22 @@ export function parseAcceptLanguage(header) {
  *
  * Se comparan también las variantes regionales: `pt-BR` cuenta como `pt`.
  */
-export function negotiateLanguage(header, supported) {
+export function negotiateLanguage(header, supported, fallback = FALLBACK_LANGUAGE) {
   const codes = new Set(supported);
   for (const { tag } of parseAcceptLanguage(header)) {
     if (codes.has(tag)) return tag;
     const base = tag.split('-')[0];
     if (codes.has(base)) return base;
   }
-  return codes.has(FALLBACK_LANGUAGE) ? FALLBACK_LANGUAGE : supported[0];
+  return codes.has(fallback) ? fallback : supported[0];
+}
+
+export const LANGUAGE_COOKIE = 'meteolabx_language';
+
+/** Solo el selector guarda preferencias; recibir un enlace nunca las cambia. */
+export function visitorLanguage({ cookies, request }, supported, urlLanguage = '') {
+  const saved = cookies?.get(LANGUAGE_COOKIE);
+  if (supported.includes(saved)) return saved;
+  return negotiateLanguage(request.headers.get('accept-language'), supported,
+    supported.includes(urlLanguage) ? urlLanguage : FALLBACK_LANGUAGE);
 }

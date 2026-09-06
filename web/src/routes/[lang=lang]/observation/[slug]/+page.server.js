@@ -3,8 +3,6 @@ import { error, redirect } from '@sveltejs/kit';
 import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
 import {
   observationPath,
-  primaryLanguage,
-  stationLanguages,
   stationMeta
 } from '$lib/seo/station.js';
 
@@ -36,12 +34,7 @@ export async function load({ params, fetch, setHeaders }) {
     redirect(301, observationPath(lang, station.url_slug));
   }
 
-  // Cada ficha existe solo en los idiomas de su país; pedir /it/ de una
-  // estación noruega crearía una página que nunca estuvo indexada.
-  const languages = stationLanguages(station);
-  if (!languages.includes(lang)) {
-    redirect(301, observationPath(primaryLanguage(station), station.url_slug));
-  }
+
 
   const meta = stationMeta(station, lang, station.url_slug);
 

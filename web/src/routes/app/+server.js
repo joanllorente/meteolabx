@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 
 import { LANGUAGES } from '$lib/seo/i18n.js';
-import { negotiateLanguage } from '$lib/server/language.js';
+import { visitorLanguage } from '$lib/server/language.js';
 
 /**
  * Los enlaces de la aplicación anterior.
@@ -14,8 +14,8 @@ import { negotiateLanguage } from '$lib/server/language.js';
  * Aquí se traducen a su equivalente de ahora: si el enlace traía estación, se
  * abre su ficha —por slug si lo tiene, y si no por red e identificador— y en
  * la pestaña que pedía; si no traía nada, la portada en el idioma del
- * navegador. Todo con 301, para que un buscador que aún los conserve aprenda
- * la dirección nueva.
+ * navegador. La redirección es temporal y no se guarda porque su destino
+ * depende del idioma de cada visitante.
  */
 const TABS = {
   observacion: 'observation',
@@ -28,10 +28,11 @@ const TABS = {
   climograms: 'historical'
 };
 
-export async function GET({ url, request, fetch }) {
-  const language = negotiateLanguage(request.headers.get('accept-language'), Object.keys(LANGUAGES));
+export async function GET({ url, request, cookies, fetch, setHeaders }) {
+  const language = visitorLanguage({ request, cookies }, Object.keys(LANGUAGES));
   const destino = await stationPath(url, language, fetch);
-  redirect(301, destino || `/${language}`);
+  setHeaders({ 'cache-control': 'private, no-store', vary: 'Accept-Language' });
+  redirect(302, destino || `/${language}`);
 }
 
 async function stationPath(url, language, fetch) {
