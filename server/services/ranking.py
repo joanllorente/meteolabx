@@ -594,7 +594,7 @@ async def fetch_meteocat_daily(
 # ----------------------------------------------------------------------
 # Sin API key. La API exige el parámetro `networks` (no admite "todas") →
 # se itera red a red. La respuesta trae nombre (B01019) y lat/lon en `stat`,
-# así que no hace falta el catálogo. MeteoHub NO reporta ráfaga → gust=None.
+# así que no hace falta el catálogo. La racha llega como B11041.
 def _mh_networks() -> List[str]:
     from data_files import METEOHUB_IT_STATIONS_PATH
 
@@ -671,14 +671,15 @@ def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Opt
             name = str(det.get("val") or "").strip()
     aligned = mh._align_series(mh._products_by_code(st))
     daily_pairs = [
-        (epoch, temp, precip)
-        for epoch, temp, precip in zip(
-            aligned["epochs"], aligned["temps"], aligned["precips"],
+        (epoch, temp, gust, precip)
+        for epoch, temp, gust, precip in zip(
+            aligned["epochs"], aligned["temps"], aligned["gusts"], aligned["precips"],
         )
         if day_start_epoch is None or int(epoch) >= int(day_start_epoch)
     ]
-    temps = [temp for _epoch, temp, _precip in daily_pairs if temp == temp]
-    precs = [precip for _epoch, _temp, precip in daily_pairs if precip == precip]
+    temps = [temp for _epoch, temp, _gust, _precip in daily_pairs if temp == temp]
+    gusts = [gust for _epoch, _temp, gust, _precip in daily_pairs if gust == gust]
+    precs = [precip for _epoch, _temp, _gust, precip in daily_pairs if precip == precip]
     rolling_precip = [
         (int(epoch), float(precip))
         for epoch, precip in zip(aligned["epochs"], aligned["precips"])
@@ -712,7 +713,7 @@ def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Opt
         lon=float(lon) if isinstance(lon, (int, float)) else None,
         tmax=_daily_temperature_max_from_series(temps),
         tmin=round(min(temps), 1) if temps else None,
-        gust=None,  # MeteoHub no reporta ráfaga
+        gust=_daily_gust_max_from_series(gusts) if gusts else None,
         rain=round(sum(precs), 1) if precs else None,
         rain_24h=(
             round(sum(max(0.0, value) for _epoch, value in rolling_precip), 1)
@@ -736,7 +737,7 @@ async def fetch_meteohub_daily(
     Las redes se consultan EN PARALELO (con límite de concurrencia) para que
     una red lenta/caída no bloquee el ciclo — conexiones a MeteoHub pueden
     tardar ~5s (fallback IPv6). Tmáx/Tmín de la serie de temp, lluvia = suma;
-    sin ráfaga."""
+    racha máxima desde B11041."""
     import asyncio
 
     from server.services import meteohub as mh
@@ -744,9 +745,9 @@ async def fetch_meteohub_daily(
     now = datetime.now(tz=mh.STATION_TZ)
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start = now - timedelta(hours=24)
-    # Query ligera: solo temperatura (B12101) y lluvia (B13011) — las únicas
-    # que usa el ranking — en vez de las 6 productos de _build_query. Reduce
-    # mucho el tamaño de respuesta (25 redes) y el tiempo del ciclo.
+    # Query ligera: temperatura, lluvia y racha —las tres familias que usa el
+    # ranking— en vez de todos los productos de _build_query. Reduce mucho el
+    # tamaño de respuesta (25 redes) y el tiempo del ciclo.
     start_text = start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
     end_text = now.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
     q = (
@@ -754,7 +755,7 @@ async def fetch_meteohub_daily(
         f"timerange:{' or '.join(mh.QUERY_TIMERANGES)};"
         f"level:{' or '.join(mh.QUERY_LEVELS)};"
         f"license:{mh.LICENSE_GROUP};"
-        f"product:{mh.P_TEMP} or {mh.P_PRECIP}"
+        f"product:{mh.P_TEMP} or {mh.P_PRECIP} or {mh.P_WIND_GUST}"
     )
     headers = {"Accept": "application/json", "User-Agent": "MeteoLabX/1.0 (+https://meteolabx.com)"}
 

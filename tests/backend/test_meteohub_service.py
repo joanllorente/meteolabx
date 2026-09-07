@@ -19,6 +19,7 @@ import pytest
 
 from server.schemas.errors import ProviderError
 from server.services import meteohub
+from server.services import ranking
 
 
 # Estación real del catálogo: agrmet|44.08903|12.27459|carpineta.
@@ -63,6 +64,10 @@ PAYLOAD = {
                 ], lev="103,10000,0,0"),
                 _product("B11001", [
                     {"ref": _ref(11), "val": 180.0},
+                ], lev="103,10000,0,0"),
+                _product("B11041", [
+                    {"ref": _ref(10), "val": 6.0},
+                    {"ref": _ref(11), "val": 7.0},
                 ], lev="103,10000,0,0"),
                 _product("B13011", [
                     {"ref": _ref(10), "val": 0.4},
@@ -133,6 +138,7 @@ def test_fetch_current_parses_bufr_units() -> None:
     assert result["Tc"] == pytest.approx(22.0)
     assert result["RH"] == pytest.approx(60.0)
     assert result["wind"] == pytest.approx(18.0)
+    assert result["gust"] == pytest.approx(25.2)
     assert result["wind_dir_deg"] == pytest.approx(180.0)
 
     # Presión: abs 995 hPa → MSL con la elevación de los detalles (165 m)
@@ -166,6 +172,7 @@ def test_fetch_today_series_canonical() -> None:
     assert len(result["epochs"]) == 2
     assert result["temps"] == [pytest.approx(20.0), pytest.approx(22.0)]
     assert result["precip_step_mm"] == pytest.approx([0.4, 0.2])
+    assert result["gusts"] == pytest.approx([21.6, 25.2])
     # MSL por punto; primer punto sin presión → NaN
     assert math.isnan(result["pressures"][0])
     assert result["pressures"][1] == pytest.approx(995.0 * math.exp(165.0 / 8000.0))
@@ -176,3 +183,10 @@ def test_fetch_today_series_empty() -> None:
     client = _client(payload={"data": []})
     result = _run(meteohub.fetch_today_series(STATION, client=client, now=NOW_LOCAL))
     assert result["has_data"] is False
+
+
+def test_ranking_uses_meteohub_daily_gust() -> None:
+    record = ranking._mh_parse_station(PAYLOAD["data"][0])
+
+    assert record is not None
+    assert record.gust == pytest.approx(25.2)

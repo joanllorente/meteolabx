@@ -54,10 +54,19 @@ ANTARCTIC_FLOOR_C = -95.0
 # máxima y la mínima de Gettysburg el mismo día de septiembre.
 MAX_DIURNAL_RANGE_C = 40.0
 
-# Serie congelada: cuánto puede variar como MUCHO una temperatura real a lo
-# largo de una ventana larga. Skriveri se movió 0,2 °C en 24 h.
-FLATLINE_SPAN_C = 0.5
-FLATLINE_MIN_HOURS = 6.0
+# Serie congelada. El criterio es la TASA de variación, no el rango absoluto:
+# medido sobre seis horas, un rango pequeño es lo normal de madrugada, y así se
+# marcaron cinco estaciones sanas entre las 2:38 y las 8:59 —Venta Alta,
+# tres noruegas y una del NWS—. Por hora, en cambio, la rota y las sanas se
+# separan sin ambigüedad: Skriveri 0,020 °C/h frente a 0,048, 0,055 y 0,175 de
+# las buenas.
+#
+# La ventana mínima es larga por lo mismo: a primera hora del día local hay
+# pocas horas y poca variación acumulada, y cualquier umbral se vuelve ruido.
+# Con diez horas, una estación rota se detecta a media tarde en vez de al
+# amanecer, que es un precio barato por no acusar a las sanas.
+FLATLINE_MAX_RATE_C_PER_HOUR = 0.03
+FLATLINE_MIN_HOURS = 10.0
 FLATLINE_MIN_SAMPLES = 12
 
 
@@ -120,15 +129,16 @@ def flatlined_fields(
     epochs: Sequence[Any],
     values_by_field: Dict[str, Sequence[Any]],
     *,
-    span_by_field: Optional[Dict[str, float]] = None,
+    rate_by_field: Optional[Dict[str, float]] = None,
 ) -> List[str]:
     """Campos que llevan horas sin variar de forma verosímil.
 
     Generaliza el control que solo se aplicaba a Windy. La tolerancia es por
-    campo: una humedad puede quedarse clavada en 100 % con niebla, pero una
-    temperatura que se mueve dos décimas en un día está rota.
+    campo y se mide en unidades por hora: una humedad puede quedarse clavada en
+    100 % con niebla, pero una temperatura que se mueve dos centésimas de grado
+    por hora está rota.
     """
-    spans = span_by_field or {}
+    tasas = rate_by_field or {}
     congelados: List[str] = []
     for field, values in values_by_field.items():
         validos = [
@@ -138,10 +148,11 @@ def flatlined_fields(
         ]
         if len(validos) < FLATLINE_MIN_SAMPLES:
             continue
-        if validos[-1][0] - validos[0][0] < FLATLINE_MIN_HOURS * 3600:
+        horas = (validos[-1][0] - validos[0][0]) / 3600.0
+        if horas < FLATLINE_MIN_HOURS:
             continue
         medidas = [value for _epoch, value in validos]
-        span = spans.get(field, FLATLINE_SPAN_C)
-        if max(medidas) - min(medidas) < span:
+        tasa = (max(medidas) - min(medidas)) / horas
+        if tasa < tasas.get(field, FLATLINE_MAX_RATE_C_PER_HOUR):
             congelados.append(field)
     return congelados

@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-07T01:00:00+02:00",
+  "source": "IEM currents.json",
+  "stations": [
+    "AK_DCP|ZMBA2",
+    "AZ_DCP|FWJA3",
+    "HN__DCP|PTSH3",
+    "MX_NL_DCP|PCHL2",
+    "NC_DCP|TULN7",
+    "NV_DCP|FVVN2",
+    "NV_DCP|LNGN2",
+    "NV_DCP|SNVN2",
+    "OK_DCP|CSSO2",
+    "OK_DCP|EGSO2",
+    "OK_DCP|NHSO2",
+    "TX_DCP|LHTT2"
+  ]
+}

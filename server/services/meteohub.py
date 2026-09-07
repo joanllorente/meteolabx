@@ -15,8 +15,8 @@ Particularidades:
    la API lo normaliza a mayúsculas, así que aquí se re-minusculiza.
 
 3. **Unidades BUFR**: temperatura en Kelvin (B12101), presión en Pa
-   (B10004, con saneado de valores no barométricos), viento en m/s
-   (B11002). Elevación desde los detalles de estación (B07030/B07031).
+   (B10004, con saneado de valores no barométricos), viento y racha en m/s
+   (B11002/B11041). Elevación desde los detalles de estación (B07030/B07031).
 
 4. **Día local**: Europe/Rome.
 """
@@ -46,13 +46,16 @@ STATION_TZ = ZoneInfo("Europe/Rome")
 P_TEMP = "B12101"
 P_WIND_SPEED = "B11002"
 P_WIND_DIR = "B11001"
+P_WIND_GUST = "B11041"
 P_PRESSURE = "B10004"
 P_RH = "B13003"
 P_PRECIP = "B13011"
 
-QUERY_PRODUCTS = (P_TEMP, P_RH, P_PRESSURE, P_WIND_SPEED, P_WIND_DIR, P_PRECIP)
+QUERY_PRODUCTS = (
+    P_TEMP, P_RH, P_PRESSURE, P_WIND_SPEED, P_WIND_DIR, P_WIND_GUST, P_PRECIP,
+)
 QUERY_LEVELS = ("103,2000,0,0", "103,6000,0,0", "103,10000,0,0", "1,0,0,0")
-QUERY_TIMERANGES = ("254,0,0", "1,0,3600")
+QUERY_TIMERANGES = ("254,0,0", "1,0,3600", "2,0,3600")
 
 
 # =====================================================================
@@ -215,6 +218,7 @@ def _align_series(by_code: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
     add(P_PRESSURE, "p_abs", _pa_to_hpa)
     add(P_WIND_SPEED, "wind", _ms_to_kmh)
     add(P_WIND_DIR, "dir", _safe_float)
+    add(P_WIND_GUST, "gust", _ms_to_kmh)
     add(P_PRECIP, "precip", _non_negative)
 
     epochs = sorted(rows.keys())
@@ -224,6 +228,7 @@ def _align_series(by_code: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
         "humidities": [rows[ep].get("rh", float("nan")) for ep in epochs],
         "pressures_abs": [rows[ep].get("p_abs", float("nan")) for ep in epochs],
         "winds": [rows[ep].get("wind", float("nan")) for ep in epochs],
+        "gusts": [rows[ep].get("gust", float("nan")) for ep in epochs],
         "wind_dirs": [rows[ep].get("dir", float("nan")) for ep in epochs],
         "precips": [rows[ep].get("precip", float("nan")) for ep in epochs],
         "has_data": len(epochs) > 0,
@@ -388,7 +393,7 @@ async def fetch_current(
 ) -> Dict[str, Any]:
     """
     Observación actual = últimos valores válidos de las series del día.
-    MeteoHub no expone racha/radiación/UV en estos productos.
+    MeteoHub expone la racha máxima horaria como B11041.
     """
     owns_client = client is None
     if owns_client:
@@ -438,7 +443,7 @@ async def fetch_current(
         "p_hpa": p_msl,
         "p_abs_hpa": p_abs,
         "wind": _last("winds"),
-        "gust": float("nan"),
+        "gust": _last("gusts"),
         "wind_dir_deg": _last("wind_dirs"),
         "Td": float("nan"),
         "feels_like": float("nan"),
@@ -519,7 +524,7 @@ async def fetch_today_series(
         "solar_radiations": [float("nan")] * n,
         "precip_step_mm": series["precips"],
         "winds": series["winds"],
-        "gusts": [float("nan")] * n,
+        "gusts": series["gusts"],
         "wind_dirs": series["wind_dirs"],
         "lat": lat,
         "lon": lon,

@@ -250,7 +250,28 @@ def get_quarantine(
         dias.update({clave[1] for clave in getattr(store, "_daily", {})})
     activas = [fila for dia in sorted(dias, reverse=True)[:2]
                for fila in suspect_data.active(dia)]
-    return {"day": hoy, "active": activas, "history": suspect_data.history()}
+    historial = suspect_data.history()
+    # El registro guarda identidades, no nombres: sin esto la tabla es una
+    # lista de identificadores y hay que ir a buscar a mano de qué estación
+    # habla cada fila.
+    _stamp_station_names(activas + historial)
+    return {"day": hoy, "active": activas, "history": historial}
+
+
+def _stamp_station_names(filas: list) -> None:
+    """Añade el nombre del catálogo a cada fila, si lo hay."""
+    from server.services import stations as stations_svc
+
+    cache: dict = {}
+    for fila in filas:
+        clave = (fila.get("provider"), fila.get("station_id"))
+        if clave not in cache:
+            try:
+                registro = stations_svc.get_station(*clave) or {}
+            except Exception:  # noqa: BLE001 — el panel no cae por el catálogo
+                registro = {}
+            cache[clave] = str(registro.get("name") or "").strip()
+        fila["name"] = cache[clave] or None
 
 
 @router.get("/station", summary="Detalle de una estación (panel interno)")

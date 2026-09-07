@@ -13,7 +13,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 import pytest
 
-from server.routers.observations import CURRENT_TTL_BY_PROVIDER
+from server.routers.observations import CURRENT_TTL_BY_PROVIDER, SERIES_TTL_BY_PROVIDER
 from server.services.cache import AsyncTTLCache
 
 from .conftest import WU_OK_OBSERVATION
@@ -74,3 +74,7 @@ def test_personal_networks_are_the_only_ones_with_an_override(provider: str) -> 
     assert provider in CURRENT_TTL_BY_PROVIDER
     assert CURRENT_TTL_BY_PROVIDER[provider] <= 30.0
     assert set(CURRENT_TTL_BY_PROVIDER) == {"WU", "WEATHERLINK"}
+
+
+def test_meteocat_series_uses_an_hourly_ttl() -> None:
+    assert SERIES_TTL_BY_PROVIDER == {"METEOCAT": 3600.0}

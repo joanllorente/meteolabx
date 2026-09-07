@@ -67,6 +67,10 @@
   };
   const VARIABLES = { temperature: 'Temperatura', rain: 'Precipitación' };
 
+  /** Ficha de la estación, para ir a mirarla sin buscarla a mano. */
+  const fichaDe = (fila) =>
+    `/es/observation/${encodeURIComponent(fila.provider)}/${encodeURIComponent(fila.station_id)}`;
+
   async function consultar(event) {
     event?.preventDefault();
     if (!password.trim()) return;
@@ -209,6 +213,58 @@
 
   const colacion = new Intl.Collator('es-ES', { sensitivity: 'base', numeric: true });
 
+  // Contornos de países, generados por scripts/build_world_map.py desde las
+  // fronteras de Natural Earth que ya trae el repo (13 MB → 148 KB). Se cargan
+  // solo cuando hace falta pintar el mapa, no en cada visita al panel.
+  let paises = $state(null);
+  $effect(() => {
+    if (paises || !data) return;
+    fetch('/paises.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((valor) => (paises = valor))
+      .catch(() => (paises = null));
+  });
+
+  // Rótulo flotante del mapa. El `<title>` de SVG también funciona, pero es el
+  // tooltip del sistema: tarda casi un segundo en salir y rompe el recorrido
+  // cuando vas pasando de un país a otro.
+  let rotulo = $state(null);
+  const mostrarPais = (evento, codigo, nombre) => {
+    const caja = evento.currentTarget.ownerSVGElement.getBoundingClientRect();
+    rotulo = {
+      texto: nombre,
+      visitas: visitasPorPais[codigo] || 0,
+      x: evento.clientX - caja.left,
+      y: evento.clientY - caja.top
+    };
+  };
+
+  /** Contornos → atributo `d` de un path SVG, en proyección equirectangular. */
+  const trazo = (rings) =>
+    rings
+      .map((ring) => 'M' + ring.map(([lon, lat]) => `${180 + lon} ${90 - lat}`).join('L') + 'Z')
+      .join(' ');
+
+  // Pestañas del panel. La cuarentena tiene su propia vista: es otra pregunta
+  // —qué sensores no me creo— y estorbaba entre las tablas de uso.
+  const PESTANAS = [
+    { id: 'uso', etiqueta: 'Uso' },
+    { id: 'estaciones', etiqueta: 'Estaciones' },
+    { id: 'cuarentena', etiqueta: 'Cuarentena' }
+  ];
+  let pestana = $state('uso');
+
+  // Paginación: 500 filas de golpe hacían la página inmanejable.
+  const POR_PAGINA = 50;
+  let pagina = $state(1);
+  // Al reordenar o cambiar de datos se vuelve al principio: seguir en la
+  // página 7 de otra ordenación no significa nada.
+  $effect(() => {
+    void orden;
+    void data;
+    pagina = 1;
+  });
+
   const estaciones = $derived.by(() => {
     const filas = data?.stations ?? [];
     if (!orden) return filas;
@@ -222,6 +278,41 @@
       return cmp * signo;
     });
   });
+
+  const paginas = $derived(Math.max(1, Math.ceil(estaciones.length / POR_PAGINA)));
+  const paginaActual = $derived(Math.min(pagina, paginas));
+  const estacionesPagina = $derived(
+    estaciones.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA)
+  );
+
+  // Reparto por país, para el mapa y su leyenda.
+  const porPais = $derived(data?.by_country ?? []);
+  const visitasPorPais = $derived(
+    Object.fromEntries(porPais.map((fila) => [fila.country, fila.visits || 0]))
+  );
+  const visitasMaximas = $derived(Math.max(1, ...porPais.map((f) => f.visits || 0)));
+
+  // Escala logarítmica: con España en 195 visitas y el resto por debajo de 10,
+  // una escala lineal dejaba a todos los demás del mismo color que el fondo.
+  const intensidad = (visitas) =>
+    visitas > 0 ? Math.log1p(visitas) / Math.log1p(visitasMaximas) : 0;
+
+  /** Cinco tramos de color, del más claro al más saturado. */
+  const COLORES = ['#1b3a5c', '#245782', '#2c74a8', '#3e8ed0', '#6fb2e8'];
+  const colorPais = (codigo) => {
+    const visitas = visitasPorPais[codigo] || 0;
+    if (!visitas) return 'var(--panel-2)';
+    return COLORES[Math.min(COLORES.length - 1, Math.floor(intensidad(visitas) * COLORES.length))];
+  };
+
+  // Cortes de la leyenda, deshaciendo la escala logarítmica.
+  const tramos = $derived(
+    COLORES.map((color, i) => ({
+      color,
+      desde: Math.max(1, Math.round(Math.expm1((i / COLORES.length) * Math.log1p(visitasMaximas)))),
+      hasta: Math.round(Math.expm1(((i + 1) / COLORES.length) * Math.log1p(visitasMaximas)))
+    }))
+  );
 </script>
 
 <svelte:head>
@@ -270,6 +361,22 @@
       {/each}
     </section>
 
+    <nav class="pestanas" aria-label="Secciones del panel">
+      {#each PESTANAS as p (p.id)}
+        <button
+          type="button"
+          class:activa={pestana === p.id}
+          aria-current={pestana === p.id ? 'page' : undefined}
+          onclick={() => (pestana = p.id)}
+        >
+          {p.etiqueta}{#if p.id === 'cuarentena' && cuarentena?.active?.length}
+            <span class="cuenta">{cuarentena.active.length}</span>
+          {/if}
+        </button>
+      {/each}
+    </nav>
+
+    {#if pestana === 'uso'}
     <h2>Origen de las conexiones</h2>
     <section class="totales">
       {#each [
@@ -284,6 +391,54 @@
         </article>
       {/each}
     </section>
+
+    <h2>A qué países se conectan <small>({porPais.length})</small></h2>
+    {#if porPais.length}
+      {#if paises}
+        <figure class="mapa" onmouseleave={() => (rotulo = null)}>
+          <svg viewBox="0 0 360 180" role="img" aria-label="Conexiones por país">
+            <rect x="0" y="0" width="360" height="180" class="oceano" />
+            {#each Object.entries(paises) as [codigo, pais] (codigo)}
+              <path
+                d={trazo(pais.rings)}
+                fill={colorPais(codigo)}
+                class="pais"
+                class:visitado={visitasPorPais[codigo] > 0}
+                onmousemove={(e) => mostrarPais(e, codigo, pais.name)}
+              />
+            {/each}
+          </svg>
+          {#if rotulo}
+            <div class="rotulo" style="left: {rotulo.x}px; top: {rotulo.y}px">
+              <strong>{rotulo.texto}</strong>
+              <span>{rotulo.visitas ? `${numero(rotulo.visitas)} conexiones` : 'sin conexiones'}</span>
+            </div>
+          {/if}
+        </figure>
+        <div class="leyenda">
+          <span>Conexiones</span>
+          {#each tramos as tramo (tramo.color)}
+            <i style="background: {tramo.color}"></i>
+            <small>{tramo.desde === tramo.hasta ? tramo.desde : `${tramo.desde}–${tramo.hasta}`}</small>
+          {/each}
+        </div>
+      {:else}
+        <p class="vacio">Cargando el mapa…</p>
+      {/if}
+      <table>
+        <thead><tr><th>País</th><th>Conexiones</th></tr></thead>
+        <tbody>
+          {#each porPais.slice(0, 12) as fila (fila.country)}
+            <tr>
+              <td>{paises?.[fila.country]?.name || fila.country}</td>
+              <td class="n">{numero(fila.visits)}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <p class="vacio">Todavía no hay visitas con país resuelto.</p>
+    {/if}
 
     <h2>Secciones</h2>
     <table>
@@ -302,6 +457,9 @@
       </tbody>
     </table>
 
+    {/if}
+
+    {#if pestana === 'cuarentena'}
     {#if cuarentena}
       <h2>
         En cuarentena
@@ -318,7 +476,12 @@
           <tbody>
             {#each cuarentena.active as fila (fila.provider + fila.station_id + fila.variable)}
               <tr>
-                <td>{fila.station_id}</td>
+                <td>
+                  <a href={fichaDe(fila)} target="_blank" rel="noopener">
+                    {fila.name || fila.station_id}
+                  </a>
+                  {#if fila.name}<small class="id">{fila.station_id}</small>{/if}
+                </td>
                 <td>{fila.provider}</td>
                 <td>{VARIABLES[fila.variable] || fila.variable}</td>
                 <td>{motivo(fila)}</td>
@@ -343,7 +506,11 @@
           <tbody>
             {#each cuarentena.history as fila (fila.provider + fila.station_id + fila.variable)}
               <tr>
-                <td>{fila.station_id}</td>
+                <td>
+                  <a href={fichaDe(fila)} target="_blank" rel="noopener">
+                    {fila.name || fila.station_id}
+                  </a>
+                </td>
                 <td>{fila.provider}</td>
                 <td>{VARIABLES[fila.variable] || fila.variable}</td>
                 <td class="n">{fila.days_total}</td>
@@ -354,7 +521,9 @@
         </table>
       {/if}
     {/if}
+    {/if}
 
+    {#if pestana === 'estaciones'}
     {#if data.error_kinds?.length}
       <h2>Tipos de error</h2>
       <table>
@@ -367,7 +536,14 @@
       </table>
     {/if}
 
-    <h2>Estaciones <small>({data.stations.length})</small></h2>
+    <h2>
+      Estaciones
+      <small>
+        ({numero(estaciones.length)}{#if paginas > 1}
+          · {(paginaActual - 1) * POR_PAGINA + 1}–{Math.min(paginaActual * POR_PAGINA, estaciones.length)}
+        {/if})
+      </small>
+    </h2>
     <table>
       <thead>
         <tr>
@@ -385,7 +561,7 @@
         </tr>
       </thead>
       <tbody>
-        {#each estaciones as fila (claveDe(fila))}
+        {#each estacionesPagina as fila (claveDe(fila))}
           {@const clave = claveDe(fila)}
           <tr class:abierta={abierta === clave}>
             <td>
@@ -604,6 +780,17 @@
         {/each}
       </tbody>
     </table>
+
+    {#if paginas > 1}
+      <nav class="paginador" aria-label="Páginas de estaciones">
+        <button type="button" onclick={() => (pagina = Math.max(1, paginaActual - 1))}
+          disabled={paginaActual <= 1}>‹ Anterior</button>
+        <span>Página {paginaActual} de {paginas}</span>
+        <button type="button" onclick={() => (pagina = Math.min(paginas, paginaActual + 1))}
+          disabled={paginaActual >= paginas}>Siguiente ›</button>
+      </nav>
+    {/if}
+    {/if}
   {/if}
 </main>
 
@@ -673,6 +860,60 @@
      ANTES de `tr.abierta` para que la fila desplegada conserve su fondo. */
   tbody tr:hover { background: var(--fila-hover); }
   .vacio { margin: 0 0 18px; font-size: 0.78rem; color: var(--muted); }
+  td .id { display: block; font-size: 0.68rem; color: var(--muted); }
+  td a { color: var(--accent); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+
+  .pestanas { display: flex; gap: 6px; margin: 0 0 20px; flex-wrap: wrap; }
+  .pestanas button {
+    padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--panel-2); color: var(--ink-2);
+    font: inherit; font-size: 0.78rem; font-weight: 650; cursor: pointer;
+  }
+  .pestanas button:hover { color: var(--ink); }
+  .pestanas button.activa {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  .pestanas .cuenta {
+    margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    background: var(--chip-warn-bg); color: var(--chip-warn-fg); font-size: 0.72rem;
+  }
+
+  .mapa { margin: 0 0 16px; position: relative; }
+  .rotulo {
+    position: absolute; transform: translate(12px, -50%); pointer-events: none;
+    padding: 6px 10px; border: 1px solid var(--border-2); border-radius: var(--r-sm);
+    background: var(--panel); color: var(--ink); box-shadow: var(--shadow);
+    font-size: 0.74rem; white-space: nowrap; z-index: 2;
+  }
+  .rotulo strong { display: block; font-weight: 700; }
+  .rotulo span { color: var(--muted); }
+  .mapa svg {
+    width: 100%; height: auto; display: block;
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+  }
+  .mapa .oceano { fill: var(--panel-2); }
+  .mapa .pais { stroke: var(--border-2); stroke-width: 0.15; fill: var(--panel); }
+  .mapa .pais.visitado { stroke: var(--border-2); stroke-width: 0.2; }
+  .mapa .pais:hover { stroke: var(--ink); stroke-width: 0.5; }
+
+  .leyenda {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin: -6px 0 18px; font-size: 0.72rem; color: var(--muted);
+  }
+  .leyenda span { margin-right: 4px; font-weight: 650; }
+  .leyenda i { width: 22px; height: 10px; border-radius: 2px; display: inline-block; }
+  .leyenda small { margin-right: 6px; }
+
+  .paginador {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin: 14px 0 4px; font-size: 0.78rem; color: var(--muted);
+  }
+  .paginador button {
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--panel-2); color: var(--ink); font: inherit; cursor: pointer;
+  }
+  .paginador button:disabled { opacity: 0.4; cursor: default; }
   h3.sub { margin: 22px 0 8px; font-size: 0.82rem; color: var(--ink-2); }
   tr.abierta,
   tr.abierta:hover { background: var(--panel-2); }

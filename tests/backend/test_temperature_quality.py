@@ -70,32 +70,45 @@ def test_the_diurnal_range_matches_the_ranking() -> None:
     assert not is_diurnal_range_impossible(23.0, None)
 
 
-def test_a_frozen_series_is_detected_even_without_being_identical() -> None:
-    """Skriveri (Letonia) llevaba 24 h entre 0,0 y 0,2 °C mientras su presión
-    subía 14 hPa de forma coherente. El control que existía exigía valores
-    EXACTAMENTE iguales, así que no lo veía."""
+def test_a_frozen_series_is_measured_by_rate_not_by_range() -> None:
+    """El primer umbral (rango < 0,5 °C en 6 h) marcó cinco estaciones SANAS
+    entre las 2:38 y las 8:59: de madrugada la temperatura está plana y con
+    pocas horas de día apenas ha variado. Por hora, la rota y las sanas se
+    separan sin ambigüedad: Skriveri 0,020 °C/h frente a 0,048 y 0,055."""
     horas = [i * 3600 for i in range(24)]
-    skriveri = [0.0, 0.1, 0.1, 0.1, 0.2, 0.1] * 4
+    skriveri = [0.0, 0.1, 0.1, 0.1, 0.2, 0.1] * 4          # ~0,009 °C/h
     assert flatlined_fields(horas, {"temps": skriveri}) == ["temps"]
 
-    # Un día normal no se toca.
+    # Venta Alta y las noruegas: noche estable, pero se mueven lo suficiente.
+    sana = [10.0 + i * 0.05 for i in range(24)]            # 0,05 °C/h
+    assert flatlined_fields(horas, {"temps": sana}) == []
+
+    # Un día normal, ni de lejos.
     normal = [7.0 + i * 0.4 for i in range(24)]
     assert flatlined_fields(horas, {"temps": normal}) == []
 
-    # Con pocas muestras o poco arco temporal no se juzga.
-    assert flatlined_fields(horas[:6], {"temps": skriveri[:6]}) == []
-    cortas = [i * 60 for i in range(24)]  # 24 minutos
-    assert flatlined_fields(cortas, {"temps": skriveri}) == []
 
-    # La tolerancia es por campo. Con la de temperatura (0,5 °C) una humedad
-    # que se mueve tres décimas cuenta como congelada; con una tolerancia
-    # estricta, no. Por eso el detector se aplica hoy solo a `temps`: una
-    # humedad clavada en 100 % durante horas es niebla, no una avería, y
-    # marcarla exigiría una tolerancia propia pensada para ella.
-    casi_quieta = [90.0, 90.1, 90.2, 90.1] * 6
+def test_the_early_hours_are_not_judged_at_all() -> None:
+    """A primera hora del día local hay pocas horas y poca variación
+    acumulada, y cualquier umbral se vuelve ruido. Es lo que marcó a C037 a
+    las 8:59 estando perfectamente."""
+    plana = [0.0, 0.1, 0.1, 0.1, 0.2, 0.1] * 2
+    seis_horas = [i * 1800 for i in range(12)]   # 5,5 h
+    assert flatlined_fields(seis_horas, {"temps": plana}) == []
+
+    # Y con pocas muestras tampoco, aunque el arco sea largo.
+    dos_puntos = [0, 20 * 3600]
+    assert flatlined_fields(dos_puntos, {"temps": [0.0, 0.1]}) == []
+
+
+def test_the_rate_is_per_field() -> None:
+    """Una humedad clavada en 100 % durante horas es niebla, no una avería, y
+    marcarla exigiría una tolerancia propia. Por eso hoy solo se pasa `temps`."""
+    horas = [i * 3600 for i in range(24)]
+    casi_quieta = [90.0 + (i % 3) * 0.1 for i in range(24)]
     assert flatlined_fields(horas, {"humidities": casi_quieta}) == ["humidities"]
     assert flatlined_fields(
-        horas, {"humidities": casi_quieta}, span_by_field={"humidities": 0.001},
+        horas, {"humidities": casi_quieta}, rate_by_field={"humidities": 0.0001},
     ) == []
 
 

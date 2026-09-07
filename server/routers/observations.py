@@ -94,6 +94,13 @@ CURRENT_TTL_BY_PROVIDER = {
     "WEATHERLINK": 30.0,
 }
 
+# Meteocat entrega todas las variables de una estación en la misma serie
+# diaria. Mantenerla una hora evita repetir sus dos consultas (día UTC actual
+# y anterior) cuando entran más visitantes antes del siguiente refresco.
+SERIES_TTL_BY_PROVIDER = {
+    "METEOCAT": 3600.0,
+}
+
 
 _LOOKBACK_SERIES_FIELDS = (
     "temps",
@@ -348,7 +355,18 @@ def _quarantine_suspect_temperature(
                 razon = "impossible"
                 break
     if razon is None:
-        return None
+        # La ficha no ve nada raro AHORA, pero puede estar marcada de antes: el
+        # bulk la juzga con otros datos, y una serie que se descongela a media
+        # tarde no borra que estuvo rota esta mañana. Sin consultar el registro,
+        # el panel la listaba en cuarentena y la ficha no decía nada.
+        marcada = suspect_data.flags_for(provider, station_id, day).get(
+            suspect_data.TEMPERATURE,
+        )
+        if marcada is None:
+            return None
+        return observation_warnings.suspect_temperature(
+            str(marcada.get("reason") or "impossible"),
+        )
 
     suspect_data.flag(
         provider, station_id, day, suspect_data.TEMPERATURE, params={"reason": razon},
@@ -939,7 +957,9 @@ async def post_today_series(
         body, http, settings,
     )
     key = make_cache_key(body.provider, "series_today", body.station_id, cache_secret)
-    raw = await cache.get_or_fetch(key, series_fetcher)
+    raw = await cache.get_or_fetch(
+        key, series_fetcher, ttl_s=SERIES_TTL_BY_PROVIDER.get(body.provider),
+    )
 
     # La caché guarda siempre el dato crudo: los offsets son de quien pregunta
     # y se aplican sobre una copia, igual que en ``/current/processed``.
@@ -1060,7 +1080,11 @@ async def post_current_processed(
     series_key = make_cache_key(body.provider, "series_today", body.station_id, provider_cache_secret)
 
     if body.provider == "METEOCAT":
-        series_result = await series_cache.get_or_fetch(series_key, series_fetcher)
+        series_result = await series_cache.get_or_fetch(
+            series_key,
+            series_fetcher,
+            ttl_s=SERIES_TTL_BY_PROVIDER.get(body.provider),
+        )
         series_dict = series_result
         current_raw = _meteocat_current_from_series(body.station_id, series_dict)
         if not current_raw:

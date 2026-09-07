@@ -319,11 +319,17 @@ def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] |
     online = int(bool(online_raw)) if online_raw is not None else None
     # Flags por fila (GEOSPHERE marca histórico/manual estación a estación)
     # además de los criterios por proveedor/red.
-    has_historical = int(
-        provider in HISTORICAL_PROVIDER_IDS
-        or (provider == "IEM" and _iem_network_has_historical(network))
-        or bool(row.get("has_historical"))
-    )
+    # IEM refreshes now provide an explicit per-station flag based on the
+    # declared series length.  It must override the old network-name fallback:
+    # not every ASOS record has a year of accessible archive.
+    if provider == "IEM" and "has_historical" in row:
+        has_historical = int(bool(row.get("has_historical")))
+    else:
+        has_historical = int(
+            provider in HISTORICAL_PROVIDER_IDS
+            or (provider == "IEM" and _iem_network_has_historical(network))
+            or bool(row.get("has_historical"))
+        )
     manual = int(
         (provider == "IEM" and _iem_network_is_manual(network))
         or bool(row.get("manual"))

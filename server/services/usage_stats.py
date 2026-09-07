@@ -632,8 +632,30 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
     ]
     sections.sort(key=lambda row: (row["total"], row["last_epoch"]), reverse=True)
 
+    # País de cada estación visitada, para saber a dónde se conecta la gente.
+    # Sale del catálogo, no de la base de uso: allí no se guarda, y resolverlo
+    # aquí evita duplicar el dato en cada visita registrada.
+    countries: Dict[str, int] = {}
+    try:
+        from server.services import stations as stations_svc
+
+        for fila in stations:
+            registro = stations_svc.get_station(fila["provider"], fila["station_id"])
+            code = str((registro or {}).get("country") or "").strip().upper()
+            fila["country"] = code or None
+            if code:
+                countries[code] = countries.get(code, 0) + int(fila.get("total") or 0)
+    except Exception:  # noqa: BLE001 — el panel no puede caerse por el catálogo
+        logger.warning("uso: no se pudo resolver el país de las estaciones", exc_info=True)
+
+    by_country = sorted(
+        ({"country": code, "visits": total} for code, total in countries.items()),
+        key=lambda fila: -fila["visits"],
+    )
+
     return {
         "stations": stations,
+        "by_country": by_country,
         "totals": {
             "d1": int(totals_row["d1"] or 0),
             "d7": int(totals_row["d7"] or 0),

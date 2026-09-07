@@ -80,10 +80,13 @@ def _probe(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if any(marker in network.upper() for marker in UNSUPPORTED_NETWORK_MARKERS):
         return key, {"result": "unsupported_product", "checked_at": datetime.now(timezone.utc).isoformat()}
     errors: list[str] = []
+    combined_sensors: dict[str, bool] = {}
+    dates_with_data: list[str] = []
     for day in _dates(row):
         for attempt in range(3):
             try:
-                daily = "CLIMATE" in network.upper()
+                upper_network = network.upper()
+                daily = "CLIMATE" in upper_network or upper_network == "COOP" or upper_network.endswith("_COOP")
                 response = _session().get(DAILY_URL if daily else URL,
                     params={"network": network, "station": station, "date": day}, timeout=(10, 45))
                 if response.status_code == 404:
@@ -99,13 +102,22 @@ def _probe(row: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                     if found:
                         sensors = {name: sensors.get(name, False) or value for name, value in found.items()}
                 if sensors:
-                    return key, {"result": "weather_data", "date": day, "sensors": sensors,
-                                 "checked_at": datetime.now(timezone.utc).isoformat()}
+                    dates_with_data.append(day)
+                    combined_sensors = {
+                        name: combined_sensors.get(name, False) or value
+                        for name, value in sensors.items()
+                    }
                 break
             except (requests.RequestException, ValueError) as exc:
                 errors.append(type(exc).__name__)
                 if attempt < 2:
                     time.sleep(0.5 * (attempt + 1))
+    if dates_with_data:
+        return key, {
+            "result": "weather_data", "dates_with_data": dates_with_data,
+            "days_with_data": len(dates_with_data), "sensors": combined_sensors,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
     result = "error" if errors else "no_data_sample"
     return key, {"result": result, "errors": errors[-4:], "checked_at": datetime.now(timezone.utc).isoformat()}
 
@@ -117,7 +129,7 @@ def _is_manual(network: str) -> bool:
 def apply_results(inventory: dict[str, Any], results: dict[str, Any]) -> dict[str, int]:
     """Apply only conclusive results; inconclusive/error rows are preserved."""
     kept = []
-    stats = {"sensors_added": 0, "unsupported_removed": 0, "no_data_deactivated": 0}
+    stats = {"sensors_added": 0, "unsupported_removed": 0, "no_data_removed": 0}
     for row in inventory["stations"]:
         key = f"{row.get('network')}|{row.get('id')}"
         result = results.get(key, {})
@@ -131,10 +143,8 @@ def apply_results(inventory: dict[str, Any], results: dict[str, Any]) -> dict[st
             stats["unsupported_removed"] += 1
             continue
         elif status == "no_data_sample":
-            row = dict(row)
-            row["online"] = False
-            row["validation_status"] = "unconfirmed_no_data"
-            stats["no_data_deactivated"] += 1
+            stats["no_data_removed"] += 1
+            continue
         kept.append(row)
     inventory["stations"] = kept
     inventory["station_count"] = len(kept)
@@ -155,10 +165,20 @@ def main() -> int:
     parser.add_argument("--max-stations", type=int, default=0)
     parser.add_argument("--retry-errors", action="store_true")
     parser.add_argument("--apply", action="store_true", help="apply conclusive results to inventory")
+    parser.add_argument("--include-coop", action="store_true",
+                        help="validate online manual COOP stations as well")
     args = parser.parse_args()
     inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
-    targets = [row for row in inventory["stations"] if row.get("online") and not row.get("sensors")
-               and not _is_manual(str(row.get("network") or ""))]
+    targets = []
+    for row in inventory["stations"]:
+        network = str(row.get("network") or "")
+        is_coop = network.upper() == "COOP" or network.upper().endswith("_COOP")
+        if not row.get("online") or row.get("sensors"):
+            continue
+        if is_coop and args.include_coop:
+            targets.append(row)
+        elif not _is_manual(network):
+            targets.append(row)
     results: dict[str, Any] = {}
     if args.checkpoint.exists():
         results = (json.loads(args.checkpoint.read_text(encoding="utf-8")).get("stations") or {})
