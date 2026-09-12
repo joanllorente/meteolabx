@@ -77,3 +77,45 @@ test('la API va a su propio destino, no al servicio antiguo', () => {
   // El sitemap de directorios es del servicio antiguo, no de la API.
   assert.equal(isApiPath('/directories-sitemap.xml'), false);
 });
+
+test('la imagen copia todo lo que server.js necesita', async () => {
+  // El despliegue falló al retirar el proxy: el Dockerfile seguía copiando
+  // `src/lib/legacy-path.js`, que se había borrado, y el build moría con
+  // «not found». Las suites no lo vieron porque solo prueban el código.
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const raiz = new URL('../', import.meta.url).pathname;
+  const dockerfile = fs.readFileSync(path.join(raiz, 'Dockerfile'), 'utf8');
+
+  // Lo que el Dockerfile promete copiar tiene que existir.
+  for (const linea of dockerfile.split('\n')) {
+    const m = linea.match(/^COPY\s+(?!--from)(\S+)\s/);
+    if (!m || m[1].startsWith('package')) continue;
+    assert.ok(
+      fs.existsSync(path.join(raiz, m[1])),
+      `el Dockerfile copia ${m[1]}, que no existe`
+    );
+  }
+
+  // Y lo que server.js importa de `src/` tiene que estar entre lo copiado.
+  const copiados = [...dockerfile.matchAll(/^COPY\s+(?!--from)(src\/\S+)\s/gm)].map((m) => m[1]);
+  const vistos = new Set();
+  const pendientes = ['server.js'];
+  while (pendientes.length) {
+    const fichero = pendientes.pop();
+    if (vistos.has(fichero) || !fs.existsSync(path.join(raiz, fichero))) continue;
+    vistos.add(fichero);
+    const fuente = fs.readFileSync(path.join(raiz, fichero), 'utf8');
+    for (const m of fuente.matchAll(/from\s+'(\.[^']+)'/g)) {
+      pendientes.push(path.normalize(path.join(path.dirname(fichero), m[1])));
+    }
+  }
+  for (const fichero of vistos) {
+    if (!fichero.startsWith('src/')) continue;
+    assert.ok(
+      copiados.some((c) => fichero === c || fichero.startsWith(c.replace(/\/$/, '') + '/')),
+      `server.js necesita ${fichero} y el Dockerfile no lo copia`
+    );
+  }
+});

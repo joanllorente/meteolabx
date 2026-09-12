@@ -33,7 +33,6 @@ COPY --from=build /app/build ./build
 # `server.js` importa la frontera de rutas desde `src/`, así que el módulo
 # tiene que viajar también a la imagen final.
 COPY server.js ./
-COPY src/lib/legacy-path.js ./src/lib/legacy-path.js
 COPY src/lib/server/proxy-agent.js ./src/lib/server/proxy-agent.js
 COPY src/lib/seo ./src/lib/seo
 
