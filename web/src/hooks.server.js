@@ -5,6 +5,24 @@ import { observationPath } from '$lib/seo/station.js';
 import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
 import { LANGUAGE_COOKIE } from '$lib/server/language.js';
 import { matchesEtag } from '$lib/server/etag.js';
+import { isCrawlerRequest } from '$lib/server/crawler.js';
+
+const DATOS_VIVOS = /^\/v1\/(observations\/|climo\/summary)/;
+
+/**
+ * Un crawler puede indexar la ficha y sus metadatos, pero no convertir cada
+ * URL del sitemap en una consulta en vivo a AEMET, NWS, ECCC, etc.
+ */
+export async function handleFetch({ event, request, fetch }) {
+  const outbound = new URL(request.url);
+  if (isCrawlerRequest(event.request) && DATOS_VIVOS.test(outbound.pathname)) {
+    return new Response(JSON.stringify({ error_code: 'crawler_live_data_skipped' }), {
+      status: 429,
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+  return fetch(request);
+}
 
 /**
  * Las fichas estáticas antiguas redirigen a su equivalente nueva.
@@ -53,6 +71,7 @@ export async function handle({ event, resolve }) {
     redirect(301, target.pathname + target.search);
   }
   const response = await resolve(event);
+  const crawler = isCrawlerRequest(event.request);
   if (localized || event.url.pathname === '/') {
     // Estas respuestas incluyen decisiones personales, también en las
     // navegaciones de SvelteKit. Nunca compartirlas entre visitantes.
@@ -62,7 +81,7 @@ export async function handle({ event, resolve }) {
     // prohibir que se guarden. Lo personal que llevan —la decisión de idioma—
     // queda cubierto por el `Vary`, que separa la copia de cada combinación de
     // cookie e idioma en lugar de mezclarlas.
-    const compartible = isPubliclyCacheable(event, response);
+    const compartible = !crawler && isPubliclyCacheable(event, response);
     if (!compartible) response.headers.set('cache-control', 'private, no-store');
 
     // `Vary: Cookie` vuelve la respuesta incacheable en el CDN: Cloudflare
