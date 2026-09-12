@@ -1797,7 +1797,7 @@ def main() -> int:
                 logger.info("Ciclo ECMWF terminado: %s", resultado)
             except Exception:
                 logger.exception("El ciclo de ECMWF ha fallado; sigue AROME.")
-        return run_incremental_cycle(
+        result = run_incremental_cycle(
             max_hours=max(0, args.max_hours),
             diagnostic_max_hours=max(0, args.diagnostic_max_hours),
             max_tasks=max(0, args.max_tasks),
@@ -1808,6 +1808,14 @@ def main() -> int:
             workers=max(1, args.workers),
             heavy_workers=max(0, args.heavy_workers),
         )
+        # Fuera de los trabajos: todos los hijos han terminado. La función
+        # comprueba también pasadas retenidas y descargas en segundo plano.
+        from server.services.grib_page_cache import release_completed_grib_cache
+        try:
+            release_completed_grib_cache()
+        except Exception:
+            logger.exception("No se pudo liberar la caché de GRIB; el ciclo sigue válido.")
+        return result
 
     if not args.watch:
         result = run_cycle()
