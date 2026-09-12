@@ -474,7 +474,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each cuarentena.active as fila (fila.provider + fila.station_id + fila.variable)}
+            {#each cuarentena.active as fila (fila.provider + fila.station_id + fila.variable + fila.day)}
               <tr>
                 <td>
                   <a href={fichaDe(fila)} target="_blank" rel="noopener">

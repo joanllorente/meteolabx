@@ -22,11 +22,17 @@ export function startLiveObservation(request, onData) {
 
   const period = refreshSecondsFor(request.provider) * 1000;
   let stopped = false;
+  let awake = !document.hidden;
   let timer = null;
   let active = null;
 
+  const cancelTimer = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+
   const tick = async () => {
-    if (stopped || document.hidden || active) return;
+    if (stopped || !awake || document.hidden || active) return;
     const controller = new AbortController();
     active = controller;
     const timeout = setTimeout(() => controller.abort(), 30000);
@@ -42,19 +48,46 @@ export function startLiveObservation(request, onData) {
     }
   };
 
-  // Al volver a la pestaña se pide enseguida: lo que hay en pantalla puede
-  // llevar horas ahí.
-  const onVisible = () => {
-    if (!document.hidden) tick();
+  const schedule = () => {
+    if (stopped || !awake || timer !== null) return;
+    timer = setTimeout(async () => {
+      timer = null;
+      await tick();
+      schedule();
+    }, period);
   };
 
-  timer = setInterval(tick, period);
-  document.addEventListener('visibilitychange', onVisible);
+  const pause = () => {
+    awake = false;
+    cancelTimer();
+    active?.abort();
+  };
+
+  // Al volver a la pestaña se pide enseguida: lo que hay en pantalla puede
+  // llevar horas ahí. `pagehide` y `freeze` cubren además la suspensión móvil
+  // y la caché de navegación, donde visibilitychange no siempre basta.
+  const resume = () => {
+    if (stopped || document.hidden || awake) return;
+    awake = true;
+    void tick().finally(schedule);
+  };
+  const onVisibilityChange = () => document.hidden ? pause() : resume();
+
+  schedule();
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  document.addEventListener('pagehide', pause);
+  document.addEventListener('pageshow', resume);
+  document.addEventListener('freeze', pause);
+  document.addEventListener('resume', resume);
 
   return () => {
     stopped = true;
-    clearInterval(timer);
+    cancelTimer();
     active?.abort();
-    document.removeEventListener('visibilitychange', onVisible);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    document.removeEventListener('pagehide', pause);
+    document.removeEventListener('pageshow', resume);
+    document.removeEventListener('freeze', pause);
+    document.removeEventListener('resume', resume);
   };
 }

@@ -67,7 +67,7 @@ test('la conexión HTTP al backend se reutiliza', async (t) => {
   assert.equal(createApiAgent('https://example.com').protocol, 'https:');
 });
 
-test('el refresco no solapa peticiones, ignora pestañas ocultas y cancela al salir', async (t) => {
+test('el refresco no solapa peticiones y se detiene si la página deja de estar activa', async (t) => {
   const previousDocument = globalThis.document;
   const previousFetch = globalThis.fetch;
   const document = new EventTarget();
@@ -84,7 +84,7 @@ test('el refresco no solapa peticiones, ignora pestañas ocultas y cancela al sa
       signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
     });
   };
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let updates = 0;
   const stop = startLiveObservation({ provider: 'WU', stationId: 'A' }, () => updates++);
   t.after(() => {
@@ -101,11 +101,19 @@ test('el refresco no solapa peticiones, ignora pestañas ocultas y cancela al sa
   await flush();
   assert.equal(updates, 1);
   document.hidden = true;
+  document.dispatchEvent(new Event('visibilitychange'));
   t.mock.timers.tick(15000);
   assert.equal(calls, 1);
   document.hidden = false;
   document.dispatchEvent(new Event('visibilitychange'));
   assert.equal(calls, 2);
+  document.dispatchEvent(new Event('pagehide'));
+  assert.equal(signal.aborted, true);
+  t.mock.timers.tick(60000);
+  assert.equal(calls, 2);
+  await flush();
+  document.dispatchEvent(new Event('pageshow'));
+  assert.equal(calls, 3);
   stop();
   assert.equal(signal.aborted, true);
   await flush();
