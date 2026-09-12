@@ -466,16 +466,16 @@ def test_only_the_requested_ip3_fields_are_read(monkeypatch):
     monkeypatch.setattr(prevision, "_packages_available", lambda: True)
     monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
 
-    solo_rocio = prevision._isobaric_extras_from_package(
+    solo_rocio = prevision._isobaric_extras_lazily_from_package(
         RUN, RUN, [850.0], ("dewpoint",)
     )
     assert solo_rocio is not None
-    assert set(solo_rocio[0]) == {"dewpoint"}
+    assert set(solo_rocio) == {"dewpoint"}
 
     # Sin pedir nada concreto se leen todos, que es lo que necesita el mapa
     # de velocidad vertical.
-    todos = prevision._isobaric_extras_from_package(RUN, RUN, [850.0])
-    assert set(todos[0]) == {"dewpoint", "vertical_velocity"}
+    todos = prevision._isobaric_extras_lazily_from_package(RUN, RUN, [850.0])
+    assert set(todos) == {"dewpoint", "vertical_velocity"}
 
 
 def test_the_profile_reader_decodes_only_what_is_asked(monkeypatch):
@@ -505,3 +505,156 @@ def test_asking_for_something_ip1_does_not_publish_is_an_error(monkeypatch):
         paquetes.read_isobaric_profile(
             Path("da-igual"), RUN, [850.0], ("vertical_velocity",)
         )
+
+
+class _DatasetContado(_DatasetFalso):
+    """El mismo GRIB, llevando la cuenta de lecturas y de cierres."""
+
+    def __init__(self, stamp, elementos=None):
+        super().__init__(stamp, elementos)
+        self.lecturas = []
+        self.cerrado = False
+
+    def read(self, index, masked=False):
+        self.lecturas.append(index)
+        return super().read(index, masked=masked)
+
+    def __exit__(self, *args):
+        self.cerrado = True
+        return False
+
+
+def test_the_lazy_reader_decodes_nothing_until_a_level_is_asked(monkeypatch):
+    """Indexar es leer etiquetas; lo caro es descomprimir, y eso espera.
+
+    El perfil se monta nivel a nivel, así que tener los veinticuatro
+    descodificados a la vez son ochenta megas por elemento conviviendo con los
+    perfiles que se están llenando, que es el momento de mayor consumo.
+    """
+    stamp = int(RUN.timestamp())
+    doble = _DatasetContado(stamp)
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
+
+    paquete = paquetes.open_isobaric_profile(
+        Path("da-igual"), RUN, [850.0, 500.0], ("temperature", "u")
+    )
+    assert doble.lecturas == [], "indexar no debe descodificar nada"
+    assert set(paquete.elements) == {"temperature", "u"}
+
+    temperaturas = paquete.fields("temperature")
+    assert set(temperaturas) == {850.0, 500.0}
+    assert doble.lecturas == [], "enumerar los niveles tampoco los descodifica"
+
+    campo = temperaturas[850.0]
+    assert len(doble.lecturas) == 1, "sólo el nivel pedido"
+    assert np.isnan(campo[0, 0]), "el 9999 debe quedar como NaN"
+    assert campo[1, 1] == pytest.approx(10.0 + 8.5)
+
+    # Y lo que entrega es lo mismo que el lector que descodifica de una vez.
+    entero, _ = paquetes.read_isobaric_profile(
+        Path("da-igual"), RUN, [850.0, 500.0], ("temperature", "u")
+    )
+    assert np.array_equal(entero["temperature"][850.0], campo, equal_nan=True)
+
+
+def test_the_lazy_reader_closes_the_file_when_the_last_holder_lets_go(monkeypatch):
+    """El fichero se suelta al soltar los niveles, no al recolectar basura."""
+    stamp = int(RUN.timestamp())
+    doble = _DatasetContado(stamp)
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
+
+    paquete = paquetes.open_isobaric_profile(
+        Path("da-igual"), RUN, [850.0], ("temperature", "u")
+    )
+    temperaturas = paquete.fields("temperature")
+    vientos = paquete.fields("u")
+
+    temperaturas.clear()
+    assert not doble.cerrado, "todavía queda quien lo está leyendo"
+    vientos.clear()
+    assert doble.cerrado, "soltado el último, el fichero se cierra"
+
+
+def test_the_lazy_reader_complains_when_an_element_is_missing(monkeypatch):
+    """Falta un elemento: se avisa al abrir, sin descodificar nada."""
+    stamp = int(RUN.timestamp())
+    doble = _DatasetContado(stamp, elementos=("TMP", "UGRD"))
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
+
+    with pytest.raises(paquetes.AromePackageError, match="no trae"):
+        paquetes.open_isobaric_profile(Path("da-igual"), RUN, [850.0])
+    assert doble.lecturas == []
+    assert doble.cerrado, "y el fichero no se queda abierto"
+
+
+def test_the_lazy_levels_deliver_the_same_fields_as_the_eager_ones(monkeypatch):
+    """El camino perezoso entrega el mismo campo, la misma geometría y unidad.
+
+    Es el que monta el perfil convectivo: si difiriera en algo, el diagnóstico
+    cambiaría sin que ningún test lo viera.
+    """
+    from server.services import arome_forecast as prevision
+
+    stamp = int(RUN.timestamp())
+    doble = _DatasetContado(stamp)
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
+    monkeypatch.setattr(prevision, "_packages_available", lambda: True)
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+
+    ansioso = prevision._isobaric_fields_from_package(
+        None, RUN, RUN, [850.0, 500.0], ("temperature", "u")
+    )
+    lecturas_ansiosas = len(doble.lecturas)
+    assert lecturas_ansiosas == 4, "dos elementos por dos niveles, de una vez"
+
+    doble.lecturas.clear()
+    perezoso = prevision._isobaric_levels_from_package(
+        RUN, RUN, [850.0, 500.0], ("temperature", "u")
+    )
+    assert doble.lecturas == [], "montar el índice no descodifica"
+    assert set(perezoso) == set(ansioso) == {"temperature", "u"}
+    assert 850.0 in perezoso["temperature"]
+
+    campo = perezoso["temperature"][850.0]
+    esperado = ansioso["temperature"][850.0]
+    assert np.array_equal(campo.data, esperado.data, equal_nan=True)
+    assert campo.units == esperado.units
+    assert (campo.transform, campo.crs, campo.bounds) == (
+        esperado.transform, esperado.crs, esperado.bounds
+    )
+    assert len(doble.lecturas) == 1, "sólo el nivel que se ha pedido"
+
+    for campos in perezoso.values():
+        campos.clear()
+    assert doble.cerrado, "soltados los niveles, el fichero se cierra"
+
+
+def test_the_lazy_ip3_extras_only_open_what_is_asked(monkeypatch):
+    """El rocío de IP3 también se descodifica nivel a nivel."""
+    from server.services import arome_forecast as prevision
+
+    stamp = int(RUN.timestamp())
+
+    class _Ip3Contado(_IsobaricoFalso):
+        def __init__(self, stamp):
+            super().__init__(stamp)
+            self.lecturas = []
+
+        def read(self, index, masked=False):
+            self.lecturas.append(index)
+            return super().read(index, masked=masked)
+
+    doble = _Ip3Contado(stamp)
+    monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
+    monkeypatch.setattr(prevision, "_packages_available", lambda: True)
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+
+    solo_rocio = prevision._isobaric_extras_lazily_from_package(
+        RUN, RUN, [850.0, 500.0], ("dewpoint",)
+    )
+    assert set(solo_rocio) == {"dewpoint"}
+    assert doble.lecturas == []
+
+    campo = solo_rocio["dewpoint"][850.0]
+    assert campo.units == "C"
+    assert len(doble.lecturas) == 1

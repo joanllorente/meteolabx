@@ -30,11 +30,12 @@ from server.services.arome_packages import (
     IP3_ELEMENTS,
     package_ready,
     SURFACE_ELEMENTS,
-    read_isobaric_extras,
     read_surface_fields,
     AromePackageError,
     discard_packages_before,
     ensure_package,
+    open_isobaric_extras,
+    open_isobaric_profile,
     read_isobaric_profile,
 )
 from server.services.meteofrance_auth import MeteoFranceAuthError
@@ -867,8 +868,8 @@ def _convective_outputs(
     pressure: np.ndarray,
     temperature: np.ndarray,
     dewpoint: np.ndarray,
-    u_profile: np.ndarray,
-    v_profile: np.ndarray,
+    u_profile: np.ndarray | None,
+    v_profile: np.ndarray | None,
     terrain: np.ndarray,
     surface_u: np.ndarray,
     surface_v: np.ndarray,
@@ -899,20 +900,12 @@ def _convective_outputs(
     # 138 que dura un perfil.
     height = hypsometric_height_profile_m(pressure, temperature, dewpoint, terrain)
     if only_dcape:
-        vacio = np.full(shape, np.nan)
-        return {
-            "dcape": downdraft_cape(pressure, temperature, dewpoint, height),
-            **{
-                nombre: vacio.copy()
-                for nombre in (
-                    "mucape", "muli", "mlcape", "mlli", "sbcape", "sbli",
-                    "cell_u", "cell_v", "cell_speed",
-                    "ebwd", "ebwd_u", "ebwd_v", "ship",
-                    "srh_01", "srh_03", "esrh", "scp", "stp", "bunkers_u", "bunkers_v",
-                    "vv_lfc", "ml_lfc_height",
-                )
-            },
-        }
+        # Sólo el mapa que se publica. Los otros veintidós salen del nivel
+        # anterior y aquí se rellenaban de NaN para tirarlos, pagándolos tres
+        # veces: por banda, al recomponer la rejilla y al envolverlos en
+        # RasterField. Sobre el dominio entero eran 76 MB que vivían hasta el
+        # final, más una copia por banda en cada hilo.
+        return {"dcape": downdraft_cape(pressure, temperature, dewpoint, height)}
     diagnostics = diagnose_convection(
         pressure, temperature, dewpoint, height, include_dcape=include_dcape
     )
@@ -1238,8 +1231,8 @@ def _convective_outputs_in_stripes(
     pressure: np.ndarray,
     temperature: np.ndarray,
     dewpoint: np.ndarray,
-    u_profile: np.ndarray,
-    v_profile: np.ndarray,
+    u_profile: np.ndarray | None,
+    v_profile: np.ndarray | None,
     terrain: np.ndarray,
     surface_u: np.ndarray,
     surface_v: np.ndarray,
@@ -1276,8 +1269,8 @@ def _convective_outputs_in_stripes(
             pressure[:, band],
             temperature[:, band],
             dewpoint[:, band],
-            u_profile[:, band],
-            v_profile[:, band],
+            None if u_profile is None else u_profile[:, band],
+            None if v_profile is None else v_profile[:, band],
             terrain[band],
             surface_u[band],
             surface_v[band],
@@ -1456,6 +1449,122 @@ def _isobaric_fields_from_package(
     return salida
 
 
+class _CamposPerezosos:
+    """Niveles de un paquete, envueltos en RasterField cuando se piden.
+
+    Quien monta un perfil recorre los niveles una vez y escribe cada uno en su
+    sitio: no necesita que los veinticuatro estén descodificados a la vez, que
+    es lo que hacía convivir ochenta megas por elemento con los perfiles que se
+    estaban llenando.
+
+    `clear()` suelta el fichero, igual que hacía con el diccionario que había
+    antes en su lugar.
+    """
+
+    __slots__ = ("_niveles", "_geometria", "_unidad")
+
+    def __init__(self, niveles, geometria, unidad: str):
+        self._niveles = niveles
+        self._geometria = geometria
+        self._unidad = unidad
+
+    def __contains__(self, nivel: float) -> bool:
+        return nivel in self._niveles
+
+    def __len__(self) -> int:
+        return len(self._niveles)
+
+    def __iter__(self):
+        return iter(self._niveles)
+
+    def keys(self):
+        return self._niveles.keys()
+
+    def __getitem__(self, nivel: float) -> RasterField:
+        return RasterField(self._niveles[nivel], *self._geometria, self._unidad)
+
+    def clear(self) -> None:
+        self._niveles.clear()
+
+
+def _isobaric_levels_from_package(
+    run: datetime,
+    valid_time: datetime,
+    levels: list[float],
+    elements: tuple[str, ...],
+) -> dict[str, _CamposPerezosos] | None:
+    """Como `_isobaric_fields_from_package`, pero sin descodificar todavía.
+
+    Devuelve None si el paquete no está publicado, para que quien llame siga
+    por el camino del WCS.
+    """
+    if not _packages_available():
+        return None
+    try:
+        path = ensure_package("IP1", run, valid_time)
+        package = open_isobaric_profile(path, valid_time, levels, elements)
+    except (AromePackageError, MeteoFranceAuthError) as exc:
+        logger.info("Paquete IP1 no disponible, se usa el WCS: %s", exc)
+        return None
+    unidades = {
+        "temperature": "C",
+        "relative_humidity": "%",
+        "u": "m/s",
+        "v": "m/s",
+        "geopotential": "m^2/s^2",
+    }
+    return {
+        nombre: _CamposPerezosos(
+            package.fields(nombre), package.geometry, unidades.get(nombre, "")
+        )
+        for nombre in package.elements
+    }
+
+
+def _isobaric_extras_lazily_from_package(
+    run: datetime,
+    valid_time: datetime,
+    levels: list[float],
+    campos_pedidos: tuple[str, ...] = (),
+    esperar: bool = True,
+) -> dict[str, _CamposPerezosos] | None:
+    """Rocío y velocidad vertical isobáricos de IP3, nivel a nivel.
+
+    El rocío es el único campo por el que DCAPE seguía pidiendo al WCS: 24
+    peticiones por hora, más de la mitad de lo que tardaba. La velocidad
+    vertical viene en el mismo paquete y no cuesta nada más.
+
+    Con `esperar` en falso se va sin el paquete si todavía no está descargado:
+    quien sólo quiere la velocidad vertical no puede bloquear al perfil.
+
+    Devuelve None si el paquete no está o no trae lo que se espera, para que
+    quien llame siga por el camino de siempre.
+    """
+    if not _packages_available():
+        return None
+    if not esperar and not package_ready("IP3", run, valid_time):
+        return None
+    try:
+        path = ensure_package("IP3", run, valid_time)
+        # Leer un elemento que nadie va a usar son 150 MB por hora tirados.
+        buscar = (
+            {nombre: IP3_ELEMENTS[nombre] for nombre in campos_pedidos}
+            if campos_pedidos
+            else IP3_ELEMENTS
+        )
+        package = open_isobaric_extras(path, valid_time, levels, buscar)
+    except (AromePackageError, MeteoFranceAuthError) as exc:
+        logger.info("Paquete IP3 no disponible: %s", exc)
+        return None
+    unidades = {"dewpoint": "C", "vertical_velocity": "m/s"}
+    return {
+        nombre: _CamposPerezosos(
+            package.fields(nombre), package.geometry, unidades.get(nombre, "")
+        )
+        for nombre in package.elements
+    }
+
+
 def _surface_fields_from_package(
     reference: RasterField,
     run: datetime,
@@ -1495,55 +1604,6 @@ def _surface_fields_from_package(
     return campos
 
 
-def _isobaric_extras_from_package(
-    run: datetime,
-    valid_time: datetime,
-    levels: list[float],
-    campos_pedidos: tuple[str, ...] = (),
-    esperar: bool = True,
-) -> tuple[dict[str, dict[float, RasterField]], tuple[Any, Any, Any]] | None:
-    """Rocío y velocidad vertical isobáricos, del paquete IP3.
-
-    El rocío es el único campo por el que DCAPE seguía pidiendo al WCS: 24
-    peticiones por hora, más de la mitad de lo que tardaba. La velocidad
-    vertical viene en el mismo paquete y no cuesta nada más.
-
-    Devuelve None si el paquete no está o no trae lo que se espera, para que
-    quien llame siga por el camino de siempre.
-    """
-    if not _packages_available():
-        return None
-    if not esperar and not package_ready("IP3", run, valid_time):
-        # El adelanto todavía no ha llegado a este bloque. Quien sólo quiere la
-        # velocidad vertical se va sin ella: es un mapa más, y esperar medio
-        # giga dejaría sin publicar los trece diagnósticos que sí dependen del
-        # perfil.
-        return None
-    try:
-        path = ensure_package("IP3", run, valid_time)
-        # Leer un elemento que nadie va a usar son 150 MB por hora tirados: el
-        # perfil convectivo sólo necesita el rocío.
-        buscar = (
-            {nombre: IP3_ELEMENTS[nombre] for nombre in campos_pedidos}
-            if campos_pedidos
-            else IP3_ELEMENTS
-        )
-        campos, geometria = read_isobaric_extras(path, valid_time, levels, buscar)
-    except (AromePackageError, MeteoFranceAuthError) as exc:
-        logger.info("Paquete IP3 no disponible: %s", exc)
-        return None
-    unidades = {"dewpoint": "C", "vertical_velocity": "m/s"}
-    salida: dict[str, dict[float, RasterField]] = {}
-    for nombre, niveles in campos.items():
-        if not niveles:
-            continue
-        salida[nombre] = {
-            nivel: RasterField(valores, *geometria, unidades.get(nombre, ""))
-            for nivel, valores in niveles.items()
-        }
-    return (salida, geometria) if salida else None
-
-
 @lru_cache(maxsize=2)
 def _convective_frames(
     token: str,
@@ -1574,6 +1634,9 @@ def _convective_frames(
     # Sin repartir el tiempo entre fases no hay forma de saber si una hora se
     # va en traer los datos o en diagnosticarlos, y las dos se arreglan por
     # caminos distintos. Es una línea de log por hora de predicción.
+    # Desde que los niveles se descodifican al escribirlos, «traer» es sólo la
+    # descarga y la espera del WCS: el coste de descomprimir el GRIB, que antes
+    # iba ahí, ahora aparece en «montar».
     fases: dict[str, float] = {}
     reloj = time.monotonic()
 
@@ -1627,9 +1690,21 @@ def _convective_frames(
     # El geopotencial es el quinto elemento de IP1 y aqui no lo usa nadie: la
     # altura sale de la ecuacion hipsometrica, no del paquete. Descodificarlo
     # eran 100-150 MB por perfil para tirarlos.
-    package_levels = _isobaric_fields_from_package(
-        reference, run, valid_time, levels,
-        ("temperature", "relative_humidity", "u", "v"),
+    # El turno de DCAPE sólo mira el perfil termodinámico: el viento no entra
+    # en el descenso, y la humedad tampoco cuando el rocío exacto llega por
+    # IP3. Descodificarlos era leer tres cuartas partes de IP1 para tirarlas,
+    # unos 250 MB por hora retenidos hasta el final del montaje.
+    elementos_ip1 = ("temperature",)
+    if not exact_dewpoint:
+        elementos_ip1 += ("relative_humidity",)
+    if not only_dcape:
+        elementos_ip1 += ("u", "v")
+    # Indexado, no descodificado: cada nivel se descomprime cuando el montaje
+    # llega a él y muere en esa misma vuelta. Descodificarlos todos de golpe
+    # mantenía ochenta megas por elemento vivos durante todo el montaje, encima
+    # de los perfiles que se estaban llenando.
+    package_levels = _isobaric_levels_from_package(
+        run, valid_time, levels, elementos_ip1
     )
     package_levels_usado = bool(package_levels)
     # De IP3 salen el rocío exacto —sólo lo necesita DCAPE— y la velocidad
@@ -1648,13 +1723,13 @@ def _convective_frames(
     else:
         quiere = ("dewpoint", "vertical_velocity") if exact_dewpoint else ("vertical_velocity",)
     extras = (
-        _isobaric_extras_from_package(run, valid_time, levels, quiere)
+        _isobaric_extras_lazily_from_package(run, valid_time, levels, quiere)
         if package_levels
         else None
     )
-    package_dewpoint = (extras[0].get("dewpoint") if extras else None) or None
+    package_dewpoint = (extras.get("dewpoint") if extras else None) or None
     rocio_de_ip3 = bool(package_dewpoint)
-    package_vv = (extras[0].get("vertical_velocity") if extras else None) or None
+    package_vv = (extras.get("vertical_velocity") if extras else None) or None
     if package_levels:
         # Con el rocío derivado de la humedad de IP1 —o el exacto de IP3— no
         # hace falta pedir nada al WCS por niveles: 24 descargas menos por hora.
@@ -1727,7 +1802,12 @@ def _convective_frames(
     # suelta, el perfil apilado y su copia en disco, que era el momento de
     # mayor consumo de todo el proceso.
     lleva_vv = bool(package_vv) and not only_dcape
-    nombres = ("pressure", "temperature", "dewpoint", "u", "v")
+    # Montar el viento para DCAPE eran dos perfiles completos más —86 MB— y
+    # otra conversión a float64 por banda y por hilo al diagnosticar.
+    lleva_viento = not only_dcape
+    nombres = ("pressure", "temperature", "dewpoint")
+    if lleva_viento:
+        nombres += ("u", "v")
     if lleva_vv:
         nombres += ("vv",)
     forma = (len(levels) + 1, *shape)
@@ -1741,21 +1821,25 @@ def _convective_frames(
         perfiles["pressure"][0] = surface_pressure
         perfiles["temperature"][0] = surface_temperature
         perfiles["dewpoint"][0] = np.minimum(surface_dewpoint, surface_temperature)
-        perfiles["u"][0] = surface_u
-        perfiles["v"][0] = surface_v
+        if lleva_viento:
+            perfiles["u"][0] = surface_u
+            perfiles["v"][0] = surface_v
         if lleva_vv:
             # En superficie no hay velocidad vertical: es su contorno.
             perfiles["vv"][0] = 0.0
 
         for indice, level_hpa in enumerate(levels, start=1):
+            u_field = v_field = None
             if package_levels:
                 temperature_field = package_levels["temperature"][level_hpa]
-                u_field = package_levels["u"][level_hpa]
-                v_field = package_levels["v"][level_hpa]
+                if lleva_viento:
+                    u_field = package_levels["u"][level_hpa]
+                    v_field = package_levels["v"][level_hpa]
             else:
                 temperature_field = fetched[("temperature", level_hpa)]
-                u_field = fetched[("u", level_hpa)]
-                v_field = fetched[("v", level_hpa)]
+                if lleva_viento:
+                    u_field = fetched[("u", level_hpa)]
+                    v_field = fetched[("v", level_hpa)]
             if package_dewpoint and level_hpa in package_dewpoint:
                 dewpoint_field = package_dewpoint[level_hpa]
             elif package_levels and not exact_dewpoint:
@@ -1772,7 +1856,8 @@ def _convective_frames(
                 )
             else:
                 dewpoint_field = fetched[("dewpoint", level_hpa)]
-            assert temperature_field and dewpoint_field and u_field and v_field
+            assert temperature_field is not None and dewpoint_field is not None
+            assert not lleva_viento or (u_field is not None and v_field is not None)
             temperature = _as_kelvin(
                 _align(reference, temperature_field), temperature_field.units
             )
@@ -1791,12 +1876,13 @@ def _convective_frames(
                 np.where(below_ground, surface_dewpoint, dewpoint),
                 perfiles["temperature"][indice],
             )
-            perfiles["u"][indice] = np.where(
-                below_ground, surface_u, _align(reference, u_field)
-            )
-            perfiles["v"][indice] = np.where(
-                below_ground, surface_v, _align(reference, v_field)
-            )
+            if lleva_viento:
+                perfiles["u"][indice] = np.where(
+                    below_ground, surface_u, _align(reference, u_field)
+                )
+                perfiles["v"][indice] = np.where(
+                    below_ground, surface_v, _align(reference, v_field)
+                )
             if lleva_vv:
                 perfiles["vv"][indice] = np.where(
                     below_ground,
@@ -1842,7 +1928,8 @@ def _convective_frames(
         fases["montar"] = time.monotonic() - reloj
         reloj = time.monotonic()
 
-        base = [perfiles[n] for n in ("pressure", "temperature", "dewpoint", "u", "v")]
+        base = [perfiles[n] for n in ("pressure", "temperature", "dewpoint")]
+        base += [perfiles["u"], perfiles["v"]] if lleva_viento else [None, None]
         vv_en_disco = perfiles["vv"] if lleva_vv else None
         outputs = _convective_outputs_in_stripes(
             *base,
@@ -1856,7 +1943,7 @@ def _convective_frames(
         # Su mapa se publica en el nivel anterior; recalcularlo aquí sería
         # medio giga y cuatro décimas de segundo para tirarlo.
         updraft = (
-            np.full(shape, np.nan)
+            None
             if only_dcape
             else _updraft_helicity_in_stripes(*base, terrain, vv_en_disco, rejilla)
         )
@@ -1882,6 +1969,10 @@ def _convective_frames(
         pico_mb / 1024,
     )
     common = (reference.transform, reference.crs, reference.bounds)
+    if only_dcape:
+        # Es el único mapa de este nivel: los otros catorce se publicaron en el
+        # anterior y envolverlos aquí sería quince RasterField de NaN.
+        return {"dcape": RasterField(outputs["dcape"], *common, "J/kg")}, run
     frames = {
         "mucape-muli": RasterField(
             outputs["mucape"],

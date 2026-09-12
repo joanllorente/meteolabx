@@ -544,9 +544,45 @@ def test_only_dcape_gives_the_same_dcape_without_the_parcels():
     assert (np.isfinite(suelto["dcape"]) == finitos).all()
     assert np.array_equal(suelto["dcape"][finitos], completo["dcape"][finitos])
 
-    # Lo demás llega vacío: quien pide sólo DCAPE no lo mira.
-    for nombre in ("mucape", "mlcape", "sbcape", "ship", "ebwd", "cell_speed"):
-        assert not np.isfinite(suelto[nombre]).any(), nombre
+    # Lo demás ni siquiera se reserva: quien pide sólo DCAPE no lo mira, y
+    # devolverlo en blanco eran veintidós rejillas de NaN por banda.
+    assert set(suelto) == {"dcape"}
+
+
+def test_only_dcape_runs_without_any_wind():
+    """Sin perfil de viento el DCAPE sale igual: el descenso no lo usa.
+
+    DCAPE sólo mira el perfil termodinámico y la altura. Montarle además u y v
+    eran dos perfiles completos —86 MB sobre el dominio— y otra conversión a
+    float64 por banda y por hilo al diagnosticar, para no leerlos nunca.
+    """
+    from server.services.arome_forecast import (
+        _convective_outputs,
+        _convective_outputs_in_stripes,
+    )
+
+    pressure, temperature, dewpoint, u, v, terrain, su, sv, levels = (
+        _synthetic_profile(48, 30)
+    )
+    con_viento = _convective_outputs(
+        pressure, temperature, dewpoint, u, v, terrain, su, sv, levels,
+        include_dcape=True, only_dcape=True,
+    )
+    sin_viento = _convective_outputs(
+        pressure, temperature, dewpoint, None, None, terrain, su, sv, levels,
+        include_dcape=True, only_dcape=True,
+    )
+    assert np.array_equal(
+        sin_viento["dcape"], con_viento["dcape"], equal_nan=True
+    )
+
+    # Y el troceado por bandas tampoco necesita rebanar lo que no existe.
+    troceado = _convective_outputs_in_stripes(
+        pressure, temperature, dewpoint, None, None, terrain, su, sv, levels,
+        stripe_rows=24, include_dcape=True, only_dcape=True,
+    )
+    assert set(troceado) == {"dcape"}
+    assert troceado["dcape"].shape == con_viento["dcape"].shape
 
 
 def test_only_dcape_survives_the_striping():

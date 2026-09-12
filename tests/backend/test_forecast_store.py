@@ -1311,7 +1311,7 @@ def test_waiting_for_ip3_is_available_when_the_caller_prefers_it(monkeypatch):
     hora = arome_forecast._parse_time("2026-08-28T06:00:00Z")
 
     # Sin esperar: se va sin la velocidad vertical.
-    assert arome_forecast._isobaric_extras_from_package(
+    assert arome_forecast._isobaric_extras_lazily_from_package(
         hora, hora, [850.0], ("vertical_velocity",), esperar=False
     ) is None
 
@@ -1331,7 +1331,7 @@ def test_dcape_does_wait_for_ip3(monkeypatch):
     )
     hora = arome_forecast._parse_time("2026-08-28T06:00:00Z")
 
-    arome_forecast._isobaric_extras_from_package(
+    arome_forecast._isobaric_extras_lazily_from_package(
         hora, hora, [850.0], ("dewpoint",), esperar=True
     )
 
@@ -1393,6 +1393,38 @@ def test_the_dcape_pass_does_not_load_what_it_will_discard():
     )
     assert "if only_dcape\n            else _updraft_helicity_in_stripes" in fuente, (
         "no debe recalcular la helicidad del ascenso"
+    )
+    assert 'if not only_dcape:\n        elementos_ip1 += ("u", "v")' in fuente, (
+        "no debe descodificar el viento de IP1, que el descenso no mira"
+    )
+    assert 'if not exact_dewpoint:\n        elementos_ip1 += ("relative_humidity",)' in fuente, (
+        "con el rocío exacto de IP3 la humedad de IP1 no la lee nadie"
+    )
+    assert "lleva_viento = not only_dcape" in fuente, (
+        "no debe montar los perfiles de viento"
+    )
+
+
+def test_the_profile_is_built_level_by_level_from_the_package():
+    """El perfil se llena descodificando cada nivel cuando le toca.
+
+    Con el paquete descodificado de una vez, sus veinticuatro niveles en
+    float64 —ochenta megas por elemento— viven hasta el final del montaje,
+    justo encima de los perfiles que se están llenando.
+    """
+    import inspect
+
+    from server.services import arome_forecast
+
+    fuente = inspect.getsource(arome_forecast._convective_frames.__wrapped__)
+    assert "_isobaric_levels_from_package(" in fuente, (
+        "IP1 debe leerse nivel a nivel"
+    )
+    assert "_isobaric_extras_lazily_from_package(" in fuente, (
+        "IP3 debe leerse nivel a nivel"
+    )
+    assert "_isobaric_fields_from_package(" not in fuente, (
+        "el lector que descodifica el perfil entero retiene lo que no toca"
     )
 
 

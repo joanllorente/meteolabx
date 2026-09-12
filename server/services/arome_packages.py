@@ -11,6 +11,7 @@ descarta: descomprimirlo entero en memoria serían ~1,9 GB.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
 import fcntl
 from functools import lru_cache
@@ -200,20 +201,147 @@ def _download_package(
     return destination
 
 
-def read_isobaric_profile(
+class IsobaricLevels:
+    """Los niveles de un elemento, descodificados cuando se piden.
+
+    Un perfil devuelto de una vez mantiene sus veinticuatro niveles en float64
+    hasta que quien llama termina de montar el suyo: sobre el dominio entero
+    son ochenta megas por elemento, vivos durante todo el montaje y encima de
+    los perfiles que se están llenando. Pedidos de uno en uno, cada capa muere
+    en la misma vuelta en que se escribió.
+
+    No guarda lo que entrega: pedir dos veces el mismo nivel lo descodifica dos
+    veces. Quien lo necesite más de una vez debe quedárselo él.
+    """
+
+    __slots__ = ("_package", "_bands")
+
+    def __init__(self, package: "IsobaricPackage", bands: dict[float, int]):
+        self._package = package
+        self._bands = dict(bands)
+
+    def __contains__(self, level: float) -> bool:
+        return float(level) in self._bands
+
+    def __len__(self) -> int:
+        return len(self._bands)
+
+    def __iter__(self):
+        return iter(self._bands)
+
+    def __getitem__(self, level: float) -> np.ndarray:
+        return self._package.decode(self._bands[float(level)])
+
+    def keys(self):
+        return self._bands.keys()
+
+    def values(self):
+        for level in self._bands:
+            yield self[level]
+
+    def items(self):
+        for level in self._bands:
+            yield level, self[level]
+
+    def clear(self) -> None:
+        """Suelta estos niveles y, con el último, cierra el fichero."""
+        if self._bands:
+            self._bands.clear()
+            self._package.release()
+
+
+class IsobaricPackage:
+    """Un paquete isobárico abierto, con el mapa de dónde vive cada nivel.
+
+    El índice se construye leyendo etiquetas, que son texto: lo caro es
+    descomprimir, y eso se deja para cuando alguien pida el nivel.
+    """
+
+    def __init__(self, stack: ExitStack, dataset: Any, bands: dict[str, dict[float, int]], seen: set[str]):
+        self._stack = stack
+        self._dataset = dataset
+        self._bands = bands
+        self.seen = seen
+        self.geometry = (dataset.transform, dataset.crs, dataset.bounds)
+        self._holders = 0
+
+    @property
+    def elements(self) -> tuple[str, ...]:
+        return tuple(self._bands)
+
+    def fields(self, element: str) -> IsobaricLevels:
+        """Los niveles de un elemento. Quien los pide se compromete a soltarlos."""
+        self._holders += 1
+        return IsobaricLevels(self, self._bands.get(element, {}))
+
+    def decode(self, band: int) -> np.ndarray:
+        # El límite de caché de GDAL se aplica en cada lectura: sin él se queda
+        # con un porcentaje de la RAM de la máquina, que sobre medio giga de
+        # GRIB era casi un giga por proceso.
+        # El paquete marca las celdas fuera del dominio con 9999; el resto del
+        # pipeline espera NaN, igual que entrega el WCS.
+        with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB):
+            values = self._dataset.read(band, masked=True).astype(float)
+        return values.filled(np.nan)
+
+    def release(self) -> None:
+        self._holders -= 1
+        if self._holders <= 0:
+            self.close()
+
+    def close(self) -> None:
+        self._bands = {}
+        self._stack.close()
+
+
+def _index_isobaric_bands(
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+    by_element: dict[str, str],
+) -> IsobaricPackage:
+    """Abre el paquete y localiza cada nivel sin descodificar ninguno."""
+    wanted_levels = {int(round(level * 100)) for level in levels_hpa}
+    stamp = int(valid_time.astimezone(timezone.utc).timestamp())
+    bands: dict[str, dict[float, int]] = {}
+    seen: set[str] = set()
+    stack = ExitStack()
+    try:
+        stack.enter_context(rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB))
+        dataset = stack.enter_context(rasterio.open(path))
+        for index in range(1, dataset.count + 1):
+            tags = dataset.tags(index)
+            element = tags.get("GRIB_ELEMENT", "")
+            seen.add(element)
+            name = by_element.get(element)
+            if name is None:
+                continue
+            if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
+                continue
+            short_name = tags.get("GRIB_SHORT_NAME", "")
+            if not short_name.endswith("-ISBL"):
+                continue
+            level_pa = int(short_name.split("-", 1)[0])
+            if level_pa not in wanted_levels:
+                continue
+            bands.setdefault(name, {})[level_pa / 100.0] = index
+    except BaseException:
+        stack.close()
+        raise
+    return IsobaricPackage(stack, dataset, bands, seen)
+
+
+def open_isobaric_profile(
     path: Path,
     valid_time: datetime,
     levels_hpa: list[float],
     elements: tuple[str, ...] = (),
-) -> tuple[dict[str, dict[float, np.ndarray]], tuple[Any, Any, Any]]:
-    """Campos del perfil para una hora, leídos mensaje a mensaje.
+) -> IsobaricPackage:
+    """IP1 abierto y indexado, para leerlo nivel a nivel.
 
-    Devuelve `({"temperature": {850.0: array, ...}, ...}, geometría)` con las
-    unidades tal cual las publica el paquete: °C, %, m/s y m²/s².
-
-    `elements` limita lo que se decodifica. Descomprimir un elemento que nadie
-    va a mirar son seis megas por nivel: la cizalladura sólo necesita el
-    viento, y descodificarle además temperatura, humedad y geopotencial es
+    `elements` limita lo que se podrá descodificar. Descomprimir un elemento
+    que nadie va a mirar son seis megas por nivel: la cizalladura sólo necesita
+    el viento, y descodificarle además temperatura, humedad y geopotencial es
     tirar la mitad del trabajo.
 
     La geometría es la del paquete, no la de quien pregunta: son rejillas que
@@ -227,42 +355,98 @@ def read_isobaric_profile(
         raise AromePackageError(
             f"IP1 no publica {', '.join(sorted(desconocidos))}."
         )
-    wanted_levels = {int(round(level * 100)) for level in levels_hpa}
-    stamp = int(valid_time.astimezone(timezone.utc).timestamp())
-    profile: dict[str, dict[float, np.ndarray]] = {
-        name: {} for name in buscados
-    }
-    # GDAL cachea bloques del GRIB y su límite por defecto es un porcentaje de
-    # la RAM de la máquina: sobre un fichero de medio giga se quedaba con casi
-    # un giga por proceso, memoria que le hace falta al diagnóstico. Acotarlo
-    # no cuesta tiempo: los mensajes se leen una vez y en orden.
-    with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
-        geometria = (dataset.transform, dataset.crs, dataset.bounds)
-        for index in range(1, dataset.count + 1):
-            tags = dataset.tags(index)
-            element = IP1_ELEMENTS.get(tags.get("GRIB_ELEMENT", ""))
-            if element is None or element not in buscados:
-                continue
-            if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
-                continue
-            short_name = tags.get("GRIB_SHORT_NAME", "")
-            if not short_name.endswith("-ISBL"):
-                continue
-            level_pa = int(short_name.split("-", 1)[0])
-            if level_pa not in wanted_levels:
-                continue
-            # read() de una sola banda: el fichero nunca entra entero en memoria.
-            # El paquete marca las celdas fuera del dominio con 9999; el resto
-            # del pipeline espera NaN, igual que entrega el WCS.
-            values = dataset.read(index, masked=True).astype(float)
-            profile[element][level_pa / 100.0] = values.filled(np.nan)
-    faltan = [name for name, campos in profile.items() if not campos]
+    package = _index_isobaric_bands(
+        path,
+        valid_time,
+        levels_hpa,
+        {clave: nombre for clave, nombre in IP1_ELEMENTS.items() if nombre in buscados},
+    )
+    faltan = sorted(buscados - set(package.elements))
     if faltan:
+        package.close()
         raise AromePackageError(
             f"El paquete no trae {', '.join(faltan)} para "
             f"{valid_time:%Y-%m-%dT%H:%M}Z."
         )
-    return profile, geometria
+    return package
+
+
+def open_isobaric_extras(
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+    wanted: dict[str, tuple[str, ...]],
+) -> IsobaricPackage:
+    """IP3 abierto e indexado, para leerlo nivel a nivel.
+
+    Acepta varias grafías por campo porque los nombres de la documentación no
+    coinciden necesariamente con los que expone GDAL. Si alguno no aparece se
+    registran los elementos que sí trae el fichero: es la forma de averiguar
+    cómo se llaman de verdad sin tener que adivinar dos veces.
+    """
+    package = _index_isobaric_bands(
+        path,
+        valid_time,
+        levels_hpa,
+        {grafia: nombre for nombre, grafias in wanted.items() for grafia in grafias},
+    )
+    faltan = [nombre for nombre in wanted if nombre not in package.elements]
+    if faltan:
+        logger.info(
+            "IP3 no trae %s con los nombres esperados. Elementos del fichero: %s",
+            ", ".join(faltan), ", ".join(sorted(package.seen)),
+        )
+    else:
+        # Aunque salga todo: saber qué más trae el paquete es lo que permite
+        # decidir si un campo nuevo cuesta una descarga o ya está pagado.
+        _log_package_inventory(path.name, tuple(sorted(package.seen)))
+    return package
+
+
+def read_isobaric_profile(
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+    elements: tuple[str, ...] = (),
+) -> tuple[dict[str, dict[float, np.ndarray]], tuple[Any, Any, Any]]:
+    """Campos del perfil para una hora, descodificados de una vez.
+
+    Devuelve `({"temperature": {850.0: array, ...}, ...}, geometría)` con las
+    unidades tal cual las publica el paquete: °C, %, m/s y m²/s².
+
+    Quien monte un perfil nivel a nivel debe usar `open_isobaric_profile`: esto
+    retiene todos los niveles a la vez.
+    """
+    package = open_isobaric_profile(path, valid_time, levels_hpa, elements)
+    try:
+        return (
+            {name: dict(package.fields(name).items()) for name in package.elements},
+            package.geometry,
+        )
+    finally:
+        package.close()
+
+
+def read_isobaric_extras(
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+    wanted: dict[str, tuple[str, ...]],
+) -> tuple[dict[str, dict[float, np.ndarray]], tuple[Any, Any, Any]]:
+    """Campos isobáricos de IP3 para una hora, descodificados de una vez."""
+    package = open_isobaric_extras(path, valid_time, levels_hpa, wanted)
+    try:
+        return (
+            {
+                name: dict(package.fields(name).items())
+                if name in package.elements
+                else {}
+                for name in wanted
+            },
+            package.geometry,
+        )
+    finally:
+        package.close()
 
 
 # Campos de superficie que el diagnóstico convectivo necesita, repartidos entre
