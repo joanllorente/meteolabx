@@ -8,35 +8,29 @@
   const version = $derived(
     (texts.version || 'Versión {version}').replace('{version}', app.app_version)
   );
-  let selectedRelease = $state('140');
-  const releaseEntry = (number, key) => ({
-    number,
+  const releaseEntry = (key) => ({
+    number: `${key[0]}.${key[1]}.${key[2]}`,
     improvements: texts[`release_${key}_improvements`] || [],
     fixes: texts[`release_${key}_fixes`] || []
   });
-  const releaseGroups = $derived([
-    {
-      id: '110', label: '1.1.0', entries: [{
-        number: '1.1.0', improvements: texts.previous_improvements || [], fixes: texts.previous_fixes || []
-      }]
-    },
-    {
-      id: '120', label: '1.2.0', entries: [{
-        number: '1.2.0', improvements: texts.improvements || [], fixes: texts.fixes || []
-      }]
-    },
-    {
-      id: '135', label: '1.3.5', entries: [
-        releaseEntry('1.3.5', '135'), releaseEntry('1.3.4', '134'),
-        releaseEntry('1.3.3', '133'), releaseEntry('1.3.2', '132'),
-        releaseEntry('1.3.1', '131'), releaseEntry('1.3.0', '130')
-      ]
-    },
-    { id: '140', label: '1.4.0', entries: [releaseEntry('1.4.0', '140')] }
-  ]);
-  const activeRelease = $derived(
-    releaseGroups.find((group) => group.id === selectedRelease) || releaseGroups.at(-1)
+  // Comparte la lista generada con la web principal: así Predicción no se
+  // queda mostrando las antiguas versiones 1.x cuando cambia la aplicación.
+  const releaseGroups = $derived(
+    (app.releases || []).reduce((groups, key) => {
+      const entry = releaseEntry(key);
+      if (!entry.improvements.length && !entry.fixes.length) return groups;
+      const id = key.slice(0, 2);
+      const group = groups.find((candidate) => candidate.id === id);
+      if (group) group.entries.push(entry);
+      else groups.push({ id, label: `${id[0]}.${id[1]}`, entries: [entry] });
+      return groups;
+    }, [])
   );
+  let selectedRelease = $state('');
+  const activeRelease = $derived(
+    releaseGroups.find((group) => group.id === selectedRelease) || releaseGroups[0]
+  );
+  const activeId = $derived(activeRelease?.id || '');
   const privacySections = $derived(
     [
       { title: texts.privacy_cookies_title, items: texts.privacy_cookies },
@@ -118,8 +112,8 @@
           <button
             type="button"
             role="tab"
-            aria-selected={selectedRelease === group.id}
-            class:active={selectedRelease === group.id}
+            aria-selected={activeId === group.id}
+            class:active={activeId === group.id}
             onclick={() => (selectedRelease = group.id)}
           >{group.label}</button>
         {/each}

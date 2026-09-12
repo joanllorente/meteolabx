@@ -47,5 +47,7 @@ def release_completed_grib_cache() -> dict:
         except OSError as exc:
             logger.warning('No se pudo liberar caché GRIB %s: %s', path.name, exc)
     if count:
-        logger.info('Solicitada liberación de caché de %d GRIB (%.2f GB en disco); archivos conservados.', count, total / 1e9)
+        # En modo --watch esta limpieza preventiva se repite cada minuto. Es
+        # telemetría útil al diagnosticar memoria, pero no un evento operativo.
+        logger.debug('Solicitada liberación de caché de %d GRIB (%.2f GB en disco); archivos conservados.', count, total / 1e9)
     return {'files_advised': count, 'file_bytes': total}

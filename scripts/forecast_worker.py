@@ -327,7 +327,7 @@ def _prune_old_runs(store, latest_run: str) -> None:
     frontera = _oldest_unfinished_run(store, latest_run)
     # También cuando no se borra nada: sin esta línea, «no se descartó ningún
     # paquete» y «la retención no llegó a ejecutarse» se ven exactamente igual.
-    logger.info(
+    logger.debug(
         "Paquetes conservados desde %s (pasada vigente %s).", frontera, latest_run
     )
     descartados = 0
@@ -1574,7 +1574,7 @@ def run_incremental_cycle(
     failures = 0
     stop_cycle = False
     pending_count = sum(len(queue) for queue in queues.values())
-    logger.info(
+    (logger.info if pending_count else logger.debug)(
         "RUN actual %s: %d tareas pendientes en %d pasadas retenidas · "
         "%d workers, %d de ellos para perfiles convectivos",
         latest_run,
@@ -1835,7 +1835,15 @@ def main() -> int:
         cycle_started = time.monotonic()
         try:
             result = run_cycle()
-            logger.info("Ciclo terminado: %s", result)
+            # En vigilancia, la inmensa mayoría de ciclos solo comprueba si
+            # apareció una pasada nueva. No llenar producción con cuatro
+            # líneas INFO por minuto cuando no se ha hecho ningún trabajo.
+            log_cycle = (
+                logger.info
+                if result.get("tasks_seen") or result.get("failures")
+                else logger.debug
+            )
+            log_cycle("Ciclo terminado: %s", result)
         except Exception:
             logger.exception("El ciclo incremental ha fallado; se reintentará.")
         remaining = max(0.0, interval - (time.monotonic() - cycle_started))
