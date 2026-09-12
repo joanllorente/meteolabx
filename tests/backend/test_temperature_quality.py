@@ -224,3 +224,72 @@ def test_the_quarantine_survives_a_restart() -> None:
     assert suspect_data.history()[0]["days_total"] == 1
     # Un estado ilegible no revienta el arranque.
     assert suspect_data.import_state("basura") == 0
+
+
+def test_a_station_without_series_is_still_judged() -> None:
+    """Reus Aeropuerto: extremos imposibles y ninguna serie que los sostenga.
+
+    AEMET publica su propia máxima y mínima del día aunque no sirva un solo
+    punto horario, y el 12 de septiembre de 2026 daba 27,2 y −13,1 °C para la
+    misma jornada: 40,3 °C de amplitud a 71 m de altitud junto al mar.
+
+    La ficha la dejaba pasar sin aviso. El día local se deducía del último
+    punto de la serie, así que una serie vacía salía por un `return` temprano
+    antes de mirar los extremos —justo el dato que estaba roto—. Ahora, cuando
+    la serie no da la fecha, se usa la hora de la observación.
+    """
+    from server.routers import observations
+
+    aviso = observations._quarantine_suspect_temperature(
+        "AEMET",
+        "0016A",
+        {"epochs": [], "temps": []},
+        {"temp_max": 27.2, "temp_min": -13.1},
+        latitude=41.145,
+        tz_name="Europe/Madrid",
+        observation_epoch=1_789_228_800,
+    )
+    assert aviso is not None
+    assert suspect_data.is_flagged("AEMET", "0016A", "2026-09-12", "temperature")
+
+
+def test_without_series_or_time_nothing_is_invented() -> None:
+    """Sin ninguna fecha no se puede fechar la cuarentena, y no se inventa."""
+    from server.routers import observations
+
+    assert observations._quarantine_suspect_temperature(
+        "AEMET", "0016A", {"epochs": [], "temps": []},
+        {"temp_max": 27.2, "temp_min": -13.1},
+        latitude=41.145, tz_name="Europe/Madrid", observation_epoch=None,
+    ) is None
+
+
+def test_the_ranking_judges_before_sanitising() -> None:
+    """Reus Aeropuerto encabezando el ranking de mínimas de España.
+
+    El 12 de septiembre de 2026 AEMET daba 27,2 °C de máxima y −13,1 °C de
+    mínima para la misma jornada: 40,3 °C de amplitud a 71 m de altitud y a
+    seis kilómetros del mar. La mínima salió primera del país, dieciséis grados
+    por debajo de la segunda, que estaba a 1.096 m.
+
+    El saneador físico anula la máxima cuando la pareja no cabe en un día, y
+    corría ANTES que la cuarentena. Cuando esta miraba, ya no había máxima con
+    la que comparar: el criterio de amplitud no podía dispararse, y −13,1 °C
+    por sí solos no bajan del suelo climatológico de los 41 °N en septiembre.
+    Resultado: se descartaba el valor creíble y se publicaba el absurdo.
+    """
+    from server.services.ranking import RankingStore, StationDaily
+
+    rec = StationDaily(
+        provider="AEMET", station_id="0016A", name="REUS  AEROPUERTO",
+        lat=41.145, lon=1.163611,
+    )
+    rec.tmax, rec.tmin = 27.2, -13.1
+    rec.local_date = "2026-09-12"
+
+    # Por el camino real del bulk, que es donde estaba el orden equivocado.
+    RankingStore().replace_daily("AEMET", [rec])
+
+    assert suspect_data.is_flagged("AEMET", "0016A", "2026-09-12", "temperature")
+    # Y la mínima no llega al ranking: la cuarentena retira los tres campos.
+    assert rec.tmin is None, "la mínima absurda seguiría publicándose"

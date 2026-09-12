@@ -2695,10 +2695,18 @@ class RankingStore:
         fallback_day = self.local_day(provider, now)
         by_day: Dict[str, Dict[str, StationDaily]] = defaultdict(dict)
         for r in records:
-            _sanitize_record_extremes(r)
             day = self._bucket_day(provider, r, fallback_day)
             r.local_date = day
+            # Juzgar ANTES de sanear. El saneador anula la máxima cuando la
+            # pareja no cabe en un día, y así la cuarentena llegaba tarde: ya
+            # no quedaba máxima con la que comparar, el criterio de amplitud no
+            # podía dispararse y la mínima sobrevivía sola. Reus Aeropuerto
+            # encabezó el ranking de mínimas de España con −13,1 °C a 71 m en
+            # septiembre —dieciséis grados por debajo de la siguiente, que
+            # estaba a 1.096 m— porque sus 27,2 °C de máxima se habían borrado
+            # un paso antes. El saneador sigue detrás, de red física.
             _flag_suspect_temperature(r)
+            _sanitize_record_extremes(r)
             _drop_quarantined_variables(r)
             _drop_manually_excluded(r)
             by_day[day][r.station_id] = r
@@ -3030,10 +3038,10 @@ class RankingStore:
             # al día siguiente y el día anterior queda CONGELADO con su último
             # valor (currents.json deja de servirlo, pero el store lo conserva).
             for r in records:
-                _sanitize_record_extremes(r)  # imposibilidad física (todos)
                 day = self._bucket_day(provider, r, fallback_day)
                 r.local_date = day
-                _flag_suspect_temperature(r)
+                _flag_suspect_temperature(r)  # antes de sanear: ver arriba
+                _sanitize_record_extremes(r)  # imposibilidad física (todos)
                 _drop_quarantined_variables(r)
                 _drop_manually_excluded(r)
                 self._daily.setdefault((provider, day), {})[r.station_id] = r

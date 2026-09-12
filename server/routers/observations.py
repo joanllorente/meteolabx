@@ -321,6 +321,7 @@ def _quarantine_suspect_temperature(
     *,
     latitude: Optional[float],
     tz_name: str,
+    observation_epoch: Any = None,
 ) -> Optional[Dict[str, Any]]:
     """Controles del termómetro, para CUALQUIER proveedor.
 
@@ -334,10 +335,20 @@ def _quarantine_suspect_temperature(
         return None
     epochs = series.get("epochs") or []
     temps = series.get("temps") or []
+    # El día local se saca de la serie, pero la serie puede no existir y los
+    # extremos venir igual: AEMET publica su propia máxima y mínima aunque no
+    # sirva ni un punto horario. Reus Aeropuerto salía así —serie vacía, `Tc`
+    # nula y unos extremos de 27,2 y −13,1 °C el mismo día de septiembre— y
+    # este `return` la dejaba pasar sin mirar nada, porque sin serie no había
+    # fecha con la que decidir el mes. La hora de la observación sirve para
+    # eso igual de bien: cuando la serie no la da, se usa esa.
     last_epoch = next(
         (int(value) for value in reversed(epochs) if isinstance(value, (int, float))),
         None,
     )
+    if last_epoch is None:
+        respaldo = _float_or_nan(observation_epoch)
+        last_epoch = None if _is_nan_value(respaldo) else int(respaldo)
     if last_epoch is None:
         return None
     day = _local_day_for(last_epoch, tz_name)
@@ -1280,6 +1291,7 @@ async def post_current_processed(
         _daily_extremes_mapping(current_raw, series_dict),
         latitude=_float_or_nan(base_for_pipeline.get("lat")),
         tz_name=str(station_record.get("tz") or body.sun_tz_name or ""),
+        observation_epoch=(current_raw or {}).get("epoch"),
     )
     if temperature_warning:
         response_warnings.append(temperature_warning)
