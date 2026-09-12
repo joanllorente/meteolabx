@@ -3,7 +3,7 @@ import { redirect } from '@sveltejs/kit';
 import { parseLegacyStationPath } from '$lib/seo/ownership.js';
 import { observationPath } from '$lib/seo/station.js';
 import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
-import { LANGUAGE_COOKIE, visitorLanguage } from '$lib/server/language.js';
+import { LANGUAGE_COOKIE } from '$lib/server/language.js';
 import { matchesEtag } from '$lib/server/etag.js';
 
 /**
@@ -34,17 +34,18 @@ export async function handle({ event, resolve }) {
     response.headers.append('set-cookie', event.cookies.serialize(LANGUAGE_COOKIE, pathLanguage, cookieOptions));
     return response;
   }
-  if (localized) {
-    const language = visitorLanguage(event, LANGUAGE_CODES, pathLanguage);
-    if (language !== pathLanguage) {
-      const target = new URL(event.url);
-      const legacyPath = parseLegacyStationPath(target.pathname);
-      target.pathname = legacyPath
-        ? observationPath(language, legacyPath.slug)
-        : target.pathname.replace(/^\/[^/]+/, `/${language}`);
-      return languageRedirect(target);
-    }
-  }
+  // Una URL que ya lleva idioma se sirve EN ESE IDIOMA, sin mirar la cookie.
+  //
+  // Antes se renegociaba aquí: `/it/observation/tivissa` devolvía la página a
+  // quien tuviera italiano y una redirección a `/es/...` a quien tuviera
+  // español. Eso hacía que la misma dirección respondiera cosas distintas
+  // según el visitante, y obligaba a marcarla `Vary: Cookie` —que es lo que
+  // impedía a Cloudflare compartir una copia entre visitantes y mandaba cada
+  // petición al origen.
+  //
+  // La negociación sigue existiendo, pero solo en `/`, que es donde alguien
+  // llega sin haber elegido idioma. Un enlace compartido conserva el suyo, que
+  // además es lo que espera quien lo recibe.
   const legacy = parseLegacyStationPath(event.url.pathname);
   if (legacy) {
     const target = new URL(observationPath(legacy.language, legacy.slug), event.url.origin);
@@ -61,24 +62,61 @@ export async function handle({ event, resolve }) {
     // prohibir que se guarden. Lo personal que llevan —la decisión de idioma—
     // queda cubierto por el `Vary`, que separa la copia de cada combinación de
     // cookie e idioma en lugar de mezclarlas.
-    if (!isPubliclyCacheable(event, response)) response.headers.set('cache-control', 'private, no-store');
+    const compartible = isPubliclyCacheable(event, response);
+    if (!compartible) response.headers.set('cache-control', 'private, no-store');
+
+    // `Vary: Cookie` vuelve la respuesta incacheable en el CDN: Cloudflare
+    // solo respeta `Vary: Accept-Encoding` y ante cualquier otro valor manda
+    // la petición al origen. Con él puesto, el `public, max-age` de las fichas
+    // no ahorraba una sola petición, y el HTML de observación es el 83 % de la
+    // salida de datos que factura Railway.
+    //
+    // Se puede quitar de lo compartible porque estas páginas ya no dependen de
+    // quién pide: el idioma va en la URL y la negociación vive solo en `/`.
+    // Las demás lo conservan, que ahí sí separa la copia de cada visitante.
     const vary = response.headers.get('vary');
-    response.headers.set('vary', [vary, 'Cookie', 'Accept-Language'].filter(Boolean).join(', '));
+    const separadores = compartible ? ['Accept-Language'] : ['Cookie', 'Accept-Language'];
+    response.headers.set('vary', [vary, ...separadores].filter(Boolean).join(', '));
+
+    if (compartible) response.headers.set('cache-control', sharedCacheControl(response));
   }
   return notModified(event, response) || response;
 }
 
 /**
- * Solo las fichas de observación se comparten entre visitantes.
+ * TTL para el CDN, conservando el del navegador.
  *
- * La excepción es deliberadamente estrecha: hace falta que la ruta sea una
- * ficha *y* que haya pedido `public` a propósito —las redes con credencial
- * personal están bajo la misma ruta y piden `no-store`—. Las demás páginas
- * localizadas declaran `public` para el CDN, pero llevan dentro búsquedas y
- * filtros del visitante, así que se siguen aplastando.
+ * `s-maxage` habla solo con las cachés compartidas: el navegador sigue con su
+ * `max-age`, y Cloudflare guarda la copia el tiempo que aquí se diga. Cinco
+ * minutos son suficientes —las estaciones publican cada 10-60— y
+ * `stale-while-revalidate` evita que la caducidad se note: se sirve la copia
+ * vieja mientras se pide la nueva por detrás.
  */
+function sharedCacheControl(response) {
+  const actual = response.headers.get('cache-control') || 'public';
+  if (actual.includes('s-maxage')) return actual;
+  return `${actual}, s-maxage=300`;
+}
+
+
+/**
+ * Qué páginas se comparten entre visitantes.
+ *
+ * Fichas de observación y tendencias: las dos son lecturas de una estación,
+ * iguales para todo el mundo, y son el grueso de lo que rastrean los
+ * buscadores. Tendencias declaraba `public` desde su `load` pero acababa
+ * aplastada aquí, así que iba al origen en cada visita.
+ *
+ * La condición sigue siendo estrecha: hace falta que la ruta sea una de esas
+ * dos *y* que haya pedido `public` a propósito —las redes con credencial
+ * personal están bajo la misma ruta y piden `no-store`—. Las demás páginas
+ * localizadas llevan dentro búsquedas y filtros del visitante y se siguen
+ * aplastando.
+ */
+const RUTAS_COMPARTIBLES = /^\/[^/]+\/(observation|trends)\//;
+
 function isPubliclyCacheable(event, response) {
-  if (!/^\/[^/]+\/observation\//.test(event.url.pathname)) return false;
+  if (!RUTAS_COMPARTIBLES.test(event.url.pathname)) return false;
   return (response.headers.get('cache-control') || '').includes('public');
 }
 

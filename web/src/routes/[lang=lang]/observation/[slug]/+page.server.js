@@ -1,5 +1,4 @@
 import { error, redirect } from '@sveltejs/kit';
-import { languageDecision } from '$lib/server/language.js';
 import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
 
 import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
@@ -19,7 +18,7 @@ import {
  * metadatos y el contenido indexable no dependen de que la estación esté
  * publicando ahora mismo.
  */
-export async function load({ params, request, cookies, fetch, setHeaders }) {
+export async function load({ params, fetch, setHeaders }) {
   const { lang, slug } = params;
 
   let station;
@@ -66,21 +65,28 @@ export async function load({ params, request, cookies, fetch, setHeaders }) {
         unavailable: describeFailure(cause)
       }));
 
-  const decision = languageDecision({ request, cookies }, LANGUAGE_CODES, lang);
-
-  // Una hora en CDN y cinco minutos sirviendo el anterior mientras se
+  // Una hora en el navegador y cinco minutos sirviendo el anterior mientras se
   // revalida: las estaciones publican cada 10-60 minutos, así que no hay nada
   // que ganar pegándole al proveedor en cada visita. El ETag cierra el resto:
   // quien ya tenga la ficha con esta misma observación recibe un 304.
+  //
+  // El CDN va aparte y con menos cuerda: `hooks.server.js` le añade un
+  // `s-maxage` más corto a lo compartible. Una copia del borde la ven todos
+  // los visitantes, así que caducarla antes cuesta poco y evita que una ficha
+  // se quede una hora enseñando una observación vieja.
   const version = observationVersion(observation);
   setHeaders({
     'cache-control': 'public, max-age=3600, stale-while-revalidate=300',
     ...(version
-      ? { etag: contentEtag('observation', lang, station.url_slug, decision.language, version, replacementPath) }
+      ? { etag: contentEtag('observation', lang, station.url_slug, version, replacementPath) }
       : {})
   });
 
-  return { languageDecision: decision, lang, slug: station.url_slug, station, meta, observation, replacementPath };
+  // La decisión de idioma NO viaja en el HTML: esta página se comparte entre
+  // visitantes en el CDN, y un dato de quien pidió primero acabaría contado
+  // como el de todos los demás. El navegador sabe sus propios idiomas y los
+  // manda aparte al registrar la visita.
+  return { lang, slug: station.url_slug, station, meta, observation, replacementPath };
 }
 
 function describeFailure(cause) {
