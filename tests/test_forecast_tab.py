@@ -12,25 +12,6 @@ ROOT = Path(__file__).resolve().parents[1]
 LANGUAGES = ("es", "en", "ca", "fr", "it", "pt")
 
 
-def test_forecast_tab_is_registered_with_beta_badge_and_shareable_slug():
-    source = (ROOT / "meteolabx.py").read_text(encoding="utf-8")
-
-    assert '"forecast": "tabs.forecast"' in source
-    assert '"forecast": "prediccion"' in source
-    assert 'TAB_OPTIONS = ["observation", "trends", "historical", "map", "forecast", "ranking"]' in source
-    assert 'forecast_tab_position = TAB_OPTIONS.index("forecast") + 1' in source
-    assert 'content: "Beta"' in source
-    assert 'METEOLABX_FORECAST_URL' in source
-    assert '"/forecast"' in source
-    assert "const isLocal = ['localhost', '127.0.0.1'].includes(host.location.hostname)" in source
-    assert "'/forecast/forecast.html?v=20260825-54'" in source
-    assert 'target = \'_blank\'' in source
-    assert "trackedUrl.searchParams.set('from', 'streamlit')" in source
-    assert "mlbx-forecast-external-link" in source
-    assert 'elif tab_id == "forecast":' in source
-    assert 'render_forecast_tab(_build_forecast_tab_context())' in source
-
-
 def test_forecast_copy_exists_in_every_supported_language():
     required = {
         "section_title",
@@ -432,82 +413,51 @@ def test_every_selected_forecast_product_has_a_technical_guide():
     assert "Météo-France · API ciblée modèles" in guides
 
 
-def test_forecast_build_can_be_installed_into_streamlit_static_dir(tmp_path):
+def test_forecast_build_is_installed_into_the_web_service(tmp_path):
+    """El visor se publica en ``web/static/forecast`` y en ningún sitio más.
+
+    Antes se copiaba también dentro del paquete de Streamlit, que es como se
+    servía la página en la versión anterior. Ese destino obligaba a tener el
+    paquete instalado para desplegar el visor y ya no lo sirve nadie.
+    """
+    destino = tmp_path / "forecast"
     result = subprocess.run(
-        [
-            sys.executable,
-            "scripts/install_forecast_frontend.py",
-            "--target-static-dir",
-            str(tmp_path),
-        ],
+        [sys.executable, "scripts/install_forecast_frontend.py", "--target", str(destino)],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
     )
 
-    installed = tmp_path / "forecast"
-    assert (installed / "forecast.html").is_file()
-    assert (installed / "index.html").is_file()
-    assert (installed / "index.html").read_bytes() == (installed / "forecast.html").read_bytes()
-    assert (installed / "assets").is_dir()
-    assert "Frontend Svelte instalado" in result.stdout
+    assert (destino / "index.html").is_file()
+    assert (destino / "assets").is_dir()
+    # Vite lo compila con rutas relativas; servirlo en /forecast obliga a
+    # reescribirlas, o sin la barra final la página carga en blanco.
+    assert '="/forecast/' in (destino / "index.html").read_text(encoding="utf-8")
+    assert not (destino / "forecast.html").exists()
+    assert "Visor publicado" in result.stdout
 
 
 def test_installing_the_frontend_removes_the_previous_bundle(tmp_path):
     """El destino no puede quedarse con el bundle de la instalación anterior.
 
-    Streamlit sirve /forecast desde su propio `static`, y la instalación solo
-    copiaba encima. Con un nombre distinto por build, el directorio acumulaba
-    un bundle por compilación —sesenta y uno, trece megas, en una instalación
-    local— y bastaba que el `forecast.html` no se refrescara para que el
-    navegador siguiera ejecutando un visor viejo contra frames nuevos.
+    Con un nombre distinto por build, un destino que solo acumula acaba con un
+    bundle por compilación —sesenta y uno, trece megas, en una instalación
+    local— y basta que el HTML no se refresque para que el navegador siga
+    ejecutando un visor viejo contra frames nuevos.
     """
-    from scripts.install_forecast_frontend import install_forecast_frontend
+    from scripts.install_forecast_frontend import install_forecast_web
 
-    instalado = install_forecast_frontend(tmp_path)
+    destino = tmp_path / "forecast"
+    instalado = install_forecast_web(destino)
     intruso = instalado / "assets" / "forecast-VIEJO0000.js"
     intruso.write_text("// build anterior")
 
-    install_forecast_frontend(tmp_path)
+    install_forecast_web(destino)
 
     assert not intruso.exists(), "el bundle anterior sigue servible"
     actuales = {path.name for path in (ROOT / "static" / "forecast_app" / "assets").iterdir()}
     assert {path.name for path in (instalado / "assets").iterdir()} == actuales
-
-
-def test_the_local_launcher_installs_the_current_build():
-    """Compilar el visor tiene que llegar al navegador sin pasos manuales.
-
-    `start_web.sh` ya lo instala en el contenedor; en local faltaba, así que un
-    `npm run build:forecast` no se veía en :8501 y costaba media hora entender
-    por qué el mapa salía con ruido.
-    """
-    local_start = (ROOT / "scripts" / "run_app.sh").read_text(encoding="utf-8")
-
-    assert "scripts/install_forecast_frontend.py" in local_start
-
-
-def test_production_streamlit_runner_registers_clean_forecast_route_first():
-    runner = (ROOT / "scripts" / "run_streamlit.py").read_text(encoding="utf-8")
-    start = (ROOT / "scripts" / "start_web.sh").read_text(encoding="utf-8")
-    local_start = (ROOT / "scripts" / "run_app.sh").read_text(encoding="utf-8")
-
-    assert 're.compile(r"^/forecast/?$")' in runner
-    assert 're.compile(r"^/v1/stats/(?:section|seo-view)$")' in runner
-    assert "PublicStatsProxyHandler" in runner
-    assert 'self.request.path == "/forecast/"' in runner
-    assert 'self.redirect("/forecast", permanent=True)' in runner
-    assert "app.wildcard_router.rules.insert(0, route)" in runner
-    assert 'Content-Type", "text/html; charset=UTF-8' in runner
-    assert "decompress_response=False" in runner
-    assert '"Content-Encoding"' in runner
-    assert '"Accept-Encoding"' in runner
-    # El arranque de producción ya no levanta Streamlit —la web es el servicio
-    # SvelteKit—, así que la ruta limpia del visor solo se comprueba en el
-    # lanzador local, que sí lo sigue usando para las pestañas antiguas.
-    assert "scripts/install_forecast_frontend.py" in start
-    assert 'scripts/run_streamlit.py meteolabx.py' in local_start
 
 
 def test_the_api_accepts_every_published_product():
@@ -553,7 +503,10 @@ def test_wcs_metadata_is_shared_between_processes(tmp_path, monkeypatch):
     no le sirve al siguiente. Medido en producción, rehacer esos metadatos
     costaba 46 minutos por pasada, con catálogos de hasta 60 s.
     """
-    from tabs import arome_forecast as arome
+    # El cliente WCS vive en ``server/services/arome_wcs.py``, no en la pestaña:
+    # parchear la reexportación de ``tabs/`` no cambiaría lo que ejecuta el
+    # módulo real, que llama a su propio ``_api_get``.
+    from server.services import arome_wcs as arome
 
     monkeypatch.setattr(arome.tempfile, "gettempdir", lambda: str(tmp_path))
     llamadas = []
@@ -578,7 +531,10 @@ def test_wcs_metadata_is_shared_between_processes(tmp_path, monkeypatch):
 
 def test_expired_wcs_metadata_is_fetched_again(tmp_path, monkeypatch):
     """Caducado se vuelve a pedir: el catálogo cambia cuando el modelo publica."""
-    from tabs import arome_forecast as arome
+    # El cliente WCS vive en ``server/services/arome_wcs.py``, no en la pestaña:
+    # parchear la reexportación de ``tabs/`` no cambiaría lo que ejecuta el
+    # módulo real, que llama a su propio ``_api_get``.
+    from server.services import arome_wcs as arome
 
     monkeypatch.setattr(arome.tempfile, "gettempdir", lambda: str(tmp_path))
     monkeypatch.setattr(arome, "METADATA_CACHE_TTL_S", 0)
@@ -592,44 +548,6 @@ def test_expired_wcs_metadata_is_fetched_again(tmp_path, monkeypatch):
     arome._api_get_metadata("https://x/GetCapabilities", (), "t")
 
     assert len(llamadas) == 2
-
-
-def test_the_proxy_does_not_send_a_body_with_204():
-    """Tornado rechaza un cuerpo en un 204, aunque venga vacío.
-
-    Las métricas de visita responden 204, así que cada una dejaba un
-    «AssertionError: Cannot send body with 204» en el log del servidor. La
-    petición del navegador se completaba igual, pero el ruido escondía errores
-    de verdad.
-    """
-    import inspect
-    from pathlib import Path
-
-    fuente = (
-        Path(__file__).resolve().parents[1] / "scripts" / "run_streamlit.py"
-    ).read_text(encoding="utf-8")
-
-    assert "response.code in (204, 304)" in fuente, (
-        "las respuestas sin cuerpo tienen que cerrarse sin él"
-    )
-
-
-def test_the_health_endpoint_is_reachable_from_outside():
-    """El estado del backend tiene que llegar al exterior.
-
-    Sin ruta pública, la plataforma no puede saber que el servicio dejó de
-    responder y devuelve 502 hasta que alguien lo mira. Pasa por el mismo
-    proxy que el resto, así que sólo contesta si el backend está vivo.
-    """
-    from pathlib import Path
-
-    raiz = Path(__file__).resolve().parents[1]
-    proxy = (raiz / "scripts" / "run_streamlit.py").read_text(encoding="utf-8")
-    despliegue = (raiz / "railway.toml").read_text(encoding="utf-8")
-
-    assert 'r"^/v1/health/?$"' in proxy
-    assert "health_route" in proxy
-    assert 'healthcheckPath = "/v1/health"' in despliegue
 
 
 def test_the_worker_runs_at_lower_priority():

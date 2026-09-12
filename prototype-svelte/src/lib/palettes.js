@@ -62,3 +62,30 @@ export function bandOfValue(value, breaks) {
   }
   return breaks.length;
 }
+
+/**
+ * Posición en la rampa, de 0 a 1, de un valor en una escala con nodos.
+ *
+ * Los nodos son pares `[valor, fracción]` ordenados por valor: entre dos nodos
+ * el reparto sigue siendo lineal, así que la rampa no pierde continuidad, pero
+ * cada tramo se lleva la parte de paleta que se le asigna. Sirve para dilatar
+ * la franja donde vive casi todo el campo sin recortar las colas: en la
+ * temperatura a 2 m, los quince grados de una ola de frío alpina no tienen por
+ * qué gastar el mismo trozo de rampa que los quince que separan una mañana de
+ * marzo de una tarde de julio.
+ *
+ * Fuera del primer y del último nodo se recorta, como hace la escala lineal.
+ */
+export function anchorFraction(value, anchors) {
+  if (value <= anchors[0][0]) return 0;
+  const end = anchors.length - 1;
+  if (value >= anchors[end][0]) return 1;
+  for (let index = 1; index <= end; index += 1) {
+    const [upperValue, upperStop] = anchors[index];
+    if (value > upperValue) continue;
+    const [lowerValue, lowerStop] = anchors[index - 1];
+    const span = upperValue - lowerValue || 1;
+    return lowerStop + (upperStop - lowerStop) * ((value - lowerValue) / span);
+  }
+  return 1;
+}

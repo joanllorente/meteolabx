@@ -231,7 +231,7 @@ def month_year_label(date_txt: str) -> str:
     """«01/08/2026» → «Agosto 2026». El agregado mensual es de un mes, no de un día."""
     import pandas as pd
 
-    from utils.i18n import month_name
+    from domain.i18n_catalog import month_name
 
     value = str(date_txt or "").strip()
     parsed = pd.to_datetime(value, dayfirst=True, errors="coerce")

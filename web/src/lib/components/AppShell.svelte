@@ -461,8 +461,11 @@
     .topnav { flex-wrap: wrap; gap: 10px; padding: 9px 12px 0; }
     /* El nombre deja sitio: el logotipo ya identifica la aplicación, y el
        hueco se aprovecha mejor con el rótulo del botón de conectar. */
+    .brand { display: none; }
     .brand-txt { display: none; }
-    .right { gap: 8px; }
+    /* Sin el logo, todos los controles vuelven a caber y permanecen visibles
+       en la primera fila del móvil. */
+    .right { width: 100%; margin-left: 0; justify-content: space-between; gap: 6px; }
     .tabs {
       order: 3; width: 100%;
       margin: 0; padding-bottom: 7px;

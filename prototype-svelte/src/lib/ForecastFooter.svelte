@@ -52,7 +52,7 @@
   const SOURCES =
     'WU · WeatherLink · Windy PWS · AEMET · Meteocat · Euskalmet · Frost · ' +
     'Meteo-France · MeteoGalicia · NWS · POEM · Met Office · MeteoHub Italia · ' +
-    'IPMA · GeoSphere · SMHI · ECCC · IEM';
+    'IPMA · GeoSphere · SMHI · ECCC · IEM · GeoNames';
 
   let newsDialog;
   let privacyDialog;

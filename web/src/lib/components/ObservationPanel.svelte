@@ -796,6 +796,16 @@
        de su contenido si no se le dice. Nunca por letras: eso es lo que hacía
        `overflow-wrap: anywhere` y dejaba el nombre en vertical. */
     .t-a h3, .t-b h3, .t-c h3, .t-d h3 { min-width: 0; }
+    /* En la tarjeta estrecha «Punto de rocío» ocupa dos líneas. El botón de
+       ayuda, centrado respecto de ambas, parecía colgar debajo del título.
+       Lo alineamos con la primera línea y apretamos el texto solo un poco. */
+    .hum h3, .dew h3 { font-size: 0.76rem; }
+    .dew .help { align-self: flex-start; margin-top: 3px; }
+    /* En humedad también hay extremos a la derecha: título, ayuda y cifras
+       no caben en la misma línea. La ayuda funciona como insignia del icono
+       y deja de montarse sobre «relativa». */
+    .hum header { position: relative; }
+    .hum .help { position: absolute; left: 21px; top: -3px; }
     .t-a .extremes, .t-b .extremes, .t-c .extremes, .t-d .extremes {
       flex: none;
       grid-template-columns: 0.72rem max-content;

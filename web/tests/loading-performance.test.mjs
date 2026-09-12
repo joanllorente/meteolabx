@@ -34,6 +34,21 @@ test('el catálogo caduca, acota memoria y no cachea errores', async () => {
   assert.equal(await cache('bad', load), 6);
 });
 
+test('el catálogo conserva el último metadato si falla su refresco', async () => {
+  let now = 0;
+  const cache = createMetadataCache({
+    ttlMs: 10,
+    now: () => now,
+    staleIfError: true
+  });
+  assert.deepEqual(await cache('station', async () => ({ name: 'Fabra' })), { name: 'Fabra' });
+  now = 11;
+  assert.deepEqual(
+    await cache('station', async () => { throw Error('backend unavailable'); }),
+    { name: 'Fabra' }
+  );
+});
+
 test('la conexión HTTP al backend se reutiliza', async (t) => {
   let connections = 0;
   const server = createServer((_req, res) => res.end('ok'));

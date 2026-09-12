@@ -75,35 +75,11 @@ export function parseGlobalSectionPath(pathname) {
   return { language, section };
 }
 
-const OWNED_EXACT = new Set([
-  // La portada ya es el panel vacío del frontend nuevo, no la app antigua.
-  '/',
-  '/robots.txt',
-  '/sitemap.xml',
-  '/forecast',
-  // Panel interno de uso: no se indexa ni se enlaza, pero es nuestro.
-  '/stats',
-  // Estáticos que viajan con el frontend: sirviéndolos aquí, una ficha se
-  // pinta entera sin tocar el servicio antiguo.
-  '/favicon.ico',
-  '/favicon.png',
-  '/favicon-32x32.png',
-  '/og-image.png'
-]);
-const OWNED_PREFIXES = [
-  '/_app/',
-  '/@fs/',
-  '/node_modules/',
-  '/.well-known/',
-  // El visor de predicción ya viaja con este servicio: es un SPA estático
-  // que solo necesita /v1, y así deja de depender de Streamlit.
-  '/forecast/'
-];
 
 /**
  * La API tampoco es del servicio antiguo: en producción FastAPI solo escucha
  * dentro de su contenedor, así que el `/v1` que pide el navegador lo reenvía
- * este servidor al backend. Va aparte de `isOwnedPath` porque su destino es
+ * este servidor al backend. Va aparte porque su destino es
  * otro: no lo contesta SvelteKit, lo proxya a la API.
  */
 export function isApiPath(pathname) {
@@ -132,31 +108,3 @@ export function isDirectoryPath(pathname) {
   return rest.length === 1 ? rest[0].endsWith('.html') : rest[1].endsWith('.html');
 }
 
-/**
- * ¿Contesta el frontend nuevo a esta ruta?
- *
- * Todo lo que devuelva `false` acaba en la app antigua tal cual, incluidos el
- * WebSocket de Streamlit y los estáticos que sirve su paquete.
- */
-export function isOwnedPath(pathname) {
-  const path = pathname.split('?')[0];
-  if (OWNED_EXACT.has(path)) return true;
-  // Solo los sitemaps del frontend nuevo. `directories-sitemap.xml` lo
-  // sigue escribiendo Python y tiene que llegar al servicio antiguo.
-  if (path === '/sitemap-static.xml') return true;
-  if (/^\/sitemap-observation-\d+\.xml$/.test(path)) return true;
-  if (OWNED_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
-  if (path === `/${OBSERVATION_SEGMENT}` || path.startsWith(`/${OBSERVATION_SEGMENT}/`)) return true;
-  // Directorios de red, índices y páginas de ciudad. Eran lo último que
-  // quedaba en Streamlit; ahora viajan como estáticos de este servicio, y
-  // reenviarlas al proxy las dejaría en 404 el día que se apague.
-  if (path === '/directories-sitemap.xml') return true;
-  // Las URLs de la aplicación anterior: ahora redirigen a su equivalente en
-  // vez de morir con ella.
-  if (path === '/app' || path.startsWith('/app/')) return true;
-  if (isDirectoryPath(path)) return true;
-  if (parseObservationPath(path)) return true;
-  if (parseGlobalSectionPath(path)) return true;
-  if (parseLegacyStationPath(path)) return true;
-  return false;
-}

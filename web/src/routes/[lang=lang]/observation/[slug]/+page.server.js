@@ -29,7 +29,8 @@ export async function load({ params, request, cookies, fetch, setHeaders }) {
     if (cause instanceof ApiError && cause.status === 404) {
       error(404, 'station_not_found');
     }
-    throw cause;
+    console.error('[observation metadata]', cause?.cause || cause);
+    error(503, 'station_catalog_unavailable');
   }
 
   // El slug canónico manda: una mayúscula o un alias antiguo redirigen en vez

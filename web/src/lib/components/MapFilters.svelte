@@ -265,4 +265,11 @@
   .apply { padding: 8px 15px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 0.78rem; font-weight: 680; }
   .clear { font-size: 0.76rem; color: var(--muted); text-decoration: underline; }
   .clear:hover { color: var(--ink); }
+
+  @media (max-width: 560px) {
+    /* El botón queda a la izquierda de la barra en móvil. Anclar el panel
+       por la derecha hacía que creciera fuera del viewport y solo se viera
+       una franja; desde la izquierda se abre entero sobre el mapa. */
+    .panel { left: 0; right: auto; }
+  }
 </style>

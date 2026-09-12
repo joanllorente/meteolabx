@@ -432,7 +432,7 @@ async def test_unauthorized_cuts_immediately() -> None:
 # Rama async en POST /v1/climo/dataset (con extremes)
 # =====================================================================
 
-def test_endpoint_uses_async_port_and_returns_extremes() -> None:
+def test_endpoint_serves_the_dataset_and_its_extremes() -> None:
     def routes(kind, var, params):
         if kind == "diaris":
             mes = params.get("mes")
@@ -447,21 +447,17 @@ def test_endpoint_uses_async_port_and_returns_extremes() -> None:
     app = create_app()
     app.dependency_overrides[get_http_client] = lambda: _mock_client(routes)
 
-    with patch(
-        "utils.historical_dispatch.fetch_historical_dataset",
-        side_effect=AssertionError("la rama METEOCAT no debe pasar por el dispatcher frontend"),
-    ):
-        with TestClient(app) as client:
-            response = client.post(
-                "/v1/climo/dataset",
-                json={
-                    "provider": "METEOCAT",
-                    "station_id": STATION,
-                    "api_key": "K",
-                    "summary_mode": "monthly",
-                    "periods": [{"label": "jun", "start": "2025-06-01", "end": "2025-06-30"}],
-                },
-            )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/climo/dataset",
+            json={
+                "provider": "METEOCAT",
+                "station_id": STATION,
+                "api_key": "K",
+                "summary_mode": "monthly",
+                "periods": [{"label": "jun", "start": "2025-06-01", "end": "2025-06-30"}],
+            },
+        )
 
     assert response.status_code == 200
     body = response.json()

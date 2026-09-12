@@ -106,6 +106,7 @@ trap cleanup EXIT
 trap 'exit 0' TERM INT
 
 # 3) Preparativos de la web, que sirve el servicio SvelteKit.
+# El visor de Predicción se publica en web/static/forecast, su único destino.
 "${PYTHON}" scripts/install_forecast_frontend.py
 # Tabla que traduce el slug de una URL indexable a su estacion. La consulta
 # /v1/stations/by-url-slug, que es como el frontend SvelteKit resuelve

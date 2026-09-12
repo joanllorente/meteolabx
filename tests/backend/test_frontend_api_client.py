@@ -373,17 +373,6 @@ def test_api_client_has_no_legacy_payload_adapters() -> None:
     ):
         assert f"def {wrapper}(" not in source
 
-
-def test_wu_frontend_module_has_no_direct_provider_transport() -> None:
-    from pathlib import Path
-
-    source = Path("api/weather_underground.py").read_text(encoding="utf-8")
-    assert "import requests" not in source
-    assert "api.weather.com" not in source
-    assert "WU_URL_" not in source
-    assert "class WuError" not in source
-
-
 # Body realista que el endpoint ``/current/processed`` devuelve.
 PROCESSED_OK_BODY = {
     "observation": {

@@ -320,27 +320,23 @@ async def test_failed_chunk_degrades_to_empty() -> None:
     assert df.empty
 
 
-def test_endpoint_uses_async_service_not_frontend_dispatch() -> None:
+def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
     app = create_app()
     app.dependency_overrides[get_http_client] = lambda: _two_step_client(DAILY_RECORDS)
 
-    with patch(
-        "utils.historical_dispatch.fetch_historical_dataset",
-        side_effect=AssertionError("la rama AEMET no debe pasar por el dispatcher frontend"),
-    ):
-        with TestClient(app) as client:
-            response = client.post(
-                "/v1/climo/dataset",
-                json={
-                    "provider": "AEMET",
-                    "station_id": "3195",
-                    "api_key": "K",
-                    "summary_mode": "monthly",
-                    "periods": [
-                        {"label": "jun 2025", "start": "2025-06-01", "end": "2025-06-30"},
-                    ],
-                },
-            )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/climo/dataset",
+            json={
+                "provider": "AEMET",
+                "station_id": "3195",
+                "api_key": "K",
+                "summary_mode": "monthly",
+                "periods": [
+                    {"label": "jun 2025", "start": "2025-06-01", "end": "2025-06-30"},
+                ],
+            },
+        )
 
     assert response.status_code == 200
     body = response.json()

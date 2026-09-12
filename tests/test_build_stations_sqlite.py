@@ -168,10 +168,11 @@ def test_build_catalog_excludes_nws_stations_with_confirmed_observation_404(tmp_
         {
             "id": "GONE1", "name": "Unavailable NWS", "lat": 41, "lon": -76,
             "sensors": {"thermometer": False},
-            "sensor_probe_error": (
-                "404 Client Error: Not Found for url: "
-                "https://api.weather.gov/stations/GONE1/observations/latest"
-            ),
+                "sensor_probe_error": (
+                    "404 Client Error: Not Found for url: "
+                    "https://api.weather.gov/stations/GONE1/observations/latest"
+                ),
+                "consecutive_404": 2,
         },
     ]), encoding="utf-8")
     target = tmp_path / "stations.sqlite"

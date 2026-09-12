@@ -29,6 +29,18 @@ from data_files import METEOFRANCE_STATIONS_PATH
 METEOFRANCE_API_KEY = str(
     os.getenv("METEOLABX_METEOFRANCE_API_KEY") or os.getenv("METEOFRANCE_API_KEY") or ""
 ).strip()
+if not METEOFRANCE_API_KEY:
+    try:
+        from dotenv import dotenv_values
+
+        _local_env = dotenv_values(ROOT_DIR / ".env")
+        METEOFRANCE_API_KEY = str(
+            _local_env.get("METEOLABX_METEOFRANCE_API_KEY")
+            or _local_env.get("METEOFRANCE_API_KEY")
+            or ""
+        ).strip()
+    except Exception:
+        pass
 
 BASE_URL = os.getenv(
     "METEOFRANCE_BASE_URL",
@@ -135,6 +147,7 @@ def enrich_inventory(
     sleep_seconds: float,
     max_stations: int,
     hours_back: int,
+    pending_only: bool = False,
 ) -> None:
     dates = _query_dates(hours_back)
     completed = 0
@@ -142,6 +155,7 @@ def enrich_inventory(
         station
         for station in stations
         if isinstance(station, dict) and str(station.get("id_station") or station.get("id") or "").strip()
+        and (not pending_only or bool(station.get("sensor_probe_pending")))
     ]
     if max_stations > 0:
         selected = selected[:max_stations]
@@ -160,6 +174,7 @@ def enrich_inventory(
             print(f"[{index}/{total}] {station_id}: error {exc}")
         else:
             station.pop("sensor_probe_error", None)
+            station.pop("sensor_probe_pending", None)
             true_keys = [key for key, value in station["sensors"].items() if value]
             print(f"[{index}/{total}] {station_id}: {','.join(true_keys) or '-'}")
         completed += 1
@@ -184,6 +199,7 @@ def main() -> int:
     parser.add_argument("--sleep", type=float, default=0.0)
     parser.add_argument("--max-stations", type=int, default=0)
     parser.add_argument("--hours-back", type=int, default=3)
+    parser.add_argument("--pending-only", action="store_true")
     args = parser.parse_args()
 
     api_key = str(args.api_key or "").strip()
@@ -207,6 +223,7 @@ def main() -> int:
         sleep_seconds=float(args.sleep),
         max_stations=int(args.max_stations),
         hours_back=int(args.hours_back),
+        pending_only=bool(args.pending_only),
     )
 
     counts = {

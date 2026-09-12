@@ -365,50 +365,6 @@ def test_frontend_client_uses_long_iem_climo_timeout() -> None:
     assert mock_post.call_args.kwargs["timeout"] == 180.0
 
 
-def test_dispatch_propagates_network_error(monkeypatch) -> None:
-    from utils.api_errors import BackendApiError
-    from utils import historical_dispatch
-
-    monkeypatch.setenv("METEOLABX_USE_API", "1")
-    with patch(
-        "utils.api_client.requests.post",
-        side_effect=requests.ConnectionError("backend down"),
-    ):
-        with pytest.raises(BackendApiError):
-            historical_dispatch.fetch_historical_dataset(
-                provider_id="WU",
-                station_id="IBARCE12345",
-                api_key="K",
-                summary_mode="monthly",
-                periods=[],
-                selected_years=[],
-                selected_months=[],
-                frost_selected_period="",
-                frost_selected_periods=[],
-                api_secret="S",
-            )
-
-
-
-def test_historical_dispatch_has_only_api_contract_arguments() -> None:
-    import inspect
-
-    from utils.historical_dispatch import fetch_historical_dataset
-
-    assert tuple(inspect.signature(fetch_historical_dataset).parameters) == (
-        "provider_id",
-        "station_id",
-        "api_key",
-        "summary_mode",
-        "periods",
-        "selected_years",
-        "selected_months",
-        "frost_selected_period",
-        "frost_selected_periods",
-        "api_secret",
-    )
-
-
 def test_climo_request_accepts_long_jwt_api_key():
     """Regresión: la api_key de AEMET es un JWT (>256 chars). El schema no
     debe rechazarla con 422 (bug histórico: max_length=256 cortaba el JWT y

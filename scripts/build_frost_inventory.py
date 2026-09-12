@@ -14,7 +14,9 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -156,7 +158,12 @@ def _iso_or_none(value: Any) -> Optional[str]:
 def _normalize_station(item: Dict[str, Any], now_utc: datetime) -> Dict[str, Any]:
     lat, lon = _parse_coordinates(item.get("geometry"))
     valid_to_dt = _parse_iso8601(item.get("validTo"))
+    valid_from_dt = _parse_iso8601(item.get("validFrom"))
     active_now = valid_to_dt is None or valid_to_dt >= now_utc
+    duration_days = (
+        max(0, int(((valid_to_dt or now_utc) - valid_from_dt).total_seconds() // 86400))
+        if valid_from_dt else None
+    )
     wmo = item.get("wmoId")
 
     return {
@@ -179,6 +186,11 @@ def _normalize_station(item: Dict[str, Any], now_utc: datetime) -> Dict[str, Any
         "valid_from": _iso_or_none(item.get("validFrom")),
         "valid_to": _iso_or_none(item.get("validTo")),
         "active_now": bool(active_now),
+        "status": "active" if active_now else "historical",
+        "historical": not active_now,
+        "has_historical": bool(duration_days is not None and duration_days >= 365),
+        "series_start": _iso_or_none(item.get("validFrom")),
+        "series_end": _iso_or_none(item.get("validTo")),
         "station_holders": _parse_listish(item.get("stationHolders")),
         "external_ids": _parse_listish(item.get("externalIds")),
         "icao_codes": _parse_listish(item.get("icaoCodes")),
@@ -198,16 +210,56 @@ def _normalize_inventory(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
 
 
 def _save_inventory(stations: List[Dict[str, Any]], output_path: Path) -> None:
-    output_path.write_text(
-        json.dumps(stations, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{output_path.name}.", dir=output_path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(stations, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(temporary, output_path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def merge_existing_metadata(
+    stations: List[Dict[str, Any]], existing: List[Dict[str, Any]], *, minimum_history_days: int = 365,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    old = {str(row.get("id") or ""): row for row in existing if row.get("id")}
+    fresh = {str(row.get("id") or ""): row for row in stations if row.get("id")}
+    result: List[Dict[str, Any]] = []
+    short_historical: List[str] = []
+    for station_id, row in fresh.items():
+        start = _parse_iso8601(row.get("valid_from"))
+        end = _parse_iso8601(row.get("valid_to"))
+        if not row.get("active_now") and start and end and (end - start).days < minimum_history_days:
+            short_historical.append(station_id)
+            continue
+        previous = old.get(station_id, {})
+        merged = dict(previous)
+        merged.update(row)
+        if isinstance(previous.get("sensors"), dict):
+            merged["sensors"] = dict(previous["sensors"])
+        result.append(merged)
+    result.sort(key=lambda station: (station.get("id") or "", station.get("name") or ""))
+    return result, {
+        "official_count": len(fresh),
+        "previous_count": len(old),
+        "result_count": len(result),
+        "added": sorted(set(fresh) - set(old)),
+        "removed_by_provider": sorted(set(old) - set(fresh)),
+        "historical_shorter_than_days": minimum_history_days,
+        "short_historical_removed": sorted(short_historical),
+    }
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Construye inventario Frost de estaciones noruegas.")
-    parser.add_argument("--client-id", required=True, help="Client ID de Frost")
-    parser.add_argument("--client-secret", required=True, help="Client secret de Frost")
+    parser.add_argument("--client-id", default="", help="Client ID de Frost")
+    parser.add_argument("--client-secret", default="", help="Client secret de Frost")
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
@@ -218,15 +270,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Incluye solo estaciones actualmente válidas. Por defecto se incluye histórico + activas.",
     )
+    parser.add_argument("--input", default=DEFAULT_OUTPUT, help="Inventario anterior para conservar sensores")
+    parser.add_argument("--payload-file", help="Respuesta de /sources guardada previamente")
+    parser.add_argument("--report", default=str(ROOT_DIR / "data" / "frost_inventory_refresh.json"))
+    parser.add_argument("--minimum-history-days", type=int, default=365)
     return parser
 
 
 def main() -> int:
     args = _build_arg_parser().parse_args()
-    payload = _fetch_sources(
-        args.client_id,
-        args.client_secret,
-        current_only=args.current_only,
+    payload = (
+        json.loads(Path(args.payload_file).read_text(encoding="utf-8"))
+        if args.payload_file else
+        _fetch_sources(args.client_id, args.client_secret, current_only=args.current_only)
     )
     items = payload.get("data")
     if not isinstance(items, list):
@@ -234,7 +290,14 @@ def main() -> int:
 
     stations = _normalize_inventory(items)
     output_path = Path(args.output).resolve()
+    input_path = Path(args.input).resolve()
+    existing = json.loads(input_path.read_text(encoding="utf-8")) if input_path.exists() else []
+    stations, report = merge_existing_metadata(
+        stations, existing if isinstance(existing, list) else [],
+        minimum_history_days=max(0, args.minimum_history_days),
+    )
     _save_inventory(stations, output_path)
+    _save_inventory(report, Path(args.report).resolve())
 
     active_count = sum(1 for station in stations if station.get("active_now"))
     historical_count = len(stations) - active_count
@@ -243,6 +306,7 @@ def main() -> int:
     print(f"Total estaciones: {len(stations)}")
     print(f"Activas ahora: {active_count}")
     print(f"Solo históricas: {historical_count}")
+    print(json.dumps(report, ensure_ascii=False))
     return 0
 
 

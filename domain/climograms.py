@@ -11,7 +11,7 @@ import math
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import pandas as pd
-from utils.i18n import month_name, t
+from domain.i18n_catalog import month_name, t
 from utils.units import (
     convert_precip,
     convert_temperature,

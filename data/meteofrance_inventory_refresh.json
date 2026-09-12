@@ -1,0 +1,19 @@
+{
+  "official_count": 2151,
+  "previous_count": 2148,
+  "result_count": 2151,
+  "added": [
+    "30032007",
+    "34107006",
+    "48045004",
+    "97111004",
+    "98729009",
+    "98816002"
+  ],
+  "removed_without_dpclim": [
+    "10372001",
+    "13108004",
+    "81192005"
+  ],
+  "unconfirmed_missing": []
+}

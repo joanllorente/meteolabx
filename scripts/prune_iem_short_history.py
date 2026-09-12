@@ -48,15 +48,33 @@ def prune(payload: dict[str, Any], *, minimum_days: int, today: date) -> list[di
     return removed
 
 
-def classify_climate_as_historical(payload: dict[str, Any]) -> int:
+def classify_climate_lifecycle(payload: dict[str, Any], active_keys: set[str]) -> int:
     changed = 0
     for row in payload["stations"]:
         if "CLIMATE" not in str(row.get("network") or "").upper():
             continue
-        if row.get("online") or row.get("status") != "historical":
+        active = f"{row.get('network')}|{row.get('id')}" in active_keys
+        status = "online_manual" if active else "historical"
+        if bool(row.get("online")) != active or row.get("status") != status:
             changed += 1
-        row["online"] = False
-        row["status"] = "historical"
+        row["online"] = active
+        row["status"] = status
+    return changed
+
+
+def classify_manual_metadata(payload: dict[str, Any]) -> int:
+    changed = 0
+    for row in payload["stations"]:
+        network = str(row.get("network") or "").upper()
+        manual = (
+            "CLIMATE" in network
+            or "COCORAHS" in network
+            or network == "COOP"
+            or network.endswith("_COOP")
+        )
+        if manual and not row.get("manual"):
+            row["manual"] = True
+            changed += 1
     return changed
 
 
@@ -105,7 +123,18 @@ def main() -> int:
                         help="raw inventory used only to reconstruct the cumulative removal report")
     args = parser.parse_args()
     payload = json.loads(INVENTORY.read_text(encoding="utf-8"))
-    climate_changed = classify_climate_as_historical(payload)
+    validation_path = ROOT / "data" / "iem_station_validation.json"
+    validation = (
+        json.loads(validation_path.read_text(encoding="utf-8")).get("stations") or {}
+        if validation_path.exists() else {}
+    )
+    active_climate_keys = {
+        key for key, value in validation.items()
+        if "CLIMATE" in key.split("|", 1)[0].upper()
+        and value.get("result") == "weather_data"
+    }
+    climate_changed = classify_climate_lifecycle(payload, active_climate_keys)
+    manual_changed = classify_manual_metadata(payload)
     cocorahs_changed = classify_cocorahs_as_historical(
         payload, minimum_days=args.minimum_days, today=date.today()
     )
@@ -113,7 +142,8 @@ def main() -> int:
     capability_changed = classify_historical_capability(
         payload, minimum_days=args.minimum_days, today=date.today()
     )
-    print(f"climate_historical={climate_changed} cocorahs_historical={cocorahs_changed} "
+    print(f"climate_lifecycle={climate_changed} manual_metadata={manual_changed} "
+          f"cocorahs_historical={cocorahs_changed} "
           f"historical_capability={capability_changed} remove={len(removed)} "
           f"keep={payload['station_count']}")
     if args.dry_run:

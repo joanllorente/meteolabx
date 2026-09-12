@@ -1,9 +1,10 @@
 from datetime import date
 
 from scripts.prune_iem_short_history import (
-    classify_climate_as_historical,
+    classify_climate_lifecycle,
     classify_cocorahs_as_historical,
     classify_historical_capability,
+    classify_manual_metadata,
     declared_days,
     prune,
 )
@@ -24,11 +25,25 @@ def test_prune_only_removes_inactive_short_series():
     assert {row["id"] for row in payload["stations"]} == {"long", "active"}
 
 
-def test_climate_networks_are_historical_not_live():
-    payload = {"stations": [{"network": "TXCLIMATE", "id": "X", "online": True}]}
-    assert classify_climate_as_historical(payload) == 1
-    assert payload["stations"][0]["online"] is False
-    assert payload["stations"][0]["status"] == "historical"
+def test_climate_lifecycle_uses_confirmed_daily_data():
+    payload = {"stations": [
+        {"network": "TXCLIMATE", "id": "live", "online": False},
+        {"network": "TXCLIMATE", "id": "old", "online": True},
+    ]}
+    assert classify_climate_lifecycle(payload, {"TXCLIMATE|live"}) == 2
+    assert payload["stations"][0]["online"] is True
+    assert payload["stations"][0]["status"] == "online_manual"
+    assert payload["stations"][1]["online"] is False
+    assert payload["stations"][1]["status"] == "historical"
+
+
+def test_all_manual_iem_network_families_get_explicit_metadata():
+    payload = {"stations": [
+        {"network": "TXCLIMATE"}, {"network": "IA_COOP"},
+        {"network": "TX_COCORAHS"}, {"network": "IA_ASOS"},
+    ]}
+    assert classify_manual_metadata(payload) == 3
+    assert [bool(row.get("manual")) for row in payload["stations"]] == [True, True, True, False]
 
 
 def test_short_online_coop_is_removed_but_long_coop_is_kept():

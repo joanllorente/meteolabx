@@ -58,7 +58,7 @@ from server.services.arome_packages import (
     package_ready,
 )
 from server.services.meteofrance_auth import MeteoFranceAuthError
-from tabs.arome_forecast import forecast_calculation_scope
+from server.services.arome_wcs import forecast_calculation_scope
 
 
 logger = logging.getLogger("meteolabx.forecast_worker")

@@ -6,32 +6,36 @@ archivarse en ayer: sin la marca, el store le ponía la fecha del momento del
 ciclo y a las 00:15 el ranking mundial se llenaba con las máximas de la tarde
 anterior en Cataluña.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from server.services import ranking
+from server.services import meteocat, meteocat_open_data, ranking
 
 
 @pytest.fixture
 def dias_pedidos(monkeypatch):
-    """Registra qué días se piden y con cuántas estaciones responde cada uno."""
-    pedidos: list[date] = []
+    """Simula Dades Obertes y registra las ventanas temporales solicitadas."""
+    pedidos: list[tuple[datetime, datetime]] = []
     poblacion: dict[date, int] = {}
 
-    async def _variable(client, api_key, var, day, timeout_s, *args, **kwargs):
-        pedidos.append(day)
-        return {f"X{i}": [20.0 + i] for i in range(poblacion.get(day, 0))}
+    async def _maps(start, end, variable_codes, **kwargs):
+        pedidos.append((start, end))
+        out = {}
+        tz = ZoneInfo(ranking.PROVIDER_TZ["METEOCAT"])
+        for day, count in poblacion.items():
+            epoch = int(datetime.combine(day, time(0, 30), tzinfo=tz).timestamp())
+            if int(start.timestamp()) <= epoch <= int(end.timestamp()):
+                for i in range(count):
+                    out[f"X{i}"] = {
+                        meteocat.V_TEMP: [(epoch, 20.0 + i)],
+                        meteocat.V_TEMP_MAX: [(epoch, 21.0 + i)],
+                        meteocat.V_TEMP_MIN: [(epoch, 19.0 + i)],
+                    }
+        return out
 
-    async def _samples(client, api_key, var, day, timeout_s, *args, **kwargs):
-        return {}
-
-    async def _instant(client, api_key, day, timeout_s, *args, **kwargs):
-        return {}
-
-    monkeypatch.setattr(ranking, "_mc_fetch_variable", _variable)
-    monkeypatch.setattr(ranking, "_mc_fetch_variable_samples", _samples)
-    monkeypatch.setattr(ranking, "_mc_fetch_instant", _instant)
+    monkeypatch.setattr(meteocat_open_data, "fetch_variable_maps", _maps)
     return pedidos, poblacion
 
 
@@ -46,7 +50,7 @@ async def test_the_fallback_records_belong_to_the_day_they_came_from(dias_pedido
 
     recs = await ranking.fetch_meteocat_daily("clave-falsa")
 
-    assert ayer in pedidos, "con hoy vacío tiene que reintentar con ayer"
+    assert len(pedidos) == 2, "con hoy vacío tiene que completar la ventana de ayer"
     assert recs, "el fallback tiene que devolver el día anterior"
     assert {r.local_date for r in recs} == {ayer.isoformat()}
 

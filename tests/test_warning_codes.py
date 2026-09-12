@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from domain import observation_warnings as ow
-from utils.i18n import get_supported_languages
+from domain.i18n_catalog import get_supported_languages
 
 _LOCALES = Path(__file__).resolve().parent.parent / "locales"
 _LANGS = tuple(get_supported_languages())

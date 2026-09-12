@@ -31,8 +31,7 @@ solo en los de su país, exactamente igual que antes de la migración.
 | --- | --- |
 | `PORT` | Puerto público. Railway lo inyecta |
 | `METEOLABX_API_URL` | Backend FastAPI. Por red privada de Railway: `http://<servicio>.railway.internal:8000` |
-| `METEOLABX_LEGACY_ORIGIN` | Servicio actual (Streamlit). Sin esta variable no hay proxy y las rutas no migradas dan 404 |
-| `METEOLABX_API_TIMEOUT_MS` | Espera máxima al backend al renderizar. Por defecto 8000 |
+| `METEOLABX_API_TIMEOUT_MS` | Espera máxima al backend al renderizar. Por defecto 20000 |
 
 Para que la red privada funcione, el servicio Python tiene que arrancar
 uvicorn escuchando en todas las interfaces: `METEOLABX_BACKEND_HOST=::`
@@ -76,7 +75,6 @@ descomprimir el catálogo.
 ```bash
 npm run build
 METEOLABX_API_URL=http://127.0.0.1:8000 \
-METEOLABX_LEGACY_ORIGIN=https://www.meteolabx.com \
 PORT=5180 node server.js
 ```
 

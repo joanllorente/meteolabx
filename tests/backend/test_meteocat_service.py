@@ -482,3 +482,87 @@ def test_fetch_today_series_filters_outside_local_day() -> None:
     )
     assert len(result["epochs"]) == 1
     assert result["temps"] == [pytest.approx(17.5)]
+
+
+# =====================================================================
+# Respaldo en Dades Obertes cuando XEMA no contesta
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_current_falls_back_to_open_data_when_xema_is_rate_limited(monkeypatch):
+    """Agotada la cuota de XEMA, la estación se sirve por Dades Obertes.
+
+    Pasó de verdad: los rastreadores agotaron el límite mensual y las fichas
+    catalanas devolvían 429 pese a existir el respaldo.
+    """
+    from server.services import meteocat_open_data
+
+    async def xema_sin_cuota(*args, **kwargs):
+        raise ProviderError(
+            "provider_ratelimit", provider="METEOCAT",
+            detail="Meteocat quota/rate limit (HTTP 429)", status_code=429,
+        )
+
+    async def open_data_responde(station_id, **kwargs):
+        return {
+            32: [(1789210800, 27.0)],   # temperatura
+            33: [(1789210800, 62.0)],   # humedad
+        }
+
+    monkeypatch.setattr(meteocat, "_fetch_local_day_var_map", xema_sin_cuota)
+    monkeypatch.setattr(
+        meteocat_open_data, "fetch_station_day_var_map", open_data_responde,
+    )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=[])))
+    try:
+        result = await meteocat.fetch_current("X4", "KEY", client=client)
+    finally:
+        await client.aclose()
+
+    assert result["Tc"] == pytest.approx(27.0)
+    assert result["RH"] == pytest.approx(62.0)
+
+
+@pytest.mark.asyncio
+async def test_a_failing_fallback_is_logged_not_swallowed(monkeypatch, caplog):
+    """Si el respaldo tampoco sirve, se devuelve el error de XEMA —es el que
+    le importa a quien mira— pero el motivo del segundo fallo queda anotado.
+
+    Sin esa traza, un respaldo roto es indistinguible de uno que no existe:
+    la consulta a Dades Obertes salía con un 400 por un tipo de columna y
+    desde fuera solo se veía el 429 de XEMA.
+    """
+    import logging
+
+    from server.services import meteocat_open_data
+
+    async def xema_sin_cuota(*args, **kwargs):
+        raise ProviderError(
+            "provider_ratelimit", provider="METEOCAT",
+            detail="Meteocat quota/rate limit (HTTP 429)", status_code=429,
+        )
+
+    async def open_data_rota(station_id, **kwargs):
+        raise ProviderError(
+            "provider_bad_response", provider="METEOCAT",
+            detail="Dades Obertes HTTP 400: type-mismatch", status_code=502,
+        )
+
+    monkeypatch.setattr(meteocat, "_fetch_local_day_var_map", xema_sin_cuota)
+    monkeypatch.setattr(meteocat_open_data, "fetch_station_day_var_map", open_data_rota)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=[])))
+    try:
+        with caplog.at_level(logging.WARNING, logger="server.services.meteocat"):
+            with pytest.raises(ProviderError) as excinfo:
+                await meteocat.fetch_current("X4", "KEY", client=client)
+    finally:
+        await client.aclose()
+
+    # Quien consulta ve el error del proveedor principal…
+    assert excinfo.value.error_code == "provider_ratelimit"
+    # …y el log explica por qué el respaldo no salvó la petición.
+    registro = caplog.text
+    assert "Dades Obertes tampoco sirvió" in registro
+    assert "provider_bad_response" in registro

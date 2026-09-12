@@ -145,8 +145,9 @@
      quedan, que ahí sí caben y en el resto del sitio están. */
   @media (max-width: 760px) {
     .topnav { flex-wrap: wrap; gap: 10px; padding: 9px 12px 0; }
+    .brand { display: none; }
     .brand-txt { display: none; }
-    .right { gap: 8px; }
+    .right { width: 100%; margin-left: 0; justify-content: space-between; gap: 6px; }
     .tabs { order: 3; width: 100%; margin: 0; padding-bottom: 7px; }
   }
 

@@ -41,12 +41,12 @@ RELEASES = ("202", "201", "200")
 
 
 def _app_version() -> str:
-    """Versión que muestra el pie. Vive en ``meteolabx.py`` como APP_VERSION."""
-    source = (REPO_ROOT / "meteolabx.py").read_text(encoding="utf-8")
-    for line in source.splitlines():
-        if line.startswith("APP_VERSION"):
-            return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise RuntimeError("No se encontró APP_VERSION en meteolabx.py")
+    """Versión que muestra el pie, leída del fichero ``VERSION`` de la raíz.
+
+    Antes se rascaba de ``meteolabx.py`` buscando la línea ``APP_VERSION``, lo
+    que ataba el build de la web a un módulo de Streamlit.
+    """
+    return (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def build_payload() -> dict[str, object]:

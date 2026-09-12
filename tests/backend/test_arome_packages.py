@@ -139,7 +139,7 @@ def test_shear_06_reuses_the_package_levels_instead_of_downloading(monkeypatch):
     Interpola el viento a 6 km sobre seis niveles isobáricos; pedirlos al WCS
     son 18 peticiones por hora que el perfil convectivo ya ha traído.
     """
-    from tabs import arome_forecast as wcs
+    from server.services import arome_wcs as wcs
 
     descargas: list[tuple] = []
 

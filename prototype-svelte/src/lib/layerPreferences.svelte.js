@@ -12,7 +12,8 @@ export const LAYERS = [
   { id: 'isotherms', label: 'Isotermas' },
   { id: 'isohypses', label: 'Isohipsas' },
   { id: 'troughs', label: 'Ejes de vaguada' },
-  { id: 'centres', label: 'Centros de presión' }
+  { id: 'centres', label: 'Centros de presión' },
+  { id: 'cities', label: 'Ciudades' }
 ];
 
 const defaults = Object.fromEntries(LAYERS.map((capa) => [capa.id, true]));

@@ -1,70 +1,58 @@
+"""La versión se declara en un sitio y todos la leen de ahí.
+
+Antes el número vivía en ``meteolabx.py`` como ``APP_VERSION`` y se copiaba a
+mano a ``server/__init__.py`` y al exportador de textos. Tres copias que había
+que mover juntas: al publicar la 2.0.2 se quedaron dos al día y este test, que
+fijaba el número literal, siguió exigiendo la 2.0.1 sin que nadie lo notara.
+
+Ahora compara las fuentes entre sí, así que no puede desfasarse: si alguien
+cambia ``VERSION`` y se olvida del resto, salta.
+"""
+
 from pathlib import Path
-import json
 
 
-def test_footer_panels_use_active_theme_tokens():
-    source = (
-        Path(__file__).resolve().parents[1] / "meteolabx.py"
-    ).read_text(encoding="utf-8")
+def test_every_component_announces_the_same_version() -> None:
+    raiz = Path(__file__).resolve().parents[1]
+    declarada = (raiz / "VERSION").read_text(encoding="utf-8").strip()
 
-    assert '"background:var(--panel);border:1px solid var(--border);"' in source
-    assert '"color:var(--text) !important;box-shadow:var(--shadow);' in source
-    assert '"{color:var(--text) !important;}"' in source
-    assert "background:rgba(219, 235, 255, 0.96)" not in source
+    from version import APP_VERSION
 
+    assert APP_VERSION == declarada
 
-def test_whats_new_uses_one_modal_opened_from_header_and_footer():
-    root = Path(__file__).resolve().parents[1]
-    source = (root / "meteolabx.py").read_text(encoding="utf-8")
-    header_source = (root / "components" / "app_header.py").read_text(
-        encoding="utf-8"
-    )
+    import server
 
-    assert 'app_version=APP_VERSION' in source
-    assert 'class="header-version" data-mlbx-open-whats-new' in header_source
-    assert "class='mlb-footer-action' data-mlbx-open-whats-new" in source
-    assert "data-mlbx-whats-new-modal aria-hidden='true'" in source
-    assert "class='mlx-wn-close' data-mlbx-close-whats-new" in source
-    assert "function openWhatsNewModal(trigger)" in source
-    assert "function closeWhatsNewModal()" in source
-    assert 'event.key === "Escape"' in source
-    assert 'doc.querySelectorAll(".mlx-wn-dialog-content, .mlb-whats-new-panel")' in source
-    assert 'doc.removeEventListener("click", host.__mlbxWhatsNewTabsHandler, true)' in source
-    assert ".header h1 a{" in source
+    assert server.__version__ == declarada, "el backend anuncia otra versión"
+
+    from scripts.export_app_i18n import _app_version
+
+    assert _app_version() == declarada, "la web recibiría otra versión"
 
 
-def test_release_200_is_current_and_localized():
-    """La serie 2.0 es la única nota: la 1 hablaba de una interfaz retirada.
+def test_the_version_belongs_to_the_published_series() -> None:
+    """La serie 2 es la que abre pestaña en «Novedades»."""
+    raiz = Path(__file__).resolve().parents[1]
+    declarada = (raiz / "VERSION").read_text(encoding="utf-8").strip()
 
-    Sus revisiones —2.0.0, 2.0.1…— se leen seguidas en la misma hoja: lo que
-    abre pestaña es el cambio de serie, no cada arreglo.
-    """
-    root = Path(__file__).resolve().parents[1]
-    source = (root / "meteolabx.py").read_text(encoding="utf-8")
-    server_source = (root / "server" / "__init__.py").read_text(encoding="utf-8")
+    assert declarada.startswith("2.")
+    # Tres números, sin sufijos: es lo que espera el selector de versiones.
+    assert len(declarada.split(".")) == 3
+    assert all(parte.isdigit() for parte in declarada.split("."))
 
-    assert 'APP_VERSION = "2.0.1"' in source
-    assert "APP_BUILD = app_build_id()" in source
-    assert '__version__ = "2.0.1"' in server_source
-    assert "mlx-wn-pane-200 is-active" in source
-    assert "Build {html.escape(APP_BUILD)}" in source
-    assert ".mlx-wn-build{" in source
 
-    notas = {
-        "es": "Nuevo gráfico de viento en Histórico.",
-        "ca": "Nou gràfic de vent a Històric.",
-        "en": "New wind chart in Historical.",
-        "fr": "Nouveau graphique de vent dans Historique.",
-        "it": "Nuovo grafico del vento nello Storico.",
-        "pt": "Novo gráfico de vento no Histórico.",
-    }
-    for idioma, esperado in notas.items():
-        datos = json.loads((root / "locales" / f"{idioma}.json").read_text(encoding="utf-8"))
-        footer = datos["footer"]
-        assert esperado in footer["release_200_improvements"], idioma
-        assert footer["release_200_fixes"], f"{idioma}: la 2.0.0 sin correcciones"
-        # La revisión al día también tiene sus notas, en los seis idiomas.
-        assert footer["release_201_improvements"], f"{idioma}: la 2.0.1 sin mejoras"
-        # Ninguna nota de la serie 1 debe quedar suelta en los locales.
-        assert not [clave for clave in footer if clave.startswith("release_1")], idioma
+def test_the_release_notes_cover_the_current_version() -> None:
+    """Publicar sin nota deja la pestaña de Novedades vacía."""
+    import json
 
+    raiz = Path(__file__).resolve().parents[1]
+    declarada = (raiz / "VERSION").read_text(encoding="utf-8").strip()
+    clave = declarada.replace(".", "")
+
+    from scripts.export_app_i18n import RELEASES
+
+    assert clave in RELEASES, f"falta la {declarada} en RELEASES"
+
+    textos = json.loads((raiz / "locales" / "es.json").read_text(encoding="utf-8"))["footer"]
+    assert any(
+        f"release_{clave}_{tipo}" in textos for tipo in ("improvements", "fixes")
+    ), f"la {declarada} no tiene nota en locales/es.json"

@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -34,6 +35,19 @@ FROST_CLIENT_SECRET = (
     os.getenv("METEOLABX_FROST_CLIENT_SECRET", "")
     or os.getenv("FROST_CLIENT_SECRET", "")
 ).strip()
+if not FROST_CLIENT_ID or not FROST_CLIENT_SECRET:
+    try:
+        from dotenv import dotenv_values
+
+        _local_env = dotenv_values(ROOT_DIR / ".env")
+        FROST_CLIENT_ID = FROST_CLIENT_ID or str(
+            _local_env.get("METEOLABX_FROST_CLIENT_ID") or _local_env.get("FROST_CLIENT_ID") or ""
+        ).strip()
+        FROST_CLIENT_SECRET = FROST_CLIENT_SECRET or str(
+            _local_env.get("METEOLABX_FROST_CLIENT_SECRET") or _local_env.get("FROST_CLIENT_SECRET") or ""
+        ).strip()
+    except Exception:
+        pass
 
 
 def _request_json(endpoint: str, params: Dict[str, Any]) -> Any:
@@ -82,7 +96,19 @@ def _load_json(path: Path) -> Any:
 
 
 def _save_json(path: Path, payload: Any) -> None:
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _parse_iso(value: Any) -> Optional[datetime]:
@@ -158,14 +184,83 @@ def _sensor_sets_from_payload(payload: Any, *, current_only: bool) -> Dict[str, 
     return out
 
 
-def enrich_inventory(stations: List[Dict[str, Any]], *, current_only: bool) -> None:
-    payload = _fetch_available_timeseries(_all_query_elements())
-    by_source = _sensor_sets_from_payload(payload, current_only=current_only)
+def _series_inventory_from_payload(payload: Any) -> Dict[str, Dict[str, Any]]:
+    element_to_sensor = _element_to_sensor()
+    now_utc = datetime.now(timezone.utc)
+    out: Dict[str, Dict[str, Any]] = {}
+    data = payload.get("data") if isinstance(payload, dict) else []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict):
+            continue
+        station_id = _base_source_id(item.get("sourceId"))
+        sensor_key = element_to_sensor.get(str(item.get("elementId") or "").strip())
+        if not station_id or not sensor_key:
+            continue
+        entry = out.setdefault(station_id, {
+            "all_sensors": _empty_sensors(), "current_sensors": _empty_sensors(),
+            "start": None, "end": None, "open": False,
+        })
+        entry["all_sensors"][sensor_key] = True
+        start = _parse_iso(item.get("validFrom"))
+        end = _parse_iso(item.get("validTo"))
+        if start and (entry["start"] is None or start < entry["start"]):
+            entry["start"] = start
+        if end is None:
+            entry["open"] = True
+        elif entry["end"] is None or end > entry["end"]:
+            entry["end"] = end
+        if _is_current(item, now_utc):
+            entry["current_sensors"][sensor_key] = True
+    return out
+
+
+def enrich_inventory(
+    stations: List[Dict[str, Any]], *, current_only: bool, minimum_history_days: int = 365,
+    payload: Any = None,
+) -> Dict[str, Any]:
+    if payload is None:
+        payload = _fetch_available_timeseries(_all_query_elements())
+    series = _series_inventory_from_payload(payload)
+    kept: List[Dict[str, Any]] = []
+    removed_no_weather: List[str] = []
+    removed_short_history: List[str] = []
+    now_utc = datetime.now(timezone.utc)
     for station in stations:
         if not isinstance(station, dict):
             continue
         station_id = _base_source_id(station.get("id") or station.get("source_id"))
-        station["sensors"] = by_source.get(station_id, _empty_sensors())
+        metadata = series.get(station_id)
+        if not metadata or not any(metadata["all_sensors"].values()):
+            removed_no_weather.append(station_id)
+            continue
+        active_now = any(metadata["current_sensors"].values())
+        start = metadata["start"]
+        effective_end = now_utc if metadata["open"] else metadata["end"]
+        history_days = (effective_end - start).days if start and effective_end else 0
+        if not active_now and history_days < max(0, minimum_history_days):
+            removed_short_history.append(station_id)
+            continue
+        station["active_now"] = active_now
+        station["status"] = "active" if active_now else "historical"
+        station["historical"] = not active_now
+        station["has_historical"] = history_days >= max(0, minimum_history_days)
+        station["series_start"] = start.isoformat().replace("+00:00", "Z") if start else None
+        station["series_end"] = None if active_now and metadata["open"] else (
+            metadata["end"].isoformat().replace("+00:00", "Z") if metadata["end"] else None
+        )
+        station["sensors"] = (
+            metadata["current_sensors"] if active_now and current_only else metadata["all_sensors"]
+        )
+        kept.append(station)
+    stations[:] = kept
+    return {
+        "result_count": len(kept),
+        "active_count": sum(bool(row.get("active_now")) for row in kept),
+        "historical_count": sum(not bool(row.get("active_now")) for row in kept),
+        "removed_no_weather_series": sorted(removed_no_weather),
+        "removed_short_history": sorted(removed_short_history),
+        "minimum_history_days": max(0, minimum_history_days),
+    }
 
 
 def main() -> int:
@@ -179,6 +274,12 @@ def main() -> int:
         action="store_true",
         help="Use any known time series instead of only currently valid ones.",
     )
+    parser.add_argument("--minimum-history-days", type=int, default=365)
+    parser.add_argument("--payload-file", type=Path)
+    parser.add_argument(
+        "--report", type=Path,
+        default=ROOT_DIR / "data" / "frost_series_validation.json",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -188,8 +289,15 @@ def main() -> int:
         print(f"Expected a station list in {input_path}", file=sys.stderr)
         return 2
 
-    enrich_inventory(stations, current_only=not bool(args.include_historical))
+    payload = _load_json(args.payload_file) if args.payload_file else None
+    report = enrich_inventory(
+        stations,
+        current_only=not bool(args.include_historical),
+        minimum_history_days=max(0, args.minimum_history_days),
+        payload=payload,
+    )
     _save_json(output_path, stations)
+    _save_json(args.report, report)
 
     counts = {
         sensor_key: sum(
@@ -202,6 +310,13 @@ def main() -> int:
     }
     print(f"Saved {len(stations)} stations to {output_path}")
     print(counts)
+    print({
+        "result_count": report["result_count"],
+        "active_count": report["active_count"],
+        "historical_count": report["historical_count"],
+        "removed_no_weather_series": len(report["removed_no_weather_series"]),
+        "removed_short_history": len(report["removed_short_history"]),
+    })
     return 0
 
 

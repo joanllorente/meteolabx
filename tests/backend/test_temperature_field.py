@@ -477,7 +477,7 @@ def test_store_collects_only_fresh_complete_wind_vectors():
     assert store.current_wind_points(now=now) == [(40.0, -3.0, 18.5)]
 
 
-def test_meteocat_map_points_survive_two_hour_refresh_cadence():
+def test_meteocat_map_points_survive_delayed_open_data_refresh():
     from datetime import datetime, timezone
 
     now = datetime.now(tz=timezone.utc)

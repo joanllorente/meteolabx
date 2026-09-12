@@ -1,22 +1,17 @@
 # Dependencias runtime de MeteoLabX.
 #
-# El stack VISUAL (streamlit/plotly/pydeck) va fijado con ``==`` a la versión
-# probada en local: el CSS custom de la app apunta a internals del DOM de
-# Streamlit, que cambian entre minors. Con rangos flotantes, Railway instalaba
-# en cada deploy una versión distinta a la local (p. ej. 1.58 en producción vs
-# 1.50 en local) y aparecían bugs visuales imposibles de reproducir en local
-# (columnas del ranking solapadas, canvas del mapa recortado). Para subir de
-# versión: actualiza en local, prueba, y actualiza el pin aquí.
+# Aquí vivía el stack visual de la interfaz anterior —streamlit, plotly,
+# pydeck y streamlit-autorefresh—, fijado con ``==`` porque su CSS dependía de
+# internals del DOM de Streamlit. Esa interfaz se ha retirado: la web la sirve
+# el servicio SvelteKit y este backend es FastAPI puro. Un test
+# (``tests/backend/test_sin_streamlit.py``) comprueba que no vuelve a colarse.
 #
 # Notas:
 #   - pytest es dependencia de tests; idealmente debería vivir en un
 #     requirements-dev.txt aparte. Se deja aquí por compatibilidad con la
 #     configuración actual de CI.
 
-streamlit==1.50.0
 requests>=2.31.0,<3.0.0
-streamlit-autorefresh>=0.0.1,<1.0.0
-plotly==6.5.2
 pandas>=2.0.0,<3.0.0
 numpy>=1.26,<3.0
 # SHARPpy se instala con `--no-deps` en railway.toml: su wheel 1.4.0a5
@@ -25,10 +20,9 @@ rasterio>=1.4,<2.0
 python-dotenv>=1.0,<2.0
 Pillow>=10.0,<13.0
 astral>=3.2,<4.0
-# Nombres de país localizados (ES/EN/FR) para el selector del Ranking. Suele
-# venir transitivo (Streamlit/pydeck), pero lo fijamos para no depender de eso.
+# Nombres de país localizados (ES/EN/FR) para el selector del Ranking. Venía
+# transitivo con Streamlit y pydeck; retirados esos, es dependencia directa.
 Babel>=2.12,<3.0
-pydeck==0.9.1
 pytest>=8.0.0,<9.0.0
 # Sólo para tests: valida la helicidad relativa a la tormenta contra una
 # implementación de referencia. Los tests que la usan se saltan si falta.

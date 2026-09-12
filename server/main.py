@@ -42,6 +42,26 @@ def _configure_logging(settings: Settings) -> None:
         level=settings.log_level.upper(),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    _silence_streamlit_noise()
+
+
+def _silence_streamlit_noise() -> None:
+    """Calla los avisos de Streamlit, que aquí no dicen nada.
+
+    El backend no sirve ninguna interfaz de Streamlit, pero sigue importando
+    el paquete: ``tabs/arome_forecast.py`` —de donde salen los cálculos de la
+    predicción— lo importa arriba del todo, y ``utils/i18n.py`` y
+    ``utils/historical_dispatch.py`` decoran funciones con ``@st.cache_data``.
+    Al ejecutarlas fuera de un script de Streamlit (climatología las llama con
+    ``asyncio.to_thread``) el paquete avisa de que no encuentra su contexto.
+
+    El propio mensaje dice que puede ignorarse, pero llegó a escribir 1.059
+    líneas en un minuto y 3.768 en hora y media: el 71 % del log del servicio,
+    tapando lo que sí importa. Se sube el listón a ERROR en vez de desactivar
+    el logger, para que un fallo de verdad del paquete siga apareciendo.
+    """
+    for nombre in ("streamlit", "streamlit.runtime"):
+        logging.getLogger(nombre).setLevel(logging.ERROR)
 
 
 def create_app() -> FastAPI:

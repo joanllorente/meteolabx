@@ -31,7 +31,7 @@ from server.services.forecast_store import (
 )
 import re
 
-from tabs.arome_forecast import AromeError
+from server.services.arome_wcs import AromeError
 
 
 router = APIRouter(prefix="/forecast/arome", tags=["forecast"])

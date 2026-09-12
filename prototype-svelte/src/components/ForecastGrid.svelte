@@ -1,10 +1,11 @@
 <script>
   import { Locate, Minus, Plus } from '@lucide/svelte';
   import {
-    LUT_SIZE, bandOfValue, bandPosition, defaultPalette, paletteStop,
-    precipitationPalette,
+    LUT_SIZE, anchorFraction, bandOfValue, bandPosition, defaultPalette,
+    paletteStop, precipitationPalette,
   } from '../lib/palettes.js';
   import { contourLines, stepLevels } from '../lib/contours.js';
+  import { placeCities } from '../lib/cityPlacement.js';
   import { troughAxes as detectTroughAxes } from '../lib/troughs.js';
   import {
     CENTRE_PROMINENCE_HPA, pressureCentres as detectPressureCentres,
@@ -16,11 +17,14 @@
   // `formatProbe` trae ya la unidad elegida en la leyenda; sin ella se cae a la
   // que manda el backend en la cabecera del frame. `scaleBreaks` y `zeroFloor`
   // vienen del producto: con clases, el ráster deja de escalarse linealmente.
+  // `scaleAnchors` hace lo mismo sin romper el degradado: reparte la rampa por
+  // tramos en vez de a partes iguales por grado.
   let {
     frame, productLabel, language = 'es', resetKey = 0, formatProbe = null,
-    scaleBreaks = null, zeroFloor = 0,
+    scaleBreaks = null, scaleAnchors = null, zeroFloor = 0,
     displayMin = null, displayMax = null, contourStep = 0, formatContour = null,
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
+    cityLabels = false,
     troughAxes = false, overlayLabel = '',
     pressureCentres = false, overlaySmoothing = 4, overlayLayerLabel = '',
     onink = null,
@@ -34,12 +38,16 @@
     capa.id === 'isotherms' ? contourStep > 0
       : capa.id === 'isohypses' ? overlayStep > 0
       : capa.id === 'troughs' ? troughAxes && Boolean(frame.overlay)
+      : capa.id === 'cities' ? cityLabels
       : pressureCentres && Boolean(frame.overlay)
   // La capa superpuesta se llama distinto según el campo: isohipsas en un
-  // mapa de geopotencial e isobaras en uno de presión.
+  // mapa de geopotencial e isobaras en uno de presión. El nombre alternativo
+  // va por su propia clave de traducción, que si no el rótulo del panel se
+  // queda en «isohipsas» en cuanto el idioma tiene traducción propia: el
+  // respaldo solo entra cuando no la hay.
   )).map((capa) => (
     capa.id === 'isohypses' && overlayLayerLabel
-      ? { ...capa, label: overlayLayerLabel }
+      ? { ...capa, labelKey: 'isobars', label: overlayLayerLabel }
       : capa
   )));
   const showIsotherms = $derived(contourStep > 0 && layerPreferences.isotherms);
@@ -84,6 +92,17 @@
   // engrosar.
   const centreBlock = $derived(Math.max(1, Math.round(10 / cellKm)));
   const showTroughs = $derived(troughAxes && layerPreferences.troughs);
+  const showCities = $derived(cityLabels && layerPreferences.cities);
+  // El catálogo de ciudades son 160 kB: se trae aparte y solo cuando hace
+  // falta, que hay mapas que no rotulan ninguna y no tienen por qué pagarlo
+  // en la carga inicial.
+  let cityCatalogue = $state([]);
+  $effect(() => {
+    if (!showCities || cityCatalogue.length) return;
+    import('../data/cityLabels.js').then((modulo) => {
+      cityCatalogue = modulo.CITY_LABELS;
+    });
+  });
   const showCentres = $derived(pressureCentres && layerPreferences.centres);
 
   const EMPHASISED_LEVELS = [0, 10, 20, 30];
@@ -114,6 +133,8 @@
   let dragFrame = 0;
   let settleTimer = 0;
   let pendingPan = null;
+  const activePointers = new Map();
+  let pinchDistance = 0;
 
   function settleViewport() {
     window.clearTimeout(settleTimer);
@@ -248,6 +269,7 @@
     const low = Number.isFinite(displayMin) ? displayMin : frame.vmin;
     const high = Number.isFinite(displayMax) ? displayMax : frame.vmax;
     const linearScale = last / (high - low || 1);
+    const anchors = !breaks && scaleAnchors?.length > 1 ? scaleAnchors : null;
     for (let index = 0; index < values.length; index += 1) {
       const value = values[index];
       if (!Number.isFinite(value)) continue;
@@ -258,6 +280,8 @@
         if (value < .05) continue;
         const slot = Math.log1p(value) * logScale;
         canvas32[index] = lut[slot > last ? last : slot < 0 ? 0 : slot | 0];
+      } else if (anchors) {
+        canvas32[index] = lut[(anchorFraction(value, anchors) * last) | 0];
       } else {
         const slot = (value - low) * linearScale;
         canvas32[index] = lut[slot > last ? last : slot < 0 ? 0 : slot | 0];
@@ -706,6 +730,21 @@
     return placeLabels(groups);
   });
 
+  const cities = $derived.by(() => (
+    showCities
+      ? placeCities({
+          catalogue: cityCatalogue,
+          frame,
+          bounds: visibleSourceBounds(),
+          viewZoom,
+          labelScale,
+          format: (value) => (
+            formatProbe ? formatProbe(value) : `${value.toFixed(1)} ${frame.unit || ''}`.trim()
+          )
+        })
+      : []
+  ));
+
   function inspect(event) {
     if (!frame || !surface || !layer) return;
     const rect = surface.getBoundingClientRect();
@@ -774,14 +813,36 @@
   }
 
   function beginDrag(event) {
-    if (event.button !== 0) return;
-    dragging = true;
-    dragStart = { x: event.clientX, y: event.clientY, panX, panY };
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     surface.setPointerCapture(event.pointerId);
     hover = null;
+    if (activePointers.size >= 2) {
+      const [first, second] = [...activePointers.values()];
+      pinchDistance = Math.hypot(second.x - first.x, second.y - first.y);
+      dragging = false;
+      dragStart = null;
+      return;
+    }
+    dragging = true;
+    dragStart = { x: event.clientX, y: event.clientY, panX, panY };
   }
 
   function movePointer(event) {
+    if (activePointers.has(event.pointerId)) {
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+    if (activePointers.size >= 2) {
+      const [first, second] = [...activePointers.values()];
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      const centerX = (first.x + second.x) / 2;
+      const centerY = (first.y + second.y) / 2;
+      if (pinchDistance > 0 && distance > 0) {
+        setZoom(zoom * distance / pinchDistance, centerX, centerY);
+      }
+      pinchDistance = distance;
+      return;
+    }
     if (!dragging || !dragStart) {
       inspect(event);
       return;
@@ -803,6 +864,8 @@
   }
 
   function endDrag(event) {
+    activePointers.delete(event.pointerId);
+    pinchDistance = 0;
     dragging = false;
     dragStart = null;
     pendingPan = null;
@@ -812,6 +875,13 @@
     }
     settleViewport();
     if (surface?.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
+    /* Si queda un dedo tras terminar el pellizco, puede continuar desplazando
+       el mapa sin tener que levantarlo y volverlo a apoyar. */
+    if (activePointers.size === 1) {
+      const remaining = [...activePointers.values()][0];
+      dragging = true;
+      dragStart = { x: remaining.x, y: remaining.y, panX, panY };
+    }
   }
 
   function resetView() {
@@ -825,6 +895,7 @@
   $effect(() => {
     frame;
     scaleBreaks;
+    scaleAnchors;
     zeroFloor;
     renderGrid();
   });
@@ -977,6 +1048,13 @@
             d={boundary.path}
           />
         {/each}
+        {#each cities as city}
+          <g transform={`translate(${city.x.toFixed(1)} ${city.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+            <circle class="city-dot" r="1.9" />
+            <text class="city-name" text-anchor="middle" y="-5.5">{city.name}</text>
+            <text class="city-value" text-anchor="middle" y="12">{city.text}</text>
+          </g>
+        {/each}
       </g>
     </svg>
   </div>
@@ -997,7 +1075,7 @@
             checked={layerPreferences[capa.id]}
             onchange={() => toggleLayer(capa.id)}
           />
-          <span>{forecastLayerLabel(language, capa.id, capa.label)}</span>
+          <span>{forecastLayerLabel(language, capa.labelKey || capa.id, capa.label)}</span>
         </label>
       {/each}
     </div>
@@ -1073,6 +1151,9 @@
   .scalar-contour.zero-contour{stroke:#f5f8fa;stroke-width:.9}
   @keyframes stream-flow{to{stroke-dashoffset:-13.05}}
   @media(prefers-reduced-motion:reduce){.stream-particle{display:none}}
+  .city-dot{fill:rgba(12,20,28,.9);stroke:rgba(255,255,255,.9);stroke-width:.9px;pointer-events:none}
+  .city-name{fill:#fff;stroke:rgba(9,16,24,.72);stroke-width:2.6px;paint-order:stroke;font-size:10.5px;font-weight:700;letter-spacing:.01em;pointer-events:none}
+  .city-value{fill:#fff;stroke:rgba(9,16,24,.78);stroke-width:3px;paint-order:stroke;font-size:12px;font-weight:800;pointer-events:none}
   .region-boundary{fill:none;stroke:#0b0f12;stroke-width:.7;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
   .region-boundary.admin-boundary{stroke:rgba(11,15,18,.54);stroke-width:.32}
   .grid-tooltip{position:absolute;z-index:12;display:flex;flex-direction:column;gap:2px;min-width:142px;padding:8px 9px;transform:translate(12px,calc(-100% - 10px));border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#eef6fa;background:rgba(5,14,22,.9);box-shadow:0 8px 24px rgba(0,0,0,.3);backdrop-filter:blur(8px);pointer-events:none}

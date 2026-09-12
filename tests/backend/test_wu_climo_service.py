@@ -193,30 +193,26 @@ async def test_http_error_chunk_is_not_cached_as_empty_history() -> None:
     assert len(record["requests"]) == 2
 
 
-def test_endpoint_uses_async_service_not_frontend_dispatch() -> None:
+def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
     app = create_app()
     app.dependency_overrides[get_http_client] = _mock_client
 
     yesterday = date.today() - timedelta(days=1)
-    with patch(
-        "utils.historical_dispatch.fetch_historical_dataset",
-        side_effect=AssertionError("la rama WU no debe pasar por el dispatcher frontend"),
-    ):
-        with TestClient(app) as client:
-            response = client.post(
-                "/v1/climo/dataset",
-                json={
-                    "provider": "WU",
-                    "station_id": "IBARCE12345",
-                    "api_key": "K",
-                    "summary_mode": "monthly",
-                    "periods": [{
-                        "label": "ayer",
-                        "start": yesterday.isoformat(),
-                        "end": yesterday.isoformat(),
-                    }],
-                },
-            )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/climo/dataset",
+            json={
+                "provider": "WU",
+                "station_id": "IBARCE12345",
+                "api_key": "K",
+                "summary_mode": "monthly",
+                "periods": [{
+                    "label": "ayer",
+                    "start": yesterday.isoformat(),
+                    "end": yesterday.isoformat(),
+                }],
+            },
+        )
 
     assert response.status_code == 200
     body = response.json()

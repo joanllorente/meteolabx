@@ -62,6 +62,10 @@ def apply_saved_validations(payload: dict[str, Any], paths: tuple[Path, ...]) ->
             continue
         if result.get("result") == "weather_data" and isinstance(result.get("sensors"), dict):
             row["sensors"] = result["sensors"]
+            if "CLIMATE" in str(row.get("network") or "").upper():
+                row["online"] = True
+                row["manual"] = True
+                row["status"] = "online_manual"
         kept.append(row)
     payload["stations"] = kept
     payload["station_count"] = len(kept)
@@ -143,12 +147,17 @@ def merge_inventory(
 
         row = dict(old_rows.get(key, {}))
         row.update(fresh)
-        # IEM uses online=true for CLIMATE catalogues that are still updated,
-        # but these provide daily summaries, never live surface observations.
         upper_network = key[0].upper()
         is_historical_cocorahs = "COCORAHS" in upper_network and not bool(fresh.get("online"))
-        if "CLIMATE" in upper_network or is_historical_cocorahs:
-            row["online"] = False
+        is_manual = (
+            "CLIMATE" in upper_network or "COCORAHS" in upper_network
+            or upper_network == "COOP" or upper_network.endswith("_COOP")
+        )
+        if is_manual:
+            row["manual"] = True
+        if "CLIMATE" in upper_network:
+            row["status"] = "online_manual" if row.get("online") else "historical"
+        elif is_historical_cocorahs:
             row["status"] = "historical"
         sensors = dcp_currents.get(key) or sensor_currents.get(key)
         if isinstance(sensors, dict):

@@ -241,7 +241,7 @@ IEM_HISTORICAL_NETWORK_MARKERS = ("ASOS", "AWOS", "METAR")
 # Redes IEM de observadores MANUALES: COOP (cooperativos del NWS, máx/mín una
 # vez al día) y CoCoRaHS (voluntarios con pluviómetro, una lectura diaria).
 # El resto de proveedores del catálogo son redes automáticas.
-IEM_MANUAL_NETWORK_MARKERS = ("_COOP", "COCORAHS")
+IEM_MANUAL_NETWORK_MARKERS = ("_COOP", "COCORAHS", "CLIMATE")
 
 
 def _first(row: dict[str, Any], *keys: str) -> Any:
@@ -314,7 +314,11 @@ def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] |
     # como no conectable evita ofrecer al usuario una estación que sabemos que
     # fallará; una futura actualización del inventario la reactivará en cuanto
     # el sondeo vuelva a responder correctamente.
-    if provider == "NWS" and str(row.get("sensor_probe_error") or "").lstrip().startswith("404"):
+    if (
+        provider == "NWS"
+        and str(row.get("sensor_probe_error") or "").lstrip().startswith("404")
+        and int(row.get("consecutive_404") or 0) >= 2
+    ):
         online_raw = False
     online = int(bool(online_raw)) if online_raw is not None else None
     # Flags por fila (GEOSPHERE marca histórico/manual estación a estación)

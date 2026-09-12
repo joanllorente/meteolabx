@@ -8,7 +8,11 @@
 import { env } from '$env/dynamic/private';
 import { createMetadataCache } from './metadata-cache.js';
 
-const metadataCache = createMetadataCache();
+const metadataCache = createMetadataCache({
+  // Una desconexión no invalida una ficha conocida. Un 404 real sí: podría
+  // indicar que la estación fue retirada y no debe perpetuarse en caché.
+  staleIfError: (cause) => !(cause instanceof ApiError)
+});
 function publicMetadata(path, options) {
   return metadataCache(`${apiBaseUrl()}${path}`, () => request(path, options));
 }
@@ -36,21 +40,31 @@ export class ApiError extends Error {
 }
 
 async function request(path, { method = 'GET', body, fetch: fetchImpl = fetch, timeoutMs } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  try {
-    const response = await fetchImpl(`${apiBaseUrl()}${path}`, {
-      method,
-      signal: controller.signal,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new ApiError(response.status, payload);
-    return payload;
-  } finally {
-    clearTimeout(timer);
+  const attempts = method === 'GET' ? 2 : 1;
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(`${apiBaseUrl()}${path}`, {
+        method,
+        signal: controller.signal,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new ApiError(response.status, payload);
+      return payload;
+    } catch (cause) {
+      lastError = cause;
+      // Un 4xx/5xx es una respuesta real; solo se repiten cortes de red,
+      // abortos y fallos transitorios de conexión.
+      if (cause instanceof ApiError || attempt + 1 >= attempts) throw cause;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw lastError;
 }
 
 /** Ficha completa de una estación por red e identificador. */

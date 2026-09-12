@@ -75,10 +75,9 @@ PROVIDER_TZ = {
 }
 
 # Meteocat publica sus lecturas con cierto retraso y su API aplica un límite de
-# peticiones relativamente estricto. El ranking completo se consulta cada dos
-# horas (12 ciclos en un día normal), mientras los demás proveedores conservan
-# la cadencia horaria.
-METEOCAT_REFRESH_EVERY_HOURS = 2
+# El bulk de Meteocat procede ahora de Dades Obertes de la Generalitat y se
+# actualiza con la misma cadencia horaria que el resto de proveedores.
+METEOCAT_REFRESH_EVERY_HOURS = 1
 METEOCAT_MAP_MAX_AGE_S = 4 * 3600
 
 # País fijo (ISO2) de los proveedores de un solo país. El store lo estampa en
@@ -509,80 +508,127 @@ def _mc_build_records(
 
 
 async def fetch_meteocat_daily(
-    api_key: str,
+    api_key: str = "",
     *,
     client: Optional[httpx.AsyncClient] = None,
     timeout_s: float = 30.0,
 ) -> List[StationDaily]:
-    """Día de TODAS las estaciones Meteocat (4 llamadas, una por variable).
-    Fallback a ayer si hoy aún está poco poblado (madrugada)."""
+    """Ranking/mapa Meteocat desde Dades Obertes, sin consumir cuota XEMA."""
+    del api_key  # compatibilidad con callers antiguos; Socrata no usa la key XEMA
+    from server.services import meteocat as mc
+    from server.services import meteocat_open_data as open_data
+
     tz = ZoneInfo(PROVIDER_TZ["METEOCAT"])
-    today = datetime.now(tz).date()
+    now = datetime.now(tz)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = day_start - timedelta(days=1)
+    rolling_start = now - timedelta(hours=24)
+
+    variable_codes = sorted({
+        mc.V_TEMP, mc.V_TEMP_MAX, mc.V_TEMP_MIN, mc.V_PRECIP,
+        *mc.LATEST_VARIABLES["gust"],
+        mc.V_WIND, mc.V_WIND_6M, mc.V_WIND_2M,
+        mc.V_WIND_DIR, mc.V_WIND_DIR_6M, mc.V_WIND_DIR_2M,
+    })
 
     owns = client is None
     if owns:
         client = httpx.AsyncClient(timeout=timeout_s)
-    try:
-        async def _day(day) -> List[StationDaily]:
-            raw = {}
-            for metric, var in _MC_VAR.items():
-                if metric == "rain":
-                    samples = await _mc_fetch_variable_samples(
-                        client, api_key, var, day, timeout_s,
-                    )
-                    raw[metric] = {
-                        sid: [value for _epoch, value in rows]
-                        for sid, rows in samples.items()
-                    }
-                else:
-                    raw[metric] = await _mc_fetch_variable(client, api_key, var, day, timeout_s)
-            try:
-                instant = await _mc_fetch_instant(client, api_key, day, timeout_s)
-                wind_instant, direction_instant = await asyncio.gather(
-                    _mc_fetch_instant(
-                        client, api_key, day, timeout_s, _MC_WIND_VAR,
-                    ),
-                    _mc_fetch_instant(
-                        client, api_key, day, timeout_s, _MC_WIND_DIR_VAR,
-                    ),
-                )
-            except Exception as exc:
-                logger.warning("ranking: instantánea Meteocat no disponible (%s)", type(exc).__name__)
-                instant = {}
-                wind_instant = {}
-                direction_instant = {}
-            rolling: Dict[str, Tuple[float, int]] = {}
-            if day == today:
-                yesterday_samples = await _mc_fetch_variable_samples(
-                    client, api_key, _MC_VAR["rain"], today - timedelta(days=1), timeout_s,
-                )
-                cutoff = int(datetime.now(tz).timestamp()) - 24 * 3600
-                for sid in set(samples) | set(yesterday_samples):
-                    rows = [
-                        item
-                        for item in yesterday_samples.get(sid, []) + samples.get(sid, [])
-                        if item[0] >= cutoff
-                    ]
-                    if rows:
-                        rolling[sid] = (
-                            sum(max(0.0, value) for _epoch, value in rows),
-                            max(epoch for epoch, _value in rows),
-                        )
-            records = _mc_build_records(
-                raw, instant, wind_instant, direction_instant, rolling,
-            )
-            # El día que se PIDIÓ, no aquel en que se pide. De madrugada la
-            # llamada de abajo cae a ayer, y sin esta marca el store archivaba
-            # sus máximas en el día de hoy: a las 00:15 el ranking mundial se
-            # llenaba con los 42 °C de la tarde anterior en Cataluña. Los demás
-            # adaptadores con este mismo fallback ya la estampaban.
-            for record in records:
-                record.local_date = day.isoformat()
-            return records
 
-        recs = await _day(today)
+    def _merge(target, incoming) -> None:
+        for sid, variables in incoming.items():
+            for code, samples in variables.items():
+                merged = target.setdefault(sid, {}).setdefault(code, [])
+                merged.extend(samples)
+                target[sid][code] = sorted(dict(merged).items())
+
+    def _records(maps, start, end, *, include_rolling: bool) -> List[StationDaily]:
+        start_epoch = int(start.timestamp())
+        end_epoch = int(end.timestamp())
+        cutoff_24h = int(rolling_start.timestamp())
+        raw = {metric: {} for metric in METRICS}
+        instant: Dict[str, Tuple[int, float]] = {}
+        wind_instant: Dict[str, Tuple[int, float]] = {}
+        direction_instant: Dict[str, Tuple[int, float]] = {}
+        rain_24h: Dict[str, Tuple[float, int]] = {}
+
+        def _window(var_map, codes, lower=start_epoch, upper=end_epoch):
+            for code in codes:
+                samples = [
+                    (epoch, value) for epoch, value in var_map.get(code, [])
+                    if lower <= int(epoch) < upper
+                ]
+                if samples:
+                    return samples
+            return []
+
+        for sid, var_map in maps.items():
+            temp = _window(var_map, [mc.V_TEMP])
+            tmax = _window(var_map, [mc.V_TEMP_MAX])
+            tmin = _window(var_map, [mc.V_TEMP_MIN])
+            rain = _window(var_map, [mc.V_PRECIP])
+            gust = _window(var_map, mc.LATEST_VARIABLES["gust"])
+            if tmax:
+                raw["tmax"][sid] = [value for _epoch, value in tmax]
+            if tmin:
+                raw["tmin"][sid] = [value for _epoch, value in tmin]
+            if rain:
+                raw["rain"][sid] = [value for _epoch, value in rain]
+            if gust:
+                raw["gust"][sid] = [value for _epoch, value in gust]
+            if temp:
+                instant[sid] = temp[-1]
+
+            # Viento y dirección deben proceder de la misma altura.
+            for speed_code, direction_code in (
+                (mc.V_WIND, mc.V_WIND_DIR),
+                (mc.V_WIND_6M, mc.V_WIND_DIR_6M),
+                (mc.V_WIND_2M, mc.V_WIND_DIR_2M),
+            ):
+                speeds = _window(var_map, [speed_code])
+                directions = _window(var_map, [direction_code])
+                if speeds and directions:
+                    wind_instant[sid] = speeds[-1]
+                    direction_instant[sid] = directions[-1]
+                    break
+
+            if include_rolling:
+                rolling = [
+                    (epoch, max(0.0, value))
+                    for epoch, value in var_map.get(mc.V_PRECIP, [])
+                    if int(epoch) >= cutoff_24h
+                ]
+                if rolling:
+                    rain_24h[sid] = (
+                        sum(value for _epoch, value in rolling),
+                        max(epoch for epoch, _value in rolling),
+                    )
+
+        records = _mc_build_records(
+            raw, instant, wind_instant, direction_instant, rain_24h,
+        )
+        for record in records:
+            record.local_date = start.date().isoformat()
+        return records
+
+    try:
+        maps = await open_data.fetch_variable_maps(
+            rolling_start, now, variable_codes, client=client, timeout_s=timeout_s,
+        )
+        recs = _records(maps, day_start, now + timedelta(seconds=1), include_rolling=True)
         if sum(1 for r in recs if _station_has_data(r)) < 15:
-            recs = await _day(today - timedelta(days=1))
+            # De madrugada la ventana móvil no contiene el comienzo de ayer.
+            # Se pide únicamente ese tramo faltante y se reconstruye el día
+            # anterior completo, sin tocar XEMA.
+            earlier = await open_data.fetch_variable_maps(
+                yesterday_start,
+                rolling_start,
+                variable_codes,
+                client=client,
+                timeout_s=timeout_s,
+            )
+            _merge(maps, earlier)
+            recs = _records(maps, yesterday_start, day_start, include_rolling=False)
         return recs
     finally:
         if owns:
@@ -3158,7 +3204,6 @@ async def refresh_once(
         excluded = bool(skip and provider in skip)
         return selected and not excluded
 
-    mc_key = getattr(settings, "meteocat_api_key", "") if settings else ""
     aemet_key = getattr(settings, "aemet_api_key", "") if settings else ""
     mf_key = getattr(settings, "meteofrance_api_key", "") if settings else ""
     frost_id = getattr(settings, "frost_client_id", "") if settings else ""
@@ -3173,8 +3218,8 @@ async def refresh_once(
     tasks: Dict[str, Any] = {}
     if _want("METEOGALICIA"):
         tasks["METEOGALICIA"] = fetch_meteogalicia_daily(client=client)
-    if mc_key and _want("METEOCAT"):
-        tasks["METEOCAT"] = fetch_meteocat_daily(mc_key, client=client)
+    if _want("METEOCAT"):
+        tasks["METEOCAT"] = fetch_meteocat_daily(client=client)
     if aemet_key and _want("AEMET"):
         tasks["AEMET"] = fetch_aemet_records(store, aemet_key, client=client)
     if _want("METEOHUB_IT"):
@@ -3266,11 +3311,10 @@ def _next_aligned_run(offset_min: int, now: Optional[datetime] = None) -> dateti
 
 
 def _meteocat_refresh_due(now: Optional[datetime] = None) -> bool:
-    """Indica si corresponde el ciclo de Meteocat de cada dos horas.
+    """Indica si corresponde el ciclo horario de Meteocat.
 
-    Se usan las horas pares de Europe/Madrid (00, 02, ..., 22), de modo que la
-    planificación resulte fácil de reconocer en los logs y siga el horario
-    local incluso cuando cambia entre CET y CEST.
+    Se conserva el helper para la planificación y sus pruebas, aunque con una
+    cadencia de una hora todos los ciclos alineados están habilitados.
     """
     instant = now or datetime.now(tz=timezone.utc)
     if instant.tzinfo is None:
@@ -3361,8 +3405,7 @@ async def refresh_loop(
         return {"METEOCAT"}
 
     # Ciclo inmediato al arrancar: el ranking no debe salir vacío hasta el :05.
-    # Meteocat respeta también aquí su cadencia de dos horas; si existe un
-    # snapshot restaurado seguirá visible hasta el siguiente ciclo par.
+    # Dades Obertes de Meteocat se actualiza en todos los ciclos horarios.
     pending = await refresh_once(
         store,
         client=client,

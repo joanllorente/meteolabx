@@ -8,8 +8,10 @@
 #                             http://<servicio>.railway.internal:8000 — y el
 #                             backend tiene que escuchar en `::` para eso
 #                             (METEOLABX_BACKEND_HOST=:: en el servicio Python).
-#   METEOLABX_LEGACY_ORIGIN   servicio actual (Streamlit). Todo lo que aún no
-#                             está migrado se reenvía ahí, WebSocket incluido.
+#
+# METEOLABX_LEGACY_ORIGIN ya no se usa: el proxy hacia la aplicación de
+# Streamlit se ha retirado. Conviene borrarla también en Railway para que no
+# quede una variable apuntando a un servicio que nadie consulta.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"

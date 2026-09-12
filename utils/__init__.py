@@ -1,5 +1,10 @@
 """
-Módulo de utilidades
+Módulo de utilidades.
+
+Reexportaba también la internacionalización y el almacenamiento del navegador,
+que dependían de Streamlit. Se hicieron perezosos para que un ``from
+utils.units import ...`` no arrastrase el paquete entero, y al retirar la
+interfaz desaparecieron: lo que traduce sin pantalla es ``domain.i18n_catalog``.
 """
 from .helpers import (
     html_clean,
@@ -10,22 +15,6 @@ from .helpers import (
     age_string,
     fmt_hpa
 )
-from .i18n import (
-    get_language,
-    get_language_label,
-    get_supported_languages,
-    init_language,
-    month_name,
-    set_language,
-    t,
-    t_list,
-)
-from .storage import (
-    set_local_storage,
-    get_stored_station,
-    get_stored_apikey,
-    get_stored_z
-)
 
 __all__ = [
     'html_clean',
@@ -35,16 +24,4 @@ __all__ = [
     'es_datetime_from_epoch',
     'age_string',
     'fmt_hpa',
-    'get_language',
-    'get_language_label',
-    'get_supported_languages',
-    'init_language',
-    'month_name',
-    'set_language',
-    't',
-    't_list',
-    'set_local_storage',
-    'get_stored_station',
-    'get_stored_apikey',
-    'get_stored_z',
 ]

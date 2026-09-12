@@ -65,12 +65,12 @@ export function localizedForecastProducts(products, language) {
 }
 
 const LAYER_LABELS = {
-  es: { isotherms: 'Isotermas', isohypses: 'Isohipsas', troughs: 'Ejes de vaguada', centres: 'Centros de presión' },
-  ca: { isotherms: 'Isotermes', isohypses: 'Isohipses', troughs: 'Eixos de vaguada', centres: 'Centres de pressió' },
-  en: { isotherms: 'Isotherms', isohypses: 'Height contours', troughs: 'Trough axes', centres: 'Pressure centres' },
-  fr: { isotherms: 'Isothermes', isohypses: 'Isohypses', troughs: 'Axes de thalweg', centres: 'Centres de pression' },
-  it: { isotherms: 'Isoterme', isohypses: 'Isoipse', troughs: 'Assi di saccatura', centres: 'Centri di pressione' },
-  pt: { isotherms: 'Isotérmicas', isohypses: 'Isoípsas', troughs: 'Eixos de cavado', centres: 'Centros de pressão' }
+  es: { isotherms: 'Isotermas', isohypses: 'Isohipsas', troughs: 'Ejes de vaguada', centres: 'Centros de presión', cities: 'Ciudades', isobars: 'Isobaras' },
+  ca: { isotherms: 'Isotermes', isohypses: 'Isohipses', troughs: 'Eixos de vaguada', centres: 'Centres de pressió', cities: 'Ciutats', isobars: 'Isòbares' },
+  en: { isotherms: 'Isotherms', isohypses: 'Height contours', troughs: 'Trough axes', centres: 'Pressure centres', cities: 'Cities', isobars: 'Isobars' },
+  fr: { isotherms: 'Isothermes', isohypses: 'Isohypses', troughs: 'Axes de thalweg', centres: 'Centres de pression', cities: 'Villes', isobars: 'Isobares' },
+  it: { isotherms: 'Isoterme', isohypses: 'Isoipse', troughs: 'Assi di saccatura', centres: 'Centri di pressione', cities: 'Città', isobars: 'Isobare' },
+  pt: { isotherms: 'Isotérmicas', isohypses: 'Isoípsas', troughs: 'Eixos de cavado', centres: 'Centros de pressão', cities: 'Cidades', isobars: 'Isóbaras' }
 };
 
 export function forecastLayerLabel(language, id, fallback) {

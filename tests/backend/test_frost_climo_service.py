@@ -131,26 +131,22 @@ async def test_empty_inputs_return_empty_df() -> None:
     assert df_m.empty and df_y.empty
 
 
-def test_endpoint_uses_async_service_not_frontend_dispatch() -> None:
+def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
     app = create_app()
     app.dependency_overrides[get_http_client] = _mock_client
 
-    with patch(
-        "utils.historical_dispatch.fetch_historical_dataset",
-        side_effect=AssertionError("la rama FROST no debe pasar por el dispatcher frontend"),
-    ):
-        with TestClient(app) as client:
-            response = client.post(
-                "/v1/climo/dataset",
-                json={
-                    "provider": "FROST",
-                    "station_id": "SN100",
-                    "api_key": "",
-                    "summary_mode": "monthly",
-                    "selected_months": [1, 7],
-                    "frost_period": PERIOD,
-                },
-            )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/climo/dataset",
+            json={
+                "provider": "FROST",
+                "station_id": "SN100",
+                "api_key": "",
+                "summary_mode": "monthly",
+                "selected_months": [1, 7],
+                "frost_period": PERIOD,
+            },
+        )
 
     assert response.status_code == 200
     body = response.json()

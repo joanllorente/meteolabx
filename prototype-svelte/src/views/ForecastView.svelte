@@ -12,7 +12,7 @@
   } from '../data/forecastProducts.js';
   import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
-  import { bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
+  import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
   import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
   import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
@@ -148,6 +148,21 @@
         )
       : []
   );
+  // Escala con nodos: la barra sigue siendo el degradado entero, y lo que deja
+  // de ser uniforme es el reparto de grados. Las marcas van donde cae cada
+  // valor en la rampa, no donde caería en una regla lineal, que es justo lo
+  // que hay que ver: entre 0 y 30 °C hay más barra que entre −25 y 0.
+  const legendAnchorMarks = $derived.by(() => {
+    const anchors = product.scaleAnchors;
+    if (!anchors?.length || product.scaleBreaks?.length) return [];
+    const ticks = product.scaleTicks?.length
+      ? product.scaleTicks
+      : anchors.map(([value]) => value);
+    return ticks.map((value) => ({
+      at: anchorFraction(value, anchors) * 100,
+      label: formatBound(value, product, displayUnit)
+    }));
+  });
   const legendMarks = $derived.by(() => {
     if (!legendBands.length) return [];
     const cortes = [0, ...product.scaleBreaks];
@@ -591,7 +606,7 @@
       </header>
 
       <div class="forecast-map palette-{product.palette}" bind:this={mapContainer} style:--map-ink={mapInk || null}>
-        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} zeroFloor={product.zeroFloor || 0} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label={tr('windLevel')}>
             <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
@@ -615,8 +630,15 @@
             <img src={`${assetBase}mlx-logo.png`} alt="" />
             <span><strong>METEOLABX</strong><small>{tr('title')}</small></span>
           </div>
-          <div class="legend" class:legend-classes={legendBands.length > 0}>
-            {#if legendBands.length}
+          <div class="legend" class:legend-classes={legendBands.length > 0 || legendAnchorMarks.length > 0}>
+            {#if legendAnchorMarks.length}
+              <div class="band-scale">
+                <i class="ramp"></i>
+                <div class="band-marks">
+                  {#each legendAnchorMarks as mark}<span style:left={`${mark.at}%`}>{mark.label}</span>{/each}
+                </div>
+              </div>
+            {:else if legendBands.length}
               <div class="band-scale">
                 <div class="bands" style:--bands={legendBands.length}>
                   {#each legendBands as color}<span class="band" style:background-color={color}></span>{/each}
@@ -748,11 +770,13 @@
   .palette-precipitation .legend i{background:linear-gradient(90deg,#28465f,#2f6f8e,#369aa1,#58bd91,#9bd275,#d7dc69,#f2c55a,#ed914c,#df6262,#b44f88)}
   .legend-classes{align-items:flex-end;padding-bottom:6px}
   .band-scale{position:relative;padding-bottom:11px}
+  .legend i.ramp{display:block;width:262px}
   .bands{display:grid;grid-template-columns:repeat(var(--bands),1fr);width:262px;height:8px;border-radius:99px;overflow:hidden}
   .bands .band{display:block;height:100%}
   .band-marks{position:absolute;left:0;right:0;bottom:0;height:10px}
   .band-marks span{position:absolute;color:rgba(235,244,251,.72);font-size:.44rem;line-height:1;transform:translateX(-50%);white-space:nowrap}
   .band-marks span:first-child{transform:none}
+  .band-marks span:last-child{transform:translateX(-100%)}
   .unit-picker{position:relative}
   .legend .unit-static{margin-left:-4px}
   .unit-button{display:flex;align-items:center;gap:3px;padding:3px 5px 3px 7px;border:1px solid rgba(140,205,246,.42);border-radius:6px;color:#9fd8ff;background:rgba(76,163,219,.16);font-size:.6rem;font-weight:720;line-height:1;cursor:pointer}
@@ -808,5 +832,5 @@
   @media(max-width:980px){.forecast-layout{grid-template-columns:220px minmax(0,1fr)}.forecast-map{min-height:440px}}
   @media(max-width:760px){.control-bar{flex-wrap:wrap}.run-summary{order:3;width:100%;margin-left:0}.forecast-layout{grid-template-columns:1fr}.product-selector{position:static;max-height:none}.category-list{max-height:360px}.forecast-map{min-height:clamp(390px,62vh,560px)}.map-head{align-items:flex-start}.map-actions button:nth-child(2){display:none}}
   @media(max-width:640px){.bands{width:158px}.band-marks span:nth-child(even){display:none}}
-  @media(max-width:480px){.control-bar label{min-width:0;flex:1}.control-bar label>span{display:none}.control-bar select{min-width:0;width:100%}.run-summary strong{max-width:220px}.forecast-map{min-height:clamp(330px,58vh,520px)}.legend i{width:76px}.timeline{grid-template-columns:32px 32px minmax(150px,1fr) 32px;padding-inline:8px}.timeline>button{width:32px;height:32px}.time-labels>span{display:none}.time-labels{justify-content:center}.product-explainer>header{align-items:flex-start;flex-direction:column}.source-tag{margin-left:47px}}
+  @media(max-width:480px){.control-bar label{min-width:0;flex:1}.control-bar label>span{display:none}.control-bar select{min-width:0;width:100%}.run-summary strong{max-width:220px}.forecast-map{height:clamp(320px,48vh,400px);min-height:0}.legend i{width:76px}.timeline{grid-template-columns:32px 32px minmax(150px,1fr) 32px;padding-inline:8px}.timeline>button{width:32px;height:32px}.time-labels>span{display:none}.time-labels{justify-content:center}.product-explainer>header{align-items:flex-start;flex-direction:column}.source-tag{margin-left:47px}}
 </style>

@@ -34,7 +34,7 @@ from server.services.forecast_store import (
 from scripts.forecast_worker import pending_hours
 from scripts import forecast_worker
 from server.services import arome_forecast as server_arome
-from tabs import arome_forecast
+from server.services import arome_wcs as arome_forecast
 
 
 RUN = "2026-08-24T12:00:00Z"
@@ -911,7 +911,7 @@ def test_stored_grid_values_recovers_what_was_serialized(monkeypatch):
 
     from server.services import arome_forecast
     from server.services.arome_forecast import _serialize_grid, stored_grid_values
-    from tabs.arome_forecast import RasterField
+    from server.services.arome_wcs import RasterField
 
     # Ámbito de producción: en local el serializador recoloca el recorte sobre
     # la rejilla entera del modelo, que no es lo que se guarda en Railway.
@@ -974,7 +974,7 @@ def test_accumulation_reuses_published_hours_instead_of_downloading(monkeypatch)
     from rasterio.transform import from_bounds
 
     from server.services import arome_forecast
-    from tabs.arome_forecast import RasterField
+    from server.services.arome_wcs import RasterField
 
     monkeypatch.setattr(arome_forecast, "forecast_calculation_scope", lambda: "model")
     horas = [f"2026-08-26T{h:02d}:00:00Z" for h in range(13, 19)]
@@ -1023,7 +1023,7 @@ def test_accumulation_downloads_when_the_stored_grid_does_not_match(monkeypatch)
     from rasterio.transform import from_bounds
 
     from server.services import arome_forecast
-    from tabs.arome_forecast import RasterField
+    from server.services.arome_wcs import RasterField
 
     monkeypatch.setattr(arome_forecast, "forecast_calculation_scope", lambda: "model")
     horas = [f"2026-08-26T{h:02d}:00:00Z" for h in range(13, 17)]
@@ -1069,7 +1069,7 @@ def test_vertical_totals_is_the_difference_between_two_levels(monkeypatch):
     from rasterio.transform import from_bounds
 
     from server.services import arome_forecast
-    from tabs.arome_forecast import RasterField
+    from server.services.arome_wcs import RasterField
 
     geometria = (from_bounds(-2, 40, 3, 44, 4, 3), CRS.from_epsg(4326), (-2, 40, 3, 44))
     # 12 °C a 850 y -20 °C a 500: VT = 32.
@@ -1111,7 +1111,7 @@ def test_vertical_totals_falls_back_to_the_wcs_without_the_package(monkeypatch):
     from rasterio.transform import from_bounds
 
     from server.services import arome_forecast
-    from tabs.arome_forecast import RasterField
+    from server.services.arome_wcs import RasterField
 
     monkeypatch.setattr(
         arome_forecast, "_isobaric_fields_from_package",

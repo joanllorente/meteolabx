@@ -113,6 +113,14 @@ LATEST_VARIABLES: Dict[str, List[int]] = {
     "gust_dir": [V_GUST_DIR, V_GUST_DIR_6M, V_GUST_DIR_2M],
 }
 
+# Columnas necesarias para reconstruir íntegramente la ficha desde Dades
+# Obertes cuando XEMA no responde. Incluye los extremos oficiales del periodo.
+RELEVANT_VARIABLES = {
+    V_TEMP, V_RH, V_PRESSURE, V_PRECIP, V_SOLAR, V_UV,
+    V_TEMP_MAX, V_TEMP_MIN, V_RH_MAX, V_RH_MIN,
+    *(code for candidates in LATEST_VARIABLES.values() for code in candidates),
+}
+
 
 # =====================================================================
 # Helpers numéricos / temporales (clonados del legacy y limpiados)
@@ -545,9 +553,34 @@ async def fetch_current(
         client = httpx.AsyncClient(timeout=timeout_s)
 
     try:
-        var_map = await _fetch_local_day_var_map(
-            station_id, api_key, client, timeout_s=timeout_s, now=now,
-        )
+        xema_error: Optional[ProviderError] = None
+        try:
+            var_map = await _fetch_local_day_var_map(
+                station_id, api_key, client, timeout_s=timeout_s, now=now,
+            )
+        except ProviderError as exc:
+            xema_error = exc
+            logger.warning(
+                "Meteocat XEMA no disponible para %s (%s); usando Dades Obertes",
+                station_id, exc.error_code,
+            )
+            try:
+                from server.services import meteocat_open_data
+
+                var_map = await meteocat_open_data.fetch_station_day_var_map(
+                    station_id, client=client, timeout_s=timeout_s, now=now,
+                )
+            except ProviderError as fallback_exc:
+                # Sin esta traza, el fallo del fallback es invisible: se
+                # relanza el error de XEMA y desde fuera parece que Dades
+                # Obertes ni se intentó. Así se fue un rato hasta descubrir
+                # que la consulta salía con un 400 por un tipo de columna.
+                logger.warning(
+                    "Meteocat: Dades Obertes tampoco sirvió %s (%s: %s); "
+                    "se devuelve el error de XEMA",
+                    station_id, fallback_exc.error_code, fallback_exc.detail,
+                )
+                raise xema_error
 
         values: Dict[str, Tuple[float, Optional[int]]] = {}
         if var_map:
@@ -558,7 +591,7 @@ async def fetch_current(
             precip_rows = var_map.get(V_PRECIP, [])
             precip_vals = [max(0.0, v) for _, v in precip_rows if not _is_nan(v)]
             precip_total = float(sum(precip_vals)) if precip_vals else float("nan")
-        else:
+        elif xema_error is None:
             logger.info(
                 "Meteocat: día local sin lecturas para %s; fallback a /ultimes",
                 station_id,
@@ -567,6 +600,8 @@ async def fetch_current(
                 station_id, api_key, client, timeout_s=timeout_s,
             )
             precip_total = float("nan")
+        else:
+            raise xema_error
     finally:
         if owns_client:
             await client.aclose()
@@ -681,9 +716,52 @@ async def fetch_today_series(
         client = httpx.AsyncClient(timeout=timeout_s)
 
     try:
-        var_map = await _fetch_local_day_var_map(
-            station_id, api_key, client, timeout_s=timeout_s, now=now,
-        )
+        xema_error: Optional[ProviderError] = None
+        try:
+            var_map = await _fetch_local_day_var_map(
+                station_id, api_key, client, timeout_s=timeout_s, now=now,
+            )
+        except ProviderError as exc:
+            xema_error = exc
+            logger.warning(
+                "Meteocat XEMA no disponible para %s (%s); usando Dades Obertes",
+                station_id, exc.error_code,
+            )
+            try:
+                from server.services import meteocat_open_data
+
+                var_map = await meteocat_open_data.fetch_station_day_var_map(
+                    station_id, client=client, timeout_s=timeout_s, now=now,
+                )
+            except ProviderError as fallback_exc:
+                # Sin esta traza, el fallo del fallback es invisible: se
+                # relanza el error de XEMA y desde fuera parece que Dades
+                # Obertes ni se intentó. Así se fue un rato hasta descubrir
+                # que la consulta salía con un 400 por un tipo de columna.
+                logger.warning(
+                    "Meteocat: Dades Obertes tampoco sirvió %s (%s: %s); "
+                    "se devuelve el error de XEMA",
+                    station_id, fallback_exc.error_code, fallback_exc.detail,
+                )
+                raise xema_error
+
+        # Un 200 vacío puede ser una incidencia parcial de XEMA. Dades Obertes
+        # conserva la misma jornada y evita mostrar la estación sin datos.
+        if not var_map and xema_error is None:
+            try:
+                from server.services import meteocat_open_data
+
+                var_map = await meteocat_open_data.fetch_station_day_var_map(
+                    station_id, client=client, timeout_s=timeout_s, now=now,
+                )
+            except ProviderError as fallback_exc:
+                # Aquí XEMA respondió, solo que vacío: el fallback es un
+                # intento de rescate y su fallo no debe romper la petición.
+                # Pero sí se anota, o no hay forma de saber que se intentó.
+                logger.info(
+                    "Meteocat: Dades Obertes no completó el día de %s (%s)",
+                    station_id, fallback_exc.error_code,
+                )
     finally:
         if owns_client:
             await client.aclose()

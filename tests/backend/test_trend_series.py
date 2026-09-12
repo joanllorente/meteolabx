@@ -179,14 +179,3 @@ def test_derive_today_series_adds_solar_geometry_and_theoretical_curve() -> None
     assert result["solar_altitude"] is not None
     assert result["solar_altitude_max"] is not None
     assert isinstance(result["is_nighttime"], bool)
-
-
-def test_streamlit_tabs_do_not_import_meteorological_formula_modules() -> None:
-    from pathlib import Path
-
-    observation_source = Path("tabs/observation.py").read_text(encoding="utf-8")
-    trends_source = Path("tabs/trends.py").read_text(encoding="utf-8")
-    for source in (observation_source, trends_source):
-        assert "models.thermodynamics" not in source
-        assert "models.radiation" not in source
-        assert "models.trends" not in source

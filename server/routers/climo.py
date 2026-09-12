@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -315,12 +314,10 @@ async def post_climo_dataset(
     return ClimoDatasetResponse(**raw)
 
 
-# ``services.climograms`` traduce las etiquetas con ``utils.i18n.t``, que lee el
-# idioma de un estado global heredado de Streamlit. Fuera de Streamlit funciona,
-# pero es global al proceso: dos peticiones en idiomas distintos podrían pisarse.
-# El candado serializa el tramo que fija idioma y construye tablas, que son
-# milisegundos de pandas una vez el dataset está en memoria.
-_LANGUAGE_LOCK = threading.Lock()
+# El idioma de la traducción ya no es global al proceso: ``language_scope`` lo
+# fija en un ``ContextVar``, así que cada petición trabaja en el suyo. Antes
+# hacía falta un candado aquí para que dos peticiones en idiomas distintos no
+# se pisaran, y ese candado serializaba la construcción de todas las tablas.
 
 
 def _solar_metric_kind(provider: str) -> str:
@@ -342,10 +339,10 @@ def _metric_keys_by_label() -> dict[str, str]:
 
     La tabla se construye ya traducida, así que la clave hay que recuperarla
     del catálogo. Se recalcula en cada resumen porque depende del idioma
-    activo, y el idioma se fija justo antes bajo ``_LANGUAGE_LOCK``.
+    activo, que ``language_scope`` fija para esta petición.
     """
     from domain.climograms import METRIC_LABEL_KEYS
-    from utils.i18n import t
+    from domain.i18n_catalog import t
 
     # Las dos métricas solares tienen nombre propio según lo que mida la red
     # —irradiación o insolación—, pero son el mismo hito: el año con más sol y
@@ -407,7 +404,7 @@ def _localized_table(table, body: ClimoSummaryRequest, granularity: str, units: 
     """Cabeceras traducidas con su unidad y valores con un decimal."""
     import pandas as pd
 
-    from utils.i18n import t
+    from domain.i18n_catalog import t
 
     if table is None or table.empty:
         return [], []
@@ -451,7 +448,7 @@ def _build_summary(body: ClimoSummaryRequest, raw: Dict[str, Any]) -> ClimoSumma
     from io import StringIO
 
     from domain import climograms
-    from utils.i18n import set_language
+    from domain.i18n_catalog import language_scope
 
     serialized = raw.get("dataset")
     if not serialized:
@@ -465,9 +462,7 @@ def _build_summary(body: ClimoSummaryRequest, raw: Dict[str, Any]) -> ClimoSumma
     solar_kind = _solar_metric_kind(body.provider)
     period_count = len(body.periods)
 
-    with _LANGUAGE_LOCK:
-        set_language(body.language)
-
+    with language_scope(body.language):
         extremes = climograms.build_extremes_table(
             daily,
             overrides=raw.get("extremes") or None,

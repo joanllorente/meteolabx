@@ -54,7 +54,7 @@ from server.services.convective_diagnostics import (
     significant_hail_parameter_sharppy,
 )
 
-from tabs.arome_forecast import (
+from server.services.arome_wcs import (
     AromeError,
     AromeWCS,
     LOCAL_TZ,
@@ -2034,7 +2034,7 @@ def _computed_frame(
         v_field = client.get_field(
             catalog, prefixes["v"], run, valid_time, level, vertical_mode, component="v"
         )
-        from tabs.arome_forecast import _align
+        from server.services.arome_wcs import _align
 
         vector_v = _align(u_field, v_field)
         u_field.vector_u = np.asarray(u_field.data, dtype=float)
@@ -2060,7 +2060,7 @@ def _computed_frame(
         u_field.units = "m/s"
         field = u_field
     elif config["kind"] == "theta_e":
-        from tabs.arome_forecast import _align
+        from server.services.arome_wcs import _align
 
         from server.services.convective_diagnostics import (
             equivalent_potential_temperature_metpy_k,
@@ -2120,7 +2120,7 @@ def _computed_frame(
             period=str(config["period"]) if config.get("period") else None,
         )
         if config.get("accumulate_from_run"):
-            from tabs.arome_forecast import _align
+            from server.services.arome_wcs import _align
 
             accumulated = np.maximum(np.asarray(field.data, dtype=float), 0.0)
             if valid_time <= run:
@@ -2150,7 +2150,7 @@ def _computed_frame(
         field.data = values
         field.units = str(config["unit"])
         if prefixes.get("overlay"):
-            from tabs.arome_forecast import _align, _height_from_geopotential
+            from server.services.arome_wcs import _align, _height_from_geopotential
 
             try:
                 overlay_field = client.get_field(

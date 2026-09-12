@@ -28,7 +28,7 @@ from server.services.forecast_store import (
     write_json,
 )
 from server.services import arome_forecast
-from tabs.arome_forecast import CoverageCatalog
+from server.services.arome_wcs import CoverageCatalog
 
 
 def _app_with_key() -> TestClient:
@@ -462,7 +462,7 @@ def test_the_request_throttle_never_sleeps_longer_than_one_slot(tmp_path, monkey
     """
     import time
 
-    from tabs.arome_forecast import _wait_for_api_request_slot
+    from server.services.arome_wcs import _wait_for_api_request_slot
 
     fichero = tmp_path / "turno"
     monkeypatch.setenv("METEOLABX_AROME_REQUEST_THROTTLE_FILE", str(fichero))

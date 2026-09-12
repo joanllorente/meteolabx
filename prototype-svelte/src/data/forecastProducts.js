@@ -65,7 +65,15 @@ const allForecastProducts = [
   },
   {
     id: 'temperature-2m', category: 'temperature', label: 'Temperatura a 2 m', short: 'T 2 m', kind: 'native',
-    unit: '°C', min: -8, max: 42, palette: 'temperature', accent: '#ff8a5b', vectors: false,
+    unit: '°C', min: -25, max: 45, palette: 'temperature', accent: '#ff8a5b', vectors: false,
+    // La escala llega a −25 para no recortar las noches de invierno en los
+    // Alpes, pero repartir setenta grados a partes iguales dejaría sin
+    // contraste la franja de 0 a 30 °C, que es donde está casi todo el campo
+    // casi todo el año. Los nodos le dan a esos treinta grados el 58 % de la
+    // rampa y comprimen las colas, que se visitan un par de veces por invierno.
+    scaleAnchors: [[-25, 0], [-10, 0.1], [0, 0.22], [10, 0.42], [20, 0.62], [30, 0.8], [40, 0.94], [45, 1]],
+    scaleTicks: [-25, -10, 0, 10, 20, 30, 45],
+    cityLabels: true,
     description: 'Temperatura del aire prevista a dos metros sobre el terreno. Permite seguir contrastes térmicos, entradas marítimas y la evolución diurna.',
     method: 'Campo AROME en nivel de altura específica de 2 m; la API entrega el valor numérico y sus horas válidas.',
     coverage: 'TEMPERATURE · altura 2 m'
@@ -150,6 +158,7 @@ const allForecastProducts = [
   {
     id: 'precip-1h', category: 'precipitation', label: 'Precipitación en 1 hora', short: 'Precip. 1 h', kind: 'native',
     unit: 'mm', min: 0, max: 60, palette: 'precipitation', accent: '#38a8ad', vectors: false,
+    cityLabels: true,
     description: 'Precipitación total prevista durante la hora que termina en la hora válida seleccionada.',
     method: 'Campo WCS nativo TOTAL_PRECIPITATION con periodo de acumulación PT1H. Incluye precipitación líquida y sólida en equivalente de agua.',
     coverage: 'TOTAL PRECIPITATION · superficie · PT1H'
@@ -163,6 +172,7 @@ const allForecastProducts = [
     // lo acumulado se lea sobre el fondo en vez de sobre una capa de color.
     scaleBreaks: [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400],
     zeroFloor: 0.05,
+    cityLabels: true,
     description: 'Precipitación total acumulada desde el inicio de la pasada hasta la hora válida seleccionada.',
     method: 'MeteoLabX suma celda a celda los campos horarios TOTAL_PRECIPITATION PT1H comprendidos entre H+01 y la hora seleccionada. Incluye precipitación líquida y sólida en equivalente de agua.',
     coverage: 'Diagnóstico MeteoLabX · suma TOTAL PRECIPITATION PT1H desde el RUN'
@@ -354,6 +364,10 @@ const allForecastProducts = [
   {
     id: 'stp', category: 'convection', label: 'STP efectivo (con CIN)', short: 'STP efectivo', kind: 'derived',
     unit: '', min: 0, max: 10, palette: 'hail', accent: '#ef476f', vectors: false,
+    // Por debajo de 0,5 el STP no dice nada: el producto de los cinco factores
+    // deja décimas en medio mar abierto y pintarlas cubre el dominio de azul
+    // sin que haya entorno tornádico en ninguna de esas celdas.
+    zeroFloor: 0.5,
     description: 'Índice de entorno favorable a tornados significativos: STP de capa efectiva con inhibición, referido a Bunkers derecho.',
     method: 'Combina MLCAPE, MLCIN, altura del LCL mezclado sobre el terreno, ESRH y EBWD. Se anula cuando la base efectiva está elevada.',
     coverage: 'Diagnóstico MeteoLabX · STP efectivo con CIN · formulación SPC'
@@ -361,6 +375,9 @@ const allForecastProducts = [
   {
     id: 'scp', category: 'convection', label: 'Supercell Composite Parameter', short: 'SCP', kind: 'derived',
     unit: '', min: 0, max: 20, palette: 'hail', accent: '#f07086', vectors: false,
+    // El umbral clásico del SCP es 1; por debajo el índice sólo recoge restos
+    // de CAPE y helicidad que no organizan nada, así que se deja sin pintar.
+    zeroFloor: 1,
     description: 'Índice compuesto del entorno favorable a supercélulas derechas, combinando MUCAPE, helicidad efectiva y EBWD.',
     method: '(MUCAPE / 1000) × (ESRH / 50) × factor EBWD: cero por debajo de 10 m/s, EBWD / 20 entre 10 y 20 m/s y uno por encima.',
     coverage: 'Diagnóstico MeteoLabX · formulación SPC sobre perfiles AROME'
