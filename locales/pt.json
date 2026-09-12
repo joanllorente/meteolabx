@@ -167,6 +167,17 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para qualquer questão sobre privacidade ou sobre o tratamento da informação, pode escrever para",
+    "release_203_improvements": [
+      "Melhorias na interface.",
+      "Melhorias na visualização em dispositivos móveis.",
+      "Os mapas de temperatura e precipitação passam a mostrar o nome das cidades.",
+      "Melhorada a paleta do mapa de temperatura.",
+      "Reconstrução dos catálogos de estações.",
+      "Melhorias internas."
+    ],
+    "release_203_fixes": [
+      "Corrigido um problema visual em dispositivos móveis ao abrir os filtros."
+    ],
     "release_202_improvements": [
       "Atualização do inventário de estações."
     ],

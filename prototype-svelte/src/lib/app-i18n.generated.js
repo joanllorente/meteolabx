@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.0.2",
+  "app_version": "2.0.3",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -461,6 +461,17 @@ export default {
       "release_202_improvements": [
         "Actualització de l’inventari d’estacions."
       ],
+      "release_203_fixes": [
+        "Corregit un problema visual en dispositius mòbils en obrir els filtres."
+      ],
+      "release_203_improvements": [
+        "Millores a la interfície.",
+        "Millores en la visualització en dispositius mòbils.",
+        "Ara als mapes de temperatura i precipitació hi apareix el nom de les ciutats.",
+        "Millorada la paleta del mapa de temperatura.",
+        "Reconstrucció dels catàlegs d’estacions.",
+        "Millores internes."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -543,6 +554,17 @@ export default {
       ],
       "release_202_improvements": [
         "Station inventory updated."
+      ],
+      "release_203_fixes": [
+        "Fixed a visual glitch on mobile devices when opening the filters."
+      ],
+      "release_203_improvements": [
+        "Interface improvements.",
+        "Improved display on mobile devices.",
+        "City names now appear on the temperature and precipitation maps.",
+        "Improved colour palette for the temperature map.",
+        "Station catalogues rebuilt.",
+        "Internal improvements."
       ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
@@ -627,6 +649,17 @@ export default {
       "release_202_improvements": [
         "Actualización del inventario de estaciones."
       ],
+      "release_203_fixes": [
+        "Corregido un problema visual en dispositivos móviles al abrir los filtros."
+      ],
+      "release_203_improvements": [
+        "Mejoras en la interfaz.",
+        "Mejoras en la visualización en dispositivos móviles.",
+        "Ahora en los mapas de temperatura y precipitación aparece el nombre de las ciudades.",
+        "Mejorada la paleta del mapa de temperatura.",
+        "Reconstrucción de los catálogos de estaciones.",
+        "Mejoras internas."
+      ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
       "version": "Versión {version}",
@@ -709,6 +742,17 @@ export default {
       ],
       "release_202_improvements": [
         "Mise à jour de l’inventaire des stations."
+      ],
+      "release_203_fixes": [
+        "Correction d’un problème d’affichage sur mobile à l’ouverture des filtres."
+      ],
+      "release_203_improvements": [
+        "Améliorations de l’interface.",
+        "Améliorations de l’affichage sur mobile.",
+        "Les cartes de température et de précipitations affichent désormais le nom des villes.",
+        "Palette de la carte de température améliorée.",
+        "Reconstruction des catalogues de stations.",
+        "Améliorations internes."
       ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
@@ -793,6 +837,17 @@ export default {
       "release_202_improvements": [
         "Aggiornamento dell’inventario delle stazioni."
       ],
+      "release_203_fixes": [
+        "Corretto un problema visivo sui dispositivi mobili all’apertura dei filtri."
+      ],
+      "release_203_improvements": [
+        "Miglioramenti dell’interfaccia.",
+        "Miglioramenti nella visualizzazione su dispositivi mobili.",
+        "Ora sulle mappe di temperatura e precipitazione compare il nome delle città.",
+        "Migliorata la palette della mappa di temperatura.",
+        "Ricostruzione dei cataloghi di stazioni.",
+        "Miglioramenti interni."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -875,6 +930,17 @@ export default {
       ],
       "release_202_improvements": [
         "Atualização do inventário de estações."
+      ],
+      "release_203_fixes": [
+        "Corrigido um problema visual em dispositivos móveis ao abrir os filtros."
+      ],
+      "release_203_improvements": [
+        "Melhorias na interface.",
+        "Melhorias na visualização em dispositivos móveis.",
+        "Os mapas de temperatura e precipitação passam a mostrar o nome das cidades.",
+        "Melhorada a paleta do mapa de temperatura.",
+        "Reconstrução dos catálogos de estações.",
+        "Melhorias internas."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -1996,6 +2062,7 @@ export default {
     }
   },
   "releases": [
+    "203",
     "202",
     "201",
     "200"

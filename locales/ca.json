@@ -167,6 +167,17 @@
     ],
     "privacy_contact_title": "Contacte",
     "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_203_improvements": [
+      "Millores a la interfície.",
+      "Millores en la visualització en dispositius mòbils.",
+      "Ara als mapes de temperatura i precipitació hi apareix el nom de les ciutats.",
+      "Millorada la paleta del mapa de temperatura.",
+      "Reconstrucció dels catàlegs d’estacions.",
+      "Millores internes."
+    ],
+    "release_203_fixes": [
+      "Corregit un problema visual en dispositius mòbils en obrir els filtres."
+    ],
     "release_202_improvements": [
       "Actualització de l’inventari d’estacions."
     ],
