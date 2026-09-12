@@ -148,6 +148,24 @@ def test_temperature_and_rain_quarantines_are_independent() -> None:
     assert rec.tmax == pytest.approx(20.0)  # la temperatura no se toca
 
 
+def test_isolated_gust_is_added_to_quarantine_and_removed_from_ranking() -> None:
+    gust = ranking._daily_gust_max_from_series(
+        [31.0, 34.2, 35.0, 36.1, 38.7, 121.7],
+        provider="METEOCAT", station_id="X1", day="2026-09-12",
+    )
+    assert gust == pytest.approx(38.7)
+    flagged = suspect_data.flags_for("METEOCAT", "X1", "2026-09-12")
+    assert flagged[suspect_data.WIND]["reason"] == "isolated_peak"
+    assert flagged[suspect_data.WIND]["maximum_kmh"] == pytest.approx(121.7)
+
+    rec = ranking.StationDaily(
+        provider="METEOCAT", station_id="X1", name="X", locality="",
+        lat=41.0, lon=2.0, gust=gust, local_date="2026-09-12",
+    )
+    ranking._drop_quarantined_variables(rec)
+    assert rec.gust is None
+
+
 # =====================================================================
 # El ranking juzga por su cuenta, y la cuarentena lleva historial
 # =====================================================================

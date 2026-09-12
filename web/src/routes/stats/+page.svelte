@@ -59,13 +59,14 @@
   const MOTIVOS = {
     frozen: 'lleva horas sin variar',
     impossible: 'imposible para su latitud y época',
-    range: 'máxima y mínima incompatibles'
+    range: 'máxima y mínima incompatibles',
+    isolated_peak: 'racha máxima aislada'
   };
   const motivo = (fila) => {
     const clave = fila?.params?.reason || Object.keys(fila?.reasons || {})[0] || '';
     return MOTIVOS[clave] || clave || '—';
   };
-  const VARIABLES = { temperature: 'Temperatura', rain: 'Precipitación' };
+  const VARIABLES = { temperature: 'Temperatura', rain: 'Precipitación', wind: 'Viento (racha)' };
 
   /** Ficha de la estación, para ir a mirarla sin buscarla a mano. */
   const fichaDe = (fila) =>

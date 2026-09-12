@@ -127,7 +127,8 @@ class Settings(BaseSettings):
     Minuto de cada hora en que se lanza el ciclo COMPLETO del ranking (por
     defecto :05). Se alinea justo DESPUÉS de la publicación horaria de los
     proveedores (METAR/synop salen ~en punto) para pillar el dato fresco, en vez
-    de a minutos arbitrarios. Al arrancar se hace un ciclo inmediato igualmente.
+    de a minutos arbitrarios. Al arrancar se reutiliza el snapshot si puede
+    llegar vigente al siguiente ciclo; sin snapshot se refresca inmediatamente.
     Configurar vía ``METEOLABX_RANKING_REFRESH_OFFSET_MIN``.
     """
 

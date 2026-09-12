@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -8,6 +8,7 @@ from server.services.ranking import (
     StationDaily,
     _daily_gust_max_from_series,
     _daily_temperature_max_from_series,
+    _snapshot_covers_until,
 )
 
 
@@ -33,6 +34,30 @@ def test_daily_gust_max_discards_isolated_temporal_spike():
     values = [86.0, 91.0, 84.0, 267.5, 88.0, 79.0, 73.0]
 
     assert _daily_gust_max_from_series(values) == pytest.approx(91.0)
+
+
+def test_recent_snapshot_avoids_reloading_every_provider_on_redeploy():
+    now = datetime(2026, 9, 12, 20, 30, tzinfo=timezone.utc)
+    store = RankingStore(updated_at=now - timedelta(minutes=25))
+    store._daily[("AEMET", "2026-09-12")] = {
+        "X": StationDaily(provider="AEMET", station_id="X", name="X")
+    }
+
+    assert _snapshot_covers_until(
+        store, now.replace(hour=21, minute=5), now=now,
+    )
+
+
+def test_old_or_empty_snapshot_forces_startup_refresh():
+    now = datetime(2026, 9, 12, 20, 6, tzinfo=timezone.utc)
+    next_run = now.replace(hour=21, minute=5)
+    old = RankingStore(updated_at=now - timedelta(hours=1, minutes=1))
+    old._daily[("AEMET", "2026-09-12")] = {
+        "X": StationDaily(provider="AEMET", station_id="X", name="X")
+    }
+
+    assert not _snapshot_covers_until(old, next_run, now=now)
+    assert not _snapshot_covers_until(RankingStore(), next_run, now=now)
 
 
 def test_daily_gust_max_keeps_real_high_wind_cluster():

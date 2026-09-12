@@ -454,6 +454,7 @@ def _mc_build_records(
     wind_instant: Optional[Dict[str, Tuple[int, float]]] = None,
     direction_instant: Optional[Dict[str, Tuple[int, float]]] = None,
     rain_24h: Optional[Dict[str, Tuple[float, int]]] = None,
+    day: str = "",
 ) -> List[StationDaily]:
     from server.services import meteocat
 
@@ -496,7 +497,10 @@ def _mc_build_records(
                 rain=round(sum(rain_vals), 1) if rain_vals else None,
                 rain_24h=(round(rain_24h[codi][0], 1) if codi in rain_24h else None),
                 rain_24h_at=(rain_24h[codi][1] if codi in rain_24h else None),
-                gust=_daily_gust_max_from_series([v * 3.6 for v in gust_vals]) if gust_vals else None,
+                gust=_daily_gust_max_from_series(
+                    [v * 3.6 for v in gust_vals],
+                    provider="METEOCAT", station_id=codi, day=day,
+                ) if gust_vals else None,
                 tcur=round(instant[codi][1], 1) if codi in instant else None,
                 tcur_at=instant[codi][0] if codi in instant else None,
                 wind=round(float(wind_sample[1]) * 3.6, 1) if has_current_wind else None,
@@ -606,6 +610,7 @@ async def fetch_meteocat_daily(
 
         records = _mc_build_records(
             raw, instant, wind_instant, direction_instant, rain_24h,
+            day=start.date().isoformat(),
         )
         for record in records:
             record.local_date = start.date().isoformat()
@@ -750,6 +755,11 @@ def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Opt
             wind_at = int(epoch)
             break
     sid = f"{net}|{lat}|{lon}|{name}".lower()
+    local_day = (
+        datetime.fromtimestamp(day_start_epoch, tz=timezone.utc)
+        .astimezone(mh.STATION_TZ).date().isoformat()
+        if day_start_epoch is not None else ""
+    )
     return StationDaily(
         provider="METEOHUB_IT",
         station_id=sid,
@@ -759,7 +769,9 @@ def _mh_parse_station(st: dict, *, day_start_epoch: Optional[int] = None) -> Opt
         lon=float(lon) if isinstance(lon, (int, float)) else None,
         tmax=_daily_temperature_max_from_series(temps),
         tmin=round(min(temps), 1) if temps else None,
-        gust=_daily_gust_max_from_series(gusts) if gusts else None,
+        gust=_daily_gust_max_from_series(
+            gusts, provider="METEOHUB_IT", station_id=sid, day=local_day,
+        ) if gusts else None,
         rain=round(sum(precs), 1) if precs else None,
         rain_24h=(
             round(sum(max(0.0, value) for _epoch, value in rolling_precip), 1)
@@ -1142,7 +1154,10 @@ async def fetch_geosphere_daily(
                 lon=_num(meta.get("lon")),
                 tmax=round(max(tlmax), 1) if tlmax else None,
                 tmin=round(min(tlmin), 1) if tlmin else None,
-                gust=round(_daily_gust_max_from_series(gusts_kmh), 1) if gusts_kmh else None,
+                gust=round(_daily_gust_max_from_series(
+                    gusts_kmh, provider="GEOSPHERE", station_id=sid,
+                    day=day_local.isoformat(),
+                ), 1) if gusts_kmh else None,
                 rain=round(sum(precs), 1) if precs else None,
                 rain_24h=(
                     round(sum(rolling_precs), 1)
@@ -1785,7 +1800,9 @@ _TEMPORAL_GUST_MIN_DELTA_KMH = 70.0
 _TEMPORAL_GUST_MIN_RATIO = 1.65
 
 
-def _daily_gust_max_from_series(values: List[float]) -> Optional[float]:
+def _daily_gust_max_from_series(
+    values: List[float], *, provider: str = "", station_id: str = "", day: str = "",
+) -> Optional[float]:
     """Máxima diaria de racha con descarte de picos temporales aislados.
 
     Algunos proveedores publican una racha horaria puntual claramente espuria
@@ -1811,10 +1828,18 @@ def _daily_gust_max_from_series(values: List[float]) -> Optional[float]:
         and max_v >= second + _TEMPORAL_GUST_MIN_DELTA_KMH
         and max_v >= second * _TEMPORAL_GUST_MIN_RATIO
     ):
+        if provider and station_id and day:
+            suspect_data.flag(
+                provider, station_id, day, suspect_data.WIND,
+                params={
+                    "reason": "isolated_peak",
+                    "maximum_kmh": round(max_v, 1),
+                    "next_kmh": round(second, 1),
+                },
+            )
         logger.info(
-            "ranking: racha máxima aislada descartada %.1f km/h; siguiente %.1f km/h",
-            max_v,
-            second,
+            "ranking: racha máxima aislada en cuarentena %s/%s %.1f km/h; siguiente %.1f km/h",
+            provider or "?", station_id or "?", max_v, second,
         )
         return round(second, 1)
     return round(max_v, 1)
@@ -2154,6 +2179,10 @@ def _drop_quarantined_variables(rec: StationDaily) -> None:
         rec.tmin = None
         rec.tcur = None
         rec.tcur_at = None
+    if suspect_data.is_flagged(
+        rec.provider, rec.station_id, rec.local_date, suspect_data.WIND,
+    ):
+        rec.gust = None
 
 
 def _parse_iem_network(
@@ -2852,7 +2881,9 @@ class RankingStore:
                         lon=meta.get("lon"),
                         tmax=round(max(txs), 1) if txs else None,
                         tmin=round(min(tns), 1) if tns else None,
-                        gust=_daily_gust_max_from_series(gus) if gus else None,
+                        gust=_daily_gust_max_from_series(
+                            gus, provider=provider, station_id=sid, day=day,
+                        ) if gus else None,
                         rain=round(sum(rns), 1) if rns else None,
                         rain_24h=(
                             round(rain_24h[0], 1)
@@ -3318,6 +3349,38 @@ def _next_aligned_run(offset_min: int, now: Optional[datetime] = None) -> dateti
     return nxt
 
 
+_STARTUP_SNAPSHOT_MAX_AGE_S = 75 * 60
+
+
+def _snapshot_covers_until(
+    store: RankingStore,
+    next_run: datetime,
+    *,
+    now: Optional[datetime] = None,
+    max_age_s: float = _STARTUP_SNAPSHOT_MAX_AGE_S,
+) -> bool:
+    """Si el snapshot puede servirse hasta el próximo ciclo sin quedar viejo.
+
+    Mirar la edad que tendrá en ``next_run`` evita dos extremos: un redeploy
+    pocos minutos antes del :05 reutiliza el estado sin repetir llamadas, pero
+    uno justo después del :05 no espera otra hora si el último snapshot ya era
+    el del ciclo anterior.
+    """
+    if store.updated_at is None or not store.providers():
+        return False
+    updated = store.updated_at
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(tz=timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    # Se toleran cinco minutos de desfase de reloj, pero no snapshots fechados
+    # arbitrariamente en el futuro.
+    if updated > current + timedelta(minutes=5):
+        return False
+    return (next_run - updated).total_seconds() <= float(max_age_s)
+
+
 def _meteocat_refresh_due(now: Optional[datetime] = None) -> bool:
     """Indica si corresponde el ciclo horario de Meteocat.
 
@@ -3342,9 +3405,10 @@ async def refresh_loop(
 ) -> None:
     """Bucle de refresco ALINEADO a la hora: un ciclo COMPLETO en el minuto
     ``ranking_refresh_offset_min`` (def. :05) de cada hora, para pillar la
-    publicación horaria de los proveedores en vez de a minutos arbitrarios. Hace
-    un primer ciclo INMEDIATO al arrancar (para no salir vacío hasta el próximo
-    :05). Entre ciclos, si quedaron proveedores con fallo, reintenta SOLO esos
+    publicación horaria de los proveedores en vez de a minutos arbitrarios. Al
+    arrancar reutiliza un snapshot reciente hasta el próximo :05; solo hace un
+    ciclo inmediato si no hay estado válido o quedaría demasiado antiguo.
+    Entre ciclos, si quedaron proveedores con fallo, reintenta SOLO esos
     con backoff por proveedor: ``retry_interval_s`` las primeras 4 rachas y
     duplicando después hasta 15 min (``_retry_backoff_s``), para no martillear
     a un proveedor caído de verdad. Cancela limpio al apagar el server. Con
@@ -3412,18 +3476,26 @@ async def refresh_loop(
             return set()
         return {"METEOCAT"}
 
-    # Ciclo inmediato al arrancar: el ranking no debe salir vacío hasta el :05.
-    # Dades Obertes de Meteocat se actualiza en todos los ciclos horarios.
-    pending = await refresh_once(
-        store,
-        client=client,
-        settings=settings,
-        skip=_scheduled_skip(),
-    )
-    _register_attempt(set(failure_counts) | pending, pending)
-    await _persist()
-    await _prebuild_map_fields()
     next_full = _next_aligned_run(offset_min)
+    if _snapshot_covers_until(store, next_full):
+        pending: set = set()
+        logger.info(
+            "ranking: snapshot reciente; se omite el refresco de arranque "
+            "(próximo ciclo completo a las :%02d)",
+            max(0, min(59, offset_min)),
+        )
+    else:
+        # Sin un snapshot aprovechable, el ranking no debe salir vacío hasta
+        # el próximo :05. Dades Obertes de Meteocat entra en este ciclo.
+        pending = await refresh_once(
+            store,
+            client=client,
+            settings=settings,
+            skip=_scheduled_skip(),
+        )
+        _register_attempt(set(failure_counts) | pending, pending)
+        await _persist()
+        await _prebuild_map_fields()
 
     while True:
         now = datetime.now(tz=timezone.utc)

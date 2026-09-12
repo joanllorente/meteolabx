@@ -248,8 +248,16 @@ def get_quarantine(
     dias = {hoy}
     if store is not None:
         dias.update({clave[1] for clave in getattr(store, "_daily", {})})
-    activas = [fila for dia in sorted(dias, reverse=True)[:2]
-               for fila in suspect_data.active(dia)]
+    # Se consultan dos días para cubrir simultáneamente todos los husos, pero
+    # una variable puede seguir marcada al cruzar medianoche y aparecer en
+    # ambos. En el panel es un solo sensor en cuarentena: gana el día más
+    # reciente (los días ya están recorridos en orden descendente).
+    activas_unicas = {}
+    for dia in sorted(dias, reverse=True)[:2]:
+        for fila in suspect_data.active(dia):
+            clave = (fila["provider"], fila["station_id"], fila["variable"])
+            activas_unicas.setdefault(clave, fila)
+    activas = list(activas_unicas.values())
     historial = suspect_data.history()
     # El registro guarda identidades, no nombres: sin esto la tabla es una
     # lista de identificadores y hay que ir a buscar a mano de qué estación

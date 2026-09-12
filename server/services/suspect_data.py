@@ -33,6 +33,9 @@ PRECIPITATION = "rain"
 # tres campos (máxima, mínima y actual): un termómetro que miente no lo hace en
 # uno solo de ellos.
 TEMPERATURE = "temperature"
+# Una racha máxima aislada puede ser un impulso espurio del anemómetro. Se
+# guarda aparte para retirar solo la racha, no el viento sostenido actual.
+WIND = "wind"
 
 # Días locales que se conservan. Cuatro es lo mismo que guarda el store del
 # ranking (``RankingStore._KEEP_DAYS``): una fecha local vive ~50 h en algún
