@@ -43,6 +43,48 @@ def _configure_logging(settings: Settings) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     _silence_streamlit_noise()
+    _quiet_successful_accesses(settings)
+
+
+class _SoloAccesosConProblema(logging.Filter):
+    """Deja pasar solo los accesos que NO terminaron bien.
+
+    Uvicorn escribe una línea por petición y el servicio atiende varios miles
+    por hora: 19.817 accesos frente a 81 avisos en hora y media, el 92 % del
+    log. Con ese ruido, encontrar los 502 o los 429 que sí importan es
+    buscar una aguja en un pajar.
+
+    Se filtra por el código de respuesta, no se apaga el registro entero: un
+    ``--no-access-log`` habría escondido también los errores, que es justo lo
+    que se quiere leer.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        # Uvicorn pasa el código como quinto argumento del registro.
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 5:
+            return True  # formato inesperado: mejor dejarlo pasar
+        try:
+            codigo = int(args[4])
+        except (TypeError, ValueError):
+            return True
+        return codigo >= 400
+
+
+def _quiet_successful_accesses(settings: Settings) -> None:
+    """Silencia el acceso de las peticiones correctas.
+
+    Se puede recuperar el registro completo poniendo
+    ``METEOLABX_ACCESS_LOG_ALL=1``, que es lo que hace falta para depurar un
+    problema de tráfico concreto.
+    """
+    import os
+
+    if str(os.environ.get("METEOLABX_ACCESS_LOG_ALL", "")).strip().lower() in {"1", "true", "yes"}:
+        return
+    acceso = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, _SoloAccesosConProblema) for f in acceso.filters):
+        acceso.addFilter(_SoloAccesosConProblema())
 
 
 def _silence_streamlit_noise() -> None:
