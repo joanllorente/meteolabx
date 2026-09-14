@@ -28,6 +28,11 @@
     troughAxes = false, overlayLabel = '',
     pressureCentres = false, overlaySmoothing = 4, overlayLayerLabel = '',
     onink = null,
+    // Encuadre guardado fuera del componente: `{ key, zoom, panX, panY }`.
+    // La vista desmonta el mapa mientras llega el frame de la hora siguiente,
+    // y sin esto cada cambio de hora devolvía el zoom al 100 %.
+    savedView = null,
+    onviewchange = null,
   } = $props();
 
   // Isotermas notables: la del cero es la que separa nieve de lluvia y helada
@@ -930,8 +935,25 @@
       frame.bounds.join(',')
     ].join('|');
     if (key === lastViewportKey) return;
+    const firstMount = lastViewportKey === '';
     lastViewportKey = key;
+    // Al volver a montarse para el mismo mapa —otra hora del mismo producto,
+    // pasada y nivel— se recupera el encuadre en vez de reencuadrar.
+    if (firstMount && savedView?.key === key) {
+      zoom = savedView.zoom;
+      panX = savedView.panX;
+      panY = savedView.panY;
+      hover = null;
+      settleViewport();
+      return;
+    }
     resetView();
+  });
+
+  // Cada cambio de encuadre se comunica hacia arriba para poder restaurarlo.
+  $effect(() => {
+    const view = { zoom, panX, panY };
+    if (lastViewportKey) onviewchange?.({ key: lastViewportKey, ...view });
   });
 
   $effect(() => () => {

@@ -48,6 +48,10 @@
   let windLevel = $state(10);
   let unitMenuOpen = $state(false);
   let mapResetKey = $state(0);
+  // Último encuadre del mapa, para que sobreviva a que el componente se
+  // desmonte entre una hora y la siguiente. No es `$state`: nadie tiene que
+  // repintarse cuando cambia, solo leerlo al volver a montar el mapa.
+  let mapView = null;
   let mapContainer = $state();
   // Blanco o negro, según lo que haya bajo la marca de agua. Lo mide el
   // componente del mapa, que es quien tiene los píxeles.
@@ -650,7 +654,7 @@
       </header>
 
       <div class="forecast-map palette-{product.palette}" bind:this={mapContainer} style:--map-ink={mapInk || null}>
-        {#if frameMatchesSelection}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameMatchesSelection}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label={tr('windLevel')}>
             <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
