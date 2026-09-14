@@ -16,6 +16,7 @@
   import app from '$lib/i18n/app-i18n.generated.js';
   import { cardinals, ui } from '$lib/i18n/ui.js';
   import { milestoneCards, summaryCards } from '$lib/historical/cards.js';
+  import { seriesRange } from '$lib/historical/selection.js';
   import { navigating } from '$app/state';
   import { closeOnOutside } from '$lib/close-on-outside.js';
   import { families } from '$lib/families.js';
@@ -41,7 +42,10 @@
     stationName = '',
     failure = '',
     provider = '',
-    busy = false
+    busy = false,
+    // Ficha de catálogo: si trae `series_start`/`series_end`, se dice entre qué
+    // fechas hay datos para no buscar a ciegas.
+    series = null
   } = $props();
 
   /**
@@ -212,6 +216,15 @@
       .replace('{selected_blocks}', String(period?.blocks ?? 0));
   });
 
+  const seriesText = $derived(() => {
+    const range = seriesRange(series);
+    if (!range) return '';
+    const format = (date) => date.toISOString().slice(0, 10).split('-').reverse().join('/');
+    return ui(language, 'historical_series_range')
+      .replace('{start}', format(range.start))
+      .replace('{end}', range.end ? format(range.end) : ui(language, 'historical_series_ongoing'));
+  });
+
   const periodText = $derived(() => {
     const raw = texts.caption?.period_summary || '';
     if (!raw || !period?.range) return '';
@@ -345,6 +358,7 @@
     </button>
   </form>
 
+  {#if seriesText()}<p class="period series">{seriesText()}</p>{/if}
   {#if periodText()}<p class="period">{periodText()}</p>{/if}
   {#if warningText() && !loading}<p class="warn">{warningText()}</p>{/if}
   {#if failure && !loading}

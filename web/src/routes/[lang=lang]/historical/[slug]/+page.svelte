@@ -58,6 +58,7 @@
     warning={data.warning}
     period={data.period}
     maxBlocks={data.maxBlocks}
+    series={data.station}
     failure={data.failure}
     provider={meta.provider || data.provider}
   />

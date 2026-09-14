@@ -64,12 +64,22 @@ export function describeSelection(mode, selection, blocks) {
  * primero es lo que manda un formulario con casillas, lo segundo lo que se
  * escribe a mano en un enlace.
  */
-export function resolveSelection(params, mode, language, requested = false) {
+export function resolveSelection(params, mode, language, requested = false, series = null) {
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   // El mes en curso casi nunca está completo en los catálogos oficiales; el
   // anterior sí, y es el que deja el formulario listo para consultar.
-  const previous = new Date(Date.UTC(currentYear, now.getUTCMonth() - 1, 1));
+  let previous = new Date(Date.UTC(currentYear, now.getUTCMonth() - 1, 1));
+
+  // Cuando el catálogo sabe entre qué fechas hay datos, el selector solo
+  // ofrece esos años —un archivo desde 1951 queda al alcance; una estación
+  // cerrada en 2024 ya no propone 2026— y la sugerencia es su último mes.
+  const range = seriesRange(series);
+  const firstYear = range ? range.start.getUTCFullYear() : FIRST_YEAR;
+  const lastYear = range?.end ? Math.min(currentYear, range.end.getUTCFullYear()) : currentYear;
+  if (range?.end && range.end < previous) {
+    previous = new Date(Date.UTC(range.end.getUTCFullYear(), range.end.getUTCMonth(), 1));
+  }
 
   const numbers = (name) =>
     params
@@ -82,11 +92,11 @@ export function resolveSelection(params, mode, language, requested = false) {
     (a, b) => a - b
   );
   const years = [
-    ...new Set(numbers('anios').filter((y) => y >= FIRST_YEAR && y <= currentYear))
+    ...new Set(numbers('anios').filter((y) => y >= firstYear && y <= lastYear))
   ].sort((a, b) => b - a);
 
   const yearOptions = [];
-  for (let value = currentYear; value >= FIRST_YEAR; value -= 1) yearOptions.push(value);
+  for (let value = lastYear; value >= firstYear; value -= 1) yearOptions.push(value);
 
   const formatter = new Intl.DateTimeFormat(language, { month: 'long', timeZone: 'UTC' });
   const monthOptions = Array.from({ length: 12 }, (_, index) => {
@@ -103,8 +113,26 @@ export function resolveSelection(params, mode, language, requested = false) {
     years:
       years.length || !suggest
         ? years
-        : [mode === 'annual' ? currentYear - 1 : previous.getUTCFullYear()],
+        : [
+            mode === 'annual'
+              ? Math.max(firstYear, range?.end ? lastYear : currentYear - 1)
+              : previous.getUTCFullYear()
+          ],
     monthOptions,
     yearOptions
   };
+}
+
+/**
+ * Fechas de la serie que declara el catálogo (`series_start`/`series_end`).
+ * Sin inicio no hay rango: la red no lo publica y se ofrece el de siempre.
+ */
+export function seriesRange(station) {
+  const parse = (value) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    return match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null;
+  };
+  const start = parse(station?.series_start);
+  if (!start) return null;
+  return { start, end: parse(station?.series_end) };
 }

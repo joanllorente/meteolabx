@@ -16,7 +16,7 @@
  * lado, y el eje de una vaguada no se define mejor por mirarlo más de cerca.
  */
 
-import { contourLines, gaussianBlur, stepLevels } from './contours.js';
+import { contourPolylines, gaussianBlur, stepLevels } from './contours.js';
 
 /** Lado del bloque de engrosado, en celdas de AROME. */
 export const TROUGH_BLOCK = 8;
@@ -696,21 +696,19 @@ export function troughAxes(field, {
   const niveles = stepLevels(suave, levelStep);
   const peaksByLevel = [];
   for (const nivel of niveles) {
-    const lineas = contourLines(suave, {
+    const lineas = contourPolylines(suave, {
       width: grueso.width,
       height: grueso.height,
       levels: [nivel],
       sigma: 0,
       minRingArea: 0,
-      tolerance: 0,
-      labelMinLength: Infinity
+      tolerance: 0
     });
     const picos = [];
     for (const linea of lineas) {
-      // `contourLines` devuelve el trazo montado; los vértices se recuperan de
-      // él, que es la misma geometría ya limpia de anillos sueltos.
-      for (const tramo of linea.path.split('M').slice(1)) {
-        const points = tramo.split('L').map((par) => par.split(',').map(Number));
+      // Los vértices salen directamente de las isolíneas, no del trazo SVG:
+      // su formato (rectas o curvas) es cosa del dibujo.
+      for (const { points } of linea.lines) {
         if (points.length < 5) continue;
         picos.push(...curvaturePeaks(
           points, fuerza, grueso.width, grueso.height,

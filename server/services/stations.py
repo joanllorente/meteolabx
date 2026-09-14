@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -25,8 +26,8 @@ SENSOR_KEYS = (
 CONNECTABLE_PROVIDERS = (
     "AEMET", "METEOCAT", "EUSKALMET", "FROST", "METEOFRANCE",
     "METEOGALICIA", "NWS", "POEM", "METOFFICE", "METEOHUB_IT",
-    "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE",
-    "WINDY", "NETATMO",
+    "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE", "LHMT", "IMGW", "DMI",
+    "METEOSWISS", "WINDY", "NETATMO",
 )
 CATALOG_PROVIDERS = CONNECTABLE_PROVIDERS
 PWS_CATALOG_PROVIDERS = ("WINDY", "NETATMO")
@@ -58,13 +59,20 @@ PROVIDER_COUNTRIES = {
     "SMHI": "SE",
     "ECCC": "CA",
     "CLIMANTARTIDE": "AQ",
+    "LHMT": "LT",
+    "IMGW": "PL",
 }
 
 # Antártida: la excepción. CLIMANTARTIDE solo cubre las bases italianas —11 de
 # las 51 que hay— y quitar IEM dejaría el continente casi vacío, así que allí
 # conviven las dos redes y el solapamiento se resuelve estación por estación
 # (``_IEM_SUPERSEDED_BY_CLIMANTARTIDE``).
-_IEM_KEEP_DESPITE_OWN_PROVIDER = ("AQ",)
+#
+# Lituania, lo mismo por otro motivo: LHMT solo publica sus 52 estaciones
+# automáticas, y las cuatro de IEM allí son METAR de aeropuerto (Vilnius,
+# Kaunas, Palanga y Šiauliai) que la red nacional no sirve. No hay duplicado
+# que esconder y quitarlas dejaría los aeropuertos sin estación.
+_IEM_KEEP_DESPITE_OWN_PROVIDER = ("AQ", "LT")
 
 # Donde hay red propia, IEM no se enseña: es casi todo duplicado, la misma
 # estación con otro identificador y otro nombre. Vale para el mapa y para la
@@ -77,8 +85,19 @@ _IEM_KEEP_DESPITE_OWN_PROVIDER = ("AQ",)
 #
 # Provisional mientras no exista la deduplicación: cuando esté, habrá que
 # decidir si IEM vuelve al mapa y a la búsqueda de estos países.
+# Redes nacionales de más de un país. No van en ``PROVIDER_COUNTRIES``, que
+# estampa un único país en todas sus estaciones: aquí cada una trae el suyo.
+MULTI_COUNTRY_PROVIDERS = {
+    # DMI: Dinamarca, Groenlandia y las Feroe.
+    "DMI": ("DK", "GL", "FO"),
+    # MeteoSwiss: Suiza y Liechtenstein (Vaduz, Malbun y Schaan).
+    "METEOSWISS": ("CH", "LI"),
+}
+
 COUNTRIES_WITH_OWN_NETWORK = tuple(sorted(
-    set(PROVIDER_COUNTRIES.values()) - set(_IEM_KEEP_DESPITE_OWN_PROVIDER)
+    (set(PROVIDER_COUNTRIES.values()) | {
+        code for codes in MULTI_COUNTRY_PROVIDERS.values() for code in codes
+    }) - set(_IEM_KEEP_DESPITE_OWN_PROVIDER)
 ))
 
 
@@ -233,7 +252,9 @@ def _pws_record(row: sqlite3.Row) -> Dict[str, Any]:
         "tz": None,
         "country": country or "UNSPECIFIED",
         "region": None,
-        "locality": str(row["station_type"] or ""),
+        # ``station_type`` es el modelo de la estación («Davis Vantage Pro
+        # 2»), no una localidad: la ficha lo enseñaba como tal.
+        "locality": "",
         "connectable": True,
         "has_historical": False,
         "is_historical_only": False,
@@ -588,7 +609,16 @@ def _lifecycle_metadata(raw_json: Any) -> Dict[str, Any]:
         "replacement_station_name": (
             str(raw.get("replacement_station_name") or "").strip() or None
         ),
+        # Primer y último día con datos del histórico, cuando el inventario los
+        # conoce (IMGW). Fin vacío = la serie sigue.
+        "series_start": _iso_day(raw.get("archive_start")),
+        "series_end": _iso_day(raw.get("archive_end")),
     }
+
+
+def _iso_day(value: Any) -> Optional[str]:
+    text = str(value or "").strip()[:10]
+    return text if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else None
 
 
 def _record(row: sqlite3.Row) -> Dict[str, Any]:
@@ -725,7 +755,7 @@ def get_station(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
                 (provider, station_id),
             ).fetchone()
     if row is not None:
-        return _record(row)
+        return _with_resolved_country(_record(row))
 
     # MeteoHub publica en su feed estaciones que el inventario local todavía
     # no tiene, y su identificador ya lleva dentro todo lo que hace falta para
@@ -735,6 +765,23 @@ def get_station(provider: str, station_id: str) -> Optional[Dict[str, Any]]:
     if provider == "METEOHUB_IT":
         return _meteohub_station_from_id(station_id)
     return None
+
+
+def _with_resolved_country(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Pone país real a las estaciones de IEM que llegan con ``UN``/``AN``.
+
+    En los listados basta con el código del catálogo, pero la ficha de una
+    estación lo enseña, y «UN» no es un país: se resuelve por coordenadas,
+    como ya hace el ranking. Es una sola estación, así que el
+    point-in-polygon no cuesta nada.
+    """
+    if record.get("country") not in COUNTRY_CODES_RESOLVED_BY_COORDS:
+        return record
+    try:
+        resolved = country_for_point(float(record["lat"]), float(record["lon"]))
+    except (TypeError, ValueError, KeyError):
+        return record
+    return {**record, "country": resolved} if resolved else record
 
 
 def _meteohub_station_from_id(station_id: str) -> Optional[Dict[str, Any]]:
@@ -1072,7 +1119,7 @@ def indexable_url_slug_count() -> int:
 # IEM para no duplicar. EE.UU. NO está aquí: NWS no tiene endpoint bulk
 # (observaciones solo por estación), así que el ranking de EE.UU. lo cubre IEM.
 # (NWS se sigue usando para el MAPA, no para el ranking.)
-IEM_RANKING_EXCLUDE_COUNTRIES = ("ES", "FR", "NO", "IT", "PT", "AT", "SE", "CA")
+IEM_RANKING_EXCLUDE_COUNTRIES = ("ES", "FR", "NO", "IT", "PT", "AT", "SE", "CA", "PL", "DK", "GL", "FO", "CH", "LI")
 
 # Redes IEM que NO aportan al ranking (no se llaman, ahorrando peticiones):
 #   - COCORAHS: pluviómetros ciudadanos, sin termómetro, volumen enorme.
@@ -1380,7 +1427,14 @@ _country_counts_cache: Dict[tuple, tuple[float, Dict[str, int]]] = {}
 
 
 def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
-    cache_key = tuple(sorted(
+    # Igual que :func:`drop_redundant_iem`: el IEM de los países con red
+    # propia no sale en el mapa ni en la búsqueda, así que tampoco en sus
+    # recuentos —el selector ponía 110.000 estaciones junto a Estados Unidos
+    # y enseñaba 30.000—. Pedir IEM por su nombre lo desactiva.
+    keep_redundant_iem = bool(providers) and any(
+        str(value).strip().upper() in AGGREGATOR_CATALOG_PROVIDERS for value in providers
+    )
+    cache_key = (keep_redundant_iem, *sorted(
         str(value).strip().upper() for value in (providers or list(CATALOG_PROVIDERS))
     ))
     cached = _country_counts_cache.get(cache_key)
@@ -1401,8 +1455,16 @@ def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     if wanted_providers:
         placeholders = ",".join("?" for _ in wanted_providers)
+        country_expr = _effective_country_sql()
+        redundant_clause = ""
+        redundant_args: tuple = ()
+        if not keep_redundant_iem:
+            redundant_clause = (
+                f" AND NOT (s.provider IN ({','.join('?' for _ in AGGREGATOR_CATALOG_PROVIDERS)})"
+                f" AND {country_expr} IN ({','.join('?' for _ in COUNTRIES_WITH_OWN_NETWORK)}))"
+            )
+            redundant_args = (*AGGREGATOR_CATALOG_PROVIDERS, *COUNTRIES_WITH_OWN_NETWORK)
         with _connect() as connection:
-            country_expr = _effective_country_sql()
             rows = connection.execute(
                 f"""
                 SELECT {country_expr} AS country,
@@ -1411,10 +1473,11 @@ def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
                 LEFT JOIN station_visibility_overrides svo USING(station_pk)
                 WHERE s.provider IN ({placeholders})
                   AND COALESCE(svo.hidden, 0) = 0
+                  {redundant_clause}
                 GROUP BY {country_expr}
                 ORDER BY station_count DESC, country
                 """,
-                wanted_providers,
+                (*wanted_providers, *redundant_args),
             ).fetchall()
         counts.update({row["country"]: int(row["station_count"]) for row in rows})
 
@@ -1452,6 +1515,18 @@ def country_counts(*, providers: Optional[List[str]] = None) -> Dict[str, int]:
     return counts
 
 
+def inventory_station_count() -> int:
+    """Estaciones del inventario tal como las enseñan el mapa y la búsqueda.
+
+    Es la suma de :func:`country_counts`, que ya deja fuera el IEM de los
+    países con red propia (más de cien mil duplicados de AEMET, Météo-France
+    o el NWS que ninguna vista enseña). Las estaciones podadas de IEM —redes
+    retiradas, DCP hidrológicas, históricos de menos de un año, duplicados
+    confirmados— ni siquiera están en el catálogo.
+    """
+    return int(sum(country_counts().values()))
+
+
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     rad = math.radians
     dlat = rad(lat2 - lat1)
@@ -1474,8 +1549,14 @@ def search_near(
     has_historical: bool = False,
     hide_historical_only: bool = False,
     limit: int = 200,
+    requested_providers: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Search the RTree and apply exact distance and sensor filters."""
+    """Search the RTree and apply exact distance and sensor filters.
+
+    ``requested_providers`` es lo que pidió el usuario, si difiere de
+    ``providers`` (p. ej. la lista blanca de «ocultar particulares», que
+    incluye IEM sin que nadie lo haya pedido por su nombre).
+    """
     wanted_providers = [
         provider for provider in (
             str(value).strip().upper()
@@ -1560,7 +1641,8 @@ def search_near(
     # IEM— ocuparía una de las plazas del límite y devolveríamos menos
     # resultados de los pedidos.
     return drop_redundant_iem(
-        _drop_silent_stations(results), requested_providers=providers,
+        _drop_silent_stations(results),
+        requested_providers=providers if requested_providers is None else requested_providers,
     )[:max(1, int(limit))]
 
 

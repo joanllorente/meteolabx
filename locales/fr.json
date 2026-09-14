@@ -9,6 +9,7 @@
     "suspect_temperature_reason_frozen": "inchangée depuis des heures",
     "suspect_temperature_reason_impossible": "impossible pour sa latitude et cette saison",
     "suspect_temperature_reason_range": "maximale et minimale incompatibles le même jour",
+    "suspect_wind": "⚠️ L'anémomètre de cette station a relevé aujourd'hui une rafale de {gust} km/h qui n'est pas crédible. Ses données de vent du jour ont été exclues du classement.",
     "historical_station": "⚠️ Cette station est historique et ne publie plus d’observations actuelles. Vous pouvez consulter sa série dans l’onglet Historique.",
     "historical_station_replacement": "Cette station a été déplacée. La station actuelle est {station_link}."
   },
@@ -167,6 +168,21 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à",
+    "release_210_improvements": [
+      "Ajout de nouveaux fournisseurs officiels de Lituanie, de Pologne, du Danemark et de Suisse.",
+      "La recherche par lieu mémorise désormais les dernières stations consultées.",
+      "Ajout de nouveaux préréglages d’unités de mesure.",
+      "Amélioration de l’affichage de la carte des précipitations.",
+      "La rose des vents affiche désormais aussi les vitesses enregistrées.",
+      "Ajout d’une nouvelle rose des vents pour les rafales.",
+      "Ajout de la langue allemande.",
+      "MeteoLabX fonctionne désormais pleinement comme Progressive Web App (PWA) et peut être installée comme application sur les appareils compatibles."
+    ],
+    "release_210_fixes": [
+      "Correction d’un problème qui empêchait d’afficher simultanément des stations de plusieurs pays sur la carte.",
+      "Correction d’un problème qui empêchait d’afficher correctement le pays des stations du fournisseur IEM.",
+      "Correction d’un bug qui pouvait provoquer des valeurs de température erronées pour les stations de MeteoGalicia."
+    ],
     "release_203_improvements": [
       "Améliorations de l’interface.",
       "Améliorations de l’affichage sur mobile.",
@@ -288,7 +304,17 @@
         "wind": "Vent",
         "pressure": "Pression",
         "precip": "Précipitation",
-        "radiation": "Rayonnement"
+        "radiation": "Rayonnement",
+        "distance": "Distance",
+        "altitude": "Altitude"
+      },
+      "presets_title": "Système",
+      "presets": {
+        "metric": "Métrique",
+        "meteorological": "Météorologique",
+        "imperial": "Impérial (US)",
+        "aviation": "Aviation",
+        "uk": "Royaume-Uni"
       }
     },
     "buttons": {

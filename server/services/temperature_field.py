@@ -921,6 +921,22 @@ def render_grid_png(
     return buffer.getvalue()
 
 
+def _disk_max_filter(values: np.ndarray, radius: int) -> np.ndarray:
+    """Máximo en un vecindario circular de ``radius`` celdas."""
+    rows, cols = values.shape
+    padded = np.pad(values, radius)
+    out = values.copy()
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if (dy or dx) and dy * dy + dx * dx <= radius * radius + radius:
+                np.maximum(
+                    out,
+                    padded[radius + dy: radius + dy + rows, radius + dx: radius + dx + cols],
+                    out=out,
+                )
+    return out
+
+
 def render_global_grid_png(
     temp: np.ndarray,
     mask: np.ndarray,
@@ -930,12 +946,18 @@ def render_global_grid_png(
     color_stops: Sequence[Tuple[float, Tuple[int, int, int]]] = COLOR_STOPS,
     band_size: float = 1.0,
     preserve_mask_alpha: bool = False,
+    bands_at_output_size: bool = False,
 ) -> bytes:
     """Textura mundial cacheable con costa 1:10m.
 
     A diferencia del antiguo recorte por viewport, esta operación no depende
     de la cámara. El navegador conserva la misma textura durante todos los
     movimientos y solo la sustituye cuando cambia el ciclo meteorológico.
+
+    ``bands_at_output_size`` amplía el campo antes de aplicar la rampa: los
+    bordes entre bandas quedan al paso de la textura (0,05°) en vez de en
+    escalones de la rejilla de 0,1° difuminados. Cuesta medio GB de pico, así
+    que solo lo usa la precipitación, cuyas bandas de 0,2 mm lo necesitan.
     """
     from PIL import Image, ImageChops, ImageFilter
 
@@ -944,18 +966,35 @@ def render_global_grid_png(
     if not (2048 <= width <= 8192 and 1024 <= height <= 4096):
         raise ValueError("global temperature field size is out of range")
 
-    colored = colorize(
-        temp, np.asarray(mask) > 0,
-        color_stops=color_stops, band_size=band_size,
-    )
-    rgb_source = Image.fromarray(colored[..., :3])
-    support_values = (
-        np.clip(np.asarray(mask, dtype=float) * 255.0, 0, 255).astype(np.uint8)
-        if preserve_mask_alpha
-        else np.where(np.asarray(mask) > 0, 255, 0).astype(np.uint8)
-    )
-    support_source = Image.fromarray(support_values).filter(ImageFilter.MaxFilter(5))
-    rgb = rgb_source.resize((width, height), Image.Resampling.BILINEAR)
+    if bands_at_output_size:
+        values = Image.fromarray(np.asarray(temp, dtype=np.float32), "F").resize(
+            (width, height), Image.Resampling.BILINEAR,
+        )
+        colored = colorize(
+            np.asarray(values), True,
+            color_stops=color_stops, band_size=band_size,
+        )
+        rgb = Image.fromarray(colored[..., :3])
+        del values, colored
+    else:
+        colored = colorize(
+            temp, np.asarray(mask) > 0,
+            color_stops=color_stops, band_size=band_size,
+        )
+        rgb = Image.fromarray(colored[..., :3]).resize(
+            (width, height), Image.Resampling.BILINEAR,
+        )
+    if preserve_mask_alpha:
+        # Dilatación en disco y no en cuadrado: con alfa fraccional la
+        # ventana cuadrada dejaba lloviznas aisladas como baldosas.
+        support_source = Image.fromarray(_disk_max_filter(
+            np.clip(np.asarray(mask, dtype=float) * 255.0, 0, 255).astype(np.uint8),
+            radius=2,
+        ))
+    else:
+        support_source = Image.fromarray(
+            np.where(np.asarray(mask) > 0, 255, 0).astype(np.uint8)
+        ).filter(ImageFilter.MaxFilter(5))
     support = support_source.resize(
         (width, height),
         Image.Resampling.BILINEAR if preserve_mask_alpha else Image.Resampling.NEAREST,

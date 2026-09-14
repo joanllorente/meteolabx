@@ -25,6 +25,7 @@
         "es",
         "ca",
         "en",
+        "de",
         "fr",
         "it",
         "pt"
@@ -33,6 +34,7 @@
         "es",
         "ca",
         "en",
+        "de",
         "fr",
         "it",
         "pt"
@@ -64,6 +66,15 @@
           "search_name": "Barcelona Drassanes",
           "sensors": "temperature, humidity, atmospheric pressure",
           "place_name": "Weather station Barcelona Drassanes"
+        },
+        "de": {
+          "title": "Wetterstation Barcelona Drassanes (AEMET) | MeteoLabX",
+          "description": "Messwerte der Wetterstation Barcelona Drassanes von AEMET in Spanien: Standort, Höhe, Sensoren und Wetterdaten in MeteoLabX.",
+          "lede": "Wetterdaten von Barcelona Drassanes, einer Station von AEMET in Spanien.",
+          "location": "Spanien",
+          "search_name": "Barcelona Drassanes",
+          "sensors": "Temperatur, Luftfeuchte, Luftdruck",
+          "place_name": "Wetterstation Barcelona Drassanes"
         },
         "fr": {
           "title": "Station météo Barcelona Drassanes (AEMET) | MeteoLabX",
@@ -117,6 +128,7 @@
         "es",
         "ca",
         "en",
+        "de",
         "fr",
         "it",
         "pt"
@@ -125,6 +137,7 @@
         "es",
         "ca",
         "en",
+        "de",
         "fr",
         "it",
         "pt"
@@ -156,6 +169,15 @@
           "search_name": "Fabra Observatory",
           "sensors": "temperature, wind speed",
           "place_name": "Weather station Barcelona - Observatori Fabra"
+        },
+        "de": {
+          "title": "Wetterstation Barcelona - Observatori Fabra (Meteocat) | MeteoLabX",
+          "description": "Messwerte der Wetterstation Barcelona - Observatori Fabra von Meteocat in Barcelona, Catalunya, Spanien: Standort, Höhe, Sensoren und Wetterdaten in MeteoLabX.",
+          "lede": "Wetterdaten von Barcelona - Observatori Fabra, einer Station von Meteocat in Barcelona, Catalunya, Spanien.",
+          "location": "Barcelona, Catalunya, Spanien",
+          "search_name": "Barcelona - Observatori Fabra",
+          "sensors": "Temperatur, Windgeschwindigkeit",
+          "place_name": "Wetterstation Barcelona - Observatori Fabra"
         },
         "fr": {
           "title": "Station météo Observatoire Fabra (Meteocat) | MeteoLabX",

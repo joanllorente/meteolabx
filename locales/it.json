@@ -9,6 +9,7 @@
     "suspect_temperature_reason_frozen": "ferma da ore",
     "suspect_temperature_reason_impossible": "impossibile per la sua latitudine e stagione",
     "suspect_temperature_reason_range": "massima e minima incompatibili nello stesso giorno",
+    "suspect_wind": "⚠️ L'anemometro di questa stazione ha registrato oggi una raffica di {gust} km/h non attendibile. I suoi dati di vento di oggi sono stati esclusi dalla classifica.",
     "historical_station": "⚠️ Questa stazione è storica e non pubblica più osservazioni attuali. Puoi consultarne la serie nella scheda Storico.",
     "historical_station_replacement": "Questa stazione è stata trasferita. La stazione attuale è {station_link}."
   },
@@ -167,6 +168,21 @@
     ],
     "privacy_contact_title": "Contatto",
     "privacy_contact": "Per qualsiasi domanda sulla privacy o sul trattamento di queste informazioni, puoi scrivere a",
+    "release_210_improvements": [
+      "Aggiunti nuovi fornitori ufficiali di Lituania, Polonia, Danimarca e Svizzera.",
+      "La ricerca per località ora ricorda le ultime stazioni visitate.",
+      "Aggiunte nuove preimpostazioni delle unità di misura.",
+      "Migliorata la visualizzazione della mappa delle precipitazioni.",
+      "La rosa dei venti ora mostra anche le velocità registrate.",
+      "Aggiunta una nuova rosa dei venti per le raffiche.",
+      "Aggiunta la lingua tedesca.",
+      "MeteoLabX ora funziona completamente come Progressive Web App (PWA) e può essere installata come app sui dispositivi compatibili."
+    ],
+    "release_210_fixes": [
+      "Corretto un problema che impediva di mostrare contemporaneamente sulla mappa stazioni di più paesi.",
+      "Corretto un problema che impediva di mostrare correttamente il paese delle stazioni del fornitore IEM.",
+      "Corretto un errore che poteva causare valori di temperatura errati nelle stazioni di MeteoGalicia."
+    ],
     "release_203_improvements": [
       "Miglioramenti dell’interfaccia.",
       "Miglioramenti nella visualizzazione su dispositivi mobili.",
@@ -288,7 +304,17 @@
         "wind": "Vento",
         "pressure": "Pressione",
         "precip": "Precipitazione",
-        "radiation": "Radiazione"
+        "radiation": "Radiazione",
+        "distance": "Distanza",
+        "altitude": "Altitudine"
+      },
+      "presets_title": "Sistema",
+      "presets": {
+        "metric": "Metrico",
+        "meteorological": "Meteorologico",
+        "imperial": "Imperiale (USA)",
+        "aviation": "Aviazione",
+        "uk": "Regno Unito"
       }
     },
     "buttons": {

@@ -84,7 +84,7 @@ def _wind_data_key(store, points) -> str:
 
     return (
         f"wind-field-{FIELD_ALGORITHM_VERSION}:"
-        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}:{len(points)}"
+        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}"
     )
 
 
@@ -96,7 +96,7 @@ def _precipitation_data_key(store, points) -> str:
 
     return (
         f"precipitation-field-{FIELD_ALGORITHM_VERSION}:"
-        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}:{len(points)}"
+        f"palette-{COLOR_SCALE_VERSION}:{_snapshot_key(store, points)}"
     )
 
 
@@ -446,6 +446,7 @@ async def get_precipitation_field(request: Request) -> Response:
                 color_stops=COLOR_STOPS,
                 band_size=BAND_SIZE_MM,
                 preserve_mask_alpha=True,
+                bands_at_output_size=True,
             )
             _precipitation_field_cache["data_key"] = data_key
             _precipitation_field_cache["png"] = png
@@ -533,6 +534,19 @@ async def get_countries(
 
 
 @router.get(
+    "/inventory-total",
+    summary="Número total de estaciones del inventario, fijado en cada deploy",
+    response_model=Dict[str, Optional[object]],
+)
+async def get_inventory_total() -> Dict[str, Optional[object]]:
+    from server.services import inventory_total
+
+    # La primera llamada de un deploy puede tener que contar (unas décimas):
+    # fuera del bucle de eventos, para no frenar al resto de peticiones.
+    return await asyncio.to_thread(inventory_total.current)
+
+
+@router.get(
     "/country-by-tz",
     summary="País (ISO2) aproximado a partir de una zona horaria IANA",
     response_model=Dict[str, Optional[str]],
@@ -576,6 +590,9 @@ async def get_stations_near(
     country_list: Optional[List[str]] = [
         c for c in (item.strip().upper() for item in countries.split(",")) if c
     ] or None
+    # Lo pedido por nombre, antes de convertir «ocultar particulares» en lista
+    # blanca: esa lista incluye IEM y desactivaría el filtro de sus duplicados.
+    requested_providers = list(provider_list or [])
     if hide_amateur:
         # Como lista blanca, no recortando después: el límite se aplica en la
         # consulta, y si las más cercanas son todas de particulares, filtrar
@@ -595,6 +612,7 @@ async def get_stations_near(
         has_historical=has_historical,
         hide_historical_only=hide_historical_only,
         limit=limit,
+        requested_providers=requested_providers,
     )
     return StationSearchResponse(
         count=len(results),

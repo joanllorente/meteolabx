@@ -23,6 +23,7 @@ usage_stats.sqlite`` (sobrevive redeploys) > ``data/usage_stats.sqlite``
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -101,6 +102,36 @@ CREATE TABLE IF NOT EXISTS seo_panel_clicks (
 );
 CREATE INDEX IF NOT EXISTS idx_seo_clicks_station ON seo_panel_clicks(provider, station_id);
 CREATE INDEX IF NOT EXISTS idx_seo_clicks_epoch ON seo_panel_clicks(epoch);
+
+-- Mapas de predicción que alguien abre a propósito en el visor: una fila por
+-- mapa distinto elegido en cada carga de página, no por cada vez que se
+-- vuelve a él. ``label`` es el nombre del mapa en castellano en el momento
+-- de verlo, como el nombre de una estación: sin él la tabla serían ids.
+CREATE TABLE IF NOT EXISTS forecast_map_views (
+    view_pk INTEGER PRIMARY KEY,
+    model TEXT NOT NULL,
+    product TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    epoch INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_forecast_map_views_product ON forecast_map_views(model, product);
+CREATE INDEX IF NOT EXISTS idx_forecast_map_views_epoch ON forecast_map_views(epoch);
+
+-- Instalación de la PWA. Una fila por evento, con el aparato en el que pasó:
+-- sistema, tipo de dispositivo, navegador y la forma de instalar que se le
+-- enseñó. Nada que identifique a la persona.
+CREATE TABLE IF NOT EXISTS pwa_events (
+    event_pk INTEGER PRIMARY KEY,
+    event TEXT NOT NULL,
+    os TEXT NOT NULL DEFAULT '',
+    device TEXT NOT NULL DEFAULT '',
+    browser TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL DEFAULT '',
+    epoch INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pwa_events_event ON pwa_events(event);
+CREATE INDEX IF NOT EXISTS idx_pwa_events_epoch ON pwa_events(epoch);
 """
 
 TRACKED_SECTIONS = (
@@ -322,6 +353,231 @@ def record_section_visit(section: str, *, settings=None) -> None:
             "INSERT INTO section_visits(section, epoch) VALUES (?, ?)",
             (section, int(time.time())),
         )
+
+
+FORECAST_MODELS = frozenset({"arome", "ecmwf"})
+_FORECAST_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,59}$")
+
+
+def record_forecast_map_view(
+    model: str,
+    product: str,
+    *,
+    label: str = "",
+    category: str = "",
+    settings=None,
+) -> None:
+    """Registra que se ha abierto un mapa de predicción, sin datos personales."""
+    model = str(model or "").strip().lower()
+    product = str(product or "").strip().lower()
+    category = str(category or "").strip().lower()
+    if model not in FORECAST_MODELS or not _FORECAST_ID.match(product):
+        return
+    if category and not _FORECAST_ID.match(category):
+        category = ""
+    with _connect(settings) as connection:
+        connection.execute(
+            "INSERT INTO forecast_map_views(model, product, label, category, epoch)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (model, product, str(label or "").strip()[:120], category, int(time.time())),
+        )
+
+
+def forecast_map_summary(*, settings=None, now: Optional[int] = None) -> Dict[str, Any]:
+    """Mapas de predicción más vistos, con las mismas ventanas que el resto."""
+    now = int(now if now is not None else time.time())
+    windows = (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"])
+    with _connect(settings) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            """
+            SELECT model, product,
+                   (SELECT f2.label FROM forecast_map_views f2
+                    WHERE f2.model = f.model AND f2.product = f.product AND f2.label <> ''
+                    ORDER BY f2.epoch DESC LIMIT 1) AS label,
+                   (SELECT f3.category FROM forecast_map_views f3
+                    WHERE f3.model = f.model AND f3.product = f.product AND f3.category <> ''
+                    ORDER BY f3.epoch DESC LIMIT 1) AS category,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM forecast_map_views f
+            GROUP BY model, product
+            """,
+            windows,
+        ).fetchall()
+        totals = connection.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+            FROM forecast_map_views
+            """,
+            windows,
+        ).fetchone()
+
+    maps = [
+        {
+            "model": str(row["model"]),
+            "product": str(row["product"]),
+            "label": str(row["label"] or ""),
+            "category": str(row["category"] or ""),
+            "d1": int(row["d1"] or 0),
+            "d7": int(row["d7"] or 0),
+            "d30": int(row["d30"] or 0),
+            "total": int(row["total"] or 0),
+            "last_epoch": int(row["last_epoch"] or 0),
+        }
+        for row in rows
+    ]
+    maps.sort(key=lambda row: (row["d30"], row["total"], row["last_epoch"]), reverse=True)
+
+    by_category: Dict[str, Dict[str, int]] = {}
+    for row in maps:
+        bucket = by_category.setdefault(row["category"] or "", {"d30": 0, "total": 0})
+        bucket["d30"] += row["d30"]
+        bucket["total"] += row["total"]
+    categories = sorted(
+        ({"category": key, **value} for key, value in by_category.items()),
+        key=lambda row: (row["d30"], row["total"]),
+        reverse=True,
+    )
+    return {
+        "maps": maps,
+        "categories": categories,
+        "totals": {
+            "d1": int(totals["d1"] or 0),
+            "d7": int(totals["d7"] or 0),
+            "d30": int(totals["d30"] or 0),
+            "total": int(totals["total"] or 0),
+            "maps": len(maps),
+        },
+    }
+
+
+# Eventos de instalación, en el orden del embudo.
+#
+# - offered: la tarjeta se ha enseñado (una vez por navegador).
+# - instructions: se han abierto las instrucciones.
+# - prompt_accepted / prompt_dismissed: respuesta al diálogo de Chrome o Edge.
+# - installed: el navegador confirma la instalación (solo Chromium lo avisa).
+# - launched: primera apertura de la app instalada. Es la única señal que hay
+#   en iPhone y iPad, así que es la cifra de instalaciones comparable.
+# - dismissed: «Ahora no».
+PWA_EVENTS = (
+    "offered", "instructions", "prompt_accepted", "prompt_dismissed",
+    "installed", "launched", "dismissed",
+)
+PWA_OS = frozenset({"ios", "ipados", "android", "macos", "windows", "linux", "chromeos", "other"})
+PWA_DEVICES = frozenset({"mobile", "tablet", "desktop"})
+PWA_BROWSERS = frozenset({"safari", "chrome", "edge", "firefox", "samsung", "opera", "other"})
+PWA_METHODS = frozenset({
+    "installed", "prompt", "ios-safari", "ios-share", "android-menu", "android-samsung",
+    "android-firefox", "mac-safari", "desktop-chromium", "open-browser", "unsupported",
+})
+
+
+def record_pwa_event(
+    event: str,
+    *,
+    os: str = "",
+    device: str = "",
+    browser: str = "",
+    method: str = "",
+    settings=None,
+) -> None:
+    """Registra un evento de instalación; lo desconocido se guarda vacío."""
+    event = str(event or "").strip().lower()
+    if event not in PWA_EVENTS:
+        return
+
+    def _known(value: str, allowed) -> str:
+        value = str(value or "").strip().lower()
+        return value if value in allowed else ""
+
+    with _connect(settings) as connection:
+        connection.execute(
+            "INSERT INTO pwa_events(event, os, device, browser, method, epoch)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                event,
+                _known(os, PWA_OS),
+                _known(device, PWA_DEVICES),
+                _known(browser, PWA_BROWSERS),
+                _known(method, PWA_METHODS),
+                int(time.time()),
+            ),
+        )
+
+
+def pwa_summary(*, settings=None, now: Optional[int] = None) -> Dict[str, Any]:
+    """Embudo de instalación y en qué aparatos se instala."""
+    now = int(now if now is not None else time.time())
+    windows = (now - WINDOWS["d1"], now - WINDOWS["d7"], now - WINDOWS["d30"])
+    counts = """
+        COUNT(*) AS total,
+        SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+        SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+        SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
+    """
+    with _connect(settings) as connection:
+        connection.row_factory = sqlite3.Row
+        event_rows = connection.execute(
+            f"SELECT event, {counts} FROM pwa_events GROUP BY event", windows,
+        ).fetchall()
+        breakdown = {}
+        for dimension in ("device", "os", "browser"):
+            breakdown[dimension] = connection.execute(
+                f"""
+                SELECT {dimension} AS value,
+                       SUM(CASE WHEN event = 'launched' THEN 1 ELSE 0 END) AS launched,
+                       SUM(CASE WHEN event = 'installed' THEN 1 ELSE 0 END) AS installed,
+                       SUM(CASE WHEN event = 'offered' THEN 1 ELSE 0 END) AS offered,
+                       SUM(CASE WHEN event = 'launched' AND epoch >= ? THEN 1 ELSE 0 END) AS launched_d30
+                FROM pwa_events
+                GROUP BY {dimension}
+                """,
+                (windows[2],),
+            ).fetchall()
+        method_rows = connection.execute(
+            """
+            SELECT method AS value,
+                   SUM(CASE WHEN event = 'offered' THEN 1 ELSE 0 END) AS offered,
+                   SUM(CASE WHEN event = 'instructions' THEN 1 ELSE 0 END) AS instructions,
+                   SUM(CASE WHEN event = 'prompt_accepted' THEN 1 ELSE 0 END) AS prompt_accepted,
+                   SUM(CASE WHEN event = 'prompt_dismissed' THEN 1 ELSE 0 END) AS prompt_dismissed,
+                   SUM(CASE WHEN event = 'dismissed' THEN 1 ELSE 0 END) AS dismissed
+            FROM pwa_events
+            WHERE event <> 'launched'
+            GROUP BY method
+            """
+        ).fetchall()
+
+    by_event = {
+        str(row["event"]): {key: int(row[key] or 0) for key in ("d1", "d7", "d30", "total")}
+        for row in event_rows
+    }
+    empty = {"d1": 0, "d7": 0, "d30": 0, "total": 0}
+    events = [{"event": event, **by_event.get(event, empty)} for event in PWA_EVENTS]
+
+    def _rows(rows, keys):
+        out = [{"value": str(row["value"] or ""), **{k: int(row[k] or 0) for k in keys}} for row in rows]
+        out = [row for row in out if any(row[k] for k in keys)]
+        return sorted(out, key=lambda row: tuple(row[k] for k in keys), reverse=True)
+
+    return {
+        "events": events,
+        "by_device": _rows(breakdown["device"], ("launched", "installed", "offered", "launched_d30")),
+        "by_os": _rows(breakdown["os"], ("launched", "installed", "offered", "launched_d30")),
+        "by_browser": _rows(breakdown["browser"], ("launched", "installed", "offered", "launched_d30")),
+        "by_method": _rows(
+            method_rows,
+            ("offered", "instructions", "prompt_accepted", "prompt_dismissed", "dismissed"),
+        ),
+    }
 
 
 def purge_crawler_visits(*, settings=None) -> int:
@@ -959,7 +1215,7 @@ def station_detail(
     }
 
 
-SUPPORTED_LANGUAGES = {"es", "ca", "en", "fr", "it", "pt"}
+SUPPORTED_LANGUAGES = {"es", "ca", "en", "de", "fr", "it", "pt"}
 
 
 def language_tags(value: str) -> str:

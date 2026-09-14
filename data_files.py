@@ -27,6 +27,13 @@ GEOSPHERE_STATIONS_PATH = DATA_DIR / "data_estaciones_geosphere.json"
 SMHI_STATIONS_PATH = DATA_DIR / "data_estaciones_smhi.json"
 ECCC_STATIONS_PATH = DATA_DIR / "data_estaciones_eccc.json"
 CLIMANTARTIDE_STATIONS_PATH = DATA_DIR / "data_estaciones_climantartide.json"
+LHMT_STATIONS_PATH = DATA_DIR / "data_estaciones_lhmt.json"
+IMGW_STATIONS_PATH = DATA_DIR / "data_estaciones_imgw.json"
+DMI_STATIONS_PATH = DATA_DIR / "data_estaciones_dmi.json"
+METEOSWISS_STATIONS_PATH = DATA_DIR / "data_estaciones_meteoswiss.json"
+# Coordenadas de las estaciones del archivo de IMGW sacadas de sus mapas PDF
+# (scripts/extract_imgw_pdf_coords.py).
+IMGW_PDF_COORDS_PATH = DATA_DIR / "imgw_pdf_coords.json"
 
 # Fronteras de países (Natural Earth 1:50m, ISO_A2_EH) para resolver el país
 # de una estación por sus coordenadas (point-in-polygon). Usado para colocar en
@@ -57,6 +64,10 @@ STATION_CATALOG_PATHS = [
     SMHI_STATIONS_PATH,
     ECCC_STATIONS_PATH,
     CLIMANTARTIDE_STATIONS_PATH,
+    LHMT_STATIONS_PATH,
+    IMGW_STATIONS_PATH,
+    DMI_STATIONS_PATH,
+    METEOSWISS_STATIONS_PATH,
 ]
 
 # Valor de respaldo del conteo visible del SQLite unificado (conectables +

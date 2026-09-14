@@ -1,5 +1,6 @@
 import {
   fetchCountryByTimezone,
+  fetchInventoryTotal,
   fetchMapCatalog,
   fetchMapPoints,
   fetchStationCountries
@@ -13,7 +14,7 @@ const LAYERS = {
 };
 
 // Último recurso, cuando no hay país en la URL ni zona horaria conocida.
-const LANGUAGE_COUNTRY = { es: 'ES', fr: 'FR', it: 'IT', pt: 'PT', ca: 'ES', en: 'ES' };
+const LANGUAGE_COUNTRY = { es: 'ES', fr: 'FR', it: 'IT', pt: 'PT', ca: 'ES', en: 'ES', de: 'DE' };
 
 // La zona horaria del navegador, que deja el cliente en una cookie. Es la
 // misma aproximación que usa la app actual cuando no tiene la posición del
@@ -40,6 +41,7 @@ const MAX_STATIONS = 60_000;
 export async function load({ params, url, fetch, cookies, setHeaders }) {
   const layer = LAYERS[url.searchParams.get('capa') || ''] || 'stations';
   const countriesPromise = fetchStationCountries({ fetch }).catch(() => ({}));
+  const inventoryPromise = fetchInventoryTotal({ fetch }).catch(() => null);
   const filters = await readFilters(url.searchParams, params.lang, cookies, fetch);
 
   let catalog = null;
@@ -71,6 +73,7 @@ export async function load({ params, url, fetch, cookies, setHeaders }) {
     filters,
     sensorKeys: SENSORS,
     countries: await countriesPromise,
+    inventoryTotal: (await inventoryPromise)?.total ?? null,
     catalog,
     points,
     updatedAt,

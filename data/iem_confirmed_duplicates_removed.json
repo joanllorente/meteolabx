@@ -804,6 +804,1711 @@
    "name": "MADRID RETIRO",
    "canonical": "AEMET:3195",
    "removed_at": "2026-07-05T13:02:30.006858+00:00"
+  },
+  "NO__ASOS|ENAL": {
+   "name": "Alesund",
+   "canonical": "FROST:SN60990",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENAT": {
+   "name": "Alta",
+   "canonical": "FROST:SN93140",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENFB": {
+   "name": "Oslo",
+   "canonical": "FROST:SN76934",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENGM": {
+   "name": "Oslo",
+   "canonical": "FROST:SN4780",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENOA": {
+   "name": "OSEBERG",
+   "canonical": "FROST:SN76927",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENRS": {
+   "name": "Røst",
+   "canonical": "FROST:SN85890",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENSD": {
+   "name": "Sandane",
+   "canonical": "FROST:SN58100",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "NO__ASOS|ENTO": {
+   "name": "Sandefjord",
+   "canonical": "FROST:SN27470",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-139": {
+   "name": "VAEROY HELIPORT",
+   "canonical": "FROST:SN85840",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-152": {
+   "name": "BODO VI",
+   "canonical": "FROST:SN82290",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-161": {
+   "name": "SVOLVAER AP",
+   "canonical": "FROST:SN85450",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-214": {
+   "name": "REKDAL",
+   "canonical": "FROST:SN61060",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-254": {
+   "name": "KOTSOY",
+   "canonical": "FROST:SN67560",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-26": {
+   "name": "TROMSO",
+   "canonical": "FROST:SN90450",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-270": {
+   "name": "KVITHAMAR",
+   "canonical": "FROST:SN69150",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-332": {
+   "name": "FJAERLAND-BREMUSEET",
+   "canonical": "FROST:SN55820",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-358": {
+   "name": "HEMSEDAL II",
+   "canonical": "FROST:SN25110",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-365": {
+   "name": "BEITOSTOLEN II",
+   "canonical": "FROST:SN23550",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-383": {
+   "name": "EVENSTAD",
+   "canonical": "FROST:SN8140",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-389": {
+   "name": "RENA AP",
+   "canonical": "FROST:SN7950",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-424": {
+   "name": "SAUDA",
+   "canonical": "FROST:SN46610",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-426": {
+   "name": "EIGEROYA",
+   "canonical": "FROST:SN43350",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-465": {
+   "name": "TORUNGEN LH",
+   "canonical": "FROST:SN36200",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-478": {
+   "name": "SVENNER LH",
+   "canonical": "FROST:SN29950",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-490": {
+   "name": "TRYVANNSHOGDA",
+   "canonical": "FROST:SN18950",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-492": {
+   "name": "OSLO-BLINDERN",
+   "canonical": "FROST:SN18700",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-493": {
+   "name": "SARPSBORG",
+   "canonical": "FROST:SN3190",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-578-0-58": {
+   "name": "SUOLOVUOPMI LULIT",
+   "canonical": "FROST:SN93301",
+   "removed_at": "2026-09-13T14:51:54.402589+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-615": {
+   "name": "Falsterbo A",
+   "canonical": "SMHI:52240",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-635": {
+   "name": "MALMO",
+   "canonical": "SMHI:52350",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-618": {
+   "name": "TORUP",
+   "canonical": "SMHI:63590",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-664": {
+   "name": "Ronneby",
+   "canonical": "SMHI:65160",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "SE__ASOS|ESDF": {
+   "name": "Ronneby",
+   "canonical": "SMHI:65160",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-550": {
+   "name": "Jonkoping Flygplats",
+   "canonical": "SMHI:74460",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-590": {
+   "name": "Visby Flygplats",
+   "canonical": "SMHI:78400",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-452": {
+   "name": "KILSBERGEN-SUTTARBOD",
+   "canonical": "SMHI:94190",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-464": {
+   "name": "Stockholm Bromma",
+   "canonical": "SMHI:97200",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-498": {
+   "name": "Svenska Hogarna A",
+   "canonical": "SMHI:99280",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-407": {
+   "name": "MALUNG",
+   "canonical": "SMHI:103420",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-435": {
+   "name": "Borlange",
+   "canonical": "SMHI:105260",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-308": {
+   "name": "TANNAS",
+   "canonical": "SMHI:122260",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-366": {
+   "name": "Sundsvall Harnosand",
+   "canonical": "SMHI:127310",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-207": {
+   "name": "STORLIEN-STORVALLEN",
+   "canonical": "SMHI:132170",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-226": {
+   "name": "Ostersund Froson",
+   "canonical": "SMHI:134110",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-287": {
+   "name": "HOLMON",
+   "canonical": "SMHI:140460",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-186": {
+   "name": "Lulea Kallax Airport",
+   "canonical": "SMHI:162860",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-752-0-119": {
+   "name": "KVIKKJOKK-ARRENJARKA",
+   "canonical": "SMHI:167990",
+   "removed_at": "2026-09-13T15:25:04.828859+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-1": {
+   "name": "WOLFSEGG",
+   "canonical": "GEOSPHERE:11001",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-8": {
+   "name": "ROHRBACH",
+   "canonical": "GEOSPHERE:11008",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-10": {
+   "name": "LINZ/HOERSCHING-FLUG",
+   "canonical": "GEOSPHERE:11010",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-12": {
+   "name": "KREMSMUENSTER",
+   "canonical": "GEOSPHERE:11012",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-18": {
+   "name": "AMSTETTEN",
+   "canonical": "GEOSPHERE:11018",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-20": {
+   "name": "STIFT ZWETTL",
+   "canonical": "GEOSPHERE:11020",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-21": {
+   "name": "LITSCHAU",
+   "canonical": "GEOSPHERE:11021",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-22": {
+   "name": "RETZ",
+   "canonical": "GEOSPHERE:11022",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-24": {
+   "name": "JAUERLING",
+   "canonical": "GEOSPHERE:11024",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-25": {
+   "name": "WEITRA",
+   "canonical": "GEOSPHERE:11025",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-27": {
+   "name": "STOCKERAU",
+   "canonical": "GEOSPHERE:11027",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-30": {
+   "name": "TULLN/LANGENLEBARN",
+   "canonical": "GEOSPHERE:11030",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-32": {
+   "name": "POYSDORF",
+   "canonical": "GEOSPHERE:11032",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-34": {
+   "name": "WIEN-INNERE STADT",
+   "canonical": "GEOSPHERE:11034",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-35": {
+   "name": "WIEN/HOHE WARTE",
+   "canonical": "GEOSPHERE:11035",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-36": {
+   "name": "WIEN/SCHWECHAT-FLUGH",
+   "canonical": "GEOSPHERE:11036",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-37": {
+   "name": "GROSSENZERSDORF",
+   "canonical": "GEOSPHERE:11037",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-40": {
+   "name": "WIEN/UNTERLAA",
+   "canonical": "GEOSPHERE:11040",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-51": {
+   "name": "BRAUNAU/RANSHOFEN",
+   "canonical": "GEOSPHERE:11051",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-53": {
+   "name": "RIED IM INNKREIS",
+   "canonical": "GEOSPHERE:11053",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-55": {
+   "name": "SCHAERDING",
+   "canonical": "GEOSPHERE:11055",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-59": {
+   "name": "WELS/SCHLEISSHEIM",
+   "canonical": "GEOSPHERE:11059",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-60": {
+   "name": "LINZ-STADT",
+   "canonical": "GEOSPHERE:11060",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-70": {
+   "name": "KREMS",
+   "canonical": "GEOSPHERE:11070",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-71": {
+   "name": "WAIDHOFEN/YBBS",
+   "canonical": "GEOSPHERE:11071",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-72": {
+   "name": "NEUSIEDL AM SEE",
+   "canonical": "GEOSPHERE:11072",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-75": {
+   "name": "LANGENLOIS",
+   "canonical": "GEOSPHERE:11075",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-78": {
+   "name": "LILIENFELD/TARSCHBER",
+   "canonical": "GEOSPHERE:11078",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-80": {
+   "name": "WIEN/MARIABRUNN",
+   "canonical": "GEOSPHERE:11080",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-82": {
+   "name": "GUMPOLDSKIRCHEN",
+   "canonical": "GEOSPHERE:11082",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-83": {
+   "name": "LEISER BERGE",
+   "canonical": "GEOSPHERE:11083",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-85": {
+   "name": "ZWERNDORF-MARCHEGG",
+   "canonical": "GEOSPHERE:11085",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-90": {
+   "name": "WIEN-DONAUFELD",
+   "canonical": "GEOSPHERE:11090",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-101": {
+   "name": "BREGENZ",
+   "canonical": "GEOSPHERE:11101",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-105": {
+   "name": "FELDKIRCH",
+   "canonical": "GEOSPHERE:11105",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-110": {
+   "name": "GALZIG",
+   "canonical": "GEOSPHERE:11110",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-112": {
+   "name": "LANDECK",
+   "canonical": "GEOSPHERE:11112",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-119": {
+   "name": "SEEFELD",
+   "canonical": "GEOSPHERE:11119",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-121": {
+   "name": "INNSBRUCK-FLUGHAFEN",
+   "canonical": "GEOSPHERE:11121",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-120": {
+   "name": "INNSBRUCK-FLUGHAFEN",
+   "canonical": "GEOSPHERE:11121",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-126": {
+   "name": "PATSCHERKOFEL",
+   "canonical": "GEOSPHERE:11126",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-127": {
+   "name": "OBERGURGL",
+   "canonical": "GEOSPHERE:11127",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-129": {
+   "name": "BRENNER NEU",
+   "canonical": "GEOSPHERE:11129",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-130": {
+   "name": "KUFSTEIN",
+   "canonical": "GEOSPHERE:11130",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-136": {
+   "name": "KRIMML",
+   "canonical": "GEOSPHERE:11136",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-138": {
+   "name": "RUDOLFSHUETTE-ALPINZ",
+   "canonical": "GEOSPHERE:11138",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-140": {
+   "name": "LOFER",
+   "canonical": "GEOSPHERE:11140",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-141": {
+   "name": "BISCHOFSHOFEN",
+   "canonical": "GEOSPHERE:11141",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-144": {
+   "name": "ZELL AM SEE",
+   "canonical": "GEOSPHERE:11144",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-148": {
+   "name": "ST.MICHAEL/LUNGAU",
+   "canonical": "GEOSPHERE:11148",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-149": {
+   "name": "OBERTAUERN",
+   "canonical": "GEOSPHERE:11149",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-150": {
+   "name": "SALZBURG-FLUGHAFEN",
+   "canonical": "GEOSPHERE:11150",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-152": {
+   "name": "MATTSEE",
+   "canonical": "GEOSPHERE:11152",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-153": {
+   "name": "MONDSEE",
+   "canonical": "GEOSPHERE:11153",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-155": {
+   "name": "FEUERKOGEL",
+   "canonical": "GEOSPHERE:11155",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-157": {
+   "name": "AIGEN_IM_ENNSTAL",
+   "canonical": "GEOSPHERE:11157",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-161": {
+   "name": "PRAEBICHL",
+   "canonical": "GEOSPHERE:11161",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-170": {
+   "name": "LUNZ",
+   "canonical": "GEOSPHERE:11170",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-171": {
+   "name": "MARIAZELL/ST SEBASTI",
+   "canonical": "GEOSPHERE:11171",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-173": {
+   "name": "FISCHBACH",
+   "canonical": "GEOSPHERE:11173",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-175": {
+   "name": "BRUCK/MUR",
+   "canonical": "GEOSPHERE:11175",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-176": {
+   "name": "KAPFENBERG-FLUGFELD",
+   "canonical": "GEOSPHERE:11176",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-180": {
+   "name": "RAX/SEILBAHN-BERGSTA",
+   "canonical": "GEOSPHERE:11180",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-182": {
+   "name": "WIENER_NEUSTADT",
+   "canonical": "GEOSPHERE:11182",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-185": {
+   "name": "MOENICHKIRCHEN",
+   "canonical": "GEOSPHERE:11185",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-190": {
+   "name": "EISENSTADT",
+   "canonical": "GEOSPHERE:11190",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-192": {
+   "name": "KLEINZICKEN",
+   "canonical": "GEOSPHERE:11192",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-193": {
+   "name": "BAD TATZMANNSDORF",
+   "canonical": "GEOSPHERE:11193",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-201": {
+   "name": "SILLIAN",
+   "canonical": "GEOSPHERE:11201",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-204": {
+   "name": "LIENZ",
+   "canonical": "GEOSPHERE:11204",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-208": {
+   "name": "RADSTADT-TANDALIER",
+   "canonical": "GEOSPHERE:11208",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-213": {
+   "name": "VILLACH",
+   "canonical": "GEOSPHERE:11213",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-214": {
+   "name": "PREITENEGG",
+   "canonical": "GEOSPHERE:11214",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-220": {
+   "name": "NEUMARKT",
+   "canonical": "GEOSPHERE:11220",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-221": {
+   "name": "KOEFLACH",
+   "canonical": "GEOSPHERE:11221",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-225": {
+   "name": "WEITENSFELD",
+   "canonical": "GEOSPHERE:11225",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-227": {
+   "name": "FELDKIRCHEN",
+   "canonical": "GEOSPHERE:11227",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-229": {
+   "name": "ST.ANDRAE I.L.",
+   "canonical": "GEOSPHERE:11229",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-232": {
+   "name": "FEISTRITZ OB BLEIBUR",
+   "canonical": "GEOSPHERE:11232",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-234": {
+   "name": "BAD EISENKAPPEL EISE",
+   "canonical": "GEOSPHERE:11234",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-241": {
+   "name": "SCHOECKL",
+   "canonical": "GEOSPHERE:11241",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-242": {
+   "name": "ST.RADEGUND",
+   "canonical": "GEOSPHERE:11242",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-244": {
+   "name": "BAD GLEICHENBERG",
+   "canonical": "GEOSPHERE:11244",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-252": {
+   "name": "VIRGEN",
+   "canonical": "GEOSPHERE:11252",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-255": {
+   "name": "KOETSCHACH-MAUTHEN",
+   "canonical": "GEOSPHERE:11255",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-260": {
+   "name": "MALLNITZ-BAD",
+   "canonical": "GEOSPHERE:11260",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-263": {
+   "name": "WEISSENSEE/GATSCHACH",
+   "canonical": "GEOSPHERE:11263",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-265": {
+   "name": "VILLACHER ALPE - AUT",
+   "canonical": "GEOSPHERE:11265",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-266": {
+   "name": "ACHENKIRCH CAMPINGPL",
+   "canonical": "GEOSPHERE:11266",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-270": {
+   "name": "DELLACH IM DRAUTAL",
+   "canonical": "GEOSPHERE:11270",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-272": {
+   "name": "SPITTAL/DRAU",
+   "canonical": "GEOSPHERE:11272",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-274": {
+   "name": "LEOBEN",
+   "canonical": "GEOSPHERE:11274",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-275": {
+   "name": "ARRIACH",
+   "canonical": "GEOSPHERE:11275",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-278": {
+   "name": "POERTSCHACH",
+   "canonical": "GEOSPHERE:11278",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-280": {
+   "name": "MURAU",
+   "canonical": "GEOSPHERE:11280",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-285": {
+   "name": "DEUTSCHLANDSBERG",
+   "canonical": "GEOSPHERE:11285",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-291": {
+   "name": "GRAZ UNIVERSITAET/HE",
+   "canonical": "GEOSPHERE:11291",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-292": {
+   "name": "LASSNITZHOEHE",
+   "canonical": "GEOSPHERE:11292",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-296": {
+   "name": "LEIBNITZ",
+   "canonical": "GEOSPHERE:11296",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-298": {
+   "name": "FELDBACH",
+   "canonical": "GEOSPHERE:11298",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-301": {
+   "name": "ALBERSCHWENDE",
+   "canonical": "GEOSPHERE:11301",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-302": {
+   "name": "DORNBIRN",
+   "canonical": "GEOSPHERE:11302",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-304": {
+   "name": "BRAND",
+   "canonical": "GEOSPHERE:11304",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-308": {
+   "name": "WARTH",
+   "canonical": "GEOSPHERE:11308",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-310": {
+   "name": "ISCHGL/IDALPE",
+   "canonical": "GEOSPHERE:11310",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-312": {
+   "name": "GALTUER",
+   "canonical": "GEOSPHERE:11312",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-314": {
+   "name": "REUTTE",
+   "canonical": "GEOSPHERE:11314",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-318": {
+   "name": "BRUNNENKOGEL / OETZT",
+   "canonical": "GEOSPHERE:11318",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-325": {
+   "name": "JENBACH",
+   "canonical": "GEOSPHERE:11325",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-330": {
+   "name": "MAYRHOFEN",
+   "canonical": "GEOSPHERE:11330",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-331": {
+   "name": "KLAGENFURT-FLUGHAFEN",
+   "canonical": "GEOSPHERE:11331",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-332": {
+   "name": "MISTELBACH",
+   "canonical": "GEOSPHERE:11332",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-337": {
+   "name": "LOFERER ALM",
+   "canonical": "GEOSPHERE:11337",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-340": {
+   "name": "SCHMITTENHOEHE",
+   "canonical": "GEOSPHERE:11340",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-343": {
+   "name": "SONNBLICK - AUTOM.",
+   "canonical": "GEOSPHERE:11343",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-345": {
+   "name": "ST.VEIT IM PONGAU",
+   "canonical": "GEOSPHERE:11345",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-346": {
+   "name": "RAURIS",
+   "canonical": "GEOSPHERE:11346",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-348": {
+   "name": "MARIAPFARR",
+   "canonical": "GEOSPHERE:11348",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-349": {
+   "name": "KATSCHBERG",
+   "canonical": "GEOSPHERE:11349",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-350": {
+   "name": "SALZBURG-FREISAAL",
+   "canonical": "GEOSPHERE:11350",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-351": {
+   "name": "RAMSAU/DACHSTEIN",
+   "canonical": "GEOSPHERE:11351",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-355": {
+   "name": "WINDISCHGARSTEN",
+   "canonical": "GEOSPHERE:11355",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-356": {
+   "name": "BAD AUSSEE",
+   "canonical": "GEOSPHERE:11356",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-357": {
+   "name": "ST.WOLFGANG",
+   "canonical": "GEOSPHERE:11357",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-358": {
+   "name": "BAD MITTERNDORF",
+   "canonical": "GEOSPHERE:11358",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-359": {
+   "name": "GROEBMING",
+   "canonical": "GEOSPHERE:11359",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-362": {
+   "name": "KALWANG",
+   "canonical": "GEOSPHERE:11362",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-365": {
+   "name": "ZELTWEG - AUTOM. STA",
+   "canonical": "GEOSPHERE:11365",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-366": {
+   "name": "SAALBACH",
+   "canonical": "GEOSPHERE:11366",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-367": {
+   "name": "BAERNKOPF",
+   "canonical": "GEOSPHERE:11367",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-375": {
+   "name": "AFLENZ",
+   "canonical": "GEOSPHERE:11375",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-378": {
+   "name": "GUTENSTEIN-MARIAHILF",
+   "canonical": "GEOSPHERE:11378",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-380": {
+   "name": "REICHENAU/RAX",
+   "canonical": "GEOSPHERE:11380",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-382": {
+   "name": "PUCHBERG",
+   "canonical": "GEOSPHERE:11382",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-383": {
+   "name": "SEMMERING/PASS",
+   "canonical": "GEOSPHERE:11383",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-385": {
+   "name": "HOHE WAND/HOCHKOGELH",
+   "canonical": "GEOSPHERE:11385",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-387": {
+   "name": "SEIBERSDORF",
+   "canonical": "GEOSPHERE:11387",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-389": {
+   "name": "ST.POELTEN LANDHAUS",
+   "canonical": "GEOSPHERE:11389",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-390": {
+   "name": "HARTBERG",
+   "canonical": "GEOSPHERE:11390",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-393": {
+   "name": "LUTZMANNSBURG",
+   "canonical": "GEOSPHERE:11393",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-40-0-395": {
+   "name": "ANDAU",
+   "canonical": "GEOSPHERE:11395",
+   "removed_at": "2026-09-13T15:34:54.117120+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-601": {
+   "name": "BASEL / BINNINGEN",
+   "canonical": "METEOSWISS:BAS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-602": {
+   "name": "DELEMONT",
+   "canonical": "METEOSWISS:DEM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-603": {
+   "name": "VEVEY",
+   "canonical": "METEOSWISS:VEV",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-604": {
+   "name": "NEUCHATEL",
+   "canonical": "METEOSWISS:NEU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-605": {
+   "name": "CHASSERAL",
+   "canonical": "METEOSWISS:CHA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-606": {
+   "name": "CRESSIER",
+   "canonical": "METEOSWISS:CRM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-608": {
+   "name": "CHAUMONT",
+   "canonical": "METEOSWISS:CHM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-609": {
+   "name": "LE MOLESON",
+   "canonical": "METEOSWISS:MLS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-610": {
+   "name": "PAYERNE (6610-0)",
+   "canonical": "METEOSWISS:PAY",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-612": {
+   "name": "LA CHAUX-DE-FONDS",
+   "canonical": "METEOSWISS:CDF",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-613": {
+   "name": "FRUTIGEN",
+   "canonical": "METEOSWISS:FRU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-614": {
+   "name": "LES MARECOTTES",
+   "canonical": "METEOSWISS:MAR",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-615": {
+   "name": "MONTAGNIER  BAGNES",
+   "canonical": "METEOSWISS:MOB",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-616": {
+   "name": "FAHY",
+   "canonical": "METEOSWISS:FAH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-617": {
+   "name": "LA BREVINE",
+   "canonical": "METEOSWISS:BRL",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-618": {
+   "name": "MATHOD",
+   "canonical": "METEOSWISS:MAH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-619": {
+   "name": "BULLET / LA FRETAZ",
+   "canonical": "METEOSWISS:FRE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-620": {
+   "name": "SCHAFFHAUSEN",
+   "canonical": "METEOSWISS:SHA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-621": {
+   "name": "GUETTINGEN",
+   "canonical": "METEOSWISS:GUT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-623": {
+   "name": "SALEN-REUTENEN",
+   "canonical": "METEOSWISS:HAI",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-624": {
+   "name": "HALLAU",
+   "canonical": "METEOSWISS:HLL",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-625": {
+   "name": "FRIBOURG / POSIEUX",
+   "canonical": "METEOSWISS:GRA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-626": {
+   "name": "GOESGEN",
+   "canonical": "METEOSWISS:GOE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-627": {
+   "name": "CHATEAU-D'OEX",
+   "canonical": "METEOSWISS:CHD",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-628": {
+   "name": "PLAFFEIEN",
+   "canonical": "METEOSWISS:PLF",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-631": {
+   "name": "BERN / ZOLLIKOFEN",
+   "canonical": "METEOSWISS:BER",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-632": {
+   "name": "GRENCHEN",
+   "canonical": "METEOSWISS:GRE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-633": {
+   "name": "BUCHS / AARAU",
+   "canonical": "METEOSWISS:BUS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-635": {
+   "name": "KOPPIGEN",
+   "canonical": "METEOSWISS:KOP",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-636": {
+   "name": "MUEHLEBERG",
+   "canonical": "METEOSWISS:MUB",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-637": {
+   "name": "MEIRINGEN",
+   "canonical": "METEOSWISS:MER",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-638": {
+   "name": "LANGNAU I.E.",
+   "canonical": "METEOSWISS:LAG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-639": {
+   "name": "NAPF",
+   "canonical": "METEOSWISS:NAP",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-640": {
+   "name": "MARSENS",
+   "canonical": "METEOSWISS:MAS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-641": {
+   "name": "MOEHLIN",
+   "canonical": "METEOSWISS:MOE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-642": {
+   "name": "BERGUEN / LATSCH",
+   "canonical": "METEOSWISS:LAT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-643": {
+   "name": "WYNAU",
+   "canonical": "METEOSWISS:WYN",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-644": {
+   "name": "MOSEN",
+   "canonical": "METEOSWISS:MOA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-645": {
+   "name": "RUENENBERG",
+   "canonical": "METEOSWISS:RUE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-646": {
+   "name": "BEZNAU",
+   "canonical": "METEOSWISS:BEZ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-647": {
+   "name": "WUERENLINGEN / PSI",
+   "canonical": "METEOSWISS:PSI",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-648": {
+   "name": "EGOLZWIL",
+   "canonical": "METEOSWISS:EGO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-649": {
+   "name": "OBERRIET / KRIESSERN",
+   "canonical": "METEOSWISS:OBR",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-650": {
+   "name": "LUZERN",
+   "canonical": "METEOSWISS:LUZ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-651": {
+   "name": "SCHUEPFHEIM",
+   "canonical": "METEOSWISS:SPF",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-652": {
+   "name": "FLUEHLI",
+   "canonical": "METEOSWISS:FLU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-653": {
+   "name": "GERSAU",
+   "canonical": "METEOSWISS:GES",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-654": {
+   "name": "SIMPLON-DORF",
+   "canonical": "METEOSWISS:SIM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-655": {
+   "name": "ENGELBERG",
+   "canonical": "METEOSWISS:ENG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-656": {
+   "name": "BRIENZ",
+   "canonical": "METEOSWISS:BRZ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-657": {
+   "name": "GISWIL",
+   "canonical": "METEOSWISS:GIH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-659": {
+   "name": "PILATUS",
+   "canonical": "METEOSWISS:PIL",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-660": {
+   "name": "ZUERICH / FLUNTERN",
+   "canonical": "METEOSWISS:SMA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-662": {
+   "name": "SATTEL  SZ",
+   "canonical": "METEOSWISS:SAG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-663": {
+   "name": "VALS",
+   "canonical": "METEOSWISS:VLS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-664": {
+   "name": "ZUERICH / AFFOLTERN",
+   "canonical": "METEOSWISS:REH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-665": {
+   "name": "LACHEN / GALGENEN",
+   "canonical": "METEOSWISS:LAC",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-666": {
+   "name": "LEIBSTADT",
+   "canonical": "METEOSWISS:LEI",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-668": {
+   "name": "GOESCHENEN",
+   "canonical": "METEOSWISS:GOS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-669": {
+   "name": "LAEGERN",
+   "canonical": "METEOSWISS:LAE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-670": {
+   "name": "ZUERICH / KLOTEN",
+   "canonical": "METEOSWISS:KLO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-671": {
+   "name": "STECKBORN",
+   "canonical": "METEOSWISS:STK",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-672": {
+   "name": "ALTDORF",
+   "canonical": "METEOSWISS:ALT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-673": {
+   "name": "WAEDENSWIL",
+   "canonical": "METEOSWISS:WAE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-674": {
+   "name": "CHAM",
+   "canonical": "METEOSWISS:CHZ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-675": {
+   "name": "EINSIEDELN",
+   "canonical": "METEOSWISS:EIN",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-676": {
+   "name": "OBERAEGERI",
+   "canonical": "METEOSWISS:AEG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-678": {
+   "name": "BISCHOFSZELL",
+   "canonical": "METEOSWISS:BIZ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-679": {
+   "name": "AADORF / TAENIKON",
+   "canonical": "METEOSWISS:TAE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-680": {
+   "name": "SAENTIS",
+   "canonical": "METEOSWISS:SAE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-681": {
+   "name": "ST. GALLEN",
+   "canonical": "METEOSWISS:STG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-682": {
+   "name": "ELM",
+   "canonical": "METEOSWISS:ELM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-683": {
+   "name": "SCHMERIKON",
+   "canonical": "METEOSWISS:SCM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-685": {
+   "name": "GLARUS",
+   "canonical": "METEOSWISS:GLA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-686": {
+   "name": "BAD RAGAZ",
+   "canonical": "METEOSWISS:RAG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-687": {
+   "name": "QUINTEN",
+   "canonical": "METEOSWISS:QUI",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-688": {
+   "name": "CRAP MASEGN",
+   "canonical": "METEOSWISS:CMA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-689": {
+   "name": "HOERNLI",
+   "canonical": "METEOSWISS:HOE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-690": {
+   "name": "ALTENRHEIN",
+   "canonical": "METEOSWISS:ARH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-693": {
+   "name": "EBNAT-KAPPEL",
+   "canonical": "METEOSWISS:EBK",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-695": {
+   "name": "ANDERMATT",
+   "canonical": "METEOSWISS:ANT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-700": {
+   "name": "GENEVE / COINTRIN",
+   "canonical": "METEOSWISS:GVE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-702": {
+   "name": "LA DOLE (6702-0)",
+   "canonical": "METEOSWISS:DOL",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-703": {
+   "name": "LES CHARBONNIERES",
+   "canonical": "METEOSWISS:CHB",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-704": {
+   "name": "BIERE",
+   "canonical": "METEOSWISS:BIE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-705": {
+   "name": "NYON / CHANGINS",
+   "canonical": "METEOSWISS:CGI",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-706": {
+   "name": "ST-PREX",
+   "canonical": "METEOSWISS:PRE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-707": {
+   "name": "VILLARS-TIERCELIN",
+   "canonical": "METEOSWISS:VIT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-708": {
+   "name": "ORON",
+   "canonical": "METEOSWISS:ORO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-709": {
+   "name": "BOUVERET",
+   "canonical": "METEOSWISS:BOU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-710": {
+   "name": "COURTELARY",
+   "canonical": "METEOSWISS:COY",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-711": {
+   "name": "PULLY",
+   "canonical": "METEOSWISS:PUY",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-712": {
+   "name": "AIGLE",
+   "canonical": "METEOSWISS:AIG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-713": {
+   "name": "COL DES MOSSES",
+   "canonical": "METEOSWISS:CDM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-714": {
+   "name": "LES DIABLERETS",
+   "canonical": "METEOSWISS:DIA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-715": {
+   "name": "EVIONNAZ",
+   "canonical": "METEOSWISS:EVI",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-716": {
+   "name": "MOTTEC",
+   "canonical": "METEOSWISS:MTE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-717": {
+   "name": "COL DU GRAND ST-BERN",
+   "canonical": "METEOSWISS:GSB",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-720": {
+   "name": "SION (6720-0)",
+   "canonical": "METEOSWISS:SIO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-721": {
+   "name": "BINN",
+   "canonical": "METEOSWISS:BIN",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-722": {
+   "name": "EVOLENE / VILLA",
+   "canonical": "METEOSWISS:EVO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-723": {
+   "name": "LES ATTELAS",
+   "canonical": "METEOSWISS:ATT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-724": {
+   "name": "MONTANA",
+   "canonical": "METEOSWISS:MVE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-725": {
+   "name": "BLATTEN  LOETSCHENTA",
+   "canonical": "METEOSWISS:BLA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-727": {
+   "name": "VISP",
+   "canonical": "METEOSWISS:VIS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-728": {
+   "name": "GRAECHEN",
+   "canonical": "METEOSWISS:GRC",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-730": {
+   "name": "JUNGFRAUJOCH",
+   "canonical": "METEOSWISS:JUN",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-731": {
+   "name": "THUN",
+   "canonical": "METEOSWISS:THU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-733": {
+   "name": "BOLTIGEN",
+   "canonical": "METEOSWISS:BOL",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-734": {
+   "name": "INTERLAKEN",
+   "canonical": "METEOSWISS:INT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-735": {
+   "name": "ADELBODEN",
+   "canonical": "METEOSWISS:ABO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-739": {
+   "name": "EGGISHORN",
+   "canonical": "METEOSWISS:EGH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-740": {
+   "name": "TITLIS",
+   "canonical": "METEOSWISS:TIT",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-744": {
+   "name": "GRIMSEL HOSPIZ",
+   "canonical": "METEOSWISS:GRH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-745": {
+   "name": "ULRICHEN",
+   "canonical": "METEOSWISS:ULR",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-748": {
+   "name": "ZERMATT",
+   "canonical": "METEOSWISS:ZER",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-749": {
+   "name": "GORNERGRAT",
+   "canonical": "METEOSWISS:GOR",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-750": {
+   "name": "GUETSCH  ANDERMATT",
+   "canonical": "METEOSWISS:GUE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-751": {
+   "name": "ROBIEI",
+   "canonical": "METEOSWISS:ROE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-752": {
+   "name": "CEVIO",
+   "canonical": "METEOSWISS:CEV",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-753": {
+   "name": "PIOTTA",
+   "canonical": "METEOSWISS:PIO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-754": {
+   "name": "MATRO",
+   "canonical": "METEOSWISS:MTR",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-756": {
+   "name": "ACQUAROSSA / COMPROV",
+   "canonical": "METEOSWISS:COM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-758": {
+   "name": "GRONO",
+   "canonical": "METEOSWISS:GRO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-759": {
+   "name": "CIMETTA",
+   "canonical": "METEOSWISS:CIM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-762": {
+   "name": "MAGADINO / CADENAZZO",
+   "canonical": "METEOSWISS:MAG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-770": {
+   "name": "LUGANO",
+   "canonical": "METEOSWISS:LUG",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-771": {
+   "name": "STABIO",
+   "canonical": "METEOSWISS:SBO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-774": {
+   "name": "BIVIO",
+   "canonical": "METEOSWISS:BIV",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-777": {
+   "name": "MONTE GENEROSO",
+   "canonical": "METEOSWISS:GEN",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-778": {
+   "name": "BUFFALORA",
+   "canonical": "METEOSWISS:BUF",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-779": {
+   "name": "SEGL-MARIA",
+   "canonical": "METEOSWISS:SIA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-780": {
+   "name": "WEISSFLUHJOCH",
+   "canonical": "METEOSWISS:WFJ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-782": {
+   "name": "DISENTIS",
+   "canonical": "METEOSWISS:DIS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-783": {
+   "name": "S. BERNARDINO",
+   "canonical": "METEOSWISS:SBE",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-784": {
+   "name": "DAVOS",
+   "canonical": "METEOSWISS:DAV",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-785": {
+   "name": "AROSA",
+   "canonical": "METEOSWISS:ARO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-786": {
+   "name": "CHUR",
+   "canonical": "METEOSWISS:CHU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-787": {
+   "name": "ANDEER",
+   "canonical": "METEOSWISS:AND",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-788": {
+   "name": "VICOSOPRANO",
+   "canonical": "METEOSWISS:VIO",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-789": {
+   "name": "ILANZ",
+   "canonical": "METEOSWISS:ILZ",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-790": {
+   "name": "SCHIERS",
+   "canonical": "METEOSWISS:SRS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-791": {
+   "name": "PIZ CORVATSCH",
+   "canonical": "METEOSWISS:COV",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-792": {
+   "name": "SAMEDAN",
+   "canonical": "METEOSWISS:SAM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-793": {
+   "name": "VALBELLA",
+   "canonical": "METEOSWISS:VAB",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-794": {
+   "name": "POSCHIAVO / ROBBIA",
+   "canonical": "METEOSWISS:ROB",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-795": {
+   "name": "PIZ MARTEGNAS",
+   "canonical": "METEOSWISS:PMA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-796": {
+   "name": "STA. MARIA  VAL MUES",
+   "canonical": "METEOSWISS:SMM",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-797": {
+   "name": "PASSO DEL BERNINA",
+   "canonical": "METEOSWISS:BEH",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-798": {
+   "name": "SCUOL",
+   "canonical": "METEOSWISS:SCU",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-799": {
+   "name": "NALUNS / SCHLIVERA",
+   "canonical": "METEOSWISS:NAS",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-990": {
+   "name": "VADUZ",
+   "canonical": "METEOSWISS:VAD",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
+  },
+  "WMO_BUFR_SRF|0-756-0-BIA": {
+   "name": "BIASCA",
+   "canonical": "METEOSWISS:BIA",
+   "removed_at": "2026-09-13T20:31:57.488114+00:00"
   }
  }
 }

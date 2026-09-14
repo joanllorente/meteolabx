@@ -32,7 +32,7 @@ from utils.station_url import candidate_url_slug, url_slug_map
 INDEXABLE_PROVIDERS = (
     "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "POEM", "METEOFRANCE",
     "FROST", "NWS", "METOFFICE", "METEOHUB_IT", "IPMA", "GEOSPHERE", "SMHI",
-    "ECCC", "CLIMANTARTIDE",
+    "ECCC", "CLIMANTARTIDE", "LHMT", "IMGW", "DMI", "METEOSWISS",
 )
 
 _SCHEMA = """

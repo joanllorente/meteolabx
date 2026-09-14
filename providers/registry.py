@@ -27,6 +27,10 @@ PROVIDER_NAMES = {
     "ECCC": "ECCC",
     "IEM": "IEM",
     "CLIMANTARTIDE": "Climantartide",
+    "LHMT": "LHMT",
+    "IMGW": "IMGW",
+    "DMI": "DMI",
+    "METEOSWISS": "MeteoSwiss",
     "WINDY": "Windy PWS",
     "NETATMO": "Netatmo",
 }

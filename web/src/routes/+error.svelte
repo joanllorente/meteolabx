@@ -1,11 +1,32 @@
 <script>
+  import { onMount } from 'svelte';
+
   import { page } from '$app/state';
+  import { currentConnection, forgetConnection, loadConnection } from '$lib/connection.svelte.js';
 
   /**
    * Página de error. Lleva `noindex` siempre: un 404 indexado es una URL
    * gastada, y estas fichas están precisamente para lo contrario.
    */
   const notFound = $derived(page.status === 404);
+
+  /**
+   * Una estación recordada que ya no existe se olvida.
+   *
+   * La portada abre la estación conectada al entrar. Si el catálogo la ha
+   * retirado, cada visita acabaría aquí sin salida más que desconectarse a
+   * mano, algo que nadie adivina desde una página de error.
+   */
+  onMount(() => {
+    if (page.status !== 404) return;
+    loadConnection();
+    const conectada = currentConnection();
+    const ruta = decodeURIComponent(page.url.pathname);
+    const suya =
+      (conectada?.slug && ruta.endsWith(`/${conectada.slug}`)) ||
+      (conectada?.path && decodeURIComponent(conectada.path) === ruta);
+    if (suya) forgetConnection();
+  });
 </script>
 
 <svelte:head>

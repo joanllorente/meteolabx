@@ -361,35 +361,56 @@ export function stepLevels(field, step) {
  * decide cuántos caben es la colocación, que sí conoce el zoom.
  */
 export function contourLines(field, {
+  labelMinLength = CONTOUR_LABEL_MIN_LENGTH,
+  labelSpacing = 60,
+  ...options
+} = {}) {
+  const contours = [];
+  for (const { level, lines } of contourPolylines(field, options)) {
+    const paths = [];
+    const anchors = [];
+    for (const { points, closed, length } of lines) {
+      paths.push(toPath(points, closed));
+      if (length >= labelMinLength) {
+        for (const anchor of anchorsAlong(points, labelSpacing)) anchors.push(anchor);
+      }
+    }
+    contours.push({ level, path: paths.join(''), anchors });
+  }
+  return contours;
+}
+
+/**
+ * Las mismas isolíneas que `contourLines`, como vértices en vez de trazo.
+ *
+ * El detector de vaguadas necesita la geometría, y sacarla del `path` montado
+ * dependía de cómo se dibuja: cuando el trazo pasó de rectas (`L`) a curvas
+ * (`C`), partir por `L` dejó de dar vértices y los ejes desaparecieron del
+ * mapa sin ningún error.
+ */
+export function contourPolylines(field, {
   width,
   height,
   levels,
   sigma = CONTOUR_SIGMA,
   minRingArea = CONTOUR_MIN_RING_CELLS,
-  tolerance = CONTOUR_TOLERANCE,
-  labelMinLength = CONTOUR_LABEL_MIN_LENGTH,
-  labelSpacing = 60
+  tolerance = CONTOUR_TOLERANCE
 } = {}) {
   if (!field || !levels?.length) return [];
   const smooth = gaussianBlur(field, width, height, sigma);
   const contours = [];
   for (const level of levels) {
-    const lines = linkSegments(marchingSegments(smooth, width, height, level));
-    const paths = [];
-    const anchors = [];
-    for (const line of lines) {
+    const lines = [];
+    for (const line of linkSegments(marchingSegments(smooth, width, height, level))) {
       // Los anillos diminutos son ruido de celda, no una estructura: fuera.
       if (line.closed && ringArea(line.points) < minRingArea) continue;
       const points = simplify(line.points, tolerance);
       if (points.length < 2) continue;
       const length = polylineLength(points);
       if (!line.closed && length < 2) continue;
-      paths.push(toPath(points, line.closed));
-      if (length >= labelMinLength) {
-        for (const anchor of anchorsAlong(points, labelSpacing)) anchors.push(anchor);
-      }
+      lines.push({ points, closed: line.closed, length });
     }
-    if (paths.length) contours.push({ level, path: paths.join(''), anchors });
+    if (lines.length) contours.push({ level, lines });
   }
   return contours;
 }

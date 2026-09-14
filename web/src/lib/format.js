@@ -10,7 +10,7 @@ import app from './i18n/app-i18n.generated.js';
 import { cardinals, ui } from './i18n/ui.js';
 
 const LOCALES = {
-  es: 'es-ES', ca: 'ca-ES', en: 'en-GB', fr: 'fr-FR', it: 'it-IT', pt: 'pt-PT'
+  es: 'es-ES', ca: 'ca-ES', en: 'en-GB', de: 'de-DE', fr: 'fr-FR', it: 'it-IT', pt: 'pt-PT'
 };
 
 export function locale(language) {

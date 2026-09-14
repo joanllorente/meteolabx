@@ -91,9 +91,9 @@ def test_builds_directories_that_link_to_the_observation_routes(tmp_path: Path):
         "stations": 2,
         "providers": 2,
         "cities": 1,
-        "languages": 6,
-        "pages": 30,
-        "sitemap_urls": 30,
+        "languages": 7,
+        "pages": 35,
+        "sitemap_urls": 35,
     }
 
     # Ni una sola ficha de estación en disco: eran 300.000 ficheros que ahora
@@ -141,7 +141,7 @@ def test_sitemap_keeps_only_the_pages_that_remain_static(tmp_path: Path):
     assert not list(output.glob("sitemap-*.xml"))
 
     sitemap = (output / "directories-sitemap.xml").read_text(encoding="utf-8")
-    assert sitemap.count("<url>") == 30
+    assert sitemap.count("<url>") == 35
     assert 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' in sitemap
     assert "https://www.meteolabx.com/es/estaciones/aemet.html" in sitemap
     assert "https://www.meteolabx.com/fr/stations-meteo/aemet.html" in sitemap

@@ -89,6 +89,10 @@ PROVIDER_LABELS = {
     "SMHI": "SMHI",
     "ECCC": "Environment Canada",
     "CLIMANTARTIDE": "ClimAntartide",
+    "LHMT": "LHMT",
+    "IMGW": "IMGW",
+    "DMI": "DMI",
+    "METEOSWISS": "MeteoSwiss",
 }
 PROVIDER_COUNTRIES = {
     "AEMET": "ES", "METEOCAT": "ES", "EUSKALMET": "ES",
@@ -96,9 +100,10 @@ PROVIDER_COUNTRIES = {
     "FROST": "NO", "NWS": "US", "METOFFICE": "GB",
     "METEOHUB_IT": "IT", "IPMA": "PT", "GEOSPHERE": "AT",
     "SMHI": "SE", "ECCC": "CA", "CLIMANTARTIDE": "AQ",
+    "LHMT": "LT", "IMGW": "PL",
 }
 LANGUAGES_BY_COUNTRY = {
-    "ES": ("es", "ca", "en", "fr", "it", "pt"),
+    "ES": ("es", "ca", "en", "de", "fr", "it", "pt"),
     "FR": ("fr", "en", "es"),
     "CA": ("en", "fr", "es"),
     "IT": ("it", "en", "es"),
@@ -106,7 +111,13 @@ LANGUAGES_BY_COUNTRY = {
     "US": ("en", "es"),
     "GB": ("en", "es"),
     "NO": ("en", "es"),
-    "AT": ("en", "es"),
+    "AT": ("de", "en", "es"),
+    "DE": ("de", "en", "es"),
+    "CH": ("de", "fr", "it", "en", "es"),
+    "LI": ("de", "en", "es"),
+    "DK": ("en", "de", "es"),
+    "PL": ("en", "de", "es"),
+    "LT": ("en", "de", "es"),
     "SE": ("en", "es"),
     "AQ": ("en", "es"),
 }

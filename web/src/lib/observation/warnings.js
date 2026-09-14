@@ -15,6 +15,7 @@ const CODIGOS_DATOS_DUDOSOS = new Set([
   'suspect_temperature',
   'suspect_precipitation',
   'unreported_precipitation',
+  'suspect_wind',
   'flatlined_series'
 ]);
 

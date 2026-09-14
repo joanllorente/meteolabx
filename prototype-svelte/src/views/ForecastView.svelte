@@ -13,6 +13,7 @@
   import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
   import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
+  import { recordForecastMap } from '../lib/stats.js';
   import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
   import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
@@ -39,6 +40,7 @@
   let selectedRun = $state('');
   let catalogError = $state('');
   let frameData = $state.raw(null);
+  let loadedFrameKey = $state('');
   let frameLoading = $state(false);
   let framePending = $state(false);
   let frameError = $state('');
@@ -63,7 +65,7 @@
    * una captura suelta siga siendo legible meses después.
    */
   async function downloadPng() {
-    if (!mapContainer || !frameData || exporting) return;
+    if (!mapContainer || !frameMatchesSelection || exporting) return;
     exporting = true;
     exportError = '';
     try {
@@ -123,6 +125,26 @@
     !precomputedOnly
       || (connectedProduct?.available_times || []).includes(valid?.iso)
   );
+  const activeFrameKey = $derived([
+    selectedModel,
+    selectedRunCatalog?.run || '',
+    product.id,
+    valid?.iso || '',
+    product.id === 'wind-level' ? windLevelKind : '',
+    product.id === 'wind-level' ? windLevel : ''
+  ].join('|'));
+  // Una selección nueva no puede reutilizar visualmente el frame anterior:
+  // sus valores se repintarían durante un instante con la paleta y los límites
+  // del producto recién pulsado, produciendo un mapa de colores falsos.
+  const frameMatchesSelection = $derived(Boolean(
+    frameData
+      && loadedFrameKey === activeFrameKey
+  ));
+  const showFrameLoading = $derived(Boolean(
+    frameLoading
+      || (selectedProduct && connectedProduct && selectedFrameReady
+        && !frameMatchesSelection && !framePending && !frameError)
+  ));
   const selectedCategory = $derived(categories.find((item) => item.id === product.category));
   // Qué enseña el mapa. Por defecto su categoría, que para la mayoría es
   // descripción bastante; los que llevan más de un campo encima lo dicen.
@@ -222,8 +244,23 @@
   function selectProduct(item) {
     playing = false;
     unitMenuOpen = false;
+    frameRequest?.abort();
+    frameData = null;
+    loadedFrameKey = '';
+    frameLoading = true;
+    framePending = false;
+    frameError = '';
     selectedProduct = item.id;
     expandedCategory = item.category;
+    // Solo lo que se elige a mano: el primer mapa que pone un cambio de
+    // modelo no dice qué interesa a nadie.
+    const original = productsForModel(selectedModel).find((entry) => entry.id === item.id);
+    recordForecastMap({
+      model: selectedModel,
+      product: item.id,
+      label: original?.label || item.label || '',
+      category: item.category || ''
+    });
     const count = selectedRunCatalog?.products?.[item.id]?.valid_times?.length || hours.length;
     hourIndex = Math.min(hourIndex, count - 1);
   }
@@ -243,6 +280,7 @@
     hourIndex = 0;
     catalog = null;
     frameData = null;
+    loadedFrameKey = '';
     catalogError = '';
     fetchDomainBoundaries(modelId).catch(() => {});
     refreshCatalog();
@@ -254,6 +292,7 @@
     const next = runCatalogs.find((item) => item.run === run)?.products?.[product.id];
     hourIndex = Math.min(hourIndex, Math.max(0, (next?.valid_times?.length || hours.length) - 1));
     frameData = null;
+    loadedFrameKey = '';
   }
 
   function shortRunLabel(run) {
@@ -382,9 +421,11 @@
     const requestedWindKind = windLevelKind;
     const requestedWindLevel = windLevel;
     const requestedRun = selectedRunCatalog?.run;
+    const requestedFrameKey = activeFrameKey;
     if (!selectedId || !meta || !validTime) {
       frameRequest?.abort();
       frameData = null;
+      loadedFrameKey = '';
       frameLoading = false;
       framePending = false;
       frameError = '';
@@ -393,6 +434,7 @@
     if (!selectedFrameReady) {
       frameRequest?.abort();
       frameData = null;
+      loadedFrameKey = '';
       frameLoading = false;
       framePending = true;
       frameError = '';
@@ -410,6 +452,7 @@
     if (cachedFrame) {
       frameRequest?.abort();
       frameData = cachedFrame;
+      loadedFrameKey = requestedFrameKey;
       frameLoading = false;
       framePending = false;
       frameError = '';
@@ -425,6 +468,7 @@
       .then((frame) => {
         if (controller.signal.aborted) return;
         frameData = frame;
+        loadedFrameKey = requestedFrameKey;
         frameLoading = false;
       })
       .catch((error) => {
@@ -598,7 +642,7 @@
             type="button"
             title={tr('downloadPng')}
             aria-label={tr('downloadMapPng')}
-            disabled={!frameData || exporting}
+            disabled={!frameMatchesSelection || exporting}
             onclick={downloadPng}
           ><Download size={16} /></button>
           <button type="button" title={tr('fullscreen')} onclick={toggleFullscreen}><Maximize2 size={16} /></button>
@@ -606,7 +650,7 @@
       </header>
 
       <div class="forecast-map palette-{product.palette}" bind:this={mapContainer} style:--map-ink={mapInk || null}>
-        {#if frameData}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameMatchesSelection}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label={tr('windLevel')}>
             <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
@@ -622,10 +666,10 @@
           </aside>
         {/if}
 
-        {#if frameLoading}<div class="frame-state"><span class="spinner"></span><strong>{tr('loading', { product: product.short })}</strong><small>{tr('downloading')}</small></div>{/if}
+        {#if showFrameLoading}<div class="frame-state"><span class="spinner"></span><strong>{tr('loading', { product: product.short })}</strong><small>{tr('downloading')}</small></div>{/if}
         {#if framePending}<div class="frame-state"><span class="spinner"></span><strong>{tr('calculating', { product: product.short })}</strong><small>{tr('workerPending')}</small></div>{/if}
         {#if frameError}<div class="frame-state error"><strong>{tr('loadError')}</strong><small>{frameError}</small><button type="button" onclick={() => (hourIndex = Math.max(0, hourIndex - 1))}>{tr('previousHourTry')}</button></div>{/if}
-        {#if frameData}
+        {#if frameMatchesSelection}
           <div class="map-watermark" aria-hidden="true">
             <img src={`${assetBase}mlx-logo.png`} alt="" />
             <span><strong>METEOLABX</strong><small>{tr('title')}</small></span>

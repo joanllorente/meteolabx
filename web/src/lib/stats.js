@@ -208,6 +208,18 @@ export function visitLanguageContext(browser = globalThis.navigator, url = globa
   const urlLanguage = String(url?.pathname || '').split('/')[1] || '';
   return {
     browser_languages: [...new Set(Array.from(languages || []).filter(valid))].slice(0, 6).join(',').slice(0, 200),
-    url_language: ['es', 'ca', 'en', 'fr', 'it', 'pt'].includes(urlLanguage) ? urlLanguage : ''
+    url_language: ['es', 'ca', 'en', 'de', 'fr', 'it', 'pt'].includes(urlLanguage) ? urlLanguage : ''
   };
+}
+
+/**
+ * Instalación de la PWA: qué se ofrece, qué se hace y en qué aparato.
+ *
+ * `event` es uno de los de `server/services/usage_stats.py`
+ * (`PWA_EVENTS`); el contexto dice sistema, dispositivo, navegador y la
+ * forma de instalar que se le enseñó. Nada que identifique a la persona.
+ */
+export function recordPwaEvent(event, { os = '', device = '', browser = '', method = '' } = {}) {
+  if (!event) return;
+  send('/v1/stats/pwa', { event, os, device, browser, method });
 }

@@ -2,7 +2,8 @@
 import {
   defaultUnitPreferences,
   normalizeUnitPreferences,
-  unitOptions
+  unitOptions,
+  unitPresets
 } from './units.js';
 import { readSharedLegacyKey } from './legacy-storage.js';
 
@@ -21,13 +22,25 @@ export function loadUnitPreferences() {
   Object.assign(unitPreferences, normalizeUnitPreferences(stored));
 }
 
-export function chooseUnit(family, unit) {
-  if (!unitOptions[family]?.[unit]) return;
-  unitPreferences[family] = unit;
+function persistUnits() {
   try {
     localStorage.setItem(UNIT_STORAGE_KEY, JSON.stringify(unitPreferences));
   } catch {
     // En navegación privada se conserva al menos durante esta sesión.
   }
   window.dispatchEvent(new CustomEvent('mlx:units', { detail: { ...unitPreferences } }));
+}
+
+export function chooseUnit(family, unit) {
+  if (!unitOptions[family]?.[unit]) return;
+  unitPreferences[family] = unit;
+  persistUnits();
+}
+
+/** Aplica un sistema entero de una vez, con un único aviso de cambio. */
+export function choosePreset(id) {
+  const preset = unitPresets.find((item) => item.id === id);
+  if (!preset) return;
+  Object.assign(unitPreferences, preset.units);
+  persistUnits();
 }

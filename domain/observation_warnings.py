@@ -37,6 +37,9 @@ UNREPORTED_PRECIPITATION = "unreported_precipitation"
 # El termómetro da valores que su lugar y su época no admiten, que su propia
 # máxima desmiente, o que llevan horas sin moverse.
 SUSPECT_TEMPERATURE = "suspect_temperature"
+# El anemómetro ha dado ese día una racha que no puede ser: aislada del resto
+# de la serie, por encima del récord mundial o desmentida por el viento medio.
+SUSPECT_WIND = "suspect_wind"
 
 
 def data_age(provider: str, minutes: float) -> Dict[str, Any]:
@@ -84,3 +87,8 @@ def suspect_temperature(reason: str) -> Dict[str, Any]:
     (máxima y mínima incompatibles el mismo día).
     """
     return {"code": SUSPECT_TEMPERATURE, "params": {"reason": str(reason)}}
+
+
+def suspect_wind(maximum_kmh: float) -> Dict[str, Any]:
+    """Warning de anemómetro con una racha descartada ese día."""
+    return {"code": SUSPECT_WIND, "params": {"gust": round(float(maximum_kmh))}}

@@ -68,7 +68,11 @@ def test_nws_recent_series_bins_hourly() -> None:
 # Frost — elementos de tendencia + MSL derivada
 # =====================================================================
 
-def test_frost_recent_series_uses_trend_elements() -> None:
+def test_frost_recent_series_uses_trend_elements(monkeypatch) -> None:
+    # SN100 ya no está en el inventario de Frost: se fija su ficha.
+    monkeypatch.setattr(frost, "_load_stations", lambda: [
+        {"id": "SN100", "name": "PLASSEN", "lat": 61.1349, "lon": 12.5039, "elev": 333.0},
+    ])
     tz = ZoneInfo("Europe/Oslo")
     now = datetime(2026, 6, 10, 12, 0, tzinfo=tz)
     captured = {}

@@ -1,0 +1,316 @@
+{
+  "method": {
+    "near_distance_m": 150.0,
+    "strong_identifier_distance_m": 5000.0,
+    "warning": "Candidates are unreviewed; no stations were merged or deleted.",
+    "short_station_ids_are_evidence": false,
+    "observation_comparison": "pending for probable and ambiguous candidates",
+    "excluded_canonical_providers": [
+      "NWS",
+      "METOFFICE"
+    ],
+    "provider_filter": "METEOSWISS"
+  },
+  "candidates": 162,
+  "classifications": {
+    "ambiguous": 1,
+    "probable": 2,
+    "secure": 159
+  },
+  "providers": {
+    "METEOSWISS": 162
+  },
+  "geographically_incompatible_pairs_rejected": 1,
+  "geographic_rejections_by_provider_country": {
+    "METEOSWISS:AT": 1
+  },
+  "iem_stations_with_multiple_original_candidates": 1,
+  "examples": {
+    "secure": [
+      {
+        "classification": "secure",
+        "distance_m": 0.4,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.4,
+        "shared_identifiers": [
+          "WMONAT:756:735"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "ABO",
+          "name": "Adelboden"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-735",
+          "name": "ADELBODEN",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 4.0,
+        "name_similarity": 0.947,
+        "elevation_delta_m": 0.4,
+        "shared_identifiers": [
+          "WMONAT:756:676"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "AEG",
+          "name": "Oberägeri"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-676",
+          "name": "OBERAEGERI",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 5.7,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [
+          "WMONAT:756:712"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "AIG",
+          "name": "Aigle"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-712",
+          "name": "AIGLE",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 3.5,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.1,
+        "shared_identifiers": [
+          "WMONAT:756:672"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "ALT",
+          "name": "Altdorf"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-672",
+          "name": "ALTDORF",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 4.6,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.1,
+        "shared_identifiers": [
+          "WMONAT:756:787"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "AND",
+          "name": "Andeer"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-787",
+          "name": "ANDEER",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 3.9,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.5,
+        "shared_identifiers": [
+          "WMONAT:756:695"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "ANT",
+          "name": "Andermatt"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-695",
+          "name": "ANDERMATT",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 5.1,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.3,
+        "shared_identifiers": [
+          "WMONAT:756:690"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "ARH",
+          "name": "Altenrhein"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-690",
+          "name": "ALTENRHEIN",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 4.5,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.0,
+        "shared_identifiers": [
+          "WMONAT:756:785"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "ARO",
+          "name": "Arosa"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-785",
+          "name": "AROSA",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 3.9,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.1,
+        "shared_identifiers": [
+          "WMONAT:756:723"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "ATT",
+          "name": "Les Attelas"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-723",
+          "name": "LES ATTELAS",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "secure",
+        "distance_m": 5.0,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 0.2,
+        "shared_identifiers": [
+          "WMONAT:756:601"
+        ],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "BAS",
+          "name": "Basel / Binningen"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-601",
+          "name": "BASEL / BINNINGEN",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      }
+    ],
+    "probable": [
+      {
+        "classification": "probable",
+        "distance_m": 4.9,
+        "name_similarity": 0.476,
+        "elevation_delta_m": 5.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "GVE",
+          "name": "Genève / Cointrin"
+        },
+        "iem": {
+          "network": "CH__ASOS",
+          "station_id": "LSGG",
+          "name": "Geneva",
+          "country": "CH"
+        },
+        "observation_comparison": null
+      },
+      {
+        "classification": "probable",
+        "distance_m": 1011.5,
+        "name_similarity": 1.0,
+        "elevation_delta_m": 1.7,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "MANUAL",
+          "station_id": "STE",
+          "name": "Steckborn"
+        },
+        "iem": {
+          "network": "WMO_BUFR_SRF",
+          "station_id": "0-756-0-671",
+          "name": "STECKBORN",
+          "country": "UN"
+        },
+        "observation_comparison": null
+      }
+    ],
+    "ambiguous": [
+      {
+        "classification": "ambiguous",
+        "distance_m": 101.7,
+        "name_similarity": 0.333,
+        "elevation_delta_m": 10.0,
+        "shared_identifiers": [],
+        "source": {
+          "provider": "METEOSWISS",
+          "network": "SWISSMETNET",
+          "station_id": "CDF",
+          "name": "La Chaux-de-Fonds"
+        },
+        "iem": {
+          "network": "CH__ASOS",
+          "station_id": "LSGC",
+          "name": "Les Eplatures",
+          "country": "CH"
+        },
+        "observation_comparison": null
+      }
+    ]
+  }
+}

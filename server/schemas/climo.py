@@ -28,8 +28,8 @@ class ClimoPeriod(BaseModel):
 class ClimoDatasetRequest(BaseModel):
     """
     Petición de ``POST /v1/climo/dataset``. Calca los argumentos del
-    dispatcher legacy: el modo (mensual/anual), los periodos de fechas
-    y, para Frost, los periodos de normales climáticas ("1991/2020").
+    dispatcher legacy: el modo (mensual/anual) y los periodos de fechas.
+    Los campos de normales Frost quedan para su endpoint específico.
     ``api_secret`` es opcional para todos salvo WeatherLink.
     """
 

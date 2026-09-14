@@ -539,3 +539,160 @@ def test_discarding_crawlers_does_not_touch_real_visits(stats_client):
     detail = stats_client.get('/v1/stats/station', params={'provider': 'AEMET', 'station_id': '3386A'},
                               headers={'X-Stats-Password': 's3creto'}).json()
     assert detail['visits']['total'] == 1
+
+
+# =====================================================================
+# Mapas de predicción
+# =====================================================================
+
+def test_forecast_map_views_rank_by_last_30_days(tmp_path):
+    settings = _settings(tmp_path)
+    for _ in range(3):
+        usage_stats.record_forecast_map_view(
+            "arome", "cape", label="CAPE", category="convection", settings=settings,
+        )
+    usage_stats.record_forecast_map_view(
+        "arome", "temperature-2m", label="Temperatura a 2 m", category="temperature",
+        settings=settings,
+    )
+    # Un mapa visto hace dos meses cuenta en el total, no en los 30 días.
+    antiguo = int(time.time()) - 60 * 24 * 3600
+    with usage_stats._connect(settings) as connection:
+        for _ in range(5):
+            connection.execute(
+                "INSERT INTO forecast_map_views(model, product, label, category, epoch)"
+                " VALUES ('arome', 'temperature-2m', 'Temperatura a 2 m', 'temperature', ?)",
+                (antiguo,),
+            )
+
+    summary = usage_stats.forecast_map_summary(settings=settings)
+
+    assert [row["product"] for row in summary["maps"]] == ["cape", "temperature-2m"]
+    cape, temperatura = summary["maps"]
+    assert (cape["d30"], cape["total"], cape["label"]) == (3, 3, "CAPE")
+    assert (temperatura["d30"], temperatura["total"]) == (1, 6)
+    assert summary["totals"] == {"d1": 4, "d7": 4, "d30": 4, "total": 9, "maps": 2}
+    assert summary["categories"][0] == {"category": "convection", "d30": 3, "total": 3}
+
+
+def test_forecast_map_view_rejects_unknown_models_and_odd_ids(tmp_path):
+    settings = _settings(tmp_path)
+    usage_stats.record_forecast_map_view("gfs", "cape", settings=settings)
+    usage_stats.record_forecast_map_view("arome", "'; DROP TABLE x;--", settings=settings)
+    usage_stats.record_forecast_map_view("AROME", "Wind-Level", category="Dynamics!", settings=settings)
+
+    maps = usage_stats.forecast_map_summary(settings=settings)["maps"]
+    assert [(row["model"], row["product"], row["category"]) for row in maps] == [
+        ("arome", "wind-level", ""),
+    ]
+
+
+def test_forecast_map_endpoints(stats_client):
+    enviado = stats_client.post(
+        "/v1/stats/forecast-map",
+        json={"model": "arome", "product": "cape", "label": "CAPE", "category": "convection"},
+    )
+    assert enviado.status_code == 204
+    rastreador = stats_client.post(
+        "/v1/stats/forecast-map",
+        json={"model": "arome", "product": "cape"},
+        headers={"User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)"},
+    )
+    assert rastreador.status_code == 204
+
+    assert stats_client.get(
+        "/v1/stats/forecast-maps", headers={"X-Stats-Password": "mala"}
+    ).status_code == 401
+    respuesta = stats_client.get(
+        "/v1/stats/forecast-maps", headers={"X-Stats-Password": "s3creto"}
+    )
+    assert respuesta.status_code == 200
+    assert respuesta.json()["maps"][0]["total"] == 1
+
+
+# =====================================================================
+# Instalación de la PWA
+# =====================================================================
+
+def test_pwa_events_funnel_and_devices(tmp_path):
+    settings = _settings(tmp_path)
+    iphone = dict(os="ios", device="mobile", browser="safari", method="ios-safari")
+    android = dict(os="android", device="mobile", browser="chrome", method="prompt")
+    pc = dict(os="windows", device="desktop", browser="edge", method="desktop-chromium")
+    for event, context in [
+        ("offered", iphone), ("instructions", iphone), ("launched", {**iphone, "method": "installed"}),
+        ("offered", android), ("prompt_accepted", android), ("installed", android),
+        ("launched", {**android, "method": "installed"}),
+        ("offered", pc), ("dismissed", pc),
+        ("offered", iphone),
+    ]:
+        usage_stats.record_pwa_event(event, settings=settings, **context)
+
+    summary = usage_stats.pwa_summary(settings=settings)
+    totals = {row["event"]: row["total"] for row in summary["events"]}
+    assert totals == {
+        "offered": 4, "instructions": 1, "prompt_accepted": 1, "prompt_dismissed": 0,
+        "installed": 1, "launched": 2, "dismissed": 1,
+    }
+    assert [row["event"] for row in summary["events"]] == list(usage_stats.PWA_EVENTS)
+    por_so = {row["value"]: row for row in summary["by_os"]}
+    assert (por_so["ios"]["launched"], por_so["ios"]["offered"]) == (1, 2)
+    assert (por_so["android"]["installed"], por_so["android"]["launched"]) == (1, 1)
+    assert por_so["windows"]["launched"] == 0
+    assert summary["by_device"][0] == {
+        "value": "mobile", "launched": 2, "installed": 1, "offered": 3, "launched_d30": 2,
+    }
+    metodos = {row["value"]: row for row in summary["by_method"]}
+    assert metodos["prompt"]["prompt_accepted"] == 1
+    assert metodos["desktop-chromium"]["dismissed"] == 1
+
+
+def test_pwa_event_drops_unknown_values(tmp_path):
+    settings = _settings(tmp_path)
+    usage_stats.record_pwa_event("hacked", os="ios", settings=settings)
+    usage_stats.record_pwa_event("LAUNCHED", os="ios", device="fridge", browser="netscape", settings=settings)
+    summary = usage_stats.pwa_summary(settings=settings)
+    assert sum(row["total"] for row in summary["events"]) == 1
+    assert summary["by_device"] == [{"value": "", "launched": 1, "installed": 0, "offered": 0, "launched_d30": 1}]
+    assert summary["by_browser"][0]["value"] == ""
+
+
+def test_pwa_endpoints(stats_client):
+    assert stats_client.post(
+        "/v1/stats/pwa",
+        json={"event": "launched", "os": "ipados", "device": "tablet", "browser": "safari", "method": "installed"},
+    ).status_code == 204
+    assert stats_client.post(
+        "/v1/stats/pwa", json={"event": "launched", "os": "ios"},
+        headers={"User-Agent": "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)"},
+    ).status_code == 204
+    assert stats_client.get("/v1/stats/pwa", headers={"X-Stats-Password": "mala"}).status_code == 401
+    respuesta = stats_client.get("/v1/stats/pwa", headers={"X-Stats-Password": "s3creto"})
+    assert respuesta.status_code == 200
+    body = respuesta.json()
+    assert {row["event"]: row["total"] for row in body["events"]}["launched"] == 1
+    assert body["by_os"][0]["value"] == "ipados"
+
+
+def test_pwa_values_match_the_frontend():
+    """Si el navegador envía un valor que aquí no está, se guarda vacío sin avisar."""
+    import re
+    from pathlib import Path
+
+    web = Path(__file__).resolve().parents[2] / "web" / "src"
+    platform = (web / "lib" / "pwa" / "platform.js").read_text(encoding="utf-8")
+    bloque = platform[platform.index("export const INSTALL_METHODS"):]
+    bloque = bloque[:bloque.index("];")]
+    assert set(re.findall(r"'([a-z-]+)'", bloque)) == usage_stats.PWA_METHODS
+
+    # Cada línea que llama a `recordPwaEvent` lleva el evento entre comillas
+    # (o los dos de un ternario, como el del diálogo del navegador).
+    enviados = set()
+    for path in (web / "lib").rglob("*"):
+        if path.suffix not in {".js", ".svelte"}:
+            continue
+        for linea in path.read_text(encoding="utf-8").splitlines():
+            if "recordPwaEvent(" in linea and "function recordPwaEvent" not in linea:
+                enviados |= set(re.findall(r"'([a-z_]+)'", linea))
+    assert enviados <= set(usage_stats.PWA_EVENTS)
+    assert {"offered", "instructions", "installed", "launched", "dismissed", "prompt_accepted", "prompt_dismissed"} <= enviados

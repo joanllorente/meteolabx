@@ -48,43 +48,103 @@ const CALM_KMH = 2;
  */
 const CALM_WIND_KMH = 0.5;
 
-function windRose(series, language) {
-  const dirs = series?.wind_dirs || [];
-  const speeds = series?.winds || [];
-  const sectors = new Array(16).fill(0);
+/**
+ * Bandas de intensidad de la rosa, en la unidad que lee el usuario.
+ *
+ * Límites redondos en cada unidad —3, 6, 9 m/s; 5, 10, 15 kt—, no 10 km/h
+ * traducidos a 2,8 m/s. Van casi a la par en todas (unos 10, 20, 30, 40 y
+ * 60 km/h), así que cada banda conserva su color al cambiar de unidad. Los
+ * colores son los del mapa de viento en esos mismos tramos.
+ */
+const ROSE_BAND_EDGES = {
+  kmh: [10, 20, 30, 40, 60],
+  ms: [3, 6, 9, 12, 17],
+  mph: [5, 10, 20, 25, 40],
+  kt: [5, 10, 15, 20, 30]
+};
+const ROSE_BAND_COLORS = ['#43c4cf', '#48c992', '#b9da53', '#f7cf3f', '#f79732', '#e24932'];
+
+function roseBands(preferences, language) {
+  const edges = ROSE_BAND_EDGES[preferences?.wind] || ROSE_BAND_EDGES.kmh;
+  const format = (value) => num(value, { language, decimals: 0 });
+  return ROSE_BAND_COLORS.map((color, index) => ({
+    color,
+    label: index === 0
+      ? `<${format(edges[0])}`
+      : index === edges.length
+        ? `≥${format(edges[index - 1])}`
+        : `${format(edges[index - 1])}–${format(edges[index])}`,
+    // Límite inferior en km/h, que es la unidad de la serie.
+    from: index === 0 ? 0 : edges[index - 1] / convertUnit(1, 'wind', preferences)
+  }));
+}
+
+function roseFor(dirs, speeds, language, preferences) {
+  const bands = roseBands(preferences, language);
+  const sectors = Array.from({ length: 16 }, () => new Array(bands.length).fill(0));
   let calm = 0;
   let total = 0;
 
   for (let index = 0; index < dirs.length; index += 1) {
     const direction = valid(dirs[index]);
     const speed = valid(speeds[index]);
-    if (direction === null) continue;
+    // Sin velocidad no hay intensidad que apilar: un rumbo suelto no entra.
+    if (direction === null || speed === null) continue;
     total += 1;
-    if (speed !== null && speed < CALM_KMH) {
+    if (speed < CALM_KMH) {
       calm += 1;
       continue;
     }
-    sectors[Math.round((((direction % 360) + 360) % 360) / 22.5) % 16] += 1;
+    let band = 0;
+    while (band + 1 < bands.length && speed >= bands[band + 1].from) band += 1;
+    sectors[Math.round((((direction % 360) + 360) % 360) / 22.5) % 16][band] += 1;
   }
 
   const active = total - calm;
   if (active < 6) return null;
 
   const names = cardinals(language);
-  const data = sectors.map((count, index) => ({
-    dir: names[index],
-    pct: (count / active) * 100
-  }));
+  const data = sectors.map((counts, index) => {
+    const bandPct = counts.map((count) => (count / active) * 100);
+    return {
+      dir: names[index],
+      pct: bandPct.reduce((sum, value) => sum + value, 0),
+      bands: bandPct
+    };
+  });
   const dominant = data.reduce((best, item) => (item.pct > best.pct ? item : best), data[0]);
   return {
     data,
+    // Solo las bandas que han soplado hoy: una leyenda con «≥60» un día de
+    // brisa promete algo que la rosa no enseña.
+    bands: bands
+      .map(({ color, label }, index) => ({ color, label, index }))
+      .filter(({ index }) => data.some((sector) => sector.bands[index] > 0)),
     cardinals: [names[0], names[4], names[8], names[12]],
+    samples: total,
     stats: {
       dominant: dominant.dir,
       frequency: `${num(dominant.pct, { language, decimals: 0 })} %`,
       samples: num(total, { language, decimals: 0 }),
       calm: `${num((calm / total) * 100, { language, decimals: 0 })} %`
     }
+  };
+}
+
+// La rosa de rachas solo se ofrece si la racha acompaña a casi todas las
+// lecturas. Las redes METAR la informan únicamente cuando hay racha, e IPMA o
+// CLIMANTARTIDE no la publican: con esa serie la rosa contaría solo los
+// ratos racheados y parecería el día entero.
+const GUST_ROSE_MIN_COVERAGE = 0.8;
+
+function windRose(series, language, preferences) {
+  const dirs = series?.wind_dirs || [];
+  const mean = roseFor(dirs, series?.winds || [], language, preferences);
+  if (!mean) return null;
+  const gust = roseFor(dirs, series?.gusts || [], language, preferences);
+  return {
+    ...mean,
+    gust: gust && gust.samples >= mean.samples * GUST_ROSE_MIN_COVERAGE ? gust : null
   };
 }
 
@@ -224,7 +284,7 @@ export function observationModel(payload, station, language, rawPreferences = nu
     card({ tooltip: 'temperatura equivalente', title: ui(language, 'equivalent_temperature'), value: derivatives.Te, unit: '°C', icon: 'Thermometer', language, family: 'temperature', preferences }),
     card({ tooltip: 'temperatura potencial', title: ui(language, 'potential_temperature'), value: derivatives.theta, unit: '°C', icon: 'Thermometer', language, family: 'temperature', preferences }),
     card({ tooltip: 'densidad del aire', title: ui(language, 'air_density'), value: derivatives.rho, unit: 'kg/m³', icon: 'Box', language, decimals: 3  }),
-    card({ tooltip: 'nivel de condensacion por ascenso', title: ui(language, 'lcl'), value: derivatives.lcl, unit: 'm', icon: 'CloudFog', language, decimals: 0  }),
+    card({ tooltip: 'nivel de condensacion por ascenso', title: ui(language, 'lcl'), value: derivatives.lcl, unit: 'm', icon: 'CloudFog', language, decimals: 0, family: 'altitude', preferences }),
     card({ tooltip: 'velocidad del sonido', title: ui(language, 'sound_speed'), value: derivatives.sound_speed_ms, unit: 'm/s', icon: 'AudioLines', language })
   ], { keepEmpty: placeholder });
 
@@ -328,13 +388,15 @@ export function observationModel(payload, station, language, rawPreferences = nu
 
   const names = cardinals(language);
 
-  const rose = windRose(series, language);
+  const rose = windRose(series, language, preferences);
   if (rose) {
-    rose.stats.calmThreshold = `<${formatFamily(
+    const calmThreshold = `<${formatFamily(
       CALM_KMH,
       'wind',
       preferences.wind === 'kmh' ? 0 : 1
     )} ${windUnit}`;
+    rose.stats.calmThreshold = calmThreshold;
+    if (rose.gust) rose.gust.stats.calmThreshold = calmThreshold;
   }
 
   return {
@@ -462,7 +524,11 @@ export function observationModel(payload, station, language, rawPreferences = nu
       },
       vapour: (() => {
         const built = dayChart(series, ['vapor_pressures', 'saturation_pressures'], dayOptions);
-        return built && { ...built, data: built.data.map((values) => convertSeries(values, 'pressure', preferences)) };
+        // La presión saturante sale de la temperatura; la de vapor, de la
+        // humedad. Sin higrómetro solo queda la curva de referencia, y un
+        // gráfico de presión de vapor sin presión de vapor no dice nada.
+        if (!built || !built.data[0].some(isNumber)) return null;
+        return { ...built, data: built.data.map((values) => convertSeries(values, 'pressure', preferences)) };
       })(),
       precipitation: (() => {
         const built = dayChart(series, ['precips'], dayOptions);

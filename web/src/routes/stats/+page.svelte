@@ -45,6 +45,8 @@
   });
 
   let cuarentena = $state(null);
+  let prediccion = $state(null);
+  let instalacion = $state(null);
 
   /** Días completos que lleva marcada, para saber si es crónica o de un rato. */
   const duracion = (fila) => {
@@ -60,10 +62,18 @@
     frozen: 'lleva horas sin variar',
     impossible: 'imposible para su latitud y época',
     range: 'máxima y mínima incompatibles',
-    isolated_peak: 'racha máxima aislada'
+    isolated_peak: 'racha máxima aislada',
+    sustained_mismatch: 'racha que su viento medio desmiente',
+    world_record: 'por encima del récord mundial',
+    intensity: 'intensidad de lluvia implausible',
+    unreported: 'lluvia que ningún parte confirma'
   };
   const motivo = (fila) => {
-    const clave = fila?.params?.reason || Object.keys(fila?.reasons || {})[0] || '';
+    // Las marcas de lluvia de la ficha no llevan `reason`, pero sus parámetros
+    // dicen de cuál se trata: sin esto salían en blanco.
+    const params = fila?.params || {};
+    const deducido = params.reports != null ? 'unreported' : params.minutes != null ? 'intensity' : '';
+    const clave = params.reason || deducido || Object.keys(fila?.reasons || {})[0] || '';
     return MOTIVOS[clave] || clave || '—';
   };
   const VARIABLES = { temperature: 'Temperatura', rain: 'Precipitación', wind: 'Viento (racha)' };
@@ -88,6 +98,18 @@
       // La cuarentena vive en memoria del backend, no en la base de uso, así
       // que va en su propia llamada. Que falle no debe tumbar el panel.
       cuarentena = await fetch('/v1/stats/quarantine', {
+        headers: { 'X-Stats-Password': password.trim() }
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      // Los mapas de predicción, igual: su propia llamada, y un fallo solo
+      // deja vacía su pestaña.
+      prediccion = await fetch('/v1/stats/forecast-maps', {
+        headers: { 'X-Stats-Password': password.trim() }
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      instalacion = await fetch('/v1/stats/pwa', {
         headers: { 'X-Stats-Password': password.trim() }
       })
         .then((r) => (r.ok ? r.json() : null))
@@ -251,8 +273,54 @@
   const PESTANAS = [
     { id: 'uso', etiqueta: 'Uso' },
     { id: 'estaciones', etiqueta: 'Estaciones' },
+    { id: 'prediccion', etiqueta: 'Predicción' },
+    { id: 'instalacion', etiqueta: 'Instalación' },
     { id: 'cuarentena', etiqueta: 'Cuarentena' }
   ];
+
+  // Las categorías del visor de predicción, con sus nombres del menú.
+  const CATEGORIAS_PREDICCION = {
+    temperature: 'Temperatura',
+    precipitation: 'Precipitación',
+    dynamics: 'Dinámica atmosférica',
+    convection: 'Convección',
+    humidity: 'Humedad',
+    clouds: 'Nubosidad',
+    radiation: 'Radiación'
+  };
+  const nombreCategoria = (id) => CATEGORIAS_PREDICCION[id] || id || '—';
+  const MODELOS_PREDICCION = { arome: 'AROME', ecmwf: 'ECMWF' };
+
+  // Instalación de la app. Los identificadores son los de `platform.js`.
+  const EVENTOS_PWA = {
+    offered: 'Tarjeta enseñada',
+    instructions: 'Instrucciones abiertas',
+    prompt_accepted: 'Diálogo aceptado',
+    prompt_dismissed: 'Diálogo rechazado',
+    installed: 'Instalación confirmada',
+    launched: 'Primera apertura instalada',
+    dismissed: '«Ahora no»'
+  };
+  const NOMBRES_PWA = {
+    mobile: 'Móvil', tablet: 'Tableta', desktop: 'Escritorio',
+    ios: 'iOS', ipados: 'iPadOS', android: 'Android', macos: 'macOS', windows: 'Windows',
+    linux: 'Linux', chromeos: 'ChromeOS',
+    safari: 'Safari', chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', samsung: 'Samsung Internet',
+    opera: 'Opera', other: 'Otro',
+    prompt: 'Botón con diálogo del navegador', 'ios-safari': 'Instrucciones · Safari en iOS',
+    'ios-share': 'Instrucciones · otro navegador en iOS', 'android-menu': 'Instrucciones · menú de Android',
+    'android-samsung': 'Instrucciones · Samsung Internet', 'android-firefox': 'Instrucciones · Firefox Android',
+    'mac-safari': 'Instrucciones · Safari en Mac', 'desktop-chromium': 'Instrucciones · Chrome/Edge escritorio',
+    'open-browser': 'Dentro de otra app', unsupported: 'Navegador sin instalación', installed: 'Ya instalada'
+  };
+  const nombrePwa = (valor) => NOMBRES_PWA[valor] || valor || 'Sin dato';
+  const totalPwa = (evento, ventana = 'total') =>
+    instalacion?.events?.find((fila) => fila.event === evento)?.[ventana] || 0;
+
+  // Barra de cada fila, relativa al mapa más visto en 30 días.
+  const maximoPrediccion = $derived(
+    Math.max(1, ...(prediccion?.maps || []).map((fila) => fila.d30))
+  );
   let pestana = $state('uso');
 
   // Paginación: 500 filas de golpe hacían la página inmanejable.
@@ -458,6 +526,171 @@
       </tbody>
     </table>
 
+    {/if}
+
+    {#if pestana === 'prediccion'}
+    {#if prediccion}
+      <section class="totales">
+        {#each [
+          ['Hoy', prediccion.totals.d1],
+          ['7 días', prediccion.totals.d7],
+          ['30 días', prediccion.totals.d30],
+          ['Desde el inicio', prediccion.totals.total],
+          ['Mapas distintos', prediccion.totals.maps]
+        ] as [etiqueta, valor] (etiqueta)}
+          <article><span>{etiqueta}</span><strong>{numero(valor)}</strong></article>
+        {/each}
+      </section>
+      <p class="nota">
+        Cuenta cada mapa elegido en el menú del visor una vez por carga de página:
+        volver a él mientras se compara no suma. El primero que pone un cambio de
+        modelo no cuenta.
+      </p>
+
+      {#if prediccion.maps.length}
+        <h2>Mapas más vistos <small>({prediccion.maps.length})</small></h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Mapa</th><th>Modelo</th><th>Categoría</th>
+              <th class="num">Hoy</th><th class="num">7 d</th><th class="num">30 d</th>
+              <th class="num">Total</th><th>Último</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each prediccion.maps as fila (`${fila.model}|${fila.product}`)}
+              <tr>
+                <td title={fila.product}>
+                  {fila.label || fila.product}
+                  <span class="barra" style="width: {(fila.d30 / maximoPrediccion) * 100}%"></span>
+                </td>
+                <td class="red">{MODELOS_PREDICCION[fila.model] || fila.model}</td>
+                <td class="red">{nombreCategoria(fila.category)}</td>
+                <td class="n">{numero(fila.d1)}</td>
+                <td class="n">{numero(fila.d7)}</td>
+                <td class="n">{numero(fila.d30)}</td>
+                <td class="n">{numero(fila.total)}</td>
+                <td class="fecha">{fecha(fila.last_epoch)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+
+        <h2>Por categoría</h2>
+        <table>
+          <thead><tr><th>Categoría</th><th class="num">30 d</th><th class="num">Total</th></tr></thead>
+          <tbody>
+            {#each prediccion.categories as fila (fila.category)}
+              <tr>
+                <td>{nombreCategoria(fila.category)}</td>
+                <td class="n">{numero(fila.d30)}</td>
+                <td class="n">{numero(fila.total)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="vacio">Todavía no se ha registrado ningún mapa de predicción.</p>
+      {/if}
+    {:else}
+      <p class="vacio">No se pudieron consultar los mapas de predicción.</p>
+    {/if}
+    {/if}
+
+    {#if pestana === 'instalacion'}
+    {#if instalacion}
+      <section class="totales">
+        {#each [
+          ['Instalaciones (30 d)', totalPwa('launched', 'd30')],
+          ['Instalaciones totales', totalPwa('launched')],
+          ['Confirmadas por el navegador', totalPwa('installed')],
+          ['Tarjeta enseñada', totalPwa('offered')]
+        ] as [etiqueta, valor] (etiqueta)}
+          <article><span>{etiqueta}</span><strong>{numero(valor)}</strong></article>
+        {/each}
+      </section>
+      <p class="nota">
+        Una instalación se cuenta la primera vez que se abre la app instalada: en iPhone y
+        iPad es la única señal, porque Safari no avisa al añadirla. «Confirmadas por el
+        navegador» solo existe en Chrome, Edge y compañía, y va aparte para no contar dos
+        veces. La tarjeta se cuenta una vez por navegador.
+      </p>
+
+      <h2>Embudo</h2>
+      <table>
+        <thead><tr><th>Evento</th><th class="num">Hoy</th><th class="num">7 d</th><th class="num">30 d</th><th class="num">Total</th></tr></thead>
+        <tbody>
+          {#each instalacion.events as fila (fila.event)}
+            <tr>
+              <td title={fila.event}>{EVENTOS_PWA[fila.event] || fila.event}</td>
+              <td class="n">{numero(fila.d1)}</td>
+              <td class="n">{numero(fila.d7)}</td>
+              <td class="n">{numero(fila.d30)}</td>
+              <td class="n">{numero(fila.total)}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+
+      {#each [
+        ['Por dispositivo', instalacion.by_device],
+        ['Por sistema', instalacion.by_os],
+        ['Por navegador', instalacion.by_browser]
+      ] as [titulo, filas] (titulo)}
+        <h2>{titulo}</h2>
+        {#if filas.length}
+          <table>
+            <thead>
+              <tr>
+                <th></th><th class="num">Instalaciones (30 d)</th><th class="num">Instalaciones</th>
+                <th class="num">Confirmadas</th><th class="num">Tarjeta enseñada</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each filas as fila (fila.value)}
+                <tr>
+                  <td>{nombrePwa(fila.value)}</td>
+                  <td class="n">{numero(fila.launched_d30)}</td>
+                  <td class="n">{numero(fila.launched)}</td>
+                  <td class="n">{numero(fila.installed)}</td>
+                  <td class="n">{numero(fila.offered)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {:else}
+          <p class="vacio">Sin datos todavía.</p>
+        {/if}
+      {/each}
+
+      <h2>Por forma de instalar</h2>
+      {#if instalacion.by_method.length}
+        <table>
+          <thead>
+            <tr>
+              <th>Qué se le ofreció</th><th class="num">Enseñada</th><th class="num">Instrucciones</th>
+              <th class="num">Diálogo aceptado</th><th class="num">Diálogo rechazado</th><th class="num">«Ahora no»</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each instalacion.by_method as fila (fila.value)}
+              <tr>
+                <td>{nombrePwa(fila.value)}</td>
+                <td class="n">{numero(fila.offered)}</td>
+                <td class="n">{numero(fila.instructions)}</td>
+                <td class="n">{numero(fila.prompt_accepted)}</td>
+                <td class="n">{numero(fila.prompt_dismissed)}</td>
+                <td class="n">{numero(fila.dismissed)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="vacio">Sin datos todavía.</p>
+      {/if}
+    {:else}
+      <p class="vacio">No se pudieron consultar las instalaciones.</p>
+    {/if}
     {/if}
 
     {#if pestana === 'cuarentena'}
@@ -866,6 +1099,11 @@
   td a:hover { text-decoration: underline; }
 
   .pestanas { display: flex; gap: 6px; margin: 0 0 20px; flex-wrap: wrap; }
+  .nota { margin: 10px 0 0; font-size: 0.7rem; color: var(--muted); }
+  td .barra {
+    display: block; height: 3px; margin-top: 4px; border-radius: 2px;
+    background: var(--accent); opacity: 0.55; min-width: 2px;
+  }
   .pestanas button {
     padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px;
     background: var(--panel-2); color: var(--ink-2);

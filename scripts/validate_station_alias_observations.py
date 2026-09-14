@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.build_station_aliases import DEFAULT_DATABASE
+from scripts.build_station_aliases import DEFAULT_DATABASE, EXCLUDED_CANONICAL_PROVIDERS
 from server.config import get_settings
 from server.routers.observations import _resolve_provider_fetchers
 from server.schemas.observation import TodaySeriesRequest
@@ -47,6 +47,11 @@ ON station_alias_observation_checks(alias_pk, checked_at);
 # 0,0-0,1 así que no pierde discriminación. humidity_pct 2.0: la RH de BUFR
 # se deriva de T/Td redondeados.
 TOLERANCES = {"temperature_c": 0.3, "humidity_pct": 2.0, "wind_kmh": 0.5, "wind_dir_deg": 3.0}
+MIN_MATCHED_HOURS = 12
+MIN_TEMPERATURE_VALUES = 12
+MIN_TOTAL_VALUES = 24
+MIN_TEMPERATURE_RATIO = 0.90
+MIN_MULTIVARIABLE_RATIO = 0.85
 
 # Paso de cuantización por variable cuando la serie IEM viene redondeada en
 # origen: los METAR (redes *_ASOS) publican temperatura en °C ENTEROS y
@@ -100,9 +105,18 @@ def _hourly_source(series: dict[str, Any]) -> dict[int, dict[str, float]]:
         except (TypeError, ValueError):
             continue
         bucket = epoch // 3600
-        row = hourly.setdefault(bucket, {"epoch": float(epoch)})
-        if epoch >= row["epoch"]:
-            row["epoch"] = float(epoch)
+        row = hourly.get(bucket)
+        # Los feeds oficiales pueden publicar cada 10 minutos, mientras que
+        # IEM/BUFR conserva el parte de la hora en punto. Elegir la última
+        # lectura del bloque (:50) comparaba instantes distintos. Conservamos
+        # la lectura más próxima a :00 (normalmente exactamente :00).
+        distance_to_hour = epoch - bucket * 3600
+        current_distance = (
+            int(row["epoch"]) - bucket * 3600 if row is not None else 3601
+        )
+        if row is None or distance_to_hour < current_distance:
+            row = {"epoch": float(epoch)}
+            hourly[bucket] = row
             for canonical, source_key in keys.items():
                 values = series.get(source_key, [])
                 value = _number(values[index]) if isinstance(values, list) and index < len(values) else None
@@ -199,17 +213,42 @@ def compare_hourly(source: dict[int, dict[str, float]], iem: dict[int, dict[str,
             best_offset = offset
             comparisons = offset_comparisons
             matched_hours = offset_hours
+    return _summarize_comparisons(
+        comparisons, matched_hours=matched_hours, hour_offset=best_offset,
+        tolerances=tolerances,
+    )
+
+
+def _summarize_comparisons(
+    comparisons: list[dict[str, Any]], *, matched_hours: int | None = None,
+    hour_offset: int | None = None, tolerances: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Classify comparisons, deduplicating hours accumulated across runs."""
+    unique = {
+        (int(row["hour_epoch"]), str(row["variable"])): row
+        for row in comparisons
+        if "hour_epoch" in row and "variable" in row
+    }
+    comparisons = list(unique.values())
+    observed_hours = len({int(row["hour_epoch"]) for row in comparisons})
+    matched_hours = observed_hours if matched_hours is None else min(matched_hours, observed_hours)
     agreeing = sum(bool(row["agrees"]) for row in comparisons)
     total = len(comparisons)
     ratio = agreeing / total if total else 0.0
     temperature = [row for row in comparisons if row["variable"] == "temperature_c"]
     temperature_ratio = sum(row["agrees"] for row in temperature) / len(temperature) if temperature else 0.0
     variables = {row["variable"] for row in comparisons}
-    strong_temperature = len(temperature) >= 4 and temperature_ratio >= 0.75
-    strong_multivariable = total >= 8 and len(variables) >= 2 and ratio >= 0.80
-    if matched_hours >= 4 and (strong_temperature or strong_multivariable):
+    strong_temperature = (
+        len(temperature) >= MIN_TEMPERATURE_VALUES
+        and temperature_ratio >= MIN_TEMPERATURE_RATIO
+    )
+    strong_multivariable = (
+        total >= MIN_TOTAL_VALUES and len(variables) >= 2
+        and ratio >= MIN_MULTIVARIABLE_RATIO
+    )
+    if matched_hours >= MIN_MATCHED_HOURS and (strong_temperature or strong_multivariable):
         status = "confirmed"
-    elif matched_hours >= 4 and total >= 8 and ratio <= 0.25 and (
+    elif matched_hours >= MIN_MATCHED_HOURS and total >= MIN_TOTAL_VALUES and ratio <= 0.25 and (
         not temperature or temperature_ratio <= 0.25
     ):
         status = "conflict"
@@ -219,8 +258,8 @@ def compare_hourly(source: dict[int, dict[str, float]], iem: dict[int, dict[str,
         "status": status, "matched_hours": matched_hours, "compared_values": total,
         "agreeing_values": agreeing, "agreement_ratio": round(ratio, 3),
         "temperature_agreement_ratio": round(temperature_ratio, 3),
-        "hour_offset": best_offset,
-        "tolerances": {key: round(value, 3) for key, value in tolerances.items()},
+        "hour_offset": hour_offset,
+        "tolerances": {key: round(value, 3) for key, value in (tolerances or TOLERANCES).items()},
         "comparisons": comparisons,
     }
 
@@ -230,6 +269,20 @@ async def _source_series(provider: str, station_id: str, client: httpx.AsyncClie
     _secret, _current, fetch_series = _resolve_provider_fetchers(body, client, get_settings())
     value = await fetch_series()
     return value if isinstance(value, dict) else {}
+
+
+async def _retry_async(factory, *, retries: int, delay_seconds: float):
+    """Retry transient provider/rate-limit failures with exponential backoff."""
+    last_error: Exception | None = None
+    for attempt in range(max(0, retries) + 1):
+        try:
+            return await factory()
+        except Exception as exc:
+            last_error = exc
+            if attempt >= retries:
+                raise
+            await asyncio.sleep(delay_seconds * (2 ** attempt))
+    raise last_error or RuntimeError("retry failed")
 
 
 async def _iem_rows(
@@ -250,13 +303,20 @@ async def _iem_rows(
 
 async def _validate_candidate(
     candidate: sqlite3.Row, client: httpx.AsyncClient, semaphore: asyncio.Semaphore,
+    retries: int = 2, retry_delay: float = 2.0,
 ) -> tuple[int, dict[str, Any]]:
     async with semaphore:
         try:
-            series = await _source_series(candidate["provider"], candidate["source_station_id"], client)
+            series = await _retry_async(
+                lambda: _source_series(candidate["provider"], candidate["source_station_id"], client),
+                retries=retries, delay_seconds=retry_delay,
+            )
             dates = _dates_for_series(series, candidate["iem_timezone"])
-            iem_rows = await _iem_rows(
-                candidate["network_code"], candidate["iem_station_id"], dates, client,
+            iem_rows = await _retry_async(
+                lambda: _iem_rows(
+                    candidate["network_code"], candidate["iem_station_id"], dates, client,
+                ),
+                retries=retries, delay_seconds=retry_delay,
             ) if dates else []
             details = compare_hourly(_hourly_source(series), _hourly_iem(iem_rows))
         except Exception as exc:
@@ -281,6 +341,36 @@ def _dates_for_series(series: dict[str, Any], tz_name: str) -> set[str]:
     return dates
 
 
+def _accumulate_previous_checks(
+    connection: sqlite3.Connection, alias_pk: int, current: dict[str, Any],
+) -> dict[str, Any]:
+    """Combine distinct hourly evidence from earlier inconclusive runs."""
+    if current.get("status") == "error":
+        return current
+    comparisons = list(current.get("comparisons") or [])
+    rows = connection.execute(
+        """
+        SELECT details_json FROM station_alias_observation_checks
+        WHERE alias_pk = ? AND status IN ('confirmed', 'conflict', 'inconclusive')
+        ORDER BY check_pk
+        """,
+        (alias_pk,),
+    ).fetchall()
+    for row in rows:
+        try:
+            previous = json.loads(row["details_json"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        comparisons.extend(previous.get("comparisons") or [])
+    result = _summarize_comparisons(comparisons)
+    result["sampled_dates"] = sorted({
+        datetime.fromtimestamp(int(row["hour_epoch"]), tz=timezone.utc).date().isoformat()
+        for row in result["comparisons"]
+    })
+    result["accumulated_runs"] = len(rows) + 1
+    return result
+
+
 def _candidates(
     connection: sqlite3.Connection, limit: int, provider: str,
     retry_inconclusive: bool = False, include_secure: bool = False,
@@ -300,6 +390,9 @@ def _candidates(
     methods = "'inventory_probable', 'inventory_ambiguous'"
     if include_secure:
         methods = "'inventory_secure', 'inventory_probable', 'inventory_ambiguous'"
+    excluded_providers = ", ".join(
+        f"'{provider}'" for provider in EXCLUDED_CANONICAL_PROVIDERS
+    )
     return connection.execute(
         f"""
         SELECT a.alias_pk, source.provider, source.station_id AS source_station_id,
@@ -314,6 +407,7 @@ def _candidates(
               WHERE c.alias_pk = a.alias_pk
           )
         WHERE a.reviewed = 0 AND a.method IN ({methods})
+          AND source.provider NOT IN ({excluded_providers})
           AND {pending_clause} {provider_clause}
         ORDER BY CASE a.method
                    WHEN 'inventory_secure' THEN 0
@@ -331,6 +425,7 @@ async def validate_batch(
     database: Path, *, limit: int = 10, provider: str = "",
     retry_inconclusive: bool = False, concurrency: int = 1,
     include_secure: bool = False,
+    retries: int = 2, retry_delay: float = 2.0,
 ) -> dict[str, int]:
     connection = sqlite3.connect(database)
     connection.row_factory = sqlite3.Row
@@ -339,9 +434,13 @@ async def validate_batch(
     counts = {"confirmed": 0, "conflict": 0, "inconclusive": 0, "error": 0}
     semaphore = asyncio.Semaphore(max(1, concurrency))
     async with httpx.AsyncClient(headers={"User-Agent": "MeteoLabX alias validation"}) as client:
-        tasks = [_validate_candidate(candidate, client, semaphore) for candidate in candidates]
+        tasks = [
+            _validate_candidate(candidate, client, semaphore, retries, retry_delay)
+            for candidate in candidates
+        ]
         for task in asyncio.as_completed(tasks):
             alias_pk, details = await task
+            details = _accumulate_previous_checks(connection, alias_pk, details)
             status = details["status"]
             counts[status] += 1
             connection.execute(
@@ -393,6 +492,8 @@ def main() -> None:
     parser.add_argument("--provider", default="")
     parser.add_argument("--retry-inconclusive", action="store_true")
     parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--retry-delay", type=float, default=2.0)
     parser.add_argument(
         "--include-secure",
         action="store_true",
@@ -403,6 +504,7 @@ def main() -> None:
         args.database, limit=max(1, args.limit), provider=args.provider,
         retry_inconclusive=args.retry_inconclusive, concurrency=max(1, args.concurrency),
         include_secure=args.include_secure,
+        retries=max(0, args.retries), retry_delay=max(0.0, args.retry_delay),
     ))
     print("Observation validation:", " ".join(f"{key}={value}" for key, value in counts.items()))
 

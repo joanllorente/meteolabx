@@ -307,24 +307,27 @@ def _index_isobaric_bands(
     seen: set[str] = set()
     stack = ExitStack()
     try:
-        stack.enter_context(rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB))
-        dataset = stack.enter_context(rasterio.open(path))
-        for index in range(1, dataset.count + 1):
-            tags = dataset.tags(index)
-            element = tags.get("GRIB_ELEMENT", "")
-            seen.add(element)
-            name = by_element.get(element)
-            if name is None:
-                continue
-            if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
-                continue
-            short_name = tags.get("GRIB_SHORT_NAME", "")
-            if not short_name.endswith("-ISBL"):
-                continue
-            level_pa = int(short_name.split("-", 1)[0])
-            if level_pa not in wanted_levels:
-                continue
-            bands.setdefault(name, {})[level_pa / 100.0] = index
+        # Env es local al hilo y debe cerrarse en orden LIFO. IP1/IP3
+        # permanecen abiertos y se liberan en distinto orden: no conservar
+        # sus Env en los ExitStack de los datasets.
+        with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB):
+            dataset = stack.enter_context(rasterio.open(path))
+            for index in range(1, dataset.count + 1):
+                tags = dataset.tags(index)
+                element = tags.get("GRIB_ELEMENT", "")
+                seen.add(element)
+                name = by_element.get(element)
+                if name is None:
+                    continue
+                if int(tags.get("GRIB_VALID_TIME", -1)) != stamp:
+                    continue
+                short_name = tags.get("GRIB_SHORT_NAME", "")
+                if not short_name.endswith("-ISBL"):
+                    continue
+                level_pa = int(short_name.split("-", 1)[0])
+                if level_pa not in wanted_levels:
+                    continue
+                bands.setdefault(name, {})[level_pa / 100.0] = index
     except BaseException:
         stack.close()
         raise

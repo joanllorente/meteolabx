@@ -9,6 +9,7 @@
     "suspect_temperature_reason_frozen": "fa hores que no varia",
     "suspect_temperature_reason_impossible": "impossible per a la seva latitud i època de l’any",
     "suspect_temperature_reason_range": "màxima i mínima incompatibles el mateix dia",
+    "suspect_wind": "⚠️ L'anemòmetre d'aquesta estació ha donat avui una ratxa de {gust} km/h que no és creïble. Les seves dades de vent d'avui s'han exclòs del rànquing.",
     "historical_station": "⚠️ Aquesta estació és històrica i ja no publica observacions actuals. Pots consultar-ne la sèrie a la pestanya Històric.",
     "historical_station_replacement": "Aquesta estació s’ha traslladat. L’estació actual és {station_link}."
   },
@@ -167,6 +168,21 @@
     ],
     "privacy_contact_title": "Contacte",
     "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_210_improvements": [
+      "Afegits nous proveïdors oficials de Lituània, Polònia, Dinamarca i Suïssa.",
+      "La cerca per ubicació ara recorda les darreres estacions visitades.",
+      "Afegits nous presets d’unitats de mesura.",
+      "Millorada la visualització del mapa de precipitació.",
+      "La rosa dels vents ara mostra també les velocitats registrades.",
+      "Afegida una nova rosa dels vents per a ratxes.",
+      "Afegit l’idioma alemany.",
+      "MeteoLabX funciona ara completament com a Progressive Web App (PWA) i es pot instal·lar com a aplicació en dispositius compatibles."
+    ],
+    "release_210_fixes": [
+      "Corregit un problema que impedia mostrar estacions de diversos països alhora al mapa.",
+      "Corregit un problema que impedia mostrar correctament el país de les estacions del proveïdor IEM.",
+      "Corregit un error que podia provocar valors de temperatura incorrectes en estacions de MeteoGalicia."
+    ],
     "release_203_improvements": [
       "Millores a la interfície.",
       "Millores en la visualització en dispositius mòbils.",
@@ -288,7 +304,17 @@
         "wind": "Vent",
         "pressure": "Pressió",
         "precip": "Precipitació",
-        "radiation": "Radiació"
+        "radiation": "Radiació",
+        "distance": "Distància",
+        "altitude": "Altitud"
+      },
+      "presets_title": "Sistema",
+      "presets": {
+        "metric": "Mètric",
+        "meteorological": "Meteorològic",
+        "imperial": "Imperial (EUA)",
+        "aviation": "Aviació",
+        "uk": "Regne Unit"
       }
     },
     "buttons": {

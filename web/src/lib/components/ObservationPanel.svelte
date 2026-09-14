@@ -11,6 +11,7 @@
   import Sparkline from './Sparkline.svelte';
   import TrendChart from './TrendChart.svelte';
   import WindChart from './WindChart.svelte';
+  import InstallApp from './InstallApp.svelte';
   import WindRose from './WindRose.svelte';
   import { families } from '$lib/families.js';
   import { chartHeight, loadViewport } from '$lib/viewport.svelte.js';
@@ -64,6 +65,17 @@
   let windSeries = $state({ speed: true, gust: true, dir: true });
   const toggleWind = (key) => (windSeries = { ...windSeries, [key]: !windSeries[key] });
 
+  /**
+   * Rosa de viento medio o de rachas.
+   *
+   * Si la estación deja de ofrecer rachas —otra estación, o una serie que ya
+   * no cubre el día—, se vuelve sola a la del viento medio.
+   */
+  let roseMode = $state('mean');
+  const roseView = $derived(
+    roseMode === 'gust' && model.rose?.gust ? model.rose.gust : model.rose
+  );
+
   // «Máx.» y «Mín.» ya están traducidas para el histórico; son las mismas.
   const shortLabels = $derived(
     app.historical?.[language]?.cards || app.historical?.es?.cards || {}
@@ -72,6 +84,9 @@
     Boolean(charts.temperature || charts.vapour || charts.precipitation || charts.wind || charts.irradiance)
   );
 </script>
+
+<!-- Instalar la app: entre la información de la estación y lo observado. -->
+<InstallApp {language} />
 
 <!-- ══ OBSERVADO · bento ══ -->
 <div class="sec-head">
@@ -426,14 +441,39 @@
 
     {#if model.rose}
       <section class="chart-card rose">
-        <header><h3>{ui(language, 'chart_rose')}</h3></header>
+        <header>
+          <h3>{ui(language, 'chart_rose')}</h3>
+          {#if model.rose.gust}
+            <!-- Medio o racha: el reparto por intensidades cambia mucho entre
+                 uno y otro en un día racheado. El mismo selector segmentado
+                 que Sinóptico/Hoy en Tendencias: se lee como una elección, no
+                 como una serie que se apaga. -->
+            <div class="seg" role="group" aria-label={ui(language, 'chart_rose')}>
+              <button type="button" class:active={roseMode === 'mean'} aria-pressed={roseMode === 'mean'} onclick={() => (roseMode = 'mean')}>
+                {ui(language, 'mean_wind')}
+              </button>
+              <button type="button" class:active={roseMode === 'gust'} aria-pressed={roseMode === 'gust'} onclick={() => (roseMode = 'gust')}>
+                {ui(language, 'gust')}
+              </button>
+            </div>
+          {/if}
+        </header>
+        {#if roseView.bands?.length}
+          <div class="legend rose-bands">
+            {#each roseView.bands as band}
+              <span><i class="dot" style:background={band.color}></i>{band.label}</span>
+            {/each}
+            <span class="unit">{model.units.wind}</span>
+          </div>
+        {/if}
         <!-- Los cuatro datos, al lado: debajo robaban a la rosa la mitad de
              la altura de la tarjeta, que es lo único que fija su tamaño. -->
         <div class="rose-body">
           <div class="rose-wrap">
             <WindRose
-              data={model.rose.data}
-              cardinals={model.rose.cardinals}
+              data={roseView.data}
+              bandLegend={roseView.bands}
+              cardinals={roseView.cardinals}
               frequencyLabel={ui(language, 'rose_frequency')}
               formatPct={(value) => `${tick(value, 0)} %`}
               exportName={pngName('chart_rose')}
@@ -441,12 +481,12 @@
             />
           </div>
           <div class="rose-stats">
-            <span><small>{ui(language, 'rose_dominant')}</small><b>{model.rose.stats.dominant}</b></span>
-            <span><small>{ui(language, 'rose_frequency')}</small><b>{model.rose.stats.frequency}</b></span>
-            <span><small>{ui(language, 'rose_samples')}</small><b>{model.rose.stats.samples}</b></span>
+            <span><small>{ui(language, 'rose_dominant')}</small><b>{roseView.stats.dominant}</b></span>
+            <span><small>{ui(language, 'rose_frequency')}</small><b>{roseView.stats.frequency}</b></span>
+            <span><small>{ui(language, 'rose_samples')}</small><b>{roseView.stats.samples}</b></span>
             <span>
-              <small>{String(ui(language, 'rose_calm')).replace(/<.*$/, model.rose.stats.calmThreshold || '')}</small>
-              <b>{model.rose.stats.calm}</b>
+              <small>{String(ui(language, 'rose_calm')).replace(/<.*$/, roseView.stats.calmThreshold || '')}</small>
+              <b>{roseView.stats.calm}</b>
             </span>
           </div>
         </div>
@@ -655,6 +695,15 @@
   .legend i.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 
   .chart-card.rose { display: flex; flex-direction: column; }
+  .seg { display: inline-flex; flex: 0 0 auto; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel-2); }
+  .seg button {
+    padding: 4px 10px; border: 0; border-radius: 6px; background: transparent;
+    font: inherit; font-size: 0.7rem; font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .seg button:hover { color: var(--ink-2); }
+  .seg button.active { color: var(--ink); background: var(--card); box-shadow: var(--shadow); }
+  .rose-bands { gap: 4px 11px; }
+  .rose-bands .unit { color: var(--muted-2); }
   .rose-body { display: flex; align-items: center; gap: 18px; flex: 1; padding: 6px 0 4px; }
   .rose-wrap { flex: 1 1 auto; min-width: 0; display: grid; place-items: center; }
   .rose-wrap :global(svg.rose) { max-width: 300px; }

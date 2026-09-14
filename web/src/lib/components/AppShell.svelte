@@ -13,13 +13,15 @@
   import UnitPreferences from './UnitPreferences.svelte';
   import StationMenu from './StationMenu.svelte';
   import LanguageSwitcher from './LanguageSwitcher.svelte';
-  import { Activity, History, LayoutDashboard, Map, TrendingUp, Trophy } from '@lucide/svelte';
+  import { Activity, History, LayoutDashboard, Map, TrendingUp, TriangleAlert, Trophy } from '@lucide/svelte';
   import { currentMode, cycleTheme, loadTheme } from '$lib/theme.svelte.js';
   import { importLegacyStorage } from '$lib/legacy-storage.js';
-  import { loadFavourites } from '$lib/favourites.svelte.js';
+  import { favouriteKey, listFavourites, loadFavourites, toggleFavourite } from '$lib/favourites.svelte.js';
+  import { currentConnection } from '$lib/connection.svelte.js';
   import { loadCredentials } from '$lib/credentials.svelte.js';
   import { loadViewSearches, viewSearch } from '$lib/view-memory.svelte.js';
-  import { locale } from '$lib/format.js';
+  import { locale, num } from '$lib/format.js';
+  import { convertUnit, unitLabel, unitPreferences } from '$lib/units.svelte.js';
   import app from '$lib/i18n/app-i18n.generated.js';
   import { ui } from '$lib/i18n/ui.js';
 
@@ -127,6 +129,37 @@
     }
   });
 
+  /**
+   * Guardar en favoritos la estación conectada, desde la propia cinta.
+   *
+   * La opción ya estaba en el menú de la estrella de la barra, pero había que
+   * saber que existía. La identidad es la de la conexión —slug o ruta—, que
+   * cada página fija al abrir la estación, y la lista es estado compartido:
+   * guardar aquí enciende también la estrella de la barra.
+   */
+  const connection = $derived(disconnectHref ? currentConnection() : null);
+  const connectionKey = $derived(favouriteKey(connection || {}));
+  const savedConnection = $derived(
+    Boolean(connectionKey) && listFavourites().some((item) => favouriteKey(item) === connectionKey)
+  );
+
+  function toggleConnectionFavourite() {
+    if (!connection) return;
+    toggleFavourite({
+      slug: connection.slug || '',
+      path: connection.path || '',
+      name: connection.name || station?.name || '',
+      provider: connection.provider || ''
+    });
+  }
+
+  /** Altitud de la cinta, en metros o pies según las unidades elegidas. */
+  const altitudeText = $derived(
+    Number.isFinite(station?.elevation)
+      ? `${num(convertUnit(station.elevation, 'altitude', unitPreferences), { language, decimals: 0 })} ${unitLabel('altitude', unitPreferences)}`
+      : ''
+  );
+
   const navTabs = $derived(
     tabs.map((tab) => {
       const search = tab.href.includes('?') ? '' : viewSearch(tab.id);
@@ -196,7 +229,7 @@
   const primaryActive = $derived(
     active === 'trends' || active === 'historical' ? 'observation' : active
   );
-  const navIcons = { Activity, History, LayoutDashboard, Map, TrendingUp, Trophy };
+  const navIcons = { Activity, History, LayoutDashboard, Map, TrendingUp, TriangleAlert, Trophy };
 </script>
 
 <div class="shell">
@@ -284,12 +317,29 @@
       <div class="stripe-inner">
         <div class="s-left">
           <span class="s-prov">{station.provider}</span>
-          <h1>{station.name}</h1>
+          <div class="s-title">
+            <h1>{station.name}</h1>
+            {#if connectionKey}
+              <button
+                type="button"
+                class="favourite"
+                class:saved={savedConnection}
+                aria-pressed={savedConnection}
+                aria-label={ui(language, savedConnection ? 'remove_favourite' : 'save_favourite')}
+                title={ui(language, savedConnection ? 'remove_favourite' : 'save_favourite')}
+                onclick={toggleConnectionFavourite}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8Z" />
+                </svg>
+              </button>
+            {/if}
+          </div>
           {#if station.place}<span class="s-place">{station.place}</span>{/if}
         </div>
         <div class="s-facts">
           <span><small>ID</small>{station.id}</span>
-          {#if station.altitude}<span><small>ALT</small>{station.altitude}</span>{/if}
+          {#if altitudeText}<span><small>ALT</small>{altitudeText}</span>{/if}
           <span><small>LAT</small>{station.lat}</span>
           <span><small>LON</small>{station.lon}</span>
         </div>
@@ -391,6 +441,21 @@
     text-decoration: none; white-space: nowrap;
   }
   .disconnect:hover { color: var(--ink); border-color: var(--accent); }
+  /* Solo la estrella, junto al nombre: un botón con texto en la línea de
+     estado la hacía saltar de fila y engordaba la cinta. */
+  .s-title { display: flex; align-items: center; gap: 8px; }
+  .favourite {
+    display: grid; place-items: center; flex: none;
+    width: 34px; height: 34px; padding: 0;
+    border: 0; border-radius: 50%; background: none; color: var(--muted-2);
+  }
+  .favourite:hover { color: var(--accent); background: var(--card); }
+  .favourite svg {
+    width: 22px; height: 22px;
+    fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round;
+  }
+  .favourite.saved { color: var(--accent); }
+  .favourite.saved svg { fill: currentColor; }
   .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 
   /* Mismas medidas que el selector de unidades, que es su vecino: 30 px al
@@ -447,6 +512,13 @@
   .wrap { width: min(1240px, calc(100% - 40px)); margin: auto; padding: 26px 0 40px; }
 
   @media (max-width: 760px) {
+    /* Margen lateral de 12 px, el mismo que ya tiene la barra superior: con
+       20 px por lado un móvil de 390 perdía un diez por ciento del ancho. Las
+       tres bandas cambian a la vez para que los bordes sigan alineados. */
+    .stripe-inner,
+    .subtabs,
+    .wrap { width: calc(100% - 24px); }
+
     /* Los cuatro datos de la estación y la línea de estado se reparten el
        ancho de la cinta en vez de apelotonarse a la izquierda: ahí no compiten
        con nada, y así se leen sin acercar la vista. */

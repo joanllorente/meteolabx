@@ -98,6 +98,21 @@ class ConnectionErrorRequest(BaseModel):
     status_code: Optional[int] = Field(default=None, ge=100, le=599)
 
 
+class PwaEventRequest(BaseModel):
+    event: str = Field(min_length=1, max_length=30)
+    os: str = Field(default="", max_length=20)
+    device: str = Field(default="", max_length=20)
+    browser: str = Field(default="", max_length=20)
+    method: str = Field(default="", max_length=30)
+
+
+class ForecastMapViewRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=20)
+    product: str = Field(min_length=1, max_length=60)
+    label: str = Field(default="", max_length=200)
+    category: str = Field(default="", max_length=60)
+
+
 class SectionVisitRequest(BaseModel):
     section: Literal[
         "observation",
@@ -164,6 +179,49 @@ def post_section_visit(
     return Response(status_code=204)
 
 
+@router.post("/pwa", status_code=204, summary="Registrar un evento de instalación de la app")
+def post_pwa_event(
+    body: PwaEventRequest, request: Request, settings: Settings = Depends(get_settings)
+) -> Response:
+    from server.services import usage_stats
+
+    if _is_crawler(request):
+        return Response(status_code=204)
+    try:
+        usage_stats.record_pwa_event(
+            body.event,
+            os=body.os,
+            device=body.device,
+            browser=body.browser,
+            method=body.method,
+            settings=settings,
+        )
+    except Exception:
+        logger.warning("stats: no se pudo registrar el evento de instalación", exc_info=True)
+    return Response(status_code=204)
+
+
+@router.post("/forecast-map", status_code=204, summary="Registrar la apertura de un mapa de predicción")
+def post_forecast_map_view(
+    body: ForecastMapViewRequest, request: Request, settings: Settings = Depends(get_settings)
+) -> Response:
+    from server.services import usage_stats
+
+    if _is_crawler(request):
+        return Response(status_code=204)
+    try:
+        usage_stats.record_forecast_map_view(
+            body.model,
+            body.product,
+            label=body.label,
+            category=body.category,
+            settings=settings,
+        )
+    except Exception:
+        logger.warning("stats: no se pudo registrar el mapa de predicción", exc_info=True)
+    return Response(status_code=204)
+
+
 @router.post("/panel-click", status_code=204, summary="Registrar apertura del panel desde una ficha SEO")
 def post_seo_panel_click(
     body: SeoPanelClickRequest, request: Request, settings: Settings = Depends(get_settings)
@@ -223,6 +281,28 @@ def get_station_stats(
 
     _check_password(settings, x_stats_password)
     return usage_stats.visit_summary(settings=settings)
+
+
+@router.get("/pwa", summary="Instalaciones de la app por aparato (panel interno)")
+def get_pwa_stats(
+    settings: Settings = Depends(get_settings),
+    x_stats_password: str = Header(default=""),
+) -> dict:
+    from server.services import usage_stats
+
+    _check_password(settings, x_stats_password)
+    return usage_stats.pwa_summary(settings=settings)
+
+
+@router.get("/forecast-maps", summary="Mapas de predicción más vistos (panel interno)")
+def get_forecast_map_stats(
+    settings: Settings = Depends(get_settings),
+    x_stats_password: str = Header(default=""),
+) -> dict:
+    from server.services import usage_stats
+
+    _check_password(settings, x_stats_password)
+    return usage_stats.forecast_map_summary(settings=settings)
 
 
 @router.get("/quarantine", summary="Estaciones con variables en cuarentena (panel interno)")

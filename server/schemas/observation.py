@@ -66,7 +66,7 @@ class _ProviderStationRequest(BaseModel):
     provider: Literal[
         "WU", "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS",
         "METEOFRANCE", "METOFFICE", "FROST", "POEM", "METEOHUB_IT",
-        "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE",
+        "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE", "LHMT", "IMGW", "DMI", "METEOSWISS",
         "WEATHERLINK", "WINDY", "NETATMO",
     ] = Field(
         default="WU",
@@ -648,6 +648,14 @@ class StationInfo(BaseModel):
     replacement_station_name: Optional[str] = Field(
         default=None,
         description="Nombre de la estación operativa sustituta.",
+    )
+    series_start: Optional[str] = Field(
+        default=None,
+        description="Primer día con datos del histórico (ISO), si el inventario lo conoce.",
+    )
+    series_end: Optional[str] = Field(
+        default=None,
+        description="Último día con datos del histórico (ISO); vacío si la serie sigue.",
     )
     manual: bool = Field(
         default=False,

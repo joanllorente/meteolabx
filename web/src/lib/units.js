@@ -1,6 +1,7 @@
 /** Opciones y conversiones puras desde las unidades canónicas del backend. */
 export const defaultUnitPreferences = {
-  temperature: 'c', wind: 'kmh', pressure: 'hpa', precip: 'mm', radiation: 'wm2'
+  temperature: 'c', wind: 'kmh', pressure: 'hpa', precip: 'mm', radiation: 'wm2',
+  distance: 'km', altitude: 'm'
 };
 
 export const unitOptions = {
@@ -8,8 +9,33 @@ export const unitOptions = {
   wind: { kmh: 'km/h', ms: 'm/s', mph: 'mph', kt: 'kt' },
   pressure: { hpa: 'hPa', mmhg: 'mmHg', inhg: 'inHg' },
   precip: { mm: 'mm', in: 'in' },
-  radiation: { wm2: 'W/m²', mjm2: 'MJ/m²', kwhm2: 'kWh/m²' }
+  radiation: { wm2: 'W/m²', mjm2: 'MJ/m²', kwhm2: 'kWh/m²' },
+  distance: { km: 'km', mi: 'mi', nm: 'NM' },
+  altitude: { m: 'm', ft: 'ft' }
 };
+
+/**
+ * Sistemas de medida completos, para no tener que elegir familia a familia.
+ *
+ * La radiación no entra: ningún sistema la fija, y cambiarla al elegir
+ * «Imperial» sería tocar algo que nadie ha pedido. Un preset está activo
+ * cuando todas sus familias coinciden con las elegidas.
+ */
+export const unitPresets = [
+  { id: 'metric', units: { temperature: 'c', wind: 'kmh', pressure: 'hpa', precip: 'mm', distance: 'km', altitude: 'm' } },
+  { id: 'meteorological', units: { temperature: 'c', wind: 'ms', pressure: 'hpa', precip: 'mm', distance: 'km', altitude: 'm' } },
+  { id: 'imperial', units: { temperature: 'f', wind: 'mph', pressure: 'inhg', precip: 'in', distance: 'mi', altitude: 'ft' } },
+  { id: 'aviation', units: { temperature: 'c', wind: 'kt', pressure: 'hpa', precip: 'mm', distance: 'nm', altitude: 'ft' } },
+  { id: 'uk', units: { temperature: 'c', wind: 'mph', pressure: 'hpa', precip: 'mm', distance: 'mi', altitude: 'ft' } }
+];
+
+/** Id del preset que coincide con las preferencias, o cadena vacía. */
+export function activeUnitPreset(preferences) {
+  const match = unitPresets.find((preset) =>
+    Object.entries(preset.units).every(([family, unit]) => preferences?.[family] === unit)
+  );
+  return match?.id || '';
+}
 
 export function normalizeUnitPreferences(raw) {
   const normalized = { ...defaultUnitPreferences };
@@ -53,6 +79,11 @@ export function convertUnit(value, family, preferences = defaultUnitPreferences,
     if (selected === 'inhg') return number * 0.0295299831;
   }
   if (family === 'precip' && selected === 'in') return number / 25.4;
+  if (family === 'distance') {
+    if (selected === 'mi') return number / 1.609344;
+    if (selected === 'nm') return number / 1.852;
+  }
+  if (family === 'altitude' && selected === 'ft') return number / 0.3048;
   if (family === 'radiation') {
     if (selected === 'mjm2') return number * 0.0036;
     if (selected === 'kwhm2') return number / 1000;

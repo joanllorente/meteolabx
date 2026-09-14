@@ -40,7 +40,7 @@ DEFAULT_OUTPUT = REPO_ROOT / "web" / "src" / "lib" / "seo" / "seo-i18n.generated
 
 
 def _country_labels() -> dict[str, dict[str, str]]:
-    """Nombre de cada país en los seis idiomas, resuelto por Babel.
+    """Nombre de cada país en los idiomas publicados, resuelto por Babel.
 
     Se exporta en vez de resolverlo en el navegador con ``Intl.DisplayNames``
     porque la descripción de cada ficha lleva el país dentro: si las dos

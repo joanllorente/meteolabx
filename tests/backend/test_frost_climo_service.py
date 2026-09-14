@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import math
+from datetime import date
 from typing import Optional
 from unittest.mock import patch
 
@@ -48,6 +49,21 @@ NORMALS_YEARLY_PAYLOAD = {
     ]
 }
 
+OBSERVED_DAILY_PAYLOAD = {
+    "data": [{
+        "sourceId": "SN100:0",
+        "referenceTime": "2026-01-15T00:00:00.000Z",
+        "observations": [
+            {"elementId": "mean(air_temperature P1D)", "value": -2.0, "qualityCode": 0},
+            {"elementId": "max(air_temperature P1D)", "value": 1.5, "qualityCode": 0},
+            {"elementId": "min(air_temperature P1D)", "value": -5.0, "qualityCode": 0},
+            {"elementId": "sum(precipitation_amount P1D)", "value": 3.0, "qualityCode": 0},
+            {"elementId": "mean(wind_speed P1D)", "value": 2.0, "qualityCode": 2},
+            {"elementId": "max(wind_speed_of_gust P1D)", "value": 8.0},
+        ],
+    }]
+}
+
 
 def _mock_client(record: Optional[dict] = None) -> httpx.AsyncClient:
     def handler(request: httpx.Request) -> httpx.Response:
@@ -60,6 +76,8 @@ def _mock_client(record: Optional[dict] = None) -> httpx.AsyncClient:
             if "P1Y" in elements:
                 return httpx.Response(200, json=NORMALS_YEARLY_PAYLOAD)
             return httpx.Response(200, json=NORMALS_MONTHLY_PAYLOAD)
+        if "/observations/" in request.url.path:
+            return httpx.Response(200, json=OBSERVED_DAILY_PAYLOAD)
         return httpx.Response(404, json={})
 
     return httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
@@ -131,7 +149,25 @@ async def test_empty_inputs_return_empty_df() -> None:
     assert df_m.empty and df_y.empty
 
 
-def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
+@pytest.mark.asyncio
+async def test_observed_history_requests_the_complete_last_day() -> None:
+    from server.services.frost_observed_climo import fetch_daily_for_periods
+
+    record: dict = {}
+    async with _mock_client(record) as client:
+        frame = await fetch_daily_for_periods(
+            client, "SN100", [(date(2026, 1, 1), date(2026, 1, 31))],
+            client_id="ID", client_secret="SECRET", today_date=date(2026, 2, 1),
+        )
+
+    request = next(
+        item for item in record["requests"] if "/observations/" in item.url.path
+    )
+    assert request.url.params["referencetime"] == "2026-01-01/2026-02-01"
+    assert frame["gust_max"].iloc[0] == pytest.approx(28.8)
+
+
+def test_endpoint_serves_observed_daily_dataset() -> None:
     app = create_app()
     app.dependency_overrides[get_http_client] = _mock_client
 
@@ -143,8 +179,8 @@ def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
                 "station_id": "SN100",
                 "api_key": "",
                 "summary_mode": "monthly",
-                "selected_months": [1, 7],
-                "frost_period": PERIOD,
+                "selected_months": [1],
+                "selected_years": [2026],
             },
         )
 
@@ -152,10 +188,11 @@ def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
     body = response.json()
     assert body["has_data"] is True
     df = pd.read_json(io.StringIO(body["dataset"]), orient="table")
-    assert df["temp_mean"].tolist() == [-4.2, 14.8]
+    assert df["temp_mean"].tolist() == [-2.0]
+    assert df["gust_max"].tolist() == [pytest.approx(28.8)]
 
 
-def test_endpoint_annual_mode_uses_periods() -> None:
+def test_endpoint_annual_mode_uses_observed_year() -> None:
     app = create_app()
     app.dependency_overrides[get_http_client] = _mock_client
 
@@ -167,14 +204,14 @@ def test_endpoint_annual_mode_uses_periods() -> None:
                 "station_id": "SN100",
                 "api_key": "",
                 "summary_mode": "annual",
-                "frost_periods": [PERIOD],
+                "selected_years": [2026],
             },
         )
 
     assert response.status_code == 200
     df = pd.read_json(io.StringIO(response.json()["dataset"]), orient="table")
     assert len(df) == 1
-    assert df["precip_total"].iloc[0] == pytest.approx(780.0)
+    assert df["precip_total"].iloc[0] == pytest.approx(3.0)
 
 
 # =====================================================================

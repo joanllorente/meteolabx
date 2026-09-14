@@ -356,5 +356,10 @@
     "reappeared": 24,
     "still_unconfirmed": 83,
     "failed_jobs": 0
+  },
+  "applied": {
+    "result_count": 4482,
+    "reactivated": 24,
+    "removed": 83
   }
 }

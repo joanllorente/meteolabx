@@ -12,6 +12,17 @@ export default {
     "trend": "Tendència",
     "trends": "Tendències"
   },
+  "de": {
+    "current": "Aktuell",
+    "forecast": "Vorhersage",
+    "historical": "Historie",
+    "info": "Wissen",
+    "map": "Karte",
+    "observation": "Messwerte",
+    "ranking": "Rangliste",
+    "trend": "Trend",
+    "trends": "Trends"
+  },
   "en": {
     "current": "Current",
     "forecast": "Forecast",

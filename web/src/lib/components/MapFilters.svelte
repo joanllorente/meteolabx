@@ -70,13 +70,17 @@
       document.removeEventListener('keydown', closeOnEscape);
     };
   });
-  const visible = $derived(
-    search.trim()
-      ? options.filter((option) =>
-          option.name.toLowerCase().includes(search.trim().toLowerCase())
-        )
-      : options
-  );
+  /**
+   * ¿Coincide con la búsqueda?
+   *
+   * Se OCULTA lo que no coincide, no se quita. Esto es un formulario GET: una
+   * casilla que no está en el DOM no se envía. Filtrando la lista, buscar
+   * «Francia» sacaba del formulario los países ya marcados y al aplicar solo
+   * quedaba Francia. Y al borrar la búsqueda, la casilla recién marcada se
+   * volvía a crear desmarcada.
+   */
+  const matches = (option) =>
+    !search.trim() || option.name.toLowerCase().includes(search.trim().toLowerCase());
 
   /** Los sensores llegan en minúscula porque nacieron dentro de una frase. */
   const capitalize = (text) => (text ? text[0].toUpperCase() + text.slice(1) : text);
@@ -137,8 +141,8 @@
         aria-label={texts.country_filter}
       />
       <div class="countries">
-        {#each visible as option (option.code)}
-          <label>
+        {#each options as option (option.code)}
+          <label hidden={!matches(option)}>
             <input type="checkbox" name="pais" value={option.code} checked={option.chosen} />
             <span>{option.name}</span>
             <small>{num(option.count, { language, decimals: 0 })}</small>
@@ -226,6 +230,8 @@
     padding: 4px 8px; background: var(--panel-2);
   }
   .countries label { justify-content: flex-start; gap: 8px; }
+  /* `label { display: flex }` pisaría el `hidden` del navegador. */
+  .countries label[hidden] { display: none; }
   .countries small { margin-left: auto; color: var(--muted-2); font-size: 0.68rem; font-variant-numeric: tabular-nums; }
 
   label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.78rem; color: var(--ink-2); cursor: pointer; }

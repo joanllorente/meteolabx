@@ -64,6 +64,7 @@ def main() -> int:
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--apply", action="store_true", help="Apply a completed report to the inventory")
     args = parser.parse_args()
 
     inventory = json.loads(args.inventory.read_text(encoding="utf-8"))
@@ -139,6 +140,29 @@ def main() -> int:
         "still_unconfirmed": len(exact) - len(matched),
         "failed_jobs": len(report.get("failed_jobs") or []),
     }
+    if args.apply:
+        failed = report.get("failed_jobs") or []
+        if failed:
+            raise SystemExit("Cannot apply a validation report with failed API jobs")
+        reappeared = set(report["reappeared"])
+        absent = set(report["still_unconfirmed"])
+        updated = []
+        for row in inventory:
+            station_id = str(row.get("id") or "")
+            if station_id in absent:
+                continue
+            if station_id in reappeared:
+                row["active_now"] = True
+                row["status"] = "active"
+                row["missing_checks"] = 0
+                row["last_inventory_check_at"] = report["window_end"]
+            updated.append(row)
+        _atomic_json(args.inventory, updated)
+        report["applied"] = {
+            "result_count": len(updated),
+            "reactivated": len(reappeared),
+            "removed": len(absent),
+        }
     _atomic_json(args.report, report)
     print(json.dumps(report["summary"], ensure_ascii=False))
     print(f"Saved report to {args.report}")

@@ -13,6 +13,7 @@
    * que hace la aplicación actual cuando aún no has elegido estación.
    */
   import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
 
   import AppShell from '$lib/components/AppShell.svelte';
   import ConnectionBar from '$lib/components/ConnectionBar.svelte';
@@ -33,6 +34,9 @@
   const model = $derived(observationModel(null, {}, lang, unitPreferences));
 
 
+  // La autoconexión ya ha mandado a otra parte: nadie más debe redirigir.
+  let autoconectando = false;
+
   onMount(() => {
     loadFavourites();
 
@@ -42,6 +46,7 @@
     const target = autoconnectSlug();
     if (target && !location.search && autoconnectPending()) {
       spendAutoconnect();
+      autoconectando = true;
       // El valor guardado es un slug, `RED/identificador`, o una ruta entera
       // —las estaciones propias, que se conectan con credencial.
       location.replace(target.startsWith('/') ? target : `/${lang}/observation/${target}`);
@@ -51,6 +56,29 @@
   // La estación conectada vive en el navegador: se lee al hidratar y las
   // pestañas dejan de perderla al pasar por aquí.
   onMount(loadConnection);
+
+  /**
+   * Volver a entrar con una estación conectada la abre.
+   *
+   * El menú de la barra recuerda la estación, pero esta página no la miraba:
+   * al recargar o al volver a la web salía el panel vacío mientras el botón
+   * seguía diciendo «Norfolk/Hampton Roads», como si estuvieras conectado a
+   * nada.
+   *
+   * Solo al ENTRAR (`enter`: recarga, dirección escrita, pestaña nueva). Llegar
+   * aquí desde dentro —el logo, «Desconectar»— es querer el buscador, y
+   * redirigir entonces obligaría a desconectarse para buscar otra estación.
+   * Una búsqueda en la URL también manda: se quiere elegir, no volver.
+   */
+  afterNavigate(({ type }) => {
+    // La autoconexión elegida a propósito va primero, y ya ha saltado arriba.
+    if (type !== 'enter' || location.search || autoconectando) return;
+    // Se relee aquí: no depender de en qué orden se montan los efectos.
+    loadConnection();
+    const conectada = currentConnection();
+    const destino = conectada?.slug ? `/${lang}/observation/${conectada.slug}` : conectada?.path;
+    if (destino && destino !== location.pathname) location.replace(destino);
+  });
 </script>
 
 <svelte:head>

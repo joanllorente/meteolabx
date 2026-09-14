@@ -148,6 +148,14 @@
   <div class="map-head">
     <div>
       <h2>{ui(lang, 'map_title')}</h2>
+      {#if data.inventoryTotal}
+        <p class="inventory">
+          {ui(lang, 'map_inventory_total', {
+            // Con separador de millares: «430240» no se lee de un vistazo.
+            count: new Intl.NumberFormat(locale(lang)).format(data.inventoryTotal)
+          })}
+        </p>
+      {/if}
       <p>
         {#if data.layer === 'stations'}
           {ui(lang, 'map_visible_subtitle', {
@@ -223,6 +231,7 @@
   .map-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
   .map-head h2 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
   .map-head p { margin-top: 4px; font-size: 0.8rem; color: var(--muted);  text-wrap: balance; }
+  .map-head p.inventory { color: var(--ink-2); font-weight: 600; }
   .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
   .seg { display: flex; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }

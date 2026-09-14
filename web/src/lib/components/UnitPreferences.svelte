@@ -3,10 +3,13 @@
   import { onMount } from 'svelte';
   import app from '../i18n/app-i18n.generated.js';
   import {
+    activeUnitPreset,
+    choosePreset,
     chooseUnit,
     loadUnitPreferences,
     unitOptions as OPTIONS,
-    unitPreferences as preferences
+    unitPreferences as preferences,
+    unitPresets as PRESETS
   } from '../units.svelte.js';
 
   let { language = 'es' } = $props();
@@ -14,6 +17,11 @@
   let open = $state(false);
   const texts = $derived(app.units?.[language] || app.units?.es || {});
   const fields = $derived(texts.fields || {});
+  const activePreset = $derived(activeUnitPreset(preferences));
+
+  /** «°C · km/h · hPa · mm · km · m»: lo que fija cada sistema, a la vista. */
+  const presetSummary = (preset) =>
+    Object.entries(preset.units).map(([family, unit]) => OPTIONS[family][unit]).join(' · ');
   const temperatureLabel = $derived(OPTIONS.temperature[preferences.temperature] || '°C');
 
   // Véase ConnectMyStation: la cabecera con blur no puede ser el contenedor
@@ -50,6 +58,23 @@
         </div>
         <button class="close" type="button" aria-label={texts.close} title={texts.close} onclick={() => (open = false)}>×</button>
       </header>
+
+      <section class="presets" aria-labelledby="units-presets-title">
+        <h3 id="units-presets-title">{texts.presets_title}</h3>
+        <div class="preset-grid">
+          {#each PRESETS as preset (preset.id)}
+            <button
+              type="button"
+              class:active={activePreset === preset.id}
+              aria-pressed={activePreset === preset.id}
+              onclick={() => choosePreset(preset.id)}
+            >
+              <strong>{texts.presets?.[preset.id] || preset.id}</strong>
+              <span>{presetSummary(preset)}</span>
+            </button>
+          {/each}
+        </div>
+      </section>
 
       <div class="unit-list">
         {#each Object.entries(OPTIONS) as [category, options] (category)}
@@ -103,6 +128,19 @@
     font: inherit; font-size: 1.25rem; line-height: 1;
   }
   .close:hover { color: var(--ink); border-color: var(--border-2); }
+  .presets { padding: 14px 0 12px; border-bottom: 1px solid var(--border); }
+  .presets h3 { margin-bottom: 9px; }
+  .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 6px; }
+  .preset-grid button {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px;
+    background: var(--panel-2); color: var(--ink-2); font: inherit; text-align: left;
+  }
+  .preset-grid button:hover { color: var(--ink); border-color: var(--border-2); }
+  .preset-grid strong { font-size: 0.74rem; font-weight: 700; }
+  .preset-grid span { font-size: 0.64rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .preset-grid button.active { border-color: var(--accent); background: var(--card); color: var(--ink); }
+  .preset-grid button.active strong { color: var(--accent); }
   .unit-list { display: flex; flex-direction: column; padding-top: 5px; }
   .unit-row {
     display: grid; grid-template-columns: 130px 1fr; gap: 18px; align-items: center;

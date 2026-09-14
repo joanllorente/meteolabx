@@ -18,6 +18,7 @@
     toggleFavourite
   } from '$lib/favourites.svelte.js';
   import { num } from '$lib/format.js';
+  import { convertUnit, unitLabel, unitPreferences } from '$lib/units.svelte.js';
   import { ui } from '$lib/i18n/ui.js';
   import { providerLabel, sensorLabel } from '$lib/seo/i18n.js';
 
@@ -90,13 +91,13 @@
         {#if station.elevation !== null && station.elevation !== undefined}
           <div>
             <dt>{ui(language, 'altitude')}</dt>
-            <dd class="mono">{num(station.elevation, { language, decimals: 0 })} m</dd>
+            <dd class="mono">{num(convertUnit(station.elevation, 'altitude', unitPreferences), { language, decimals: 0 })} {unitLabel('altitude', unitPreferences)}</dd>
           </div>
         {/if}
         {#if distanceKm !== null}
           <div>
             <dt>{ui(language, 'distance')}</dt>
-            <dd class="mono">{num(distanceKm, { language })} km</dd>
+            <dd class="mono">{num(convertUnit(distanceKm, 'distance', unitPreferences), { language })} {unitLabel('distance', unitPreferences)}</dd>
           </div>
         {/if}
         <div>
@@ -105,7 +106,11 @@
         </div>
         <div>
           <dt>{ui(language, 'station_type_filters')}</dt>
-          <dd>{ui(language, station.manual ? 'type_manual' : 'type_automatic')}</dd>
+          <!-- Una estación archivada ya no mide de ninguna manera: decir que es
+               automática —o manual— describía lo que fue, no lo que es. -->
+          <dd>{ui(language, station.is_historical_only
+            ? 'type_historical'
+            : station.manual ? 'type_manual' : 'type_automatic')}</dd>
         </div>
       </dl>
 

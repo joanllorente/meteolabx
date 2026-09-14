@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import unicodedata
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -121,6 +122,21 @@ def _measure_kind_score(code_raw: str, name_raw: str) -> Tuple[str, int]:
         if "10M" in code:
             score += 2
         return "wind", score
+
+    # Rocío («orballo») y suelo también se llaman «temperatura», y puntuaban
+    # igual que la del aire. En Campus Lugo (10053) `TO_AVG_1.5m` empataba con
+    # `TA_AVG_1.5m` y, por ir detrás en la lista, ganaba: la ficha enseñaba
+    # 12,8 °C —el rocío— con el aire a 31,2 °C, y todas las termodinámicas
+    # salían de ahí. No son la temperatura del aire, así que no compiten.
+    # El rocío tampoco se aprovecha: el backend lo deriva de T y HR.
+    if (
+        code.startswith("TO_")
+        or code.startswith("TS_")
+        or "orballo" in name
+        or "rocio" in name
+        or re.search(r"\b(solo|suelo)\b", name)
+    ):
+        return "", -1
 
     if code.startswith("TA_") or "temperatura" in name:
         score = 50

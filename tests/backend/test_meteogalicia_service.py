@@ -168,6 +168,25 @@ def test_measure_scoring_prefers_avg_and_discards_invalidated() -> None:
     assert "precip" not in measures
 
 
+def test_dew_point_and_soil_are_not_the_air_temperature() -> None:
+    """Campus Lugo (10053), lectura de 10 minutos del 13 de septiembre de 2026.
+
+    `TO_AVG_1.5m` («Temperatura de orballo», el rocío) puntuaba igual que la
+    temperatura del aire y ganaba por ir detrás: la ficha enseñaba 12,8 °C con
+    el aire a 31,2 °C. Mismo orden y mismos nombres que el parte real.
+    """
+    def medida(code: str, value: float, name: str) -> dict:
+        return {**_measure(code, value, unit="ºC"), "nomeParametro": name}
+
+    measures = meteogalicia._extract_measures([
+        medida("TA_AVG_1.5m", 31.21, "Temperatura  a 1.5m"),
+        medida("TA_AVG_0.1m", 38.15, "Temperatura  a 0.1m"),
+        medida("TO_AVG_1.5m", 12.76, "Temperatura de orballo a 1.5m"),
+        medida("TS_AVG_-0.1m", 22.23, "Temperatura do solo a -0.1m"),
+    ])
+    assert measures["temp"] == pytest.approx(31.21)
+
+
 def test_wind_unit_normalization() -> None:
     measures = meteogalicia._extract_measures([
         _measure("VV_AVG_10m", 5.0, unit="m/s"),

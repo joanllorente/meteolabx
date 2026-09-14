@@ -31,7 +31,7 @@
   import { unitPreferences } from '$lib/units.svelte.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
   import { hasUnreliableData } from '$lib/observation/warnings.js';
-  import { displayName, providerLabel } from '$lib/seo/i18n.js';
+  import { displayName, providerLabel, stationLocationLabel } from '$lib/seo/i18n.js';
   import { appTabs, observationTabs } from '$lib/tabs.js';
 
   let { data } = $props();
@@ -188,12 +188,9 @@
   const stripe = $derived({
     provider: providerLabel(station.provider),
     name,
-    place: [station.locality, station.region].filter(Boolean).join(', '),
+    place: stationLocationLabel(station, lang),
     id: station.station_id,
-    altitude:
-      station.elevation === null || station.elevation === undefined
-        ? ''
-        : `${Math.round(station.elevation)} m`,
+    elevation: Number.isFinite(station.elevation) ? station.elevation : null,
     lat: station.lat?.toFixed(4),
     lon: station.lon?.toFixed(4)
   });

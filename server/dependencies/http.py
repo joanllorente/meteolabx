@@ -160,9 +160,49 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
             "ranking: refresco automático desactivado; no se llamará a proveedores"
         )
 
+    # IMGW: la API solo publica la última instantánea; las series de las fichas
+    # polacas las va construyendo este poller (una descarga cada 10 min).
+    from server.services import imgw
+
+    imgw_state_path = str(getattr(settings, "imgw_series_state_path", "") or "").strip()
+    if not imgw_state_path:
+        volume_dir = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+        if volume_dir:
+            imgw_state_path = os.path.join(volume_dir, "imgw_series.json.gz")
+    if imgw_state_path:
+        imgw.STORE.load_from_disk(imgw_state_path)
+    imgw_enabled = getattr(settings, "imgw_poller_enabled", None)
+    if imgw_enabled is None:
+        imgw_enabled = app.state.ranking_refresh_enabled
+    # Total de estaciones del inventario: se cuenta al arrancar cada deploy y
+    # queda fijo hasta el siguiente. En segundo plano, que el arranque no
+    # espere a recorrer el catálogo.
+    from server.services import inventory_total
+
+    inventory_task = asyncio.create_task(asyncio.to_thread(inventory_total.current))
+    inventory_task.add_done_callback(
+        lambda task: task.cancelled() or task.exception() is None
+        or logger.warning("inventory_total: fallo al contar: %s", task.exception())
+    )
+
+    imgw_task: asyncio.Task[None] | None = None
+    if imgw_enabled:
+        imgw_task = asyncio.create_task(imgw.poll_loop(client, state_path=imgw_state_path))
+
     try:
         yield
     finally:
+        if imgw_task is not None:
+            imgw_task.cancel()
+            try:
+                await imgw_task
+            except asyncio.CancelledError:
+                pass
+            if imgw_state_path:
+                try:
+                    imgw.STORE.save_to_disk(imgw_state_path)
+                except Exception:
+                    logger.warning("IMGW: no se pudo guardar el almacén final", exc_info=True)
         if ranking_task is not None:
             ranking_task.cancel()
             try:

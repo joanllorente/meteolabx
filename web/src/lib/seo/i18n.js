@@ -28,10 +28,28 @@ export function providerLabel(provider) {
   return PROVIDER_LABELS[key] || provider || '';
 }
 
+/**
+ * Nombre del país en el idioma de quien mira.
+ *
+ * Las etiquetas generadas solo cubren los países con red propia; el resto
+ * —IEM llega a casi doscientos— sale de `Intl`. `UN` y `AN` no son países
+ * (la red global WMO y las Antillas Neerlandesas, disueltas) y un nombre
+ * inventado es peor que ninguno.
+ */
+const NOT_A_COUNTRY = new Set(['UN', 'AN', 'ZZ', 'UNSPECIFIED']);
+
 export function countryLabel(country, language) {
   const code = String(country || '').trim().toUpperCase();
-  if (!code) return '';
-  return data.country_labels[code]?.[language] || code;
+  if (!code || NOT_A_COUNTRY.has(code)) return '';
+  const generated = data.country_labels[code]?.[language];
+  if (generated) return generated;
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  try {
+    const name = new Intl.DisplayNames([language], { type: 'region' }).of(code);
+    return name && name !== code ? name : '';
+  } catch {
+    return '';
+  }
 }
 
 /**

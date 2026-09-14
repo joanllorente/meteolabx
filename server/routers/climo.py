@@ -46,7 +46,8 @@ router = APIRouter(prefix="/climo", tags=["climo"])
 # Proveedores con datos históricos/climogramas.
 CLIMO_PROVIDERS = (
     "WU", "AEMET", "METEOCAT", "METEOFRANCE", "METEOGALICIA", "FROST",
-    "WEATHERLINK", "IEM", "GEOSPHERE", "SMHI", "ECCC",
+    "WEATHERLINK", "IEM", "GEOSPHERE", "SMHI", "ECCC", "LHMT", "IMGW", "DMI",
+    "METEOSWISS",
 )
 
 
@@ -152,6 +153,50 @@ async def _run_async_port(
             selected_years=[int(y) for y in body.selected_years],
         )
         return dataset, None
+    if body.provider == "METEOSWISS":
+        from server.services import meteoswiss_climo
+
+        dataset = await meteoswiss_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
+    if body.provider == "DMI":
+        from server.services import dmi_climo
+
+        dataset = await dmi_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
+    if body.provider == "IMGW":
+        from server.services import imgw_climo
+
+        dataset = await imgw_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
+    if body.provider == "LHMT":
+        from server.services import lhmt_climo
+
+        dataset = await lhmt_climo.fetch_climo_dataset(
+            client,
+            body.station_id,
+            summary_mode=body.summary_mode,
+            periods=[(p.start, p.end) for p in body.periods],
+            selected_years=[int(y) for y in body.selected_years],
+        )
+        return dataset, None
     if body.provider == "IEM":
         from server.services import iem_climo
 
@@ -188,15 +233,12 @@ async def _run_async_port(
         )
         return dataset, None
     if body.provider == "FROST":
-        from server.services import frost_climo
+        from server.services import frost_observed_climo
 
-        dataset = await frost_climo.fetch_climo_dataset(
+        dataset = await frost_observed_climo.fetch_daily_for_periods(
             client,
             body.station_id,
-            summary_mode=body.summary_mode,
-            selected_months=[int(m) for m in body.selected_months],
-            frost_period=body.frost_period,
-            frost_periods=list(body.frost_periods),
+            [(p.start, p.end) for p in body.periods],
             client_id=settings.frost_client_id,
             client_secret=settings.frost_client_secret,
         )
@@ -212,10 +254,9 @@ def ensure_periods(body: ClimoDatasetRequest) -> None:
     El cliente puede mandar la selección tal cual la hizo el usuario —«agosto
     de 2024, 2025 y 2026»— y dejar que el servidor la convierta en bloques de
     fechas. Es la misma construcción que usa la app actual, así que las dos
-    piden exactamente los mismos días. Frost queda fuera: sus periodos son
-    normales climáticas («1991/2020»), no rangos de calendario.
+    piden exactamente los mismos días, también para FROST.
     """
-    if body.periods or not body.selected_years or body.provider == "FROST":
+    if body.periods or not body.selected_years:
         return
     from domain.climograms import build_period_specs, clip_periods_to_today
 
@@ -268,7 +309,7 @@ async def _fetch_dataset(
         "``orient='table'`` de pandas. Proveedores: "
         "``WU``, ``AEMET``, ``METEOCAT``, ``METEOFRANCE``, "
         "``METEOGALICIA``, ``FROST``, ``WEATHERLINK``, ``IEM``, "
-        "``GEOSPHERE``, ``SMHI`` y ``ECCC``."
+        "``GEOSPHERE``, ``SMHI``, ``ECCC``, ``LHMT``, ``IMGW``, ``DMI`` y ``METEOSWISS``."
     ),
     responses={
         400: {"model": ErrorResponse, "description": "Proveedor sin datos históricos."},
@@ -472,7 +513,7 @@ def _build_summary(body: ClimoSummaryRequest, raw: Dict[str, Any]) -> ClimoSumma
             include_daily_temperature_extremes=(
                 body.summary_mode == "annual"
                 and period_count > 1
-                and body.provider in {"WU", "IEM"}
+                and body.provider in {"WU", "IEM", "METEOCAT"}
             ),
             solar_metric_kind=solar_kind,
         )
@@ -480,12 +521,7 @@ def _build_summary(body: ClimoSummaryRequest, raw: Dict[str, Any]) -> ClimoSumma
             daily, unit_preferences=units, solar_metric_kind=solar_kind
         )
 
-        # Frost sirve normales climáticas, no días sueltos: su climograma va
-        # por mes o por año según el modo, sin pasar por la regla general.
-        if body.provider == "FROST":
-            granularity = "monthly" if body.summary_mode == "monthly" else "yearly"
-        else:
-            granularity = climograms.resolve_chart_granularity(body.summary_mode, period_count)
+        granularity = climograms.resolve_chart_granularity(body.summary_mode, period_count)
 
         chart = climograms.build_chart_table(daily, granularity, unit_preferences=units)
         wind_chart = climograms.build_wind_chart_table(daily, granularity, unit_preferences=units)
@@ -498,7 +534,7 @@ def _build_summary(body: ClimoSummaryRequest, raw: Dict[str, Any]) -> ClimoSumma
                 unit_preferences=units,
                 shared_bounds=period_count > 1,
             )
-            if body.provider != "FROST" and body.summary_mode != "annual"
+            if body.summary_mode != "annual"
             else {}
         )
         table = climograms.build_units_table(daily, granularity, unit_preferences=units)

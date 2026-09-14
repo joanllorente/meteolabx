@@ -12,8 +12,13 @@
    * queda en la URL.
    */
   import { ui } from '$lib/i18n/ui.js';
+  import { convertUnit, unitLabel, unitPreferences } from '$lib/units.svelte.js';
   import { providerLabel } from '$lib/seo/i18n.js';
   import { stationKey } from '$lib/seo/station.js';
+  import { tick } from 'svelte';
+  import {
+    forgetSearch, loadRecentSearches, matchRecentSearches, rememberSearch
+  } from '$lib/recent-searches.js';
 
   let {
     language, query = '', place = '', results = [], failed = false, searched = false,
@@ -35,6 +40,69 @@
   });
 
   let locating = $state(false);
+
+  /**
+   * Búsquedas recientes, desplegadas bajo la caja al pulsarla.
+   *
+   * Se apunta una búsqueda cuando el servidor la ha resuelto a un sitio: lo
+   * que no encontró nada no merece volver a ofrecerse.
+   */
+  let form = $state();
+  let text = $state('');
+  let recents = $state([]);
+  let open = $state(false);
+  let active = $state(-1);
+  const suggestions = $derived(matchRecentSearches(recents, text));
+  const showRecents = $derived(open && suggestions.length > 0);
+
+  $effect.pre(() => {
+    text = query;
+  });
+
+  $effect(() => {
+    recents = searched && query && place && !failed
+      ? rememberSearch({ query, label: place })
+      : loadRecentSearches();
+  });
+
+  function openRecents() {
+    open = true;
+    active = -1;
+  }
+
+  async function pick(item) {
+    text = item.query;
+    open = false;
+    await tick();
+    form?.requestSubmit();
+  }
+
+  function forget(item) {
+    recents = forgetSearch(item.query);
+    active = -1;
+  }
+
+  function onKeydown(event) {
+    if (event.key === 'Escape') {
+      open = false;
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!showRecents) {
+        openRecents();
+        return;
+      }
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      const count = suggestions.length;
+      active = active < 0 && step < 0 ? count - 1 : (active + step + count) % count;
+      return;
+    }
+    if (event.key === 'Enter' && showRecents && active >= 0) {
+      event.preventDefault();
+      pick(suggestions[active]);
+    }
+  }
 
   function locate() {
     if (!navigator.geolocation) return;
@@ -58,16 +126,65 @@
     <p>{ui(language, 'connect_hint')}</p>
   </div>
 
-  <form method="GET" action="/">
-    <input
-      type="search"
-      name="q"
-      value={query}
-      placeholder={ui(language, 'connect_placeholder')}
-      autocomplete="off"
-      enterkeyhint="search"
-      aria-label={ui(language, 'connect_title')}
-    />
+  <form method="GET" action="/" bind:this={form}>
+    <div class="combo">
+      <input
+        type="search"
+        name="q"
+        bind:value={text}
+        placeholder={ui(language, 'connect_placeholder')}
+        autocomplete="off"
+        enterkeyhint="search"
+        aria-label={ui(language, 'connect_title')}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={showRecents}
+        aria-controls="recent-searches"
+        aria-activedescendant={showRecents && active >= 0 ? `recent-${active}` : undefined}
+        onfocus={openRecents}
+        onclick={() => (open = true)}
+        oninput={openRecents}
+        onblur={() => (open = false)}
+        onkeydown={onKeydown}
+      />
+      {#if showRecents}
+        <!-- `mousedown` con `preventDefault`: si no, la caja pierde el foco y
+             el desplegable se cierra antes de que llegue el clic. -->
+        <div class="recents" role="presentation" onmousedown={(event) => event.preventDefault()}>
+          <p class="recents-head">{ui(language, 'recent_searches')}</p>
+          <ul id="recent-searches" role="listbox" aria-label={ui(language, 'recent_searches')}>
+            {#each suggestions as item, index (item.query)}
+              <!-- El teclado se lleva desde la caja con `aria-activedescendant`. -->
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <li
+                id="recent-{index}"
+                role="option"
+                aria-selected={index === active}
+                class:active={index === active}
+                tabindex="-1"
+                onclick={() => pick(item)}
+                onmouseenter={() => (active = index)}
+              >
+                <svg class="clock" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="8" cy="8" r="6.2" /><path d="M8 4.6V8l2.3 1.5" />
+                </svg>
+                <span class="recent-text">
+                  <strong>{item.query}</strong>
+                  {#if item.label && item.label !== item.query}<span>{item.label}</span>{/if}
+                </span>
+                <button
+                  type="button"
+                  class="forget"
+                  aria-label={ui(language, 'remove_recent')}
+                  title={ui(language, 'remove_recent')}
+                  onclick={(event) => { event.stopPropagation(); forget(item); }}
+                >×</button>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+    </div>
     <button class="go" type="submit">{ui(language, 'search')}</button>
     <button class="geo" type="button" onclick={locate} disabled={locating}>
       {locating ? ui(language, 'locating') : ui(language, 'use_my_location')}
@@ -100,7 +217,7 @@
               {#if navigatingTo(target)}<span class="spin" aria-hidden="true"></span>{/if}
               <span>{providerLabel(station.provider)}</span>
             </a>
-            <span class="dist">{station.distance_km.toFixed(1)} km</span>
+            <span class="dist">{convertUnit(station.distance_km, 'distance', unitPreferences).toFixed(1)} {unitLabel('distance', unitPreferences)}</span>
           </li>
         {/each}
       </ul>
@@ -136,12 +253,52 @@
   .head p { margin-top: 4px; font-size: 0.82rem; color: var(--muted); }
 
   form { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 15px; }
+  .combo { position: relative; flex: 1 1 250px; display: flex; }
   input {
-    flex: 1 1 250px; padding: 12px 15px;
+    flex: 1; min-width: 0; padding: 12px 15px;
     border: 1px solid var(--border-2); border-radius: var(--r-sm);
     background: var(--card); color: var(--ink); font: inherit;
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .recents {
+    position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0;
+    padding: 6px 0; border: 1px solid var(--border-2); border-radius: var(--r-sm);
+    background: var(--card); box-shadow: 0 10px 28px rgb(0 0 0 / 0.16);
+  }
+  .recents-head {
+    padding: 4px 14px 6px; font-size: 0.68rem; font-weight: 650;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+  }
+  .recents ul { display: block; }
+  .recents li {
+    display: flex; align-items: center; gap: 11px; justify-content: flex-start;
+    padding: 8px 8px 8px 14px; border: 0; border-radius: 0; background: none;
+    cursor: pointer;
+  }
+  .recents li.active, .recents li:hover { background: var(--card-hover); }
+  .clock {
+    width: 15px; height: 15px; flex: none;
+    fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linecap: round;
+  }
+  .recent-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .recent-text strong {
+    font-size: 0.88rem; font-weight: 560; color: var(--ink);
+    display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .recent-text span {
+    font-size: 0.72rem; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .forget {
+    flex: none; width: 26px; height: 26px; border: 0; border-radius: 50%;
+    background: none; color: var(--muted); font-size: 1.05rem; line-height: 1;
+    opacity: 0;
+  }
+  .recents li.active .forget, .recents li:hover .forget, .forget:focus-visible { opacity: 1; }
+  .forget:hover { color: var(--ink); background: var(--border); }
+  @media (hover: none) { .forget { opacity: 1; } }
+
   .go, .geo {
     padding: 12px 17px; border-radius: var(--r-sm);
     border: 1px solid transparent; font-weight: 680; font-size: 0.86rem;

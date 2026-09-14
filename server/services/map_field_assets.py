@@ -82,6 +82,7 @@ def _precipitation_png(points: Iterable[tuple[float, float, float]]) -> bytes:
         color_stops=COLOR_STOPS,
         band_size=BAND_SIZE_MM,
         preserve_mask_alpha=True,
+        bands_at_output_size=True,
     )
 
 

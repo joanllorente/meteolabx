@@ -55,7 +55,7 @@ def test_alias_rebuild_preserves_reviewed_candidates(tmp_path):
         ).fetchone()[0] == 1
 
 
-def test_nws_catalog_membership_allows_stations_outside_us(tmp_path):
+def test_nws_is_excluded_from_iem_alias_candidates(tmp_path):
     nws = tmp_path / "nws.json"
     iem = tmp_path / "iem.json"
     database = tmp_path / "stations.sqlite"
@@ -70,7 +70,8 @@ def test_nws_catalog_membership_allows_stations_outside_us(tmp_path):
 
     report = build_aliases(database)
 
-    assert report["candidates"] == 1
+    assert report["candidates"] == 0
     assert report["geographically_incompatible_pairs_rejected"] == 0
+    assert report["method"]["excluded_canonical_providers"] == ["NWS", "METOFFICE"]
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM station_aliases").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM station_aliases").fetchone()[0] == 0

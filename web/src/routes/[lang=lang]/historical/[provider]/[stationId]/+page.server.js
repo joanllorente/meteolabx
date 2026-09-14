@@ -33,27 +33,31 @@ export async function load({ params, url, fetch, setHeaders }) {
   // Sin selección explícita no se consulta nada: la pestaña se abre con el
   // formulario preparado y espera al botón.
   const requested = url.searchParams.has('consulta');
-  const selection = resolveSelection(url.searchParams, mode, lang, requested);
-  const blocks = countBlocks(mode, selection);
   const supported = HISTORICAL_PROVIDERS.has(provider);
 
-  const common = {
-    lang,
-    provider,
-    stationId,
-    supported,
-    mode,
-    requested,
-    selection,
-    blocks,
-    period: describeSelection(mode, selection, blocks),
-    maxBlocks: MAX_MONTHLY_BLOCKS,
-    warning: requested ? validate(mode, selection, blocks) : ''
+  // La selección depende de la estación: si el catálogo conoce las fechas de
+  // su serie, solo se ofrecen esos años.
+  const commonFor = (series) => {
+    const selection = resolveSelection(url.searchParams, mode, lang, requested, series);
+    const blocks = countBlocks(mode, selection);
+    return {
+      lang,
+      provider,
+      stationId,
+      supported,
+      mode,
+      requested,
+      selection,
+      blocks,
+      period: describeSelection(mode, selection, blocks),
+      maxBlocks: MAX_MONTHLY_BLOCKS,
+      warning: requested ? validate(mode, selection, blocks) : ''
+    };
   };
 
   if (PERSONAL_PROVIDERS.includes(provider)) {
     setHeaders({ 'cache-control': 'private, no-store' });
-    return { ...common, station: null, summary: null, failure: '', personal: true };
+    return { ...commonFor(null), station: null, summary: null, failure: '', personal: true };
   }
 
   let station;
@@ -73,6 +77,9 @@ export async function load({ params, url, fetch, setHeaders }) {
   if (slugPayload?.url_slug) {
     redirect(301, `/${lang}/historical/${slugPayload.url_slug}${url.search}`);
   }
+
+  const common = commonFor(station);
+  const { selection, blocks } = common;
 
   let summary = null;
   let failure = '';

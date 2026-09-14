@@ -21,11 +21,21 @@ from server.schemas.errors import ProviderError
 from server.services import frost
 
 
-# Estación real del catálogo: SN100 "PLASSEN", lat 61.1349,
-# lon 12.5039, elev 333.0.
+# Ficha de SN100 "PLASSEN" tal como estaba en el catálogo. Salió del
+# inventario al actualizarlo (no publica sensores), así que los tests la fijan
+# en vez de depender de que siga en data/data_estaciones_frost.json.
 STATION = "SN100"
 ELEVATION = 333.0
+STATION_ROW = {
+    "id": STATION, "name": "PLASSEN", "lat": 61.1349, "lon": 12.5039,
+    "elev": ELEVATION, "country_code": "NO",
+}
 TZ = ZoneInfo("Europe/Oslo")
+
+
+@pytest.fixture(autouse=True)
+def _frost_catalog(monkeypatch):
+    monkeypatch.setattr(frost, "_load_stations", lambda: [STATION_ROW])
 
 NOW_LOCAL = datetime(2026, 6, 10, 12, 0, tzinfo=TZ)
 
@@ -140,6 +150,15 @@ def test_choose_observation_discards_explicit_bad_quality() -> None:
     assert frost._choose_observation([observations[1]], "temp_c") is None
 
 
+def test_choose_observation_supports_aggregated_gust_and_prefers_ten_minutes() -> None:
+    observations = [
+        {**_obs("max(wind_speed_of_gust PT1H)", 8.0, resolution="PT1H", level=10.0), "_reference_epoch": 100},
+        {**_obs("max(wind_speed_of_gust PT10M)", 10.0, resolution="PT10M", level=10.0), "_reference_epoch": 100},
+    ]
+    chosen = frost._choose_observation(observations, "gust_ms")
+    assert chosen["value"] == pytest.approx(10.0)
+
+
 def test_precip_total_counter_mode() -> None:
     # Contador creciente: total = último - primero
     assert frost._precip_total([1.0, 2.5, 4.0], []) == pytest.approx(3.0)
@@ -191,6 +210,23 @@ def test_fetch_current_latest_plus_today_precip() -> None:
 
     assert result["station_name"] == "PLASSEN"
     assert not math.isnan(result["Td"])
+
+
+def test_fetch_current_uses_aggregated_gust_variant() -> None:
+    latest = {
+        "data": [{
+            "sourceId": "SN100:0",
+            "referenceTime": _ref(11, 50),
+            "observations": [
+                _obs("air_temperature", 18.0, level=2.0),
+                _obs("max(wind_speed_of_gust PT10M)", 12.0, level=10.0),
+            ],
+        }]
+    }
+    result = _run(frost.fetch_current(
+        STATION, "ID", "SECRET", client=_routing_client(latest=latest), now=NOW_LOCAL,
+    ))
+    assert result["gust"] == pytest.approx(43.2)
 
 
 def test_fetch_current_unauthorized_propagates() -> None:

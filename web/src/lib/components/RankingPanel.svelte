@@ -182,7 +182,7 @@
 
           <span class="extra">
             {#if row.elevation !== null && row.elevation !== undefined}
-              <b class="tnum">{num(row.elevation, { language, decimals: 0 })} m</b>
+              <b class="tnum">{num(convertUnit(row.elevation, 'altitude', unitPreferences), { language, decimals: 0 })} {unitLabel('altitude', unitPreferences)}</b>
             {/if}
             {#if row.local_time}
               <b class="time">{row.local_time}</b>

@@ -25,7 +25,7 @@ from typing import Dict, Sequence
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOCALES_DIR = REPO_ROOT / "locales"
 DEFAULT_OUTPUT = REPO_ROOT / "web" / "src" / "lib" / "i18n" / "card-tooltips.generated.js"
-LANGUAGES = ("es", "ca", "en", "fr", "it", "pt")
+LANGUAGES = ("es", "ca", "en", "de", "fr", "it", "pt")
 
 
 def normalize(text: str) -> str:

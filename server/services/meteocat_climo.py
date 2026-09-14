@@ -175,6 +175,25 @@ async def fetch_daily_history_for_periods(
                 row[metric_name] = value
                 row["epoch"] = P.climo_epoch_from_label(day_txt)
 
+    return _daily_frame_from_rows(rows_by_day, periods)
+
+
+def _empty_daily_row(day_txt: str) -> Dict[str, Any]:
+    return {
+        "date": day_txt, "epoch": P.climo_epoch_from_label(day_txt),
+        "temp_mean": float("nan"), "temp_max": float("nan"), "temp_min": float("nan"),
+        "wind_mean": float("nan"), "wind_dir_mean": float("nan"),
+        "gust_max": float("nan"), "gust_dir_max": float("nan"),
+        "precip_total": float("nan"),
+        "precip_rate_max": float("nan"),
+        "solar_mean": float("nan"),
+    }
+
+
+def _daily_frame_from_rows(
+    rows_by_day: Dict[str, Dict[str, Any]], periods: Sequence[Tuple[date, date]],
+) -> pd.DataFrame:
+    """Filas diarias ya en unidades de la app → DataFrame recortado a los periodos."""
     if not rows_by_day:
         return P.empty_daily_df()
 
@@ -516,6 +535,254 @@ async def fetch_daily_extremes_for_periods(
 
 
 # =====================================================================
+# Histórico desde Dades Obertes (sin cuota)
+# =====================================================================
+
+# Viento y dirección, y racha y su dirección, van por parejas de la misma
+# altura; se prefiere 2 m como en ``CLIMO_STAT_CODES``.
+_OPEN_WIND_PAIRS = (
+    (P.STAT_WIND_MEAN_2, P.STAT_WIND_DIR_MEAN_2),
+    (P.STAT_WIND_MEAN_6, P.STAT_WIND_DIR_MEAN_6),
+    (P.STAT_WIND_MEAN_10, P.STAT_WIND_DIR_MEAN_10),
+)
+_OPEN_GUST_PAIRS = (
+    (P.STAT_GUST_MAX_2, P.STAT_GUST_DIR_2),
+    (P.STAT_GUST_MAX_6, P.STAT_GUST_DIR_6),
+    (P.STAT_GUST_MAX_10, P.STAT_GUST_DIR_10),
+)
+_OPEN_DAILY_CODES = sorted({
+    P.STAT_TEMP_MEAN, P.STAT_TEMP_MAX, P.STAT_TEMP_MIN,
+    P.STAT_PRECIP, P.STAT_PRECIP_MAX_1MIN, P.STAT_SOLAR_GLOBAL,
+    *(code for pair in _OPEN_WIND_PAIRS + _OPEN_GUST_PAIRS for code in pair),
+})
+# El dataset diario va dos días por detrás. Solo se rellena desde las
+# semihorarias un hueco reciente de ese tamaño; más atrás no es retraso de
+# publicación sino una estación sin datos, y no hay nada que inventar.
+_OPEN_GAP_FILL_MAX_DAYS = 10
+# Un día semihorario se da por completo con 43 de sus 48 lecturas (90 %).
+_HALF_HOURLY_MIN_SAMPLES = 43
+
+
+def _nan() -> float:
+    return float("nan")
+
+
+def _rows_from_open_daily(values: Dict[int, Dict[str, float]]) -> Dict[str, Dict[str, Any]]:
+    rows: Dict[str, Dict[str, Any]] = {}
+    days = sorted({day for by_day in values.values() for day in by_day})
+    for day in days:
+        row = _empty_daily_row(day)
+
+        def pick(code: int) -> float:
+            return float(values.get(code, {}).get(day, _nan()))
+
+        row["temp_mean"] = pick(P.STAT_TEMP_MEAN)
+        row["temp_max"] = pick(P.STAT_TEMP_MAX)
+        row["temp_min"] = pick(P.STAT_TEMP_MIN)
+        row["precip_total"] = pick(P.STAT_PRECIP)
+        rate = pick(P.STAT_PRECIP_MAX_1MIN)
+        # Milímetros en un minuto → intensidad en mm/h, como el camino XEMA.
+        row["precip_rate_max"] = rate * 60.0 if not P._is_nan(rate) else _nan()
+        row["solar_mean"] = pick(P.STAT_SOLAR_GLOBAL)
+        for speed_code, direction_code in _OPEN_WIND_PAIRS:
+            speed = pick(speed_code)
+            if not P._is_nan(speed):
+                row["wind_mean"] = P.ms_to_kmh(speed)
+                row["wind_dir_mean"] = pick(direction_code)
+                break
+        for gust_code, direction_code in _OPEN_GUST_PAIRS:
+            gust = pick(gust_code)
+            if not P._is_nan(gust):
+                row["gust_max"] = P.ms_to_kmh(gust)
+                row["gust_dir_max"] = pick(direction_code)
+                break
+        rows[day] = row
+    return rows
+
+
+def _circular_mean_deg(directions: Sequence[float]) -> float:
+    import math
+
+    if not directions:
+        return _nan()
+    sin_sum = sum(math.sin(math.radians(value)) for value in directions)
+    cos_sum = sum(math.cos(math.radians(value)) for value in directions)
+    if abs(sin_sum) < 1e-9 and abs(cos_sum) < 1e-9:
+        return _nan()
+    return math.degrees(math.atan2(sin_sum, cos_sum)) % 360.0
+
+
+def _rows_from_half_hourly(
+    maps: Dict[int, list], days: Sequence[date],
+) -> Dict[str, Dict[str, Any]]:
+    """Reconstruye días completos desde las lecturas semihorarias (días UTC).
+
+    Solo para el tramo que el dataset diario aún no ha publicado. Una
+    variable sin cobertura suficiente queda en blanco: una máxima de medio
+    día no es la máxima del día.
+    """
+    from datetime import datetime as _dt, timedelta, timezone as _tz
+
+    from server.services import meteocat as mc
+
+    rows: Dict[str, Dict[str, Any]] = {}
+    for day in days:
+        start = int(_dt(day.year, day.month, day.day, tzinfo=_tz.utc).timestamp())
+        end = start + 86400
+
+        def samples(code: int) -> list:
+            return [value for epoch, value in maps.get(code, []) if start <= int(epoch) < end]
+
+        def complete(code: int) -> list:
+            values = samples(code)
+            return values if len(values) >= _HALF_HOURLY_MIN_SAMPLES else []
+
+        row = _empty_daily_row(day.isoformat())
+        temp = complete(mc.V_TEMP)
+        tmax = complete(mc.V_TEMP_MAX) or temp
+        tmin = complete(mc.V_TEMP_MIN) or temp
+        if temp:
+            row["temp_mean"] = sum(temp) / len(temp)
+        if tmax:
+            row["temp_max"] = max(tmax)
+        if tmin:
+            row["temp_min"] = min(tmin)
+        rain = complete(mc.V_PRECIP)
+        if rain:
+            row["precip_total"] = sum(max(0.0, value) for value in rain)
+        solar = complete(mc.V_SOLAR)
+        if solar:
+            # W/m² medios del día → MJ/m², la unidad de la irradiación diaria.
+            row["solar_mean"] = sum(solar) / len(solar) * 86400.0 / 1e6
+        for speed_code, direction_code in (
+            (mc.V_WIND_2M, mc.V_WIND_DIR_2M),
+            (mc.V_WIND_6M, mc.V_WIND_DIR_6M),
+            (mc.V_WIND, mc.V_WIND_DIR),
+        ):
+            speeds = complete(speed_code)
+            if speeds:
+                row["wind_mean"] = P.ms_to_kmh(sum(speeds) / len(speeds))
+                row["wind_dir_mean"] = _circular_mean_deg(samples(direction_code))
+                break
+        for gust_code, direction_code in (
+            (mc.V_GUST_2M, mc.V_GUST_DIR_2M),
+            (mc.V_GUST_6M, mc.V_GUST_DIR_6M),
+            (mc.V_GUST, mc.V_GUST_DIR),
+        ):
+            gusts = [
+                (epoch, value) for epoch, value in maps.get(gust_code, [])
+                if start <= int(epoch) < end
+            ]
+            if len(gusts) >= _HALF_HOURLY_MIN_SAMPLES:
+                epoch, value = max(gusts, key=lambda item: item[1])
+                row["gust_max"] = P.ms_to_kmh(value)
+                direction = dict(maps.get(direction_code, [])).get(epoch)
+                row["gust_dir_max"] = float(direction) if direction is not None else _nan()
+                break
+        if any(
+            not P._is_nan(row[column])
+            for column in ("temp_mean", "temp_max", "temp_min", "precip_total")
+        ):
+            rows[day.isoformat()] = row
+    return rows
+
+
+async def fetch_open_data_daily_for_periods(
+    client: httpx.AsyncClient,
+    station_code: str,
+    periods: Sequence[Tuple[date, date]],
+    *,
+    today: Optional[date] = None,
+) -> pd.DataFrame:
+    """Serie diaria de los periodos pedidos desde Dades Obertes.
+
+    Da igual el modo: un mes, un año o veinte llegan como días, y los
+    resúmenes mensuales y anuales los agrega después el pipeline común, como
+    con IEM o LHMT. Se baja un bloque por año natural —una sola petición de
+    menos de un segundo, cacheable entero— y solo de los años que tocan los
+    periodos, para no descargar los intermedios de una selección discontinua.
+
+    Los días que el dataset diario aún no publica (va dos días por detrás) se
+    reconstruyen desde las lecturas semihorarias. El de hoy no: está a medias.
+    """
+    from datetime import datetime as _dt, timedelta, timezone as _tz
+
+    from server.services import meteocat as mc
+    from server.services import meteocat_open_data as open_data
+
+    code = str(station_code).strip().upper()
+    if not code or not periods:
+        return P.empty_daily_df()
+    today = today or _dt.now(_tz.utc).date()
+    last_complete = today - timedelta(days=1)
+    years = sorted({
+        year
+        for period_start, period_end in periods
+        for year in range(period_start.year, min(period_end, last_complete).year + 1)
+        if period_start <= last_complete
+    })
+    if not years:
+        return P.empty_daily_df()
+
+    semaphore = asyncio.Semaphore(open_data.DAILY_CONCURRENCY)
+
+    async def _year(year: int) -> Dict[int, Dict[str, float]]:
+        async with semaphore:
+            return await get_or_fetch_climo_block(
+                provider=PROVIDER,
+                kind=f"open-daily:{year}:{','.join(map(str, _OPEN_DAILY_CODES))}",
+                station_id=code,
+                credential="",
+                client=client,
+                end_date=date(year, 12, 31),
+                fetcher=lambda: open_data.fetch_daily_values(
+                    code, date(year, 1, 1), min(date(year, 12, 31), last_complete),
+                    _OPEN_DAILY_CODES, client=client,
+                ),
+            ) or {}
+
+    blocks = await asyncio.gather(*(_year(year) for year in years))
+    values: Dict[int, Dict[str, float]] = {}
+    for block in blocks:
+        for var_code, by_day in block.items():
+            values.setdefault(var_code, {}).update(by_day)
+    rows_by_day = _rows_from_open_daily(values)
+
+    requested_end = min(max(period_end for _start, period_end in periods), last_complete)
+    published = max((date.fromisoformat(day) for day in rows_by_day), default=None)
+    if published is not None and published < requested_end:
+        gap_start = published + timedelta(days=1)
+        if (requested_end - gap_start).days < _OPEN_GAP_FILL_MAX_DAYS:
+            gap_days = [
+                gap_start + timedelta(days=offset)
+                for offset in range((requested_end - gap_start).days + 1)
+            ]
+            try:
+                maps = await open_data.fetch_variable_maps(
+                    _dt(gap_start.year, gap_start.month, gap_start.day, tzinfo=_tz.utc),
+                    _dt(requested_end.year, requested_end.month, requested_end.day, tzinfo=_tz.utc)
+                    + timedelta(days=1) - timedelta(seconds=1),
+                    sorted({
+                        mc.V_TEMP, mc.V_TEMP_MAX, mc.V_TEMP_MIN, mc.V_PRECIP, mc.V_SOLAR,
+                        mc.V_WIND, mc.V_WIND_DIR, mc.V_WIND_6M, mc.V_WIND_DIR_6M,
+                        mc.V_WIND_2M, mc.V_WIND_DIR_2M,
+                        mc.V_GUST, mc.V_GUST_DIR, mc.V_GUST_6M, mc.V_GUST_DIR_6M,
+                        mc.V_GUST_2M, mc.V_GUST_DIR_2M,
+                    }),
+                    station_id=code,
+                    client=client,
+                )
+            except ProviderError as exc:
+                # Sin los últimos días el histórico sigue siendo válido.
+                logger.warning("Climo Meteocat: no se pudieron completar %s-%s: %s",
+                               gap_start, requested_end, exc.detail)
+            else:
+                rows_by_day.update(_rows_from_half_hourly(maps.get(code, {}), gap_days))
+
+    return _daily_frame_from_rows(rows_by_day, periods)
+
+
+# =====================================================================
 # Orquestación del dataset canónico
 # =====================================================================
 
@@ -528,9 +795,29 @@ async def fetch_climo_dataset(
     periods: Sequence[Tuple[date, date]],
     selected_years: Sequence[int],
 ) -> Tuple[pd.DataFrame, Optional[Dict[str, Dict[str, str]]]]:
-    """Selección de modo idéntica a ``_fetch_meteocat_historical_dataset``."""
-    _require_api_key(api_key)
+    """Dataset canónico de Meteocat.
+
+    Primero Dades Obertes, que devuelve días en cualquier modo y sin cuota:
+    así también el resumen anual tiene mínima de máximas, máxima de mínimas,
+    histograma y distribución, que con ``mensuals``/``anuals`` no se podían
+    calcular. La API de Meteocat queda como respaldo si Dades Obertes falla.
+    """
     years = [int(y) for y in selected_years]
+    try:
+        df = await fetch_open_data_daily_for_periods(client, station_code, periods)
+    except ProviderError as exc:
+        logger.warning(
+            "Climo Meteocat: Dades Obertes falló (%s); se recurre a XEMA", exc.detail,
+        )
+    else:
+        # En la comparación de varios años los hitos diarios los calcula el
+        # pipeline común con sus ventanas estacionales; aquí sobrarían.
+        if summary_mode == "annual" and len(years) > 1:
+            return df, None
+        extremes = _daily_extremes_from_frame(df)
+        return df, (extremes or None)
+
+    _require_api_key(api_key)
 
     if summary_mode == "annual" and len(years) > 1:
         df = await fetch_annual_history_for_years(client, station_code, api_key, years)

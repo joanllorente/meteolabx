@@ -69,6 +69,9 @@
     releaseGroups.find((group) => group.id === selectedRelease) || releaseGroups[0]
   );
   const activeId = $derived(activeRelease?.id || '');
+  // Las pestañas se leen en orden, de la serie más antigua a la más nueva
+  // (2.0, 2.1…), pero la que se abre es la última publicada.
+  const releaseTabs = $derived([...releaseGroups].reverse());
 
   const PRIVACY_EMAIL = 'meteolabx@gmail.com';
 
@@ -114,7 +117,7 @@
   const SOURCES =
     'WU · WeatherLink · Windy PWS · AEMET · Meteocat · Euskalmet · Frost · ' +
     'Meteo-France · MeteoGalicia · NWS · POEM · Met Office · MeteoHub Italia · ' +
-    'IPMA · GeoSphere · SMHI · ECCC · IEM';
+    'IPMA · GeoSphere · SMHI · ECCC · LHMT · IMGW · DMI · MeteoSwiss · IEM';
 
   let newsDialog;
   let privacyDialog;
@@ -178,7 +181,7 @@
       <!-- Con una sola versión publicada, una fila de una pestaña sobra. -->
       {#if releaseGroups.length > 1}
       <div class="release-tabs" role="tablist" aria-label={texts.whats_new}>
-        {#each releaseGroups as group (group.id)}
+        {#each releaseTabs as group (group.id)}
           <button
             type="button"
             role="tab"

@@ -47,7 +47,7 @@ export async function load({ params, url, fetch, setHeaders }) {
   // Sin selección explícita no se consulta nada: la pestaña se abre con el
   // formulario preparado y espera al botón.
   const requested = url.searchParams.has('consulta');
-  const selection = resolveSelection(url.searchParams, mode, lang, requested);
+  const selection = resolveSelection(url.searchParams, mode, lang, requested, station);
   const blocks = countBlocks(mode, selection);
 
   let summary = null;

@@ -141,16 +141,20 @@ def test_provider_counts_covers_all_catalogs() -> None:
     assert set(counts) == set(stations.CATALOG_PROVIDERS)
     assert counts["NWS"] > 30000
     assert counts["METEOCAT"] > 100
-    # ~170k tras podar las DCP hidrológicas sin sensores meteo
-    # (scripts/prune_iem_hydro_dcp.py).
-    assert counts["IEM"] > 160000
+    # 118.563 desde el inventario curado del 6 de septiembre de 2026
+    # (scripts/merge_iem_inventory.py): fuera las CoCoRaHS no validadas, las
+    # DCP sin sensores meteo y las ~1.900 WMO_BUFR en las que IEM no devolvió
+    # ninguna muestra (data/iem_station_validation.json). Antes eran ~170k.
+    assert counts["IEM"] > 110000
 
 
 def test_country_counts_and_iem_country_filter() -> None:
     counts = stations.country_counts(providers=["IEM"])
     assert counts["US"] > 100000
     assert counts["ES"] > 0
-    assert counts["AQ"] >= 35
+    # 33 tras la misma curación: Halley, Rothera, Syowa y otras cuatro bases
+    # salieron por no dar ninguna muestra en IEM; eran 41.
+    assert counts["AQ"] >= 30
 
     nws_counts = stations.country_counts(providers=["NWS"])
     assert nws_counts["US"] > 30000
@@ -160,15 +164,16 @@ def test_country_counts_and_iem_country_filter() -> None:
         providers=list(stations.OFFICIAL_CATALOG_PROVIDERS)
     )
     assert official_counts["TR"] == 75
-    assert official_counts["PR"] == 1
+    # El único «RQ» del catálogo era el radiosondeo TJSJ de San Juan, que la
+    # curación de IEM del 6 de septiembre retiró por ser un producto de altura.
+    # Las estaciones de Puerto Rico de IEM llegan con país US, así que PR ya no
+    # aparece; lo que se sigue exigiendo es que el alias RQ no se cuele.
 
     all_counts = stations.country_counts()
     assert all_counts["ES"] > counts["ES"]
     assert all_counts["TR"] >= official_counts["TR"]
     assert "TU" not in all_counts
-    # Era 2 hasta la poda de DCP hidrológicas: la segunda estación de PR era
-    # una DCP de nivel de río sin sensores meteo. Queda el radiosondeo TJSJ.
-    assert all_counts["PR"] >= official_counts["PR"]
+    assert all_counts.get("PR", 0) >= official_counts.get("PR", 0)
     assert "RQ" not in all_counts
 
     results = stations.search_near(
@@ -195,10 +200,10 @@ def test_country_counts_and_iem_country_filter() -> None:
     assert berlin_tegel_record["has_historical"] is True
     assert berlin_tegel_record["is_historical_only"] is True
 
-    puerto_rico_record = stations.get_station("IEM", "RAOB|TJSJ")
-    assert puerto_rico_record is not None
-    assert puerto_rico_record["country"] == "PR"
-    assert puerto_rico_record["has_historical"] is False
+    # El radiosondeo TJSJ, que venía como «RQ», ya no está en el catálogo; la
+    # normalización del código se comprueba directamente.
+    assert stations.get_station("IEM", "RAOB|TJSJ") is None
+    assert stations._normalize_country_code("rq") == "PR"
 
     antarctica = stations.search_catalog(
         providers=["IEM"], countries=["AQ"], limit=5000,
@@ -211,7 +216,8 @@ def test_country_counts_and_iem_country_filter() -> None:
         ),
         None,
     )
-    assert len(antarctica) >= 35
+    # 33 tras la curación de IEM del 6 de septiembre (ver arriba); eran 41.
+    assert len(antarctica) >= 30
     # La copia BUFR de IEM está oculta como duplicado confirmado: la fuente
     # canónica de Concordia es Climantartide (IEM anula el frío < −73,3°C).
     assert concordia_iem is None
@@ -403,3 +409,29 @@ def test_weatherlink_stations_endpoint_keeps_credentials_server_side() -> None:
     rows = response.json()["stations"]
     assert rows[0]["station_id"] == "123456"
     assert rows[0]["station_name"] == "Mi Davis"
+
+
+def test_ficha_resuelve_por_coordenadas_el_pais_un_de_iem(monkeypatch):
+    from server.services import stations as stations_service
+
+    monkeypatch.setattr(stations_service, "country_for_point", lambda lat, lon: "RU")
+    record = {"provider": "IEM", "country": "UN", "lat": 50.0, "lon": 40.0}
+    assert stations_service._with_resolved_country(record)["country"] == "RU"
+    # Un país real no se toca, y sin fronteras disponibles se deja como estaba.
+    assert stations_service._with_resolved_country({**record, "country": "IR"})["country"] == "IR"
+    monkeypatch.setattr(stations_service, "country_for_point", lambda lat, lon: None)
+    assert stations_service._with_resolved_country(record)["country"] == "UN"
+
+
+def test_hide_amateur_whitelist_keeps_iem_duplicates_hidden() -> None:
+    # «Ocultar particulares» llega como lista blanca de proveedores, con IEM
+    # dentro; no es pedir IEM por su nombre y sus duplicados siguen fuera.
+    whitelist = [p for p in stations.CATALOG_PROVIDERS if p not in ("WINDY", "NETATMO")]
+    rows = stations.search_near(
+        46.99, 7.46, radius_km=15, providers=whitelist, limit=500, requested_providers=[],
+    )
+    assert any(row["provider"] == "METEOSWISS" for row in rows)
+    assert not any(row["provider"] == "IEM" and row["country"] == "CH" for row in rows)
+
+    named = stations.search_near(46.99, 7.46, radius_km=15, providers=["IEM"], limit=500)
+    assert any(row["provider"] == "IEM" and row["country"] == "CH" for row in named)

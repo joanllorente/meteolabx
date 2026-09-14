@@ -52,6 +52,10 @@ def _credentials_status(settings: Settings) -> dict:
         "GEOSPHERE": "public",
         "SMHI": "public",
         "ECCC": "public",
+        "LHMT": "public",
+        "IMGW": "public",
+        "DMI": "public",
+        "METEOSWISS": "public",
         "POEM": "public",  # auth opcional; sin ella el feed público funciona
         "AEMET": _key(settings.aemet_api_key),
         "METEOCAT": _key(settings.meteocat_api_key),

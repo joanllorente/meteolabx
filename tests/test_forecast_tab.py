@@ -63,7 +63,9 @@ def test_svelte_forecast_is_a_standalone_entrypoint():
     assert "forecast.direct" in forecast_app
     assert "fetch('/v1/stats/section'" in forecast_app
     assert "window.history.replaceState" in forecast_app
-    assert "const forecastHome = isLocal" in forecast_app
+    # La cabecera es la barra común de la web (desde la 2.0.0), no un enlace
+    # propio que distinguía localhost.
+    assert "import TopNav from './lib/TopNav.svelte'" in forecast_app
     assert "ObservationView" not in forecast_app
     assert "TrendsView" not in forecast_app
     assert "forecast: resolve(import.meta.dirname, 'forecast.html')" in vite_config
@@ -74,6 +76,11 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
         encoding="utf-8"
     )
     view = (ROOT / "prototype-svelte" / "src" / "views" / "ForecastView.svelte").read_text(
+        encoding="utf-8"
+    )
+    # Desde la 2.0.0 los textos del visor viven en el diccionario de idiomas y
+    # la vista los pide con ``tr(clave)``.
+    i18n = (ROOT / "prototype-svelte" / "src" / "lib" / "forecast-i18n.js").read_text(
         encoding="utf-8"
     )
 
@@ -115,11 +122,11 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "initialProductIds" in products
     assert "item.kind === 'derived'" in view
     assert "mlx-logo.png" in view
-    assert "Mapa visualizado" in view
-    assert "Selector de mapas" in view
-    assert "fetchAromeCatalog" in view
-    assert "fetchAromeFrame" in view
-    assert "getCachedAromeFrame" in view
+    assert "tr('viewedMap')" in view and "viewedMap: 'Mapa visualizado'" in i18n
+    assert "tr('mapSelector')" in view and "mapSelector: 'Selector de mapas'" in i18n
+    assert "fetchForecastCatalog" in view
+    assert "fetchForecastFrame" in view
+    assert "getCachedForecastFrame" in view
     assert "}, 350);" not in view
     assert "ForecastGrid" in view
     assert "resetKey" in view
@@ -129,20 +136,19 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "CEST" not in view
     assert "Europe/Madrid" not in view
     assert "min-height:clamp(620px,64vh,780px)" in view
-    assert "Nivel vertical del viento" in view
+    assert "tr('windLevel')" in view and "windLevel: 'Nivel vertical del viento'" in i18n
     assert "m AGL" in view
     assert "hPa" in view
     assert "windLevelKind" in view
     assert "runCatalogs" in view
     assert "selectedRun" in view
-    assert "Progreso de cada RUN" in view
-    assert "run-progress-list" in view
-    assert "runProgress(item).toLocaleString('es-ES')" in view
+    # El progreso de cada RUN va en su opción del selector, en el idioma activo.
+    assert "runProgress(item).toLocaleString(locale)" in view
     assert "productProgress(item)" in view
     assert "product-status {availability.state}" in view
     assert "availability.state === 'complete' ? '✓'" in view
     assert "class:ready={hourIsReady(hour)}" in view
-    assert "UTC pendiente" in view
+    assert "'hourPending'" in view and "hourPending: '{time} UTC pendiente'" in i18n
 
     api = (ROOT / "prototype-svelte" / "src" / "services" / "forecastApi.js").read_text(
         encoding="utf-8"
@@ -152,8 +158,8 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     # revisión es lo único que hace que un navegador vuelva a pedirlos. Sube
     # con cada cambio de formato de la rejilla: la v17 es la que trae la capa
     # de geopotencial, y sin subirla el cambio no llega a quien ya tenga la
-    # hora guardada, ni recargando ni reiniciando.
-    assert "forecast-fields-v17" in api
+    # hora guardada, ni recargando ni reiniciando. La v19 es la vigente.
+    assert "forecast-fields-v19" in api
     assert "FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024" in api
     assert "shareFrameGeometry" in api
     assert "frameCacheBytes" in api
@@ -231,7 +237,9 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "centre.main ? 'B' : 'b'" in grid
     centros = (ROOT / "prototype-svelte" / "src" / "lib" / "pressureCentres.js").read_text(encoding="utf-8")
     assert "closureDepth" in centros
-    assert "CENTRE_MAIN_DEPTH_HPA = 4" in centros
+    # Tres cuartos del intervalo de 4 hPa entre isobaras (el 4 de antes se
+    # calibró con la medida del cierre rota).
+    assert "CENTRE_MAIN_DEPTH_HPA = 3" in centros
     assert "CENTRE_MAIN_RADIUS_KM = 150" in centros
     assert "ringExtreme" not in centros, (
         "el anillo fijo medía el sector que más favorecía al candidato"
@@ -361,6 +369,9 @@ def test_every_selected_forecast_product_has_a_technical_guide():
     view = view_path.read_text(encoding="utf-8")
     forecast_app = forecast_app_path.read_text(encoding="utf-8")
     math = math_path.read_text(encoding="utf-8")
+    i18n = (ROOT / "prototype-svelte" / "src" / "lib" / "forecast-i18n.js").read_text(
+        encoding="utf-8"
+    )
 
     selected_block = products.split("const initialProductIds = [", 1)[1].split("];", 1)[0]
     selected_ids = [
@@ -369,12 +380,15 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 29
+    assert len(selected_ids) == 33
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 
-    for heading in ("Qué representa", "Interpretación", "Cálculo", "Base documental"):
-        assert heading in view
+    for key, heading in (
+        ("what", "Qué representa"), ("interpretation", "Interpretación"),
+        ("calculation", "Cálculo"), ("sources", "Base documental"),
+    ):
+        assert f"tr('{key}')" in view and f"{key}: '{heading}'" in i18n
     assert ".explanation-overview{display:grid;grid-template-columns:1fr;" in view
     assert 'class="calculation-layout"' not in view
     assert 'class="formula-stack"' not in view
@@ -395,10 +409,10 @@ def test_every_selected_forecast_product_has_a_technical_guide():
     assert "MODELO ACTIVO" not in forecast_app
     assert "model-chip" not in forecast_app
     assert "let selectedProduct = $state(null)" in view
-    assert "Ningún mapa seleccionado" in view
+    assert "tr('noneSelected')" in view and "noneSelected: 'Ningún mapa seleccionado'" in i18n
     assert "empty-forecast" in view
     assert "map-watermark" in view
-    assert view.count("Predicción numérica") >= 3
+    assert view.count("tr('title')") >= 3 and "title: 'Predicción numérica'" in i18n
     assert "Mapa conceptual" not in view
     assert "catalunya" not in view
     assert "map-badge" not in view

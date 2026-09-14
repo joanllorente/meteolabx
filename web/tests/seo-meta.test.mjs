@@ -10,7 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { stationMeta, stationLanguages, observationUrl, stationKey } from '../src/lib/seo/station.js';
+import { primaryLanguage, stationMeta, stationLanguages, observationUrl, stationKey } from '../src/lib/seo/station.js';
 import { displayName, sensorLabel, t } from '../src/lib/seo/i18n.js';
 
 const fixture = JSON.parse(
@@ -78,6 +78,13 @@ test('canonical y alternates apuntan a las URLs nuevas', () => {
       assert.equal(meta.xDefault, observationUrl(item.language_codes[0], item.url_slug));
     }
   }
+});
+
+test('una estación polaca no publica variante catalana', () => {
+  const station = { provider: 'IMGW', country: 'PL', station_id: '123', name: 'Poznań' };
+  assert.deepEqual(stationLanguages(station), ['es', 'en', 'de']);
+  assert.equal(primaryLanguage(station), 'en');
+  assert.equal(stationLanguages(station).includes('ca'), false);
 });
 
 test('los datos estructurados mantienen BreadcrumbList y Place', () => {

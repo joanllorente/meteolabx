@@ -31,6 +31,9 @@
     releaseGroups.find((group) => group.id === selectedRelease) || releaseGroups[0]
   );
   const activeId = $derived(activeRelease?.id || '');
+  // Las pestañas se leen en orden, de la serie más antigua a la más nueva
+  // (2.0, 2.1…), pero la que se abre es la última publicada.
+  const releaseTabs = $derived([...releaseGroups].reverse());
   const privacySections = $derived(
     [
       { title: texts.privacy_cookies_title, items: texts.privacy_cookies },
@@ -108,7 +111,7 @@
     </header>
     <div class="body">
       <div class="release-tabs" role="tablist" aria-label={texts.whats_new}>
-        {#each releaseGroups as group (group.id)}
+        {#each releaseTabs as group (group.id)}
           <button
             type="button"
             role="tab"

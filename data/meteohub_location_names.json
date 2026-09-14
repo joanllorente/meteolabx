@@ -1,0 +1,6960 @@
+{
+  "updated": 1159,
+  "collisions_disambiguated": 298,
+  "changes": [
+    {
+      "id": "mnw|36.70409|14.94827|scl430",
+      "code": "scl430",
+      "name": "Santa Maria del Focallo",
+      "distance_km": 1.16
+    },
+    {
+      "id": "mnw|36.92277|15.06626|scl447",
+      "code": "scl447",
+      "name": "San Corrado di Fuori",
+      "distance_km": 0.45
+    },
+    {
+      "id": "mnw|36.92817|14.47120|scl400",
+      "code": "scl400",
+      "name": "Borgo Europa",
+      "distance_km": 0.386
+    },
+    {
+      "id": "mnw|36.93162|14.47901|scl026",
+      "code": "scl026",
+      "name": "Villaggio degli Ulivi-San Giovanni",
+      "distance_km": 0.573
+    },
+    {
+      "id": "mnw|36.93710|14.52056|scl014",
+      "code": "scl014",
+      "name": "Vittoria",
+      "distance_km": 1.729
+    },
+    {
+      "id": "mnw|36.93891|15.06339|scl435",
+      "code": "scl435",
+      "name": "Lenzevacche",
+      "distance_km": 1.167
+    },
+    {
+      "id": "mnw|37.06467|15.15876|scl432",
+      "code": "scl432",
+      "name": "Cefalino",
+      "distance_km": 1.995
+    },
+    {
+      "id": "mnw|37.19405|14.93789|scl391",
+      "code": "scl391",
+      "name": "Pedagaggi · 0.3 km SO",
+      "distance_km": 0.275
+    },
+    {
+      "id": "mnw|37.21206|14.64086|scl433",
+      "code": "scl433",
+      "name": "Grammichele · 0.7 km O",
+      "distance_km": 0.699
+    },
+    {
+      "id": "mnw|37.29221|13.47221|scl431",
+      "code": "scl431",
+      "name": "Scavuzzo",
+      "distance_km": 0.755
+    },
+    {
+      "id": "mnw|37.29337|15.00840|scl437",
+      "code": "scl437",
+      "name": "Carlentini Nord · 0.0 km E",
+      "distance_km": 0.032
+    },
+    {
+      "id": "mnw|37.32573|14.44795|scl071",
+      "code": "scl071",
+      "name": "Mirabella Imbaccari",
+      "distance_km": 0.221
+    },
+    {
+      "id": "mnw|37.37016|14.85352|scl105",
+      "code": "scl105",
+      "name": "La Callura · 3.3 km O",
+      "distance_km": 3.28
+    },
+    {
+      "id": "mnw|37.38250|14.36787|scl448",
+      "code": "scl448",
+      "name": "Piazza Armerina · 0.2 km NE",
+      "distance_km": 0.22
+    },
+    {
+      "id": "mnw|37.39066|13.64994|scl417",
+      "code": "scl417",
+      "name": "Quattro Strade",
+      "distance_km": 1.326
+    },
+    {
+      "id": "mnw|37.39135|14.37341|scl428",
+      "code": "scl428",
+      "name": "Piazza Armerina · 0.9 km SO",
+      "distance_km": 0.88
+    },
+    {
+      "id": "mnw|37.40344|13.61724|scl398",
+      "code": "scl398",
+      "name": "Aragona · 0.5 km SE",
+      "distance_km": 0.537
+    },
+    {
+      "id": "mnw|37.42213|13.61507|scl442",
+      "code": "scl442",
+      "name": "Miniera Montagna d'Aragona",
+      "distance_km": 1.823
+    },
+    {
+      "id": "mnw|37.47058|15.07274|scl085",
+      "code": "scl085",
+      "name": "Catania",
+      "distance_km": 2.416
+    },
+    {
+      "id": "mnw|37.49389|14.05154|scl114",
+      "code": "scl114",
+      "name": "Caltanissetta",
+      "distance_km": 1.021
+    },
+    {
+      "id": "mnw|37.51253|13.54413|scl425",
+      "code": "scl425",
+      "name": "San Biagio Platani",
+      "distance_km": 1.431
+    },
+    {
+      "id": "mnw|37.55263|15.08975|scl044",
+      "code": "scl044",
+      "name": "Sant'Agata Li Battiati",
+      "distance_km": 1.014
+    },
+    {
+      "id": "mnw|37.57059|12.71797|scl434",
+      "code": "scl434",
+      "name": "Tre Fontane",
+      "distance_km": 0.557
+    },
+    {
+      "id": "mnw|37.57737|13.21699|scl090",
+      "code": "scl090",
+      "name": "Caltabellotta",
+      "distance_km": 0.224
+    },
+    {
+      "id": "mnw|37.58000|14.97000|scl004",
+      "code": "scl004",
+      "name": "Altarello",
+      "distance_km": 0.855
+    },
+    {
+      "id": "mnw|37.60325|15.15297|scl405",
+      "code": "scl405",
+      "name": "Aci Catena",
+      "distance_km": 1.048
+    },
+    {
+      "id": "mnw|37.62176|15.04542|scl083",
+      "code": "scl083",
+      "name": "Nicolosi-Pedara · 0.5 km SO",
+      "distance_km": 0.536
+    },
+    {
+      "id": "mnw|37.62185|15.04579|scl123",
+      "code": "scl123",
+      "name": "Nicolosi-Pedara · 0.6 km SO",
+      "distance_km": 0.559
+    },
+    {
+      "id": "mnw|37.62594|15.02565|scl046",
+      "code": "scl046",
+      "name": "Nicolosi",
+      "distance_km": 0.532
+    },
+    {
+      "id": "mnw|37.62834|13.62764|scl094",
+      "code": "scl094",
+      "name": "Cammarata",
+      "distance_km": 0.587
+    },
+    {
+      "id": "mnw|37.70382|13.26181|scl413",
+      "code": "scl413",
+      "name": "Bisacquino · 0.1 km O",
+      "distance_km": 0.119
+    },
+    {
+      "id": "mnw|37.72031|13.76813|scl157",
+      "code": "scl157",
+      "name": "Borgo Regalmici",
+      "distance_km": 5.059
+    },
+    {
+      "id": "mnw|37.72746|12.89384|scl007",
+      "code": "scl007",
+      "name": "Partanna",
+      "distance_km": 0.417
+    },
+    {
+      "id": "mnw|37.74128|13.69782|scl451",
+      "code": "scl451",
+      "name": "Marcato Bianco · 0.6 km E",
+      "distance_km": 0.63
+    },
+    {
+      "id": "mnw|37.74812|13.82789|scl163",
+      "code": "scl163",
+      "name": "Valledolmo · 0.1 km S",
+      "distance_km": 0.123
+    },
+    {
+      "id": "mnw|37.76277|13.72575|scl165",
+      "code": "scl165",
+      "name": "Chianchitelle",
+      "distance_km": 0.933
+    },
+    {
+      "id": "mnw|37.77942|13.71183|scl412",
+      "code": "scl412",
+      "name": "Alia · 0.2 km SE",
+      "distance_km": 0.201
+    },
+    {
+      "id": "mnw|37.95578|13.42060|scl054",
+      "code": "scl054",
+      "name": "Marineo · 0.5 km SO",
+      "distance_km": 0.501
+    },
+    {
+      "id": "mnw|37.97558|13.70037|scl073",
+      "code": "scl073",
+      "name": "Termini Imerese · 0.8 km N",
+      "distance_km": 0.789
+    },
+    {
+      "id": "mnw|37.97598|13.69877|scl414",
+      "code": "scl414",
+      "name": "Termini Imerese · 0.7 km N",
+      "distance_km": 0.709
+    },
+    {
+      "id": "mnw|38.07652|13.44147|scl396",
+      "code": "scl396",
+      "name": "Villabate",
+      "distance_km": 0.189
+    },
+    {
+      "id": "mnw|38.07714|13.50441|scl093",
+      "code": "scl093",
+      "name": "Bagheria · 0.7 km E",
+      "distance_km": 0.724
+    },
+    {
+      "id": "mnw|38.07761|13.33143|scl040",
+      "code": "scl040",
+      "name": "Villagrazia · 0.7 km N",
+      "distance_km": 0.657
+    },
+    {
+      "id": "mnw|38.08789|13.34365|scl421",
+      "code": "scl421",
+      "name": "Villagrazia · 1.0 km SO",
+      "distance_km": 1.036
+    },
+    {
+      "id": "mnw|38.08809|13.30320|scl148",
+      "code": "scl148",
+      "name": "Boccadifalco",
+      "distance_km": 1.354
+    },
+    {
+      "id": "mnw|38.08876|13.25012|scl393",
+      "code": "scl393",
+      "name": "San Martino delle Scale",
+      "distance_km": 0.407
+    },
+    {
+      "id": "mnw|38.11299|13.31114|scl088",
+      "code": "scl088",
+      "name": "Poggio Ridente",
+      "distance_km": 1.253
+    },
+    {
+      "id": "mnw|38.11817|15.07932|scl126",
+      "code": "scl126",
+      "name": "Falcone",
+      "distance_km": 0.135
+    },
+    {
+      "id": "mnw|38.12073|13.35844|scl069",
+      "code": "scl069",
+      "name": "Palermo",
+      "distance_km": 0.644
+    },
+    {
+      "id": "mnw|38.12846|13.18594|scl422",
+      "code": "scl422",
+      "name": "Carini · 0.5 km NO",
+      "distance_km": 0.52
+    },
+    {
+      "id": "mnw|38.13729|13.18770|scl440",
+      "code": "scl440",
+      "name": "Carini · 0.7 km SO",
+      "distance_km": 0.696
+    },
+    {
+      "id": "mnw|38.14225|15.20538|scl018",
+      "code": "scl018",
+      "name": "Miranda",
+      "distance_km": 0.982
+    },
+    {
+      "id": "mnw|38.14630|13.17699|scl012",
+      "code": "scl012",
+      "name": "Carini · 1.6 km S",
+      "distance_km": 1.625
+    },
+    {
+      "id": "mnw|38.14648|14.77760|scl404",
+      "code": "scl404",
+      "name": "Scafa",
+      "distance_km": 0.514
+    },
+    {
+      "id": "mnw|38.14652|15.21382|scl099",
+      "code": "scl099",
+      "name": "Barcellona Pozzo di Gotto",
+      "distance_km": 0.154
+    },
+    {
+      "id": "mnw|38.15409|14.85115|scl112",
+      "code": "scl112",
+      "name": "Fiumara",
+      "distance_km": 0.247
+    },
+    {
+      "id": "mnw|38.15483|14.84004|scl025",
+      "code": "scl025",
+      "name": "Sirò",
+      "distance_km": 0.084
+    },
+    {
+      "id": "mnw|38.15593|15.22328|scl087",
+      "code": "scl087",
+      "name": "Pozzo di Gotto",
+      "distance_km": 1.099
+    },
+    {
+      "id": "mnw|38.15629|14.96369|scl159",
+      "code": "scl159",
+      "name": "Patti",
+      "distance_km": 0.994
+    },
+    {
+      "id": "mnw|38.16623|15.84049|clb312",
+      "code": "clb312",
+      "name": "Basilicò",
+      "distance_km": 0.628
+    },
+    {
+      "id": "mnw|38.16990|13.09097|scl150",
+      "code": "scl150",
+      "name": "Cinisi · 1.3 km SE",
+      "distance_km": 1.337
+    },
+    {
+      "id": "mnw|38.17121|15.30828|scl116",
+      "code": "scl116",
+      "name": "Pace Superiore",
+      "distance_km": 0.89
+    },
+    {
+      "id": "mnw|38.17327|15.27259|scl418",
+      "code": "scl418",
+      "name": "San Filippo del Mela",
+      "distance_km": 0.362
+    },
+    {
+      "id": "mnw|38.18000|13.30000|scl016",
+      "code": "scl016",
+      "name": "Tommaso Natale",
+      "distance_km": 1.503
+    },
+    {
+      "id": "mnw|38.18050|13.23525|scl037",
+      "code": "scl037",
+      "name": "Capaci",
+      "distance_km": 1.107
+    },
+    {
+      "id": "mnw|38.19118|15.32403|scl160",
+      "code": "scl160",
+      "name": "Serro",
+      "distance_km": 0.717
+    },
+    {
+      "id": "mnw|38.24124|15.43773|scl444",
+      "code": "scl444",
+      "name": "Villafranca Tirrena",
+      "distance_km": 0.215
+    },
+    {
+      "id": "mnw|38.26538|15.64097|scl036",
+      "code": "scl036",
+      "name": "Torre di Faro",
+      "distance_km": 0.801
+    },
+    {
+      "id": "mnw|38.27889|15.98014|clb432",
+      "code": "clb432",
+      "name": "Oppido Mamertina",
+      "distance_km": 1.643
+    },
+    {
+      "id": "mnw|38.28186|15.50815|scl135",
+      "code": "scl135",
+      "name": "Miano",
+      "distance_km": 0.214
+    },
+    {
+      "id": "mnw|38.36415|15.85485|clb326",
+      "code": "clb326",
+      "name": "Palmi · 0.6 km SO",
+      "distance_km": 0.599
+    },
+    {
+      "id": "mnw|38.45580|15.97957|clb246",
+      "code": "clb246",
+      "name": "Nespolaro",
+      "distance_km": 0.242
+    },
+    {
+      "id": "mnw|38.48948|15.97374|clb308",
+      "code": "clb308",
+      "name": "Rosarno · 0.6 km SE",
+      "distance_km": 0.568
+    },
+    {
+      "id": "mnw|38.69349|16.54034|clb305",
+      "code": "clb305",
+      "name": "Soverato Superiore",
+      "distance_km": 0.684
+    },
+    {
+      "id": "mnw|38.86699|16.60276|clb315",
+      "code": "clb315",
+      "name": "Santa Maria · 0.2 km O",
+      "distance_km": 0.242
+    },
+    {
+      "id": "mnw|38.93403|16.22636|clb323",
+      "code": "clb323",
+      "name": "Contrada Maruca",
+      "distance_km": 0.033
+    },
+    {
+      "id": "mnw|38.95537|16.64483|clb248",
+      "code": "clb248",
+      "name": "Crichi",
+      "distance_km": 0.376
+    },
+    {
+      "id": "mnw|38.95950|16.58295|clb241",
+      "code": "clb241",
+      "name": "Sant'Elia · 0.3 km SE",
+      "distance_km": 0.266
+    },
+    {
+      "id": "mnw|38.98602|16.57936|clb310",
+      "code": "clb310",
+      "name": "Pentone",
+      "distance_km": 0.273
+    },
+    {
+      "id": "mnw|39.04922|16.34792|clb249",
+      "code": "clb249",
+      "name": "San Bernardo · 0.1 km NO",
+      "distance_km": 0.119
+    },
+    {
+      "id": "mnw|39.08656|16.38043|clb307",
+      "code": "clb307",
+      "name": "Soveria Mannelli",
+      "distance_km": 1.012
+    },
+    {
+      "id": "mnw|39.13396|16.24399|clb215",
+      "code": "clb215",
+      "name": "Maione",
+      "distance_km": 0.265
+    },
+    {
+      "id": "mnw|39.15031|8.95972|srd034",
+      "code": "srd034",
+      "name": "Poggio dei Pini",
+      "distance_km": 1.065
+    },
+    {
+      "id": "mnw|39.16387|9.38565|srd040",
+      "code": "srd040",
+      "name": "Marongiu",
+      "distance_km": 0.413
+    },
+    {
+      "id": "mnw|39.20516|9.55380|srd163",
+      "code": "srd163",
+      "name": "Cala Sinzias",
+      "distance_km": 1.417
+    },
+    {
+      "id": "mnw|39.22404|9.13402|srd041",
+      "code": "srd041",
+      "name": "Cagliari · 1.5 km NO",
+      "distance_km": 1.469
+    },
+    {
+      "id": "mnw|39.22520|9.10405|srd037",
+      "code": "srd037",
+      "name": "Sant'Avendrace",
+      "distance_km": 0.855
+    },
+    {
+      "id": "mnw|39.25732|16.23943|clb253",
+      "code": "clb253",
+      "name": "Tessano",
+      "distance_km": 0.2
+    },
+    {
+      "id": "mnw|39.28496|16.24382|clb232",
+      "code": "clb232",
+      "name": "Laurignano",
+      "distance_km": 0.659
+    },
+    {
+      "id": "mnw|39.28501|16.32979|clb340",
+      "code": "clb340",
+      "name": "Casole Bruzio",
+      "distance_km": 0.225
+    },
+    {
+      "id": "mnw|39.28506|8.99801|srd058",
+      "code": "srd058",
+      "name": "Assemini",
+      "distance_km": 0.689
+    },
+    {
+      "id": "mnw|39.29179|16.25359|clb235",
+      "code": "clb235",
+      "name": "Cosenza · 0.8 km N",
+      "distance_km": 0.792
+    },
+    {
+      "id": "mnw|39.30341|16.20914|clb233",
+      "code": "clb233",
+      "name": "Serra Miceli",
+      "distance_km": 0.713
+    },
+    {
+      "id": "mnw|39.30516|8.52298|srd025",
+      "code": "srd025",
+      "name": "Iglesias · 1.3 km E",
+      "distance_km": 1.303
+    },
+    {
+      "id": "mnw|39.30748|16.24293|clb342",
+      "code": "clb342",
+      "name": "Cosenza · 1.3 km SE",
+      "distance_km": 1.293
+    },
+    {
+      "id": "mnw|39.30843|16.27159|clb311",
+      "code": "clb311",
+      "name": "Malavicina",
+      "distance_km": 0.092
+    },
+    {
+      "id": "mnw|39.31437|16.75142|clb214",
+      "code": "clb214",
+      "name": "Villaggio Pino Grande",
+      "distance_km": 1.096
+    },
+    {
+      "id": "mnw|39.32697|16.25342|clb236",
+      "code": "clb236",
+      "name": "Zona Industriale Menna · 0.8 km NE",
+      "distance_km": 0.771
+    },
+    {
+      "id": "mnw|39.33150|16.25945|clb250",
+      "code": "clb250",
+      "name": "Zona Industriale Menna · 0.2 km SE",
+      "distance_km": 0.154
+    },
+    {
+      "id": "mnw|39.35930|16.21417|clb251",
+      "code": "clb251",
+      "name": "Arcavacata",
+      "distance_km": 0.501
+    },
+    {
+      "id": "mnw|39.37126|16.23827|clb002",
+      "code": "clb002",
+      "name": "Rocchi Est",
+      "distance_km": 0.924
+    },
+    {
+      "id": "mnw|39.43565|9.58239|srd048",
+      "code": "srd048",
+      "name": "Villaputzu",
+      "distance_km": 0.798
+    },
+    {
+      "id": "mnw|39.44779|16.26131|clb012",
+      "code": "clb012",
+      "name": "Cavoni-Ginestreto",
+      "distance_km": 0.495
+    },
+    {
+      "id": "mnw|39.45085|16.30115|clb347",
+      "code": "clb347",
+      "name": "Pezza di Piro",
+      "distance_km": 0.74
+    },
+    {
+      "id": "mnw|39.46430|16.13807|clb042",
+      "code": "clb042",
+      "name": "Santa Maria le Grotte",
+      "distance_km": 1.46
+    },
+    {
+      "id": "mnw|39.48917|16.95637|clb343",
+      "code": "clb343",
+      "name": "Cariati · 0.8 km N",
+      "distance_km": 0.799
+    },
+    {
+      "id": "mnw|39.50338|16.27436|clb032",
+      "code": "clb032",
+      "name": "Bisignano",
+      "distance_km": 0.719
+    },
+    {
+      "id": "mnw|39.51674|16.17867|clb020",
+      "code": "clb020",
+      "name": "Sartano",
+      "distance_km": 0.563
+    },
+    {
+      "id": "mnw|39.52631|16.24421|clb345",
+      "code": "clb345",
+      "name": "Cretarossa",
+      "distance_km": 1.254
+    },
+    {
+      "id": "mnw|39.54589|8.64720|srd164",
+      "code": "srd164",
+      "name": "Guspini",
+      "distance_km": 1.261
+    },
+    {
+      "id": "mnw|39.58071|16.36789|clb331",
+      "code": "clb331",
+      "name": "Macchia Albanese",
+      "distance_km": 1.144
+    },
+    {
+      "id": "mnw|39.67118|16.30677|clb211",
+      "code": "clb211",
+      "name": "Spezzano Albanese",
+      "distance_km": 0.369
+    },
+    {
+      "id": "mnw|39.70051|9.00393|srd039",
+      "code": "srd039",
+      "name": "Barumini",
+      "distance_km": 0.188
+    },
+    {
+      "id": "mnw|39.85000|18.31000|pgl031",
+      "code": "pgl031",
+      "name": "Morciano di Leuca",
+      "distance_km": 0.322
+    },
+    {
+      "id": "mnw|39.85679|16.14573|clb341",
+      "code": "clb341",
+      "name": "Cutura",
+      "distance_km": 1.718
+    },
+    {
+      "id": "mnw|39.91212|8.59295|srd175",
+      "code": "srd175",
+      "name": "Oristano",
+      "distance_km": 0.948
+    },
+    {
+      "id": "mnw|39.93834|18.23262|pgl293",
+      "code": "pgl293",
+      "name": "Taurisano",
+      "distance_km": 2.604
+    },
+    {
+      "id": "mnw|39.95153|8.57562|srd176",
+      "code": "srd176",
+      "name": "Sa Mora",
+      "distance_km": 0.961
+    },
+    {
+      "id": "mnw|39.95332|9.19591|srd057",
+      "code": "srd057",
+      "name": "Aritzo",
+      "distance_km": 0.693
+    },
+    {
+      "id": "mnw|40.00668|15.97894|bsl049",
+      "code": "bsl049",
+      "name": "Contrada Viola",
+      "distance_km": 0.562
+    },
+    {
+      "id": "mnw|40.00919|18.24353|pgl012",
+      "code": "pgl012",
+      "name": "Supersano",
+      "distance_km": 0.828
+    },
+    {
+      "id": "mnw|40.01482|18.37188|pgl118",
+      "code": "pgl118",
+      "name": "Spongano",
+      "distance_km": 0.628
+    },
+    {
+      "id": "mnw|40.03258|8.89783|srd159",
+      "code": "srd159",
+      "name": "Busachi",
+      "distance_km": 0.817
+    },
+    {
+      "id": "mnw|40.03391|18.39165|pgl205",
+      "code": "pgl205",
+      "name": "Ortelle · 0.0 km SO",
+      "distance_km": 0.041
+    },
+    {
+      "id": "mnw|40.03409|18.39265|pgl197",
+      "code": "pgl197",
+      "name": "Ortelle · 0.1 km O",
+      "distance_km": 0.126
+    },
+    {
+      "id": "mnw|40.03790|18.13507|pgl309",
+      "code": "pgl309",
+      "name": "Matino",
+      "distance_km": 0.793
+    },
+    {
+      "id": "mnw|40.05330|17.99218|pgl151",
+      "code": "pgl151",
+      "name": "Gallipoli",
+      "distance_km": 0.314
+    },
+    {
+      "id": "mnw|40.05425|18.01072|pgl191",
+      "code": "pgl191",
+      "name": "Ospedale",
+      "distance_km": 0.46
+    },
+    {
+      "id": "mnw|40.06287|18.44246|pgl027",
+      "code": "pgl027",
+      "name": "Cerfignano",
+      "distance_km": 0.204
+    },
+    {
+      "id": "mnw|40.06845|18.15863|pgl140",
+      "code": "pgl140",
+      "name": "Collepasso · 0.4 km NE",
+      "distance_km": 0.428
+    },
+    {
+      "id": "mnw|40.07366|18.09912|pgl036",
+      "code": "pgl036",
+      "name": "Tuglie",
+      "distance_km": 0.041
+    },
+    {
+      "id": "mnw|40.08234|18.42380|pgl266",
+      "code": "pgl266",
+      "name": "Minervino di Lecce · 0.9 km N",
+      "distance_km": 0.903
+    },
+    {
+      "id": "mnw|40.08291|18.29807|pgl223",
+      "code": "pgl223",
+      "name": "Scorrano",
+      "distance_km": 0.824
+    },
+    {
+      "id": "mnw|40.12924|18.43014|pgl242",
+      "code": "pgl242",
+      "name": "Giurdignano",
+      "distance_km": 0.631
+    },
+    {
+      "id": "mnw|40.13284|18.12931|pgl241",
+      "code": "pgl241",
+      "name": "Aradeo",
+      "distance_km": 0.404
+    },
+    {
+      "id": "mnw|40.14184|18.49250|pgl239",
+      "code": "pgl239",
+      "name": "Otranto · 0.8 km NO",
+      "distance_km": 0.828
+    },
+    {
+      "id": "mnw|40.14363|18.08014|pgl139",
+      "code": "pgl139",
+      "name": "Galatone",
+      "distance_km": 0.978
+    },
+    {
+      "id": "mnw|40.18152|18.29786|pgl274",
+      "code": "pgl274",
+      "name": "Castrignano De' Greci",
+      "distance_km": 0.909
+    },
+    {
+      "id": "mnw|40.18702|18.20016|pgl020",
+      "code": "pgl020",
+      "name": "Soleto · 0.5 km E",
+      "distance_km": 0.529
+    },
+    {
+      "id": "mnw|40.19143|18.21211|pgl288",
+      "code": "pgl288",
+      "name": "Soleto · 0.6 km SO",
+      "distance_km": 0.637
+    },
+    {
+      "id": "mnw|40.26104|17.90150|pgl245",
+      "code": "pgl245",
+      "name": "Porto Cesareo",
+      "distance_km": 0.256
+    },
+    {
+      "id": "mnw|40.30000|18.13000|pgl028",
+      "code": "pgl028",
+      "name": "Dragoni",
+      "distance_km": 0.282
+    },
+    {
+      "id": "mnw|40.30111|17.55722|pgl235",
+      "code": "pgl235",
+      "name": "Campomarino",
+      "distance_km": 1.245
+    },
+    {
+      "id": "mnw|40.31010|18.19516|pgl094",
+      "code": "pgl094",
+      "name": "Cavallino",
+      "distance_km": 0.598
+    },
+    {
+      "id": "mnw|40.32141|17.96433|pgl149",
+      "code": "pgl149",
+      "name": "Saraceni",
+      "distance_km": 0.87
+    },
+    {
+      "id": "mnw|40.32251|17.56953|pgl214",
+      "code": "pgl214",
+      "name": "Maruggio",
+      "distance_km": 0.235
+    },
+    {
+      "id": "mnw|40.34557|18.03778|pgl193",
+      "code": "pgl193",
+      "name": "Carmiano",
+      "distance_km": 0.392
+    },
+    {
+      "id": "mnw|40.35220|15.61792|cmp075",
+      "code": "cmp075",
+      "name": "Contrada Carrarola",
+      "distance_km": 0.664
+    },
+    {
+      "id": "mnw|40.35613|18.16491|pgl080",
+      "code": "pgl080",
+      "name": "Lecce · 0.7 km E",
+      "distance_km": 0.655
+    },
+    {
+      "id": "mnw|40.36275|18.22159|pgl295",
+      "code": "pgl295",
+      "name": "Marangi",
+      "distance_km": 0.899
+    },
+    {
+      "id": "mnw|40.36434|16.70544|bsl014",
+      "code": "bsl014",
+      "name": "Marconia",
+      "distance_km": 1.461
+    },
+    {
+      "id": "mnw|40.36679|18.07954|pgl281",
+      "code": "pgl281",
+      "name": "Convento",
+      "distance_km": 1.09
+    },
+    {
+      "id": "mnw|40.37820|16.44035|bsl050",
+      "code": "bsl050",
+      "name": "Craco-Sant'Angelo",
+      "distance_km": 0.337
+    },
+    {
+      "id": "mnw|40.38148|17.96558|pgl194",
+      "code": "pgl194",
+      "name": "Salice Salentino",
+      "distance_km": 0.519
+    },
+    {
+      "id": "mnw|40.38686|17.62668|pgl310",
+      "code": "pgl310",
+      "name": "Torre Bianca",
+      "distance_km": 1.398
+    },
+    {
+      "id": "mnw|40.38891|16.56044|bsl031",
+      "code": "bsl031",
+      "name": "Pisticci · 0.2 km NO",
+      "distance_km": 0.176
+    },
+    {
+      "id": "mnw|40.39007|16.55571|bsl037",
+      "code": "bsl037",
+      "name": "Pisticci · 0.3 km E",
+      "distance_km": 0.295
+    },
+    {
+      "id": "mnw|40.39918|15.34727|cmp074",
+      "code": "cmp074",
+      "name": "Roscigno",
+      "distance_km": 0.149
+    },
+    {
+      "id": "mnw|40.39988|17.62709|pgl230",
+      "code": "pgl230",
+      "name": "Manduria · 0.9 km E",
+      "distance_km": 0.867
+    },
+    {
+      "id": "mnw|40.43000|18.04000|pgl021",
+      "code": "pgl021",
+      "name": "Squinzano · 0.6 km N",
+      "distance_km": 0.575
+    },
+    {
+      "id": "mnw|40.43113|17.81724|pgl176",
+      "code": "pgl176",
+      "name": "San Pancrazio Salentino · 2.0 km SE",
+      "distance_km": 2.047
+    },
+    {
+      "id": "mnw|40.43309|18.04996|pgl216",
+      "code": "pgl216",
+      "name": "Squinzano · 0.8 km O",
+      "distance_km": 0.803
+    },
+    {
+      "id": "mnw|40.45343|17.25827|pgl128",
+      "code": "pgl128",
+      "name": "Ruberto · 1.0 km N",
+      "distance_km": 1.016
+    },
+    {
+      "id": "mnw|40.45675|17.25722|pgl305",
+      "code": "pgl305",
+      "name": "Ruberto · 0.7 km N",
+      "distance_km": 0.673
+    },
+    {
+      "id": "mnw|40.46828|17.25326|pgl283",
+      "code": "pgl283",
+      "name": "Taranto · 0.7 km SO",
+      "distance_km": 0.68
+    },
+    {
+      "id": "mnw|40.47756|15.16888|cmp091",
+      "code": "cmp091",
+      "name": "Santo Jorio",
+      "distance_km": 1.0
+    },
+    {
+      "id": "mnw|40.51611|17.55722|pgl325",
+      "code": "pgl325",
+      "name": "Carloto-Capitolo",
+      "distance_km": 2.168
+    },
+    {
+      "id": "mnw|40.52272|17.57984|pgl186",
+      "code": "pgl186",
+      "name": "Francavilla Fontana · 1.0 km NE",
+      "distance_km": 1.05
+    },
+    {
+      "id": "mnw|40.52705|16.04627|bsl021",
+      "code": "bsl021",
+      "name": "Castelmezzano",
+      "distance_km": 0.146
+    },
+    {
+      "id": "mnw|40.52833|15.13033|cmp078",
+      "code": "cmp078",
+      "name": "Altavilla Silentina",
+      "distance_km": 0.223
+    },
+    {
+      "id": "mnw|40.52891|17.58567|pgl317",
+      "code": "pgl317",
+      "name": "Francavilla Fontana · 0.3 km N",
+      "distance_km": 0.261
+    },
+    {
+      "id": "mnw|40.53106|17.58952|pgl315",
+      "code": "pgl315",
+      "name": "Francavilla Fontana · 0.4 km O",
+      "distance_km": 0.364
+    },
+    {
+      "id": "mnw|40.54905|17.71416|pgl204",
+      "code": "pgl204",
+      "name": "Latiano · 0.4 km NE",
+      "distance_km": 0.406
+    },
+    {
+      "id": "mnw|40.55581|16.66575|bsl042",
+      "code": "bsl042",
+      "name": "Montescaglioso · 0.6 km S",
+      "distance_km": 0.62
+    },
+    {
+      "id": "mnw|40.55582|16.66549|bsl028",
+      "code": "bsl028",
+      "name": "Montescaglioso · 40.5558, 16.6655",
+      "distance_km": 0.621
+    },
+    {
+      "id": "mnw|40.56885|16.49503|bsl008",
+      "code": "bsl008",
+      "name": "Miglionico",
+      "distance_km": 0.412
+    },
+    {
+      "id": "mnw|40.60590|17.22910|pgl208",
+      "code": "pgl208",
+      "name": "Crispiano · 0.4 km SE",
+      "distance_km": 0.397
+    },
+    {
+      "id": "mnw|40.61871|14.35760|cmp016",
+      "code": "cmp016",
+      "name": "Montecorbo",
+      "distance_km": 0.531
+    },
+    {
+      "id": "mnw|40.61942|17.92244|pgl143",
+      "code": "pgl143",
+      "name": "Balie · 1.2 km S",
+      "distance_km": 1.215
+    },
+    {
+      "id": "mnw|40.62056|17.92309|pgl131",
+      "code": "pgl131",
+      "name": "Balie · 1.3 km S",
+      "distance_km": 1.343
+    },
+    {
+      "id": "mnw|40.63362|17.03834|pgl217",
+      "code": "pgl217",
+      "name": "Mottola · 0.7 km NO",
+      "distance_km": 0.678
+    },
+    {
+      "id": "mnw|40.63436|14.41672|cmp290",
+      "code": "cmp290",
+      "name": "Piano di Sorrento",
+      "distance_km": 0.702
+    },
+    {
+      "id": "mnw|40.64136|17.03730|pgl270",
+      "code": "pgl270",
+      "name": "Mottola · 0.4 km SO",
+      "distance_km": 0.372
+    },
+    {
+      "id": "mnw|40.64454|17.92887|pgl244",
+      "code": "pgl244",
+      "name": "Santa Maria del Casale",
+      "distance_km": 1.025
+    },
+    {
+      "id": "mnw|40.66019|15.28597|cmp294",
+      "code": "cmp294",
+      "name": "Fontana",
+      "distance_km": 0.044
+    },
+    {
+      "id": "mnw|40.67611|8.58535|srd013",
+      "code": "srd013",
+      "name": "Ossi",
+      "distance_km": 0.623
+    },
+    {
+      "id": "mnw|40.67813|17.35158|pgl092",
+      "code": "pgl092",
+      "name": "Martina Franca · 3.0 km N",
+      "distance_km": 3.045
+    },
+    {
+      "id": "mnw|40.68824|17.41439|pgl155",
+      "code": "pgl155",
+      "name": "Galante",
+      "distance_km": 1.43
+    },
+    {
+      "id": "mnw|40.69299|15.20089|cmp073",
+      "code": "cmp073",
+      "name": "Serroni",
+      "distance_km": 1.283
+    },
+    {
+      "id": "mnw|40.70529|17.33955|pgl177",
+      "code": "pgl177",
+      "name": "Martina Franca · 0.2 km SO",
+      "distance_km": 0.227
+    },
+    {
+      "id": "mnw|40.70690|17.65806|pgl308",
+      "code": "pgl308",
+      "name": "Carovigno",
+      "distance_km": 0.079
+    },
+    {
+      "id": "mnw|40.72543|17.58006|pgl240",
+      "code": "pgl240",
+      "name": "Ostuni · 0.5 km NO",
+      "distance_km": 0.497
+    },
+    {
+      "id": "mnw|40.72572|14.84763|cmp095",
+      "code": "cmp095",
+      "name": "Castiglione del Genovesi · 0.2 km S",
+      "distance_km": 0.23
+    },
+    {
+      "id": "mnw|40.73508|17.33260|pgl252",
+      "code": "pgl252",
+      "name": "Pozzo la Chianca-Salamina-Difesa",
+      "distance_km": 2.07
+    },
+    {
+      "id": "mnw|40.73815|17.41204|pgl016",
+      "code": "pgl016",
+      "name": "Barbagiulo I · 0.2 km S",
+      "distance_km": 0.169
+    },
+    {
+      "id": "mnw|40.73874|17.44037|pgl015",
+      "code": "pgl015",
+      "name": "Carperi",
+      "distance_km": 1.091
+    },
+    {
+      "id": "mnw|40.73956|17.41571|pgl290",
+      "code": "pgl290",
+      "name": "Barbagiulo I · 0.4 km SO",
+      "distance_km": 0.429
+    },
+    {
+      "id": "mnw|40.75181|14.52127|cmp293",
+      "code": "cmp293",
+      "name": "Acanfora",
+      "distance_km": 1.486
+    },
+    {
+      "id": "mnw|40.75464|17.32836|pgl006",
+      "code": "pgl006",
+      "name": "Locorotondo · 0.4 km NO",
+      "distance_km": 0.433
+    },
+    {
+      "id": "mnw|40.75483|14.49733|cmp311",
+      "code": "cmp311",
+      "name": "Fossa di Valle",
+      "distance_km": 0.722
+    },
+    {
+      "id": "mnw|40.75585|17.31517|pgl250",
+      "code": "pgl250",
+      "name": "Locorotondo · 0.7 km E",
+      "distance_km": 0.742
+    },
+    {
+      "id": "mnw|40.75997|14.69158|cmp291",
+      "code": "cmp291",
+      "name": "Roccapiemonte",
+      "distance_km": 0.06
+    },
+    {
+      "id": "mnw|40.76126|14.83399|cmp096",
+      "code": "cmp096",
+      "name": "Gaiano",
+      "distance_km": 1.65
+    },
+    {
+      "id": "mnw|40.76189|17.32390|pgl082",
+      "code": "pgl082",
+      "name": "Locorotondo · 0.6 km S",
+      "distance_km": 0.587
+    },
+    {
+      "id": "mnw|40.76475|14.67477|cmp295",
+      "code": "cmp295",
+      "name": "Casali-San Potito",
+      "distance_km": 0.097
+    },
+    {
+      "id": "mnw|40.78031|17.23931|pgl024",
+      "code": "pgl024",
+      "name": "Alberobello",
+      "distance_km": 0.533
+    },
+    {
+      "id": "mnw|40.78620|17.12335|pgl045",
+      "code": "pgl045",
+      "name": "Noci · 0.9 km N",
+      "distance_km": 0.869
+    },
+    {
+      "id": "mnw|40.78841|13.42233|laz171",
+      "code": "laz171",
+      "name": "Ventotene",
+      "distance_km": 0.776
+    },
+    {
+      "id": "mnw|40.78921|14.51576|cmp059",
+      "code": "cmp059",
+      "name": "Fornillo",
+      "distance_km": 1.29
+    },
+    {
+      "id": "mnw|40.79449|17.12297|pgl311",
+      "code": "pgl311",
+      "name": "Noci · 0.3 km E",
+      "distance_km": 0.339
+    },
+    {
+      "id": "mnw|40.79815|16.78315|pgl104",
+      "code": "pgl104",
+      "name": "Santeramo in Colle · 2.2 km O",
+      "distance_km": 2.154
+    },
+    {
+      "id": "mnw|40.80154|14.19384|cmp304",
+      "code": "cmp304",
+      "name": "Posillipo · 1.4 km NE",
+      "distance_km": 1.354
+    },
+    {
+      "id": "mnw|40.80382|14.20069|cmp307",
+      "code": "cmp307",
+      "name": "Posillipo · 1.0 km N",
+      "distance_km": 0.999
+    },
+    {
+      "id": "mnw|40.81634|17.31868|pgl268",
+      "code": "pgl268",
+      "name": "Cocolicchio",
+      "distance_km": 0.424
+    },
+    {
+      "id": "mnw|40.82410|17.32781|pgl169",
+      "code": "pgl169",
+      "name": "Selva di Fasano",
+      "distance_km": 0.646
+    },
+    {
+      "id": "mnw|40.82560|16.55241|pgl226",
+      "code": "pgl226",
+      "name": "Altamura · 0.3 km NO",
+      "distance_km": 0.269
+    },
+    {
+      "id": "mnw|40.83401|17.36373|pgl091",
+      "code": "pgl091",
+      "name": "Fasano · 0.4 km NO",
+      "distance_km": 0.396
+    },
+    {
+      "id": "mnw|40.83625|14.23712|cmp292",
+      "code": "cmp292",
+      "name": "Villanova · 1.8 km O",
+      "distance_km": 1.751
+    },
+    {
+      "id": "mnw|40.83772|16.58540|pgl329",
+      "code": "pgl329",
+      "name": "Madonna del Buon Cammino",
+      "distance_km": 2.007
+    },
+    {
+      "id": "mnw|40.84106|14.22908|cmp080",
+      "code": "cmp080",
+      "name": "Villanova · 1.4 km SO",
+      "distance_km": 1.352
+    },
+    {
+      "id": "mnw|40.84518|17.15214|pgl249",
+      "code": "pgl249",
+      "name": "San Biagio · 0.5 km SO",
+      "distance_km": 0.52
+    },
+    {
+      "id": "mnw|40.84862|17.11760|pgl316",
+      "code": "pgl316",
+      "name": "Putignano · 0.5 km NE",
+      "distance_km": 0.452
+    },
+    {
+      "id": "mnw|40.84989|17.12043|pgl313",
+      "code": "pgl313",
+      "name": "Putignano · 0.2 km NE",
+      "distance_km": 0.179
+    },
+    {
+      "id": "mnw|40.87933|15.17989|cmp306",
+      "code": "cmp306",
+      "name": "Lioni",
+      "distance_km": 0.335
+    },
+    {
+      "id": "mnw|40.88434|16.76626|pgl068",
+      "code": "pgl068",
+      "name": "Cassano delle Murge",
+      "distance_km": 0.758
+    },
+    {
+      "id": "mnw|40.88636|17.16369|pgl095",
+      "code": "pgl095",
+      "name": "Castellana",
+      "distance_km": 0.152
+    },
+    {
+      "id": "mnw|40.89064|16.84546|pgl119",
+      "code": "pgl119",
+      "name": "Acquaviva delle Fonti · 0.7 km N",
+      "distance_km": 0.734
+    },
+    {
+      "id": "mnw|40.91450|8.78006|srd046",
+      "code": "srd046",
+      "name": "La Ciaccia",
+      "distance_km": 0.221
+    },
+    {
+      "id": "mnw|40.93852|14.24903|cmp296",
+      "code": "cmp296",
+      "name": "Grumo Nevano",
+      "distance_km": 0.952
+    },
+    {
+      "id": "mnw|40.96653|8.88308|srd168",
+      "code": "srd168",
+      "name": "Badesi",
+      "distance_km": 0.223
+    },
+    {
+      "id": "mnw|40.96879|16.08565|pgl228",
+      "code": "pgl228",
+      "name": "Spinazzola · 0.7 km SE",
+      "distance_km": 0.704
+    },
+    {
+      "id": "mnw|40.97232|16.08374|pgl299",
+      "code": "pgl299",
+      "name": "Spinazzola · 1.1 km SE",
+      "distance_km": 1.114
+    },
+    {
+      "id": "mnw|40.97641|17.13001|pgl320",
+      "code": "pgl320",
+      "name": "Conversano · 1.7 km SO",
+      "distance_km": 1.665
+    },
+    {
+      "id": "mnw|40.99377|17.21161|pgl231",
+      "code": "pgl231",
+      "name": "Polignano a Mare · 0.8 km E",
+      "distance_km": 0.847
+    },
+    {
+      "id": "mnw|40.99570|17.21321|pgl341",
+      "code": "pgl341",
+      "name": "Polignano a Mare · 0.8 km SE",
+      "distance_km": 0.796
+    },
+    {
+      "id": "mnw|40.99624|17.21409|pgl267",
+      "code": "pgl267",
+      "name": "Polignano a Mare · 40.9962, 17.2141",
+      "distance_km": 0.766
+    },
+    {
+      "id": "mnw|41.00470|17.00278|pgl221",
+      "code": "pgl221",
+      "name": "Rutigliano · 0.6 km N",
+      "distance_km": 0.631
+    },
+    {
+      "id": "mnw|41.00644|16.86499|pgl207",
+      "code": "pgl207",
+      "name": "Adelfia · 0.7 km SE",
+      "distance_km": 0.69
+    },
+    {
+      "id": "mnw|41.00959|16.97151|pgl259",
+      "code": "pgl259",
+      "name": "Rutigliano · 2.9 km E",
+      "distance_km": 2.859
+    },
+    {
+      "id": "mnw|41.02525|14.49677|cmp300",
+      "code": "cmp300",
+      "name": "Arienzo · 0.2 km N",
+      "distance_km": 0.245
+    },
+    {
+      "id": "mnw|41.03860|16.75002|pgl275",
+      "code": "pgl275",
+      "name": "Bitetto",
+      "distance_km": 0.358
+    },
+    {
+      "id": "mnw|41.04387|16.88655|pgl072",
+      "code": "pgl072",
+      "name": "Valenzano",
+      "distance_km": 0.138
+    },
+    {
+      "id": "mnw|41.05095|17.08017|pgl110",
+      "code": "pgl110",
+      "name": "Mola di Bari · 1.3 km NE",
+      "distance_km": 1.299
+    },
+    {
+      "id": "mnw|41.05283|17.08192|pgl025",
+      "code": "pgl025",
+      "name": "Mola di Bari · 1.0 km NE",
+      "distance_km": 1.044
+    },
+    {
+      "id": "mnw|41.06441|14.64036|cmp287",
+      "code": "cmp287",
+      "name": "Montesarchio",
+      "distance_km": 0.243
+    },
+    {
+      "id": "mnw|41.07420|14.33066|cmp308",
+      "code": "cmp308",
+      "name": "Caserta",
+      "distance_km": 0.224
+    },
+    {
+      "id": "mnw|41.08585|16.86834|pgl265",
+      "code": "pgl265",
+      "name": "Carbonara di Bari",
+      "distance_km": 2.137
+    },
+    {
+      "id": "mnw|41.09507|16.42422|pgl253",
+      "code": "pgl253",
+      "name": "Calendano",
+      "distance_km": 1.762
+    },
+    {
+      "id": "mnw|41.09697|16.95973|pgl260",
+      "code": "pgl260",
+      "name": "San Giorgio · 1.1 km E",
+      "distance_km": 1.082
+    },
+    {
+      "id": "mnw|41.10015|16.55317|pgl257",
+      "code": "pgl257",
+      "name": "De Crescenzio",
+      "distance_km": 0.266
+    },
+    {
+      "id": "mnw|41.10616|16.68862|pgl168",
+      "code": "pgl168",
+      "name": "Bitonto · 0.5 km NE",
+      "distance_km": 0.473
+    },
+    {
+      "id": "mnw|41.12140|16.57927|pgl256",
+      "code": "pgl256",
+      "name": "Sovereto",
+      "distance_km": 0.529
+    },
+    {
+      "id": "mnw|41.12470|16.85221|pgl323",
+      "code": "pgl323",
+      "name": "Bari",
+      "distance_km": 1.542
+    },
+    {
+      "id": "mnw|41.13097|14.77538|cmp305",
+      "code": "cmp305",
+      "name": "Benevento · 0.2 km E",
+      "distance_km": 0.235
+    },
+    {
+      "id": "mnw|41.13221|14.64529|cmp087",
+      "code": "cmp087",
+      "name": "Campoli del Monte Taburno",
+      "distance_km": 0.192
+    },
+    {
+      "id": "mnw|41.13221|16.50419|pgl255",
+      "code": "pgl255",
+      "name": "Ruvo di Puglia · 2.3 km SO",
+      "distance_km": 2.334
+    },
+    {
+      "id": "mnw|41.13295|16.55175|pgl005",
+      "code": "pgl005",
+      "name": "Terlizzi",
+      "distance_km": 0.689
+    },
+    {
+      "id": "mnw|41.14428|16.56525|pgl258",
+      "code": "pgl258",
+      "name": "Piscina Rossa",
+      "distance_km": 1.761
+    },
+    {
+      "id": "mnw|41.18276|14.16444|cmp015",
+      "code": "cmp015",
+      "name": "Taverna di Pignataro Maggiore",
+      "distance_km": 0.783
+    },
+    {
+      "id": "mnw|41.18344|16.66584|pgl199",
+      "code": "pgl199",
+      "name": "Giovinazzo · 0.4 km NE",
+      "distance_km": 0.43
+    },
+    {
+      "id": "mnw|41.19436|14.35881|cmp101",
+      "code": "cmp101",
+      "name": "Cameralonga",
+      "distance_km": 0.23
+    },
+    {
+      "id": "mnw|41.21181|16.54338|pgl278",
+      "code": "pgl278",
+      "name": "Zona Artigianale e P.I.P.",
+      "distance_km": 1.135
+    },
+    {
+      "id": "mnw|41.23660|13.09076|laz542",
+      "code": "laz542",
+      "name": "San Felice Circeo",
+      "distance_km": 0.291
+    },
+    {
+      "id": "mnw|41.23887|16.50092|pgl190",
+      "code": "pgl190",
+      "name": "Bisceglie · 0.4 km N",
+      "distance_km": 0.419
+    },
+    {
+      "id": "mnw|41.26568|16.12018|pgl282",
+      "code": "pgl282",
+      "name": "San Ferdinando di Puglia · 5.8 km NO",
+      "distance_km": 5.843
+    },
+    {
+      "id": "mnw|41.26796|15.89649|pgl219",
+      "code": "pgl219",
+      "name": "Cerignola · 0.3 km S",
+      "distance_km": 0.313
+    },
+    {
+      "id": "mnw|41.28091|13.67835|laz246",
+      "code": "laz246",
+      "name": "Castellonorato",
+      "distance_km": 0.156
+    },
+    {
+      "id": "mnw|41.28179|13.14935|laz275",
+      "code": "laz275",
+      "name": "Macchia di Piano II",
+      "distance_km": 0.841
+    },
+    {
+      "id": "mnw|41.28800|14.67567|cmp018",
+      "code": "cmp018",
+      "name": "Gugliete",
+      "distance_km": 0.417
+    },
+    {
+      "id": "mnw|41.29912|16.07008|pgl107",
+      "code": "pgl107",
+      "name": "San Ferdinando di Puglia · 0.4 km N",
+      "distance_km": 0.392
+    },
+    {
+      "id": "mnw|41.30364|16.07746|pgl276",
+      "code": "pgl276",
+      "name": "San Ferdinando di Puglia · 0.6 km O",
+      "distance_km": 0.595
+    },
+    {
+      "id": "mnw|41.31305|16.28152|pgl171",
+      "code": "pgl171",
+      "name": "Barletta · 0.1 km N",
+      "distance_km": 0.138
+    },
+    {
+      "id": "mnw|41.31536|16.25912|pgl173",
+      "code": "pgl173",
+      "name": "Barletta · 1.9 km E",
+      "distance_km": 1.885
+    },
+    {
+      "id": "mnw|41.32924|14.32991|cmp063",
+      "code": "cmp063",
+      "name": "Alife · 0.5 km SE",
+      "distance_km": 0.489
+    },
+    {
+      "id": "mnw|41.34489|14.33038|cmp069",
+      "code": "cmp069",
+      "name": "Colleferro",
+      "distance_km": 0.596
+    },
+    {
+      "id": "mnw|41.34997|14.36496|cmp309",
+      "code": "cmp309",
+      "name": "Piedimonte d'Alife",
+      "distance_km": 0.143
+    },
+    {
+      "id": "mnw|41.35528|14.68515|cmp104",
+      "code": "cmp104",
+      "name": "Area Industriale",
+      "distance_km": 1.43
+    },
+    {
+      "id": "mnw|41.35542|15.07476|pgl218",
+      "code": "pgl218",
+      "name": "Roseto Valfortore",
+      "distance_km": 2.966
+    },
+    {
+      "id": "mnw|41.36228|16.09266|pgl206",
+      "code": "pgl206",
+      "name": "Trinitapoli",
+      "distance_km": 0.699
+    },
+    {
+      "id": "mnw|41.36290|15.19177|pgl333",
+      "code": "pgl333",
+      "name": "Castelluccio Valmaggiore",
+      "distance_km": 2.314
+    },
+    {
+      "id": "mnw|41.36641|13.45238|laz195",
+      "code": "laz195",
+      "name": "Passignano",
+      "distance_km": 1.408
+    },
+    {
+      "id": "mnw|41.39358|14.97164|cmp090",
+      "code": "cmp090",
+      "name": "Baselice",
+      "distance_km": 0.18
+    },
+    {
+      "id": "mnw|41.41592|15.01720|cmp027",
+      "code": "cmp027",
+      "name": "San Bartolomeo in Galdo",
+      "distance_km": 0.01
+    },
+    {
+      "id": "mnw|41.42000|12.97000|laz045",
+      "code": "laz045",
+      "name": "Scopeto Madonna Gulia",
+      "distance_km": 0.731
+    },
+    {
+      "id": "mnw|41.42238|15.89090|pgl322",
+      "code": "pgl322",
+      "name": "Masseria Inacquata",
+      "distance_km": 3.621
+    },
+    {
+      "id": "mnw|41.45230|15.52588|pgl332",
+      "code": "pgl332",
+      "name": "Via Napoli Hotel Holiday",
+      "distance_km": 2.201
+    },
+    {
+      "id": "mnw|41.45474|15.53092|pgl008",
+      "code": "pgl008",
+      "name": "Foggia",
+      "distance_km": 1.795
+    },
+    {
+      "id": "mnw|41.45563|15.95520|pgl277",
+      "code": "pgl277",
+      "name": "Zapponeta",
+      "distance_km": 0.182
+    },
+    {
+      "id": "mnw|41.45714|13.85290|laz162",
+      "code": "laz162",
+      "name": "Pietà",
+      "distance_km": 0.417
+    },
+    {
+      "id": "mnw|41.45807|13.66744|laz216",
+      "code": "laz216",
+      "name": "Pontecorvo · 0.1 km NO",
+      "distance_km": 0.121
+    },
+    {
+      "id": "mnw|41.46649|13.66279|laz540",
+      "code": "laz540",
+      "name": "Pontecorvo · 0.9 km S",
+      "distance_km": 0.921
+    },
+    {
+      "id": "mnw|41.46712|13.55952|laz188",
+      "code": "laz188",
+      "name": "Colle Ponte",
+      "distance_km": 0.045
+    },
+    {
+      "id": "mnw|41.46811|13.83152|laz543",
+      "code": "laz543",
+      "name": "Ponte Marozzo",
+      "distance_km": 0.146
+    },
+    {
+      "id": "mnw|41.49359|12.80101|laz286",
+      "code": "laz286",
+      "name": "Castelverde",
+      "distance_km": 0.184
+    },
+    {
+      "id": "mnw|41.49574|12.61684|laz549",
+      "code": "laz549",
+      "name": "Casale Vignarola",
+      "distance_km": 2.259
+    },
+    {
+      "id": "mnw|41.49808|13.06322|laz211",
+      "code": "laz211",
+      "name": "Sezze · 0.3 km NO",
+      "distance_km": 0.277
+    },
+    {
+      "id": "mnw|41.49901|13.56806|laz570",
+      "code": "laz570",
+      "name": "Starze · 0.4 km N",
+      "distance_km": 0.429
+    },
+    {
+      "id": "mnw|41.49961|13.56852|laz595",
+      "code": "laz595",
+      "name": "Starze · 41.4996, 13.5685",
+      "distance_km": 0.355
+    },
+    {
+      "id": "mnw|41.50000|12.92000|laz013",
+      "code": "laz013",
+      "name": "Epidaffio",
+      "distance_km": 0.492
+    },
+    {
+      "id": "mnw|41.50000|13.07111|laz274",
+      "code": "laz274",
+      "name": "Sezze · 0.8 km O",
+      "distance_km": 0.779
+    },
+    {
+      "id": "mnw|41.50164|15.34706|pgl303",
+      "code": "pgl303",
+      "name": "Lucera · 0.8 km NO",
+      "distance_km": 0.79
+    },
+    {
+      "id": "mnw|41.50176|14.50214|mls065",
+      "code": "mls065",
+      "name": "Fonte delle Felci",
+      "distance_km": 0.782
+    },
+    {
+      "id": "mnw|41.50772|15.86613|pgl195",
+      "code": "pgl195",
+      "name": "Scalo dei Saraceni",
+      "distance_km": 3.79
+    },
+    {
+      "id": "mnw|41.52686|14.55835|mls007",
+      "code": "mls007",
+      "name": "Baranello",
+      "distance_km": 0.05
+    },
+    {
+      "id": "mnw|41.52802|14.14906|mls002",
+      "code": "mls002",
+      "name": "Sant'Eusanio",
+      "distance_km": 0.207
+    },
+    {
+      "id": "mnw|41.52956|12.94341|laz276",
+      "code": "laz276",
+      "name": "Latina Scalo",
+      "distance_km": 0.292
+    },
+    {
+      "id": "mnw|41.55007|15.28325|pgl287",
+      "code": "pgl287",
+      "name": "Sterparone",
+      "distance_km": 6.209
+    },
+    {
+      "id": "mnw|41.57000|14.68000|mls001",
+      "code": "mls001",
+      "name": "San Giovanni in Golfo II",
+      "distance_km": 0.243
+    },
+    {
+      "id": "mnw|41.57407|13.31997|laz021",
+      "code": "laz021",
+      "name": "Caporcegli",
+      "distance_km": 0.743
+    },
+    {
+      "id": "mnw|41.59698|14.24336|mls072",
+      "code": "mls072",
+      "name": "Ramiera Vecchia",
+      "distance_km": 0.433
+    },
+    {
+      "id": "mnw|41.62258|13.32674|laz050",
+      "code": "laz050",
+      "name": "Le Rase",
+      "distance_km": 1.336
+    },
+    {
+      "id": "mnw|41.62286|15.90570|pgl296",
+      "code": "pgl296",
+      "name": "Manfredonia",
+      "distance_km": 1.389
+    },
+    {
+      "id": "mnw|41.62876|13.23108|laz239",
+      "code": "laz239",
+      "name": "Supino · 0.9 km S",
+      "distance_km": 0.872
+    },
+    {
+      "id": "mnw|41.63254|13.35180|laz241",
+      "code": "laz241",
+      "name": "Frosinone · 1.2 km NO",
+      "distance_km": 1.199
+    },
+    {
+      "id": "mnw|41.65783|12.76697|laz284",
+      "code": "laz284",
+      "name": "Colli di Cicerone",
+      "distance_km": 2.707
+    },
+    {
+      "id": "mnw|41.66791|12.50914|laz143",
+      "code": "laz143",
+      "name": "Pomeziameteo",
+      "distance_km": 0.032
+    },
+    {
+      "id": "mnw|41.67861|12.70016|laz091",
+      "code": "laz091",
+      "name": "Lanuvio · 0.8 km SO",
+      "distance_km": 0.808
+    },
+    {
+      "id": "mnw|41.68000|13.25000|laz036",
+      "code": "laz036",
+      "name": "Ferentino · 1.3 km N",
+      "distance_km": 1.347
+    },
+    {
+      "id": "mnw|41.68695|13.58069|laz041",
+      "code": "laz041",
+      "name": "Ponte Marmone",
+      "distance_km": 1.182
+    },
+    {
+      "id": "mnw|41.68862|13.34118|laz144",
+      "code": "laz144",
+      "name": "Tecchiena · 0.4 km E",
+      "distance_km": 0.352
+    },
+    {
+      "id": "mnw|41.69321|13.25182|laz033",
+      "code": "laz033",
+      "name": "Ferentino · 0.4 km SE",
+      "distance_km": 0.427
+    },
+    {
+      "id": "mnw|41.69603|13.54861|laz111",
+      "code": "laz111",
+      "name": "Staccone",
+      "distance_km": 0.494
+    },
+    {
+      "id": "mnw|41.70186|13.35126|laz562",
+      "code": "laz562",
+      "name": "Tecchiena · 1.6 km S",
+      "distance_km": 1.593
+    },
+    {
+      "id": "mnw|41.70399|15.72477|pgl060",
+      "code": "pgl060",
+      "name": "San Giovanni Rotondo",
+      "distance_km": 0.364
+    },
+    {
+      "id": "mnw|41.70656|15.65176|pgl269",
+      "code": "pgl269",
+      "name": "Borgo Celano",
+      "distance_km": 0.569
+    },
+    {
+      "id": "mnw|41.72057|12.68471|laz169",
+      "code": "laz169",
+      "name": "Le Piagge",
+      "distance_km": 0.778
+    },
+    {
+      "id": "mnw|41.72062|13.03009|laz298",
+      "code": "laz298",
+      "name": "Recchia",
+      "distance_km": 1.171
+    },
+    {
+      "id": "mnw|41.72215|13.61409|laz039",
+      "code": "laz039",
+      "name": "Sora · 0.4 km S",
+      "distance_km": 0.431
+    },
+    {
+      "id": "mnw|41.72714|13.65957|laz534",
+      "code": "laz534",
+      "name": "Colle di Sora II",
+      "distance_km": 0.274
+    },
+    {
+      "id": "mnw|41.72741|12.67559|laz537",
+      "code": "laz537",
+      "name": "Ariccia",
+      "distance_km": 0.802
+    },
+    {
+      "id": "mnw|41.72829|12.83100|laz200",
+      "code": "laz200",
+      "name": "Lariano",
+      "distance_km": 1.109
+    },
+    {
+      "id": "mnw|41.73054|13.35729|laz099",
+      "code": "laz099",
+      "name": "Fontana Scurano",
+      "distance_km": 0.869
+    },
+    {
+      "id": "mnw|41.73532|13.68902|laz601",
+      "code": "laz601",
+      "name": "Spimalva",
+      "distance_km": 0.436
+    },
+    {
+      "id": "mnw|41.74780|13.14871|laz054",
+      "code": "laz054",
+      "name": "Anagni",
+      "distance_km": 0.734
+    },
+    {
+      "id": "mnw|41.75015|12.77039|laz546",
+      "code": "laz546",
+      "name": "Domatore",
+      "distance_km": 0.179
+    },
+    {
+      "id": "mnw|41.76216|12.30224|laz594",
+      "code": "laz594",
+      "name": "Ostia · 0.5 km SO",
+      "distance_km": 0.464
+    },
+    {
+      "id": "mnw|41.76238|13.36272|laz293",
+      "code": "laz293",
+      "name": "Collepardo",
+      "distance_km": 0.516
+    },
+    {
+      "id": "mnw|41.76847|12.63998|laz295",
+      "code": "laz295",
+      "name": "Castel De Paolis",
+      "distance_km": 1.421
+    },
+    {
+      "id": "mnw|41.76872|12.66102|laz544",
+      "code": "laz544",
+      "name": "Marino · 0.2 km NO",
+      "distance_km": 0.198
+    },
+    {
+      "id": "mnw|41.77569|12.65794|laz600",
+      "code": "laz600",
+      "name": "Marino · 0.7 km S",
+      "distance_km": 0.658
+    },
+    {
+      "id": "mnw|41.77930|14.10493|abr114",
+      "code": "abr114",
+      "name": "Castel di Sangro",
+      "distance_km": 0.531
+    },
+    {
+      "id": "mnw|41.77995|15.83368|pgl111",
+      "code": "pgl111",
+      "name": "Cagnano Varano · 7.4 km NO",
+      "distance_km": 7.419
+    },
+    {
+      "id": "mnw|41.78640|12.43870|laz094",
+      "code": "laz094",
+      "name": "Spinaceto",
+      "distance_km": 0.918
+    },
+    {
+      "id": "mnw|41.79019|12.75809|laz110",
+      "code": "laz110",
+      "name": "Colle della Castagna",
+      "distance_km": 2.421
+    },
+    {
+      "id": "mnw|41.80000|13.23000|laz043",
+      "code": "laz043",
+      "name": "Fiuggi · 0.6 km SO",
+      "distance_km": 0.565
+    },
+    {
+      "id": "mnw|41.82016|15.99169|pgl126",
+      "code": "pgl126",
+      "name": "II Parchetto",
+      "distance_km": 4.59
+    },
+    {
+      "id": "mnw|41.82206|13.32928|laz277",
+      "code": "laz277",
+      "name": "Campocatino · 1.3 km N",
+      "distance_km": 1.297
+    },
+    {
+      "id": "mnw|41.82463|12.88931|laz252",
+      "code": "laz252",
+      "name": "Palestrina · 1.1 km NO",
+      "distance_km": 1.097
+    },
+    {
+      "id": "mnw|41.83000|13.33000|laz042",
+      "code": "laz042",
+      "name": "Campocatino · 0.5 km NE",
+      "distance_km": 0.462
+    },
+    {
+      "id": "mnw|41.83311|12.50879|laz266",
+      "code": "laz266",
+      "name": "Casale Smeraldi",
+      "distance_km": 3.739
+    },
+    {
+      "id": "mnw|41.83655|14.26705|mls071",
+      "code": "mls071",
+      "name": "Capracotta · 0.4 km S",
+      "distance_km": 0.38
+    },
+    {
+      "id": "mnw|41.85313|12.67666|laz585",
+      "code": "laz585",
+      "name": "Torre Gaia",
+      "distance_km": 2.98
+    },
+    {
+      "id": "mnw|41.86284|12.46791|laz296",
+      "code": "laz296",
+      "name": "Rome · 4.8 km NE",
+      "distance_km": 4.836
+    },
+    {
+      "id": "mnw|41.86403|13.03265|laz176",
+      "code": "laz176",
+      "name": "Olevano Romano",
+      "distance_km": 0.656
+    },
+    {
+      "id": "mnw|41.87311|12.57494|laz590",
+      "code": "laz590",
+      "name": "Torrenova",
+      "distance_km": 4.307
+    },
+    {
+      "id": "mnw|41.87748|12.45241|laz555",
+      "code": "laz555",
+      "name": "Rome · 5.1 km E",
+      "distance_km": 5.135
+    },
+    {
+      "id": "mnw|41.87753|12.45242|laz226",
+      "code": "laz226",
+      "name": "Rome · 41.8775, 12.4524",
+      "distance_km": 5.133
+    },
+    {
+      "id": "mnw|41.88000|12.57000|laz056",
+      "code": "laz056",
+      "name": "Lunghezza · 4.2 km N",
+      "distance_km": 4.224
+    },
+    {
+      "id": "mnw|41.88328|16.16920|pgl040",
+      "code": "pgl040",
+      "name": "Vieste · 0.2 km SE",
+      "distance_km": 0.224
+    },
+    {
+      "id": "mnw|41.89159|12.63511|laz215",
+      "code": "laz215",
+      "name": "Colle Monfortani",
+      "distance_km": 1.216
+    },
+    {
+      "id": "mnw|41.89476|12.56466|laz230",
+      "code": "laz230",
+      "name": "Lunghezza · 2.9 km NE",
+      "distance_km": 2.885
+    },
+    {
+      "id": "mnw|41.90428|12.44523|laz257",
+      "code": "laz257",
+      "name": "Rome · 5.6 km E",
+      "distance_km": 5.641
+    },
+    {
+      "id": "mnw|41.94160|16.02029|pgl300",
+      "code": "pgl300",
+      "name": "Peschici · 0.5 km NO",
+      "distance_km": 0.529
+    },
+    {
+      "id": "mnw|41.95630|12.80268|laz177",
+      "code": "laz177",
+      "name": "Tivoli · 0.4 km N",
+      "distance_km": 0.369
+    },
+    {
+      "id": "mnw|41.95997|12.53305|laz232",
+      "code": "laz232",
+      "name": "Casale Bufalotta",
+      "distance_km": 2.951
+    },
+    {
+      "id": "mnw|41.98278|13.27651|abr132",
+      "code": "abr132",
+      "name": "Camporotondo",
+      "distance_km": 0.102
+    },
+    {
+      "id": "mnw|41.99668|12.39260|laz303",
+      "code": "laz303",
+      "name": "La Storta · 0.9 km NO",
+      "distance_km": 0.85
+    },
+    {
+      "id": "mnw|41.99932|12.37839|laz203",
+      "code": "laz203",
+      "name": "La Storta · 0.4 km E",
+      "distance_km": 0.415
+    },
+    {
+      "id": "mnw|42.04275|12.63991|laz307",
+      "code": "laz307",
+      "name": "Mentana",
+      "distance_km": 0.89
+    },
+    {
+      "id": "mnw|42.06036|12.61628|laz282",
+      "code": "laz282",
+      "name": "Monterotondo · 1.0 km S",
+      "distance_km": 1.015
+    },
+    {
+      "id": "mnw|42.06271|12.59318|laz556",
+      "code": "laz556",
+      "name": "San Martinello",
+      "distance_km": 1.531
+    },
+    {
+      "id": "mnw|42.06996|13.25317|abr126",
+      "code": "abr126",
+      "name": "Tagliacozzo",
+      "distance_km": 0.144
+    },
+    {
+      "id": "mnw|42.06998|13.05287|abr133",
+      "code": "abr133",
+      "name": "Pezzetaglie",
+      "distance_km": 0.121
+    },
+    {
+      "id": "mnw|42.07077|11.81683|laz290",
+      "code": "laz290",
+      "name": "Poggio Martino",
+      "distance_km": 0.661
+    },
+    {
+      "id": "mnw|42.07118|13.21292|abr127",
+      "code": "abr127",
+      "name": "Roccacerro",
+      "distance_km": 0.685
+    },
+    {
+      "id": "mnw|42.07127|12.28595|laz179",
+      "code": "laz179",
+      "name": "Anguillara Sabazia",
+      "distance_km": 0.901
+    },
+    {
+      "id": "mnw|42.07302|14.03000|abr130",
+      "code": "abr130",
+      "name": "Roccacaramanico",
+      "distance_km": 3.643
+    },
+    {
+      "id": "mnw|42.07674|12.37952|laz565",
+      "code": "laz565",
+      "name": "Monte Massaruccio",
+      "distance_km": 0.777
+    },
+    {
+      "id": "mnw|42.08910|14.20521|abr063",
+      "code": "abr063",
+      "name": "Fara San Martino",
+      "distance_km": 0.487
+    },
+    {
+      "id": "mnw|42.09223|11.79975|laz287",
+      "code": "laz287",
+      "name": "Civitavecchia",
+      "distance_km": 0.273
+    },
+    {
+      "id": "mnw|42.12634|13.84147|abr121",
+      "code": "abr121",
+      "name": "Corfinio",
+      "distance_km": 0.566
+    },
+    {
+      "id": "mnw|42.14550|12.49476|laz311",
+      "code": "laz311",
+      "name": "Morlupo · 0.8 km NE",
+      "distance_km": 0.849
+    },
+    {
+      "id": "mnw|42.14668|11.89855|laz539",
+      "code": "laz539",
+      "name": "La Bianca",
+      "distance_km": 0.546
+    },
+    {
+      "id": "mnw|42.15445|12.48606|laz173",
+      "code": "laz173",
+      "name": "Trullo",
+      "distance_km": 0.663
+    },
+    {
+      "id": "mnw|42.15915|12.78669|laz234",
+      "code": "laz234",
+      "name": "Nerola · 0.2 km NO",
+      "distance_km": 0.157
+    },
+    {
+      "id": "mnw|42.18390|12.66215|laz579",
+      "code": "laz579",
+      "name": "Valle Falsa",
+      "distance_km": 0.496
+    },
+    {
+      "id": "mnw|42.19492|12.33866|laz302",
+      "code": "laz302",
+      "name": "Vigne Nuove",
+      "distance_km": 1.758
+    },
+    {
+      "id": "mnw|42.20255|13.52594|abr128",
+      "code": "abr128",
+      "name": "Rocca di Mezzo",
+      "distance_km": 0.655
+    },
+    {
+      "id": "mnw|42.27137|12.66669|laz598",
+      "code": "laz598",
+      "name": "San Luigi · 0.6 km NO",
+      "distance_km": 0.646
+    },
+    {
+      "id": "mnw|42.28384|12.21232|laz548",
+      "code": "laz548",
+      "name": "Ronciglione · 0.6 km N",
+      "distance_km": 0.608
+    },
+    {
+      "id": "mnw|42.29377|12.22050|laz267",
+      "code": "laz267",
+      "name": "Ronciglione · 0.7 km SO",
+      "distance_km": 0.709
+    },
+    {
+      "id": "mnw|42.33058|12.21704|laz571",
+      "code": "laz571",
+      "name": "San Rocco",
+      "distance_km": 0.213
+    },
+    {
+      "id": "mnw|42.34312|13.42050|abr074",
+      "code": "abr074",
+      "name": "Sant'Elia · 0.3 km SO",
+      "distance_km": 0.302
+    },
+    {
+      "id": "mnw|42.35127|14.11078|abr043",
+      "code": "abr043",
+      "name": "Vallemare",
+      "distance_km": 0.573
+    },
+    {
+      "id": "mnw|42.35684|14.13879|abr018",
+      "code": "abr018",
+      "name": "Palozzo",
+      "distance_km": 1.879
+    },
+    {
+      "id": "mnw|42.35986|14.08369|abr136",
+      "code": "abr136",
+      "name": "Tre Croci",
+      "distance_km": 0.287
+    },
+    {
+      "id": "mnw|42.36800|13.34221|abr034",
+      "code": "abr034",
+      "name": "Coppito",
+      "distance_km": 0.137
+    },
+    {
+      "id": "mnw|42.36938|14.17166|abr070",
+      "code": "abr070",
+      "name": "Villa degli Ulivi",
+      "distance_km": 0.454
+    },
+    {
+      "id": "mnw|42.37012|12.47189|laz551",
+      "code": "laz551",
+      "name": "Frangellini",
+      "distance_km": 0.154
+    },
+    {
+      "id": "mnw|42.41515|12.11316|laz212",
+      "code": "laz212",
+      "name": "Viterbo · 0.8 km NO",
+      "distance_km": 0.778
+    },
+    {
+      "id": "mnw|42.42135|12.23185|laz593",
+      "code": "laz593",
+      "name": "Soriano nel Cimino · 0.4 km SE",
+      "distance_km": 0.398
+    },
+    {
+      "id": "mnw|42.42589|13.33113|abr086",
+      "code": "abr086",
+      "name": "Boccanello",
+      "distance_km": 0.469
+    },
+    {
+      "id": "mnw|42.45385|12.15855|laz312",
+      "code": "laz312",
+      "name": "Paparano",
+      "distance_km": 0.121
+    },
+    {
+      "id": "mnw|42.46250|13.22073|abr087",
+      "code": "abr087",
+      "name": "Collicello",
+      "distance_km": 0.129
+    },
+    {
+      "id": "mnw|42.46453|13.91046|abr124",
+      "code": "abr124",
+      "name": "Portacaldaia",
+      "distance_km": 0.116
+    },
+    {
+      "id": "mnw|42.48124|14.16149|abr116",
+      "code": "abr116",
+      "name": "Case Candeloro",
+      "distance_km": 1.167
+    },
+    {
+      "id": "mnw|42.52092|12.61282|mbr143",
+      "code": "mbr143",
+      "name": "Colle Sant'Angelo",
+      "distance_km": 0.201
+    },
+    {
+      "id": "mnw|42.53572|11.92420|laz026",
+      "code": "laz026",
+      "name": "Marta · 0.3 km S",
+      "distance_km": 0.282
+    },
+    {
+      "id": "mnw|42.55499|12.02652|laz253",
+      "code": "laz253",
+      "name": "Montefiascone · 1.5 km S",
+      "distance_km": 1.452
+    },
+    {
+      "id": "mnw|42.55574|11.88751|laz114",
+      "code": "laz114",
+      "name": "Sant'Antonio",
+      "distance_km": 0.578
+    },
+    {
+      "id": "mnw|42.55622|13.26577|abr111",
+      "code": "abr111",
+      "name": "Aringo",
+      "distance_km": 0.144
+    },
+    {
+      "id": "mnw|42.56263|14.08389|abr119",
+      "code": "abr119",
+      "name": "Silvi Paese",
+      "distance_km": 0.332
+    },
+    {
+      "id": "mnw|42.59169|13.84718|abr122",
+      "code": "abr122",
+      "name": "Staiano",
+      "distance_km": 0.214
+    },
+    {
+      "id": "mnw|42.63071|13.23280|laz201",
+      "code": "laz201",
+      "name": "Bagnolo",
+      "distance_km": 0.078
+    },
+    {
+      "id": "mnw|42.63465|14.04054|abr066",
+      "code": "abr066",
+      "name": "Contrada Capitolo",
+      "distance_km": 0.24
+    },
+    {
+      "id": "mnw|42.64301|11.85034|laz314",
+      "code": "laz314",
+      "name": "Gradoli",
+      "distance_km": 0.499
+    },
+    {
+      "id": "mnw|42.66657|13.80615|abr112",
+      "code": "abr112",
+      "name": "Colli",
+      "distance_km": 0.751
+    },
+    {
+      "id": "mnw|42.68635|11.90592|laz090",
+      "code": "laz090",
+      "name": "San Lorenzo Nuovo",
+      "distance_km": 0.103
+    },
+    {
+      "id": "mnw|42.68652|11.32994|tsc292",
+      "code": "tsc292",
+      "name": "Scansano · 0.1 km N",
+      "distance_km": 0.142
+    },
+    {
+      "id": "mnw|42.80352|13.90645|abr044",
+      "code": "abr044",
+      "name": "Tortoreto · 0.6 km E",
+      "distance_km": 0.572
+    },
+    {
+      "id": "mnw|42.80723|13.90742|abr105",
+      "code": "abr105",
+      "name": "Tortoreto · 0.6 km SE",
+      "distance_km": 0.629
+    },
+    {
+      "id": "mnw|42.81233|13.93629|abr032",
+      "code": "abr032",
+      "name": "Tortoreto Lido",
+      "distance_km": 1.496
+    },
+    {
+      "id": "mnw|42.81594|13.82183|abr052",
+      "code": "abr052",
+      "name": "Nereto",
+      "distance_km": 0.166
+    },
+    {
+      "id": "mnw|42.84481|10.99602|tsc107",
+      "code": "tsc107",
+      "name": "Vaticino",
+      "distance_km": 0.031
+    },
+    {
+      "id": "mnw|42.85410|13.81698|abr030",
+      "code": "abr030",
+      "name": "Controguerra",
+      "distance_km": 0.064
+    },
+    {
+      "id": "mnw|42.86026|12.01229|mbr050",
+      "code": "mbr050",
+      "name": "Poggio della Fame",
+      "distance_km": 0.595
+    },
+    {
+      "id": "mnw|42.87347|12.01516|mbr045",
+      "code": "mbr045",
+      "name": "Fabro",
+      "distance_km": 0.091
+    },
+    {
+      "id": "mnw|42.94024|10.53657|tsc228",
+      "code": "tsc228",
+      "name": "Gagno",
+      "distance_km": 0.906
+    },
+    {
+      "id": "mnw|42.94089|11.87056|tsc117",
+      "code": "tsc117",
+      "name": "Fonte Vetriana",
+      "distance_km": 1.713
+    },
+    {
+      "id": "mnw|42.95025|12.40031|mbr047",
+      "code": "mbr047",
+      "name": "Casalina",
+      "distance_km": 0.038
+    },
+    {
+      "id": "mnw|42.97022|13.87373|mrc060",
+      "code": "mrc060",
+      "name": "Montesecco",
+      "distance_km": 0.746
+    },
+    {
+      "id": "mnw|42.97386|12.08164|mbr037",
+      "code": "mbr037",
+      "name": "Borghetto",
+      "distance_km": 0.834
+    },
+    {
+      "id": "mnw|42.98000|12.32000|mbr006",
+      "code": "mbr006",
+      "name": "Olmeto",
+      "distance_km": 0.781
+    },
+    {
+      "id": "mnw|42.98988|11.80423|tsc236",
+      "code": "tsc236",
+      "name": "Castiglioncello del Trinoro",
+      "distance_km": 0.749
+    },
+    {
+      "id": "mnw|42.99903|11.86432|tsc237",
+      "code": "tsc237",
+      "name": "Sarteano",
+      "distance_km": 0.79
+    },
+    {
+      "id": "mnw|43.01014|11.82505|tsc758",
+      "code": "tsc758",
+      "name": "Fonte della Regina",
+      "distance_km": 2.05
+    },
+    {
+      "id": "mnw|43.01246|12.19865|mbr048",
+      "code": "mbr048",
+      "name": "Casa Torontola",
+      "distance_km": 0.481
+    },
+    {
+      "id": "mnw|43.02049|11.89145|tsc073",
+      "code": "tsc073",
+      "name": "Località Poggio Olivo",
+      "distance_km": 0.235
+    },
+    {
+      "id": "mnw|43.02156|11.93772|tsc191",
+      "code": "tsc191",
+      "name": "Montevenere",
+      "distance_km": 1.0
+    },
+    {
+      "id": "mnw|43.04251|11.80960|tsc162",
+      "code": "tsc162",
+      "name": "Chianciano Terme",
+      "distance_km": 0.214
+    },
+    {
+      "id": "mnw|43.04944|11.96143|tsc113",
+      "code": "tsc113",
+      "name": "Porto",
+      "distance_km": 2.764
+    },
+    {
+      "id": "mnw|43.05479|11.48974|tsc289",
+      "code": "tsc289",
+      "name": "Montalcino · 0.1 km SO",
+      "distance_km": 0.134
+    },
+    {
+      "id": "mnw|43.07402|11.15334|tsc214",
+      "code": "tsc214",
+      "name": "Torniella",
+      "distance_km": 0.045
+    },
+    {
+      "id": "mnw|43.11600|11.86165|tsc157",
+      "code": "tsc157",
+      "name": "Acquaviva",
+      "distance_km": 0.078
+    },
+    {
+      "id": "mnw|43.13171|12.04229|mbr038",
+      "code": "mbr038",
+      "name": "Castiglione del Lago · 0.8 km S",
+      "distance_km": 0.819
+    },
+    {
+      "id": "mnw|43.17879|11.78052|tsc763",
+      "code": "tsc763",
+      "name": "Laparelli",
+      "distance_km": 0.197
+    },
+    {
+      "id": "mnw|43.19139|11.14269|tsc204",
+      "code": "tsc204",
+      "name": "Frosini",
+      "distance_km": 1.625
+    },
+    {
+      "id": "mnw|43.19267|13.78875|mrc064",
+      "code": "mrc064",
+      "name": "Lido di Fermo",
+      "distance_km": 1.471
+    },
+    {
+      "id": "mnw|43.20000|10.90000|tsc002",
+      "code": "tsc002",
+      "name": "Castelnuovo di Val di Cecina",
+      "distance_km": 1.32
+    },
+    {
+      "id": "mnw|43.20624|13.05181|mrc207",
+      "code": "mrc207",
+      "name": "Castelraimondo",
+      "distance_km": 0.355
+    },
+    {
+      "id": "mnw|43.22861|13.17588|mrc201",
+      "code": "mrc201",
+      "name": "San Severino Marche",
+      "distance_km": 0.375
+    },
+    {
+      "id": "mnw|43.22930|11.57237|tsc203",
+      "code": "tsc203",
+      "name": "Asciano",
+      "distance_km": 0.579
+    },
+    {
+      "id": "mnw|43.24721|11.81656|tsc111",
+      "code": "tsc111",
+      "name": "Foiano della Chiana · 0.7 km N",
+      "distance_km": 0.664
+    },
+    {
+      "id": "mnw|43.25000|12.77000|mbr001",
+      "code": "mbr001",
+      "name": "Madonna del Gambero",
+      "distance_km": 0.784
+    },
+    {
+      "id": "mnw|43.25583|11.82700|tsc093",
+      "code": "tsc093",
+      "name": "Foiano della Chiana · 0.9 km O",
+      "distance_km": 0.902
+    },
+    {
+      "id": "mnw|43.26302|13.75264|mrc054",
+      "code": "mrc054",
+      "name": "Porto Sant'Elpidio",
+      "distance_km": 1.255
+    },
+    {
+      "id": "mnw|43.30444|13.43735|mrc015",
+      "code": "mrc015",
+      "name": "Santo Stefano",
+      "distance_km": 1.343
+    },
+    {
+      "id": "mnw|43.32414|11.32198|tsc207",
+      "code": "tsc207",
+      "name": "Siena",
+      "distance_km": 0.961
+    },
+    {
+      "id": "mnw|43.32851|11.38028|tsc206",
+      "code": "tsc206",
+      "name": "Pieve A Bozzone",
+      "distance_km": 1.049
+    },
+    {
+      "id": "mnw|43.34898|11.55249|tsc205",
+      "code": "tsc205",
+      "name": "Castello di Montalto",
+      "distance_km": 1.977
+    },
+    {
+      "id": "mnw|43.38000|10.45000|tsc004",
+      "code": "tsc004",
+      "name": "Polveroni",
+      "distance_km": 1.382
+    },
+    {
+      "id": "mnw|43.40473|10.44770|tsc275",
+      "code": "tsc275",
+      "name": "Il Giardino",
+      "distance_km": 1.808
+    },
+    {
+      "id": "mnw|43.41023|11.85110|tsc108",
+      "code": "tsc108",
+      "name": "Tregozzano",
+      "distance_km": 0.798
+    },
+    {
+      "id": "mnw|43.43944|13.36669|mrc013",
+      "code": "mrc013",
+      "name": "Tornasano",
+      "distance_km": 0.066
+    },
+    {
+      "id": "mnw|43.46221|13.55497|mrc199",
+      "code": "mrc199",
+      "name": "Castelfidardo",
+      "distance_km": 0.499
+    },
+    {
+      "id": "mnw|43.46478|10.34690|tsc265",
+      "code": "tsc265",
+      "name": "Quercianella · 1.8 km E",
+      "distance_km": 1.765
+    },
+    {
+      "id": "mnw|43.47052|13.04010|mrc069",
+      "code": "mrc069",
+      "name": "Mergo",
+      "distance_km": 0.523
+    },
+    {
+      "id": "mnw|43.48752|11.91202|tsc271",
+      "code": "tsc271",
+      "name": "San Polo",
+      "distance_km": 0.321
+    },
+    {
+      "id": "mnw|43.49234|13.54520|mrc198",
+      "code": "mrc198",
+      "name": "Abbadia",
+      "distance_km": 0.843
+    },
+    {
+      "id": "mnw|43.50486|13.28439|mrc048",
+      "code": "mrc048",
+      "name": "Santa Maria Nuova",
+      "distance_km": 3.495
+    },
+    {
+      "id": "mnw|43.52201|13.39699|mrc208",
+      "code": "mrc208",
+      "name": "Loc.Marcillina",
+      "distance_km": 0.807
+    },
+    {
+      "id": "mnw|43.52211|13.21792|mrc041",
+      "code": "mrc041",
+      "name": "Casa Monticelli · 1.8 km NE",
+      "distance_km": 1.761
+    },
+    {
+      "id": "mnw|43.52235|13.21733|mrc043",
+      "code": "mrc043",
+      "name": "Casa Monticelli · 43.5224, 13.2173",
+      "distance_km": 1.776
+    },
+    {
+      "id": "mnw|43.52500|13.20286|mrc045",
+      "code": "mrc045",
+      "name": "Casa Montesecco · 1.0 km N",
+      "distance_km": 0.955
+    },
+    {
+      "id": "mnw|43.52500|13.20309|mrc210",
+      "code": "mrc210",
+      "name": "Casa Montesecco · 43.5250, 13.2031",
+      "distance_km": 0.959
+    },
+    {
+      "id": "mnw|43.53000|11.87000|tsc035",
+      "code": "tsc035",
+      "name": "Borgo a Giovi",
+      "distance_km": 0.457
+    },
+    {
+      "id": "mnw|43.53321|11.46112|tsc070",
+      "code": "tsc070",
+      "name": "Neri",
+      "distance_km": 0.101
+    },
+    {
+      "id": "mnw|43.55737|11.53727|tsc260",
+      "code": "tsc260",
+      "name": "San Giovanni Valdarno",
+      "distance_km": 1.281
+    },
+    {
+      "id": "mnw|43.55910|13.24937|mrc042",
+      "code": "mrc042",
+      "name": "Monsano",
+      "distance_km": 0.4
+    },
+    {
+      "id": "mnw|43.56773|13.51609|mrc049",
+      "code": "mrc049",
+      "name": "Angeli di Varano",
+      "distance_km": 2.125
+    },
+    {
+      "id": "mnw|43.57362|10.51026|tsc119",
+      "code": "tsc119",
+      "name": "Fauglia",
+      "distance_km": 0.402
+    },
+    {
+      "id": "mnw|43.57996|10.44422|tsc118",
+      "code": "tsc118",
+      "name": "Nugola",
+      "distance_km": 0.346
+    },
+    {
+      "id": "mnw|43.58000|11.63000|tsc036",
+      "code": "tsc036",
+      "name": "Gropina",
+      "distance_km": 0.687
+    },
+    {
+      "id": "mnw|43.60460|13.05867|mrc212",
+      "code": "mrc212",
+      "name": "Ostra Vetere",
+      "distance_km": 0.266
+    },
+    {
+      "id": "mnw|43.62000|10.63000|tsc026",
+      "code": "tsc026",
+      "name": "Ponsacco",
+      "distance_km": 0.437
+    },
+    {
+      "id": "mnw|43.62401|13.40740|mrc072",
+      "code": "mrc072",
+      "name": "Falconara Marittima",
+      "distance_km": 0.656
+    },
+    {
+      "id": "mnw|43.63477|10.81106|tsc266",
+      "code": "tsc266",
+      "name": "Bucciano",
+      "distance_km": 0.052
+    },
+    {
+      "id": "mnw|43.65949|11.18426|tsc163",
+      "code": "tsc163",
+      "name": "San Casciano in Val di Pesa",
+      "distance_km": 0.062
+    },
+    {
+      "id": "mnw|43.67094|11.51385|tsc188",
+      "code": "tsc188",
+      "name": "Borgo a Cascia",
+      "distance_km": 0.111
+    },
+    {
+      "id": "mnw|43.67427|10.75079|tsc273",
+      "code": "tsc273",
+      "name": "Montopoli · 0.1 km SO",
+      "distance_km": 0.131
+    },
+    {
+      "id": "mnw|43.67692|10.53964|tsc224",
+      "code": "tsc224",
+      "name": "Piana di Noce",
+      "distance_km": 1.135
+    },
+    {
+      "id": "mnw|43.67737|10.86464|tsc263",
+      "code": "tsc263",
+      "name": "Le Colonne",
+      "distance_km": 0.085
+    },
+    {
+      "id": "mnw|43.67961|10.54926|tsc760",
+      "code": "tsc760",
+      "name": "Cascina",
+      "distance_km": 0.641
+    },
+    {
+      "id": "mnw|43.68288|11.53281|tsc179",
+      "code": "tsc179",
+      "name": "Reggello",
+      "distance_km": 0.433
+    },
+    {
+      "id": "mnw|43.69876|11.46895|tsc137",
+      "code": "tsc137",
+      "name": "Leccio",
+      "distance_km": 0.2
+    },
+    {
+      "id": "mnw|43.70007|11.82003|tsc210",
+      "code": "tsc210",
+      "name": "Bibbiena · 0.4 km O",
+      "distance_km": 0.45
+    },
+    {
+      "id": "mnw|43.70390|10.74246|tsc218",
+      "code": "tsc218",
+      "name": "Castelfranco di Sotto",
+      "distance_km": 0.31
+    },
+    {
+      "id": "mnw|43.70762|11.34207|tsc110",
+      "code": "tsc110",
+      "name": "Picille",
+      "distance_km": 0.718
+    },
+    {
+      "id": "mnw|43.70966|12.29761|tsc756",
+      "code": "tsc756",
+      "name": "Sestino · 0.0 km E",
+      "distance_km": 0.019
+    },
+    {
+      "id": "mnw|43.70996|13.22331|mrc070",
+      "code": "mrc070",
+      "name": "Senigallia · 1.4 km NO",
+      "distance_km": 1.359
+    },
+    {
+      "id": "mnw|43.71188|13.22339|mrc057",
+      "code": "mrc057",
+      "name": "Senigallia · 1.3 km NO",
+      "distance_km": 1.268
+    },
+    {
+      "id": "mnw|43.71263|12.18264|tsc755",
+      "code": "tsc755",
+      "name": "Badia Tedalda · 0.4 km S",
+      "distance_km": 0.438
+    },
+    {
+      "id": "mnw|43.71519|10.39763|tsc039",
+      "code": "tsc039",
+      "name": "Pisa",
+      "distance_km": 0.882
+    },
+    {
+      "id": "mnw|43.71532|12.85661|mrc059",
+      "code": "mrc059",
+      "name": "Zona Artigianale Sterpeti",
+      "distance_km": 0.439
+    },
+    {
+      "id": "mnw|43.71809|10.37880|tsc038",
+      "code": "tsc038",
+      "name": "Barbaricina",
+      "distance_km": 0.504
+    },
+    {
+      "id": "mnw|43.71967|11.66426|tsc161",
+      "code": "tsc161",
+      "name": "Pratalutoli",
+      "distance_km": 0.297
+    },
+    {
+      "id": "mnw|43.71996|12.22269|tsc258",
+      "code": "tsc258",
+      "name": "Colcellalto",
+      "distance_km": 0.082
+    },
+    {
+      "id": "mnw|43.72028|12.63609|mrc211",
+      "code": "mrc211",
+      "name": "Urbino · 0.7 km N",
+      "distance_km": 0.66
+    },
+    {
+      "id": "mnw|43.72213|11.45246|tsc009",
+      "code": "tsc009",
+      "name": "Rignano sull'Arno",
+      "distance_km": 0.091
+    },
+    {
+      "id": "mnw|43.72397|10.52040|tsc114",
+      "code": "tsc114",
+      "name": "Calci",
+      "distance_km": 0.299
+    },
+    {
+      "id": "mnw|43.72800|10.40036|tsc184",
+      "code": "tsc184",
+      "name": "Le Maggiola",
+      "distance_km": 1.416
+    },
+    {
+      "id": "mnw|43.73391|10.79538|tsc100",
+      "code": "tsc100",
+      "name": "Fucecchio",
+      "distance_km": 0.202
+    },
+    {
+      "id": "mnw|43.73872|10.39917|tsc160",
+      "code": "tsc160",
+      "name": "Le Maggiola Ovest",
+      "distance_km": 0.485
+    },
+    {
+      "id": "mnw|43.74034|11.98626|tsc766",
+      "code": "tsc766",
+      "name": "Bulciano",
+      "distance_km": 3.066
+    },
+    {
+      "id": "mnw|43.75764|11.30005|tsc269",
+      "code": "tsc269",
+      "name": "Rovezzano",
+      "distance_km": 1.317
+    },
+    {
+      "id": "mnw|43.76081|11.28896|tsc007",
+      "code": "tsc007",
+      "name": "Piazza Calda · 1.8 km SO",
+      "distance_km": 1.782
+    },
+    {
+      "id": "mnw|43.76188|11.27823|tsc757",
+      "code": "tsc757",
+      "name": "Piazza Calda · 1.6 km S",
+      "distance_km": 1.552
+    },
+    {
+      "id": "mnw|43.76466|10.37888|tsc156",
+      "code": "tsc156",
+      "name": "Piaggia",
+      "distance_km": 0.086
+    },
+    {
+      "id": "mnw|43.76958|13.07797|mrc074",
+      "code": "mrc074",
+      "name": "San Costanzo",
+      "distance_km": 0.475
+    },
+    {
+      "id": "mnw|43.77056|11.27586|tsc147",
+      "code": "tsc147",
+      "name": "Piazza Calda · 2.5 km S",
+      "distance_km": 2.502
+    },
+    {
+      "id": "mnw|43.77460|10.40907|tsc146",
+      "code": "tsc146",
+      "name": "Pontasserchio",
+      "distance_km": 0.824
+    },
+    {
+      "id": "mnw|43.78020|10.97611|tsc190",
+      "code": "tsc190",
+      "name": "San Giusto · 0.7 km NE",
+      "distance_km": 0.676
+    },
+    {
+      "id": "mnw|43.78677|10.99002|tsc291",
+      "code": "tsc291",
+      "name": "San Giusto · 0.7 km SO",
+      "distance_km": 0.659
+    },
+    {
+      "id": "mnw|43.78696|10.83265|tsc103",
+      "code": "tsc103",
+      "name": "Stabbia · 0.5 km S",
+      "distance_km": 0.507
+    },
+    {
+      "id": "mnw|43.79139|11.06613|tsc256",
+      "code": "tsc256",
+      "name": "Comeana · 0.7 km O",
+      "distance_km": 0.669
+    },
+    {
+      "id": "mnw|43.79148|11.06624|tsc031",
+      "code": "tsc031",
+      "name": "Comeana · 43.7915, 11.0662",
+      "distance_km": 0.674
+    },
+    {
+      "id": "mnw|43.79315|12.09944|ero106",
+      "code": "ero106",
+      "name": "Sant'Alberico",
+      "distance_km": 0.006
+    },
+    {
+      "id": "mnw|43.80104|12.62252|mrc028",
+      "code": "mrc028",
+      "name": "Ca' Gallo",
+      "distance_km": 0.191
+    },
+    {
+      "id": "mnw|43.80823|10.86617|tsc220",
+      "code": "tsc220",
+      "name": "Bussoli",
+      "distance_km": 0.881
+    },
+    {
+      "id": "mnw|43.81111|11.23425|tsc285",
+      "code": "tsc285",
+      "name": "Castello · 0.6 km N",
+      "distance_km": 0.623
+    },
+    {
+      "id": "mnw|43.81226|11.40015|tsc101",
+      "code": "tsc101",
+      "name": "Molino del Piano",
+      "distance_km": 0.144
+    },
+    {
+      "id": "mnw|43.81369|11.01782|tsc213",
+      "code": "tsc213",
+      "name": "Carmignano",
+      "distance_km": 0.445
+    },
+    {
+      "id": "mnw|43.82128|13.02399|mrc068",
+      "code": "mrc068",
+      "name": "Ingualchiera",
+      "distance_km": 0.518
+    },
+    {
+      "id": "mnw|43.82560|11.20931|tsc287",
+      "code": "tsc287",
+      "name": "Colonnata",
+      "distance_km": 1.043
+    },
+    {
+      "id": "mnw|43.82575|11.48590|tsc231",
+      "code": "tsc231",
+      "name": "Rufina",
+      "distance_km": 0.21
+    },
+    {
+      "id": "mnw|43.83341|10.91874|tsc759",
+      "code": "tsc759",
+      "name": "San Baronto",
+      "distance_km": 0.368
+    },
+    {
+      "id": "mnw|43.83864|7.55358|lig063",
+      "code": "lig063",
+      "name": "Torri",
+      "distance_km": 0.115
+    },
+    {
+      "id": "mnw|43.84818|12.78959|mrc029",
+      "code": "mrc029",
+      "name": "Montelabbate",
+      "distance_km": 0.184
+    },
+    {
+      "id": "mnw|43.85407|10.99037|tsc771",
+      "code": "tsc771",
+      "name": "Le Fornaci · 0.4 km E",
+      "distance_km": 0.445
+    },
+    {
+      "id": "mnw|43.86092|10.24881|tsc782",
+      "code": "tsc782",
+      "name": "Viareggio",
+      "distance_km": 0.678
+    },
+    {
+      "id": "mnw|43.86793|11.04221|tsc267",
+      "code": "tsc267",
+      "name": "Le Vanne",
+      "distance_km": 1.679
+    },
+    {
+      "id": "mnw|43.89087|12.90974|mrc065",
+      "code": "mrc065",
+      "name": "Pesaro",
+      "distance_km": 2.108
+    },
+    {
+      "id": "mnw|43.89135|10.23765|tsc069",
+      "code": "tsc069",
+      "name": "Lido di Camaiore · 1.3 km NO",
+      "distance_km": 1.301
+    },
+    {
+      "id": "mnw|43.89313|10.65644|tsc042",
+      "code": "tsc042",
+      "name": "San Gennaro I",
+      "distance_km": 0.018
+    },
+    {
+      "id": "mnw|43.90993|11.27717|tsc281",
+      "code": "tsc281",
+      "name": "Vaglia · 0.2 km E",
+      "distance_km": 0.24
+    },
+    {
+      "id": "mnw|43.91003|10.43578|tsc180",
+      "code": "tsc180",
+      "name": "San Martino in Freddana-Monsagrati",
+      "distance_km": 0.184
+    },
+    {
+      "id": "mnw|43.91601|11.00509|tsc215",
+      "code": "tsc215",
+      "name": "Stazione",
+      "distance_km": 0.742
+    },
+    {
+      "id": "mnw|43.93459|11.45998|tsc084",
+      "code": "tsc084",
+      "name": "Vicchio",
+      "distance_km": 0.051
+    },
+    {
+      "id": "mnw|43.93624|10.99387|tsc200",
+      "code": "tsc200",
+      "name": "Santomato · 0.9 km NO",
+      "distance_km": 0.878
+    },
+    {
+      "id": "mnw|43.93826|12.54262|ero183",
+      "code": "ero183",
+      "name": "Trarivi",
+      "distance_km": 0.204
+    },
+    {
+      "id": "mnw|43.94054|10.31586|tsc159",
+      "code": "tsc159",
+      "name": "Salapreti",
+      "distance_km": 1.168
+    },
+    {
+      "id": "mnw|43.95949|10.95380|tsc169",
+      "code": "tsc169",
+      "name": "Cacciaia",
+      "distance_km": 0.489
+    },
+    {
+      "id": "mnw|43.96091|12.75605|mrc197",
+      "code": "mrc197",
+      "name": "Gabicce Mare · 0.4 km N",
+      "distance_km": 0.424
+    },
+    {
+      "id": "mnw|43.96107|11.14657|tsc105",
+      "code": "tsc105",
+      "name": "Le Fornaci · 0.9 km N",
+      "distance_km": 0.909
+    },
+    {
+      "id": "mnw|43.96282|12.74956|ero049",
+      "code": "ero049",
+      "name": "Gabicce Mare · 0.6 km E",
+      "distance_km": 0.587
+    },
+    {
+      "id": "mnw|43.96643|12.75291|mrc039",
+      "code": "mrc039",
+      "name": "Gabicce Mare · 0.3 km SE",
+      "distance_km": 0.339
+    },
+    {
+      "id": "mnw|43.98196|8.15875|lig075",
+      "code": "lig075",
+      "name": "Laigueglia",
+      "distance_km": 0.675
+    },
+    {
+      "id": "mnw|43.98787|11.09977|tsc221",
+      "code": "tsc221",
+      "name": "Migliana",
+      "distance_km": 0.053
+    },
+    {
+      "id": "mnw|43.98998|10.20201|tsc765",
+      "code": "tsc765",
+      "name": "Strettoia · 0.7 km O",
+      "distance_km": 0.675
+    },
+    {
+      "id": "mnw|44.01222|12.44408|ero133",
+      "code": "ero133",
+      "name": "La Valle",
+      "distance_km": 0.691
+    },
+    {
+      "id": "mnw|44.03751|12.60004|ero121",
+      "code": "ero121",
+      "name": "Marebello · 0.8 km NE",
+      "distance_km": 0.84
+    },
+    {
+      "id": "mnw|44.04048|12.50219|ero345",
+      "code": "ero345",
+      "name": "Vergiano · 0.1 km NE",
+      "distance_km": 0.054
+    },
+    {
+      "id": "mnw|44.04222|11.15183|tsc189",
+      "code": "tsc189",
+      "name": "Mercatale-San Quirico",
+      "distance_km": 0.227
+    },
+    {
+      "id": "mnw|44.04423|12.37321|ero629",
+      "code": "ero629",
+      "name": "Tribola",
+      "distance_km": 0.355
+    },
+    {
+      "id": "mnw|44.04454|12.60768|ero346",
+      "code": "ero346",
+      "name": "Marebello · 0.2 km SO",
+      "distance_km": 0.152
+    },
+    {
+      "id": "mnw|44.04728|12.55607|ero167",
+      "code": "ero167",
+      "name": "Crocefisso · 0.8 km NO",
+      "distance_km": 0.823
+    },
+    {
+      "id": "mnw|44.04746|12.52143|ero654",
+      "code": "ero654",
+      "name": "Ca' Guda · 0.4 km N",
+      "distance_km": 0.406
+    },
+    {
+      "id": "mnw|44.04763|12.55384|ero634",
+      "code": "ero634",
+      "name": "Crocefisso · 0.7 km NO",
+      "distance_km": 0.661
+    },
+    {
+      "id": "mnw|44.04862|12.52172|ero642",
+      "code": "ero642",
+      "name": "Ca' Guda · 0.3 km NE",
+      "distance_km": 0.277
+    },
+    {
+      "id": "mnw|44.04916|12.27988|ero149",
+      "code": "ero149",
+      "name": "Monteleone",
+      "distance_km": 1.129
+    },
+    {
+      "id": "mnw|44.05086|12.56520|ero138",
+      "code": "ero138",
+      "name": "Rimini · 0.7 km N",
+      "distance_km": 0.744
+    },
+    {
+      "id": "mnw|44.05088|12.56547|ero159",
+      "code": "ero159",
+      "name": "Rimini · 44.0509, 12.5655",
+      "distance_km": 0.742
+    },
+    {
+      "id": "mnw|44.06091|12.59262|ero316",
+      "code": "ero316",
+      "name": "Bellariva",
+      "distance_km": 1.746
+    },
+    {
+      "id": "mnw|44.06884|11.82678|ero613",
+      "code": "ero613",
+      "name": "Rocca San Casciano",
+      "distance_km": 1.701
+    },
+    {
+      "id": "mnw|44.08051|11.11647|tsc154",
+      "code": "tsc154",
+      "name": "Gavigno · 2.2 km SO",
+      "distance_km": 2.228
+    },
+    {
+      "id": "mnw|44.08361|12.26732|ero344",
+      "code": "ero344",
+      "name": "Casa Francesconi",
+      "distance_km": 1.279
+    },
+    {
+      "id": "mnw|44.08992|12.39289|ero273",
+      "code": "ero273",
+      "name": "Savignano sul Rubicone",
+      "distance_km": 0.516
+    },
+    {
+      "id": "mnw|44.09110|11.16026|tsc133",
+      "code": "tsc133",
+      "name": "Montepiano",
+      "distance_km": 0.05
+    },
+    {
+      "id": "mnw|44.10736|12.19145|ero321",
+      "code": "ero321",
+      "name": "Case Franchini",
+      "distance_km": 0.479
+    },
+    {
+      "id": "mnw|44.10802|12.31087|ero268",
+      "code": "ero268",
+      "name": "Calisese",
+      "distance_km": 1.046
+    },
+    {
+      "id": "mnw|44.10900|9.81856|lig048",
+      "code": "lig048",
+      "name": "La Spezia · 0.8 km SE",
+      "distance_km": 0.785
+    },
+    {
+      "id": "mnw|44.10937|12.08699|ero145",
+      "code": "ero145",
+      "name": "Ca' di Sisto",
+      "distance_km": 1.932
+    },
+    {
+      "id": "mnw|44.11427|9.83495|lig045",
+      "code": "lig045",
+      "name": "Chiappa",
+      "distance_km": 1.484
+    },
+    {
+      "id": "mnw|44.12000|8.25000|lig012",
+      "code": "lig012",
+      "name": "Loano",
+      "distance_km": 1.048
+    },
+    {
+      "id": "mnw|44.12006|12.34017|ero002",
+      "code": "ero002",
+      "name": "Gambettola · 0.4 km SO",
+      "distance_km": 0.38
+    },
+    {
+      "id": "mnw|44.12316|12.33805|ero182",
+      "code": "ero182",
+      "name": "Gambettola · 0.6 km S",
+      "distance_km": 0.637
+    },
+    {
+      "id": "mnw|44.12430|10.62733|tsc264",
+      "code": "tsc264",
+      "name": "Pracchi",
+      "distance_km": 3.473
+    },
+    {
+      "id": "mnw|44.12929|10.63077|tsc238",
+      "code": "tsc238",
+      "name": "Casa Gallo",
+      "distance_km": 3.152
+    },
+    {
+      "id": "mnw|44.14545|9.92164|lig051",
+      "code": "lig051",
+      "name": "Santo Stefano di Magra",
+      "distance_km": 0.385
+    },
+    {
+      "id": "mnw|44.14781|7.73521|pmn494",
+      "code": "pmn494",
+      "name": "Carnino",
+      "distance_km": 0.192
+    },
+    {
+      "id": "mnw|44.15499|11.85101|ero347",
+      "code": "ero347",
+      "name": "San Cassiano",
+      "distance_km": 1.301
+    },
+    {
+      "id": "mnw|44.16073|8.29175|lig411",
+      "code": "lig411",
+      "name": "Borgio",
+      "distance_km": 1.335
+    },
+    {
+      "id": "mnw|44.17064|12.44016|ero198",
+      "code": "ero198",
+      "name": "Gatteo a Mare",
+      "distance_km": 0.373
+    },
+    {
+      "id": "mnw|44.18251|9.58180|lig299",
+      "code": "lig299",
+      "name": "Bonassola",
+      "distance_km": 0.209
+    },
+    {
+      "id": "mnw|44.19269|7.58818|pmn487",
+      "code": "pmn487",
+      "name": "Limone Piemonte · 1.2 km NO",
+      "distance_km": 1.191
+    },
+    {
+      "id": "mnw|44.19700|8.03271|pmn130",
+      "code": "pmn130",
+      "name": "Borgo Ponte",
+      "distance_km": 1.321
+    },
+    {
+      "id": "mnw|44.20004|7.57612|pmn508",
+      "code": "pmn508",
+      "name": "Limone Piemonte · 0.2 km NE",
+      "distance_km": 0.221
+    },
+    {
+      "id": "mnw|44.21500|11.91046|ero617",
+      "code": "ero617",
+      "name": "Agriturismo e cantina la Sabbiona",
+      "distance_km": 2.105
+    },
+    {
+      "id": "mnw|44.22409|12.15227|ero282",
+      "code": "ero282",
+      "name": "Ca' Belletti",
+      "distance_km": 1.27
+    },
+    {
+      "id": "mnw|44.22586|12.03882|ero113",
+      "code": "ero113",
+      "name": "Forlì",
+      "distance_km": 0.5
+    },
+    {
+      "id": "mnw|44.23992|9.48526|lig017",
+      "code": "lig017",
+      "name": "Moneglia · 0.5 km E",
+      "distance_km": 0.453
+    },
+    {
+      "id": "mnw|44.24018|9.48752|lig297",
+      "code": "lig297",
+      "name": "Moneglia · 0.3 km SE",
+      "distance_km": 0.291
+    },
+    {
+      "id": "mnw|44.24486|9.48848|lig054",
+      "code": "lig054",
+      "name": "Moneglia · 0.7 km S",
+      "distance_km": 0.672
+    },
+    {
+      "id": "mnw|44.24497|11.95088|ero115",
+      "code": "ero115",
+      "name": "San Biagio · 1.0 km NO",
+      "distance_km": 1.036
+    },
+    {
+      "id": "mnw|44.24619|10.43000|ero608",
+      "code": "ero608",
+      "name": "Segheria",
+      "distance_km": 0.5
+    },
+    {
+      "id": "mnw|44.26934|10.93979|ero067",
+      "code": "ero067",
+      "name": "Montese · 0.5 km E",
+      "distance_km": 0.455
+    },
+    {
+      "id": "mnw|44.28564|7.65593|pmn481",
+      "code": "pmn481",
+      "name": "Tetti Truna",
+      "distance_km": 0.758
+    },
+    {
+      "id": "mnw|44.28753|9.40972|lig309",
+      "code": "lig309",
+      "name": "San Bernardo · 0.1 km SE",
+      "distance_km": 0.076
+    },
+    {
+      "id": "mnw|44.29573|11.87619|ero317",
+      "code": "ero317",
+      "name": "Faenza · 0.7 km SE",
+      "distance_km": 0.682
+    },
+    {
+      "id": "mnw|44.29596|11.41752|ero365",
+      "code": "ero365",
+      "name": "Villa di Cassano",
+      "distance_km": 0.121
+    },
+    {
+      "id": "mnw|44.30012|10.57043|ero001",
+      "code": "ero001",
+      "name": "Frassinoro · 0.6 km S",
+      "distance_km": 0.627
+    },
+    {
+      "id": "mnw|44.30899|11.73400|ero110",
+      "code": "ero110",
+      "name": "Bergullo",
+      "distance_km": 0.856
+    },
+    {
+      "id": "mnw|44.31947|11.60758|ero327",
+      "code": "ero327",
+      "name": "Pieve di Sant'Andrea",
+      "distance_km": 1.964
+    },
+    {
+      "id": "mnw|44.33873|8.42111|lig300",
+      "code": "lig300",
+      "name": "Botta",
+      "distance_km": 0.753
+    },
+    {
+      "id": "mnw|44.33952|10.83413|ero054",
+      "code": "ero054",
+      "name": "Pavullo nel Frignano",
+      "distance_km": 0.675
+    },
+    {
+      "id": "mnw|44.34699|11.78941|ero338",
+      "code": "ero338",
+      "name": "Zello",
+      "distance_km": 1.523
+    },
+    {
+      "id": "mnw|44.35612|9.21259|lig414",
+      "code": "lig414",
+      "name": "Sant'Anna",
+      "distance_km": 0.534
+    },
+    {
+      "id": "mnw|44.35812|9.28491|lig072",
+      "code": "lig072",
+      "name": "Villa Oneto",
+      "distance_km": 0.209
+    },
+    {
+      "id": "mnw|44.36852|8.59938|lig305",
+      "code": "lig305",
+      "name": "Varazze",
+      "distance_km": 0.547
+    },
+    {
+      "id": "mnw|44.36936|9.11355|lig033",
+      "code": "lig033",
+      "name": "Sant'Apollinare",
+      "distance_km": 0.356
+    },
+    {
+      "id": "mnw|44.37911|11.65247|ero328",
+      "code": "ero328",
+      "name": "Casa Sassetta",
+      "distance_km": 0.509
+    },
+    {
+      "id": "mnw|44.38068|11.67426|ero618",
+      "code": "ero618",
+      "name": "L'Osso",
+      "distance_km": 0.628
+    },
+    {
+      "id": "mnw|44.38343|9.04702|lig291",
+      "code": "lig291",
+      "name": "Nervi",
+      "distance_km": 1.088
+    },
+    {
+      "id": "mnw|44.38523|11.69539|ero619",
+      "code": "ero619",
+      "name": "Ospedaliera Nuova",
+      "distance_km": 1.05
+    },
+    {
+      "id": "mnw|44.39019|11.14166|ero340",
+      "code": "ero340",
+      "name": "Padova",
+      "distance_km": 0.886
+    },
+    {
+      "id": "mnw|44.39701|11.39311|ero609",
+      "code": "ero609",
+      "name": "Botteghino di Zocca",
+      "distance_km": 0.323
+    },
+    {
+      "id": "mnw|44.39868|11.98967|ero644",
+      "code": "ero644",
+      "name": "Borgo Stecchi",
+      "distance_km": 1.622
+    },
+    {
+      "id": "mnw|44.40510|8.99823|lig053",
+      "code": "lig053",
+      "name": "Carupola",
+      "distance_km": 1.036
+    },
+    {
+      "id": "mnw|44.40706|12.19236|ero645",
+      "code": "ero645",
+      "name": "Ravenna",
+      "distance_km": 0.999
+    },
+    {
+      "id": "mnw|44.40941|8.96063|lig016",
+      "code": "lig016",
+      "name": "Genoa · 1.4 km O",
+      "distance_km": 1.389
+    },
+    {
+      "id": "mnw|44.40985|8.94792|lig016",
+      "code": "lig016",
+      "name": "Genoa · 0.6 km SO",
+      "distance_km": 0.63
+    },
+    {
+      "id": "mnw|44.41718|11.09935|ero333",
+      "code": "ero333",
+      "name": "Casaccia",
+      "distance_km": 0.077
+    },
+    {
+      "id": "mnw|44.42000|8.98000|lig011",
+      "code": "lig011",
+      "name": "Camaldoli · 0.4 km E",
+      "distance_km": 0.354
+    },
+    {
+      "id": "mnw|44.42613|8.92509|lig030",
+      "code": "lig030",
+      "name": "Fregoso",
+      "distance_km": 1.4
+    },
+    {
+      "id": "mnw|44.42795|8.77944|lig306",
+      "code": "lig306",
+      "name": "Collegio",
+      "distance_km": 1.143
+    },
+    {
+      "id": "mnw|44.42876|8.82785|lig087",
+      "code": "lig087",
+      "name": "Villa Piston · 1.8 km N",
+      "distance_km": 1.807
+    },
+    {
+      "id": "mnw|44.42987|8.76003|lig310",
+      "code": "lig310",
+      "name": "Voltri",
+      "distance_km": 0.912
+    },
+    {
+      "id": "mnw|44.43118|8.84116|lig060",
+      "code": "lig060",
+      "name": "Villa Piston · 2.1 km NO",
+      "distance_km": 2.08
+    },
+    {
+      "id": "mnw|44.43382|8.99014|lig101",
+      "code": "lig101",
+      "name": "Camaldoli · 1.6 km S",
+      "distance_km": 1.569
+    },
+    {
+      "id": "mnw|44.43740|10.69026|ero130",
+      "code": "ero130",
+      "name": "Prignano",
+      "distance_km": 0.092
+    },
+    {
+      "id": "mnw|44.43852|9.10573|lig065",
+      "code": "lig065",
+      "name": "Maxena",
+      "distance_km": 0.47
+    },
+    {
+      "id": "mnw|44.44186|11.46824|ero612",
+      "code": "ero612",
+      "name": "Ozzano dell'Emilia",
+      "distance_km": 0.637
+    },
+    {
+      "id": "mnw|44.44660|11.27049|ero610",
+      "code": "ero610",
+      "name": "Borgonuovo · 1.2 km S",
+      "distance_km": 1.227
+    },
+    {
+      "id": "mnw|44.44910|10.97221|ero201",
+      "code": "ero201",
+      "name": "Marano sul Panaro",
+      "distance_km": 1.16
+    },
+    {
+      "id": "mnw|44.45316|11.37782|ero124",
+      "code": "ero124",
+      "name": "Ponticella",
+      "distance_km": 0.155
+    },
+    {
+      "id": "mnw|44.45859|10.39635|ero174",
+      "code": "ero174",
+      "name": "Bora del Musso",
+      "distance_km": 0.106
+    },
+    {
+      "id": "mnw|44.46043|11.01009|ero026",
+      "code": "ero026",
+      "name": "Garofano",
+      "distance_km": 0.779
+    },
+    {
+      "id": "mnw|44.47497|11.39452|ero275",
+      "code": "ero275",
+      "name": "San Lazzaro",
+      "distance_km": 1.216
+    },
+    {
+      "id": "mnw|44.47959|11.36313|ero152",
+      "code": "ero152",
+      "name": "Fossolo",
+      "distance_km": 1.656
+    },
+    {
+      "id": "mnw|44.49209|8.85022|lig302",
+      "code": "lig302",
+      "name": "Lencisa",
+      "distance_km": 0.116
+    },
+    {
+      "id": "mnw|44.49671|11.29088|ero662",
+      "code": "ero662",
+      "name": "Tre Madonne",
+      "distance_km": 0.702
+    },
+    {
+      "id": "mnw|44.50850|8.91369|lig099",
+      "code": "lig099",
+      "name": "Prelo",
+      "distance_km": 0.061
+    },
+    {
+      "id": "mnw|44.51293|9.88806|ero202",
+      "code": "ero202",
+      "name": "Galla",
+      "distance_km": 0.922
+    },
+    {
+      "id": "mnw|44.51319|11.83445|ero615",
+      "code": "ero615",
+      "name": "Conselice",
+      "distance_km": 0.504
+    },
+    {
+      "id": "mnw|44.53667|11.12221|ero357",
+      "code": "ero357",
+      "name": "Calcara",
+      "distance_km": 1.46
+    },
+    {
+      "id": "mnw|44.55914|10.97716|ero143",
+      "code": "ero143",
+      "name": "San Vito",
+      "distance_km": 0.247
+    },
+    {
+      "id": "mnw|44.56208|7.44334|pmn491",
+      "code": "pmn491",
+      "name": "Piasco",
+      "distance_km": 0.132
+    },
+    {
+      "id": "mnw|44.56531|12.04689|ero287",
+      "code": "ero287",
+      "name": "Casa Nuova",
+      "distance_km": 1.574
+    },
+    {
+      "id": "mnw|44.59015|11.92966|ero122",
+      "code": "ero122",
+      "name": "Filo",
+      "distance_km": 0.417
+    },
+    {
+      "id": "mnw|44.59456|11.87134|ero299",
+      "code": "ero299",
+      "name": "San Biagio · 0.9 km S",
+      "distance_km": 0.863
+    },
+    {
+      "id": "mnw|44.59514|10.08406|ero195",
+      "code": "ero195",
+      "name": "Lughero - Casola di Terenzo",
+      "distance_km": 0.047
+    },
+    {
+      "id": "mnw|44.59999|10.41591|ero318",
+      "code": "ero318",
+      "name": "Ciano d'Enza",
+      "distance_km": 0.437
+    },
+    {
+      "id": "mnw|44.63157|11.55205|ero363",
+      "code": "ero363",
+      "name": "Area Produttiva Prato Grande",
+      "distance_km": 0.327
+    },
+    {
+      "id": "mnw|44.63274|8.60017|pmn175",
+      "code": "pmn175",
+      "name": "Cremolino",
+      "distance_km": 1.218
+    },
+    {
+      "id": "mnw|44.64435|9.49836|ero191",
+      "code": "ero191",
+      "name": "Ferriere",
+      "distance_km": 0.152
+    },
+    {
+      "id": "mnw|44.66150|7.08738|pmn500",
+      "code": "pmn500",
+      "name": "Pian del Re",
+      "distance_km": 4.435
+    },
+    {
+      "id": "mnw|44.66188|11.85224|ero300",
+      "code": "ero300",
+      "name": "Boaria Cavallara",
+      "distance_km": 0.561
+    },
+    {
+      "id": "mnw|44.66663|11.48425|ero367",
+      "code": "ero367",
+      "name": "Altedo",
+      "distance_km": 0.642
+    },
+    {
+      "id": "mnw|44.66750|10.59532|ero614",
+      "code": "ero614",
+      "name": "Guittone d'Arezzo",
+      "distance_km": 0.632
+    },
+    {
+      "id": "mnw|44.66855|11.72163|ero292",
+      "code": "ero292",
+      "name": "Ospital Monacale",
+      "distance_km": 1.723
+    },
+    {
+      "id": "mnw|44.67027|10.90071|ero179",
+      "code": "ero179",
+      "name": "San Cataldo",
+      "distance_km": 0.404
+    },
+    {
+      "id": "mnw|44.68471|11.41512|ero336",
+      "code": "ero336",
+      "name": "Rubizzano",
+      "distance_km": 0.256
+    },
+    {
+      "id": "mnw|44.69949|8.06934|pmn127",
+      "code": "pmn127",
+      "name": "Pertinale",
+      "distance_km": 0.407
+    },
+    {
+      "id": "mnw|44.70539|9.07745|pmn484",
+      "code": "pmn484",
+      "name": "Santa Maria · 0.7 km NE",
+      "distance_km": 0.735
+    },
+    {
+      "id": "mnw|44.71521|10.75062|ero362",
+      "code": "ero362",
+      "name": "Prato",
+      "distance_km": 0.223
+    },
+    {
+      "id": "mnw|44.71641|8.19532|pmn177",
+      "code": "pmn177",
+      "name": "Castiglione Tinella",
+      "distance_km": 1.074
+    },
+    {
+      "id": "mnw|44.71658|10.24771|ero661",
+      "code": "ero661",
+      "name": "Casale",
+      "distance_km": 0.178
+    },
+    {
+      "id": "mnw|44.72166|9.70327|ero269",
+      "code": "ero269",
+      "name": "Morfasso",
+      "distance_km": 0.143
+    },
+    {
+      "id": "mnw|44.72326|11.80657|ero301",
+      "code": "ero301",
+      "name": "Sandolo",
+      "distance_km": 0.713
+    },
+    {
+      "id": "mnw|44.73955|12.14884|ero314",
+      "code": "ero314",
+      "name": "Case Accorsi",
+      "distance_km": 0.959
+    },
+    {
+      "id": "mnw|44.74139|11.60657|ero293",
+      "code": "ero293",
+      "name": "Borgo Sgarbata",
+      "distance_km": 0.719
+    },
+    {
+      "id": "mnw|44.74673|11.79017|ero185",
+      "code": "ero185",
+      "name": "Gambulaga",
+      "distance_km": 0.294
+    },
+    {
+      "id": "mnw|44.74798|11.94270|ero296",
+      "code": "ero296",
+      "name": "Ostellato",
+      "distance_km": 0.269
+    },
+    {
+      "id": "mnw|44.74873|10.95035|ero635",
+      "code": "ero635",
+      "name": "Due Madonne",
+      "distance_km": 0.836
+    },
+    {
+      "id": "mnw|44.74909|11.48295|ero289",
+      "code": "ero289",
+      "name": "La Sanguettola",
+      "distance_km": 0.106
+    },
+    {
+      "id": "mnw|44.75434|8.61794|pmn143",
+      "code": "pmn143",
+      "name": "Castelferro",
+      "distance_km": 0.372
+    },
+    {
+      "id": "mnw|44.75503|9.51293|ero621",
+      "code": "ero621",
+      "name": "Piccoli",
+      "distance_km": 0.078
+    },
+    {
+      "id": "mnw|44.75758|11.59608|ero356",
+      "code": "ero356",
+      "name": "Borgo Ricovero",
+      "distance_km": 1.054
+    },
+    {
+      "id": "mnw|44.76897|11.66262|ero343",
+      "code": "ero343",
+      "name": "Gaibanella-Sant'Edigio",
+      "distance_km": 1.029
+    },
+    {
+      "id": "mnw|44.76940|11.71925|ero631",
+      "code": "ero631",
+      "name": "Zarabina",
+      "distance_km": 0.212
+    },
+    {
+      "id": "mnw|44.77293|11.86743|ero290",
+      "code": "ero290",
+      "name": "Medelana",
+      "distance_km": 0.446
+    },
+    {
+      "id": "mnw|44.77931|11.34486|ero305",
+      "code": "ero305",
+      "name": "Area Industriale Dosso",
+      "distance_km": 0.876
+    },
+    {
+      "id": "mnw|44.78720|12.02761|ero306",
+      "code": "ero306",
+      "name": "La Chiarina",
+      "distance_km": 1.589
+    },
+    {
+      "id": "mnw|44.79184|8.78114|pmn505",
+      "code": "pmn505",
+      "name": "Pozzolo Formigaro · 0.8 km N",
+      "distance_km": 0.847
+    },
+    {
+      "id": "mnw|44.79278|11.72938|ero628",
+      "code": "ero628",
+      "name": "Possessione Nuova Baricella",
+      "distance_km": 0.077
+    },
+    {
+      "id": "mnw|44.79711|11.64744|ero308",
+      "code": "ero308",
+      "name": "Ca' Baiesi",
+      "distance_km": 0.518
+    },
+    {
+      "id": "mnw|44.80011|8.79062|pmn140",
+      "code": "pmn140",
+      "name": "Pozzolo Formigaro · 0.6 km O",
+      "distance_km": 0.559
+    },
+    {
+      "id": "mnw|44.81082|11.86766|ero307",
+      "code": "ero307",
+      "name": "Borgo del Sostegno",
+      "distance_km": 1.195
+    },
+    {
+      "id": "mnw|44.81265|11.68327|ero169",
+      "code": "ero169",
+      "name": "Coccomaro DI Cona",
+      "distance_km": 0.428
+    },
+    {
+      "id": "mnw|44.81383|12.20016|ero312",
+      "code": "ero312",
+      "name": "Passo di Pomposa",
+      "distance_km": 2.047
+    },
+    {
+      "id": "mnw|44.81488|11.50586|ero639",
+      "code": "ero639",
+      "name": "Castello · 0.9 km E",
+      "distance_km": 0.931
+    },
+    {
+      "id": "mnw|44.81585|12.39166|vnt681",
+      "code": "vnt681",
+      "name": "Bacucco",
+      "distance_km": 0.309
+    },
+    {
+      "id": "mnw|44.81664|12.01409|ero632",
+      "code": "ero632",
+      "name": "Massa Fiscaglia",
+      "distance_km": 0.92
+    },
+    {
+      "id": "mnw|44.81828|11.74899|ero298",
+      "code": "ero298",
+      "name": "Borgata della Stradella",
+      "distance_km": 1.11
+    },
+    {
+      "id": "mnw|44.82037|11.60958|ero319",
+      "code": "ero319",
+      "name": "Ferrara · 2.1 km NE",
+      "distance_km": 2.147
+    },
+    {
+      "id": "mnw|44.82718|12.13284|ero304",
+      "code": "ero304",
+      "name": "Case Baldi",
+      "distance_km": 0.57
+    },
+    {
+      "id": "mnw|44.83687|7.49655|pmn503",
+      "code": "pmn503",
+      "name": "Vigone",
+      "distance_km": 0.618
+    },
+    {
+      "id": "mnw|44.84114|12.04094|ero633",
+      "code": "ero633",
+      "name": "Tieni",
+      "distance_km": 2.182
+    },
+    {
+      "id": "mnw|44.84190|11.62285|ero126",
+      "code": "ero126",
+      "name": "Ferrara · 0.5 km SO",
+      "distance_km": 0.465
+    },
+    {
+      "id": "mnw|44.84455|11.14469|ero643",
+      "code": "ero643",
+      "name": "San Felice sul Panaro",
+      "distance_km": 1.023
+    },
+    {
+      "id": "mnw|44.84931|12.35367|vnt428",
+      "code": "vnt428",
+      "name": "Gorino Veneto",
+      "distance_km": 1.728
+    },
+    {
+      "id": "mnw|44.86266|11.00379|ero165",
+      "code": "ero165",
+      "name": "Disvetro",
+      "distance_km": 0.412
+    },
+    {
+      "id": "mnw|44.86757|10.06070|ero153",
+      "code": "ero153",
+      "name": "Fidenza · 0.1 km S",
+      "distance_km": 0.074
+    },
+    {
+      "id": "mnw|44.86918|9.64741|ero196",
+      "code": "ero196",
+      "name": "Ponte dell'Olio · 0.3 km SO",
+      "distance_km": 0.298
+    },
+    {
+      "id": "mnw|44.87162|8.22137|pmn497",
+      "code": "pmn497",
+      "name": "Vairo",
+      "distance_km": 0.877
+    },
+    {
+      "id": "mnw|44.87283|11.14622|ero323",
+      "code": "ero323",
+      "name": "Ponte di San Pellegrino",
+      "distance_km": 0.747
+    },
+    {
+      "id": "mnw|44.88279|11.93304|ero294",
+      "code": "ero294",
+      "name": "La Salana",
+      "distance_km": 1.291
+    },
+    {
+      "id": "mnw|44.88365|10.89863|ero068",
+      "code": "ero068",
+      "name": "Casa Madonnina",
+      "distance_km": 0.114
+    },
+    {
+      "id": "mnw|44.88589|11.51169|ero297",
+      "code": "ero297",
+      "name": "Palazzi Diamantina",
+      "distance_km": 0.241
+    },
+    {
+      "id": "mnw|44.88731|12.32515|vnt685",
+      "code": "vnt685",
+      "name": "L'Oca",
+      "distance_km": 0.318
+    },
+    {
+      "id": "mnw|44.88922|12.07368|ero354",
+      "code": "ero354",
+      "name": "Tagliata II",
+      "distance_km": 0.275
+    },
+    {
+      "id": "mnw|44.88963|11.01208|ero019",
+      "code": "ero019",
+      "name": "Corte · 1.3 km NO",
+      "distance_km": 1.272
+    },
+    {
+      "id": "mnw|44.89398|11.00131|ero325",
+      "code": "ero325",
+      "name": "Corte · 0.5 km N",
+      "distance_km": 0.52
+    },
+    {
+      "id": "mnw|44.89528|11.60148|vnt251",
+      "code": "vnt251",
+      "name": "Malcantone",
+      "distance_km": 0.374
+    },
+    {
+      "id": "mnw|44.90641|12.09834|ero148",
+      "code": "ero148",
+      "name": "Mezzogoro",
+      "distance_km": 0.434
+    },
+    {
+      "id": "mnw|44.91175|10.10439|ero173",
+      "code": "ero173",
+      "name": "Castellina",
+      "distance_km": 0.294
+    },
+    {
+      "id": "mnw|44.91209|11.47330|ero630",
+      "code": "ero630",
+      "name": "Porporana",
+      "distance_km": 1.389
+    },
+    {
+      "id": "mnw|44.91672|7.26107|pmn151",
+      "code": "pmn151",
+      "name": "Ciardossina",
+      "distance_km": 0.347
+    },
+    {
+      "id": "mnw|44.91931|12.17260|ero291",
+      "code": "ero291",
+      "name": "Massenzatica",
+      "distance_km": 0.698
+    },
+    {
+      "id": "mnw|44.91933|7.25138|pmn150",
+      "code": "pmn150",
+      "name": "Villar Perosa",
+      "distance_km": 0.267
+    },
+    {
+      "id": "mnw|44.92162|11.79994|ero288",
+      "code": "ero288",
+      "name": "Tabarro",
+      "distance_km": 1.302
+    },
+    {
+      "id": "mnw|44.92167|11.33724|ero303",
+      "code": "ero303",
+      "name": "Bruciantine",
+      "distance_km": 1.18
+    },
+    {
+      "id": "mnw|44.92296|7.73819|pmn502",
+      "code": "pmn502",
+      "name": "Villastellone",
+      "distance_km": 0.439
+    },
+    {
+      "id": "mnw|44.92567|12.22081|vnt695",
+      "code": "vnt695",
+      "name": "Rivà",
+      "distance_km": 0.809
+    },
+    {
+      "id": "mnw|44.92757|12.01419|ero309",
+      "code": "ero309",
+      "name": "Fienile Avanzarola",
+      "distance_km": 1.288
+    },
+    {
+      "id": "mnw|44.93534|9.60503|ero280",
+      "code": "ero280",
+      "name": "Roveleto Landi",
+      "distance_km": 0.086
+    },
+    {
+      "id": "mnw|44.93931|9.63312|ero188",
+      "code": "ero188",
+      "name": "Niviano",
+      "distance_km": 0.358
+    },
+    {
+      "id": "mnw|44.94514|7.93638|pmn490",
+      "code": "pmn490",
+      "name": "Villanova d'Asti",
+      "distance_km": 0.24
+    },
+    {
+      "id": "mnw|44.94676|12.46502|vnt653",
+      "code": "vnt653",
+      "name": "Case Ocaro",
+      "distance_km": 0.287
+    },
+    {
+      "id": "mnw|44.94837|10.81873|lmb350",
+      "code": "lmb350",
+      "name": "Gonzaga · 0.4 km N",
+      "distance_km": 0.397
+    },
+    {
+      "id": "mnw|44.94902|8.66928|pmn007",
+      "code": "pmn007",
+      "name": "Bricchi",
+      "distance_km": 0.177
+    },
+    {
+      "id": "mnw|44.95000|7.97000|pmn041",
+      "code": "pmn041",
+      "name": "San Paolo Solbrito",
+      "distance_km": 0.092
+    },
+    {
+      "id": "mnw|44.95084|9.03244|lmb366",
+      "code": "lmb366",
+      "name": "Retorbido",
+      "distance_km": 0.362
+    },
+    {
+      "id": "mnw|44.95407|8.05959|pmn172",
+      "code": "pmn172",
+      "name": "Cortandone",
+      "distance_km": 0.572
+    },
+    {
+      "id": "mnw|44.95974|8.66242|pmn074",
+      "code": "pmn074",
+      "name": "Molina",
+      "distance_km": 0.54
+    },
+    {
+      "id": "mnw|44.96569|11.74927|vnt668",
+      "code": "vnt668",
+      "name": "Polesella",
+      "distance_km": 0.128
+    },
+    {
+      "id": "mnw|44.98881|8.77075|pmn495",
+      "code": "pmn495",
+      "name": "Baracconi",
+      "distance_km": 0.117
+    },
+    {
+      "id": "mnw|44.99316|7.65821|pmn016",
+      "code": "pmn016",
+      "name": "Nichelino",
+      "distance_km": 0.893
+    },
+    {
+      "id": "mnw|45.00186|9.78186|ero197",
+      "code": "ero197",
+      "name": "San Giovanni · 0.6 km NO",
+      "distance_km": 0.572
+    },
+    {
+      "id": "mnw|45.01175|9.43851|ero368",
+      "code": "ero368",
+      "name": "Borgonovo Valtidone",
+      "distance_km": 0.485
+    },
+    {
+      "id": "mnw|45.01212|7.50538|pmn117",
+      "code": "pmn117",
+      "name": "Prabernasca",
+      "distance_km": 0.823
+    },
+    {
+      "id": "mnw|45.01856|11.38214|vnt480",
+      "code": "vnt480",
+      "name": "Facchina",
+      "distance_km": 0.447
+    },
+    {
+      "id": "mnw|45.01886|12.21033|vnt649",
+      "code": "vnt649",
+      "name": "Taglio",
+      "distance_km": 0.376
+    },
+    {
+      "id": "mnw|45.02317|12.23583|vnt370",
+      "code": "vnt370",
+      "name": "Contarina · 0.8 km NO",
+      "distance_km": 0.765
+    },
+    {
+      "id": "mnw|45.02325|7.75223|pmn040",
+      "code": "pmn040",
+      "name": "Pecetto",
+      "distance_km": 0.635
+    },
+    {
+      "id": "mnw|45.02797|12.22682|vnt610",
+      "code": "vnt610",
+      "name": "Contarina · 0.1 km E",
+      "distance_km": 0.142
+    },
+    {
+      "id": "mnw|45.04690|9.68166|ero193",
+      "code": "ero193",
+      "name": "Piacenza",
+      "distance_km": 1.109
+    },
+    {
+      "id": "mnw|45.04767|7.34369|pmn510",
+      "code": "pmn510",
+      "name": "Giaveno",
+      "distance_km": 0.462
+    },
+    {
+      "id": "mnw|45.05191|8.04912|pmn103",
+      "code": "pmn103",
+      "name": "Piovà Massaia",
+      "distance_km": 0.369
+    },
+    {
+      "id": "mnw|45.07076|9.27213|lmb389",
+      "code": "lmb389",
+      "name": "Broni · 1.2 km SO",
+      "distance_km": 1.222
+    },
+    {
+      "id": "mnw|45.07230|12.23751|vnt033",
+      "code": "vnt033",
+      "name": "Rosolina",
+      "distance_km": 0.783
+    },
+    {
+      "id": "mnw|45.07274|6.88382|pmn506",
+      "code": "pmn506",
+      "name": "Salbertrand",
+      "distance_km": 0.297
+    },
+    {
+      "id": "mnw|45.08914|11.59587|vnt416",
+      "code": "vnt416",
+      "name": "Caselle Provinciale",
+      "distance_km": 0.801
+    },
+    {
+      "id": "mnw|45.11103|7.66317|pmn493",
+      "code": "pmn493",
+      "name": "Ceronda",
+      "distance_km": 1.604
+    },
+    {
+      "id": "mnw|45.12323|9.02702|lmb346",
+      "code": "lmb346",
+      "name": "Zaccarina-Sant'Antonio",
+      "distance_km": 0.528
+    },
+    {
+      "id": "mnw|45.13457|8.13607|pmn171",
+      "code": "pmn171",
+      "name": "Mezzalfenga di Sopra",
+      "distance_km": 0.057
+    },
+    {
+      "id": "mnw|45.13553|8.46562|pmn061",
+      "code": "pmn061",
+      "name": "Casale Monferrato",
+      "distance_km": 1.057
+    },
+    {
+      "id": "mnw|45.13578|8.41987|pmn069",
+      "code": "pmn069",
+      "name": "Villa Sordi",
+      "distance_km": 2.313
+    },
+    {
+      "id": "mnw|45.14257|7.06698|pmn482",
+      "code": "pmn482",
+      "name": "Urbiano",
+      "distance_km": 0.121
+    },
+    {
+      "id": "mnw|45.14591|10.76227|lmb015",
+      "code": "lmb015",
+      "name": "Zona Artigianale · 1.8 km O",
+      "distance_km": 1.799
+    },
+    {
+      "id": "mnw|45.15187|9.92864|lmb249",
+      "code": "lmb249",
+      "name": "Spinadesco",
+      "distance_km": 0.349
+    },
+    {
+      "id": "mnw|45.15505|9.69335|lmb039",
+      "code": "lmb039",
+      "name": "Retegno",
+      "distance_km": 0.744
+    },
+    {
+      "id": "mnw|45.16045|7.89060|pmn031",
+      "code": "pmn031",
+      "name": "Castagneto Po · 0.4 km SO",
+      "distance_km": 0.393
+    },
+    {
+      "id": "mnw|45.16119|8.94838|lmb375",
+      "code": "lmb375",
+      "name": "Dorno",
+      "distance_km": 0.873
+    },
+    {
+      "id": "mnw|45.16937|11.31835|vnt102",
+      "code": "vnt102",
+      "name": "Barotto",
+      "distance_km": 1.021
+    },
+    {
+      "id": "mnw|45.17299|10.67657|lmb214",
+      "code": "lmb214",
+      "name": "Rivalta sul Mincio",
+      "distance_km": 0.015
+    },
+    {
+      "id": "mnw|45.17852|9.65187|lmb310",
+      "code": "lmb310",
+      "name": "Casalpusterlengo",
+      "distance_km": 0.287
+    },
+    {
+      "id": "mnw|45.18665|11.88335|vnt242",
+      "code": "vnt242",
+      "name": "Bagnoli di Sopra",
+      "distance_km": 0.077
+    },
+    {
+      "id": "mnw|45.18665|7.72000|pmn501",
+      "code": "pmn501",
+      "name": "Leini",
+      "distance_km": 0.627
+    },
+    {
+      "id": "mnw|45.18984|11.80522|vnt448",
+      "code": "vnt448",
+      "name": "Argine",
+      "distance_km": 0.589
+    },
+    {
+      "id": "mnw|45.19184|10.97165|lmb495",
+      "code": "lmb495",
+      "name": "Castel d'Ario",
+      "distance_km": 0.483
+    },
+    {
+      "id": "mnw|45.22624|7.49651|pmn496",
+      "code": "pmn496",
+      "name": "Vallo Torinese",
+      "distance_km": 0.299
+    },
+    {
+      "id": "mnw|45.22707|7.53987|pmn009",
+      "code": "pmn009",
+      "name": "Pinardi",
+      "distance_km": 0.762
+    },
+    {
+      "id": "mnw|45.23182|7.51050|pmn178",
+      "code": "pmn178",
+      "name": "Monasterolo",
+      "distance_km": 0.446
+    },
+    {
+      "id": "mnw|45.23260|7.63999|pmn162",
+      "code": "pmn162",
+      "name": "Sedime",
+      "distance_km": 0.565
+    },
+    {
+      "id": "mnw|45.23688|7.57190|pmn048",
+      "code": "pmn048",
+      "name": "Nole",
+      "distance_km": 0.548
+    },
+    {
+      "id": "mnw|45.26329|8.86597|lmb251",
+      "code": "lmb251",
+      "name": "Gambolò · 0.6 km O",
+      "distance_km": 0.623
+    },
+    {
+      "id": "mnw|45.26695|8.85428|lmb378",
+      "code": "lmb378",
+      "name": "Gambolò · 0.6 km SE",
+      "distance_km": 0.621
+    },
+    {
+      "id": "mnw|45.28214|10.64712|lmb288",
+      "code": "lmb288",
+      "name": "Cerlongo",
+      "distance_km": 0.446
+    },
+    {
+      "id": "mnw|45.28353|8.59566|lmb395",
+      "code": "lmb395",
+      "name": "Robbio",
+      "distance_km": 0.647
+    },
+    {
+      "id": "mnw|45.28426|11.79076|vnt241",
+      "code": "vnt241",
+      "name": "Granze",
+      "distance_km": 0.28
+    },
+    {
+      "id": "mnw|45.29451|11.81665|vnt484",
+      "code": "vnt484",
+      "name": "Carrara San Giorgio",
+      "distance_km": 0.254
+    },
+    {
+      "id": "mnw|45.29908|11.43939|vnt460",
+      "code": "vnt460",
+      "name": "Fornasette",
+      "distance_km": 0.118
+    },
+    {
+      "id": "mnw|45.29913|9.52013|lmb168",
+      "code": "lmb168",
+      "name": "Olmo",
+      "distance_km": 1.197
+    },
+    {
+      "id": "mnw|45.30551|9.49406|lmb191",
+      "code": "lmb191",
+      "name": "Lodi",
+      "distance_km": 0.721
+    },
+    {
+      "id": "mnw|45.31359|11.88236|vnt153",
+      "code": "vnt153",
+      "name": "Bertipaglia",
+      "distance_km": 0.357
+    },
+    {
+      "id": "mnw|45.31542|11.49979|vnt378",
+      "code": "vnt378",
+      "name": "Cagnano",
+      "distance_km": 0.316
+    },
+    {
+      "id": "mnw|45.31572|10.94823|vnt377",
+      "code": "vnt377",
+      "name": "Vigasio",
+      "distance_km": 0.422
+    },
+    {
+      "id": "mnw|45.31868|8.85266|lmb403",
+      "code": "lmb403",
+      "name": "Vigevano",
+      "distance_km": 0.53
+    },
+    {
+      "id": "mnw|45.32044|11.98008|vnt136",
+      "code": "vnt136",
+      "name": "Via Ardoneghe I",
+      "distance_km": 0.208
+    },
+    {
+      "id": "mnw|45.33586|9.47167|lmb408",
+      "code": "lmb408",
+      "name": "Montanaso Lombardo",
+      "distance_km": 0.487
+    },
+    {
+      "id": "mnw|45.35787|10.42611|lmb492",
+      "code": "lmb492",
+      "name": "Carpenedolo",
+      "distance_km": 0.584
+    },
+    {
+      "id": "mnw|45.35986|9.70411|lmb520",
+      "code": "lmb520",
+      "name": "Crema",
+      "distance_km": 1.773
+    },
+    {
+      "id": "mnw|45.36408|11.79203|vnt263",
+      "code": "vnt263",
+      "name": "Abano Terme",
+      "distance_km": 0.818
+    },
+    {
+      "id": "mnw|45.36531|11.92899|vnt066",
+      "code": "vnt066",
+      "name": "Ponte San Nicolò",
+      "distance_km": 0.483
+    },
+    {
+      "id": "mnw|45.38293|10.37715|lmb332",
+      "code": "lmb332",
+      "name": "Bredazzane",
+      "distance_km": 0.134
+    },
+    {
+      "id": "mnw|45.38630|7.66168|pmn499",
+      "code": "pmn499",
+      "name": "Piova",
+      "distance_km": 0.71
+    },
+    {
+      "id": "mnw|45.38978|11.84982|vnt657",
+      "code": "vnt657",
+      "name": "Caldon-Lavezzolo",
+      "distance_km": 1.609
+    },
+    {
+      "id": "mnw|45.39022|7.64900|pmn170",
+      "code": "pmn170",
+      "name": "Cuorgnè",
+      "distance_km": 0.366
+    },
+    {
+      "id": "mnw|45.39097|11.87066|vnt707",
+      "code": "vnt707",
+      "name": "Padua · 2.2 km NE",
+      "distance_km": 2.232
+    },
+    {
+      "id": "mnw|45.39279|11.95750|vnt656",
+      "code": "vnt656",
+      "name": "Villatora",
+      "distance_km": 0.957
+    },
+    {
+      "id": "mnw|45.40530|9.03568|lmb352",
+      "code": "lmb352",
+      "name": "Gaggiano",
+      "distance_km": 0.081
+    },
+    {
+      "id": "mnw|45.40807|11.85807|vnt655",
+      "code": "vnt655",
+      "name": "Padua · 2.2 km E",
+      "distance_km": 2.169
+    },
+    {
+      "id": "mnw|45.41008|11.88894|vnt470",
+      "code": "vnt470",
+      "name": "Padua · 0.3 km SO",
+      "distance_km": 0.336
+    },
+    {
+      "id": "mnw|45.41072|11.87227|vnt680",
+      "code": "vnt680",
+      "name": "Padua · 1.1 km E",
+      "distance_km": 1.104
+    },
+    {
+      "id": "mnw|45.41449|12.00828|vnt394",
+      "code": "vnt394",
+      "name": "Bassa",
+      "distance_km": 0.267
+    },
+    {
+      "id": "mnw|45.41666|11.81495|vnt675",
+      "code": "vnt675",
+      "name": "Caselle · 0.6 km S",
+      "distance_km": 0.611
+    },
+    {
+      "id": "mnw|45.42000|8.73000|pmn047",
+      "code": "pmn047",
+      "name": "Cascina Mietta",
+      "distance_km": 1.583
+    },
+    {
+      "id": "mnw|45.42148|10.96719|vnt454",
+      "code": "vnt454",
+      "name": "Bonizzati-Fonte Madonna",
+      "distance_km": 2.112
+    },
+    {
+      "id": "mnw|45.42226|11.89480|vnt654",
+      "code": "vnt654",
+      "name": "Padua · 1.7 km SO",
+      "distance_km": 1.735
+    },
+    {
+      "id": "mnw|45.42355|7.59580|pmn095",
+      "code": "pmn095",
+      "name": "Pont Canavese",
+      "distance_km": 0.422
+    },
+    {
+      "id": "mnw|45.42398|11.87082|vnt706",
+      "code": "vnt706",
+      "name": "Padua · 2.1 km SE",
+      "distance_km": 2.132
+    },
+    {
+      "id": "mnw|45.42855|7.79038|pmn113",
+      "code": "pmn113",
+      "name": "Parella",
+      "distance_km": 0.194
+    },
+    {
+      "id": "mnw|45.42911|11.84558|vnt406",
+      "code": "vnt406",
+      "name": "Galdiolo",
+      "distance_km": 1.89
+    },
+    {
+      "id": "mnw|45.43010|12.32804|vnt375",
+      "code": "vnt375",
+      "name": "Giudecca",
+      "distance_km": 0.598
+    },
+    {
+      "id": "mnw|45.43179|12.05230|vnt442",
+      "code": "vnt442",
+      "name": "Arino · 0.8 km N",
+      "distance_km": 0.769
+    },
+    {
+      "id": "mnw|45.43301|8.74403|pmn176",
+      "code": "pmn176",
+      "name": "Trecate",
+      "distance_km": 0.605
+    },
+    {
+      "id": "mnw|45.43525|11.31981|vnt481",
+      "code": "vnt481",
+      "name": "Sarmazza",
+      "distance_km": 0.395
+    },
+    {
+      "id": "mnw|45.43673|10.68672|vnt259",
+      "code": "vnt259",
+      "name": "Peschiera del Garda",
+      "distance_km": 0.27
+    },
+    {
+      "id": "mnw|45.43770|10.99305|vnt651",
+      "code": "vnt651",
+      "name": "Verona",
+      "distance_km": 0.11
+    },
+    {
+      "id": "mnw|45.43894|12.04884|vnt362",
+      "code": "vnt362",
+      "name": "Arino · 0.4 km E",
+      "distance_km": 0.438
+    },
+    {
+      "id": "mnw|45.44556|11.75541|vnt191",
+      "code": "vnt191",
+      "name": "Mestrino",
+      "distance_km": 0.555
+    },
+    {
+      "id": "mnw|45.44720|9.09839|lmb502",
+      "code": "lmb502",
+      "name": "Cesano Boscone",
+      "distance_km": 0.648
+    },
+    {
+      "id": "mnw|45.44869|10.23600|lmb273",
+      "code": "lmb273",
+      "name": "Montirone",
+      "distance_km": 0.62
+    },
+    {
+      "id": "mnw|45.45878|10.11173|lmb508",
+      "code": "lmb508",
+      "name": "Azzano Mella",
+      "distance_km": 0.631
+    },
+    {
+      "id": "mnw|45.47033|8.69434|pmn147",
+      "code": "pmn147",
+      "name": "Galliate · 1.1 km N",
+      "distance_km": 1.054
+    },
+    {
+      "id": "mnw|45.47246|11.60880|vnt628",
+      "code": "vnt628",
+      "name": "Longare",
+      "distance_km": 0.553
+    },
+    {
+      "id": "mnw|45.47326|8.46355|pmn033",
+      "code": "pmn033",
+      "name": "Vicolungo",
+      "distance_km": 0.283
+    },
+    {
+      "id": "mnw|45.47512|11.54097|vnt679",
+      "code": "vnt679",
+      "name": "Lapio",
+      "distance_km": 0.418
+    },
+    {
+      "id": "mnw|45.48010|8.81554|lmb400",
+      "code": "lmb400",
+      "name": "Bernate Ticino",
+      "distance_km": 0.266
+    },
+    {
+      "id": "mnw|45.48138|12.24769|vnt431",
+      "code": "vnt431",
+      "name": "Mestre",
+      "distance_km": 1.158
+    },
+    {
+      "id": "mnw|45.48527|11.34295|vnt276",
+      "code": "vnt276",
+      "name": "Casarotto",
+      "distance_km": 0.062
+    },
+    {
+      "id": "mnw|45.48843|8.70128|pmn507",
+      "code": "pmn507",
+      "name": "Galliate · 1.0 km S",
+      "distance_km": 1.031
+    },
+    {
+      "id": "mnw|45.48854|12.16368|vnt417",
+      "code": "vnt417",
+      "name": "Spinea-Orgnano",
+      "distance_km": 0.733
+    },
+    {
+      "id": "mnw|45.48890|8.08520|pmn156",
+      "code": "pmn156",
+      "name": "Vergnasco",
+      "distance_km": 0.1
+    },
+    {
+      "id": "mnw|45.48968|11.57556|vnt100",
+      "code": "vnt100",
+      "name": "Lago di Fimon",
+      "distance_km": 1.13
+    },
+    {
+      "id": "mnw|45.49080|11.96139|vnt356",
+      "code": "vnt356",
+      "name": "Case Via Cognaro",
+      "distance_km": 0.644
+    },
+    {
+      "id": "mnw|45.49817|9.24053|lmb254",
+      "code": "lmb254",
+      "name": "Cascina Metalino",
+      "distance_km": 3.086
+    },
+    {
+      "id": "mnw|45.49899|8.33820|pmn115",
+      "code": "pmn115",
+      "name": "San Giacomo Vercellese",
+      "distance_km": 0.899
+    },
+    {
+      "id": "mnw|45.49992|10.93624|vnt613",
+      "code": "vnt613",
+      "name": "Arbizzano-Santa Maria",
+      "distance_km": 0.582
+    },
+    {
+      "id": "mnw|45.51028|9.57581|lmb179",
+      "code": "lmb179",
+      "name": "Casiraga",
+      "distance_km": 0.861
+    },
+    {
+      "id": "mnw|45.51341|12.28384|vnt177",
+      "code": "vnt177",
+      "name": "Ca' Solaro Sud",
+      "distance_km": 0.578
+    },
+    {
+      "id": "mnw|45.51405|11.24648|vnt634",
+      "code": "vnt634",
+      "name": "Coltrini",
+      "distance_km": 0.258
+    },
+    {
+      "id": "mnw|45.51427|10.93425|vnt650",
+      "code": "vnt650",
+      "name": "Busa",
+      "distance_km": 0.635
+    },
+    {
+      "id": "mnw|45.51600|12.00219|vnt080",
+      "code": "vnt080",
+      "name": "Rigon",
+      "distance_km": 1.3
+    },
+    {
+      "id": "mnw|45.52274|11.43989|vnt627",
+      "code": "vnt627",
+      "name": "Sovizzo",
+      "distance_km": 0.653
+    },
+    {
+      "id": "mnw|45.52342|9.31255|lmb532",
+      "code": "lmb532",
+      "name": "Cascina Gaggiolo",
+      "distance_km": 0.495
+    },
+    {
+      "id": "mnw|45.52701|11.55981|vnt112",
+      "code": "vnt112",
+      "name": "Case della Porciglia",
+      "distance_km": 0.814
+    },
+    {
+      "id": "mnw|45.52784|9.39268|lmb384",
+      "code": "lmb384",
+      "name": "Sant'Agata Martesana",
+      "distance_km": 0.933
+    },
+    {
+      "id": "mnw|45.53000|11.35000|vnt051",
+      "code": "vnt051",
+      "name": "Coraini",
+      "distance_km": 1.154
+    },
+    {
+      "id": "mnw|45.53820|7.94789|pmn097",
+      "code": "pmn097",
+      "name": "Netro",
+      "distance_km": 0.217
+    },
+    {
+      "id": "mnw|45.53895|9.22434|lmb534",
+      "code": "lmb534",
+      "name": "Sesto San Giovanni",
+      "distance_km": 0.64
+    },
+    {
+      "id": "mnw|45.54151|11.36813|vnt137",
+      "code": "vnt137",
+      "name": "Tezze",
+      "distance_km": 0.845
+    },
+    {
+      "id": "mnw|45.54240|11.27614|vnt594",
+      "code": "vnt594",
+      "name": "Vignaga",
+      "distance_km": 0.605
+    },
+    {
+      "id": "mnw|45.54431|11.55097|vnt672",
+      "code": "vnt672",
+      "name": "Vicenza",
+      "distance_km": 0.381
+    },
+    {
+      "id": "mnw|45.54582|11.61333|vnt596",
+      "code": "vnt596",
+      "name": "Villaggio Montegrappa",
+      "distance_km": 0.1
+    },
+    {
+      "id": "mnw|45.54600|11.32500|vnt103",
+      "code": "vnt103",
+      "name": "Manella",
+      "distance_km": 0.146
+    },
+    {
+      "id": "mnw|45.54913|12.04145|vnt677",
+      "code": "vnt677",
+      "name": "San Dono",
+      "distance_km": 0.987
+    },
+    {
+      "id": "mnw|45.55972|10.86684|vnt607",
+      "code": "vnt607",
+      "name": "La Ca'",
+      "distance_km": 0.08
+    },
+    {
+      "id": "mnw|45.56097|7.98934|pmn054",
+      "code": "pmn054",
+      "name": "Muzzano",
+      "distance_km": 0.04
+    },
+    {
+      "id": "mnw|45.56111|8.10327|pmn114",
+      "code": "pmn114",
+      "name": "Vigliano Biellese",
+      "distance_km": 0.269
+    },
+    {
+      "id": "mnw|45.56395|12.22784|vnt108",
+      "code": "vnt108",
+      "name": "Mogliano Veneto",
+      "distance_km": 1.475
+    },
+    {
+      "id": "mnw|45.56790|9.26895|lmb259",
+      "code": "lmb259",
+      "name": "Monza · 1.4 km N",
+      "distance_km": 1.378
+    },
+    {
+      "id": "mnw|45.56981|11.97865|vnt641",
+      "code": "vnt641",
+      "name": "Rustega",
+      "distance_km": 0.198
+    },
+    {
+      "id": "mnw|45.57491|11.48199|vnt691",
+      "code": "vnt691",
+      "name": "Bagnara",
+      "distance_km": 0.867
+    },
+    {
+      "id": "mnw|45.57752|12.67969|vnt601",
+      "code": "vnt601",
+      "name": "Eraclea",
+      "distance_km": 0.505
+    },
+    {
+      "id": "mnw|45.57893|9.30211|lmb171",
+      "code": "lmb171",
+      "name": "Monza · 2.3 km O",
+      "distance_km": 2.311
+    },
+    {
+      "id": "mnw|45.58220|9.14818|lmb320",
+      "code": "lmb320",
+      "name": "Cascina Messa",
+      "distance_km": 1.421
+    },
+    {
+      "id": "mnw|45.59626|9.26147|lmb170",
+      "code": "lmb170",
+      "name": "Vedano al Lambro · 1.5 km N",
+      "distance_km": 1.478
+    },
+    {
+      "id": "mnw|45.60308|9.89660|lmb341",
+      "code": "lmb341",
+      "name": "Vanzeghetto",
+      "distance_km": 0.96
+    },
+    {
+      "id": "mnw|45.60723|9.23602|lmb287",
+      "code": "lmb287",
+      "name": "Lissone",
+      "distance_km": 0.644
+    },
+    {
+      "id": "mnw|45.60950|9.89370|lmb006",
+      "code": "lmb006",
+      "name": "Castelli Calepio",
+      "distance_km": 0.763
+    },
+    {
+      "id": "mnw|45.61029|9.15731|lmb339",
+      "code": "lmb339",
+      "name": "Bovisio-Masciago",
+      "distance_km": 0.335
+    },
+    {
+      "id": "mnw|45.61048|9.41870|lmb704",
+      "code": "lmb704",
+      "name": "Bellusco",
+      "distance_km": 1.012
+    },
+    {
+      "id": "mnw|45.61352|9.10645|lmb489",
+      "code": "lmb489",
+      "name": "Villaggio del Sole · 0.1 km NE",
+      "distance_km": 0.081
+    },
+    {
+      "id": "mnw|45.61395|9.26794|lmb499",
+      "code": "lmb499",
+      "name": "Vedano al Lambro · 0.6 km S",
+      "distance_km": 0.575
+    },
+    {
+      "id": "mnw|45.61950|9.28602|lmb286",
+      "code": "lmb286",
+      "name": "San Giorgio · 1.0 km SE",
+      "distance_km": 0.961
+    },
+    {
+      "id": "mnw|45.62186|11.51497|vnt400",
+      "code": "vnt400",
+      "name": "Pomaroli II",
+      "distance_km": 1.159
+    },
+    {
+      "id": "mnw|45.62489|13.79883|fvg132",
+      "code": "fvg132",
+      "name": "Piano di Sant'Anna",
+      "distance_km": 0.153
+    },
+    {
+      "id": "mnw|45.62706|9.32648|lmb372",
+      "code": "lmb372",
+      "name": "Arcore",
+      "distance_km": 0.155
+    },
+    {
+      "id": "mnw|45.62886|9.17348|lmb517",
+      "code": "lmb517",
+      "name": "Cesano Maderno",
+      "distance_km": 1.679
+    },
+    {
+      "id": "mnw|45.63131|12.26173|vnt463",
+      "code": "vnt463",
+      "name": "Case Cadamuro",
+      "distance_km": 0.631
+    },
+    {
+      "id": "mnw|45.63174|12.59242|vnt391",
+      "code": "vnt391",
+      "name": "Casa Gnes",
+      "distance_km": 0.729
+    },
+    {
+      "id": "mnw|45.63359|12.69056|vnt383",
+      "code": "vnt383",
+      "name": "Stretti",
+      "distance_km": 0.373
+    },
+    {
+      "id": "mnw|45.64009|11.83511|vnt216",
+      "code": "vnt216",
+      "name": "Peraro",
+      "distance_km": 0.363
+    },
+    {
+      "id": "mnw|45.64268|10.73399|vnt387",
+      "code": "vnt387",
+      "name": "San Zeno di Montagna",
+      "distance_km": 0.594
+    },
+    {
+      "id": "mnw|45.64623|13.05053|vnt705",
+      "code": "vnt705",
+      "name": "Ca Grande Pineda",
+      "distance_km": 1.394
+    },
+    {
+      "id": "mnw|45.64669|12.27036|vnt190",
+      "code": "vnt190",
+      "name": "Ansa del Sile",
+      "distance_km": 0.658
+    },
+    {
+      "id": "mnw|45.64795|13.79062|fvg108",
+      "code": "fvg108",
+      "name": "San Luigi · 0.3 km N",
+      "distance_km": 0.254
+    },
+    {
+      "id": "mnw|45.64902|12.65031|vnt453",
+      "code": "vnt453",
+      "name": "Cittànova",
+      "distance_km": 1.286
+    },
+    {
+      "id": "mnw|45.64987|7.15127|vda010",
+      "code": "vda010",
+      "name": "Rhemes-Saint-Georges",
+      "distance_km": 0.36
+    },
+    {
+      "id": "mnw|45.65000|11.58000|vnt049",
+      "code": "vnt049",
+      "name": "Forni",
+      "distance_km": 0.797
+    },
+    {
+      "id": "mnw|45.65004|9.38548|lmb380",
+      "code": "lmb380",
+      "name": "Carnate",
+      "distance_km": 0.599
+    },
+    {
+      "id": "mnw|45.65016|11.65391|vnt643",
+      "code": "vnt643",
+      "name": "Zona Artigianale · 0.4 km NE",
+      "distance_km": 0.383
+    },
+    {
+      "id": "mnw|45.65310|9.28221|lmb359",
+      "code": "lmb359",
+      "name": "Canonica",
+      "distance_km": 0.513
+    },
+    {
+      "id": "mnw|45.65312|9.19900|lmb021",
+      "code": "lmb021",
+      "name": "Seregno · 0.6 km SE",
+      "distance_km": 0.61
+    },
+    {
+      "id": "mnw|45.65384|9.17903|lmb080",
+      "code": "lmb080",
+      "name": "Seregno · 2.1 km E",
+      "distance_km": 2.099
+    },
+    {
+      "id": "mnw|45.65584|9.30797|lmb238",
+      "code": "lmb238",
+      "name": "Lesmo",
+      "distance_km": 0.809
+    },
+    {
+      "id": "mnw|45.66034|13.78281|fvg113",
+      "code": "fvg113",
+      "name": "Trieste",
+      "distance_km": 1.29
+    },
+    {
+      "id": "mnw|45.66107|9.16986|lmb516",
+      "code": "lmb516",
+      "name": "Meda · 1.3 km O",
+      "distance_km": 1.282
+    },
+    {
+      "id": "mnw|45.66119|12.12932|vnt464",
+      "code": "vnt464",
+      "name": "Altana",
+      "distance_km": 0.477
+    },
+    {
+      "id": "mnw|45.66466|13.77586|fvg073",
+      "code": "fvg073",
+      "name": "Sottomonte · 1.1 km N",
+      "distance_km": 1.114
+    },
+    {
+      "id": "mnw|45.66630|9.30947|lmb507",
+      "code": "lmb507",
+      "name": "Correzzana",
+      "distance_km": 0.152
+    },
+    {
+      "id": "mnw|45.66670|9.16034|lmb338",
+      "code": "lmb338",
+      "name": "Meda · 0.8 km SO",
+      "distance_km": 0.816
+    },
+    {
+      "id": "mnw|45.66827|9.14998|lmb506",
+      "code": "lmb506",
+      "name": "Meda · 0.8 km S",
+      "distance_km": 0.828
+    },
+    {
+      "id": "mnw|45.66881|11.92021|vnt637",
+      "code": "vnt637",
+      "name": "Castelfranco Veneto · 0.6 km NE",
+      "distance_km": 0.642
+    },
+    {
+      "id": "mnw|45.67819|11.97060|vnt609",
+      "code": "vnt609",
+      "name": "Salvatronda",
+      "distance_km": 0.668
+    },
+    {
+      "id": "mnw|45.68043|13.77294|fvg140",
+      "code": "fvg140",
+      "name": "Sottomonte · 0.9 km SE",
+      "distance_km": 0.936
+    },
+    {
+      "id": "mnw|45.68367|10.97931|vnt482",
+      "code": "vnt482",
+      "name": "Villaggio San Michele",
+      "distance_km": 2.005
+    },
+    {
+      "id": "mnw|45.68772|11.84929|vnt364",
+      "code": "vnt364",
+      "name": "Alberone",
+      "distance_km": 0.264
+    },
+    {
+      "id": "mnw|45.68791|9.10614|lmb325",
+      "code": "lmb325",
+      "name": "Cascina Valle-Stazione di Carimate",
+      "distance_km": 0.857
+    },
+    {
+      "id": "mnw|45.68887|11.61945|vnt487",
+      "code": "vnt487",
+      "name": "Brian-Roncaggia",
+      "distance_km": 0.6
+    },
+    {
+      "id": "mnw|45.69077|9.20547|lmb136",
+      "code": "lmb136",
+      "name": "Giussano",
+      "distance_km": 1.065
+    },
+    {
+      "id": "mnw|45.69159|12.37363|vnt266",
+      "code": "vnt266",
+      "name": "San Biagio di Callalta",
+      "distance_km": 0.93
+    },
+    {
+      "id": "mnw|45.69427|9.83997|lmb382",
+      "code": "lmb382",
+      "name": "Trescore Balneario",
+      "distance_km": 0.138
+    },
+    {
+      "id": "mnw|45.69682|11.52793|vnt398",
+      "code": "vnt398",
+      "name": "Sarcedo",
+      "distance_km": 0.52
+    },
+    {
+      "id": "mnw|45.70000|11.58000|vnt023",
+      "code": "vnt023",
+      "name": "Valerio",
+      "distance_km": 0.45
+    },
+    {
+      "id": "mnw|45.70000|8.90000|lmb183",
+      "code": "lmb183",
+      "name": "Tradate",
+      "distance_km": 1.109
+    },
+    {
+      "id": "mnw|45.70000|9.03000|lmb128",
+      "code": "lmb128",
+      "name": "Lomazzo",
+      "distance_km": 0.495
+    },
+    {
+      "id": "mnw|45.70348|10.31498|lmb117",
+      "code": "lmb117",
+      "name": "Briale",
+      "distance_km": 0.163
+    },
+    {
+      "id": "mnw|45.70395|11.70383|vnt713",
+      "code": "vnt713",
+      "name": "Vegre · 0.1 km NO",
+      "distance_km": 0.088
+    },
+    {
+      "id": "mnw|45.70528|12.14127|vnt468",
+      "code": "vnt468",
+      "name": "Porcellengo",
+      "distance_km": 0.121
+    },
+    {
+      "id": "mnw|45.70771|11.67924|vnt157",
+      "code": "vnt157",
+      "name": "Incrocio Tonellotto",
+      "distance_km": 0.624
+    },
+    {
+      "id": "mnw|45.70828|11.70160|vnt219",
+      "code": "vnt219",
+      "name": "Vegre · 0.5 km S",
+      "distance_km": 0.455
+    },
+    {
+      "id": "mnw|45.70830|9.18441|lmb381",
+      "code": "lmb381",
+      "name": "Carugo",
+      "distance_km": 0.965
+    },
+    {
+      "id": "mnw|45.70832|11.86685|vnt455",
+      "code": "vnt455",
+      "name": "Giorgione",
+      "distance_km": 0.343
+    },
+    {
+      "id": "mnw|45.71238|9.26441|lmb166",
+      "code": "lmb166",
+      "name": "Capriano",
+      "distance_km": 1.376
+    },
+    {
+      "id": "mnw|45.71483|7.27354|vda012",
+      "code": "vda012",
+      "name": "Jovencan",
+      "distance_km": 0.073
+    },
+    {
+      "id": "mnw|45.71493|11.36484|vnt178",
+      "code": "vnt178",
+      "name": "Schio",
+      "distance_km": 0.681
+    },
+    {
+      "id": "mnw|45.71498|8.79459|lmb379",
+      "code": "lmb379",
+      "name": "Jerago Con Orago",
+      "distance_km": 1.151
+    },
+    {
+      "id": "mnw|45.72294|11.35996|vnt612",
+      "code": "vnt612",
+      "name": "Ponte Timonchio",
+      "distance_km": 1.097
+    },
+    {
+      "id": "mnw|45.72380|9.60909|lmb079",
+      "code": "lmb079",
+      "name": "Scano al Brembo",
+      "distance_km": 0.58
+    },
+    {
+      "id": "mnw|45.72416|11.44700|vnt114",
+      "code": "vnt114",
+      "name": "Zanè",
+      "distance_km": 0.3
+    },
+    {
+      "id": "mnw|45.72565|8.79628|lmb529",
+      "code": "lmb529",
+      "name": "Albizzate",
+      "distance_km": 0.551
+    },
+    {
+      "id": "mnw|45.72598|8.58108|pmn174",
+      "code": "pmn174",
+      "name": "Glisente",
+      "distance_km": 1.306
+    },
+    {
+      "id": "mnw|45.73092|12.57672|vnt642",
+      "code": "vnt642",
+      "name": "Chiarano",
+      "distance_km": 0.42
+    },
+    {
+      "id": "mnw|45.73101|8.65146|lmb397",
+      "code": "lmb397",
+      "name": "Sesto Calende",
+      "distance_km": 1.464
+    },
+    {
+      "id": "mnw|45.73424|11.10775|trn311",
+      "code": "trn311",
+      "name": "Rifugio Fraccaroli",
+      "distance_km": 2.037
+    },
+    {
+      "id": "mnw|45.73566|10.93781|trn047",
+      "code": "trn047",
+      "name": "Avio",
+      "distance_km": 0.225
+    },
+    {
+      "id": "mnw|45.73575|12.12067|vnt667",
+      "code": "vnt667",
+      "name": "Zona Industriale Sant'Elena",
+      "distance_km": 0.466
+    },
+    {
+      "id": "mnw|45.73841|9.57891|lmb315",
+      "code": "lmb315",
+      "name": "Almenno San Bartolomeo",
+      "distance_km": 0.168
+    },
+    {
+      "id": "mnw|45.74165|8.41085|pmn105",
+      "code": "pmn105",
+      "name": "Soriso",
+      "distance_km": 0.175
+    },
+    {
+      "id": "mnw|45.74317|8.81170|lmb390",
+      "code": "lmb390",
+      "name": "Castronno · 0.6 km N",
+      "distance_km": 0.57
+    },
+    {
+      "id": "mnw|45.74729|12.10591|vnt255",
+      "code": "vnt255",
+      "name": "Falzè-Signoressa",
+      "distance_km": 0.348
+    },
+    {
+      "id": "mnw|45.74755|9.59497|lmb223",
+      "code": "lmb223",
+      "name": "Almenno San Salvatore",
+      "distance_km": 0.287
+    },
+    {
+      "id": "mnw|45.75000|11.73000|vnt050",
+      "code": "vnt050",
+      "name": "Baggi",
+      "distance_km": 1.117
+    },
+    {
+      "id": "mnw|45.75246|11.65984|vnt230",
+      "code": "vnt230",
+      "name": "Marostica",
+      "distance_km": 0.808
+    },
+    {
+      "id": "mnw|45.75529|8.81342|lmb392",
+      "code": "lmb392",
+      "name": "Cascine Maggio",
+      "distance_km": 0.478
+    },
+    {
+      "id": "mnw|45.75604|11.23540|vnt647",
+      "code": "vnt647",
+      "name": "Chiumenti",
+      "distance_km": 0.613
+    },
+    {
+      "id": "mnw|45.75689|9.51597|lmb486",
+      "code": "lmb486",
+      "name": "Burligo",
+      "distance_km": 0.247
+    },
+    {
+      "id": "mnw|45.75818|11.56594|vnt165",
+      "code": "vnt165",
+      "name": "Salcedo",
+      "distance_km": 0.044
+    },
+    {
+      "id": "mnw|45.76240|11.76262|vnt363",
+      "code": "vnt363",
+      "name": "San Giacomo · 0.6 km NE",
+      "distance_km": 0.569
+    },
+    {
+      "id": "mnw|45.76384|8.55414|pmn125",
+      "code": "pmn125",
+      "name": "Arona",
+      "distance_km": 0.597
+    },
+    {
+      "id": "mnw|45.76665|9.13202|lmb084",
+      "code": "lmb084",
+      "name": "San Giorgio · 0.3 km N",
+      "distance_km": 0.291
+    },
+    {
+      "id": "mnw|45.76701|12.05374|vnt702",
+      "code": "vnt702",
+      "name": "Montebelluna",
+      "distance_km": 0.964
+    },
+    {
+      "id": "mnw|45.76962|8.08259|pmn036",
+      "code": "pmn036",
+      "name": "Pila",
+      "distance_km": 0.113
+    },
+    {
+      "id": "mnw|45.77000|11.00000|trn038",
+      "code": "trn038",
+      "name": "Pilcante",
+      "distance_km": 0.095
+    },
+    {
+      "id": "mnw|45.77118|13.16570|fvg046",
+      "code": "fvg046",
+      "name": "Marano · 0.5 km S",
+      "distance_km": 0.507
+    },
+    {
+      "id": "mnw|45.77243|9.45437|lmb301",
+      "code": "lmb301",
+      "name": "Monte Marenzo",
+      "distance_km": 0.045
+    },
+    {
+      "id": "mnw|45.77740|9.19308|lmb201",
+      "code": "lmb201",
+      "name": "Cascina Foppa",
+      "distance_km": 0.129
+    },
+    {
+      "id": "mnw|45.77811|11.69700|vnt278",
+      "code": "vnt278",
+      "name": "San Michele · 0.5 km O",
+      "distance_km": 0.479
+    },
+    {
+      "id": "mnw|45.78018|12.82169|vnt430",
+      "code": "vnt430",
+      "name": "Campeio",
+      "distance_km": 1.019
+    },
+    {
+      "id": "mnw|45.78312|11.80229|vnt425",
+      "code": "vnt425",
+      "name": "Mussolente",
+      "distance_km": 0.531
+    },
+    {
+      "id": "mnw|45.78318|11.57029|vnt282",
+      "code": "vnt282",
+      "name": "Lusiana",
+      "distance_km": 0.369
+    },
+    {
+      "id": "mnw|45.78582|8.94033|lmb493",
+      "code": "lmb493",
+      "name": "Beregazzo con Figliaro",
+      "distance_km": 0.643
+    },
+    {
+      "id": "mnw|45.78642|12.05778|vnt246",
+      "code": "vnt246",
+      "name": "Biadene",
+      "distance_km": 0.666
+    },
+    {
+      "id": "mnw|45.78803|11.67150|vnt089",
+      "code": "vnt089",
+      "name": "Fagarè Basso",
+      "distance_km": 0.581
+    },
+    {
+      "id": "mnw|45.78868|11.88179|vnt435",
+      "code": "vnt435",
+      "name": "Onè",
+      "distance_km": 0.814
+    },
+    {
+      "id": "mnw|45.78883|12.61625|vnt597",
+      "code": "vnt597",
+      "name": "San Giovanni · 0.2 km O",
+      "distance_km": 0.192
+    },
+    {
+      "id": "mnw|45.78928|8.90355|lmb300",
+      "code": "lmb300",
+      "name": "Via Doberdò",
+      "distance_km": 0.506
+    },
+    {
+      "id": "mnw|45.78951|9.27142|lmb087",
+      "code": "lmb087",
+      "name": "Eupilio",
+      "distance_km": 0.521
+    },
+    {
+      "id": "mnw|45.79016|12.69152|vnt633",
+      "code": "vnt633",
+      "name": "Annone Veneto",
+      "distance_km": 0.396
+    },
+    {
+      "id": "mnw|45.79181|9.02660|lmb519",
+      "code": "lmb519",
+      "name": "Montano",
+      "distance_km": 0.436
+    },
+    {
+      "id": "mnw|45.79507|9.13182|lmb174",
+      "code": "lmb174",
+      "name": "Tavernerio",
+      "distance_km": 0.92
+    },
+    {
+      "id": "mnw|45.80000|8.12000|pmn024",
+      "code": "pmn024",
+      "name": "Muro",
+      "distance_km": 0.297
+    },
+    {
+      "id": "mnw|45.80000|9.88000|lmb129",
+      "code": "lmb129",
+      "name": "Leffe",
+      "distance_km": 0.403
+    },
+    {
+      "id": "mnw|45.80453|9.84451|lmb411",
+      "code": "lmb411",
+      "name": "Pianuri",
+      "distance_km": 0.323
+    },
+    {
+      "id": "mnw|45.81044|10.89046|trn316",
+      "code": "trn316",
+      "name": "San Giacomo · 2.5 km SE",
+      "distance_km": 2.548
+    },
+    {
+      "id": "mnw|45.81190|9.57197|lmb302",
+      "code": "lmb302",
+      "name": "Berbenno",
+      "distance_km": 0.328
+    },
+    {
+      "id": "mnw|45.81326|11.74010|vnt635",
+      "code": "vnt635",
+      "name": "Valle Santa Felicita",
+      "distance_km": 1.465
+    },
+    {
+      "id": "mnw|45.81462|8.83785|lmb412",
+      "code": "lmb412",
+      "name": "Varese",
+      "distance_km": 1.189
+    },
+    {
+      "id": "mnw|45.81598|11.90642|vnt689",
+      "code": "vnt689",
+      "name": "Borgo Favrin",
+      "distance_km": 0.17
+    },
+    {
+      "id": "mnw|45.81818|13.34595|fvg103",
+      "code": "fvg103",
+      "name": "Cervignano del Friuli · 0.6 km NO",
+      "distance_km": 0.594
+    },
+    {
+      "id": "mnw|45.81904|11.09555|trn348",
+      "code": "trn348",
+      "name": "Valmorbia",
+      "distance_km": 0.21
+    },
+    {
+      "id": "mnw|45.82126|11.62163|vnt162",
+      "code": "vnt162",
+      "name": "Lastaro",
+      "distance_km": 0.403
+    },
+    {
+      "id": "mnw|45.82255|13.50761|fvg055",
+      "code": "fvg055",
+      "name": "Ronchi dei Legionari",
+      "distance_km": 0.597
+    },
+    {
+      "id": "mnw|45.82399|9.73221|lmb511",
+      "code": "lmb511",
+      "name": "Ascensione",
+      "distance_km": 0.258
+    },
+    {
+      "id": "mnw|45.83255|12.01646|vnt461",
+      "code": "vnt461",
+      "name": "Case Ravanello",
+      "distance_km": 0.39
+    },
+    {
+      "id": "mnw|45.83973|13.10544|fvg102",
+      "code": "fvg102",
+      "name": "Pocenia",
+      "distance_km": 0.544
+    },
+    {
+      "id": "mnw|45.84377|11.34712|vnt369",
+      "code": "vnt369",
+      "name": "Campana",
+      "distance_km": 0.319
+    },
+    {
+      "id": "mnw|45.85057|11.07746|trn053",
+      "code": "trn053",
+      "name": "Vanza",
+      "distance_km": 0.459
+    },
+    {
+      "id": "mnw|45.85745|11.34491|vnt074",
+      "code": "vnt074",
+      "name": "Tonezza del Cimone",
+      "distance_km": 0.178
+    },
+    {
+      "id": "mnw|45.85963|11.74599|vnt418",
+      "code": "vnt418",
+      "name": "Val della Giara",
+      "distance_km": 0.144
+    },
+    {
+      "id": "mnw|45.85970|9.41985|lmb531",
+      "code": "lmb531",
+      "name": "Malnago",
+      "distance_km": 0.286
+    },
+    {
+      "id": "mnw|45.86166|11.27936|vnt462",
+      "code": "vnt462",
+      "name": "Malga Campiluzzi Inferiore",
+      "distance_km": 2.617
+    },
+    {
+      "id": "mnw|45.86479|7.30110|vda006",
+      "code": "vda006",
+      "name": "Vaud",
+      "distance_km": 0.069
+    },
+    {
+      "id": "mnw|45.87332|12.04527|vnt231",
+      "code": "vnt231",
+      "name": "Vidor",
+      "distance_km": 0.748
+    },
+    {
+      "id": "mnw|45.87374|11.27544|vnt412",
+      "code": "vnt412",
+      "name": "Villaggio Fiorentini",
+      "distance_km": 2.673
+    },
+    {
+      "id": "mnw|45.87773|11.51440|vnt402",
+      "code": "vnt402",
+      "name": "Asiago",
+      "distance_km": 0.266
+    },
+    {
+      "id": "mnw|45.87970|11.48579|vnt284",
+      "code": "vnt284",
+      "name": "Camporovere",
+      "distance_km": 0.102
+    },
+    {
+      "id": "mnw|45.88076|11.03223|trn312",
+      "code": "trn312",
+      "name": "Casette",
+      "distance_km": 1.133
+    },
+    {
+      "id": "mnw|45.88631|11.53673|vnt355",
+      "code": "vnt355",
+      "name": "Gallio · 0.2 km SO",
+      "distance_km": 0.242
+    },
+    {
+      "id": "mnw|45.89022|11.00644|trn212",
+      "code": "trn212",
+      "name": "Isera",
+      "distance_km": 0.36
+    },
+    {
+      "id": "mnw|45.89070|11.72164|vnt068",
+      "code": "vnt068",
+      "name": "Cason delle Fratte",
+      "distance_km": 0.905
+    },
+    {
+      "id": "mnw|45.89257|12.33491|vnt456",
+      "code": "vnt456",
+      "name": "San Vendemiano-Fossamerlo",
+      "distance_km": 0.396
+    },
+    {
+      "id": "mnw|45.89722|12.29928|vnt443",
+      "code": "vnt443",
+      "name": "Costa",
+      "distance_km": 1.009
+    },
+    {
+      "id": "mnw|45.89786|11.39254|vnt413",
+      "code": "vnt413",
+      "name": "San Pietro Valdastico",
+      "distance_km": 2.698
+    },
+    {
+      "id": "mnw|45.90000|11.03000|trn041",
+      "code": "trn041",
+      "name": "Marano · 1.2 km O",
+      "distance_km": 1.201
+    },
+    {
+      "id": "mnw|45.90055|10.21892|lmb304",
+      "code": "lmb304",
+      "name": "Sacca",
+      "distance_km": 0.145
+    },
+    {
+      "id": "mnw|45.90306|8.86541|lmb292",
+      "code": "lmb292",
+      "name": "Imborgnana",
+      "distance_km": 0.502
+    },
+    {
+      "id": "mnw|45.90398|11.89363|vnt434",
+      "code": "vnt434",
+      "name": "Casera Campigolo",
+      "distance_km": 0.662
+    },
+    {
+      "id": "mnw|45.90505|12.02340|vnt201",
+      "code": "vnt201",
+      "name": "Case Marche",
+      "distance_km": 0.018
+    },
+    {
+      "id": "mnw|45.90582|10.84571|trn033",
+      "code": "trn033",
+      "name": "Varone",
+      "distance_km": 0.441
+    },
+    {
+      "id": "mnw|45.90715|13.60038|fvg133",
+      "code": "fvg133",
+      "name": "Zona Industriale",
+      "distance_km": 0.853
+    },
+    {
+      "id": "mnw|45.91141|8.88629|lmb409",
+      "code": "lmb409",
+      "name": "Borgnana",
+      "distance_km": 0.18
+    },
+    {
+      "id": "mnw|45.91153|11.96577|vnt621",
+      "code": "vnt621",
+      "name": "Col Lonc",
+      "distance_km": 0.171
+    },
+    {
+      "id": "mnw|45.91166|8.80995|lmb518",
+      "code": "lmb518",
+      "name": "Mondonico",
+      "distance_km": 0.232
+    },
+    {
+      "id": "mnw|45.91182|10.90036|trn050",
+      "code": "trn050",
+      "name": "Bolognano-Vignole",
+      "distance_km": 0.357
+    },
+    {
+      "id": "mnw|45.91348|13.35177|fvg124",
+      "code": "fvg124",
+      "name": "Ialmicco",
+      "distance_km": 0.438
+    },
+    {
+      "id": "mnw|45.91471|11.14101|trn350",
+      "code": "trn350",
+      "name": "Dori",
+      "distance_km": 0.073
+    },
+    {
+      "id": "mnw|45.91843|13.57081|fvg111",
+      "code": "fvg111",
+      "name": "Mocchetta",
+      "distance_km": 0.833
+    },
+    {
+      "id": "mnw|45.91990|10.86351|trn351",
+      "code": "trn351",
+      "name": "Piazze",
+      "distance_km": 1.008
+    },
+    {
+      "id": "mnw|45.91996|11.18644|trn064",
+      "code": "trn064",
+      "name": "Colpi",
+      "distance_km": 0.71
+    },
+    {
+      "id": "mnw|45.92000|10.88000|trn032",
+      "code": "trn032",
+      "name": "Arco",
+      "distance_km": 0.578
+    },
+    {
+      "id": "mnw|45.92559|10.24717|lmb307",
+      "code": "lmb307",
+      "name": "Esine",
+      "distance_km": 0.302
+    },
+    {
+      "id": "mnw|45.92662|12.09111|vnt478",
+      "code": "vnt478",
+      "name": "Campea",
+      "distance_km": 1.281
+    },
+    {
+      "id": "mnw|45.92665|12.43801|vnt617",
+      "code": "vnt617",
+      "name": "Bavaroi",
+      "distance_km": 0.452
+    },
+    {
+      "id": "mnw|45.93000|9.47000|lmb002",
+      "code": "lmb002",
+      "name": "Cremeno",
+      "distance_km": 0.552
+    },
+    {
+      "id": "mnw|45.93026|12.06983|vnt595",
+      "code": "vnt595",
+      "name": "Combai · 0.1 km SE",
+      "distance_km": 0.126
+    },
+    {
+      "id": "mnw|45.93189|13.44076|fvg093",
+      "code": "fvg093",
+      "name": "Borgnano · 0.2 km SE",
+      "distance_km": 0.162
+    },
+    {
+      "id": "mnw|45.93366|12.22940|vnt674",
+      "code": "vnt674",
+      "name": "San Pietro",
+      "distance_km": 0.846
+    },
+    {
+      "id": "mnw|45.93378|13.44010|fvg079",
+      "code": "fvg079",
+      "name": "Borgnano · 0.3 km SE",
+      "distance_km": 0.343
+    },
+    {
+      "id": "mnw|45.93430|11.10027|trn203",
+      "code": "trn203",
+      "name": "Calliano",
+      "distance_km": 0.431
+    },
+    {
+      "id": "mnw|45.93443|11.74770|vnt384",
+      "code": "vnt384",
+      "name": "Zanetti",
+      "distance_km": 0.216
+    },
+    {
+      "id": "mnw|45.93655|12.06870|vnt604",
+      "code": "vnt604",
+      "name": "Combai · 0.8 km S",
+      "distance_km": 0.802
+    },
+    {
+      "id": "mnw|45.94090|12.64482|fvg126",
+      "code": "fvg126",
+      "name": "Noncello · 0.3 km S",
+      "distance_km": 0.286
+    },
+    {
+      "id": "mnw|45.94126|13.04657|fvg087",
+      "code": "fvg087",
+      "name": "Bertiolo",
+      "distance_km": 0.824
+    },
+    {
+      "id": "mnw|45.94208|12.02884|vnt233",
+      "code": "vnt233",
+      "name": "Pianezze",
+      "distance_km": 2.173
+    },
+    {
+      "id": "mnw|45.94230|9.47811|lmb510",
+      "code": "lmb510",
+      "name": "Concenedo",
+      "distance_km": 0.033
+    },
+    {
+      "id": "mnw|45.94410|12.47981|fvg096",
+      "code": "fvg096",
+      "name": "Vistorta",
+      "distance_km": 0.857
+    },
+    {
+      "id": "mnw|45.94422|12.65894|fvg061",
+      "code": "fvg061",
+      "name": "Noncello · 1.3 km SO",
+      "distance_km": 1.28
+    },
+    {
+      "id": "mnw|45.94537|12.34360|vnt645",
+      "code": "vnt645",
+      "name": "Colle Umberto",
+      "distance_km": 0.348
+    },
+    {
+      "id": "mnw|45.94812|12.11943|vnt439",
+      "code": "vnt439",
+      "name": "Follina",
+      "distance_km": 0.601
+    },
+    {
+      "id": "mnw|45.95428|12.41251|vnt678",
+      "code": "vnt678",
+      "name": "Cordignano",
+      "distance_km": 0.599
+    },
+    {
+      "id": "mnw|45.95533|12.99002|fvg112",
+      "code": "fvg112",
+      "name": "Tessitori",
+      "distance_km": 1.301
+    },
+    {
+      "id": "mnw|45.95664|12.49197|fvg030",
+      "code": "fvg030",
+      "name": "Sacile",
+      "distance_km": 0.878
+    },
+    {
+      "id": "mnw|45.96437|7.91917|pmn126",
+      "code": "pmn126",
+      "name": "Staffa",
+      "distance_km": 3.732
+    },
+    {
+      "id": "mnw|45.96499|10.81000|trn200",
+      "code": "trn200",
+      "name": "Ballino · 0.1 km E",
+      "distance_km": 0.116
+    },
+    {
+      "id": "mnw|45.96715|12.18009|vnt476",
+      "code": "vnt476",
+      "name": "Gai",
+      "distance_km": 0.481
+    },
+    {
+      "id": "mnw|45.96728|12.30266|vnt630",
+      "code": "vnt630",
+      "name": "Vittorio Veneto",
+      "distance_km": 1.452
+    },
+    {
+      "id": "mnw|45.96967|12.31425|vnt483",
+      "code": "vnt483",
+      "name": "San Giacomo · 1.2 km SE",
+      "distance_km": 1.247
+    },
+    {
+      "id": "mnw|45.96975|12.64578|fvg110",
+      "code": "fvg110",
+      "name": "Pordenone",
+      "distance_km": 1.828
+    },
+    {
+      "id": "mnw|45.97004|10.87730|trn357",
+      "code": "trn357",
+      "name": "Ceniga",
+      "distance_km": 2.805
+    },
+    {
+      "id": "mnw|45.97049|10.77841|trn216",
+      "code": "trn216",
+      "name": "Ballino · 2.6 km E",
+      "distance_km": 2.614
+    },
+    {
+      "id": "mnw|45.97146|10.88338|trn359",
+      "code": "trn359",
+      "name": "Dro",
+      "distance_km": 2.489
+    },
+    {
+      "id": "mnw|45.97230|12.81598|fvg054",
+      "code": "fvg054",
+      "name": "Orcenico Superiore",
+      "distance_km": 0.385
+    },
+    {
+      "id": "mnw|45.97460|12.36565|vnt693",
+      "code": "vnt693",
+      "name": "Case Pagotto",
+      "distance_km": 0.431
+    },
+    {
+      "id": "mnw|45.97756|10.33293|lmb343",
+      "code": "lmb343",
+      "name": "Niardo",
+      "distance_km": 0.176
+    },
+    {
+      "id": "mnw|45.97958|11.23777|trn011",
+      "code": "trn011",
+      "name": "Pian dei Pradi",
+      "distance_km": 0.056
+    },
+    {
+      "id": "mnw|45.98377|12.36389|vnt673",
+      "code": "vnt673",
+      "name": "Borgo Dari",
+      "distance_km": 0.49
+    },
+    {
+      "id": "mnw|45.98783|12.27459|vnt486",
+      "code": "vnt486",
+      "name": "San Lorenzo · 0.1 km N",
+      "distance_km": 0.073
+    },
+    {
+      "id": "mnw|45.98885|12.51935|fvg009",
+      "code": "fvg009",
+      "name": "La Croce",
+      "distance_km": 1.357
+    },
+    {
+      "id": "mnw|45.99215|12.24709|vnt694",
+      "code": "vnt694",
+      "name": "Zona Industriale di Lago",
+      "distance_km": 0.354
+    },
+    {
+      "id": "mnw|46.00126|12.14856|vnt646",
+      "code": "vnt646",
+      "name": "San Boldo",
+      "distance_km": 1.651
+    },
+    {
+      "id": "mnw|46.01117|12.31310|vnt591",
+      "code": "vnt591",
+      "name": "Mezzavilla",
+      "distance_km": 0.933
+    },
+    {
+      "id": "mnw|46.01139|11.96609|vnt374",
+      "code": "vnt374",
+      "name": "Celarda",
+      "distance_km": 0.056
+    },
+    {
+      "id": "mnw|46.01257|12.61000|fvg122",
+      "code": "fvg122",
+      "name": "Roveredo in Piano",
+      "distance_km": 0.856
+    },
+    {
+      "id": "mnw|46.01312|11.81278|vnt245",
+      "code": "vnt245",
+      "name": "Calderal",
+      "distance_km": 0.809
+    },
+    {
+      "id": "mnw|46.02000|10.95409|trn220",
+      "code": "trn220",
+      "name": "Pergolese",
+      "distance_km": 0.63
+    },
+    {
+      "id": "mnw|46.02195|12.37162|vnt427",
+      "code": "vnt427",
+      "name": "San Daniele",
+      "distance_km": 1.466
+    },
+    {
+      "id": "mnw|46.02359|11.91201|vnt432",
+      "code": "vnt432",
+      "name": "Feltre",
+      "distance_km": 0.953
+    },
+    {
+      "id": "mnw|46.02711|12.26027|vnt615",
+      "code": "vnt615",
+      "name": "Borgo Olivi",
+      "distance_km": 1.166
+    },
+    {
+      "id": "mnw|46.03098|13.20330|fvg045",
+      "code": "fvg045",
+      "name": "Basaldella",
+      "distance_km": 1.246
+    },
+    {
+      "id": "mnw|46.04119|12.34448|vnt599",
+      "code": "vnt599",
+      "name": "Sònego",
+      "distance_km": 2.242
+    },
+    {
+      "id": "mnw|46.04228|11.86880|vnt361",
+      "code": "vnt361",
+      "name": "Fistisei",
+      "distance_km": 0.306
+    },
+    {
+      "id": "mnw|46.04397|11.55446|trn224",
+      "code": "trn224",
+      "name": "Ospedaletto",
+      "distance_km": 0.124
+    },
+    {
+      "id": "mnw|46.04491|13.25054|fvg010",
+      "code": "fvg010",
+      "name": "Cussignacco",
+      "distance_km": 1.104
+    },
+    {
+      "id": "mnw|46.04519|11.74775|vnt082",
+      "code": "vnt082",
+      "name": "Lamon",
+      "distance_km": 0.276
+    },
+    {
+      "id": "mnw|46.04561|12.33798|vnt686",
+      "code": "vnt686",
+      "name": "Alto Nove",
+      "distance_km": 1.653
+    },
+    {
+      "id": "mnw|46.04663|11.25695|trn217",
+      "code": "trn217",
+      "name": "Zava",
+      "distance_km": 0.64
+    },
+    {
+      "id": "mnw|46.04718|12.40477|vnt477",
+      "code": "vnt477",
+      "name": "La Crosetta",
+      "distance_km": 1.267
+    },
+    {
+      "id": "mnw|46.04943|11.46338|trn194",
+      "code": "trn194",
+      "name": "Borgo Valsugana",
+      "distance_km": 0.49
+    },
+    {
+      "id": "mnw|46.05000|10.77000|trn018",
+      "code": "trn018",
+      "name": "Ragoli",
+      "distance_km": 0.81
+    },
+    {
+      "id": "mnw|46.05092|12.44440|fvg120",
+      "code": "fvg120",
+      "name": "Coltura",
+      "distance_km": 3.426
+    },
+    {
+      "id": "mnw|46.05299|12.54003|fvg058",
+      "code": "fvg058",
+      "name": "Dardago",
+      "distance_km": 0.517
+    },
+    {
+      "id": "mnw|46.05744|13.21321|fvg131",
+      "code": "fvg131",
+      "name": "Passons",
+      "distance_km": 2.25
+    },
+    {
+      "id": "mnw|46.05939|12.40589|vnt603",
+      "code": "vnt603",
+      "name": "Le Rotte · 0.8 km O",
+      "distance_km": 0.814
+    },
+    {
+      "id": "mnw|46.06058|12.39607|vnt445",
+      "code": "vnt445",
+      "name": "Le Rotte · 0.1 km S",
+      "distance_km": 0.149
+    },
+    {
+      "id": "mnw|46.06118|12.57704|fvg066",
+      "code": "fvg066",
+      "name": "Aviano-Castello",
+      "distance_km": 0.858
+    },
+    {
+      "id": "mnw|46.06192|11.12041|trn196",
+      "code": "trn196",
+      "name": "Trento",
+      "distance_km": 0.664
+    },
+    {
+      "id": "mnw|46.06279|10.99051|trn014",
+      "code": "trn014",
+      "name": "Padergnone",
+      "distance_km": 0.552
+    },
+    {
+      "id": "mnw|46.06764|10.34823|lmb193",
+      "code": "lmb193",
+      "name": "Grevo",
+      "distance_km": 0.174
+    },
+    {
+      "id": "mnw|46.06864|10.96187|trn313",
+      "code": "trn313",
+      "name": "Margone",
+      "distance_km": 0.054
+    },
+    {
+      "id": "mnw|46.07097|12.41610|vnt449",
+      "code": "vnt449",
+      "name": "Le Rotte · 2.1 km SO",
+      "distance_km": 2.059
+    },
+    {
+      "id": "mnw|46.08582|12.43796|vnt593",
+      "code": "vnt593",
+      "name": "Pian Osteria",
+      "distance_km": 2.277
+    },
+    {
+      "id": "mnw|46.09231|12.50351|fvg078",
+      "code": "fvg078",
+      "name": "Casere della Valle",
+      "distance_km": 1.432
+    },
+    {
+      "id": "mnw|46.09611|13.12802|fvg088",
+      "code": "fvg088",
+      "name": "Villalta",
+      "distance_km": 0.952
+    },
+    {
+      "id": "mnw|46.09780|13.08308|fvg082",
+      "code": "fvg082",
+      "name": "Ciconicco",
+      "distance_km": 1.164
+    },
+    {
+      "id": "mnw|46.10000|11.10000|trn009",
+      "code": "trn009",
+      "name": "Bolleri Vecchia",
+      "distance_km": 1.895
+    },
+    {
+      "id": "mnw|46.10311|13.22099|fvg052",
+      "code": "fvg052",
+      "name": "Feletto Umberto",
+      "distance_km": 0.075
+    },
+    {
+      "id": "mnw|46.10659|8.29205|pmn128",
+      "code": "pmn128",
+      "name": "Trontana",
+      "distance_km": 0.62
+    },
+    {
+      "id": "mnw|46.11205|13.25462|fvg127",
+      "code": "fvg127",
+      "name": "San Bernardo · 0.4 km E",
+      "distance_km": 0.427
+    },
+    {
+      "id": "mnw|46.11854|12.34919|vnt632",
+      "code": "vnt632",
+      "name": "Farra d'Alpago",
+      "distance_km": 0.779
+    },
+    {
+      "id": "mnw|46.12000|11.10000|trn012",
+      "code": "trn012",
+      "name": "Gardolo di Mezzo",
+      "distance_km": 1.353
+    },
+    {
+      "id": "mnw|46.12525|10.80702|trn218",
+      "code": "trn218",
+      "name": "Massimeno",
+      "distance_km": 3.123
+    },
+    {
+      "id": "mnw|46.12688|13.13839|fvg105",
+      "code": "fvg105",
+      "name": "Modotto",
+      "distance_km": 0.019
+    },
+    {
+      "id": "mnw|46.13416|12.48941|vnt592",
+      "code": "vnt592",
+      "name": "Casera le Valli",
+      "distance_km": 2.187
+    },
+    {
+      "id": "mnw|46.13817|9.57611|lmb404",
+      "code": "lmb404",
+      "name": "Morbegno",
+      "distance_km": 0.186
+    },
+    {
+      "id": "mnw|46.13851|11.10070|trn013",
+      "code": "trn013",
+      "name": "Lavis",
+      "distance_km": 0.733
+    },
+    {
+      "id": "mnw|46.13881|12.42363|vnt606",
+      "code": "vnt606",
+      "name": "Tambruz",
+      "distance_km": 0.605
+    },
+    {
+      "id": "mnw|46.14346|12.43059|vnt625",
+      "code": "vnt625",
+      "name": "Lavina",
+      "distance_km": 0.987
+    },
+    {
+      "id": "mnw|46.14371|8.19621|pmn485",
+      "code": "pmn485",
+      "name": "Vercengio",
+      "distance_km": 0.435
+    },
+    {
+      "id": "mnw|46.15444|9.88749|lmb308",
+      "code": "lmb308",
+      "name": "Poratti",
+      "distance_km": 0.513
+    },
+    {
+      "id": "mnw|46.15827|12.38380|vnt614",
+      "code": "vnt614",
+      "name": "Codenzano",
+      "distance_km": 0.517
+    },
+    {
+      "id": "mnw|46.16054|11.17227|trn003",
+      "code": "trn003",
+      "name": "Ceola",
+      "distance_km": 0.157
+    },
+    {
+      "id": "mnw|46.16224|9.86147|lmb042",
+      "code": "lmb042",
+      "name": "Torchione-Moia",
+      "distance_km": 0.829
+    },
+    {
+      "id": "mnw|46.16552|13.01309|fvg116",
+      "code": "fvg116",
+      "name": "Bronzacco",
+      "distance_km": 0.988
+    },
+    {
+      "id": "mnw|46.17000|9.90000|lmb138",
+      "code": "lmb138",
+      "name": "Montagna in Valtellina",
+      "distance_km": 0.971
+    },
+    {
+      "id": "mnw|46.18965|11.83087|trn206",
+      "code": "trn206",
+      "name": "Siror",
+      "distance_km": 0.202
+    },
+    {
+      "id": "mnw|46.19221|12.35343|vnt638",
+      "code": "vnt638",
+      "name": "Curago",
+      "distance_km": 2.041
+    },
+    {
+      "id": "mnw|46.20408|12.30191|vnt475",
+      "code": "vnt475",
+      "name": "Soverzene",
+      "distance_km": 0.12
+    },
+    {
+      "id": "mnw|46.21366|8.21374|pmn514",
+      "code": "pmn514",
+      "name": "Trasquera · 0.1 km O",
+      "distance_km": 0.085
+    },
+    {
+      "id": "mnw|46.21583|13.22796|fvg106",
+      "code": "fvg106",
+      "name": "Case Vidoni",
+      "distance_km": 0.857
+    },
+    {
+      "id": "mnw|46.30502|12.00861|vnt106",
+      "code": "vnt106",
+      "name": "Coi di Peden",
+      "distance_km": 0.342
+    },
+    {
+      "id": "mnw|46.33004|9.81967|lmb344",
+      "code": "lmb344",
+      "name": "Località Palo Lungo",
+      "distance_km": 1.801
+    },
+    {
+      "id": "mnw|46.35251|11.96900|vnt124",
+      "code": "vnt124",
+      "name": "Cencenighe Agordino",
+      "distance_km": 0.095
+    },
+    {
+      "id": "mnw|46.35943|11.91782|vnt457",
+      "code": "vnt457",
+      "name": "Canale d'Agordo",
+      "distance_km": 0.388
+    },
+    {
+      "id": "mnw|46.36028|13.31465|fvg076",
+      "code": "fvg076",
+      "name": "Oseacco",
+      "distance_km": 0.204
+    },
+    {
+      "id": "mnw|46.36439|13.29272|fvg134",
+      "code": "fvg134",
+      "name": "Ronch-Tigo",
+      "distance_km": 0.134
+    },
+    {
+      "id": "mnw|46.36854|13.03530|fvg137",
+      "code": "fvg137",
+      "name": "Cavazzo Carnico",
+      "distance_km": 0.424
+    },
+    {
+      "id": "mnw|46.38003|11.66535|trn352",
+      "code": "trn352",
+      "name": "Someda",
+      "distance_km": 0.412
+    },
+    {
+      "id": "mnw|46.38939|11.99827|vnt104",
+      "code": "vnt104",
+      "name": "Forchiade",
+      "distance_km": 0.054
+    },
+    {
+      "id": "mnw|46.41212|12.00994|vnt107",
+      "code": "vnt107",
+      "name": "Saviner di Calloneghe",
+      "distance_km": 0.201
+    },
+    {
+      "id": "mnw|46.42072|9.35444|lmb402",
+      "code": "lmb402",
+      "name": "Motta di Sotto",
+      "distance_km": 0.077
+    },
+    {
+      "id": "mnw|46.44466|12.05998|vnt123",
+      "code": "vnt123",
+      "name": "Santa Fosca",
+      "distance_km": 0.234
+    },
+    {
+      "id": "mnw|46.44588|11.68809|trn314",
+      "code": "trn314",
+      "name": "Muncion",
+      "distance_km": 0.154
+    },
+    {
+      "id": "mnw|46.45755|13.47419|fvg129",
+      "code": "fvg129",
+      "name": "Malga Saisera",
+      "distance_km": 0.151
+    },
+    {
+      "id": "mnw|46.45962|10.42848|lmb255",
+      "code": "lmb255",
+      "name": "Niblogo",
+      "distance_km": 0.538
+    },
+    {
+      "id": "mnw|46.48258|13.02359|fvg081",
+      "code": "fvg081",
+      "name": "Arta Terme",
+      "distance_km": 0.359
+    },
+    {
+      "id": "mnw|46.49165|12.87662|fvg074",
+      "code": "fvg074",
+      "name": "Liariis",
+      "distance_km": 0.073
+    },
+    {
+      "id": "mnw|46.49242|13.49293|fvg130",
+      "code": "fvg130",
+      "name": "Valbruna",
+      "distance_km": 0.289
+    },
+    {
+      "id": "mnw|46.51048|13.53441|fvg097",
+      "code": "fvg097",
+      "name": "Camporosso in Valcanale",
+      "distance_km": 0.335
+    },
+    {
+      "id": "mnw|46.51259|11.86479|vnt235",
+      "code": "vnt235",
+      "name": "Pallua",
+      "distance_km": 1.8
+    },
+    {
+      "id": "mnw|46.51568|12.86590|fvg075",
+      "code": "fvg075",
+      "name": "Comeglians · 0.1 km NE",
+      "distance_km": 0.056
+    },
+    {
+      "id": "mnw|46.59064|12.85870|fvg118",
+      "code": "fvg118",
+      "name": "Collinetta",
+      "distance_km": 1.294
+    },
+    {
+      "id": "mnw|46.59686|11.72414|trn017",
+      "code": "trn017",
+      "name": "Rainelles",
+      "distance_km": 3.487
+    },
+    {
+      "id": "mnw|46.60560|12.47875|vnt663",
+      "code": "vnt663",
+      "name": "Padola",
+      "distance_km": 0.253
+    },
+    {
+      "id": "mnw|46.67610|11.62895|trn219",
+      "code": "trn219",
+      "name": "Albes",
+      "distance_km": 0.169
+    },
+    {
+      "id": "mnw|46.71296|11.66811|trn315",
+      "code": "trn315",
+      "name": "Cornale di Sotto",
+      "distance_km": 0.643
+    }
+  ]
+}

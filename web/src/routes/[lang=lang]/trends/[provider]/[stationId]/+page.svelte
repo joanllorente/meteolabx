@@ -20,7 +20,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import { recordSection } from '$lib/stats.js';
   import { fetchPersonalRecentSeries, fetchPersonalTodaySeries } from '$lib/personal.js';
-  import { displayName, providerLabel } from '$lib/seo/i18n.js';
+  import { displayName, providerLabel, stationLocationLabel } from '$lib/seo/i18n.js';
   import { trendsModel } from '$lib/observation/trends.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { appTabs, observationTabs } from '$lib/tabs.js';
@@ -179,9 +179,9 @@
   const stripe = $derived({
     provider: providerLabel(station.provider),
     name,
-    place: [station.locality, station.region].filter(Boolean).join(', '),
+    place: stationLocationLabel(station, lang),
     id: station.station_id,
-    altitude: isNumber(station.elevation) ? `${Math.round(station.elevation)} m` : '',
+    elevation: Number.isFinite(station.elevation) ? station.elevation : null,
     lat: station.lat?.toFixed(4),
     lon: station.lon?.toFixed(4)
   });

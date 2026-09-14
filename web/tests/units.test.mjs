@@ -2,17 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  activeUnitPreset,
   convertRadiationEnergy,
   convertSeries,
   convertUnit,
   normalizeUnitPreferences,
   radiationEnergyLabel,
-  unitLabel
+  unitLabel,
+  unitOptions,
+  unitPresets
 } from '../src/lib/units.js';
 
 test('normaliza preferencias desconocidas a las unidades canónicas', () => {
   assert.deepEqual(normalizeUnitPreferences({ temperature: 'F', wind: 'invalid' }), {
-    temperature: 'f', wind: 'kmh', pressure: 'hpa', precip: 'mm', radiation: 'wm2'
+    temperature: 'f', wind: 'kmh', pressure: 'hpa', precip: 'mm', radiation: 'wm2',
+    distance: 'km', altitude: 'm'
   });
 });
 
@@ -31,4 +35,22 @@ test('convierte las cinco familias que muestra el selector global', () => {
 test('convierte series sin transformar sus huecos', () => {
   assert.deepEqual(convertSeries([0, null, 100], 'temperature', { temperature: 'f' }), [32, null, 212]);
   assert.equal(unitLabel('wind', { wind: 'mph' }), 'mph');
+});
+
+test('distancia y altitud se convierten desde km y m', () => {
+  assert.ok(Math.abs(convertUnit(1.609344, 'distance', { distance: 'mi' }) - 1) < 1e-9);
+  assert.ok(Math.abs(convertUnit(1.852, 'distance', { distance: 'nm' }) - 1) < 1e-9);
+  assert.ok(Math.abs(convertUnit(410, 'altitude', { altitude: 'ft' }) - 1345.144) < 0.001);
+  assert.equal(convertUnit(410, 'altitude', { altitude: 'm' }), 410);
+  assert.equal(unitLabel('distance', { distance: 'nm' }), 'NM');
+});
+
+test('los presets usan unidades que existen y se reconocen al elegirlos', () => {
+  assert.deepEqual(unitPresets.map((preset) => preset.id), ['metric', 'meteorological', 'imperial', 'aviation', 'uk']);
+  for (const preset of unitPresets) {
+    for (const [family, unit] of Object.entries(preset.units)) assert.ok(unitOptions[family][unit], `${preset.id}.${family}`);
+    assert.equal(activeUnitPreset({ radiation: 'mjm2', ...preset.units }), preset.id);
+  }
+  assert.equal(activeUnitPreset(normalizeUnitPreferences({})), 'metric');
+  assert.equal(activeUnitPreset({ ...unitPresets[0].units, wind: 'kt' }), '');
 });

@@ -54,6 +54,10 @@ PROVIDER_FILES = {
     "ECCC": DATA / "data_estaciones_eccc.json",
     "IEM": DATA / "data_estaciones_iem.json",
     "CLIMANTARTIDE": DATA / "data_estaciones_climantartide.json",
+    "LHMT": DATA / "data_estaciones_lhmt.json",
+    "IMGW": DATA / "data_estaciones_imgw.json",
+    "DMI": DATA / "data_estaciones_dmi.json",
+    "METEOSWISS": DATA / "data_estaciones_meteoswiss.json",
 }
 
 LIST_KEYS = ("estaciones", "stations", "listaEstacionsMeteo")
@@ -230,6 +234,8 @@ DEFAULT_TIMEZONES = {
     "METEOHUB_IT": "Europe/Rome", "METOFFICE": "Europe/London",
     "POEM": "Europe/Madrid", "IPMA": "Europe/Lisbon",
     "GEOSPHERE": "Europe/Vienna", "SMHI": "Europe/Stockholm",
+    "LHMT": "Europe/Vilnius", "IMGW": "Europe/Warsaw",
+    "METEOSWISS": "Europe/Zurich",
 }
 SENSOR_KEYS = (
     "thermometer", "hygrometer", "barometer", "anemometer",

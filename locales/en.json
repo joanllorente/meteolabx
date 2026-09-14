@@ -9,6 +9,7 @@
     "suspect_temperature_reason_frozen": "unchanged for hours",
     "suspect_temperature_reason_impossible": "impossible for its latitude and time of year",
     "suspect_temperature_reason_range": "high and low incompatible on the same day",
+    "suspect_wind": "⚠️ This station's anemometer reported a {gust} km/h gust today that cannot be trusted. Its wind data for today has been excluded from the ranking.",
     "historical_station": "⚠️ This is a historical station and it no longer publishes current observations. You can view its series in the History tab.",
     "historical_station_replacement": "This station has moved. The current station is {station_link}."
   },
@@ -167,6 +168,21 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_210_improvements": [
+      "Added new official providers from Lithuania, Poland, Denmark and Switzerland.",
+      "Location search now remembers your recently visited stations.",
+      "Added new presets for units of measurement.",
+      "Improved display of the precipitation map.",
+      "The wind rose now also shows the recorded wind speeds.",
+      "Added a new wind rose for gusts.",
+      "Added the German language.",
+      "MeteoLabX now works fully as a Progressive Web App (PWA) and can be installed as an app on compatible devices."
+    ],
+    "release_210_fixes": [
+      "Fixed an issue that prevented showing stations from several countries at once on the map.",
+      "Fixed an issue that prevented the country of IEM stations from being shown correctly.",
+      "Fixed a bug that could cause incorrect temperature values at MeteoGalicia stations."
+    ],
     "release_203_improvements": [
       "Interface improvements.",
       "Improved display on mobile devices.",
@@ -288,7 +304,17 @@
         "wind": "Wind",
         "pressure": "Pressure",
         "precip": "Precipitation",
-        "radiation": "Radiation"
+        "radiation": "Radiation",
+        "distance": "Distance",
+        "altitude": "Elevation"
+      },
+      "presets_title": "System",
+      "presets": {
+        "metric": "Metric",
+        "meteorological": "Meteorological",
+        "imperial": "Imperial (US)",
+        "aviation": "Aviation",
+        "uk": "UK"
       }
     },
     "buttons": {

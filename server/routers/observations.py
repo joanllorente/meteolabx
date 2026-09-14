@@ -14,7 +14,7 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import httpx
 from fastapi import APIRouter, Depends, Request
@@ -60,8 +60,12 @@ from server.services import (
     euskalmet,
     frost,
     geosphere,
+    dmi,
+    meteoswiss,
     iem,
+    imgw,
     ipma,
+    lhmt,
     meteocat,
     meteofrance,
     meteogalicia,
@@ -299,6 +303,63 @@ def _quarantine_suspect_precipitation(
             )
 
     return warnings
+
+
+def _warnings_from_bulk_quarantine(
+    provider: str,
+    station_id: str,
+    series: dict,
+    *,
+    already: Sequence[Dict[str, Any]],
+    tz_name: str,
+    observation_epoch: Any = None,
+) -> List[Dict[str, Any]]:
+    """Avisos de lo que el bulk puso en cuarentena y la ficha no ha visto.
+
+    El bulk juzga con otros datos que la ficha: sumas por hora, rachas de la
+    serie diaria, extremos del proveedor. Cuando marca la lluvia o el viento de
+    un día, el ranking lo excluye y el panel lo lista; si la ficha no lo dijera
+    también, la estación parecería sana justo donde la gente la mira. Es lo que
+    pasó con C037, en cuarentena en el panel y sin ningún aviso en su página.
+    """
+    epochs = series.get("epochs") if isinstance(series, dict) else None
+    last_epoch = next(
+        (int(value) for value in reversed(epochs or []) if isinstance(value, (int, float))),
+        None,
+    )
+    if last_epoch is None:
+        respaldo = _float_or_nan(observation_epoch)
+        last_epoch = None if _is_nan_value(respaldo) else int(respaldo)
+    if last_epoch is None:
+        return []
+    marcas = suspect_data.flags_for(provider, station_id, _local_day_for(last_epoch, tz_name))
+    codigos = {str(aviso.get("code")) for aviso in already if isinstance(aviso, dict)}
+    avisos: List[Dict[str, Any]] = []
+
+    lluvia = marcas.get(suspect_data.PRECIPITATION)
+    ya_avisada = codigos & {
+        observation_warnings.SUSPECT_PRECIPITATION,
+        observation_warnings.UNREPORTED_PRECIPITATION,
+    }
+    if lluvia is not None and not ya_avisada:
+        cantidad = _float_or_nan(lluvia.get("amount_mm"))
+        cantidad = 0.0 if _is_nan_value(cantidad) else cantidad
+        if lluvia.get("reports") is not None:
+            avisos.append(observation_warnings.unreported_precipitation(
+                cantidad, int(lluvia.get("reports") or 0),
+            ))
+        else:
+            # Sin duración es un total del día imposible: se cuenta como un día.
+            minutos = _float_or_nan(lluvia.get("minutes"))
+            avisos.append(observation_warnings.suspect_precipitation(
+                cantidad, 24 * 60 if _is_nan_value(minutos) else minutos,
+            ))
+
+    viento = marcas.get(suspect_data.WIND)
+    if viento is not None and observation_warnings.SUSPECT_WIND not in codigos:
+        racha = _float_or_nan(viento.get("maximum_kmh"))
+        avisos.append(observation_warnings.suspect_wind(0.0 if _is_nan_value(racha) else racha))
+    return avisos
 
 
 def _daily_extremes_mapping(current: dict, series: dict) -> Dict[str, Any]:
@@ -789,6 +850,38 @@ def _resolve_provider_fetchers(
             "public",
             lambda: smhi.fetch_current(body.station_id, client=http),
             lambda: smhi.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "METEOSWISS":
+        # Ficheros CSV por estación: ``now`` más la cola de ``recent``.
+        return (
+            "public",
+            lambda: meteoswiss.fetch_current(body.station_id, client=http),
+            lambda: meteoswiss.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "DMI":
+        # API abierta metObs: un parámetro por consulta, en paralelo.
+        return (
+            "public",
+            lambda: dmi.fetch_current(body.station_id, client=http),
+            lambda: dmi.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "IMGW":
+        # Bulk público de toda la red; las series salen del almacén del poller.
+        return (
+            "public",
+            lambda: imgw.fetch_current(body.station_id, client=http),
+            lambda: imgw.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "LHMT":
+        # API pública Meteo.lt; una petición por estación (últimas 24 h).
+        return (
+            "public",
+            lambda: lhmt.fetch_current(body.station_id, client=http),
+            lambda: lhmt.fetch_today_series(body.station_id, client=http),
         )
 
     if body.provider == "ECCC":
@@ -1295,6 +1388,14 @@ async def post_current_processed(
     )
     if temperature_warning:
         response_warnings.append(temperature_warning)
+    response_warnings.extend(_warnings_from_bulk_quarantine(
+        body.provider,
+        body.station_id,
+        series_dict,
+        already=response_warnings,
+        tz_name=str(station_record.get("tz") or body.sun_tz_name or ""),
+        observation_epoch=(current_raw or {}).get("epoch"),
+    ))
     if body.provider == "WINDY" and _windy_flatlined_fields(series_dict):
         response_warnings.append(observation_warnings.flatlined_series())
 
@@ -1702,6 +1803,32 @@ def _resolve_recent_fetcher(
         return (
             "public",
             lambda: eccc.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "METEOSWISS":
+        return (
+            "public",
+            lambda: meteoswiss.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "DMI":
+        return (
+            "public",
+            lambda: dmi.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "IMGW":
+        # Solo los días que el poller lleve acumulados (hasta 8).
+        return (
+            "public",
+            lambda: imgw.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "LHMT":
+        # Un día UTC por petición; los días cerrados salen de caché.
+        return (
+            "public",
+            lambda: lhmt.fetch_recent_series(body.station_id, days_back=days, client=http),
         )
 
     if body.provider == "WEATHERLINK":

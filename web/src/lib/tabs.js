@@ -25,8 +25,17 @@ function forecastHref(language, slug) {
   return `/forecast?${params.toString()}`;
 }
 
-export function appTabs({ language, slug = '', observationPath = '' }) {
-  return [
+/**
+ * Avisos está en construcción: solo aparece con `vite dev`.
+ *
+ * `import.meta.env.DEV` lo sustituye Vite al compilar: en el build de
+ * producción vale `false` y la barra no la enseña. Fuera de Vite —los tests
+ * con `node --test`— `import.meta.env` no existe y cuenta como producción.
+ */
+const WARNINGS_ENABLED = import.meta.env !== undefined && import.meta.env.DEV === true;
+
+export function appTabs({ language, slug = '', observationPath = '', warnings = WARNINGS_ENABLED }) {
+  const tabs = [
     {
       id: 'observation',
       label: ui(language, 'tab_observation'),
@@ -39,6 +48,10 @@ export function appTabs({ language, slug = '', observationPath = '' }) {
     { id: 'forecast', label: ui(language, 'tab_forecast'), symbol: '∂', href: forecastHref(language, slug), external: true },
     { id: 'ranking', label: ui(language, 'tab_ranking'), icon: 'Trophy', href: `/${language}/ranking` }
   ];
+  if (warnings) {
+    tabs.push({ id: 'warnings', label: ui(language, 'tab_warnings'), icon: 'TriangleAlert', href: `/${language}/warnings` });
+  }
+  return tabs;
 }
 
 /**
@@ -71,10 +84,7 @@ export function stationStripe(station, meta) {
     name: meta.name,
     place: meta.location,
     id: station.station_id,
-    altitude:
-      station.elevation === null || station.elevation === undefined
-        ? ''
-        : `${Math.round(station.elevation)} m`,
+    elevation: Number.isFinite(station.elevation) ? station.elevation : null,
     lat: station.lat?.toFixed(4),
     lon: station.lon?.toFixed(4)
   };

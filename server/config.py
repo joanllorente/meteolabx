@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -130,6 +130,23 @@ class Settings(BaseSettings):
     de a minutos arbitrarios. Al arrancar se reutiliza el snapshot si puede
     llegar vigente al siguiente ciclo; sin snapshot se refresca inmediatamente.
     Configurar vía ``METEOLABX_RANKING_REFRESH_OFFSET_MIN``.
+    """
+
+    imgw_poller_enabled: Optional[bool] = None
+    """
+    Poller de IMGW (Polonia): lee cada 10 min el bulk de la red telemétrica y
+    va guardando las series, porque la API solo da la última instantánea y sin
+    él no hay gráficas ni tendencia. Vacío → sigue a
+    ``ranking_refresh_enabled`` (activo en producción, apagado en local y en
+    los tests). Configurar vía ``METEOLABX_IMGW_POLLER_ENABLED``.
+    """
+
+    imgw_series_state_path: str = ""
+    """
+    Snapshot en disco de las series de IMGW (gzip JSON). Vacío →
+    ``$RAILWAY_VOLUME_MOUNT_PATH/imgw_series.json.gz`` si hay Volume; sin él,
+    las series viven solo en memoria. Configurar vía
+    ``METEOLABX_IMGW_SERIES_STATE_PATH``.
     """
 
     ranking_retry_interval_s: float = 60.0

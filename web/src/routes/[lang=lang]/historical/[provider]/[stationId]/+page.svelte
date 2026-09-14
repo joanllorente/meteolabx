@@ -19,7 +19,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import { recordSection } from '$lib/stats.js';
   import { fetchPersonalClimoSummary } from '$lib/personal.js';
-  import { displayName, providerLabel } from '$lib/seo/i18n.js';
+  import { displayName, providerLabel, stationLocationLabel } from '$lib/seo/i18n.js';
   import { appTabs, observationTabs } from '$lib/tabs.js';
 
   // `localStorage` no existe en el servidor: las credenciales se leen al
@@ -141,9 +141,9 @@
   const stripe = $derived({
     provider: providerLabel(station.provider),
     name,
-    place: [station.locality, station.region].filter(Boolean).join(', '),
+    place: stationLocationLabel(station, lang),
     id: station.station_id,
-    altitude: isNumber(station.elevation) ? `${Math.round(station.elevation)} m` : '',
+    elevation: Number.isFinite(station.elevation) ? station.elevation : null,
     lat: station.lat?.toFixed(4),
     lon: station.lon?.toFixed(4)
   });
@@ -186,6 +186,7 @@
     {warning}
     period={data.period}
     maxBlocks={data.maxBlocks}
+    series={data.station}
     {failure}
     provider={station.provider}
     busy={personal.loading}

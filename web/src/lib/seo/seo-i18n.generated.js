@@ -5,6 +5,7 @@ export default {
   "country_labels": {
     "AQ": {
       "ca": "Antàrtida",
+      "de": "Antarktis",
       "en": "Antarctica",
       "es": "Antártida",
       "fr": "Antarctique",
@@ -13,6 +14,7 @@ export default {
     },
     "AT": {
       "ca": "Àustria",
+      "de": "Österreich",
       "en": "Austria",
       "es": "Austria",
       "fr": "Autriche",
@@ -21,14 +23,43 @@ export default {
     },
     "CA": {
       "ca": "Canadà",
+      "de": "Kanada",
       "en": "Canada",
       "es": "Canadá",
       "fr": "Canada",
       "it": "Canada",
       "pt": "Canadá"
     },
+    "CH": {
+      "ca": "Suïssa",
+      "de": "Schweiz",
+      "en": "Switzerland",
+      "es": "Suiza",
+      "fr": "Suisse",
+      "it": "Svizzera",
+      "pt": "Suíça"
+    },
+    "DE": {
+      "ca": "Alemanya",
+      "de": "Deutschland",
+      "en": "Germany",
+      "es": "Alemania",
+      "fr": "Allemagne",
+      "it": "Germania",
+      "pt": "Alemanha"
+    },
+    "DK": {
+      "ca": "Dinamarca",
+      "de": "Dänemark",
+      "en": "Denmark",
+      "es": "Dinamarca",
+      "fr": "Danemark",
+      "it": "Danimarca",
+      "pt": "Dinamarca"
+    },
     "ES": {
       "ca": "Espanya",
+      "de": "Spanien",
       "en": "Spain",
       "es": "España",
       "fr": "Espagne",
@@ -37,6 +68,7 @@ export default {
     },
     "FR": {
       "ca": "França",
+      "de": "Frankreich",
       "en": "France",
       "es": "Francia",
       "fr": "France",
@@ -45,6 +77,7 @@ export default {
     },
     "GB": {
       "ca": "Regne Unit",
+      "de": "Vereinigtes Königreich",
       "en": "United Kingdom",
       "es": "Reino Unido",
       "fr": "Royaume-Uni",
@@ -53,22 +86,52 @@ export default {
     },
     "IT": {
       "ca": "Itàlia",
+      "de": "Italien",
       "en": "Italy",
       "es": "Italia",
       "fr": "Italie",
       "it": "Italia",
       "pt": "Itália"
     },
+    "LI": {
+      "ca": "Liechtenstein",
+      "de": "Liechtenstein",
+      "en": "Liechtenstein",
+      "es": "Liechtenstein",
+      "fr": "Liechtenstein",
+      "it": "Liechtenstein",
+      "pt": "Liechtenstein"
+    },
+    "LT": {
+      "ca": "Lituània",
+      "de": "Litauen",
+      "en": "Lithuania",
+      "es": "Lituania",
+      "fr": "Lituanie",
+      "it": "Lituania",
+      "pt": "Lituânia"
+    },
     "NO": {
       "ca": "Noruega",
+      "de": "Norwegen",
       "en": "Norway",
       "es": "Noruega",
       "fr": "Norvège",
       "it": "Norvegia",
       "pt": "Noruega"
     },
+    "PL": {
+      "ca": "Polònia",
+      "de": "Polen",
+      "en": "Poland",
+      "es": "Polonia",
+      "fr": "Pologne",
+      "it": "Polonia",
+      "pt": "Polônia"
+    },
     "PT": {
       "ca": "Portugal",
+      "de": "Portugal",
       "en": "Portugal",
       "es": "Portugal",
       "fr": "Portugal",
@@ -77,6 +140,7 @@ export default {
     },
     "SE": {
       "ca": "Suècia",
+      "de": "Schweden",
       "en": "Sweden",
       "es": "Suecia",
       "fr": "Suède",
@@ -85,6 +149,7 @@ export default {
     },
     "US": {
       "ca": "Estats Units",
+      "de": "Vereinigte Staaten",
       "en": "United States",
       "es": "Estados Unidos",
       "fr": "États-Unis",
@@ -97,6 +162,7 @@ export default {
     "es",
     "ca",
     "en",
+    "de",
     "fr",
     "it",
     "pt"
@@ -190,6 +256,96 @@ export default {
         "stations_indexed": "{count} estacions indexades",
         "variables": "Variables meteorològiques",
         "view_trends": "Veure tendències i més dades"
+      }
+    },
+    "de": {
+      "city_slug": "wetter",
+      "code": "de",
+      "directory_slug": "wetterstationen",
+      "language_label": "Deutsch",
+      "og_locale": "de_DE",
+      "sensors": {
+        "anemometer": "Windgeschwindigkeit",
+        "barometer": "Luftdruck",
+        "hygrometer": "Luftfeuchte",
+        "pyranometer": "Solarstrahlung",
+        "rain_gauge": "Niederschlag",
+        "thermometer": "Temperatur",
+        "uv": "UV-Index",
+        "wind_vane": "Windrichtung"
+      },
+      "text": {
+        "altitude": "Höhe",
+        "available": "Verfügbar",
+        "cities": "Städte",
+        "city_description": "Beobachtetes Wetter in {city} von {count} Stationen der Netze {networks}: Temperatur, Niederschlag, Wind und historische Daten in MeteoLabX.",
+        "city_directory_description": "Messstationen und beobachtete Wetterdaten in {count} Städten weltweit mit Temperatur, Niederschlag, Wind und historischen Daten.",
+        "city_directory_heading": "Wetterstationen nach Stadt",
+        "city_directory_lede": "Entdecken Sie Wetterstationen in der Nähe großer Städte und rufen Sie Messwerte, Trends und historische Daten auf.",
+        "city_directory_title": "Wetter und Wetterstationen nach Stadt | MeteoLabX",
+        "city_heading": "Wetter und Wetterstationen in {city}",
+        "city_indexed": "{count} Stationen in der Nähe",
+        "city_lede": "Beobachtete Wetterdaten im Raum {city} von {count} öffentlichen Stationen mit Temperatur, Niederschlag, Wind, Trends und historischen Daten.",
+        "city_stations": "Wetterstationen in {city}",
+        "city_title": "Wetter und Wetterstationen in {city} | MeteoLabX",
+        "coordinates": "Koordinaten",
+        "cta": "Live-Daten anzeigen",
+        "current_only": "Aktuelle Messwerte",
+        "current_text": "Die neuesten Messwerte von {name}, darunter Temperatur, Niederschlag, Wind und weitere vom offiziellen Messnetz veröffentlichte Größen.",
+        "current_title": "Aktuelles Wetter in {name}",
+        "directory_description": "Verzeichnis von {count} Wetterstationen aus öffentlichen nationalen und internationalen Messnetzen in MeteoLabX.",
+        "directory_heading": "Wetterstationen",
+        "directory_lede": "Entdecken Sie {count} Wetterstationen aus öffentlichen Messnetzen. Die Stationsprofile zeigen Standort, Höhe und Sensoren und führen zum interaktiven MeteoLabX-Dashboard.",
+        "directory_title": "Wetterstationen weltweit | MeteoLabX",
+        "distance_to_center": "{distance} km vom Zentrum",
+        "fallback_location": "ihrem Standort",
+        "footer": "Die Daten stammen aus öffentlichen Wettermessnetzen. MeteoLabX erleichtert ihre Auswertung; bei wichtigen Entscheidungen ist stets die offizielle Quelle maßgeblich.",
+        "historical": "Historie",
+        "history_cta": "Historische Daten anzeigen",
+        "history_text": "Für diese Station sind in MeteoLabX historische Zeitreihen verfügbar. Sie können frühere Zeiträume, Klimadiagramme und Zusammenfassungen der offiziellen Quelle abrufen.",
+        "history_title": "Historische Wetterdaten für {name}",
+        "identifier": "Kennung",
+        "live_panel_fallback": "Falls die Daten nicht geladen werden, öffnen Sie das vollständige Dashboard in MeteoLabX.",
+        "live_panel_loading": "Neueste Messwerte werden geladen…",
+        "live_panel_text": "Die Stationsdaten werden direkt auf dieser Seite geladen. Sie umfassen die wichtigsten Messgrößen sowie, sofern verfügbar, Dampfdruck, Sättigungsdampfdruck, Taupunkt, Feuchttemperatur, spezifische und absolute Feuchte, Luftdichte, potenzielle Temperatur, Strahlung und Wasserbilanz.",
+        "live_panel_title": "Interaktive Messwerte von {name}",
+        "location": "Standort",
+        "maximum": "Max.",
+        "minimum": "Min.",
+        "nearby": "Wetterstationen in der Nähe",
+        "network": "Messnetz",
+        "networks": "Verfügbare Messnetze",
+        "not_available": "Nicht verfügbar",
+        "not_available_plural": "Nicht verfügbar",
+        "obs_dew_point": "Taupunkt",
+        "obs_humidity": "Relative Luftfeuchte",
+        "obs_precipitation": "Niederschlag heute",
+        "obs_pressure": "Luftdruck",
+        "obs_temperature": "Temperatur",
+        "obs_wind": "Wind",
+        "observation_updated": "Letzte verfügbare Messung",
+        "observations_text": "MeteoLabX zeigt Messungen von Wetterstationen. Sie beschreiben die beobachteten Bedingungen und ersetzen keine offizielle Wettervorhersage.",
+        "observations_title": "Messwerte, keine Vorhersage",
+        "open_full_panel": "Vollständiges Dashboard öffnen",
+        "open_station": "Station öffnen",
+        "panel": "Interaktives Dashboard",
+        "provider_description": "Verzeichnis von {count} Wetterstationen des Netzes {provider}: Standort, Höhe, Sensoren und Messwerte in MeteoLabX.",
+        "provider_lede": "Entdecken Sie {count} Stationen von {provider} in MeteoLabX. Jedes Stationsprofil enthält Metadaten, verfügbare Messgrößen und den Zugang zum interaktiven Dashboard.",
+        "provider_title": "Wetterstationen von {provider} | MeteoLabX",
+        "public_network": "Öffentliches Messnetz",
+        "representative_station": "Nächstgelegene Station zum Stadtzentrum",
+        "sensor_text": "Verfügbare Messgrößen: {sensors}. Im vollständigen Dashboard finden Sie alle Daten, Diagramme und Stationsdetails.",
+        "sensor_unknown": "Kein detailliertes Sensorverzeichnis",
+        "station_count": "Stationen im Gebiet",
+        "station_description": "Messwerte der Wetterstation {name} von {provider} in {location}: Standort, Höhe, Sensoren und Wetterdaten in MeteoLabX.",
+        "station_lede": "Wetterdaten von {name}, einer Station von {provider} in {location}.",
+        "station_sheet": "Stationsprofil",
+        "station_title": "Wetterstation {name} ({provider}) | MeteoLabX",
+        "station_type": "Wetterstation",
+        "stations": "Wetterstationen",
+        "stations_indexed": "{count} indexierte Stationen",
+        "variables": "Wettergrößen",
+        "view_trends": "Trends und weitere Daten anzeigen"
       }
     },
     "en": {
@@ -649,6 +805,7 @@ export default {
       "es"
     ],
     "AT": [
+      "de",
       "en",
       "es"
     ],
@@ -657,10 +814,28 @@ export default {
       "fr",
       "es"
     ],
+    "CH": [
+      "de",
+      "fr",
+      "it",
+      "en",
+      "es"
+    ],
+    "DE": [
+      "de",
+      "en",
+      "es"
+    ],
+    "DK": [
+      "en",
+      "de",
+      "es"
+    ],
     "ES": [
       "es",
       "ca",
       "en",
+      "de",
       "fr",
       "it",
       "pt"
@@ -679,8 +854,23 @@ export default {
       "en",
       "es"
     ],
+    "LI": [
+      "de",
+      "en",
+      "es"
+    ],
+    "LT": [
+      "en",
+      "de",
+      "es"
+    ],
     "NO": [
       "en",
+      "es"
+    ],
+    "PL": [
+      "en",
+      "de",
       "es"
     ],
     "PT": [
@@ -704,7 +894,9 @@ export default {
     "EUSKALMET": "ES",
     "FROST": "NO",
     "GEOSPHERE": "AT",
+    "IMGW": "PL",
     "IPMA": "PT",
+    "LHMT": "LT",
     "METEOCAT": "ES",
     "METEOFRANCE": "FR",
     "METEOGALICIA": "ES",
@@ -717,15 +909,19 @@ export default {
   "provider_labels": {
     "AEMET": "AEMET",
     "CLIMANTARTIDE": "ClimAntartide",
+    "DMI": "DMI",
     "ECCC": "Environment Canada",
     "EUSKALMET": "Euskalmet",
     "FROST": "Frost (MET Norway)",
     "GEOSPHERE": "GeoSphere Austria",
+    "IMGW": "IMGW",
     "IPMA": "IPMA",
+    "LHMT": "LHMT",
     "METEOCAT": "Meteocat",
     "METEOFRANCE": "Météo-France",
     "METEOGALICIA": "MeteoGalicia",
     "METEOHUB_IT": "MeteoHub Italia",
+    "METEOSWISS": "MeteoSwiss",
     "METOFFICE": "Met Office",
     "NWS": "National Weather Service",
     "POEM": "Puertos del Estado",

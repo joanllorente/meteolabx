@@ -35,13 +35,20 @@ BUFR_NEAR_DISTANCE_M = 1_200.0
 # con el mejor dejaba el resto escapar.
 MAX_CANDIDATES_PER_SOURCE = 4
 
+# IEM is the indispensable operational source for these territories (notably
+# for rankings/bulk coverage), so overlaps with their official providers are
+# intentionally not candidates for aliasing, validation, or pruning.
+EXCLUDED_CANONICAL_PROVIDERS = ("NWS", "METOFFICE")
+
 # ISO 3166-1 numérico por proveedor: los ids WIGOS de WMO_BUFR_SRF son
 # ``0-{ISO numérico}-0-{nº nacional}`` (p.ej. 0-724-0-181 = España, synop
 # 08181). Permite casar el id nacional con el WMO de los inventarios.
 PROVIDER_ISO_NUMERIC = {
     "AEMET": 724, "METEOCAT": 724, "METEOGALICIA": 724, "EUSKALMET": 724,
     "POEM": 724, "METEOFRANCE": 250, "METEOHUB_IT": 380, "METOFFICE": 826,
-    "FROST": 578,
+    "FROST": 578, "ECCC": 124, "IPMA": 620, "GEOSPHERE": 40,
+    "SMHI": 752, "LHMT": 440, "IMGW": 616,
+    "METEOSWISS": 756,
 }
 
 # IEM labels WMO/BUFR records as UN even when their coordinates are inside the
@@ -61,6 +68,14 @@ ALLOWED_IEM_COUNTRIES = {
     "METEOHUB_IT": {"IT", "UN"},
     "METOFFICE": {"GB", "GG", "JE", "IM", "UN"},
     "FROST": {"NO", "SJ", "UN"},
+    "ECCC": {"CA", "UN"},
+    "IPMA": {"PT", "UN"},
+    "GEOSPHERE": {"AT", "UN"},
+    "SMHI": {"SE", "UN"},
+    "LHMT": {"LT", "UN"},
+    "IMGW": {"PL", "UN"},
+    "CLIMANTARTIDE": {"AQ", "UN"},
+    "METEOSWISS": {"CH", "LI", "UN"},
     "NWS": None,
 }
 
@@ -225,7 +240,9 @@ def _country_compatible(provider: str, iem_country: Any) -> bool:
     return bool(allowed and country in allowed)
 
 
-def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[str, Any]:
+def build_aliases(
+    database_path: Path, report_path: Path | None = None, provider: str = "",
+) -> dict[str, Any]:
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
     counts: Counter[str] = Counter()
@@ -238,15 +255,21 @@ def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[
     }
     try:
         connection.execute("PRAGMA foreign_keys = ON")
+        provider = str(provider or "").strip().upper()
+        provider_clause = " AND s.provider = ?" if provider else ""
+        source_params = (provider,) if provider else ()
         sources = connection.execute(
-            """
+            f"""
             SELECT s.*, r.raw_json
             FROM stations s
             JOIN station_inventory_records r ON r.record_pk = s.source_record_pk
             WHERE s.provider <> 'IEM'
+              AND s.provider NOT IN ('NWS', 'METOFFICE')
+              {provider_clause}
               AND s.latitude IS NOT NULL AND s.longitude IS NOT NULL
             ORDER BY s.station_pk
-            """
+            """,
+            source_params,
         ).fetchall()
         candidates_to_insert: list[tuple[Any, ...]] = []
         priority = {"secure": 0, "probable": 1, "ambiguous": 2}
@@ -339,8 +362,31 @@ def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[
                 if len(examples[label]) < 10:
                     examples[label].append(evidence)
 
+        if provider:
+            connection.execute(
+                """
+                DELETE FROM station_aliases
+                WHERE reviewed = 0
+                  AND canonical_station_pk IN (
+                      SELECT station_pk FROM stations WHERE provider = ?
+                  )
+                """,
+                (provider,),
+            )
+        else:
+            connection.execute(
+                "DELETE FROM station_aliases WHERE reviewed = 0 AND method LIKE 'inventory_%'"
+            )
+        # Remove legacy candidates/checks too. The FK cascades observation
+        # checks, ensuring these providers cannot leak into later validation.
         connection.execute(
-            "DELETE FROM station_aliases WHERE reviewed = 0 AND method LIKE 'inventory_%'"
+            """
+            DELETE FROM station_aliases
+            WHERE canonical_station_pk IN (
+                SELECT station_pk FROM stations
+                WHERE provider IN ('NWS', 'METOFFICE')
+            )
+            """
         )
         connection.executemany(
             """
@@ -371,6 +417,8 @@ def build_aliases(database_path: Path, report_path: Path | None = None) -> dict[
             "warning": "Candidates are unreviewed; no stations were merged or deleted.",
             "short_station_ids_are_evidence": False,
             "observation_comparison": "pending for probable and ambiguous candidates",
+            "excluded_canonical_providers": list(EXCLUDED_CANONICAL_PROVIDERS),
+            "provider_filter": provider or None,
         },
         "candidates": sum(counts.values()),
         "classifications": dict(sorted(counts.items())),
@@ -395,8 +443,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--provider", default="")
     args = parser.parse_args()
-    report = build_aliases(args.database, args.report)
+    report = build_aliases(args.database, args.report, provider=args.provider)
     print(f"Saved {report['candidates']} unreviewed candidates to {args.database}")
     for label, count in report["classifications"].items():
         print(f"  {label:10} {count:6}")

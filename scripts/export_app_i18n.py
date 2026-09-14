@@ -31,13 +31,13 @@ FORECAST_OUTPUT = (
 FORECAST_APP_OUTPUT = (
     REPO_ROOT / "prototype-svelte" / "src" / "lib" / "app-i18n.generated.js"
 )
-LANGUAGES = ("es", "ca", "en", "fr", "it", "pt")
+LANGUAGES = ("es", "ca", "en", "de", "fr", "it", "pt")
 
 # Las versiones que el modal de novedades enseña, de la más reciente a la más
 # antigua. El orden es el del propio modal en Streamlit.
 # La serie 1 se retiró con la 2.0.0: sus notas hablaban de una interfaz
 # que ya no existe.
-RELEASES = ("203", "202", "201", "200")
+RELEASES = ("210", "203", "202", "201", "200")
 
 
 def _app_version() -> str:
@@ -91,7 +91,7 @@ def build_payload() -> dict[str, object]:
         "range_help", "save", "saved", "unsaved",
     )
 
-    unit_keys = ("title", "description", "close")
+    unit_keys = ("title", "description", "close", "presets_title", "presets")
 
     maps: dict[str, dict] = {}
     rankings: dict[str, dict] = {}
@@ -200,7 +200,7 @@ def build_payload() -> dict[str, object]:
 
 
 def build_tabs() -> dict[str, dict]:
-    """Nombres de las seis pestañas en los seis idiomas."""
+    """Nombres de las pestañas en todos los idiomas publicados."""
     return {
         language: json.loads(
             (LOCALES_DIR / f"{language}.json").read_text(encoding="utf-8")

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#080d17" />
+    <title>MeteoLabX · Sin conexión</title>
+    <!-- Página que sirve el service worker al navegar sin red. Todo va dentro:
+         sin conexión no se puede pedir ni una hoja de estilos más. -->
+    <style>
+      :root { color-scheme: dark; --bg: #080d17; --card: #0f1726; --ink: #e8eef7; --muted: #8b98ab; --border: #1f2a3c; --accent: #3e8ed0; }
+      :root[data-theme='light'] { color-scheme: light; --bg: #eaeef4; --card: #ffffff; --ink: #142033; --muted: #5b6778; --border: #d5dce6; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+        background: var(--bg); color: var(--ink);
+        font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      main {
+        width: min(420px, 100%); padding: 32px 28px; text-align: center;
+        border: 1px solid var(--border); border-radius: 18px; background: var(--card);
+      }
+      img { width: 72px; height: 72px; border-radius: 16px; }
+      h1 { margin: 18px 0 8px; font-size: 1.25rem; }
+      p { margin: 0 0 22px; color: var(--muted); }
+      button {
+        padding: 10px 20px; border: 0; border-radius: 10px; cursor: pointer;
+        background: var(--accent); color: #fff; font: inherit; font-weight: 650;
+      }
+    </style>
+    <script>
+      try {
+        var saved = localStorage.getItem('mlx-theme-2');
+        var light = saved ? saved === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches;
+        if (light) document.documentElement.dataset.theme = 'light';
+      } catch (error) {
+        /* se queda en oscuro */
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/icon-192.png" alt="MeteoLabX" />
+      <h1 id="title">Sin conexión</h1>
+      <p id="body">No hay red ahora mismo. MeteoLabX enseña datos en vivo, así que no hay nada guardado que mostrar: en cuanto vuelva la conexión, la página se recargará sola.</p>
+      <button id="retry" type="button" onclick="location.reload()">Reintentar</button>
+    </main>
+    <script>
+      var TEXTS = {
+        es: ['Sin conexión', 'No hay red ahora mismo. MeteoLabX enseña datos en vivo, así que no hay nada guardado que mostrar: en cuanto vuelva la conexión, la página se recargará sola.', 'Reintentar'],
+        ca: ['Sense connexió', 'Ara mateix no hi ha xarxa. MeteoLabX mostra dades en directe, així que no hi ha res desat per ensenyar: tan bon punt torni la connexió, la pàgina es recarregarà sola.', 'Torna-ho a provar'],
+        de: ['Keine Verbindung', 'Gerade ist kein Netz verfügbar. MeteoLabX zeigt Live-Daten, daher gibt es nichts Gespeichertes anzuzeigen: Sobald die Verbindung zurück ist, lädt die Seite von selbst neu.', 'Erneut versuchen'],
+        en: ['You are offline', 'There is no network right now. MeteoLabX shows live data, so there is nothing saved to display: as soon as the connection is back, the page will reload by itself.', 'Try again'],
+        fr: ['Hors ligne', "Pas de réseau pour l'instant. MeteoLabX affiche des données en direct, il n'y a donc rien d'enregistré à montrer : dès que la connexion revient, la page se rechargera toute seule.", 'Réessayer'],
+        it: ['Offline', 'Al momento non c’è rete. MeteoLabX mostra dati in tempo reale, quindi non c’è nulla di salvato da mostrare: appena torna la connessione, la pagina si ricaricherà da sola.', 'Riprova'],
+        pt: ['Sem ligação', 'Não há rede neste momento. O MeteoLabX mostra dados em direto, por isso não há nada guardado para mostrar: assim que a ligação voltar, a página recarrega sozinha.', 'Tentar de novo']
+      };
+      // El idioma de la URL que se quería abrir manda; si no, el del navegador.
+      var fromPath = location.pathname.split('/')[1];
+      var fromBrowser = (navigator.language || 'es').slice(0, 2).toLowerCase();
+      var lang = TEXTS[fromPath] ? fromPath : TEXTS[fromBrowser] ? fromBrowser : 'es';
+      var text = TEXTS[lang];
+      document.documentElement.lang = lang;
+      document.title = 'MeteoLabX · ' + text[0];
+      document.getElementById('title').textContent = text[0];
+      document.getElementById('body').textContent = text[1];
+      document.getElementById('retry').textContent = text[2];
+      window.addEventListener('online', function () { location.reload(); });
+    </script>
+  </body>
+</html>

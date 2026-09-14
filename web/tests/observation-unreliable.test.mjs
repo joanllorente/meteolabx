@@ -11,6 +11,7 @@ test('los avisos de sensor dudoso encienden el cartel', () => {
     'suspect_temperature',
     'suspect_precipitation',
     'unreported_precipitation',
+    'suspect_wind',
     'flatlined_series'
   ]) {
     assert.equal(hasUnreliableData([code]), true, code);

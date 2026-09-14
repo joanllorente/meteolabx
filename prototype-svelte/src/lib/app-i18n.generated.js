@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.0.3",
+  "app_version": "2.1.0",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -21,6 +21,25 @@ export default {
       "saved": "Calibratge desat",
       "title": "Calibratge de sensors",
       "unsaved": "Els canvis de calibratge encara no s’han desat."
+    },
+    "de": {
+      "close": "Close calibration",
+      "description": "Adjust this station’s readings.",
+      "fields": {
+        "anemometer": "Anemometer (km/h)",
+        "barometer": "Barometer (hPa)",
+        "hygrometer": "Hygrometer (%)",
+        "pyranometer": "Pyranometer (W/m²)",
+        "rain_gauge": "Rain gauge (mm)",
+        "thermometer": "Thermometer (°C)",
+        "wind_vane": "Wind vane (°)"
+      },
+      "range_help": "Allowed range: {min} to {max} {unit}",
+      "requires_connection": "Connect the station to calibrate it.",
+      "save": "Save calibration",
+      "saved": "Calibration saved",
+      "title": "Sensor calibration",
+      "unsaved": "Calibration changes are not saved yet."
     },
     "en": {
       "close": "Close calibration",
@@ -472,10 +491,134 @@ export default {
         "Reconstrucció dels catàlegs d’estacions.",
         "Millores internes."
       ],
+      "release_210_fixes": [
+        "Corregit un problema que impedia mostrar estacions de diversos països alhora al mapa.",
+        "Corregit un problema que impedia mostrar correctament el país de les estacions del proveïdor IEM.",
+        "Corregit un error que podia provocar valors de temperatura incorrectes en estacions de MeteoGalicia."
+      ],
+      "release_210_improvements": [
+        "Afegits nous proveïdors oficials de Lituània, Polònia, Dinamarca i Suïssa.",
+        "La cerca per ubicació ara recorda les darreres estacions visitades.",
+        "Afegits nous presets d’unitats de mesura.",
+        "Millorada la visualització del mapa de precipitació.",
+        "La rosa dels vents ara mostra també les velocitats registrades.",
+        "Afegida una nova rosa dels vents per a ratxes.",
+        "Afegit l’idioma alemany.",
+        "MeteoLabX funciona ara completament com a Progressive Web App (PWA) i es pot instal·lar com a aplicació en dispositius compatibles."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
       "whats_new": "Novetats"
+    },
+    "de": {
+      "close": "Schließen",
+      "fixes_title": "Fehlerbehebungen",
+      "improvements_title": "Verbesserungen",
+      "privacy": "Datenschutz",
+      "privacy_browser": [
+        "So that you do not have to configure MeteoLabX on every visit, some preferences are stored locally in your browser: the units, the light or dark theme, your favourite stations, the last station you connected to and, if you enable it, the one that should open on arrival.",
+        "If you connect your own station, its altitude and the calibration of its sensors are also stored locally. They are sent to the server solely to compute the values shown.",
+        "The credentials you enter for providers such as Weather Underground or WeatherLink are also stored locally in your browser. They are used exclusively to perform the requests you make and are not added to MeteoLabX's statistics or kept in its database.",
+        "Other preferences, such as the map or ranking filters, are kept only while the tab stays open and disappear when you close it.",
+        "You can remove this information at any time by clearing the browsing data associated with MeteoLabX."
+      ],
+      "privacy_browser_title": "Preferences stored in your browser",
+      "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+      "privacy_contact_title": "Contact",
+      "privacy_cookies": [
+        "MeteoLabX does not use advertising cookies, tracking pixels or external analytics services such as Google Analytics, and it does not display advertising.",
+        "The application may use cookies or technical mechanisms that are strictly necessary for its operation and security. These mechanisms are not used for advertising or to track your activity on other websites, so they do not require consent and you will not see a cookie banner.",
+        "To open the map and the ranking in the country you are browsing from, MeteoLabX stores a technical cookie with the name of your time zone (for example, “Europe/Madrid”). It contains neither your exact location nor any identifier.",
+        "The interface typeface is served from MeteoLabX's own domain: browsing the site makes no requests to third-party servers, apart from the map's base layer described below."
+      ],
+      "privacy_cookies_title": "Cookies and tracking",
+      "privacy_infra": [
+        "The providers used to host, protect and deliver MeteoLabX may temporarily process technical information, such as the IP address, the browser used and the date and time of access, in order to provide the service, prevent abuse and guarantee its security.",
+        "These providers act exclusively as technical infrastructure providers and do not receive the data to use it for their own advertising purposes.",
+        "The map uses CARTO's base layer. When you open that tab, your browser requests the map tiles and fonts directly from its servers, so CARTO may process your IP address and the area of the map you are viewing. MeteoLabX does not send it any other information."
+      ],
+      "privacy_infra_title": "Infrastructure and security logs",
+      "privacy_intro": "MeteoLabX does not require registration or a user account, and it does not build personal profiles of its visitors.",
+      "privacy_log_intro": "To know which stations are being consulted and to check that the service is working correctly, MeteoLabX keeps a technical log that may include:",
+      "privacy_log_items": [
+        "The provider, identifier and name of the station consulted.",
+        "The date and time of the query.",
+        "If the query fails, the category of the error, such as a timeout, rejected credentials or a communication failure with the provider, and, where applicable, the HTTP status code.",
+        "The language in which the page is being displayed."
+      ],
+      "privacy_log_notes": [
+        "This log is not linked to any user account, session identifier or visitor profile. MeteoLabX does not add the visitor's IP address, location, credentials or any information intended to identify them to these statistics.",
+        "Please note that a station's identifier or name may contain information published by its owner on the corresponding weather provider."
+      ],
+      "privacy_log_title": "Technical query log",
+      "privacy_purpose_intro": "The information is used exclusively to:",
+      "privacy_purpose_items": [
+        "Produce internal statistics on the use of stations and providers.",
+        "Detect errors and availability problems.",
+        "Diagnose failures and improve how MeteoLabX works."
+      ],
+      "privacy_purpose_note": "It is not used for advertising, personal profiling or individual tracking of visitors.",
+      "privacy_purpose_title": "Purpose of the log",
+      "privacy_retention": [
+        "The technical query logs are kept indefinitely for as long as the service remains in operation.",
+        "The logs are accessible exclusively to the MeteoLabX administrator and to the technical providers when necessary to provide or protect the service."
+      ],
+      "privacy_retention_title": "Retention and access",
+      "privacy_title": "Datenschutz und Nutzungsdaten",
+      "release_200_fixes": [
+        "When the station is calm no wind direction is shown: the vane stays stuck on the last heading and measures nothing.",
+        "The UV index and the erythemal dose no longer report residual values with the Sun below the horizon.",
+        "The heat and wet-bulb warnings each appear on their own card and say which measurement they refer to.",
+        "The historical tab no longer shows empty cards when the network does not publish that measurement.",
+        "Fixed the ranking links to MeteoHub Italia stations."
+      ],
+      "release_200_improvements": [
+        "Completely redesigned interface: clearer, more modern and more consistent.",
+        "New Forecast tab, with AROME model maps and MeteoLabX's own diagnostics.",
+        "The Historical section now offers more complete information.",
+        "New wind chart in Historical."
+      ],
+      "release_201_improvements": [
+        "Improved display on mobile devices.",
+        "Improved display of the trend charts."
+      ],
+      "release_202_fixes": [
+        "Bug fixes."
+      ],
+      "release_202_improvements": [
+        "Station inventory updated."
+      ],
+      "release_203_fixes": [
+        "Fixed a visual glitch on mobile devices when opening the filters."
+      ],
+      "release_203_improvements": [
+        "Interface improvements.",
+        "Improved display on mobile devices.",
+        "City names now appear on the temperature and precipitation maps.",
+        "Improved colour palette for the temperature map.",
+        "Station catalogues rebuilt.",
+        "Internal improvements."
+      ],
+      "release_210_fixes": [
+        "Ein Problem wurde behoben, durch das Stationen aus mehreren Ländern nicht gleichzeitig auf der Karte angezeigt werden konnten.",
+        "Ein Problem wurde behoben, durch das das Land der Stationen des Anbieters IEM nicht korrekt angezeigt wurde.",
+        "Ein Fehler wurde behoben, der bei MeteoGalicia-Stationen falsche Temperaturwerte verursachen konnte."
+      ],
+      "release_210_improvements": [
+        "Neue offizielle Anbieter aus Litauen, Polen, Dänemark und der Schweiz.",
+        "Die Standortsuche merkt sich jetzt die zuletzt besuchten Stationen.",
+        "Neue Voreinstellungen für Maßeinheiten.",
+        "Verbesserte Darstellung der Niederschlagskarte.",
+        "Die Windrose zeigt jetzt auch die gemessenen Windgeschwindigkeiten.",
+        "Neue Windrose für Böen.",
+        "Deutsch als neue Sprache.",
+        "MeteoLabX funktioniert jetzt vollständig als Progressive Web App (PWA) und lässt sich auf kompatiblen Geräten als App installieren."
+      ],
+      "sources": "Quellen",
+      "unaffiliated": "Nicht verbunden",
+      "version": "Version {version}",
+      "whats_new": "Neuigkeiten"
     },
     "en": {
       "close": "Close",
@@ -565,6 +708,21 @@ export default {
         "Improved colour palette for the temperature map.",
         "Station catalogues rebuilt.",
         "Internal improvements."
+      ],
+      "release_210_fixes": [
+        "Fixed an issue that prevented showing stations from several countries at once on the map.",
+        "Fixed an issue that prevented the country of IEM stations from being shown correctly.",
+        "Fixed a bug that could cause incorrect temperature values at MeteoGalicia stations."
+      ],
+      "release_210_improvements": [
+        "Added new official providers from Lithuania, Poland, Denmark and Switzerland.",
+        "Location search now remembers your recently visited stations.",
+        "Added new presets for units of measurement.",
+        "Improved display of the precipitation map.",
+        "The wind rose now also shows the recorded wind speeds.",
+        "Added a new wind rose for gusts.",
+        "Added the German language.",
+        "MeteoLabX now works fully as a Progressive Web App (PWA) and can be installed as an app on compatible devices."
       ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
@@ -660,6 +818,21 @@ export default {
         "Reconstrucción de los catálogos de estaciones.",
         "Mejoras internas."
       ],
+      "release_210_fixes": [
+        "Corregido un problema que impedía mostrar estaciones de varios países simultáneamente en el mapa.",
+        "Corregido un problema que impedía mostrar correctamente el país de las estaciones del proveedor IEM.",
+        "Corregido un error que podía provocar valores de temperatura incorrectos en estaciones de MeteoGalicia."
+      ],
+      "release_210_improvements": [
+        "Añadidos nuevos proveedores oficiales de Lituania, Polonia, Dinamarca y Suiza.",
+        "La búsqueda por ubicación ahora recuerda las últimas estaciones visitadas.",
+        "Añadidos nuevos presets de unidades de medida.",
+        "Mejorada la visualización del mapa de precipitación.",
+        "La rosa de vientos ahora muestra también las velocidades registradas.",
+        "Añadida una nueva rosa de vientos para rachas.",
+        "Añadido el idioma alemán.",
+        "MeteoLabX funciona ahora completamente como Progressive Web App (PWA) y puede instalarse como aplicación en dispositivos compatibles."
+      ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
       "version": "Versión {version}",
@@ -753,6 +926,21 @@ export default {
         "Palette de la carte de température améliorée.",
         "Reconstruction des catalogues de stations.",
         "Améliorations internes."
+      ],
+      "release_210_fixes": [
+        "Correction d’un problème qui empêchait d’afficher simultanément des stations de plusieurs pays sur la carte.",
+        "Correction d’un problème qui empêchait d’afficher correctement le pays des stations du fournisseur IEM.",
+        "Correction d’un bug qui pouvait provoquer des valeurs de température erronées pour les stations de MeteoGalicia."
+      ],
+      "release_210_improvements": [
+        "Ajout de nouveaux fournisseurs officiels de Lituanie, de Pologne, du Danemark et de Suisse.",
+        "La recherche par lieu mémorise désormais les dernières stations consultées.",
+        "Ajout de nouveaux préréglages d’unités de mesure.",
+        "Amélioration de l’affichage de la carte des précipitations.",
+        "La rose des vents affiche désormais aussi les vitesses enregistrées.",
+        "Ajout d’une nouvelle rose des vents pour les rafales.",
+        "Ajout de la langue allemande.",
+        "MeteoLabX fonctionne désormais pleinement comme Progressive Web App (PWA) et peut être installée comme application sur les appareils compatibles."
       ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
@@ -848,6 +1036,21 @@ export default {
         "Ricostruzione dei cataloghi di stazioni.",
         "Miglioramenti interni."
       ],
+      "release_210_fixes": [
+        "Corretto un problema che impediva di mostrare contemporaneamente sulla mappa stazioni di più paesi.",
+        "Corretto un problema che impediva di mostrare correttamente il paese delle stazioni del fornitore IEM.",
+        "Corretto un errore che poteva causare valori di temperatura errati nelle stazioni di MeteoGalicia."
+      ],
+      "release_210_improvements": [
+        "Aggiunti nuovi fornitori ufficiali di Lituania, Polonia, Danimarca e Svizzera.",
+        "La ricerca per località ora ricorda le ultime stazioni visitate.",
+        "Aggiunte nuove preimpostazioni delle unità di misura.",
+        "Migliorata la visualizzazione della mappa delle precipitazioni.",
+        "La rosa dei venti ora mostra anche le velocità registrate.",
+        "Aggiunta una nuova rosa dei venti per le raffiche.",
+        "Aggiunta la lingua tedesca.",
+        "MeteoLabX ora funziona completamente come Progressive Web App (PWA) e può essere installata come app sui dispositivi compatibili."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -941,6 +1144,21 @@ export default {
         "Melhorada a paleta do mapa de temperatura.",
         "Reconstrução dos catálogos de estações.",
         "Melhorias internas."
+      ],
+      "release_210_fixes": [
+        "Corrigido um problema que impedia mostrar em simultâneo no mapa estações de vários países.",
+        "Corrigido um problema que impedia mostrar corretamente o país das estações do fornecedor IEM.",
+        "Corrigido um erro que podia provocar valores de temperatura incorretos nas estações da MeteoGalicia."
+      ],
+      "release_210_improvements": [
+        "Adicionados novos fornecedores oficiais da Lituânia, Polónia, Dinamarca e Suíça.",
+        "A pesquisa por localização passa a lembrar as últimas estações visitadas.",
+        "Adicionadas novas predefinições de unidades de medida.",
+        "Melhorada a visualização do mapa de precipitação.",
+        "A rosa dos ventos passa a mostrar também as velocidades registadas.",
+        "Adicionada uma nova rosa dos ventos para rajadas.",
+        "Adicionado o idioma alemão.",
+        "O MeteoLabX funciona agora completamente como Progressive Web App (PWA) e pode ser instalado como aplicação em dispositivos compatíveis."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -1066,6 +1284,125 @@ export default {
         "invalid_period": "⚠️ No s’ha pogut construir un període vàlid.",
         "max_monthly_blocks": "⚠️ En mode mensual el màxim és {max_blocks} blocs mes×any (seleccionats: {selected_blocks}). Redueix la selecció.",
         "no_data_selected_period": "⚠️ No hi ha dades disponibles per al període seleccionat."
+      }
+    },
+    "de": {
+      "actions": {
+        "query": "Query history"
+      },
+      "caption": {
+        "period_summary": "Period: {period_range} · Selected blocks: {blocks} · Requested days: {days}",
+        "records_received": "Valid records received: {count} · {start} → {end}",
+        "weatherlink_monthly_only": "WeatherLink v2 only allows historic data in 24 h windows; to avoid rate limits, query specific months."
+      },
+      "cards": {
+        "average_temperatures": "Average temperatures",
+        "characteristic_days": "Characteristic days",
+        "daily_temperature_extremes": "Daily extremes",
+        "max_intensity": "Maximum intensity",
+        "max_short": "Max.",
+        "mean_temp_difference": "Difference between means",
+        "mean_temp_extremes": "Mean temperature extremes",
+        "min_short": "Min.",
+        "period_amplitude": "Period temperature range",
+        "precip_extremes": "Precipitation extremes",
+        "rain_summary": "Rain",
+        "solar_extremes": "Sunshine extremes",
+        "solar_irradiation_extremes": "Solar irradiation extremes",
+        "solar_summary": "Solar",
+        "summary_labels": {
+          "accumulated": "Accumulated",
+          "direction": "Direction",
+          "frost": "Frost",
+          "irradiance_mean": "Mean irradiance",
+          "irradiation_mean": "Mean irradiation",
+          "maximums": "Maximums",
+          "mean": "Mean",
+          "minimums": "Minimums",
+          "predominant_direction": "Prevailing",
+          "rain_days": "Rainy days",
+          "stddev": "Std. deviation",
+          "sunshine_mean": "Mean sunshine",
+          "torrid": "Torrid",
+          "tropical": "Tropical",
+          "windiest_day": "Windiest day",
+          "windiest_month": "Windiest month"
+        },
+        "thermal_extremes": "Thermal extremes",
+        "wind_extremes": "Wind extremes",
+        "wind_summary": "Wind"
+      },
+      "chart": {
+        "legend": {
+          "precip": "Precipitation",
+          "temp_max": "Mean maximums",
+          "temp_mean": "Mean temperature",
+          "temp_min": "Mean minimums"
+        },
+        "scope": {
+          "daily": "daily",
+          "monthly": "monthly",
+          "yearly": "yearly"
+        },
+        "title": "Climograph ({scope})",
+        "x": {
+          "day": "Day",
+          "month": "Month",
+          "year": "Year"
+        },
+        "y": {
+          "precip": "Precipitation (mm)",
+          "temp": "Temperature (°C)"
+        }
+      },
+      "errors": {
+        "meteocat_generic": "❌ Error querying Meteocat history.",
+        "missing_aemet_station": "⚠️ AEMET station code is missing for historical queries.",
+        "missing_iem_station": "⚠️ IEM station with network|station format is missing for historical queries.",
+        "missing_meteocat_station": "⚠️ Meteocat station code is missing for historical queries.",
+        "missing_meteofrance_station": "⚠️ Meteo-France station code is missing for historical queries.",
+        "missing_meteogalicia_station": "⚠️ MeteoGalicia station code is missing for historical queries.",
+        "missing_weatherlink_credentials": "⚠️ WeatherLink credentials (Station ID/API Key/API Secret) are missing for historical queries.",
+        "missing_wu_credentials": "⚠️ WU credentials (Station ID/API Key) are missing for historical queries.",
+        "provider_generic": "❌ Error querying {provider} history: {error_type}: {error}",
+        "wu_http": "❌ Error querying WU history{status_msg}.",
+        "wu_network": "❌ Network error while querying WU history.",
+        "wu_notfound": "❌ Station ID not found in WU history.",
+        "wu_ratelimit": "❌ Rate limit reached in WU history.",
+        "wu_timeout": "❌ Timeout while querying WU history.",
+        "wu_unauthorized": "❌ Invalid API key or no permission for historical data."
+      },
+      "info": {
+        "select_month_and_year": "Select at least one month and one year.",
+        "select_year": "Select at least one year."
+      },
+      "inputs": {
+        "months": "Month(s)",
+        "years": "Year(s)"
+      },
+      "sections": {
+        "data_by": "Data by {scope}",
+        "extremes": "Period highlights",
+        "summary": "Period summary"
+      },
+      "spinner": {
+        "loading": "Querying {provider} history..."
+      },
+      "summary": {
+        "label": "Summary type",
+        "options": {
+          "annual": "Annual",
+          "monthly": "Monthly"
+        }
+      },
+      "units": {
+        "days": "days",
+        "nights": "nights"
+      },
+      "warnings": {
+        "invalid_period": "⚠️ A valid period could not be built.",
+        "max_monthly_blocks": "⚠️ In monthly mode the maximum is {max_blocks} month×year blocks (selected: {selected_blocks}). Reduce the selection.",
+        "no_data_selected_period": "⚠️ No data available for the selected period."
       }
     },
     "en": {
@@ -1690,6 +2027,28 @@ export default {
       "visible_stations": "Estacions visibles",
       "wind_field_legend": "Velocitat actual del vent (km/h)"
     },
+    "de": {
+      "country_all": "Worldwide",
+      "country_filter": "Countries",
+      "hide_historical_only": "Hide historical stations",
+      "hide_historical_only_help": "Historical stations no longer record data, but their historical archive can be consulted.",
+      "hide_manual": "Hide manual stations",
+      "hide_manual_help": "Manual stations (COOP/CoCoRaHS observers) publish one hand-taken reading per day, with no real-time data.",
+      "hide_pws": "Hide personal weather stations",
+      "hide_pws_help": "Hides personal weather stations (Netatmo and Windy PWS), leaving only official networks.",
+      "historical_only": "Show only stations with historical data",
+      "no_stations": "No stations are available for the current filters.",
+      "precip_field_legend": "Accumulated precipitation over the last 24 hours (mm)",
+      "providers": "Providers",
+      "select_station_hint": "Click a station on the map to view its details and connect it.",
+      "sensor_filter": "Sensors",
+      "sensor_filter_caption": "The sensor filter does not apply to NWS for now.",
+      "sensor_filter_clear": "Clear",
+      "station_type": "Type",
+      "temp_field_legend": "Current temperature (°C)",
+      "visible_stations": "Visible stations",
+      "wind_field_legend": "Current wind speed (km/h)"
+    },
     "en": {
       "country_all": "Worldwide",
       "country_filter": "Countries",
@@ -1837,6 +2196,46 @@ export default {
           "extreme": "Calor extrema",
           "high": "Avís de calor: evitar l'exposició prolongada a aquestes condicions",
           "very_high": "Calor intensa"
+        }
+      }
+    },
+    "de": {
+      "clarity": {
+        "clear": "Clear",
+        "cloudy": "Cloudy",
+        "mostly_clear": "Mostly clear",
+        "partly_cloudy": "Partly cloudy",
+        "very_cloudy": "Overcast"
+      },
+      "dew_point": {
+        "wet_bulb_alert": {
+          "extreme": "Value close to the theoretical physiological limit of 35 °C. Sustained exposure can be dangerous even at rest and in the shade.",
+          "warning": "Avoid physical exertion and prolonged exposure."
+        },
+        "wet_bulb_risk": {
+          "critical": "Critical conditions",
+          "extreme": "extreme conditions",
+          "potential": "potentially dangerous conditions"
+        }
+      },
+      "sky": {
+        "night": "Night",
+        "night_closed": "Night",
+        "sunrise_sunset": "Sunrise {sunrise} · Sunset {sunset}",
+        "title": "Sky clarity",
+        "twilight_astronomical": "Astronomical twilight",
+        "twilight_civil": "Civil twilight",
+        "twilight_nautical": "Nautical twilight"
+      },
+      "temperature": {
+        "heat_alert": {
+          "extreme": "Extreme heat: imminent risk of heat stroke. Stay in a cool place and hydrate; dangerous even at rest.",
+          "warning": "Intense heat: avoid physical activity and sun exposure. Risk of heat stroke with prolonged exposure."
+        },
+        "heat_risk": {
+          "extreme": "Extreme heat",
+          "high": "Heat advisory: avoid prolonged exposure to these conditions",
+          "very_high": "Intense heat"
         }
       }
     },
@@ -2045,6 +2444,9 @@ export default {
     "ca": {
       "exclude_antarctica": "Exclou l’Antàrtida"
     },
+    "de": {
+      "exclude_antarctica": "Exclude Antarctica"
+    },
     "en": {
       "exclude_antarctica": "Exclude Antarctica"
     },
@@ -2062,6 +2464,7 @@ export default {
     }
   },
   "releases": [
+    "210",
     "203",
     "202",
     "201",
@@ -2087,6 +2490,27 @@ export default {
         "mixing_ratio": "Relació de mescla (r). Massa de vapor d’aigua per unitat de massa d’aire sec. Les seves variacions ajuden a detectar canvis en el contingut d’humitat atmosfèrica i poden indicar l’arribada d’una massa d’aire més seca o més humida. També poden ser causades per evaporació, precipitació o mescla vertical.",
         "theta_e": "Magnitud que representa conjuntament la temperatura de l’aire, la humitat i la pressió. Es conserva aproximadament durant ascensos i descensos adiabàtics humits, cosa que la fa útil per identificar canvis de massa d’aire. Les variacions en superfície poden ser causades per escalfament o refredament radiatiu, canvis en el contingut d’humitat, mescla vertical o advecció.",
         "uv": "Descomposició vectorial del vent en les components zonal i meridional. La component u (zonal) representa el moviment oest-est: valors positius indiquen vent provinent de l’oest i valors negatius de l’est. La component v (meridional) representa el moviment sud-nord: valors positius indiquen vent provinent del sud i valors negatius del nord. Això permet analitzar per separat la intensitat de l’advecció zonal i meridional."
+      }
+    },
+    "de": {
+      "charts": {
+        "mixing_ratio_axis": "dr/dt (g/kg/h)",
+        "mixing_ratio_title": "Mixing Ratio Trend (r)",
+        "pressure_axis": "dp/dt (hPa/h)",
+        "pressure_title": "Absolute Pressure Trend (3 h interval)",
+        "theta_e_axis": "dθe/dt (K/h)",
+        "theta_e_title": "Equivalent Potential Temperature Trend (θe)",
+        "uv_axis": "Speed (km/h)",
+        "uv_title": "Wind components",
+        "uv_u": "u (zonal)",
+        "uv_v": "v (meridional)",
+        "vapor_pressure_axis": "de/dt (hPa/h)",
+        "vapor_pressure_title": "Vapor Pressure Trend (e)"
+      },
+      "tooltips": {
+        "mixing_ratio": "Mixing ratio (r). Mass of water vapor per unit mass of dry air. Its variations help detect changes in atmospheric moisture content and can indicate the arrival of a drier or more humid air mass. They can also be caused by evaporation, precipitation, or vertical mixing.",
+        "theta_e": "A quantity that jointly represents air temperature, humidity, and pressure. It is approximately conserved during moist adiabatic ascent and descent, so it is useful for identifying changes in air mass. Surface variations can be caused by radiative heating or cooling, changes in moisture content, vertical mixing, or advection.",
+        "uv": "Vector decomposition of wind into its zonal and meridional components. The u component (zonal) represents west–east motion: positive values indicate wind coming from the west and negative values from the east. The v component (meridional) represents south–north motion: positive values indicate wind coming from the south and negative values from the north. This makes it possible to analyze zonal and meridional advection intensity separately."
       }
     },
     "en": {
@@ -2200,72 +2624,154 @@ export default {
       "close": "Tanca les unitats",
       "description": "Aquestes preferències s’apliquen a tot MeteoLabX.",
       "fields": {
+        "altitude": "Altitud",
+        "distance": "Distància",
         "precip": "Precipitació",
         "pressure": "Pressió",
         "radiation": "Radiació",
         "temperature": "Temperatura",
         "wind": "Vent"
       },
+      "presets": {
+        "aviation": "Aviació",
+        "imperial": "Imperial (EUA)",
+        "meteorological": "Meteorològic",
+        "metric": "Mètric",
+        "uk": "Regne Unit"
+      },
+      "presets_title": "Sistema",
       "title": "Unitats"
     },
-    "en": {
+    "de": {
       "close": "Close units",
       "description": "These preferences apply across MeteoLabX.",
       "fields": {
+        "altitude": "Elevation",
+        "distance": "Distance",
         "precip": "Precipitation",
         "pressure": "Pressure",
         "radiation": "Radiation",
         "temperature": "Temperature",
         "wind": "Wind"
       },
+      "presets": {
+        "aviation": "Aviation",
+        "imperial": "Imperial (US)",
+        "meteorological": "Meteorological",
+        "metric": "Metric",
+        "uk": "UK"
+      },
+      "presets_title": "System",
+      "title": "Units"
+    },
+    "en": {
+      "close": "Close units",
+      "description": "These preferences apply across MeteoLabX.",
+      "fields": {
+        "altitude": "Elevation",
+        "distance": "Distance",
+        "precip": "Precipitation",
+        "pressure": "Pressure",
+        "radiation": "Radiation",
+        "temperature": "Temperature",
+        "wind": "Wind"
+      },
+      "presets": {
+        "aviation": "Aviation",
+        "imperial": "Imperial (US)",
+        "meteorological": "Meteorological",
+        "metric": "Metric",
+        "uk": "UK"
+      },
+      "presets_title": "System",
       "title": "Units"
     },
     "es": {
       "close": "Cerrar unidades",
       "description": "Estas preferencias se aplican a toda MeteoLabX.",
       "fields": {
+        "altitude": "Altitud",
+        "distance": "Distancia",
         "precip": "Precipitación",
         "pressure": "Presión",
         "radiation": "Radiación",
         "temperature": "Temperatura",
         "wind": "Viento"
       },
+      "presets": {
+        "aviation": "Aviación",
+        "imperial": "Imperial (US)",
+        "meteorological": "Meteorológico",
+        "metric": "Métrico",
+        "uk": "Reino Unido"
+      },
+      "presets_title": "Sistema",
       "title": "Unidades"
     },
     "fr": {
       "close": "Fermer les unités",
       "description": "Ces préférences s’appliquent à tout MeteoLabX.",
       "fields": {
+        "altitude": "Altitude",
+        "distance": "Distance",
         "precip": "Précipitation",
         "pressure": "Pression",
         "radiation": "Rayonnement",
         "temperature": "Température",
         "wind": "Vent"
       },
+      "presets": {
+        "aviation": "Aviation",
+        "imperial": "Impérial (US)",
+        "meteorological": "Météorologique",
+        "metric": "Métrique",
+        "uk": "Royaume-Uni"
+      },
+      "presets_title": "Système",
       "title": "Unités"
     },
     "it": {
       "close": "Chiudi unità",
       "description": "Queste preferenze si applicano a tutto MeteoLabX.",
       "fields": {
+        "altitude": "Altitudine",
+        "distance": "Distanza",
         "precip": "Precipitazione",
         "pressure": "Pressione",
         "radiation": "Radiazione",
         "temperature": "Temperatura",
         "wind": "Vento"
       },
+      "presets": {
+        "aviation": "Aviazione",
+        "imperial": "Imperiale (USA)",
+        "meteorological": "Meteorologico",
+        "metric": "Metrico",
+        "uk": "Regno Unito"
+      },
+      "presets_title": "Sistema",
       "title": "Unità"
     },
     "pt": {
       "close": "Fechar unidades",
       "description": "Estas preferências aplicam-se a todo o MeteoLabX.",
       "fields": {
+        "altitude": "Altitude",
+        "distance": "Distância",
         "precip": "Precipitação",
         "pressure": "Pressão",
         "radiation": "Radiação",
         "temperature": "Temperatura",
         "wind": "Vento"
       },
+      "presets": {
+        "aviation": "Aviação",
+        "imperial": "Imperial (EUA)",
+        "meteorological": "Meteorológico",
+        "metric": "Métrico",
+        "uk": "Reino Unido"
+      },
+      "presets_title": "Sistema",
       "title": "Unidades"
     }
   }

@@ -54,11 +54,23 @@ function pathOf(request) {
   }
 }
 
+// Ficheros de la PWA que tienen que llegar siempre frescos. El service worker
+// se llama igual en cada despliegue: si Cloudflare o el navegador guardan uno
+// viejo, la versión nueva tarda horas en llegar, y el manifiesto con él.
+const REVALIDATE = new Set(['/service-worker.js', '/manifest.webmanifest', '/offline.html']);
+
 const server = createServer((request, response) => {
   const path = pathOf(request);
   if (isApiPath(path)) {
     apiProxy.web(request, response);
     return;
+  }
+  if (REVALIDATE.has(path)) {
+    const writeHead = response.writeHead;
+    response.writeHead = function (...args) {
+      response.setHeader('cache-control', 'no-cache');
+      return writeHead.apply(this, args);
+    };
   }
   handler(request, response, () => {
     response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });

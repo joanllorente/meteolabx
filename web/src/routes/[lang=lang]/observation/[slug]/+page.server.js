@@ -1,11 +1,11 @@
 import { error, redirect } from '@sveltejs/kit';
-import { LANGUAGE_CODES } from '$lib/seo/i18n.js';
-
 import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
 import { contentEtag, observationVersion } from '$lib/server/etag.js';
 import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import {
   observationPath,
+  primaryLanguage,
+  stationLanguages,
   stationMeta
 } from '$lib/seo/station.js';
 
@@ -36,6 +36,13 @@ export async function load({ params, fetch, setHeaders }) {
   // de servir la misma ficha en dos URLs distintas.
   if (station.url_slug !== slug) {
     redirect(301, observationPath(lang, station.url_slug));
+  }
+
+  // El sitemap solo publica los idiomas asignados al país, y la ruta debe
+  // aplicar la misma regla. Así una estación polaca escrita bajo `/ca/` no
+  // responde con una variante indexable accidental.
+  if (!stationLanguages(station).includes(lang)) {
+    redirect(301, observationPath(primaryLanguage(station), station.url_slug));
   }
 
 

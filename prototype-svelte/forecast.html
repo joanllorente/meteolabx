@@ -5,14 +5,26 @@
     <base href="/forecast/" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#080d17" />
+    <!-- La misma PWA que el resto del sitio, también para quien entra directo
+         en Predicción. Ruta absoluta: el `<base>` de arriba convertiría una
+         relativa en /forecast/manifest.webmanifest, que no existe. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="MeteoLabX" />
     <script>
       // El mismo tema que el resto de MeteoLabX, aplicado antes de pintar para
       // que al entrar en Predicción no haya un destello del tema contrario.
       try {
-        var savedTheme = localStorage.getItem('mlx-theme');
-        var lightTheme = savedTheme === 'light' || (
-          savedTheme !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches
-        );
+        var savedTheme = localStorage.getItem('mlx-theme-2');
+        var automaticTheme = window.matchMedia('(prefers-color-scheme: light)').matches
+          ? 'light'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : (new Date().getHours() >= 8 && new Date().getHours() < 20 ? 'light' : 'dark');
+        var lightTheme = savedTheme === 'light' || (savedTheme !== 'dark' && automaticTheme === 'light');
         document.documentElement.dataset.theme = lightTheme ? 'light' : 'dark';
         document.querySelector('meta[name="theme-color"]').content = lightTheme ? '#eaeef4' : '#080d17';
       } catch (error) { /* se conserva el oscuro */ }
@@ -28,19 +40,31 @@
     <meta property="og:description" content="Mapas horarios del modelo AROME a 2,5 km: temperatura, viento, precipitación, CAPE, cizalladura, DCAPE, SHIP y Vertical Totals." />
     <title>Predicción meteorológica AROME | MeteoLabX</title>
     <style>
-      .forecast-static-intro{max-width:900px;margin:auto;padding:64px 24px;color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6}
-      .forecast-static-intro h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.1;margin:0 0 20px}
-      .forecast-static-intro p{max-width:760px;color:#aebbd0;font-size:1.1rem}
-      .forecast-static-intro a{color:#78b7ff}
+      html,body,#forecast-app{min-height:100%;margin:0}
+      body{background:#080d17;color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      html[data-theme="light"] body{background:#f3f6fa;color:#172234}
+      .forecast-launch{position:fixed;inset:0;display:grid;place-content:center;justify-items:center;gap:14px;background:inherit}
+      .forecast-launch img{width:48px;height:48px;border-radius:13px;box-shadow:0 10px 30px rgba(0,0,0,.22)}
+      .forecast-launch span{color:#aebbd0;font-size:.82rem;font-weight:650;letter-spacing:.02em}
+      html[data-theme="light"] .forecast-launch span{color:#66748a}
+      .forecast-launch i{width:22px;height:22px;border:2px solid rgba(112,185,239,.2);border-top-color:#70b9ef;border-radius:50%;animation:forecast-spin .8s linear infinite}
+      @keyframes forecast-spin{to{transform:rotate(360deg)}}
+      .forecast-static-intro{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     </style>
   </head>
   <body>
     <div id="forecast-app">
+      <div class="forecast-launch" role="status" aria-label="Cargando predicción">
+        <img src="./mlx-logo.png" alt="" />
+        <i aria-hidden="true"></i>
+        <span>Cargando predicción…</span>
+      </div>
       <main class="forecast-static-intro">
         <h1>Mapas del modelo AROME</h1>
         <p>Consulta la predicción del modelo AROME a 2,5 km hora a hora: temperatura en superficie y en altura, viento y racha, precipitación horaria y acumulada, nubosidad, radiación y los diagnósticos convectivos —CAPE, cizalladura, EBWD, DCAPE, SHIP y Vertical Totals— para analizar tormentas y entornos favorables a supercélulas.</p>
         <p><a href="/">Volver al panel de MeteoLabX</a></p>
       </main>
+      <noscript><style>.forecast-launch{display:none}.forecast-static-intro{position:static;width:auto;height:auto;margin:auto;padding:64px 24px;clip:auto;white-space:normal;max-width:900px;line-height:1.6}.forecast-static-intro p{max-width:760px;color:#aebbd0}.forecast-static-intro a{color:#78b7ff}</style></noscript>
     </div>
     <script type="module" src="/src/forecast-main.js"></script>
   </body>

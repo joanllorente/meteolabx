@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { observationTabs } from '../src/lib/tabs.js';
+import { appTabs, observationTabs } from '../src/lib/tabs.js';
+
+test('Avisos no aparece fuera de desarrollo', () => {
+  assert.ok(!appTabs({ language: 'es' }).some((tab) => tab.id === 'warnings'));
+  const tab = appTabs({ language: 'es', warnings: true }).find((item) => item.id === 'warnings');
+  assert.equal(tab?.href, '/es/warnings');
+});
 
 test('con slug, las tres vistas cuelgan del slug', () => {
   const tabs = observationTabs({ language: 'es', slug: 'el-prat-de-llobregat-0076' });

@@ -16,7 +16,7 @@
   const entryParams = new URLSearchParams(window.location.search);
   // Idioma y estación conectada con los que se llegó desde el resto de la web.
   // La barra los necesita para que salir del visor devuelva a donde se estaba.
-  const LANGUAGES = ['es', 'ca', 'en', 'fr', 'it', 'pt'];
+  const LANGUAGES = ['es', 'ca', 'en', 'de', 'fr', 'it', 'pt'];
   const entryLanguage = entryParams.get('lang') || '';
   const language = LANGUAGES.includes(entryLanguage) ? entryLanguage : 'es';
   function readConnection() {

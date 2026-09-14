@@ -306,6 +306,32 @@ def test_land_mask_extends_one_pixel_into_water():
     assert expanded.getpixel((0, 0)) == 0
 
 
+def test_disk_max_filter_rounds_isolated_drizzle():
+    from server.services.temperature_field import _disk_max_filter
+
+    values = np.zeros((7, 7), dtype=np.uint8)
+    values[3, 3] = 80
+
+    dilated = _disk_max_filter(values, radius=2)
+
+    assert dilated[3, 5] == 80 and dilated[4, 5] == 80
+    # Sin esquinas: la ventana cuadrada dejaba baldosas de 5x5.
+    assert dilated[1, 1] == 0 and dilated[5, 5] == 0
+
+
+def test_precipitation_texture_key_survives_stations_ageing_out():
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from server.routers.stations import _precipitation_data_key, _wind_data_key
+
+    store = SimpleNamespace(updated_at=datetime(2026, 9, 13, 14, tzinfo=timezone.utc))
+    # El job ceba la caché con N puntos; si al pedirla ya caducó alguna
+    # estación, la API no debe volver a renderizar con peor compresión.
+    for key in (_precipitation_data_key, _wind_data_key):
+        assert key(store, [(0.0, 0.0, 1.0)] * 3) == key(store, [(0.0, 0.0, 1.0)] * 2)
+
+
 def test_render_field_png_returns_png_bytes():
     png = render_field_png([(40.0, -3.0, 22.0)])
     assert png.startswith(b"\x89PNG")

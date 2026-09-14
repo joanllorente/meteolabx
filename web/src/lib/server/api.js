@@ -153,7 +153,8 @@ export function fetchTodaySeries(station, options = {}) {
 // que enseñar y se dice, en vez de pedir un dataset que el backend rechazará.
 export const HISTORICAL_PROVIDERS = new Set([
   'WU', 'AEMET', 'METEOCAT', 'METEOFRANCE', 'METEOGALICIA', 'FROST',
-  'WEATHERLINK', 'IEM', 'GEOSPHERE', 'SMHI', 'ECCC'
+  'WEATHERLINK', 'IEM', 'GEOSPHERE', 'SMHI', 'ECCC', 'LHMT', 'IMGW', 'DMI',
+  'METEOSWISS'
 ]);
 
 /**
@@ -243,6 +244,11 @@ export function fetchCountryByTimezone(timezone, options = {}) {
 }
 
 /** Países con estaciones en el catálogo, con su recuento. */
+/** Total de estaciones del inventario: el backend lo fija en cada deploy. */
+export function fetchInventoryTotal(options = {}) {
+  return publicMetadata('/v1/stations/inventory-total', options);
+}
+
 export function fetchStationCountries(options = {}) {
   return publicMetadata('/v1/stations/countries', options);
 }

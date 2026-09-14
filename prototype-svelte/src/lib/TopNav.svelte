@@ -18,7 +18,7 @@
 
   let { language = 'es', slug = '', observationPath = '', stationControls, themeControl } = $props();
 
-  const LANGUAGES = ['es', 'ca', 'en', 'fr', 'it', 'pt'];
+  const LANGUAGES = ['es', 'ca', 'en', 'de', 'fr', 'it', 'pt'];
   const labels = $derived(TABS[language] || TABS.es);
   const navIcons = { LayoutDashboard, Map, Trophy };
 

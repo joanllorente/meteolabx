@@ -7,7 +7,7 @@ const LIMIT = 10;
 // baja primero. El resto siempre de mayor a menor.
 const NATURAL_DESC = { tmax: true, tmin: false, gust: true, rain: true };
 
-const LANGUAGE_COUNTRY = { es: 'ES', fr: 'FR', it: 'IT', pt: 'PT', ca: 'ES', en: 'ES' };
+const LANGUAGE_COUNTRY = { es: 'ES', fr: 'FR', it: 'IT', pt: 'PT', ca: 'ES', en: 'ES', de: 'DE' };
 const TIMEZONE_COOKIE = 'mlx_tz';
 
 /**
