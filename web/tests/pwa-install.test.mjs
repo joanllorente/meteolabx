@@ -121,3 +121,22 @@ test('en iPhone y iPad se dibuja el botón Compartir y el de añadir, en todos l
     }
   }
 });
+
+test('quien ya la instaló desde este navegador no vuelve a ver la tarjeta', async () => {
+  const { resolveInstallMethod } = await import('../src/lib/pwa/platform.js');
+  const chrome = detectPlatform({ userAgent: UA.windowsChrome });
+  const iphone = detectPlatform({ userAgent: UA.iphoneSafari });
+
+  // Sin marca: instrucciones, o el botón si el navegador ofrece instalar.
+  assert.equal(resolveInstallMethod(chrome, {}), 'desktop-chromium');
+  assert.equal(resolveInstallMethod(chrome, { canPrompt: true }), 'prompt');
+  // Con la marca de instalación, oculta aunque se navegue por la pestaña normal.
+  assert.equal(resolveInstallMethod(chrome, { knownInstalled: true }), 'installed');
+  // Pero si Chrome vuelve a ofrecer instalar, es que la desinstaló.
+  assert.equal(resolveInstallMethod(chrome, { knownInstalled: true, canPrompt: true }), 'prompt');
+  // Recién instalada en esta visita: se confirma.
+  assert.equal(resolveInstallMethod(chrome, { installedNow: true, canPrompt: true }), 'installed');
+  // Dentro de la app, siempre oculta; y sin plataforma todavía, nada.
+  assert.equal(resolveInstallMethod(iphone, { standalone: true }), 'installed');
+  assert.equal(resolveInstallMethod(null, {}), null);
+});

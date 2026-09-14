@@ -9,7 +9,7 @@
    */
   import { onMount } from 'svelte';
 
-  import { currentMethod, promptInstall, pwa, pwaContext } from '$lib/pwa/install.svelte.js';
+  import { currentMethod, promptInstall, pwa, pwaContext, recordOnce } from '$lib/pwa/install.svelte.js';
   import { installText } from '$lib/pwa/install-i18n.js';
   import { recordPwaEvent } from '$lib/stats.js';
 
@@ -43,20 +43,31 @@
     mounted = true;
   });
 
-  // Se ofrece una vez por navegador: contarlo en cada ficha inflaría la cifra
+  // Se cuenta una vez por navegador: contarlo en cada ficha inflaría la cifra
   // con quien simplemente navega.
+  //
+  // Y no en cuanto aparece. Chrome y Edge avisan de que se puede instalar un
+  // momento después de cargar: contada al instante, la tarjeta quedaba
+  // apuntada como «instrucciones» aunque un segundo después fuera el botón
+  // con diálogo, y esa fila del panel salía siempre a cero. Se espera un poco,
+  // o se cuenta antes si la persona pulsa algo.
+  const OFFER_DELAY_MS = 3000;
+  const markOffered = () => {
+    if (method && method !== 'installed') recordOnce(OFFERED, 'offered', pwaContext());
+  };
   $effect(() => {
     if (!visible || method === 'installed') return;
-    try {
-      if (localStorage.getItem(OFFERED)) return;
-      localStorage.setItem(OFFERED, String(Math.floor(Date.now() / 1000)));
-    } catch {
-      return;
-    }
-    recordPwaEvent('offered', pwaContext());
+    const timer = setTimeout(markOffered, OFFER_DELAY_MS);
+    return () => clearTimeout(timer);
   });
 
+  function install() {
+    markOffered();
+    promptInstall();
+  }
+
   function toggleSteps() {
+    markOffered();
     open = !open;
     if (open && !instructionsCounted) {
       instructionsCounted = true;
@@ -65,6 +76,7 @@
   }
 
   function dismiss() {
+    markOffered();
     recordPwaEvent('dismissed', pwaContext());
     dismissed = true;
     try {
@@ -85,7 +97,7 @@
     {#if method !== 'installed'}
       <div class="actions">
         {#if method === 'prompt'}
-          <button type="button" class="primary" onclick={promptInstall}>{text.install}</button>
+          <button type="button" class="primary" onclick={install}>{text.install}</button>
         {:else}
           <!-- La etiqueta no cambia al abrir: «Ocultar instrucciones» no cabe
                en un móvil. Lo dice la flecha, y `aria-expanded` al lector. -->

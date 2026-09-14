@@ -97,3 +97,27 @@ export function installMethod(platform, { canPrompt = false, standalone = false 
   // Firefox de escritorio y lo que no reconocemos: no instalan webs.
   return 'unsupported';
 }
+
+/**
+ * Forma de instalar teniendo en cuenta lo que se sabe de este navegador.
+ *
+ * `knownInstalled` es la marca que deja una instalación hecha desde aquí:
+ * sin ella, quien instala en Chrome y sigue entrando por la pestaña normal
+ * vería la tarjeta ofreciéndole instalar otra vez en cada ficha. Si el
+ * navegador vuelve a ofrecer instalar (`canPrompt`), es que ya no lo está:
+ * la desinstaló, y la marca no vale.
+ *
+ * `installedNow` es la instalación recién hecha en esta visita, que se
+ * confirma en la tarjeta en vez de hacerla desaparecer de golpe.
+ */
+export function resolveInstallMethod(
+  platform,
+  { canPrompt = false, standalone = false, knownInstalled = false, installedNow = false } = {}
+) {
+  if (!platform) return null;
+  if (installedNow) return 'installed';
+  return installMethod(platform, {
+    canPrompt,
+    standalone: standalone || (knownInstalled && !canPrompt)
+  });
+}

@@ -685,14 +685,15 @@ def test_pwa_values_match_the_frontend():
     bloque = bloque[:bloque.index("];")]
     assert set(re.findall(r"'([a-z-]+)'", bloque)) == usage_stats.PWA_METHODS
 
-    # Cada línea que llama a `recordPwaEvent` lleva el evento entre comillas
-    # (o los dos de un ternario, como el del diálogo del navegador).
+    # Cada línea que llama a `recordPwaEvent` o a `recordOnce` lleva el evento
+    # entre comillas (o los dos de un ternario, como el del diálogo).
     enviados = set()
     for path in (web / "lib").rglob("*"):
         if path.suffix not in {".js", ".svelte"}:
             continue
         for linea in path.read_text(encoding="utf-8").splitlines():
-            if "recordPwaEvent(" in linea and "function recordPwaEvent" not in linea:
+            llamada = "recordPwaEvent(" in linea or "recordOnce(" in linea
+            if llamada and "function " not in linea:
                 enviados |= set(re.findall(r"'([a-z_]+)'", linea))
     assert enviados <= set(usage_stats.PWA_EVENTS)
     assert {"offered", "instructions", "installed", "launched", "dismissed", "prompt_accepted", "prompt_dismissed"} <= enviados
