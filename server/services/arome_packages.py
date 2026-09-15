@@ -281,7 +281,7 @@ class IsobaricPackage:
         # El paquete marca las celdas fuera del dominio con 9999; el resto del
         # pipeline espera NaN, igual que entrega el WCS.
         with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB):
-            values = self._dataset.read(band, masked=True).astype(float)
+            values = self._dataset.read(band, masked=True).astype(float, copy=False)
         return values.filled(np.nan)
 
     def release(self) -> None:
@@ -497,7 +497,7 @@ def read_surface_fields(
                 continue
             # Igual que en el perfil: 9999 marca fuera de dominio y el resto
             # del pipeline espera NaN, que es lo que entrega el WCS.
-            values = dataset.read(index, masked=True).astype(float)
+            values = dataset.read(index, masked=True).astype(float, copy=False)
             salida[destino[0]] = (values.filled(np.nan), destino[1])
     return salida, geometria
 
@@ -539,7 +539,7 @@ def read_isobaric_extras(
             level_pa = int(short_name.split("-", 1)[0])
             if level_pa not in wanted_levels:
                 continue
-            values = dataset.read(index, masked=True).astype(float)
+            values = dataset.read(index, masked=True).astype(float, copy=False)
             salida[nombre][level_pa / 100.0] = values.filled(np.nan)
     faltan = [nombre for nombre, campos in salida.items() if not campos]
     if faltan:

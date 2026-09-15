@@ -1737,7 +1737,8 @@ def _convective_frames(
             ("dewpoint",) if exact_dewpoint else ()
         )
     else:
-        level_variables = ("temperature", "dewpoint", "u", "v")
+        level_variables = (("temperature", "dewpoint") if only_dcape
+                           else ("temperature", "dewpoint", "u", "v"))
 
     # Rocío, presión y viento de superficie salen de SP1/SP2 cuando están
     # publicados: son cuatro descargas WCS menos por hora, cada una con su
@@ -1768,6 +1769,10 @@ def _convective_frames(
                 tasks[executor.submit(throttled, fetch_level, variable, level_hpa)] = (variable, level_hpa)
         for future in as_completed(tasks):
             fetched[tasks[future]] = future.result()
+    # Future conserva su resultado: vaciar fetched no bastaba para liberar
+    # las rejillas WCS mientras tasks siguiera apuntando a esos Future.
+    tasks.clear()
+    future = None
 
     if surface_package:
         surface_dewpoint_field = surface_package["surface_dewpoint"]
@@ -1836,10 +1841,10 @@ def _convective_frames(
                     u_field = package_levels["u"][level_hpa]
                     v_field = package_levels["v"][level_hpa]
             else:
-                temperature_field = fetched[("temperature", level_hpa)]
+                temperature_field = fetched.pop(("temperature", level_hpa))
                 if lleva_viento:
-                    u_field = fetched[("u", level_hpa)]
-                    v_field = fetched[("v", level_hpa)]
+                    u_field = fetched.pop(("u", level_hpa))
+                    v_field = fetched.pop(("v", level_hpa))
             if package_dewpoint and level_hpa in package_dewpoint:
                 dewpoint_field = package_dewpoint[level_hpa]
             elif package_levels and not exact_dewpoint:
@@ -1855,7 +1860,7 @@ def _convective_frames(
                     "C",
                 )
             else:
-                dewpoint_field = fetched[("dewpoint", level_hpa)]
+                dewpoint_field = fetched.pop(("dewpoint", level_hpa))
             assert temperature_field is not None and dewpoint_field is not None
             assert not lleva_viento or (u_field is not None and v_field is not None)
             temperature = _as_kelvin(

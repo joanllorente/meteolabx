@@ -42,10 +42,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
+import weakref
 from collections import OrderedDict
 from typing import Any, Awaitable, Callable, Generic, Optional, TypeVar
 
 T = TypeVar("T")
+
+LIVE_CACHES = weakref.WeakSet()
 
 
 def make_cache_key(provider: str, kind: str, station_id: str, api_key: str) -> str:
@@ -108,6 +111,7 @@ class AsyncTTLCache(Generic[T]):
         self._misses = 0
         self._coalesced = 0
         self._stale_hits = 0
+        LIVE_CACHES.add(self)
 
     async def get_or_fetch(
         self,
@@ -213,6 +217,16 @@ class AsyncTTLCache(Generic[T]):
         if not future_to_await.done():
             future_to_await.set_result(result)
         return result
+
+    async def purge_expired(self) -> int:
+        """Retira solo datos fuera del plazo de respaldo y sin refresh activo."""
+        async with self._lock:
+            now = time.time()
+            expired = [key for key, (_, stale_until, _) in self._store.items()
+                       if stale_until <= now and key not in self._in_flight]
+            for key in expired:
+                del self._store[key]
+            return len(expired)
 
     def invalidate(self, key: str) -> bool:
         """

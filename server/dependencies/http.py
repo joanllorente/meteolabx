@@ -189,9 +189,16 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
     if imgw_enabled:
         imgw_task = asyncio.create_task(imgw.poll_loop(client, state_path=imgw_state_path))
 
+    from server.services.memory_maintenance import maintenance_loop
+    memory_task = asyncio.create_task(maintenance_loop(), name="backend-memory-maintenance")
     try:
         yield
     finally:
+        memory_task.cancel()
+        try:
+            await memory_task
+        except asyncio.CancelledError:
+            pass
         if imgw_task is not None:
             imgw_task.cancel()
             try:

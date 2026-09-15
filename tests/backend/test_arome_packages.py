@@ -658,3 +658,28 @@ def test_the_lazy_ip3_extras_only_open_what_is_asked(monkeypatch):
     campo = solo_rocio["dewpoint"][850.0]
     assert campo.units == "C"
     assert len(doble.lecturas) == 1
+
+
+def test_float64_decode_reuses_unmasked_buffer():
+    from contextlib import ExitStack
+    from types import SimpleNamespace
+    data = np.arange(6, dtype=np.float64).reshape(2, 3)
+    dataset = SimpleNamespace(transform=None, crs=None, bounds=None,
+                              read=lambda *a, **k: np.ma.array(data, mask=np.ma.nomask))
+    package = paquetes.IsobaricPackage(ExitStack(), dataset, {}, set())
+    decoded = package.decode(1)
+    np.testing.assert_array_equal(decoded, data)
+    assert np.shares_memory(decoded, data)
+
+
+def test_decode_preserves_mask_and_float64_precision():
+    from contextlib import ExitStack
+    from types import SimpleNamespace
+    source = np.ma.array(np.array([1.234567, 9999], dtype=np.float32), mask=[False, True])
+    dataset = SimpleNamespace(transform=None, crs=None, bounds=None,
+                              read=lambda *a, **k: source)
+    package = paquetes.IsobaricPackage(ExitStack(), dataset, {}, set())
+    result = package.decode(1)
+    np.testing.assert_array_equal(result, source.astype(float).filled(np.nan))
+    assert result.dtype == np.float64
+    assert source.data[1] == 9999
