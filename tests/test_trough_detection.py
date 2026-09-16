@@ -37,6 +37,19 @@ function onda(amplitud, centro) {
   }
   return z;
 }
+// Vaguada asimétrica: flanco de poniente cerrado y de levante tendido, como la
+// del golfo de Bizkaia del 16 de septiembre de 2026 a H+22.
+function asimetrica(amplitud, oeste, este) {
+  const z = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const norte = (H - y) / H;
+    const eje = (x - 560) / (x < 560 ? oeste : este);
+    z[y * W + x] = 578 - 26 * norte
+      - amplitud * Math.exp(-eje * eje) * (0.35 + 0.65 * norte)
+      + 1.2 * Math.sin(x / 9) * Math.cos(y / 11);
+  }
+  return z;
+}
 function gotaFria() {
   const z = new Float32Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -54,12 +67,16 @@ function vaguadaConMinimo() {
   }
   return z;
 }
+const minimoDeGota = () => T.troughAxes(gotaFria(), { width: W, height: H }).lows
+  .map((baja) => ({ minimo: baja.minimum, grueso: baja.value }));
 const resumen = (campo) => {
   const r = T.troughAxes(campo, { width: W, height: H });
   return {
     ejes: r.axes.length,
     bajas: r.lows.length,
-    x: r.axes.map((eje) => Math.round(eje.reduce((s, p) => s + p.x, 0) / eje.length))
+    x: r.axes.map((eje) => Math.round(eje.reduce((s, p) => s + p.x, 0) / eje.length)),
+    desvio: r.axes.map((eje) => Math.round(Math.max(...eje.map((p) => Math.abs(p.x - 560))))),
+    alto: r.axes.map((eje) => Math.round(Math.max(...eje.map((p) => p.y)) - Math.min(...eje.map((p) => p.y))))
   };
 };
 console.log(JSON.stringify({
@@ -69,7 +86,35 @@ console.log(JSON.stringify({
   dorsal_centro: resumen(onda(-16, 560)),
   dorsal_borde: resumen(onda(-16, 120)),
   plano: resumen(onda(0, 560)),
+  asimetrica: resumen(asimetrica(16, 120, 500)),
+  asimetrica_espejo: resumen(asimetrica(16, 500, 120)),
+  dorsal_asimetrica: resumen(asimetrica(-16, 120, 500)),
+  // Isohipsa en V con el fondo plano entre las columnas 8 y 12.
+  fondo_plano: (() => {
+    const w = 21, h = 30, campo = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const fondo = 20 - Math.max(0, Math.abs(x - 10) - 2);
+      campo[y * w + x] = 570 + (y - fondo);
+    }
+    return T.troughVertex(campo, w, h, { x: 4, y: 14 }, 10);
+  })(),
+  // Gota fría somera: 0,9 dam de hondura. No cierra 2 dam por encima de su
+  // fondo, pero la isohipsa dibujada de 576 dam la rodea.
+  gota_somera: (() => {
+    const w = 60, h = 60, z = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const r2 = ((x - 30) ** 2 + (y - 30) ** 2) / 64;
+      z[y * w + x] = 575.4 + 0.9 * (1 - Math.exp(-r2)) + 0.01 * (y - 30);
+    }
+    return [0, 4].map((paso) => T.closedLows(z, w, h, 8, 2, paso).map(({ x, y }) => [x, y]));
+  })(),
+  amplitud_lados: {
+    simetrica: T.asymmetricAmplitude(9, 9),
+    tendida: T.asymmetricAmplitude(27, 4.5),
+    flanco_dorsal: T.asymmetricAmplitude(30, -3)
+  },
   gota_fria: resumen(gotaFria()),
+  minimo_gota: minimoDeGota(),
   vaguada_con_minimo: resumen(vaguadaConMinimo()),
   amplitud: {
     // Caso real H+32: la vaguada está bien anclada en dos isohipsas y luego
@@ -145,6 +190,34 @@ def test_a_ridge_never_becomes_a_trough(deteccion):
     assert deteccion["plano"]["ejes"] == 0
 
 
+def test_an_asymmetric_trough_is_still_a_trough(deteccion):
+    """Un flanco tendido no borra una vaguada que se ve a simple vista.
+
+    Pedir la amplitud entera al lado menos favorable dejaba fuera las vaguadas
+    con un flanco muy cerrado y el otro casi plano. Además, el pico de curvatura
+    cae en el flanco cerrado y no en el fondo de la onda, así que medida desde
+    ahí la isohipsa seguía bajando hacia el otro lado.
+    """
+    for caso in ("asimetrica", "asimetrica_espejo"):
+        assert deteccion[caso]["ejes"] == 1, caso
+        assert abs(deteccion[caso]["x"][0] - 560) < 40, deteccion[caso]
+    assert deteccion["dorsal_asimetrica"]["ejes"] == 0
+    # El eje va por el fondo de las isohipsas, no por el flanco cerrado donde
+    # gira más, y se prolonga por ellas de norte a sur del dominio.
+    for caso in ("asimetrica", "asimetrica_espejo", "centro"):
+        assert deteccion[caso]["desvio"][0] < 40, deteccion[caso]
+        assert deteccion[caso]["alto"][0] > 550, deteccion[caso]
+    fondo = deteccion["fondo_plano"]
+    # La isohipsa de 568 dam que pasa por el punto de partida toca fondo en la
+    # fila 18 a lo largo de toda la meseta: se queda con su centro.
+    assert fondo["level"] == 568
+    assert fondo["x"] == 10 and abs(fondo["y"] - 18) < 0.01, fondo
+    lados = deteccion["amplitud_lados"]
+    assert lados["simetrica"] == 9
+    assert lados["tendida"] > 7.5 * 1.0 and lados["tendida"] < 15.75
+    assert lados["flanco_dorsal"] < 0
+
+
 def test_a_cut_off_low_is_a_low_and_an_open_trough_is_an_axis(deteccion):
     """Baja cerrada y vaguada abierta son cosas distintas y se separan.
 
@@ -153,10 +226,29 @@ def test_a_cut_off_low_is_a_low_and_an_open_trough_is_an_axis(deteccion):
     parte más marcada. Hace falta que la isohipsa se cierre de verdad
     alrededor, sin escaparse por el borde del mapa.
     """
-    assert deteccion["gota_fria"] == {"ejes": 0, "bajas": 1, "x": []}
+    assert deteccion["gota_fria"]["ejes"] == 0
+    assert deteccion["gota_fria"]["bajas"] == 1
+    # El valor que acompaña a la B es el mínimo del campo del modelo, no el
+    # fondo más somero de la rejilla suavizada con la que se detecta.
+    # En el centro, 576 - 10 · 0,498 - 34 = 537,0 dam.
+    [gota] = deteccion["minimo_gota"]
+    assert abs(gota["minimo"] - 537.0) < 0.05, gota
+    assert gota["minimo"] < gota["grueso"], gota
     con_minimo = deteccion["vaguada_con_minimo"]
     assert con_minimo["ejes"] == 1
     assert con_minimo["bajas"] == 0
+
+
+def test_a_shallow_low_closed_by_a_drawn_isohypse_is_a_closed_circulation(deteccion):
+    """Una gota fría somera rodeada por una isohipsa del mapa es una baja.
+
+    Pedirle 2 dam de cierre sobre su mínimo la dejaba pasar por vaguada, y el
+    detector dibujaba un eje por el borde de una circulación cerrada (AROME 12Z
+    del 15/09/2026, H+41, sobre el centro peninsular).
+    """
+    sin_paso, con_paso = deteccion["gota_somera"]
+    assert sin_paso == []
+    assert con_paso == [[30, 30]]
 
 
 def test_a_trough_can_weaken_after_two_strong_consecutive_levels(deteccion):

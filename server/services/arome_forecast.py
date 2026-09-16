@@ -172,6 +172,10 @@ PRODUCTS = {
         "level": 850.0,
         "vmin": -10.0, "vmax": 60.0, "unit": "°C",
         "overlay_unit": "hPa",
+        # La MSLP existe en todo el dominio aunque 850 hPa quede bajo tierra:
+        # recortarla con el hueco de la theta-e cortaba las isobaras en los
+        # Alpes y la meseta y dejaba al detector de centros sin campo.
+        "overlay_own_mask": True,
     },
     "esrh": {"kind": "convective", "diagnostic": "esrh", "vmin": -300.0, "vmax": 600.0, "unit": "m²/s²"},
     "stp": {"kind": "convective", "diagnostic": "stp", "vmin": 0.0, "vmax": 10.0, "unit": ""},
@@ -2537,7 +2541,13 @@ def _serialize_grid(
         arrays.extend((vector_u, vector_v))
     has_overlay = field.overlay is not None
     if has_overlay:
-        overlay = np.where(inside, field.overlay, np.nan).astype("<f4")
+        # Por defecto la capa superpuesta comparte el hueco del campo. Una capa
+        # que se define por su cuenta —la presión reducida al nivel del mar—
+        # conserva su dominio, salvo en el recorte catalán, que es geográfico.
+        overlay_inside = inside
+        if config.get("overlay_own_mask") and calculation_scope != "catalonia":
+            overlay_inside = np.isfinite(np.asarray(field.overlay, dtype=float))
+        overlay = np.where(overlay_inside, field.overlay, np.nan).astype("<f4")
         arrays.append(overlay)
 
     output_bounds = tuple(float(value) for value in field.bounds)
@@ -2562,6 +2572,7 @@ def _serialize_grid(
         vector_v=arrays[2] if has_vectors else None,
         overlay=arrays[-1] if has_overlay else None,
         overlay_unit=field.overlay_units if has_overlay else None,
+        overlay_own_mask=bool(config.get("overlay_own_mask")) and calculation_scope != "catalonia",
         metadata={
             # El máximo sale de la cabecera HTTP, que ya lo calculó sobre el
             # campo sin recortar: recalcularlo aquí daría otro número en el

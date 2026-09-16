@@ -1250,7 +1250,8 @@ def request_client(user_agent: str) -> str:
         return "googlebot"
     if "bingbot" in agent or "bingpreview" in agent:
         return "bingbot"
-    if re.search(r"bot\b|crawler|spider|headlesschrome", agent):
+    # ``Claude-User``, ``ChatGPT-User``…: leen por encargo y no llevan «bot».
+    if re.search(r"bot\b|crawler|spider|headlesschrome|\b\w+-user/", agent):
         return "other_bot"
     return "unidentified"
 

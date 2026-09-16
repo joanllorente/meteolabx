@@ -12,7 +12,11 @@ test('reconoce los rastreadores que pueden recorrer el sitemap', () => {
     'Mozilla/5.0 (compatible; Googlebot/2.1)',
     'Mozilla/5.0 (compatible; bingbot/2.0)',
     'Mozilla/5.0 (compatible; SemrushBot/7~bl)',
-    'Mozilla/5.0 HeadlessChrome/140.0'
+    'Mozilla/5.0 HeadlessChrome/140.0',
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; +claudebot@anthropic.com)',
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +searchbot@anthropic.com)',
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +Claude-User@anthropic.com)',
+    'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot'
   ]) {
     assert.equal(isCrawlerRequest(request(agent)), true, agent);
   }

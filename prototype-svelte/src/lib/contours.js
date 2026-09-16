@@ -31,6 +31,7 @@ export const CONTOUR_LABEL_MIN_LENGTH = 70;
  */
 export function gaussianBlur(field, width, height, sigma) {
   if (!(sigma > 0)) return field;
+  if (sigma >= BOX_BLUR_MIN_SIGMA) return boxGaussianBlur(field, width, height, sigma);
   // 2,5σ recoge el 99 % del peso: el tramo que queda fuera no mueve el campo
   // y cada tap de más son ochocientas mil multiplicaciones por pasada.
   const radius = Math.max(1, Math.ceil(sigma * 2.5));
@@ -67,6 +68,61 @@ export function gaussianBlur(field, width, height, sigma) {
   };
 
   return pass(pass(field, true), false);
+}
+
+/**
+ * σ desde el que el gaussiano se aproxima con medias móviles.
+ *
+ * La convolución exacta cuesta proporcional a σ: con los 20 de las isobaras
+ * son cien muestras por celda y 400 ms por hora de mapa. Tres medias móviles
+ * seguidas dan una campana indistinguible a esa escala y cuestan lo mismo con
+ * cualquier σ. Por debajo se mantiene la exacta, que es la que ya dibuja las
+ * isohipsas y alimenta los detectores.
+ */
+export const BOX_BLUR_MIN_SIGMA = 8;
+
+/** Tres pasadas de media móvil por eje, renormalizadas con las celdas válidas. */
+export function boxGaussianBlur(field, width, height, sigma) {
+  // Tres cajas de anchura w dan varianza 3·(w² − 1)/12 = σ².
+  const radius = Math.max(1, Math.round((Math.sqrt(4 * sigma * sigma + 1) - 1) / 2));
+  const lineLength = Math.max(width, height);
+  const sums = new Float64Array(lineLength + 1);
+  const counts = new Uint32Array(lineLength + 1);
+
+  const pass = (source, horizontal) => {
+    const output = new Float32Array(source.length);
+    const lines = horizontal ? height : width;
+    const length = horizontal ? width : height;
+    for (let line = 0; line < lines; line += 1) {
+      const at = horizontal
+        ? (position) => line * width + position
+        : (position) => position * width + line;
+      for (let position = 0; position < length; position += 1) {
+        const value = source[at(position)];
+        const valid = Number.isFinite(value);
+        sums[position + 1] = sums[position] + (valid ? value : 0);
+        counts[position + 1] = counts[position] + (valid ? 1 : 0);
+      }
+      for (let position = 0; position < length; position += 1) {
+        const index = at(position);
+        if (!Number.isFinite(source[index])) {
+          output[index] = NaN;
+          continue;
+        }
+        const from = Math.max(0, position - radius);
+        const to = Math.min(length, position + radius + 1);
+        const count = counts[to] - counts[from];
+        output[index] = count > 0 ? (sums[to] - sums[from]) / count : NaN;
+      }
+    }
+    return output;
+  };
+
+  let result = field;
+  for (let vuelta = 0; vuelta < 3; vuelta += 1) {
+    result = pass(pass(result, true), false);
+  }
+  return result;
 }
 
 const MARCHING_CASES = {

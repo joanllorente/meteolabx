@@ -9,19 +9,31 @@
 /**
  * Nivel de detalle según lo ampliado que esté el mapa.
  *
- * Con el dominio entero en pantalla solo caben las grandes capitales; cada
- * salto de zoom reparte el doble de superficie por pantalla, así que va
- * entrando la tanda siguiente. Los cortes no son potencias de dos porque el
- * reparto de sitio ya frena por su cuenta: esto fija cuándo una ciudad merece
- * rótulo, no cuántos caben.
+ * Con el dominio entero en pantalla ya entran las ciudades de tercer nivel,
+ * pero solo las que quedan lejos unas de otras (ver `cityRoom`): sin ellas el
+ * interior de la península, el sur de Francia o Alemania quedaban en blanco
+ * entre capital y capital. Cada salto de zoom reparte el doble de superficie
+ * por pantalla, así que va entrando la tanda siguiente. Los cortes no son
+ * potencias de dos porque el reparto de sitio ya frena por su cuenta: esto
+ * fija cuándo una ciudad merece rótulo, no cuántos caben.
  */
 export function cityRank(zoomLevel) {
-  if (zoomLevel < 1.5) return 1;
-  if (zoomLevel < 2) return 2;
   if (zoomLevel < 2.8) return 3;
   if (zoomLevel < 3.8) return 4;
   if (zoomLevel < 5) return 5;
   return 6;
+}
+
+/**
+ * Holgura que se exigen entre sí las ciudades secundarias.
+ *
+ * Las grandes (rango 1) se rotulan con el hueco justo. Las demás, con el mapa
+ * lejos, piden más aire entre ellas: así rellenan los vacíos del mapa en vez
+ * de apelotonarse alrededor del Ruhr o de Londres. La holgura se desvanece al
+ * ampliar y a partir de 2,8 aumentos ya no pesa.
+ */
+export function cityRoom(zoomLevel) {
+  return 1 + 0.8 * Math.min(1, Math.max(0, (2.8 - zoomLevel) / 1.8));
 }
 
 /**
@@ -50,6 +62,7 @@ export function placeCities({
   // en celdas encoge a medida que se amplía: es lo que hace que quepan más.
   const escala = labelScale / viewZoom;
   const altura = 34 * escala;
+  const holgura = cityRoom(viewZoom);
   const puestas = [];
   for (const [name, latitude, longitude, rank] of catalogue) {
     if (rank > limite) continue;
@@ -65,12 +78,14 @@ export function placeCities({
     // El nombre manda en el ancho: «Villanueva de la Serena» pide sitio muy
     // distinto de «Vic», y el valor de debajo siempre es más corto.
     const anchura = (name.length * 6.4 + 16) * escala;
-    const choca = puestas.some((puesta) => (
-      Math.abs(puesta.x - x) < (puesta.anchura + anchura) / 2
-      && Math.abs(puesta.y - y) < altura
-    ));
+    const secundaria = rank > 1;
+    const choca = puestas.some((puesta) => {
+      const aire = secundaria && puesta.secundaria ? holgura : 1;
+      return Math.abs(puesta.x - x) < (puesta.anchura + anchura) / 2 * aire
+        && Math.abs(puesta.y - y) < altura * aire;
+    });
     if (choca) continue;
-    puestas.push({ name, x, y, anchura, text: format(value) });
+    puestas.push({ name, x, y, anchura, secundaria, text: format(value) });
   }
   return puestas;
 }

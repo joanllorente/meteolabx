@@ -78,6 +78,17 @@ export const TROUGH_AMPLITUDE_SPAN_KM = 500;
  * midiendo la onda contra sí misma. Por debajo, el eje no se juzga.
  */
 export const TROUGH_MIN_SPAN_KM = 200;
+/** Recorrido de la isohipsa en busca del fondo de la onda, en km a cada lado. */
+export const TROUGH_VERTEX_KM = 160;
+/**
+ * Amplitud mediana, en veces la mínima, desde la que un eje corto se admite.
+ *
+ * Con esa amplitud se le pide la longitud de los ejes del borde en vez de la
+ * sinóptica completa.
+ */
+export const TROUGH_STRONG_RATIO = 1.3;
+/** Amplitud, en veces la mínima, que ha de conservar la onda para prolongar un eje. */
+export const TROUGH_EXTEND_RATIO = 0.5;
 /** Longitud mínima de un eje medido con ventana recortada por el borde. */
 export const TROUGH_EDGE_MIN_LENGTH_KM = 250;
 /** Vértices mínimos de un eje aceptado con medición recortada. */
@@ -213,6 +224,65 @@ function sample(field, width, height, x, y) {
   return field[row * width + column];
 }
 
+/** Cruce de la isohipsa `level` con la columna `x`, el más cercano a la fila `near`. */
+function contourCrossing(field, width, height, level, x, near) {
+  if (x < 0 || x >= width) return null;
+  let mejor = null;
+  for (let y = 0; y + 1 < height; y += 1) {
+    const arriba = field[y * width + x];
+    const abajo = field[(y + 1) * width + x];
+    if (!Number.isFinite(arriba) || !Number.isFinite(abajo)) continue;
+    if ((arriba - level) * (abajo - level) > 0) continue;
+    const cruce = y + (level - arriba) / ((abajo - arriba) || 1e-9);
+    if (mejor === null || Math.abs(cruce - near) < Math.abs(mejor - near)) mejor = cruce;
+  }
+  return mejor;
+}
+
+/**
+ * Fondo de la onda en la isohipsa que pasa por `point`.
+ *
+ * El pico de curvatura no siempre cae en el fondo: en una vaguada asimétrica,
+ * con el flanco de poniente cerrado y el de levante tendido, el giro más
+ * fuerte queda en el flanco oeste, a doscientos kilómetros de donde un
+ * meteorólogo trazaría el eje. Se sigue la propia isohipsa hasta `vertexCells`
+ * columnas a cada lado y se toma su punto más meridional. Si el fondo es
+ * plano, su centro: el primer máximo de una meseta está en uno de sus bordes.
+ */
+export function troughVertex(field, width, height, point, vertexCells = 0) {
+  const origen = Math.round(point.x);
+  const row = Math.round(point.y);
+  if (origen < 0 || row < 0 || origen >= width || row >= height) return null;
+  const level = field[row * width + origen];
+  if (!Number.isFinite(level)) return null;
+  const inicio = contourCrossing(field, width, height, level, origen, row);
+  if (inicio === null) return null;
+
+  const muestras = new Map([[origen, inicio]]);
+  for (const sentido of [-1, 1]) {
+    let previa = inicio;
+    for (let paso = 1; paso <= vertexCells; paso += 1) {
+      const columna = origen + sentido * paso;
+      const cruce = contourCrossing(field, width, height, level, columna, previa);
+      // Un salto grande es otra rama de la misma isohipsa, no esta.
+      if (cruce === null || Math.abs(cruce - previa) > 4) break;
+      previa = cruce;
+      muestras.set(columna, cruce);
+    }
+  }
+  let fondo = origen;
+  for (const [columna, cruce] of muestras) {
+    if (cruce > muestras.get(fondo)) fondo = columna;
+  }
+  const hondura = muestras.get(fondo);
+  let desde = fondo;
+  let hasta = fondo;
+  while (muestras.has(desde - 1) && muestras.get(desde - 1) >= hondura - 0.5) desde -= 1;
+  while (muestras.has(hasta + 1) && muestras.get(hasta + 1) >= hondura - 0.5) hasta += 1;
+  const x = Math.round((desde + hasta) / 2);
+  return { x, y: muestras.get(x), level };
+}
+
 /**
  * Cuánto baja la isohipsa en un punto respecto a lo que hace a los lados.
  *
@@ -220,29 +290,13 @@ function sample(field, width, height, x, y) {
  * que hace una vaguada. En el hombro de una dorsal sale negativa o cerca de
  * cero, aunque la curvatura allí sea ciclónica.
  */
-export function waveAmplitude(field, width, height, point, spanCells, minSpanCells = 0) {
-  const column = Math.round(point.x);
-  const row = Math.round(point.y);
-  if (column < 0 || row < 0 || column >= width || row >= height) return null;
-  const level = field[row * width + column];
-  if (!Number.isFinite(level)) return null;
-
-  const crossing = (x) => {
-    if (x < 0 || x >= width) return null;
-    let mejor = null;
-    for (let y = 0; y + 1 < height; y += 1) {
-      const arriba = field[y * width + x];
-      const abajo = field[(y + 1) * width + x];
-      if (!Number.isFinite(arriba) || !Number.isFinite(abajo)) continue;
-      if ((arriba - level) * (abajo - level) > 0) continue;
-      const cruce = y + (level - arriba) / ((abajo - arriba) || 1e-9);
-      if (mejor === null || Math.abs(cruce - row) < Math.abs(mejor - row)) mejor = cruce;
-    }
-    return mejor;
-  };
-
-  const centro = crossing(column);
-  if (centro === null) return null;
+export function waveAmplitude(
+  field, width, height, point, spanCells, minSpanCells = 0, vertexCells = 0
+) {
+  const vertice = troughVertex(field, width, height, point, vertexCells);
+  if (!vertice) return null;
+  const { x: column, y: centro, level } = vertice;
+  const crossing = (x, cerca) => contourCrossing(field, width, height, level, x, cerca);
 
   // El dominio de AROME es estrecho para una onda sinóptica y su borde va
   // inclinado, así que a 500 km al oeste de una vaguada atlántica no hay
@@ -250,16 +304,37 @@ export function waveAmplitude(field, width, height, point, spanCells, minSpanCel
   // vez hasta encontrar dos cruces válidos, y se devuelve con cuánto se ha
   // podido medir para que el umbral se ajuste a eso.
   for (let span = spanCells; span >= minSpanCells && span > 0; span -= 1) {
-    const oeste = crossing(column - span);
-    const este = crossing(column + span);
+    const oeste = crossing(column - span, centro);
+    const este = crossing(column + span, centro);
     if (oeste === null || este === null) continue;
-    // Contra el lado menos favorable, no contra la media de los dos: en el eje
-    // de una vaguada la isohipsa está al sur por los dos lados. Con la media
-    // bastaba con que un lado quedara al norte, y entraba el flanco oriental
-    // de una dorsal. Nunca un solo lado, por lo mismo.
-    return { amplitude: centro - Math.max(oeste, este), span };
+    return {
+      amplitude: asymmetricAmplitude(centro - oeste, centro - este),
+      span,
+      x: column,
+      y: centro
+    };
   }
   return null;
+}
+
+/**
+ * Amplitud de la onda a partir de lo que sube la isohipsa a cada lado.
+ *
+ * Manda el lado menos favorable, no la media: en el eje de una vaguada la
+ * isohipsa está al sur por los dos lados, y con la media bastaba con que un
+ * lado quedara al norte para que entrase el flanco oriental de una dorsal.
+ *
+ * Pero una vaguada real puede ser muy asimétrica —cientos de kilómetros de
+ * subida por poniente y apenas un centenar por levante— y el lado corto solo
+ * la dejaba fuera. Se admite entonces la media rebajada a dos tercios, siempre
+ * que el lado corto aporte al menos el 40 % de lo que se le exigiría solo.
+ * Una onda simétrica sale igual que antes, y un flanco de dorsal, con un lado
+ * que baja, sigue en negativo.
+ */
+export function asymmetricAmplitude(west, east) {
+  const corto = Math.min(west, east);
+  const media = (west + east) / 2;
+  return Math.max(corto, Math.min(media / 1.5, corto / 0.4));
 }
 
 /**
@@ -288,6 +363,15 @@ export function supportsTroughAmplitude(measures, minAmplitude, spanCells) {
   return median > 0 && anchored;
 }
 
+/** Mediana de amplitud medida respecto a la exigida, con la ventana de cada una. */
+export function medianAmplitudeRatio(measures, minAmplitude, spanCells) {
+  if (!measures.length || !(minAmplitude > 0) || !(spanCells > 0)) return 0;
+  const ratios = measures
+    .map(({ amplitude, span }) => amplitude / (minAmplitude * (span / spanCells)))
+    .sort((left, right) => left - right);
+  return ratios[Math.floor(ratios.length / 2)];
+}
+
 /**
  * ¿Hay una isohipsa cerrada alrededor de este mínimo?
  *
@@ -299,33 +383,48 @@ export function supportsTroughAmplitude(measures, minAmplitude, spanCells) {
  * no hay baja que dibujar.
  */
 export function hasClosedContour(field, width, height, start, delta, maxCells = 4000) {
+  return closedRegion(field, width, height, start, delta, maxCells) !== null;
+}
+
+/** Celdas que encierra la isohipsa de `delta` sobre el mínimo, o null si se escapa. */
+export function closedRegion(field, width, height, start, delta, maxCells = 4000) {
   const inicio = start.y * width + start.x;
   const nivel = field[inicio] + delta;
   const vistos = new Set([inicio]);
   const cola = [inicio];
   while (cola.length) {
-    if (vistos.size > maxCells) return false;
+    if (vistos.size > maxCells) return null;
     const actual = cola.pop();
     const x = actual % width;
     const y = Math.floor(actual / width);
-    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) return false;
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) return null;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const vecino = (y + dy) * width + (x + dx);
       if (vistos.has(vecino)) continue;
       const valor = field[vecino];
       // Un hueco sin dato es tan concluyente como el borde: por ahí la
       // isohipsa se escapa del mapa.
-      if (!Number.isFinite(valor)) return false;
+      if (!Number.isFinite(valor)) return null;
       if (valor >= nivel) continue;
       vistos.add(vecino);
       cola.push(vecino);
     }
   }
-  return true;
+  return vistos;
 }
 
-/** Mínimos locales con isohipsa cerrada: centros de depresión. */
-export function closedLows(field, width, height, radius, delta = 2) {
+/**
+ * Mínimos locales con isohipsa cerrada: centros de depresión.
+ *
+ * Cuenta como cerrada la baja que cierra `delta` por encima de su mínimo o la
+ * que cierra la primera isohipsa dibujada por encima de él (múltiplo de
+ * `contourStep`). Lo segundo es lo que ve quien mira el mapa: una gota fría de
+ * medio decámetro de hondura queda rodeada por la isohipsa de 576 dam aunque
+ * no cierre dos decámetros por encima de su fondo, y su borde no es una
+ * vaguada. Se exige un cuarto de decámetro de hondura para que un mínimo
+ * rozando la isohipsa no pase por baja.
+ */
+export function closedLows(field, width, height, radius, delta = 2, contourStep = 0) {
   const centres = [];
   for (let row = radius; row < height - radius; row += 1) {
     for (let column = radius; column < width - radius; column += 1) {
@@ -343,8 +442,16 @@ export function closedLows(field, width, height, radius, delta = 2) {
         }
       }
       if (!esMinimo) continue;
-      if (!hasClosedContour(field, width, height, { x: column, y: row }, delta)) continue;
-      centres.push({ x: column, y: row, value });
+      const inicio = { x: column, y: row };
+      let cells = closedRegion(field, width, height, inicio, delta);
+      if (!cells && contourStep > 0) {
+        const isohipsa = Math.ceil((value + 0.25) / contourStep) * contourStep;
+        if (isohipsa - value < delta) {
+          cells = closedRegion(field, width, height, inicio, isohipsa - value);
+        }
+      }
+      if (!cells) continue;
+      centres.push({ x: column, y: row, value, cells });
     }
   }
   return centres;
@@ -630,6 +737,91 @@ export function mergeChains(chains, { gapCells, maxTurnDeg = TROUGH_MAX_TURN_DEG
   return unidas;
 }
 
+/**
+ * Prolonga un eje ya aceptado por los fondos de las isohipsas vecinas.
+ *
+ * El encadenado solo une picos de curvatura, y en una vaguada asimétrica la
+ * curvatura se apaga antes que la onda: el eje del golfo de Bizkaia se quedaba
+ * entre 572 y 578 dam aunque las isohipsas de 568 y 580 siguieran
+ * descolgándose en el mismo sitio. Desde cada extremo se avanza en el rumbo
+ * del eje hasta la isohipsa siguiente, se busca su fondo y se añade mientras
+ * la onda conserve la mitad de la amplitud exigida para detectarla, quede a
+ * mano y no tuerza el rumbo. Pedir menos que para detectar es a propósito:
+ * aquí no se decide si hay vaguada, solo hasta dónde llega.
+ */
+export function extendAxis(axis, {
+  field, width, height, levelCount, vertexCells, spanCells, minSpanCells,
+  minAmplitude, maxGap, levelStep = 2, maxTurnDeg = TROUGH_MAX_TURN_DEG, excluded = () => false,
+  minRatio = TROUGH_EXTEND_RATIO
+}) {
+  if (axis.length < 2) return axis;
+  const cosGiro = Math.cos((maxTurnDeg * Math.PI) / 180);
+  const eje = [...axis];
+  for (const sentido of [-1, 1]) {
+    for (let vuelta = 0; vuelta < levelCount; vuelta += 1) {
+      const indiceExtremo = sentido < 0 ? 0 : eje.length - 1;
+      const extremo = eje[indiceExtremo];
+      // Rumbo de los últimos tramos, no del último: un vértice que tiembla una
+      // celda no debe desviar la prolongación.
+      const atras = eje[sentido < 0 ? Math.min(3, eje.length - 1) : Math.max(0, eje.length - 4)];
+      const nivel = extremo.nivel + sentido;
+      if (!Number.isInteger(nivel) || nivel < 0 || nivel >= levelCount) break;
+      const rumbo = unit(atras, extremo);
+      const inicial = sample(field, width, height, extremo.x, extremo.y);
+      if (!Number.isFinite(inicial)) break;
+      // La isohipsa siguiente es donde el campo ha cambiado un salto de nivel
+      // avanzando en el rumbo del eje.
+      let semilla = null;
+      for (let paso = 0.5; paso <= maxGap * 2; paso += 0.5) {
+        const x = extremo.x + rumbo.x * paso;
+        const y = extremo.y + rumbo.y * paso;
+        const valor = sample(field, width, height, x, y);
+        if (!Number.isFinite(valor)) break;
+        if (Math.abs(valor - inicial) >= levelStep) {
+          semilla = { x, y };
+          break;
+        }
+      }
+      if (!semilla) break;
+      const medida = waveAmplitude(
+        field, width, height, semilla, spanCells, minSpanCells, vertexCells
+      );
+      if (!medida) break;
+      const ratio = medida.amplitude / (minAmplitude * (medida.span / spanCells));
+      if (!(ratio >= minRatio)) break;
+      const nuevo = { x: medida.x, y: medida.y, nivel };
+      if (distance(extremo, nuevo) > maxGap * 1.5) break;
+      if (cosine(unit(extremo, nuevo), rumbo) < cosGiro) break;
+      if (excluded(nuevo)) break;
+      if (sentido < 0) eje.unshift(nuevo);
+      else eje.push(nuevo);
+    }
+  }
+  return eje;
+}
+
+/**
+ * Mínimo del campo original dentro de una zona de la rejilla engrosada.
+ *
+ * El fondo de la rejilla suavizada sirve para decidir si hay baja, pero es
+ * más somero que el campo: rotulado, la gota fría del 17/09 marcaba 575,5 dam
+ * cuando AROME daba 575,3. Se rotula el valor del modelo.
+ */
+export function regionMinimum(field, width, height, cells, coarseWidth, block) {
+  let minimo = Infinity;
+  for (const celda of cells) {
+    const columna = celda % coarseWidth;
+    const fila = Math.floor(celda / coarseWidth);
+    for (let y = fila * block; y < Math.min(height, (fila + 1) * block); y += 1) {
+      for (let x = columna * block; x < Math.min(width, (columna + 1) * block); x += 1) {
+        const valor = field[y * width + x];
+        if (Number.isFinite(valor) && valor < minimo) minimo = valor;
+      }
+    }
+  }
+  return Number.isFinite(minimo) ? minimo : null;
+}
+
 function axisLength(axis) {
   let total = 0;
   for (let index = 0; index < axis.length - 1; index += 1) {
@@ -662,9 +854,11 @@ export function troughAxes(field, {
   minAmplitudeKm = TROUGH_MIN_AMPLITUDE_KM,
   amplitudeSpanKm = TROUGH_AMPLITUDE_SPAN_KM,
   minSpanKm = TROUGH_MIN_SPAN_KM,
+  vertexKm = TROUGH_VERTEX_KM,
   edgeMinLengthKm = TROUGH_EDGE_MIN_LENGTH_KM,
   edgeMinPoints = TROUGH_EDGE_MIN_POINTS,
-  levelStep = 2
+  levelStep = 2,
+  contourStep = 0
 } = {}) {
   if (!field) return { axes: [], lows: [] };
   const grueso = coarsen(field, width, height, block);
@@ -690,7 +884,28 @@ export function troughAxes(field, {
   // 6a. Las depresiones cerradas se localizan antes de encadenar, para poder
   // apartar de los ejes los picos que caen dentro de ellas.
   const radioCierre = Math.max(2, Math.round(150 / kmPorCelda));
-  const lows = closedLows(suave, grueso.width, grueso.height, radioCierre, levelStep);
+  const lows = closedLows(
+    suave, grueso.width, grueso.height, radioCierre, levelStep, contourStep
+  );
+  // Zona de la circulación cerrada: lo que encierra su isohipsa más un margen.
+  // Medir solo desde el centro dejaba pasar los ejes que bordean el anillo de
+  // una gota fría ancha, a 160 km del mínimo pero pegados a la isohipsa.
+  const cerrada = new Uint8Array(grueso.width * grueso.height);
+  for (const { cells } of lows) {
+    for (const celda of cells) {
+      const cx = celda % grueso.width;
+      const cy = Math.floor(celda / grueso.width);
+      for (let dy = -radioCierre; dy <= radioCierre; dy += 1) {
+        for (let dx = -radioCierre; dx <= radioCierre; dx += 1) {
+          if (dx * dx + dy * dy > radioCierre * radioCierre) continue;
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 0 || y < 0 || x >= grueso.width || y >= grueso.height) continue;
+          cerrada[y * grueso.width + x] = 1;
+        }
+      }
+    }
+  }
 
   // 3. Picos de curvatura sobre cada isohipsa.
   const niveles = stepLevels(suave, levelStep);
@@ -738,11 +953,15 @@ export function troughAxes(field, {
 
   // 5 y 6b. Poda por longitud y separación de lo que cae en una depresión.
   const minLength = minLengthKm / kmPorCelda;
-  const dentroDeCierre = (punto) => lows.some(
-    (centro) => distance(centro, punto) <= radioCierre
-  );
+  const dentroDeCierre = (punto) => {
+    const x = Math.round(punto.x);
+    const y = Math.round(punto.y);
+    if (x < 0 || y < 0 || x >= grueso.width || y >= grueso.height) return false;
+    return cerrada[y * grueso.width + x] === 1;
+  };
   const spanCells = Math.max(2, Math.round(amplitudeSpanKm / kmPorCelda));
   const minSpanCells = Math.max(2, Math.round(minSpanKm / kmPorCelda));
+  const vertexCells = Math.max(1, Math.round(vertexKm / kmPorCelda));
   const minAmplitude = minAmplitudeKm / kmPorCelda;
   const edgeMinLength = edgeMinLengthKm / kmPorCelda;
   const vorticidad = geostrophicVorticity(suave, grueso.width, grueso.height);
@@ -754,11 +973,10 @@ export function troughAxes(field, {
     // La onda tiene que existir, no solo curvarse: sin esto entraban los
     // hombros de las dorsales, que curvan del lado ciclónico sin descolgar
     // nada hacia el sur.
-    const medidas = abierto
-      .map((punto) => waveAmplitude(
-        suave, grueso.width, grueso.height, punto, spanCells, minSpanCells
-      ))
-      .filter((valor) => valor !== null);
+    const porPunto = abierto.map((punto) => waveAmplitude(
+      suave, grueso.width, grueso.height, punto, spanCells, minSpanCells, vertexCells
+    ));
+    const medidas = porPunto.filter((valor) => valor !== null);
     if (!medidas.length) continue;
     // El umbral se ajusta a lo que se ha podido medir: con 250 km de ventana
     // se le pide la mitad de amplitud que con 500. Medir menos exige menos,
@@ -767,7 +985,13 @@ export function troughAxes(field, {
 
     const recortada = medidas.some(({ span }) => span < spanCells);
     if (!recortada) {
-      if (axisLength(abierto) < minLength) continue;
+      // Una onda muy marcada se ve aunque su eje cruce pocas isohipsas: a
+      // media tarde la del golfo de Bizkaia daba 210 km de amplitud y 334 de
+      // eje, y se apagaba una hora entre dos que sí salía por quedarse a
+      // dieciséis kilómetros del mínimo. Con amplitud holgada basta la
+      // longitud que ya se pide a los ejes del borde.
+      const holgada = medianAmplitudeRatio(medidas, minAmplitude, spanCells) >= TROUGH_STRONG_RATIO;
+      if (axisLength(abierto) < (holgada ? edgeMinLength : minLength)) continue;
     } else {
       // Medido contra media ventana, el eje tiene que ganarse el sitio por
       // otro lado: presencia en varias isohipsas, giro ciclónico de verdad,
@@ -790,7 +1014,26 @@ export function troughAxes(field, {
       )));
       if (desvio > maxGap) continue;
     }
-    supervivientes.push(abierto);
+    // El eje se traza por el fondo de cada isohipsa, que es donde lo pondría
+    // un análisis a mano, y no por el pico de curvatura que lo ha encontrado.
+    // Donde no hubo medida, el vértice se queda donde estaba.
+    const porFondos = abierto.map((punto, indice) => (
+      porPunto[indice] ? { ...punto, x: porPunto[indice].x, y: porPunto[indice].y } : punto
+    ));
+    supervivientes.push(extendAxis(porFondos, {
+      field: suave,
+      width: grueso.width,
+      height: grueso.height,
+      levelCount: niveles.length,
+      vertexCells,
+      spanCells,
+      minSpanCells,
+      minAmplitude,
+      maxGap,
+      levelStep,
+      maxTurnDeg,
+      excluded: dentroDeCierre
+    }));
   }
 
   // 5b. Una misma vaguada puede dar dos cadenas casi paralelas cuando sus
@@ -825,7 +1068,8 @@ export function troughAxes(field, {
     lows: lows.map((centro) => ({
       x: centro.x * block + block / 2,
       y: centro.y * block + block / 2,
-      value: centro.value
+      value: centro.value,
+      minimum: regionMinimum(field, width, height, centro.cells, grueso.width, block) ?? centro.value
     }))
   };
 }

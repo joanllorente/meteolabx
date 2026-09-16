@@ -549,7 +549,11 @@
   // el relieve metido en el campo, no dice lo mismo.
   const troughs = $derived(
     troughAxes && frame.overlay
-      ? detectTroughAxes(frame.overlay, { width: frame.width, height: frame.height })
+      // Con el paso de las isohipsas dibujadas: una baja rodeada por una de
+      // ellas es circulación cerrada aunque sea somera, y no lleva eje.
+      ? detectTroughAxes(frame.overlay, {
+          width: frame.width, height: frame.height, contourStep: overlayStep
+        })
       : { axes: [], lows: [] }
   );
 
@@ -573,7 +577,7 @@
           height: frame.height,
           cellKm,
           block: centreBlock,
-          prominenceHpa: Math.max(1, CENTRE_PROMINENCE_HPA / Math.min(2.5, viewZoom))
+          prominenceHpa: Math.max(0.5, CENTRE_PROMINENCE_HPA / Math.min(1.5, viewZoom))
         })
       : []
   );
@@ -1034,22 +1038,16 @@
         {/each}
         {#each centres as centre}
           <g transform={`translate(${centre.x.toFixed(1)} ${centre.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
-            <text
-              class="pressure-centre"
-              class:relative={!centre.main}
-              text-anchor="middle"
-              dominant-baseline="central"
-            >
-              <tspan class="symbol">{centre.type === 'low'
-                ? (centre.main ? 'B' : 'b')
-                : (centre.main ? 'A' : 'a')}</tspan>
-              <tspan dx="3">{Math.round(centre.value)}</tspan>
-            </text>
+            <text class="centre-letter" class:relative={!centre.main} text-anchor="middle" dominant-baseline="central">{centre.type === 'low'
+              ? (centre.main ? 'B' : 'b')
+              : (centre.main ? 'A' : 'a')}</text>
+            <text class="centre-value" y={centre.main ? 17 : 14} text-anchor="middle" dominant-baseline="central">{Math.round(centre.value)}</text>
           </g>
         {/each}
         {#each showTroughs ? troughs.lows : [] as low}
           <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
-            <text class="closed-low" text-anchor="middle" dominant-baseline="central">B</text>
+            <text class="centre-letter" text-anchor="middle" dominant-baseline="central">B</text>
+            <text class="centre-value" y="17" text-anchor="middle" dominant-baseline="central">{Math.round(low.minimum)}</text>
           </g>
         {/each}
         {#each mapLabels as label}
@@ -1150,18 +1148,23 @@
   /* Eje de vaguada: blanco, grueso y discontinuo, que es como se traza a mano
      sobre un mapa isobárico. El halo oscuro lo sostiene sobre los tonos
      claros de la paleta, donde un blanco a secas se perdería. */
-  .trough-axis,.trough-axis-halo{fill:none;stroke-linecap:butt;stroke-linejoin:round;vector-effect:non-scaling-stroke;stroke-dasharray:11 7}
-  .trough-axis-halo{stroke:rgba(10,18,28,.5);stroke-width:6.2}
-  .trough-axis{stroke:rgba(255,255,255,.97);stroke-width:3.4}
-  /* Centro de presión: la letra manda y el valor la acompaña, los dos en
-     blanco con perfil oscuro para que se lean sobre cualquier tono. */
-  .pressure-centre{fill:#fff;stroke:rgba(10,18,28,.68);stroke-width:3.2px;paint-order:stroke;font-size:13px;font-weight:750;pointer-events:none}
-  .pressure-centre .symbol{font-size:18px;font-weight:900}
+  .trough-axis,.trough-axis-halo{fill:none;stroke-linecap:butt;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  /* Discontinua blanca con un contorno negro fino alrededor de cada trazo, no
+     una línea negra con blanco encima: el contorno lleva los mismos huecos que
+     el blanco y cada trazo suyo sobresale 0,7 px por los dos extremos (11+1,4
+     de trazo, 7-1,4 de hueco, adelantado 0,7), que es el borde que falta en
+     las puntas con `butt`. */
+  .trough-axis-halo{stroke:rgba(10,18,28,.9);stroke-width:4.4;stroke-dasharray:12.4 5.6;stroke-dashoffset:.7}
+  .trough-axis{stroke:#fff;stroke-width:3;stroke-dasharray:11 7}
+  /* Centros de presión y bajas cerradas de 500 hPa, con el mismo diseño: la
+     letra grande y el valor en pequeño debajo, los dos en blanco con perfil
+     oscuro para que se lean sobre cualquier tono. */
+  .centre-letter,.centre-value{fill:#fff;stroke:rgba(10,18,28,.6);paint-order:stroke;pointer-events:none}
+  .centre-letter{stroke-width:3.4px;font-size:19px;font-weight:800}
+  .centre-value{stroke-width:2.6px;font-size:10.5px;font-weight:700}
   /* Los relativos van en minúscula y algo más discretos, como en los mapas de
      AEMET: están, pero no compiten con el centro principal. */
-  .pressure-centre.relative{font-size:11px;fill:rgba(255,255,255,.92)}
-  .pressure-centre.relative .symbol{font-size:15px;font-weight:800}
-  .closed-low{fill:#fff;stroke:rgba(10,18,28,.6);stroke-width:3.4px;paint-order:stroke;font-size:19px;font-weight:800}
+  .centre-letter.relative{font-size:16px;stroke-width:3px}
   .height-label{fill:rgba(20,34,54,.96);stroke:rgba(252,253,255,.85);stroke-width:2.6px;paint-order:stroke;font-size:11px;font-weight:700;pointer-events:none}
   .height-label.major{font-size:12px;font-weight:800}
   .layer-panel{position:absolute;right:calc(-6% + 4px);top:calc(-4% + 42px);z-index:15;display:flex;flex-direction:column;gap:3px;padding:7px 9px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(5,14,22,.78);backdrop-filter:blur(8px);pointer-events:auto}

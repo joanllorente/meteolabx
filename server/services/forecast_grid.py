@@ -90,6 +90,7 @@ def pack_grid(
     vector_v: np.ndarray | None = None,
     overlay: np.ndarray | None = None,
     overlay_unit: str | None = None,
+    overlay_own_mask: bool = False,
     metadata: dict[str, Any] | None = None,
 ) -> bytes:
     """Empaqueta un campo ya calculado en el formato de rejilla del visor.
@@ -97,6 +98,10 @@ def pack_grid(
     `metadata` se funde en la cabecera al final: es donde cada modelo mete lo
     suyo —RUN, hora válida, alcance de cálculo, nivel— sin que este módulo
     tenga que conocer ninguno de los dos.
+
+    La capa superpuesta comparte por defecto el hueco del campo. Con
+    `overlay_own_mask` conserva el suyo: la presión al nivel del mar existe
+    donde la theta-e de 850 hPa queda bajo tierra.
     """
     values = np.asarray(values, dtype="<f4")
     inside = np.isfinite(values)
@@ -107,7 +112,8 @@ def pack_grid(
         arrays.append(np.where(inside, vector_v, np.nan).astype("<f4"))
     has_overlay = overlay is not None
     if has_overlay:
-        arrays.append(np.where(inside, overlay, np.nan).astype("<f4"))
+        overlay_inside = np.isfinite(np.asarray(overlay, dtype=float)) if overlay_own_mask else inside
+        arrays.append(np.where(overlay_inside, overlay, np.nan).astype("<f4"))
 
     height, width = values.shape
     west, south, east, north = (float(value) for value in bounds)

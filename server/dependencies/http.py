@@ -191,14 +191,34 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     from server.services.memory_maintenance import maintenance_loop
     memory_task = asyncio.create_task(maintenance_loop(), name="backend-memory-maintenance")
+
+    egress_enabled = settings.egress_watchdog_enabled
+    if egress_enabled is None:
+        egress_enabled = app.state.ranking_refresh_enabled
+    egress_task: asyncio.Task[None] | None = None
+    if egress_enabled:
+        from server.services.egress_watchdog import EgressWatchdog, watchdog_loop
+
+        watchdog = EgressWatchdog(
+            client,
+            url=settings.egress_probe_url,
+            failures_before_check=settings.egress_watchdog_failures,
+        )
+        egress_task = asyncio.create_task(
+            watchdog_loop(watchdog, interval_s=settings.egress_watchdog_interval_s),
+            name="backend-egress-watchdog",
+        )
     try:
         yield
     finally:
-        memory_task.cancel()
-        try:
-            await memory_task
-        except asyncio.CancelledError:
-            pass
+        for background in (memory_task, egress_task):
+            if background is None:
+                continue
+            background.cancel()
+            try:
+                await background
+            except asyncio.CancelledError:
+                pass
         if imgw_task is not None:
             imgw_task.cancel()
             try:

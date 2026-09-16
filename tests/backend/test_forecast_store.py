@@ -1719,3 +1719,71 @@ def test_the_worker_records_the_final_total_of_every_map():
     assert totales["temperature-850"] == 51, "un nativo llega al horizonte entero"
     assert totales["updraft-helicity"] == 36, "los convectivos van recortados"
     assert manifest["progress"]["frames_total"] == sum(totales.values())
+
+
+def _overlay_de(contenido: bytes) -> np.ndarray:
+    """Matriz `overlay` de una rejilla serializada, como la lee el visor."""
+    import numpy as np
+
+    largo = struct.unpack("<I", contenido[:4])[0]
+    cabecera = json.loads(contenido[4:4 + largo])
+    alto, ancho = int(cabecera["height"]), int(cabecera["width"])
+    plano = alto * ancho
+    nombres = [array["name"] for array in cabecera["arrays"]]
+    indice = nombres.index("overlay")
+    inicio = 4 + largo + indice * plano * 2
+    altos = np.frombuffer(contenido, dtype="u1", count=plano, offset=inicio)
+    bajos = np.frombuffer(contenido, dtype="u1", count=plano, offset=inicio + plano)
+    codigos = (altos.astype("<u2") << 8) | bajos
+    escala = cabecera["arrays"][indice]
+    salida = np.full(plano, np.nan)
+    vivos = codigos > 0
+    salida[vivos] = float(escala["offset"]) + (codigos[vivos] - 1) * float(escala["step"])
+    return salida.reshape(alto, ancho)
+
+
+@pytest.mark.parametrize("propia", [True, False])
+def test_mslp_keeps_its_domain_where_theta_e_is_underground(monkeypatch, propia):
+    """La MSLP no se recorta con el hueco de la theta-e de 850 hPa.
+
+    Donde 850 hPa queda bajo tierra no hay theta-e, pero sí presión reducida
+    al nivel del mar. Recortarla con el mismo hueco cortaba las isobaras en los
+    Alpes y la meseta, y el detector de centros se topaba con el agujero y
+    daba las bajas por abiertas: el 16/09/2026 no marcaba ninguna de las que
+    tenía AEMET. Los demás productos siguen compartiendo el hueco.
+    """
+    import numpy as np
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services.arome_forecast import _serialize_grid
+    from server.services.arome_wcs import RasterField
+
+    monkeypatch.setattr(server_arome, "forecast_calculation_scope", lambda: "model")
+    theta = np.full((10, 12), 40.0)
+    theta[4:6, 5:8] = np.nan        # 850 hPa bajo tierra
+    presion = np.linspace(1008.0, 1024.0, 120).reshape(10, 12)
+    presion[0, 0] = np.nan          # fuera del dominio del modelo
+    campo = RasterField(theta, from_bounds(0, 40, 3, 43, 12, 10), CRS.from_epsg(4326), (0, 40, 3, 43), "°C")
+    campo.overlay = presion
+    campo.overlay_units = "hPa"
+    config = {"vmin": -10.0, "vmax": 60.0, "unit": "°C", "overlay_own_mask": propia}
+    cabeceras = {
+        "X-AROME-Run": "2026-09-15T12:00:00Z",
+        "X-AROME-Valid-Time": "2026-09-16T14:00:00Z",
+        "X-AROME-Max": "40.000",
+        "X-AROME-Unit": "°C",
+    }
+
+    overlay = _overlay_de(_serialize_grid("mslp-theta-e-850", campo, config, cabeceras))
+
+    assert np.isnan(overlay[0, 0]), "fuera del dominio sigue sin dato"
+    if propia:
+        assert np.isfinite(overlay[4:6, 5:8]).all()
+        assert np.abs(overlay[4:6, 5:8] - presion[4:6, 5:8]).max() < 0.05
+    else:
+        assert np.isnan(overlay[4:6, 5:8]).all()
+
+
+def test_the_theta_e_map_declares_its_own_pressure_domain():
+    assert server_arome.PRODUCTS["mslp-theta-e-850"]["overlay_own_mask"] is True

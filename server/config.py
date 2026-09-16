@@ -149,6 +149,39 @@ class Settings(BaseSettings):
     ``METEOLABX_IMGW_SERIES_STATE_PATH``.
     """
 
+    live_requests_max_concurrent: int = 24
+    """
+    Peticiones de datos en vivo (``/v1/observations/*`` y ``/v1/climo/summary``)
+    que se atienden a la vez. Cada una puede abrir varias conexiones a
+    proveedores y el pool de httpx es de 80, compartido con el ranking: sin
+    tope, una avalancha de rastreadores lo acapara entero y ninguna consulta
+    llega a salir. Configurar vía ``METEOLABX_LIVE_REQUESTS_MAX_CONCURRENT``.
+    """
+
+    live_requests_queue_timeout_s: float = 5.0
+    """
+    Espera máxima por un hueco antes de contestar 503 ``backend_busy``.
+    Configurar vía ``METEOLABX_LIVE_REQUESTS_QUEUE_TIMEOUT_S``.
+    """
+
+    egress_watchdog_enabled: Optional[bool] = None
+    """
+    Vigilante de la salida a internet: si el cliente HTTP compartido deja de
+    conectar mientras una conexión independiente sí llega, el proceso se da por
+    atascado y se reinicia. Vacío → sigue a ``ranking_refresh_enabled`` (activo
+    en producción, apagado en local y en los tests). Configurar vía
+    ``METEOLABX_EGRESS_WATCHDOG_ENABLED``.
+    """
+
+    egress_probe_url: str = "https://www.cloudflare.com/cdn-cgi/trace"
+    """URL ligera y fiable con la que el vigilante comprueba la salida."""
+
+    egress_watchdog_interval_s: float = 60.0
+    """Cadencia de la sonda del vigilante (segundos)."""
+
+    egress_watchdog_failures: int = 5
+    """Sondas fallidas seguidas antes de contrastar con una conexión independiente."""
+
     ranking_retry_interval_s: float = 60.0
     """
     Si un proveedor falla en un ciclo del ranking, se reintenta (solo ese)

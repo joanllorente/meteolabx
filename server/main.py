@@ -145,6 +145,17 @@ def create_app() -> FastAPI:
         if local_origin not in cors_origins:
             cors_origins.append(local_origin)
 
+    # Antes que CORS para quedar por dentro: el 503 de saturación también
+    # tiene que llevar las cabeceras CORS o el navegador lo esconde.
+    from server.dependencies.live_limit import LiveRequestLimiter
+
+    app.add_middleware(
+        LiveRequestLimiter,
+        api_prefix=f"/{settings.api_version}",
+        max_concurrent=settings.live_requests_max_concurrent,
+        queue_timeout_s=settings.live_requests_queue_timeout_s,
+    )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,

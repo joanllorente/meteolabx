@@ -19,8 +19,16 @@ export const CENTRE_BLOCK = 4;
 export const CENTRE_SIGMA_KM = 40;
 /** Radio en el que un centro tiene que ser el extremo, en km. */
 export const CENTRE_RADIUS_KM = 200;
-/** Prominencia mínima para dibujar un centro, en hPa. */
-export const CENTRE_PROMINENCE_HPA = 2;
+/**
+ * Prominencia mínima para dibujar un centro, en hPa.
+ *
+ * Es la puerta de los centros relativos, las a y b minúsculas. Con 2 hPa no
+ * salía ninguno en situaciones de pantano barométrico: el 16/09/2026 AEMET
+ * marcaba bajas relativas en el golfo de León y el valle del Po que en AROME
+ * cierran 0,9 hPa sobre el campo suavizado. Con 0,75 salen esas y la baja
+ * térmica peninsular, entre cero y cuatro por hora, y ninguna arruga suelta.
+ */
+export const CENTRE_PROMINENCE_HPA = 0.75;
 /**
  * Cierre mínimo para que un centro sea principal, en hPa.
  *

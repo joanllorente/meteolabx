@@ -177,9 +177,10 @@ export const forecastProductGuides = {
   },
 
   'mslp-theta-e-850': {
-    what: 'Equivalent potential temperature at 850 hPa, in °C, with mean sea level pressure as isobars and its centres marked. Theta-e sums up in a single number the heat and the moisture the air carries, and it is conserved whether the mass rises dry or condenses: that is why it identifies the air mass itself and not the thermometer of a given moment.',
+    what: 'Equivalent potential temperature at 850 hPa, in °C, with mean sea level pressure as isobars and its centres marked. Theta-e sums up in a single number the heat and the moisture the air carries, and it is conserved whether the mass rises dry or condenses: that is why it identifies the air mass itself and not the thermometer of a given moment, and lets you identify the fronts that separate one mass from another.',
     interpretation: [
-      'This is the air-mass map. A tongue of high theta-e advancing over lower values is warm, moist advection; the tight gradient between two areas marks the front better than temperature alone, because a dry mass and a moist one can share the same degrees and not be the same thing.',
+      'This is the air-mass map. A tongue of high theta-e advancing over lower values is warm, moist advection.',
+      'It is used to identify fronts: they lie where theta-e packs into a narrow band between a warm, moist mass and a cold or dry one, and the surface front usually runs along the warm edge of that band. If the band advances into the warm air it is a cold front; if it retreats before it, a warm one. The isobars help confirm it, because they kink in the trough that goes with the front. Theta-e marks it better than temperature alone, because a dry mass and a moist one can share the same degrees and not be the same thing.',
       'It is read together with the isobars: the air runs almost parallel to them, so they tell you where the mass that theta-e describes is coming from. A low to the west with southerly isobars brings the warm tongue ahead of it.',
       'The 850 hPa level is chosen because it lies above surface friction and the daily cycle, yet still within the air that feeds convection.',
       'No value where the surface pressure does not reach 850 hPa: there that level is underground and the model publishes an extrapolation that is nobody’s air. That is what leaves the Alps and much of the Spanish plateau blank.'

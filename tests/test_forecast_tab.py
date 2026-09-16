@@ -108,7 +108,10 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "overlay: 'MULI'" in products
     # El mapa de masas de aire: theta-e en color, isobaras encima y sus centros.
     assert "'mslp-theta-e-850'" in products
-    assert "overlaySmoothing: 0" in products, "las isobaras van sin suavizar"
+    # Las isobaras de AROME se enroscan alrededor del relieve sin suavizar: van
+    # a escala sinóptica, y el suavizado grande usa las medias móviles rápidas.
+    assert "overlaySmoothing: 20" in products, "isobaras suavizadas a escala sinóptica"
+    assert "permite identificar los frentes" in products
     assert "pressureCentres: true" in products
     assert "Precipitación en 1 hora" in products
     assert "Viento por niveles" in products
@@ -322,9 +325,12 @@ def test_the_trough_detector_follows_the_six_steps():
     # isohipsa quede al sur de lo que hace a los dos lados.
     assert "waveAmplitude" in fuente
     assert "TROUGH_MIN_AMPLITUDE_KM = 150" in fuente
-    assert "centro - Math.max(oeste, este)" in fuente, (
-        "contra el lado menos favorable, no contra la media de los dos"
+    # Manda el lado menos favorable; la media solo cuenta, rebajada, cuando
+    # ese lado también sube (vaguadas asimétricas).
+    assert "asymmetricAmplitude(centro - oeste, centro - este)" in fuente, (
+        "la amplitud se mide contra los dos lados"
     )
+    assert "Math.max(corto, Math.min(media / 1.5, corto / 0.4))" in fuente
     # Y la geometría: sin codos, recta por PCA con pocos vértices y curva con
     # muchos, uniendo antes las cadenas que son el mismo eje partido.
     assert "TROUGH_MAX_DRIFT_DEG" in fuente

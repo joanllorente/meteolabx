@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CITY_LABELS } from '../src/data/cityLabels.js';
-import { cityRank, placeCities } from '../src/lib/cityPlacement.js';
+import { cityRank, cityRoom, placeCities } from '../src/lib/cityPlacement.js';
 
 // Rejilla de juguete con el encuadre de AROME: 0,05° por celda.
 const FRAME = {
@@ -28,9 +28,8 @@ const opciones = (extra = {}) => ({
   ...extra
 });
 
-test('el nivel de detalle crece con el zoom y se para en 5', () => {
-  assert.equal(cityRank(1), 1);
-  assert.equal(cityRank(1.8), 2);
+test('el nivel de detalle crece con el zoom y se para en 6', () => {
+  assert.equal(cityRank(1), 3);
   assert.equal(cityRank(2.5), 3);
   assert.equal(cityRank(3.5), 4);
   assert.equal(cityRank(4.5), 5);
@@ -42,6 +41,23 @@ test('el nivel de detalle crece con el zoom y se para en 5', () => {
     assert.ok(nivel >= previo, `retrocede en ${zoom}`);
     previo = nivel;
   }
+});
+
+test('con el mapa entero entran más ciudades que las capitales, repartidas', () => {
+  const dominio = {
+    ...FRAME, width: 1121, height: 717, bounds: [-12, 37.5, 16, 55.4],
+    values: new Float32Array(1121 * 717).fill(12)
+  };
+  const puestas = placeCities(opciones({
+    frame: dominio, bounds: { west: 0, east: 1121, north: 0, south: 717 }
+  }));
+  const nombres = puestas.map((ciudad) => ciudad.name);
+  for (const nombre of ['Zaragoza', 'Bilbao', 'Toulouse', 'Lyon', 'Fráncfort']) {
+    assert.ok(nombres.includes(nombre), `falta ${nombre} al 100 %`);
+  }
+  assert.ok(puestas.length < 60, 'al 100 % no se debe llegar al tope');
+  assert.ok(Math.abs(cityRoom(1) - 1.8) < 1e-9);
+  assert.equal(cityRoom(2.8), 1);
 });
 
 test('ampliar el mapa nunca quita ciudades que ya estaban', () => {

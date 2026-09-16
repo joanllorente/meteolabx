@@ -479,6 +479,8 @@ def test_client_classification_never_claims_human_identity():
     assert usage_stats.request_client('') == 'unidentified'
     assert usage_stats.request_client('bingbot/2.0') == 'bingbot'
     assert usage_stats.request_client('HeadlessChrome/140') == 'other_bot'
+    assert usage_stats.request_client('Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)') == 'other_bot'
+    assert usage_stats.request_client('Mozilla/5.0 (compatible; Claude-SearchBot/1.0)') == 'other_bot'
 
 
 def test_only_self_declared_crawlers_are_discarded():
