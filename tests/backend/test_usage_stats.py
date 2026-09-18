@@ -699,3 +699,45 @@ def test_pwa_values_match_the_frontend():
                 enviados |= set(re.findall(r"'([a-z_]+)'", linea))
     assert enviados <= set(usage_stats.PWA_EVENTS)
     assert {"offered", "instructions", "installed", "launched", "dismissed", "prompt_accepted", "prompt_dismissed"} <= enviados
+
+
+def _at(monkeypatch, epoch):
+    monkeypatch.setattr(usage_stats.time, 'time', lambda: epoch)
+
+
+def test_burst_purge_counts_first_and_only_deletes_the_pattern(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    bot = dict(request_client='unidentified', browser_languages='en-us,en', device='desktop', settings=settings)
+
+    # La ráfaga: visita, apertura de ficha y 429 en el mismo segundo.
+    for epoch, station in ((1_000_000, '20281001'), (1_000_600, '20281001'), (1_001_200, '13054001')):
+        _at(monkeypatch, epoch)
+        usage_stats.record_visit('METEOFRANCE', station, 'X', **bot)
+        usage_stats.record_seo_page_view('METEOFRANCE', station, 'X', settings=settings)
+        usage_stats.record_error('METEOFRANCE', station, 'X', error_kind='provider_ratelimit',
+                                 status_code=429, settings=settings)
+    # Una persona en la misma estación y franja, con otro navegador.
+    _at(monkeypatch, 1_000_900)
+    usage_stats.record_visit('METEOFRANCE', '20281001', 'X', request_client='unidentified',
+                             browser_languages='fr-fr,fr', device='mobile', settings=settings)
+    # Un error de otra persona lejos de cualquier visita de la ráfaga.
+    _at(monkeypatch, 1_005_000)
+    usage_stats.record_error('METEOFRANCE', '20281001', 'X', error_kind='provider_timeout', settings=settings)
+    # El mismo patrón fuera de la franja no se toca.
+    _at(monkeypatch, 2_000_000)
+    usage_stats.record_visit('METEOFRANCE', '20281001', 'X', **bot)
+
+    window = dict(since=999_000, until=1_010_000, providers=['METEOFRANCE'],
+                  browser_languages='en-US,en', device='desktop', settings=settings)
+    dry = usage_stats.purge_visit_burst(**window)
+    assert (dry['visits'], dry['errors'], dry['seo_page_views']) == (3, 3, 3)
+    assert dry['other_visits_same_window'] == {'METEOFRANCE': 1}
+    assert dry['top_stations'][0] == {'provider': 'METEOFRANCE', 'station_id': '20281001', 'visits': 2}
+    assert usage_stats.station_detail('METEOFRANCE', '20281001', settings=settings)['visits']['total'] == 4
+
+    applied = usage_stats.purge_visit_burst(**window, dry_run=False)
+    assert applied['visits'] == 3
+    detail = usage_stats.station_detail('METEOFRANCE', '20281001', settings=settings)
+    assert detail['visits']['total'] == 2
+    assert detail['errors']['total'] == 1
+    assert usage_stats.purge_visit_burst(**window)['visits'] == 0

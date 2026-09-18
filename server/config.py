@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     cache_stale_series_s: float = 3600.0
     """Ventana máxima para reutilizar una serie reciente si falla el proveedor."""
 
+    cache_error_ttl_s: float = 60.0
+    """
+    Cuánto se recuerda un fallo transitorio de un proveedor (429, timeout,
+    red, 5xx) para una estación. Mientras dura, las peticiones a esa estación
+    reciben el mismo error —o el último dato bueno, si lo hay— sin volver a
+    llamar al proveedor. ``0`` lo desactiva. Configurar vía
+    ``METEOLABX_CACHE_ERROR_TTL_S``.
+    """
+
     cache_max_entries: int = 500
     """
     Tope global de entradas por caché. Con 500 estaciones distintas

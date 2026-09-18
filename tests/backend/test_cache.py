@@ -253,6 +253,118 @@ async def test_expired_value_is_not_returned_after_stale_window() -> None:
 
 
 @pytest.mark.asyncio
+async def test_transient_provider_error_is_remembered_for_error_ttl(monkeypatch) -> None:
+    from server.schemas.errors import ProviderError
+
+    now = [1000.0]
+    monkeypatch.setattr("server.services.cache.time.time", lambda: now[0])
+    cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=10.0, error_ttl_s=60.0)
+    calls = 0
+
+    async def rate_limited() -> str:
+        nonlocal calls
+        calls += 1
+        raise ProviderError("provider_ratelimit", provider="METEOFRANCE", detail="HTTP 429", status_code=429)
+
+    with pytest.raises(ProviderError):
+        await cache.get_or_fetch("k", rate_limited)
+    # Dentro del plazo, el mismo error sin volver a llamar al proveedor.
+    with pytest.raises(ProviderError) as replayed:
+        await cache.get_or_fetch("k", rate_limited)
+    assert calls == 1
+    assert replayed.value.error_code == "provider_ratelimit"
+    assert replayed.value.provider == "METEOFRANCE"
+    assert replayed.value.status_code == 429
+    assert cache.stats()["error_hits"] == 1
+
+    now[0] += 61.0
+
+    async def recovered() -> str:
+        return "ok"
+
+    assert await cache.get_or_fetch("k", recovered) == "ok"
+    assert cache.stats()["error_entries"] == 0
+
+
+@pytest.mark.asyncio
+async def test_non_transient_errors_are_not_remembered() -> None:
+    from server.schemas.errors import ProviderError
+
+    cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=10.0, error_ttl_s=60.0)
+    calls = 0
+
+    async def missing() -> str:
+        nonlocal calls
+        calls += 1
+        raise ProviderError("station_not_found", provider="AEMET", status_code=404)
+
+    for _ in range(2):
+        with pytest.raises(ProviderError):
+            await cache.get_or_fetch("k", missing)
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_remembered_error_serves_stale_value_without_calling_provider(monkeypatch) -> None:
+    from server.schemas.errors import ProviderError
+
+    now = [1000.0]
+    monkeypatch.setattr("server.services.cache.time.time", lambda: now[0])
+    cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=10.0, stale_if_error_s=900.0, error_ttl_s=60.0)
+    calls = 0
+
+    async def good() -> str:
+        return "last-known-good"
+
+    async def timing_out() -> str:
+        nonlocal calls
+        calls += 1
+        raise ProviderError("provider_timeout", provider="NWS", status_code=504)
+
+    await cache.get_or_fetch("k", good)
+    now[0] += 20.0
+    assert await cache.get_or_fetch("k", timing_out) == "last-known-good"
+    assert await cache.get_or_fetch("k", timing_out) == "last-known-good"
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_error_memory_is_off_by_default() -> None:
+    from server.schemas.errors import ProviderError
+
+    cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=10.0)
+    calls = 0
+
+    async def timing_out() -> str:
+        nonlocal calls
+        calls += 1
+        raise ProviderError("provider_timeout", provider="NWS", status_code=504)
+
+    for _ in range(2):
+        with pytest.raises(ProviderError):
+            await cache.get_or_fetch("k", timing_out)
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_purge_drops_expired_errors(monkeypatch) -> None:
+    from server.schemas.errors import ProviderError
+
+    now = [1000.0]
+    monkeypatch.setattr("server.services.cache.time.time", lambda: now[0])
+    cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=10.0, error_ttl_s=60.0)
+
+    async def timing_out() -> str:
+        raise ProviderError("provider_timeout", provider="NWS", status_code=504)
+
+    with pytest.raises(ProviderError):
+        await cache.get_or_fetch("k", timing_out)
+    now[0] += 61.0
+    assert await cache.purge_expired() == 1
+    assert cache.stats()["error_entries"] == 0
+
+
+@pytest.mark.asyncio
 async def test_lru_eviction_when_max_entries_exceeded() -> None:
     cache: AsyncTTLCache[str] = AsyncTTLCache(default_ttl_s=100.0, max_entries=2)
 
@@ -440,3 +552,32 @@ def test_endpoint_current_provider_error_not_cached(app_factory) -> None:
     assert r1.status_code == 401
     assert r2.status_code == 200  # NO cacheado el error
     assert call_count == 2
+
+
+def test_endpoint_current_rate_limit_is_remembered_between_requests() -> None:
+    """Un 429 del proveedor no se repite en cada visita: la segunda petición
+    recibe el mismo 429 sin volver a llamar."""
+    call_count = 0
+
+    def rate_limited(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(429, json={})
+
+    from fastapi.testclient import TestClient
+    from server.dependencies.http import get_http_client
+    from server.main import create_app
+
+    limited_client = httpx.AsyncClient(transport=httpx.MockTransport(rate_limited))
+    app = create_app()
+    app.dependency_overrides[get_http_client] = lambda: limited_client
+
+    body = {"provider": "WU", "station_id": "X", "api_key": "Y"}
+    with TestClient(app) as client:
+        r1 = client.post("/v1/observations/current", json=body)
+        r2 = client.post("/v1/observations/current", json=body)
+
+    assert r1.status_code == 429
+    assert r2.status_code == 429
+    assert r2.json()["error_code"] == "provider_ratelimit"
+    assert call_count == 1

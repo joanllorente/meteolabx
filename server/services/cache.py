@@ -40,6 +40,7 @@ petición tras el restart paga el coste y las siguientes son hits).
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import time
 import weakref
@@ -49,6 +50,19 @@ from typing import Any, Awaitable, Callable, Generic, Optional, TypeVar
 T = TypeVar("T")
 
 LIVE_CACHES = weakref.WeakSet()
+
+# Fallos que dicen «ahora no» y no «esto no existe»: un 429 o un timeout
+# volverán a salir si se repite la llamada en el acto. Recordarlos un rato
+# evita que una ráfaga de visitas a la misma estación martillee al proveedor
+# que ya nos está frenando, como hizo Météo-France el 16/09/2026.
+TRANSIENT_ERROR_CODES = frozenset({
+    "provider_ratelimit",
+    "provider_timeout",
+    "provider_network_error",
+    "provider_network",
+    "provider_http_error",
+    "provider_unavailable",
+})
 
 
 def make_cache_key(provider: str, kind: str, station_id: str, api_key: str) -> str:
@@ -90,6 +104,7 @@ class AsyncTTLCache(Generic[T]):
         default_ttl_s: float,
         max_entries: int = 500,
         stale_if_error_s: float = 0.0,
+        error_ttl_s: float = 0.0,
     ) -> None:
         if default_ttl_s <= 0:
             raise ValueError("default_ttl_s must be > 0")
@@ -97,20 +112,26 @@ class AsyncTTLCache(Generic[T]):
             raise ValueError("max_entries must be > 0")
         if stale_if_error_s < 0:
             raise ValueError("stale_if_error_s must be >= 0")
+        if error_ttl_s < 0:
+            raise ValueError("error_ttl_s must be >= 0")
         self._default_ttl_s = float(default_ttl_s)
         self._max_entries = int(max_entries)
         self._stale_if_error_s = float(stale_if_error_s)
+        self._error_ttl_s = float(error_ttl_s)
         # (fresh_until, stale_until, value). Separar ambos límites impide que
         # varios fallos consecutivos prolonguen indefinidamente un dato viejo.
         self._store: "OrderedDict[str, tuple[float, float, T]]" = OrderedDict()
         # Future por key para corutinas que esperan el mismo fetch.
         self._in_flight: dict[str, "asyncio.Future[T]"] = {}
+        # (until, excepción) del último fallo transitorio por key.
+        self._errors: "OrderedDict[str, tuple[float, BaseException]]" = OrderedDict()
         self._lock = asyncio.Lock()
         # Contadores ligeros para diagnóstico/observabilidad.
         self._hits = 0
         self._misses = 0
         self._coalesced = 0
         self._stale_hits = 0
+        self._error_hits = 0
         LIVE_CACHES.add(self)
 
     async def get_or_fetch(
@@ -148,6 +169,19 @@ class AsyncTTLCache(Generic[T]):
                 else:
                     del self._store[key]
 
+            remembered = self._errors.get(key)
+            if remembered is not None:
+                until, error = remembered
+                if until > now:
+                    # El proveedor acaba de fallar con esta key: ni se le
+                    # vuelve a llamar ni se espera. Con respaldo, el respaldo.
+                    self._error_hits += 1
+                    if stale_available:
+                        self._stale_hits += 1
+                        return stale_value  # type: ignore[return-value]
+                    raise _replay(error)
+                del self._errors[key]
+
             existing_future = self._in_flight.get(key)
             if existing_future is not None:
                 # Hay otra corutina ya pidiendo este key; esperamos su resultado.
@@ -180,6 +214,7 @@ class AsyncTTLCache(Generic[T]):
             if stale_available and isinstance(exc, Exception):
                 async with self._lock:
                     self._in_flight.pop(key, None)
+                    self._remember_error(key, exc)
                     self._store.move_to_end(key)
                     self._stale_hits += 1
                 if not future_to_await.done():
@@ -190,6 +225,7 @@ class AsyncTTLCache(Generic[T]):
             # followers y propagamos la excepción.
             async with self._lock:
                 self._in_flight.pop(key, None)
+                self._remember_error(key, exc)
             if not future_to_await.done():
                 future_to_await.set_exception(exc)
             # "Marcar como retrieved" para que asyncio no chille en GC si
@@ -213,10 +249,20 @@ class AsyncTTLCache(Generic[T]):
             while len(self._store) > self._max_entries:
                 self._store.popitem(last=False)
             self._in_flight.pop(key, None)
+            self._errors.pop(key, None)
 
         if not future_to_await.done():
             future_to_await.set_result(result)
         return result
+
+    def _remember_error(self, key: str, exc: BaseException) -> None:
+        """Guarda un fallo transitorio durante ``error_ttl_s``. Llamar bajo lock."""
+        if self._error_ttl_s <= 0 or getattr(exc, "error_code", None) not in TRANSIENT_ERROR_CODES:
+            return
+        self._errors[key] = (time.time() + self._error_ttl_s, exc)
+        self._errors.move_to_end(key)
+        while len(self._errors) > self._max_entries:
+            self._errors.popitem(last=False)
 
     async def purge_expired(self) -> int:
         """Retira solo datos fuera del plazo de respaldo y sin refresh activo."""
@@ -226,7 +272,10 @@ class AsyncTTLCache(Generic[T]):
                        if stale_until <= now and key not in self._in_flight]
             for key in expired:
                 del self._store[key]
-            return len(expired)
+            expired_errors = [key for key, (until, _) in self._errors.items() if until <= now]
+            for key in expired_errors:
+                del self._errors[key]
+            return len(expired) + len(expired_errors)
 
     def invalidate(self, key: str) -> bool:
         """
@@ -237,11 +286,13 @@ class AsyncTTLCache(Generic[T]):
         Esto NO afecta a peticiones in-flight; al terminar se cachearán
         con el TTL normal.
         """
-        return self._store.pop(key, None) is not None
+        had_error = self._errors.pop(key, None) is not None
+        return self._store.pop(key, None) is not None or had_error
 
     def clear(self) -> None:
         """Vacía el caché entero. Para tests y debugging."""
         self._store.clear()
+        self._errors.clear()
         # No tocamos _in_flight: las corutinas en vuelo deben terminar
         # normalmente; sus resultados sí se cachearán (en el caché vacío).
 
@@ -254,7 +305,18 @@ class AsyncTTLCache(Generic[T]):
             "misses": self._misses,
             "coalesced": self._coalesced,
             "stale_hits": self._stale_hits,
+            "error_entries": len(self._errors),
+            "error_hits": self._error_hits,
+            "error_ttl_s": self._error_ttl_s,
             "max_entries": self._max_entries,
             "default_ttl_s": self._default_ttl_s,
             "stale_if_error_s": self._stale_if_error_s,
         }
+
+
+def _replay(error: BaseException) -> BaseException:
+    """Copia del fallo recordado: cada petición lanza la suya, sin compartir traceback."""
+    try:
+        return copy.copy(error).with_traceback(None)
+    except Exception:
+        return error

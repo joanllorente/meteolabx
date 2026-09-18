@@ -27,7 +27,7 @@ import re
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 _ROOT = Path(__file__).resolve().parents[2]
 
@@ -596,6 +596,120 @@ def purge_crawler_visits(*, settings=None) -> int:
             "DELETE FROM station_visits WHERE request_client != '' AND request_client != 'unidentified'"
         )
         return int(cursor.rowcount or 0)
+
+
+def _burst_where(
+    *,
+    since: int,
+    until: int,
+    providers: Sequence[str],
+    browser_languages: str,
+    device: str,
+    entries: Sequence[str],
+) -> tuple[str, list]:
+    clauses = ["epoch >= ?", "epoch < ?", "request_client = 'unidentified'"]
+    params: list = [int(since), int(until)]
+    if providers:
+        clauses.append(f"provider IN ({','.join('?' * len(providers))})")
+        params.extend(str(p).strip().upper() for p in providers)
+    if browser_languages:
+        clauses.append("browser_languages = ?")
+        params.append(language_tags(browser_languages))
+    if device:
+        clauses.append("device = ?")
+        params.append(str(device).strip().lower())
+    if entries:
+        clauses.append(f"entry IN ({','.join('?' * len(entries))})")
+        params.extend(entries)
+    return " AND ".join(clauses), params
+
+
+def purge_visit_burst(
+    *,
+    since: int,
+    until: int,
+    providers: Sequence[str] = (),
+    browser_languages: str = "",
+    device: str = "",
+    entries: Sequence[str] = ("", "direct"),
+    pair_window_s: int = 60,
+    dry_run: bool = True,
+    settings=None,
+) -> Dict[str, Any]:
+    """Visitas de una ráfaga de agentes que no se declararon, con sus ecos.
+
+    Un agente automático con el user-agent de un navegador corriente pasa el
+    filtro de rastreadores y queda como ``unidentified``, igual que una
+    persona: por el cliente no se distingue. Lo que lo delata es el patrón
+    —misma franja, mismos idiomas de navegador, mismo aparato, sin referente—,
+    y eso es lo que filtra esta purga. Cada visita de la ficha llega junto a
+    su apertura de ficha indexable y, si la consulta falló, su error: esos se
+    eligen por estación y por cercanía (``pair_window_s``) a una visita de la
+    ráfaga, porque esas tablas no guardan nada del cliente.
+
+    Con ``dry_run`` solo cuenta. Devuelve el reparto por proveedor y hora, las
+    estaciones más tocadas y, para comparar, las visitas de la misma franja
+    que no encajan en el patrón.
+    """
+    where, params = _burst_where(
+        since=since, until=until, providers=providers,
+        browser_languages=browser_languages, device=device, entries=entries,
+    )
+    window = max(0, int(pair_window_s))
+    with _connect(settings) as connection:
+        connection.execute("DROP TABLE IF EXISTS temp.burst_visits")
+        connection.execute(
+            "CREATE TEMP TABLE burst_visits AS"
+            f" SELECT visit_pk, provider, station_id, epoch FROM station_visits WHERE {where}",
+            params,
+        )
+        by_provider = dict(connection.execute(
+            "SELECT provider, COUNT(*) FROM burst_visits GROUP BY provider ORDER BY COUNT(*) DESC"
+        ).fetchall())
+        by_hour = dict(connection.execute(
+            "SELECT strftime('%Y-%m-%d %H:00', epoch, 'unixepoch'), COUNT(*)"
+            " FROM burst_visits GROUP BY 1 ORDER BY 1"
+        ).fetchall())
+        top_stations = [
+            {"provider": p, "station_id": s, "visits": n}
+            for p, s, n in connection.execute(
+                "SELECT provider, station_id, COUNT(*) FROM burst_visits"
+                " GROUP BY provider, station_id ORDER BY COUNT(*) DESC LIMIT 10"
+            )
+        ]
+        others = dict(connection.execute(
+            "SELECT provider, COUNT(*) FROM station_visits"
+            " WHERE epoch >= ? AND epoch < ? AND visit_pk NOT IN (SELECT visit_pk FROM burst_visits)"
+            " GROUP BY provider ORDER BY COUNT(*) DESC",
+            (int(since), int(until)),
+        ).fetchall())
+        paired_rows = {}
+        for table, pk in (("station_errors", "error_pk"), ("seo_page_views", "view_pk")):
+            paired_rows[table] = [row[0] for row in connection.execute(
+                f"SELECT DISTINCT t.{pk} FROM {table} t JOIN burst_visits v"
+                " ON t.provider = v.provider AND t.station_id = v.station_id"
+                " AND t.epoch BETWEEN v.epoch - ? AND v.epoch + ?",
+                (window, window),
+            )]
+
+        result: Dict[str, Any] = {
+            "visits": sum(by_provider.values()),
+            "errors": len(paired_rows["station_errors"]),
+            "seo_page_views": len(paired_rows["seo_page_views"]),
+            "by_provider": by_provider,
+            "by_hour_utc": by_hour,
+            "top_stations": top_stations,
+            "other_visits_same_window": others,
+            "dry_run": bool(dry_run),
+        }
+        if not dry_run:
+            for table, pk in (("station_errors", "error_pk"), ("seo_page_views", "view_pk")):
+                connection.executemany(
+                    f"DELETE FROM {table} WHERE {pk} = ?", [(row,) for row in paired_rows[table]]
+                )
+            connection.execute("DELETE FROM station_visits WHERE visit_pk IN (SELECT visit_pk FROM burst_visits)")
+        connection.execute("DROP TABLE IF EXISTS temp.burst_visits")
+    return result
 
 
 def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
