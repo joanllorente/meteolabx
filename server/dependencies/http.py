@@ -210,10 +210,23 @@ async def http_client_lifespan(app: FastAPI) -> AsyncIterator[None]:
             watchdog_loop(watchdog, interval_s=settings.egress_watchdog_interval_s),
             name="backend-egress-watchdog",
         )
+    # Vigilante de salud: pasadas atascadas (el worker muerto por memoria no
+    # puede avisar de su propia muerte) y resumen diario. Sigue el mismo
+    # interruptor que el resto de los trabajos de fondo para que en local y en
+    # los tests no mande nada.
+    health_task: asyncio.Task[None] | None = None
+    if app.state.ranking_refresh_enabled:
+        from server.services.health_alerts import health_loop
+
+        health_task = asyncio.create_task(
+            health_loop(interval_s=settings.health_alerts_interval_s),
+            name="backend-health-alerts",
+        )
+
     try:
         yield
     finally:
-        for background in (memory_task, egress_task):
+        for background in (memory_task, egress_task, health_task):
             if background is None:
                 continue
             background.cancel()

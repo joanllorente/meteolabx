@@ -191,6 +191,32 @@ class Settings(BaseSettings):
     egress_watchdog_failures: int = 5
     """Sondas fallidas seguidas antes de contrastar con una conexión independiente."""
 
+    # --- Avisos por correo ---
+    health_alerts_interval_s: float = 300.0
+    """Cadencia del vigilante de salud: pasadas atascadas y resumen diario."""
+
+    alert_email_to: str = "joan.llorente@protonmail.com"
+    """
+    Destinatario de los avisos. El envío corre por ``server/services/alerts.py``,
+    que lee el entorno directamente —el worker es otro proceso y no monta este
+    ``Settings``—; aquí queda declarado para que el nombre de la variable sea
+    fácil de encontrar y no se lea como configuración perdida.
+    Configurar vía ``METEOLABX_ALERT_EMAIL_TO``.
+    """
+
+    resend_api_key: str = ""
+    """
+    Clave de la API de Resend. Sin ella no sale ningún correo y los avisos se
+    quedan en el log, que es el comportamiento en local y en los tests.
+    Configurar vía ``METEOLABX_RESEND_API_KEY``.
+    """
+
+    alert_digest_hour_utc: int = 6
+    """Hora UTC del resumen diario. Negativa lo desactiva."""
+
+    run_stall_minutes: float = 45.0
+    """Minutos sin que avance una pasada antes de darla por atascada y avisar."""
+
     ranking_retry_interval_s: float = 60.0
     """
     Si un proveedor falla en un ciclo del ranking, se reintenta (solo ese)

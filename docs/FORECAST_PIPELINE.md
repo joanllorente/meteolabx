@@ -171,3 +171,89 @@ METEOLABX_FORECAST_WORKER_MAX_HOURS=1 bash scripts/run_forecast_worker.sh
 No ejecutar dos workers contra el mismo RUN simultáneamente. El despliegue
 utiliza una única réplica del servicio; la paralelización futura debe hacerse
 dentro del worker por bloques, conservando un único escritor del manifiesto.
+
+## Avisos por correo
+
+Todo lo que iba mal terminaba en el log de Railway, que solo guarda el
+despliegue activo: un fallo de madrugada se descubría por la mañana, mirando
+el mapa vacío, y sin rastro de cómo empezó. `server/services/alerts.py` es
+ahora el único sitio que manda correo; los vigilantes le entregan un `Alert` y
+él decide si toca enviarlo.
+
+Qué dispara un correo:
+
+| Disparador | Quién lo detecta | Gravedad |
+| --- | --- | --- |
+| Pasada terminada con huecos, errores o mucho más lenta de lo suyo | worker, al darla por completa | ⚠️ / ⛔ |
+| Pasada que se va del volumen sin haberse completado | worker, al rotar el turno | ⛔ |
+| Pasada parada más de `METEOLABX_RUN_STALL_MINUTES` | backend (`health_alerts`) | ⛔ |
+| Backend sin salida a internet | `egress_watchdog` | ⛔ / ⚠️ |
+| Varios proveedores de estaciones caídos a la vez | ranking, al cerrar el ciclo | ⛔ |
+| Un proveedor con racha larga de fallos | ranking | ⚠️ |
+| Resumen diario de las cuatro pasadas | backend, a `METEOLABX_ALERT_DIGEST_HOUR_UTC` | informativo |
+
+El informe se genera y se guarda en **todas** las pasadas; lo que decide
+`METEOLABX_ALERT_EMAIL_LEVEL` es cuáles llegan además al buzón. Por defecto
+(`problems`) una pasada limpia no escribe: cuatro correos diarios de «todo
+bien» acaban sin abrirse, y con ellos el que importaba. Con `all` llega uno
+por pasada, que es lo razonable las primeras semanas, mientras se ve qué es
+normal en este servicio. El resumen diario existe para que el silencio no sea
+ambiguo —si no llega, el vigilante también se ha caído—.
+
+Cada aviso lleva una clave estable y no se repite hasta pasadas seis horas
+(una, en los atascos de red). La marca de enviado vive en el volumen, no en
+memoria: un reinicio por falta de memoria no puede reabrir la compuerta.
+
+### Qué lleva el informe
+
+Tiempos (duración total, reparto por nivel y comparación con las pasadas
+conservadas), cobertura (frames publicados, productos vacíos), errores
+agrupados por producto y, desde la instrumentación del worker:
+
+- **Memoria**: pico y media del cgroup durante la pasada, contra el techo del
+  contenedor. Se muestrea al cerrar cada trabajo, sobre las funciones que ya
+  usaba el freno de perfiles pesados.
+- **CPU**: `RUSAGE_SELF` + `RUSAGE_CHILDREN`, acumulada por deltas en el
+  manifiesto. Por deltas y no en absoluto porque la pasada sobrevive a los
+  reinicios del worker; los trabajos aislados cuentan porque se recogen con
+  `join`.
+- **Descargas GRIB**: paquetes, GB, minutos y qué parte de la pasada se fue
+  esperando a Météo-France. El registro es un `downloads-<pasada>.jsonl` junto
+  a los paquetes, no un acumulador en memoria: cada trabajo aislado es otro
+  proceso y lo que baje allí no llegaría al padre. Se borra con sus paquetes.
+- **Trabajos caídos por causa**: `killed` (el contenedor los mató, o sea
+  memoria), `timeout`, `provider` y `other`. Distinguirlos importa porque
+  piden cosas distintas: más memoria, menos paralelismo o nada que se pueda
+  hacer desde aquí.
+- **Coste aproximado**: memoria (GB-min × tarifa) + CPU (vCPU-min × tarifa),
+  con el desglose a la vista. Las descargas **no** suman: son ingress y no se
+  facturan; el egress de la factura lo genera el servicio `web`. Las tarifas
+  salen de la facturación de Railway (09/2026) y se cambian con
+  `METEOLABX_PRICE_MEMORY_GB_MIN`, `METEOLABX_PRICE_CPU_VCPU_MIN`,
+  `METEOLABX_PRICE_VOLUME_GB_MIN` y `METEOLABX_PRICE_EGRESS_GB`.
+
+Dos de esas cifras generan aviso por sí solas: un trabajo matado por memoria
+y un pico por encima del 90 % del techo. Son el aviso temprano del OOM que
+hasta ahora solo se veía cuando la pasada ya había quedado a medias.
+
+El informe de cada pasada se guarda junto a ella y se consulta sin correo:
+
+```
+GET /v1/forecast/arome/report          # la pasada en curso, calculada al vuelo
+GET /v1/forecast/arome/report?run=...  # una pasada concreta
+```
+
+Variables del servicio (todas opcionales; sin `RESEND_API_KEY` no sale ningún
+correo y los avisos se quedan en el log, que es el comportamiento en local y
+en los tests):
+
+| Variable | Por defecto | Para qué |
+| --- | --- | --- |
+| `METEOLABX_RESEND_API_KEY` | — | Clave de la API de Resend. Sin ella no hay correo. |
+| `METEOLABX_ALERT_EMAIL_TO` | `joan.llorente@protonmail.com` | Destinatario. |
+| `METEOLABX_ALERT_EMAIL_FROM` | `MeteoLabX <alertas@meteolabx.com>` | Remitente; el dominio debe estar verificado en Resend. |
+| `METEOLABX_ALERT_EMAIL_ENABLED` | activo si hay clave | `false` apaga el envío sin borrar la clave. |
+| `METEOLABX_ALERT_EMAIL_LEVEL` | `problems` | `all` manda correo también con las pasadas limpias. |
+| `METEOLABX_ALERT_DIGEST_HOUR_UTC` | `6` | Hora del resumen diario; negativa lo desactiva. |
+| `METEOLABX_RUN_STALL_MINUTES` | `45` | Minutos sin avanzar antes de dar una pasada por atascada. |
+| `METEOLABX_HEALTH_ALERTS_INTERVAL_S` | `300` | Cadencia del vigilante. |

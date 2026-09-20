@@ -9,6 +9,8 @@ panel ni la ficha sabían que el anemómetro había mentido.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from domain import observation_warnings
@@ -17,6 +19,10 @@ from server.services.ranking import RankingStore, StationDaily
 
 DIA = "2026-09-12"
 T0 = 1_789_200_000
+# `reduce_accumulable_records` solo mira el día en curso y el anterior según su
+# reloj, así que sin fijarlo el test caducaba: a los cuatro días de escribirlo,
+# DIA dejaba de entrar y la cuarentena no se anotaba nunca.
+AHORA = datetime(2026, 9, 12, 18, tzinfo=timezone.utc)
 
 
 @pytest.fixture(autouse=True)
@@ -84,7 +90,7 @@ def test_the_accumulable_bulk_quarantines_its_hourly_rain() -> None:
             name="Test", locality="", lat=59.3, lon=18.0,
             values={"rain": mm, "rain_at": T0 + hora * 3600},
         )
-    store.reduce_accumulable_records("SMHI")
+    store.reduce_accumulable_records("SMHI", now=AHORA)
     assert suspect_data.is_flagged("SMHI", "97400", DIA, suspect_data.PRECIPITATION)
 
 

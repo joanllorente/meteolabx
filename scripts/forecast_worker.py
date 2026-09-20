@@ -294,6 +294,11 @@ def _publish_run_slot(store, manifest: dict[str, Any]) -> None:
         scope=str(previous_manifest.get("calculation_scope", "model")),
     )
     logger.info("RUN %s sustituido en el turno %sZ", previous_run, previous_run[11:13])
+    if previous_manifest and str(previous_manifest.get("status")) != "complete":
+        # Se va del volumen sin haber terminado: ya no habrá otra ocasión de
+        # avisar, y que un turno entero no llegase a publicarse es justo lo
+        # que no queremos enterarnos por el mapa vacío.
+        _emit_run_report(store, previous_manifest)
 
 
 def _oldest_unfinished_run(store, latest_run: str) -> str:
@@ -997,6 +1002,84 @@ def _clear_active_job(manifest: dict[str, Any], job: ForecastJob) -> None:
     progress["current_job"] = active[0] if active else None
 
 
+# Última lectura de CPU de ESTE proceso. El consumo se acumula por deltas
+# porque la pasada sobrevive a los reinicios del worker: un contador absoluto
+# se reiniciaría con el proceso y la pasada parecería gratis.
+_ULTIMA_CPU_S: float | None = None
+
+
+def _cpu_seconds_total() -> float:
+    """CPU consumida por el worker y por sus trabajos aislados.
+
+    ``RUSAGE_CHILDREN`` solo suma hijos ya recogidos, que es justo lo que hace
+    ``_run_isolated_job`` con su ``join``: el perfil convectivo que corre en
+    otro proceso cuenta igual que si corriera aquí, y es el grueso del gasto.
+    """
+    import resource
+
+    propio = resource.getrusage(resource.RUSAGE_SELF)
+    hijos = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return propio.ru_utime + propio.ru_stime + hijos.ru_utime + hijos.ru_stime
+
+
+def _sample_resources(manifest: dict[str, Any]) -> None:
+    """Apunta memoria y CPU en el manifiesto de la pasada que está corriendo.
+
+    Sin esto, el informe podía decir que una pasada tardó el triple pero no
+    por qué. La memoria es el cuello conocido —el contenedor mata al worker
+    cuando aprieta— y hasta ahora solo se veía en las gráficas de Railway, que
+    no distinguen una pasada de otra.
+    """
+    global _ULTIMA_CPU_S
+
+    uso = manifest.setdefault("resource_usage", {})
+    medida = _cgroup_memory()
+    if medida is not None:
+        anonima, limite = medida
+        uso["memory_peak_bytes"] = max(int(uso.get("memory_peak_bytes", 0)), anonima)
+        uso["memory_sum_bytes"] = int(uso.get("memory_sum_bytes", 0)) + anonima
+        uso["memory_samples"] = int(uso.get("memory_samples", 0)) + 1
+        uso["memory_limit_bytes"] = limite
+    total = _cgroup_total_bytes()
+    if total is not None:
+        uso["memory_peak_total_bytes"] = max(int(uso.get("memory_peak_total_bytes", 0)), total)
+
+    ahora = _cpu_seconds_total()
+    if _ULTIMA_CPU_S is not None and ahora >= _ULTIMA_CPU_S:
+        uso["cpu_seconds"] = round(float(uso.get("cpu_seconds", 0.0)) + (ahora - _ULTIMA_CPU_S), 1)
+    _ULTIMA_CPU_S = ahora
+
+
+def _record_downloads(manifest: dict[str, Any]) -> None:
+    """Trae al manifiesto lo que llevan descargado los paquetes de la pasada."""
+    try:
+        from server.services.arome_packages import download_stats
+
+        manifest.setdefault("resource_usage", {})["downloads"] = download_stats(
+            _parse_iso(str(manifest["run"]))
+        )
+    except Exception:
+        logger.debug("No se pudieron contar las descargas de la pasada", exc_info=True)
+
+
+def _failure_kind(message: str) -> str:
+    """Clasifica por qué murió un trabajo.
+
+    Distinguirlos importa porque piden cosas distintas: un trabajo matado por
+    el contenedor se arregla con memoria, uno agotado por tiempo con menos
+    paralelismo, y uno rechazado por Météo-France no se arregla desde aquí.
+    Antes había que leer el texto de cientos de errores para saber cuál era.
+    """
+    texto = str(message).lower()
+    if "sin resultado" in texto or "terminó con código" in texto:
+        return "killed"
+    if "superó" in texto or "timeout" in texto:
+        return "timeout"
+    if any(pista in texto for pista in ("http", "wcs", "paquete", "auth", "api", "token")):
+        return "provider"
+    return "other"
+
+
 def _mark_job_finished(manifest: dict[str, Any], job: ForecastJob) -> int:
     completed = 0
     for product in job.products:
@@ -1015,6 +1098,7 @@ def _mark_job_finished(manifest: dict[str, Any], job: ForecastJob) -> int:
         "products": list(job.products),
         "completed_at": _utc_now(),
     }
+    _sample_resources(manifest)
     return completed
 
 
@@ -1045,10 +1129,15 @@ def _mark_job_failed(
                 message,
                 retry_after=retry_after,
             )
+    clase = _failure_kind(message)
+    fallos = manifest.setdefault("failure_kinds", {})
+    fallos[clase] = int(fallos.get(clase, 0)) + 1
+    _sample_resources(manifest)
     _clear_active_job(manifest, job)
 
 
-def _finish_status(manifest: dict[str, Any]) -> None:
+def _finish_status(manifest: dict[str, Any], store: Any = None) -> None:
+    _record_downloads(manifest)
     all_complete = True
     for product in PERSISTED_FORECAST_PRODUCTS:
         expected_product = set(_product_expected_times(manifest, product))
@@ -1080,6 +1169,38 @@ def _finish_status(manifest: dict[str, Any]) -> None:
     # nada que resumir, y apuntarlo igualmente lo daba por hecho para siempre.
     if manifest["status"] == "complete" and not manifest.get("summary_logged"):
         manifest["summary_logged"] = _log_run_summary(manifest)
+    if manifest["status"] == "complete" and not manifest.get("report_emitted"):
+        manifest["report_emitted"] = _emit_run_report(store, manifest)
+
+
+def _emit_run_report(store, manifest: dict[str, Any]) -> bool:
+    """Guarda el informe de la pasada y avisa si hubo algo que contar.
+
+    Se llama una sola vez por pasada, al darla por completa. El informe se
+    guarda siempre —consultable en /v1/forecast/report aunque el correo no
+    salga— y el correo solo sale si la pasada tuvo problemas: cuatro correos
+    diarios de «todo bien» acaban en la papelera sin abrir, y con ellos el que
+    importaba.
+
+    Devuelve si llegó a escribirse, para no reintentarlo en cada ciclo.
+    """
+    if store is None:
+        return False
+    try:
+        from server.services.alerts import send as send_alert
+        from server.services.run_report import alert_for_report, build_report, save_report
+
+        report = build_report(manifest, previous=retained_manifests(store))
+        save_report(store, report)
+        aviso = alert_for_report(report)
+        if aviso is not None:
+            send_alert(aviso, store=store)
+        return True
+    except Exception:
+        # El informe es información sobre el trabajo, no el trabajo: si falla,
+        # la pasada ya está calculada y publicada y eso es lo que importa.
+        logger.warning("No se pudo emitir el informe de la pasada", exc_info=True)
+        return False
 
 
 def _log_run_summary(manifest: dict[str, Any]) -> bool:
@@ -1360,7 +1481,7 @@ def _run_parallel_work(
 
     def persist_result(manifest: dict[str, Any], run_iso: str) -> None:
         manifest["worker_heartbeat_at"] = _utc_now()
-        _finish_status(manifest)
+        _finish_status(manifest, store)
         _persist_manifest(store, manifest, latest_run=latest_run)
         write_json(
             store,
@@ -1598,7 +1719,7 @@ def run_incremental_cycle(
             derived_timeout_s=derived_timeout_s,
         )
         for manifest in manifests:
-            _finish_status(manifest)
+            _finish_status(manifest, store)
             _persist_manifest(store, manifest, latest_run=latest_run)
         return {
             "run": latest_run,
@@ -1665,7 +1786,7 @@ def run_incremental_cycle(
             finally:
                 tasks_completed += 1
                 manifest["worker_heartbeat_at"] = _utc_now()
-                _finish_status(manifest)
+                _finish_status(manifest, store)
                 _persist_manifest(store, manifest, latest_run=latest_run)
                 write_json(
                     store,
@@ -1680,7 +1801,7 @@ def run_incremental_cycle(
             break
 
     for manifest in manifests:
-        _finish_status(manifest)
+        _finish_status(manifest, store)
         _persist_manifest(store, manifest, latest_run=latest_run)
 
     return {

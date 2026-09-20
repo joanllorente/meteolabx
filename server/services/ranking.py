@@ -4070,6 +4070,12 @@ async def refresh_loop(
                     "ranking: %-12s lleva %d fallos seguidos → backoff %.0fs",
                     provider, failure_counts[provider], backoff,
                 )
+        # Con las rachas ya actualizadas: varios proveedores caídos a la vez
+        # suele ser nuestra red, no la suya, y es el cuadro que dejaba el mapa
+        # sin estaciones sin que nadie se enterase.
+        from server.services.health_alerts import check_providers
+
+        check_providers(dict(failure_counts), attempted=sorted(attempted))
 
     async def _persist() -> None:
         if not state_path:

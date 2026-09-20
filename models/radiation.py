@@ -2,7 +2,7 @@
 Cálculos relacionados con radiación solar y evapotranspiración según FAO-56
 """
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 
@@ -158,7 +158,7 @@ def extraterrestrial_radiation_short_period(
         return float("nan")
 
     lon_deg = 0.0 if is_nan(longitude_deg) else float(longitude_deg)
-    dt_utc = datetime.utcfromtimestamp(timestamp)
+    dt_utc = datetime.fromtimestamp(timestamp, timezone.utc)
 
     # Día del año en hora solar aproximada (UTC + lon/15).
     dt_solar = dt_utc + timedelta(hours=(lon_deg / 15.0))
@@ -253,7 +253,7 @@ def solar_zenith_cosine(
         return float("nan")
 
     lon_deg = 0.0 if is_nan(longitude_deg) else float(longitude_deg)
-    dt_utc = datetime.utcfromtimestamp(timestamp)
+    dt_utc = datetime.fromtimestamp(timestamp, timezone.utc)
     dt_solar = dt_utc + timedelta(hours=(lon_deg / 15.0))
     day_of_year = dt_solar.timetuple().tm_yday
 
@@ -309,7 +309,7 @@ def max_solar_altitude_day_deg(
         return float("nan")
 
     lon_deg = 0.0 if is_nan(longitude_deg) else float(longitude_deg)
-    dt_utc = datetime.utcfromtimestamp(timestamp)
+    dt_utc = datetime.fromtimestamp(timestamp, timezone.utc)
     dt_solar = dt_utc + timedelta(hours=(lon_deg / 15.0))
     day_of_year = dt_solar.timetuple().tm_yday
 

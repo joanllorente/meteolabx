@@ -42,7 +42,10 @@ shapely>=2.0,<3.0
 uvicorn[standard]>=0.27.0,<1.0.0
 pydantic-settings>=2.2.0,<3.0.0
 httpx>=0.27.0,<1.0.0
-pytest-asyncio>=0.23.0,<1.0.0
+# La serie 0.x llamaba a asyncio.get_event_loop_policy en cada test, que
+# Python retira en la 3.16: ocho avisos por ejecución. La 1.x no la usa y
+# mantiene el asyncio_mode=strict de pytest.ini.
+pytest-asyncio>=1.0,<2.0
 # Cliente S3 para compartir frames precalculados entre el worker y la API
 # mediante Railway Storage Buckets.
 boto3>=1.35,<2.0

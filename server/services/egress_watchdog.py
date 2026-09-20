@@ -80,6 +80,18 @@ def pool_state(client: httpx.AsyncClient) -> dict:
     return state
 
 
+def _avisar(*, restarting: bool, pool: dict) -> None:
+    """Manda el correo sin dejar que un fallo suyo estorbe al reinicio."""
+    try:
+        from server.services.alerts import send
+        from server.services.forecast_store import get_forecast_store
+        from server.services.health_alerts import egress_alert
+
+        send(egress_alert(restarting=restarting, pool=pool), store=get_forecast_store())
+    except Exception:
+        logger.warning("No se pudo avisar del atasco de salida", exc_info=True)
+
+
 def restart_process() -> None:
     """SIGTERM para un cierre ordenado; si se cuelga, salida forzada."""
     def forced_exit() -> None:
@@ -133,6 +145,7 @@ class EgressWatchdog:
             logger.warning(
                 "Tampoco sale una conexión independiente: parece un corte de red; no se reinicia"
             )
+            _avisar(restarting=False, pool=pool_state(self._client))
             return False
 
         logger.error(
@@ -140,6 +153,9 @@ class EgressWatchdog:
             "proceso atascado, se reinicia · %s",
             pool_state(self._client),
         )
+        # Antes de reiniciar: el reinicio borra el log del proceso y, sin
+        # aviso, este fallo solo se descubre viendo el mapa vacío.
+        _avisar(restarting=True, pool=pool_state(self._client))
         self._restart()
         return True
 

@@ -15,6 +15,7 @@ from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
 import fcntl
 from functools import lru_cache
+import json
 import logging
 import os
 from pathlib import Path
@@ -109,6 +110,51 @@ def _package_path(package: str, run: datetime, block: str) -> Path:
     return _cache_dir() / f"{package}-{stamp}-{block}.grib2"
 
 
+def _downloads_log(run: datetime) -> Path:
+    stamp = run.astimezone(timezone.utc).strftime("%Y%m%dT%H")
+    return _cache_dir() / f"downloads-{stamp}.jsonl"
+
+
+def _record_download(package: str, run: datetime, block: str, size: int, seconds: float) -> None:
+    """Apunta una descarga para poder resumir después lo que costó la pasada.
+
+    Se escribe en disco, no en memoria: cada trabajo aislado es un proceso
+    aparte y lo que bajara allí no llegaría a un acumulador del padre. Una
+    línea por descarga, en modo append, que es atómico para líneas cortas y no
+    necesita coordinar a nadie.
+    """
+    linea = json.dumps({
+        "package": package, "block": block,
+        "bytes": int(size), "seconds": round(float(seconds), 1),
+        "at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }, ensure_ascii=False)
+    try:
+        with _downloads_log(run).open("a", encoding="utf-8") as registro:
+            registro.write(linea + "\n")
+    except OSError:
+        # Contabilizar no puede estorbar a descargar.
+        logger.debug("No se pudo apuntar la descarga de %s %s", package, block)
+
+
+def download_stats(run: datetime) -> dict[str, Any]:
+    """Cuántos paquetes, cuántos bytes y cuánto tiempo lleva esta pasada."""
+    resumen = {"packages": 0, "bytes": 0, "seconds": 0.0}
+    try:
+        contenido = _downloads_log(run).read_text(encoding="utf-8")
+    except OSError:
+        return resumen
+    for linea in contenido.splitlines():
+        try:
+            registro = json.loads(linea)
+        except ValueError:
+            continue
+        resumen["packages"] += 1
+        resumen["bytes"] += int(registro.get("bytes", 0))
+        resumen["seconds"] += float(registro.get("seconds", 0.0))
+    resumen["seconds"] = round(resumen["seconds"], 1)
+    return resumen
+
+
 def _is_downloaded(destination: Path) -> bool:
     try:
         return destination.stat().st_size > 0
@@ -147,6 +193,10 @@ def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
                 return destination
             descarga = time.monotonic()
             resultado = _download_package(package, run, block, destination)
+            _record_download(
+                package, run, block,
+                resultado.stat().st_size, time.monotonic() - descarga,
+            )
             logger.info(
                 "%s %s descargado: %.0f MB en %.0f s%s.",
                 package, block,
@@ -584,6 +634,7 @@ def discard_packages_before(run: datetime) -> list[Path]:
     try:
         candidates = list(_cache_dir().glob("*.grib2"))
         candidates += list(_cache_dir().glob("*.lock"))
+        candidates += list(_cache_dir().glob("downloads-*.jsonl"))
     except OSError:
         return removed
     for path in candidates:

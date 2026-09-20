@@ -92,6 +92,36 @@ def get_progress() -> dict:
     }
 
 
+@router.get("/report", summary="Informe de una pasada AROME")
+def get_report(run: str = Query(default="", max_length=32)) -> dict:
+    """Informe de cómo fue una pasada: tiempos por nivel, huecos y errores.
+
+    Existe para poder mirar lo que pasó sin depender del correo ni del log de
+    Railway, que solo conserva el despliegue activo. Sin ``run`` devuelve el de
+    la pasada en curso, calculado al vuelo: mientras publica todavía no hay
+    informe guardado, y es justo cuando más se quiere mirar.
+    """
+    from server.services.run_report import build_report, report_key
+
+    store = get_forecast_store()
+    runs = retained_manifests(store)
+    if run:
+        try:
+            guardado = read_json(store, report_key(run))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Pasada no válida.")
+        if guardado:
+            return guardado
+        manifest = read_json(store, run_manifest_key(run))
+        if not manifest:
+            raise HTTPException(status_code=404, detail="Esa pasada no está en el volumen.")
+    else:
+        manifest = read_json(store, LATEST_MANIFEST_KEY)
+        if not manifest:
+            raise HTTPException(status_code=404, detail="Todavía no hay ninguna pasada.")
+    return build_report(manifest, previous=runs)
+
+
 @router.get("/catalog", summary="Catálogo de diagnósticos AROME conectados")
 def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
     store = get_forecast_store()
