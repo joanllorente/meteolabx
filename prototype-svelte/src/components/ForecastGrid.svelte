@@ -10,6 +10,9 @@
   import {
     CENTRE_PROMINENCE_HPA, pressureCentres as detectPressureCentres,
   } from '../lib/pressureCentres.js';
+  import {
+    STREAM_FADE, evenlySpacedStreamlines, fadeSegments, streamlineArrows
+  } from '../lib/streamlines.js';
   import { colorDeFondo, mezclaSobre, tintaLegible } from '../lib/ink.js';
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
   import { forecastLayerLabel, forecastText } from '../lib/forecast-i18n.js';
@@ -26,6 +29,9 @@
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
     cityLabels = false,
     troughAxes = false, overlayLabel = '',
+    // Viento dibujado como líneas de corriente en vez de flechas sueltas: se
+    // ve el flujo entero y, con él, dónde converge.
+    flowLines = false,
     pressureCentres = false, overlaySmoothing = 4, overlayLayerLabel = '',
     onink = null,
     // Encuadre guardado fuera del componente: `{ key, zoom, panX, panY }`.
@@ -380,7 +386,7 @@
   }
 
   function makeArrowGlyphs() {
-    if (!frame.u || !frame.v || frame.product === 'wind-level') return { arrows: [], path: '' };
+    if (!frame.u || !frame.v || flowLines) return { arrows: [], path: '' };
     const arrows = [];
     // Mantiene una densidad visual estable tanto en el dominio AROME completo
     // como al ampliar una región: unas 26 agrupaciones a lo ancho del visor.
@@ -424,65 +430,41 @@
     return magnitude >= .35 ? { u, v, magnitude } : null;
   }
 
-  function integrateStream(seedX, seedY, direction, spatialStep, maxSteps) {
-    const points = [];
-    let x = seedX;
-    let y = seedY;
-    for (let step = 0; step < maxSteps; step += 1) {
-      const first = sampleVector(x, y);
-      if (!first) break;
-      const halfX = x + direction * spatialStep * .5 * first.u / first.magnitude;
-      const halfY = y - direction * spatialStep * .5 * first.v / first.magnitude;
-      const middle = sampleVector(halfX, halfY);
-      if (!middle) break;
-      x += direction * spatialStep * middle.u / middle.magnitude;
-      y -= direction * spatialStep * middle.v / middle.magnitude;
-      if (!sampleVector(x, y)) break;
-      points.push([x, y]);
-    }
-    return points;
-  }
+
+
+  const boundaryPaths = $derived(makeBoundaryPaths());
 
   function makeStreamlinePaths() {
-    if (!frame.u || !frame.v || frame.product !== 'wind-level') return { paths: [], markerPath: '' };
-    const paths = [];
-    const baseSeedStep = Math.max(4.5, frame.width / 25);
-    const seedStep = baseSeedStep / viewZoom;
-    const spatialStep = Math.max(.16, seedStep / 9);
-    const bounds = visibleSourceBounds();
-    const firstX = Math.floor(bounds.west / seedStep) * seedStep + seedStep * .5;
-    const firstY = Math.floor(bounds.north / seedStep) * seedStep + seedStep * .5;
-    for (let y = firstY; y < bounds.south; y += seedStep) {
-      for (let x = firstX; x < bounds.east; x += seedStep) {
-        if (!sampleVector(x, y)) continue;
-        const points = [
-          ...integrateStream(x, y, -1, spatialStep, 15).reverse(),
-          [x, y],
-          ...integrateStream(x, y, 1, spatialStep, 15)
-        ];
-        if (points.length < 10) continue;
-        const middleIndex = Math.floor(points.length / 2);
-        const previous = points[Math.max(0, middleIndex - 1)];
-        const middle = points[middleIndex];
-        const next = points[Math.min(points.length - 1, middleIndex + 1)];
-        paths.push({
-          path: `M${points.map(([px, py]) => `${px.toFixed(2)},${py.toFixed(2)}`).join('L')}`,
-          marker: {
-            x: middle[0],
-            y: middle[1],
-            angle: Math.atan2(next[1] - previous[1], next[0] - previous[0]) * 180 / Math.PI
-          }
-        });
-      }
+    if (!frame.u || !frame.v || !flowLines) {
+      return { paths: [], segments: [], arrows: [], markerPath: '' };
     }
-    const markerSize = Math.max(3.2, baseSeedStep * .22);
+    // Separación entre líneas vecinas: el reparto la respeta por su cuenta,
+    // así que esto fija la densidad del mapa y no dónde empieza cada línea.
+    const separacion = Math.max(4.5, frame.width / 55) / viewZoom;
+    const lineas = evenlySpacedStreamlines({
+      sample: sampleVector,
+      bounds: visibleSourceBounds(),
+      separation: separacion,
+      step: separacion / 4
+    });
+    const trazo = (puntos) => `M${puntos.map(([px, py]) => `${px.toFixed(2)},${py.toFixed(2)}`).join('L')}`;
+    const markerSize = Math.max(2.4, separacion * viewZoom * 0.16);
     return {
-      paths,
+      // La línea entera, para la animación de partículas.
+      paths: lineas.map((linea) => trazo(linea.points)),
+      // Y partida en tramos con su tinta, para que las puntas se desvanezcan
+      // en vez de cortarse en seco a media pantalla.
+      segments: lineas.flatMap((linea) => (
+        fadeSegments(linea.points, { fade: separacion * STREAM_FADE })
+          .map((tramo) => ({ d: trazo(tramo.points), opacity: tramo.opacity }))
+      )),
+      // Una flecha cada dos separaciones y media: bastantes para seguir el
+      // sentido sin que dos caigan sobre el mismo tramo de línea.
+      arrows: lineas.flatMap((linea) => streamlineArrows(linea.points, separacion * 2.5)),
       markerPath: `M${(-markerSize).toFixed(2)},${(-markerSize * .62).toFixed(2)}L0,0L${(-markerSize).toFixed(2)},${(markerSize * .62).toFixed(2)}`
     };
   }
 
-  const boundaryPaths = $derived(makeBoundaryPaths());
   const arrowGlyphs = $derived(makeArrowGlyphs());
   const streamlineData = $derived(makeStreamlinePaths());
   // El contorno del índice superpuesto va crudo, como estaba: es una línea de
@@ -989,11 +971,15 @@
     ></canvas>
     <svg class="vector-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} preserveAspectRatio="none" aria-hidden="true">
       <g transform={vectorTransform()}>
+        {#each streamlineData.segments as tramo}
+          <path class="streamline-halo" d={tramo.d} style={`opacity:${tramo.opacity.toFixed(2)}`} />
+          <path class="streamline" d={tramo.d} style={`opacity:${tramo.opacity.toFixed(2)}`} />
+        {/each}
         {#each streamlineData.paths as streamline}
-          <path class="streamline-halo" d={streamline.path} />
-          <path class="streamline" d={streamline.path} />
-          <path class="stream-particle" d={streamline.path} />
-          <g transform={`translate(${streamline.marker.x.toFixed(2)} ${streamline.marker.y.toFixed(2)}) rotate(${streamline.marker.angle.toFixed(2)}) scale(${(1 / zoom).toFixed(5)})`}>
+          <path class="stream-particle" d={streamline} />
+        {/each}
+        {#each streamlineData.arrows as marker}
+          <g transform={`translate(${marker.x.toFixed(2)} ${marker.y.toFixed(2)}) rotate(${marker.angle.toFixed(2)}) scale(${(1 / zoom).toFixed(5)})`}>
             <path class="stream-direction-halo" d={streamlineData.markerPath} />
             <path class="stream-direction" d={streamlineData.markerPath} />
           </g>
@@ -1124,11 +1110,13 @@
   .vector-arrow-halo{stroke:rgba(239,247,250,.62);stroke-width:1.9}
   .vector-arrow{stroke:rgba(7,13,18,.94);stroke-width:1.02}
   .streamline,.streamline-halo,.stream-particle,.stream-direction,.stream-direction-halo{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-  .streamline-halo{stroke:rgba(238,247,250,.58);stroke-width:2.75}
-  .streamline{stroke:rgba(5,14,20,.9);stroke-width:1.48}
-  .stream-particle{stroke:rgba(190,232,250,.88);stroke-width:1.55;stroke-dasharray:1.25 11.75;animation:stream-flow 1.25s linear infinite}
-  .stream-direction-halo{stroke:rgba(238,247,250,.9);stroke-width:3.55}
-  .stream-direction{stroke:rgba(5,14,20,.98);stroke-width:2.05}
+  /* Trazo fino: las líneas van a una separación pareja y con un grosor de
+     dos píxeles el mapa se convertía en una maraña de tuberías. */
+  .streamline-halo{stroke:rgba(238,247,250,.5);stroke-width:1.9}
+  .streamline{stroke:rgba(5,14,20,.82);stroke-width:.95}
+  .stream-particle{stroke:rgba(190,232,250,.85);stroke-width:1;stroke-dasharray:1.25 11.75;animation:stream-flow 1.25s linear infinite}
+  .stream-direction-halo{stroke:rgba(238,247,250,.85);stroke-width:2.4}
+  .stream-direction{stroke:rgba(5,14,20,.95);stroke-width:1.35}
   .scalar-contour{fill:none;stroke:rgba(9,13,18,.82);stroke-width:.62;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
   /* Marrón cálido, no negro: las fronteras ya son negras y el trazo del
      índice superpuesto también. El halo claro las mantiene legibles sobre los

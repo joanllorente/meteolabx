@@ -119,7 +119,8 @@ export const forecastProductGuides = {
       'It answers the question the instability maps leave open: whether the ascent reaches the height at which the parcel becomes buoyant. Once the LFC is reached, convection fires on its own; below it, the convergence bottles up under the inversion and nothing happens.',
       'That is why it complements the CAPE fields instead of repeating them: those say how much energy is available, this one says whether something is going to release it. A high value over an area with appreciable CAPE points to where and when.',
       'AROME partly resolves convection, so in cells that are already developed this field picks up the updraft itself and not only the forcing that preceded it. It remains useful as a detector of where the model is convecting, but it is worth knowing that it is not always the cause.',
-      'The arrows are the 10 m wind: they show what is forcing the ascent — a sea breeze, a convergence line, the terrain — and which way anything that fires would propagate.'
+      'The streamlines are the 10 m wind, not the wind at the level the colours show: they tell you what is forcing the ascent — a sea breeze, a convergence line, the terrain — and which way anything that fires would propagate.',
+      'Where two streamlines come together or meet head on there is surface convergence, and that is where to look when the colours say the ascent reaches the LFC. A parallel, loose flow forces nothing on its own, however strong it is.'
     ],
     method: 'Geometric vertical velocity from the isobaric levels of the IP3 package, linearly interpolated to the height of the LFC. The LFC comes from the mixed-layer parcel of the lowest 100 hPa, the same one used for MLCAPE.',
     equations: [

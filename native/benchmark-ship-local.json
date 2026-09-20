@@ -1,0 +1,20 @@
+{
+  "source": "synthetic",
+  "shape": [
+    384,
+    1121
+  ],
+  "valid_cells": 430464,
+  "runs": [
+    {
+      "engine": "python",
+      "seconds": 17.081167416996323
+    },
+    {
+      "engine": "cpp",
+      "seconds": 0.02803287500864826
+    }
+  ],
+  "max_abs_difference": 4.263256414560601e-14,
+  "speedup": 609.3262789395204
+}

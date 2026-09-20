@@ -414,6 +414,15 @@ export function closedRegion(field, width, height, start, delta, maxCells = 4000
 }
 
 /**
+ * Celdas mínimas que ha de encerrar una isohipsa dibujada para valer de baja.
+ *
+ * En la rejilla engrosada son bloques de 20 km de lado, así que tres son unos
+ * 1.200 km². Por debajo, el anillo es el roce de la isohipsa con un fondo
+ * plano y no una circulación.
+ */
+export const CLOSED_MIN_CELLS = 3;
+
+/**
  * Mínimos locales con isohipsa cerrada: centros de depresión.
  *
  * Cuenta como cerrada la baja que cierra `delta` por encima de su mínimo o la
@@ -445,9 +454,16 @@ export function closedLows(field, width, height, radius, delta = 2, contourStep 
       const inicio = { x: column, y: row };
       let cells = closedRegion(field, width, height, inicio, delta);
       if (!cells && contourStep > 0) {
-        const isohipsa = Math.ceil((value + 0.25) / contourStep) * contourStep;
+        // La primera isohipsa dibujada por encima del fondo, por poco que lo
+        // supere: el campo con el que se detecta va suavizado a 50 km y sale
+        // más somero que el dibujado, así que descontar un margen fijo dejaba
+        // fuera bajas con anillo bien visible —la de Córcega del 18/09/2026 a
+        // H+06, con el fondo en 575,9 y su isohipsa de 576—. Lo que descarta
+        // un roce sin baja es el tamaño de lo que encierra.
+        const isohipsa = (Math.floor(value / contourStep) + 1) * contourStep;
         if (isohipsa - value < delta) {
           cells = closedRegion(field, width, height, inicio, isohipsa - value);
+          if (cells && cells.size < CLOSED_MIN_CELLS) cells = null;
         }
       }
       if (!cells) continue;

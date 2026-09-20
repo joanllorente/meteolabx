@@ -1,0 +1,11 @@
+{
+  "shape": [
+    25,
+    128,
+    384
+  ],
+  "reference": "vector SHARPpy vs scalar C++ conv=0.1",
+  "max_abs_difference_J_kg": 13.965514236128797,
+  "mean_abs_difference_J_kg": 0.3795963200774781,
+  "p99_abs_difference_J_kg": 3.7230749644535646
+}

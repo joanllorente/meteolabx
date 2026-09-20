@@ -137,7 +137,8 @@ export const forecastProductGuides = {
       'Responde a la pregunta que los mapas de inestabilidad no contestan: si el ascenso llega hasta donde la parcela se vuelve flotante. Alcanzado el NCL la convección se dispara sola; por debajo, la convergencia se embotella bajo la inversión y no pasa nada.',
       'Por eso complementa a los CAPE en lugar de repetirlos: aquéllos dicen cuánta energía hay disponible y éste, si algo la va a liberar. Un valor alto sobre una zona con CAPE apreciable señala dónde y cuándo.',
       'AROME resuelve parcialmente la convección, así que en celdas ya desarrolladas este campo recoge la propia corriente ascendente y no solo el forzamiento previo. Como detector de dónde el modelo está convectando sigue siendo útil, pero conviene saber que no siempre es la causa.',
-      'Las flechas son el viento de 10 m: indican qué está forzando el ascenso —brisa, línea de convergencia, relieve— y hacia dónde se propagaría lo que se dispare.'
+      'Las líneas de corriente son el viento de 10 m, no el del nivel que colorea el mapa: enseñan qué está forzando el ascenso —brisa, línea de convergencia, relieve— y hacia dónde se propagaría lo que se dispare.',
+      'Donde dos líneas se juntan o se encuentran de frente hay convergencia en superficie, y es ahí donde conviene mirar si el color dice que el ascenso llega al NCL. Un flujo paralelo y suelto, por marcado que sea, no fuerza nada por sí solo.'
     ],
     method: 'Velocidad vertical geométrica de los niveles isobáricos del paquete IP3, interpolada linealmente a la altura del NCL. El NCL sale de la parcela de capa mezclada de los 100 hPa inferiores, la misma con la que se calcula el MLCAPE.',
     equations: [

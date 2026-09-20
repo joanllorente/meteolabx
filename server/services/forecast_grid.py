@@ -90,6 +90,7 @@ def pack_grid(
     vector_v: np.ndarray | None = None,
     overlay: np.ndarray | None = None,
     overlay_unit: str | None = None,
+    vectors_own_mask: bool = False,
     overlay_own_mask: bool = False,
     metadata: dict[str, Any] | None = None,
 ) -> bytes:
@@ -99,17 +100,23 @@ def pack_grid(
     suyo —RUN, hora válida, alcance de cálculo, nivel— sin que este módulo
     tenga que conocer ninguno de los dos.
 
-    La capa superpuesta comparte por defecto el hueco del campo. Con
-    `overlay_own_mask` conserva el suyo: la presión al nivel del mar existe
-    donde la theta-e de 850 hPa queda bajo tierra.
+    La capa superpuesta y las componentes del viento comparten por defecto el
+    hueco del campo. Con `overlay_own_mask` y `vectors_own_mask` conservan el
+    suyo: la presión al nivel del mar existe donde la theta-e de 850 hPa queda
+    bajo tierra, y el viento de 10 m sopla donde la parcela no tiene NCL.
     """
     values = np.asarray(values, dtype="<f4")
     inside = np.isfinite(values)
     arrays = [values]
     has_vectors = vector_u is not None and vector_v is not None
     if has_vectors:
-        arrays.append(np.where(inside, vector_u, np.nan).astype("<f4"))
-        arrays.append(np.where(inside, vector_v, np.nan).astype("<f4"))
+        vectors_inside = inside
+        if vectors_own_mask:
+            vectors_inside = np.isfinite(np.asarray(vector_u, dtype=float)) & np.isfinite(
+                np.asarray(vector_v, dtype=float)
+            )
+        arrays.append(np.where(vectors_inside, vector_u, np.nan).astype("<f4"))
+        arrays.append(np.where(vectors_inside, vector_v, np.nan).astype("<f4"))
     has_overlay = overlay is not None
     if has_overlay:
         overlay_inside = np.isfinite(np.asarray(overlay, dtype=float)) if overlay_own_mask else inside

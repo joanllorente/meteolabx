@@ -46,3 +46,10 @@ pytest-asyncio>=0.23.0,<1.0.0
 # Cliente S3 para compartir frames precalculados entre el worker y la API
 # mediante Railway Storage Buckets.
 boto3>=1.35,<2.0
+
+# Sólo para el build: cabeceras de pybind11 con las que se compila el núcleo
+# opcional de DCAPE (native/dcape.cpp). No se importa en tiempo de ejecución
+# —el binario resultante no depende de ella—, pero tiene que estar instalada
+# antes de que el buildCommand ejecute scripts/build_dcape_native.py. Ver
+# native/README.md.
+pybind11>=3.0,<4.0

@@ -168,6 +168,12 @@
     ],
     "privacy_contact_title": "Contatto",
     "privacy_contact": "Per qualsiasi domanda sulla privacy o sul trattamento di queste informazioni, puoi scrivere a",
+    "release_211_improvements": [
+      "Migliorato il rilevamento degli assi di saccatura.",
+      "Migliorato il rilevamento dei centri di pressione.",
+      "Migliorato il tracciamento delle isobare.",
+      "Migliorate le linee di flusso del vento."
+    ],
     "release_210_improvements": [
       "Aggiunti nuovi fornitori ufficiali di Lituania, Polonia, Danimarca e Svizzera.",
       "La ricerca per località ora ricorda le ultime stazioni visitate.",

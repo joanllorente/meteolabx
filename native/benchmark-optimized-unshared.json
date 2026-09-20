@@ -1,0 +1,28 @@
+{
+  "runs": [
+    {
+      "engine": "python",
+      "dtype": "float32",
+      "shape": [
+        25,
+        128,
+        1121
+      ],
+      "seconds": 8.266921166999964,
+      "peak_rss_bytes": 579747840
+    },
+    {
+      "engine": "cpp",
+      "dtype": "float32",
+      "shape": [
+        25,
+        128,
+        1121
+      ],
+      "seconds": 4.094155541999498,
+      "peak_rss_bytes": 169000960
+    }
+  ],
+  "max_abs_difference": 0.0,
+  "speedup": 2.0192005609446326
+}

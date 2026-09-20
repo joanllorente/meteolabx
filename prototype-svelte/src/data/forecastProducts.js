@@ -116,7 +116,7 @@ const allForecastProducts = [
   },
   {
     id: 'wind-level', category: 'dynamics', label: 'Viento por niveles', short: 'Viento', kind: 'native',
-    unit: 'm/s', min: 0, max: 55, palette: 'wind', accent: '#4db6e8', vectors: true,
+    unit: 'm/s', min: 0, max: 55, palette: 'wind', accent: '#4db6e8', vectors: true, flowLines: true,
     description: 'Velocidad y dirección del viento en alturas sobre el terreno o superficies isobáricas.',
     method: 'Magnitud calculada a partir de las componentes U/V nativas del nivel seleccionado; las flechas muestran la dirección.',
     coverage: 'U/V · altura geométrica o nivel isobárico'
@@ -394,8 +394,11 @@ const allForecastProducts = [
   {
     id: 'vv-lfc', category: 'convection', label: 'Velocidad vertical en el NCL', short: 'w en NCL', kind: 'derived',
     unit: 'm/s', min: -5, max: 10, palette: 'shear', accent: '#4ade80', vectors: true,
-    description: 'Velocidad vertical del modelo interpolada al nivel de convección libre de la parcela de capa mezclada. Un ascenso que alcanza ese nivel dispara la convección; el que se queda por debajo se embotella bajo la inversión, y una convergencia en superficie no distingue esos dos casos.',
-    method: 'Velocidad vertical geométrica del paquete isobárico IP3, interpolada a la altura del NCL que calcula la parcela ML100. Las flechas son el viento de 10 m.',
+    // El viento de 10 m va en líneas de corriente: es lo que enseña dónde
+    // convergen las brisas, que es lo que fuerza el ascenso que pinta el mapa.
+    flowLines: true,
+    description: 'Velocidad vertical del modelo interpolada al nivel de convección libre de la parcela de capa mezclada, con el viento de 10 m en líneas de corriente. Un ascenso que alcanza ese nivel dispara la convección; el que se queda por debajo se embotella bajo la inversión, y una convergencia en superficie no distingue esos dos casos. Donde las líneas de corriente se juntan o chocan hay convergencia en superficie, que es lo que suele forzar el ascenso.',
+    method: 'Velocidad vertical geométrica del paquete isobárico IP3, interpolada a la altura del NCL que calcula la parcela ML100. Las líneas de corriente son el viento de 10 m.',
     coverage: 'IP3 · velocidad vertical en niveles isobáricos'
   },
   {

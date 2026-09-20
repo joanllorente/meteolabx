@@ -7,6 +7,8 @@ sin confundirlos con los campos ECAPE nativos del modelo.
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -191,6 +193,12 @@ def _saturated_temperature_from_theta_e(
     pasadas, así que iterar la malla entera nueve veces gastaba la mayor parte
     del tiempo en recalcular exponenciales de puntos ya resueltos.
     """
+    engine = os.getenv("METEOLABX_SATURATION_ENGINE", "python").lower()
+    if engine == "cpp":
+        from server.services._dcape_native import saturated_temperature
+        return np.asarray(saturated_temperature(pressure_hpa, theta_e_k, initial_k))
+    if engine != "python":
+        raise ValueError("METEOLABX_SATURATION_ENGINE debe ser python o cpp")
     pressure = np.asarray(pressure_hpa, dtype=float)
     target_log = np.log(np.maximum(np.asarray(theta_e_k, dtype=float), 1.0))
     temperature = np.clip(np.asarray(initial_k, dtype=float), 170.0, 380.0)
@@ -455,6 +463,16 @@ def parcel_diagnostics(
     parcel_temperature_k: np.ndarray,
     parcel_dewpoint_k: np.ndarray,
 ) -> ParcelDiagnostics:
+    engine = os.getenv("METEOLABX_PARCEL_ENGINE", "python").lower()
+    if engine == "cpp":
+        from server.services._dcape_native import parcel
+        shape = np.shape(pressure_hpa)[1:]
+        origins = [np.broadcast_to(np.asarray(value, dtype=float), shape)[None, ...]
+                   for value in (parcel_pressure_hpa, parcel_temperature_k, parcel_dewpoint_k)]
+        return ParcelDiagnostics(*parcel(pressure_hpa, environmental_temperature_k,
+                                        environmental_dewpoint_k, height_m, *origins))
+    if engine != "python":
+        raise ValueError("METEOLABX_PARCEL_ENGINE debe ser python o cpp")
     pressure = np.asarray(pressure_hpa, dtype=float)
     env_temperature = np.asarray(environmental_temperature_k, dtype=float)
     env_dewpoint = np.minimum(np.asarray(environmental_dewpoint_k, dtype=float), env_temperature)
@@ -829,23 +847,7 @@ def _mixed_layer_parcel_properties(
     return mixed_temperature, mixed_dewpoint
 
 
-def downdraft_cape(
-    pressure_hpa: np.ndarray,
-    environmental_temperature_k: np.ndarray,
-    environmental_dewpoint_k: np.ndarray,
-    height_m: np.ndarray,
-) -> np.ndarray:
-    """DCAPE según el procedimiento SPC/SHARPpy.
-
-    Busca, dentro de los 400 hPa inferiores, la capa móvil de 100 hPa con
-    menor theta-e media. La parcela parte del centro de esa capa, se satura a
-    temperatura de bulbo húmedo y desciende pseudoadiabáticamente. Para
-    reproducir SHARPpy, la integral usa temperatura ordinaria, no virtual.
-    """
-    pressure = np.asarray(pressure_hpa, dtype=float)
-    temperature = np.asarray(environmental_temperature_k, dtype=float)
-    dewpoint = np.minimum(np.asarray(environmental_dewpoint_k, dtype=float), temperature)
-    height = np.asarray(height_m, dtype=float)
+def _dcape_source_python(pressure, temperature, dewpoint, height):
     surface_pressure = pressure[0]
 
     # Los logaritmos de presión no dependen del campo interpolado ni del
@@ -930,7 +932,6 @@ def downdraft_cape(
         source_base_index = np.where(better, index, source_base_index)
         source_base_pressure = np.where(better, base_pressure, source_base_pressure)
 
-    any_layer = source_base_index >= 0
     source_pressure = source_base_pressure - 50.0
     source_temperature = interpolate_to_targets(temperature, source_pressure)
     source_dewpoint = np.minimum(
@@ -938,7 +939,47 @@ def downdraft_cape(
         source_temperature,
     )
     source_height = interpolate_to_targets(height, source_pressure)
-    if sharppy_thermo is not None:
+    return (source_base_index, source_pressure, source_temperature,
+            source_dewpoint, source_height)
+
+
+def downdraft_cape(
+    pressure_hpa: np.ndarray,
+    environmental_temperature_k: np.ndarray,
+    environmental_dewpoint_k: np.ndarray,
+    height_m: np.ndarray,
+) -> np.ndarray:
+    """DCAPE según el procedimiento SPC/SHARPpy.
+
+    Busca, dentro de los 400 hPa inferiores, la capa móvil de 100 hPa con
+    menor theta-e media. La parcela parte del centro de esa capa, se satura a
+    temperatura de bulbo húmedo y desciende pseudoadiabáticamente. Para
+    reproducir SHARPpy, la integral usa temperatura ordinaria, no virtual.
+    """
+    engine = os.getenv("METEOLABX_DCAPE_ENGINE", "python").lower()
+    native = engine in ("cpp", "cpp-column")
+    # Preserve stored float32 views; native promotes only one column at a time.
+    pressure = np.asarray(pressure_hpa, dtype=None if native else float)
+    temperature = np.asarray(environmental_temperature_k, dtype=None if native else float)
+    dewpoint = np.asarray(environmental_dewpoint_k, dtype=None if native else float)
+    height = np.asarray(height_m, dtype=None if native else float)
+    if native:
+        from server.services._dcape_native import source
+        values = source(pressure, temperature, dewpoint, height)
+    elif engine == "python":
+        dewpoint = np.minimum(dewpoint, temperature)
+        values = _dcape_source_python(pressure, temperature, dewpoint, height)
+    else:
+        raise ValueError("METEOLABX_DCAPE_ENGINE debe ser python, cpp o cpp-column")
+    (source_base_index, source_pressure, source_temperature,
+     source_dewpoint, source_height) = values
+    # Experimental scalar convergence: independent of stripe partitioning.
+    thermo = sharppy_thermo
+    if engine == "cpp-column":
+        from server.services import _dcape_native as thermo
+    surface_pressure = pressure[0]
+    any_layer = source_base_index >= 0
+    if thermo is not None:
         sharp_valid = (
             any_layer
             & np.isfinite(source_pressure)
@@ -946,7 +987,7 @@ def downdraft_cape(
             & np.isfinite(source_dewpoint)
         )
         sharp_wetbulb = np.asarray(
-            sharppy_thermo.wetbulb(
+            thermo.wetbulb(
                 np.where(sharp_valid, source_pressure, 1000.0),
                 np.where(sharp_valid, source_temperature - 273.15, 0.0),
                 np.where(sharp_valid, source_dewpoint - 273.15, 0.0),
@@ -983,7 +1024,7 @@ def downdraft_cape(
             & np.isfinite(height[index])
         )
         target_pressure = np.where(active, pressure[index], parcel_pressure)
-        if sharppy_thermo is not None:
+        if thermo is not None:
             sharp_valid = (
                 active
                 & np.isfinite(parcel_pressure)
@@ -991,7 +1032,7 @@ def downdraft_cape(
                 & np.isfinite(target_pressure)
             )
             sharp_lifted = np.asarray(
-                sharppy_thermo.wetlift(
+                thermo.wetlift(
                     np.where(sharp_valid, parcel_pressure, 1000.0),
                     np.where(sharp_valid, parcel_temperature_c, 0.0),
                     np.where(sharp_valid, target_pressure, 1000.0),
@@ -1013,7 +1054,7 @@ def downdraft_cape(
                 ),
                 parcel_temperature_c + 273.15,
             ) - 273.15
-        target_environment_c = temperature[index] - 273.15
+        target_environment_c = np.asarray(temperature[index], dtype=float) - 273.15
         target_height = height[index]
         deficit_start = (parcel_temperature_c - environment_temperature_c) / (
             environment_temperature_c + 273.15
@@ -1377,10 +1418,18 @@ def significant_hail_parameter_sharppy(
 ) -> np.ndarray:
     """Ejecuta ``sharppy.sharptab.params.ship`` celda a celda.
 
-    SHARPpy no vectoriza esta función, pero su coste (~1–2 s para toda la
-    rejilla) es asumible durante el precálculo de cada hora. Si la dependencia
-    opcional no está disponible, conserva la formulación vectorizada idéntica.
+    El coste Python escala con las celdas válidas (dos objetos por celda).
+    METEOLABX_SHIP_ENGINE=cpp activa la traducción nativa del adaptador y
+    SHARPpy, incluidas sus conversiones de humedad y viento. Sin SHARPpy,
+    el modo Python conserva la fórmula vectorizada alternativa existente.
     """
+    engine = os.getenv("METEOLABX_SHIP_ENGINE", "python").lower()
+    if engine == "cpp":
+        from server.services._dcape_native import ship
+        return np.asarray(ship(mucape, mu_mixing_ratio_gkg, lapse_rate_700_500_ckm,
+                               temperature_500_c, shear_surface_6km_ms, freezing_level_agl_m))
+    if engine != "python":
+        raise ValueError("METEOLABX_SHIP_ENGINE debe ser python o cpp")
     arrays = np.broadcast_arrays(
         np.asarray(mucape, dtype=float),
         np.asarray(mu_mixing_ratio_gkg, dtype=float),

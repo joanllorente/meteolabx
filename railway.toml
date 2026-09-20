@@ -5,7 +5,16 @@
 builder = "RAILPACK"
 # La wheel oficial de SHARPpy funciona en Python 3.14, pero su metadata fija
 # NumPy 1.15. Evitamos ese pin obsoleto e instalamos solo `sharptab` y su código.
-buildCommand = "python -m pip install --no-deps SHARPpy==1.4.0a5"
+#
+# Después se compila el núcleo opcional en C++ (native/dcape.cpp), que reúne
+# el DCAPE, el SHIP y las parcelas. El binario es específico de la plataforma
+# y de la versión de Python —lleva el ABI en el nombre—, así que no viaja en
+# Git y hay que generarlo aquí, en la misma imagen que luego lo importa.
+# pybind11 llega por requirements.txt, que Railpack instala antes de esta
+# fase. Compilarlo no activa nada: cada motor lo elige su variable
+# (METEOLABX_DCAPE_ENGINE, _SHIP_ENGINE, _PARCEL_ENGINE), y todas siguen en
+# `python` mientras no se cambien en el servicio.
+buildCommand = "python -m pip install --no-deps SHARPpy==1.4.0a5 && python scripts/build_dcape_native.py"
 
 [deploy]
 startCommand = "bash scripts/start_web.sh"

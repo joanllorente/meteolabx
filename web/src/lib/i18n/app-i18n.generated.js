@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.1.0",
+  "app_version": "2.1.1",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -506,6 +506,12 @@ export default {
         "Afegit l’idioma alemany.",
         "MeteoLabX funciona ara completament com a Progressive Web App (PWA) i es pot instal·lar com a aplicació en dispositius compatibles."
       ],
+      "release_211_improvements": [
+        "Millorada la detecció dels eixos de vaguada.",
+        "Millorada la detecció dels centres de pressió.",
+        "Millorat el traçat de les isòbares.",
+        "Millorades les línies de corrent del vent."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -614,6 +620,12 @@ export default {
         "Neue Windrose für Böen.",
         "Deutsch als neue Sprache.",
         "MeteoLabX funktioniert jetzt vollständig als Progressive Web App (PWA) und lässt sich auf kompatiblen Geräten als App installieren."
+      ],
+      "release_211_improvements": [
+        "Verbesserte Erkennung von Trogachsen.",
+        "Verbesserte Erkennung von Druckzentren.",
+        "Verbesserte Darstellung der Isobaren.",
+        "Verbesserte Windstromlinien."
       ],
       "sources": "Quellen",
       "unaffiliated": "Nicht verbunden",
@@ -724,6 +736,12 @@ export default {
         "Added the German language.",
         "MeteoLabX now works fully as a Progressive Web App (PWA) and can be installed as an app on compatible devices."
       ],
+      "release_211_improvements": [
+        "Improved detection of trough axes.",
+        "Improved detection of pressure centres.",
+        "Improved isobar rendering.",
+        "Improved wind streamlines."
+      ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
       "version": "Version {version}",
@@ -832,6 +850,12 @@ export default {
         "Añadida una nueva rosa de vientos para rachas.",
         "Añadido el idioma alemán.",
         "MeteoLabX funciona ahora completamente como Progressive Web App (PWA) y puede instalarse como aplicación en dispositivos compatibles."
+      ],
+      "release_211_improvements": [
+        "Mejorada la detección de los ejes de vaguada.",
+        "Mejorada la detección de los centros de presión.",
+        "Mejorado el trazado de las isobaras.",
+        "Mejoradas las líneas de corriente del viento."
       ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
@@ -942,6 +966,12 @@ export default {
         "Ajout de la langue allemande.",
         "MeteoLabX fonctionne désormais pleinement comme Progressive Web App (PWA) et peut être installée comme application sur les appareils compatibles."
       ],
+      "release_211_improvements": [
+        "Détection améliorée des axes de talweg.",
+        "Détection améliorée des centres de pression.",
+        "Tracé amélioré des isobares.",
+        "Lignes de courant du vent améliorées."
+      ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
       "version": "Version {version}",
@@ -1051,6 +1081,12 @@ export default {
         "Aggiunta la lingua tedesca.",
         "MeteoLabX ora funziona completamente come Progressive Web App (PWA) e può essere installata come app sui dispositivi compatibili."
       ],
+      "release_211_improvements": [
+        "Migliorato il rilevamento degli assi di saccatura.",
+        "Migliorato il rilevamento dei centri di pressione.",
+        "Migliorato il tracciamento delle isobare.",
+        "Migliorate le linee di flusso del vento."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -1159,6 +1195,12 @@ export default {
         "Adicionada uma nova rosa dos ventos para rajadas.",
         "Adicionado o idioma alemão.",
         "O MeteoLabX funciona agora completamente como Progressive Web App (PWA) e pode ser instalado como aplicação em dispositivos compatíveis."
+      ],
+      "release_211_improvements": [
+        "Melhorada a deteção dos eixos de vaguada.",
+        "Melhorada a deteção dos centros de pressão.",
+        "Melhorado o traçado das isóbaras.",
+        "Melhoradas as linhas de corrente do vento."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -2464,6 +2506,7 @@ export default {
     }
   },
   "releases": [
+    "211",
     "210",
     "203",
     "202",

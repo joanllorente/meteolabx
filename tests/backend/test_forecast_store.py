@@ -1723,6 +1723,11 @@ def test_the_worker_records_the_final_total_of_every_map():
 
 def _overlay_de(contenido: bytes) -> np.ndarray:
     """Matriz `overlay` de una rejilla serializada, como la lee el visor."""
+    return _matriz_de(contenido, "overlay")
+
+
+def _matriz_de(contenido: bytes, nombre: str) -> np.ndarray:
+    """Una matriz de una rejilla serializada, como la lee el visor."""
     import numpy as np
 
     largo = struct.unpack("<I", contenido[:4])[0]
@@ -1730,7 +1735,7 @@ def _overlay_de(contenido: bytes) -> np.ndarray:
     alto, ancho = int(cabecera["height"]), int(cabecera["width"])
     plano = alto * ancho
     nombres = [array["name"] for array in cabecera["arrays"]]
-    indice = nombres.index("overlay")
+    indice = nombres.index(nombre)
     inicio = 4 + largo + indice * plano * 2
     altos = np.frombuffer(contenido, dtype="u1", count=plano, offset=inicio)
     bajos = np.frombuffer(contenido, dtype="u1", count=plano, offset=inicio + plano)
@@ -1787,3 +1792,47 @@ def test_mslp_keeps_its_domain_where_theta_e_is_underground(monkeypatch, propia)
 
 def test_the_theta_e_map_declares_its_own_pressure_domain():
     assert server_arome.PRODUCTS["mslp-theta-e-850"]["overlay_own_mask"] is True
+
+
+def test_the_lfc_map_keeps_the_surface_wind_where_there_is_no_free_convection(monkeypatch):
+    """El viento de 10 m del mapa del NCL no se recorta con el hueco del campo.
+
+    La parcela no tiene nivel de convección libre en casi ningún sitio con un
+    anticiclón encima, así que recortar el viento con esa máscara dejaba las
+    líneas de corriente hechas trozos justo donde hay que mirar si convergen.
+    """
+    import numpy as np
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds
+
+    from server.services.arome_forecast import _serialize_grid
+    from server.services.arome_wcs import RasterField
+
+    assert server_arome.PRODUCTS["vv-lfc"]["vectors_own_mask"] is True
+    monkeypatch.setattr(server_arome, "forecast_calculation_scope", lambda: "model")
+
+    campo_valores = np.full((8, 10), 2.0)
+    campo_valores[2:6, 3:7] = np.nan     # sin NCL
+    viento_u = np.full((8, 10), 4.0)
+    viento_v = np.full((8, 10), -3.0)
+    campo = RasterField(
+        campo_valores, from_bounds(0, 40, 3, 43, 10, 8), CRS.from_epsg(4326), (0, 40, 3, 43), "m/s"
+    )
+    campo.vector_u = viento_u
+    campo.vector_v = viento_v
+    config = {"vmin": -5.0, "vmax": 10.0, "unit": "m/s", "vectors_own_mask": True}
+    cabeceras = {
+        "X-AROME-Run": "2026-09-18T12:00:00Z",
+        "X-AROME-Valid-Time": "2026-09-19T14:00:00Z",
+        "X-AROME-Max": "2.000",
+        "X-AROME-Unit": "m/s",
+    }
+
+    contenido = _serialize_grid("vv-lfc", campo, config, cabeceras)
+    largo = struct.unpack("<I", contenido[:4])[0]
+    nombres = [array["name"] for array in json.loads(contenido[4:4 + largo])["arrays"]]
+
+    assert "u" in nombres and "v" in nombres
+    componente = _matriz_de(contenido, "u")
+    assert np.isfinite(componente[2:6, 3:7]).all(), "el viento se ha ido con el hueco del campo"
+    assert np.abs(componente[2:6, 3:7] - 4.0).max() < 0.05

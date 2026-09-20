@@ -1,0 +1,56 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "small": {
+    "runs": [
+      {
+        "engine": "python",
+        "shape": [
+          25,
+          64,
+          256
+        ],
+        "seconds": 0.9453928339935374,
+        "peak_rss_bytes": 100843520
+      },
+      {
+        "engine": "cpp",
+        "shape": [
+          25,
+          64,
+          256
+        ],
+        "seconds": 0.4936919999890961,
+        "peak_rss_bytes": 65372160
+      }
+    ],
+    "max_abs_difference": 0.0,
+    "speedup": 1.9149446092187392
+  },
+  "production_band_shape": {
+    "runs": [
+      {
+        "engine": "python",
+        "shape": [
+          25,
+          128,
+          1121
+        ],
+        "seconds": 8.270329582999693,
+        "peak_rss_bytes": 553517056
+      },
+      {
+        "engine": "cpp",
+        "shape": [
+          25,
+          128,
+          1121
+        ],
+        "seconds": 4.313263916003052,
+        "peak_rss_bytes": 265551872
+      }
+    ],
+    "max_abs_difference": 0.0,
+    "speedup": 1.9174179331608145
+  },
+  "note": "Synthetic profiles; full DCAPE includes existing Python/SHARPpy descent. Single run per engine in a fresh process."
+}

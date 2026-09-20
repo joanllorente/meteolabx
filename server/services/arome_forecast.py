@@ -69,7 +69,6 @@ from server.services.arome_wcs import (
     _load_forecast_regions_geojson,
     _mask_to_catalonia,
     _resolved_prefixes,
-    _wait_for_api_request_slot,
     forecast_calculation_scope,
 )
 
@@ -149,6 +148,10 @@ PRODUCTS = {
         "kind": "convective",
         "diagnostic": "vv_lfc",
         "vmin": -5.0, "vmax": 10.0, "unit": "m/s",
+        # El vector es el viento de 10 m y sopla en todo el dominio, aunque la
+        # parcela no tenga nivel de convección libre y el campo en color se
+        # quede en blanco.
+        "vectors_own_mask": True,
     },
     "srh-01": {
         "kind": "convective",
@@ -812,15 +815,6 @@ def _pressure_levels(client, catalog, prefix: str, run: datetime) -> list[float]
     return sorted((value for value in levels if 100.0 <= value <= 1_000.0), reverse=True)
 
 
-def _wait_for_profile_request_slot() -> None:
-    """Limita globalmente WCS incluso con varios perfiles en procesos distintos."""
-    interval = max(
-        0.1,
-        float(os.getenv("METEOLABX_AROME_PROFILE_REQUEST_INTERVAL_S", "1.25")),
-    )
-    _wait_for_api_request_slot(interval)
-
-
 # Filas de rejilla que se diagnostican de una vez. El perfil completo ocupa
 # ~1 GB y los temporales del cálculo varias veces más: trocear por bandas
 # recorta el pico sin cambiar el resultado, porque cada celda es independiente
@@ -836,16 +830,13 @@ CONVECTIVE_THREADS = max(
 CONVECTIVE_STRIPE_ROWS = int(
     os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS", "128")
 )
-# DCAPE es el único que no tolera bandas estrechas: su selección de capa de
-# origen a través de SHARPpy cambia según cómo se particione la rejilla, y
-# sólo por encima de ~120 filas devuelve lo mismo que la rejilla entera. De ahí
-# las 128 de arriba: comprobado sobre 384x1121, da el mismo DCAPE bit a bit que
-# con 192 y ahorra 435 MB por perfil, que es lo que más aprieta cuando hay
-# varios a la vez. Los
-# otros trece son celda a celda, así que cuando DCAPE queda fuera —su propio
-# turno lo calcula aparte— se puede bajar mucho: medido sobre una rejilla de
-# 384x1121, pasar de 192 a 64 filas recorta 1.089 MB del pico en el mismo
-# tiempo y con resultados idénticos hasta el último bit.
+# El satlift vectorial de SHARPpy usa convergencia global: el descenso de
+# DCAPE puede cambiar al particionar la rejilla. La selección de capa no es
+# la causa. Las 128 filas coinciden con 192 en el caso medido de 384x1121
+# (435 MB menos por perfil), pero no garantizan invariancia en otras rejillas.
+# El motor experimental cpp-column converge por celda; validar perfiles
+# reales antes de reducir este valor. Los demás diagnósticos son celda a
+# celda: sin DCAPE, pasar de 192 a 64 filas ahorró 1.089 MB en esa medición.
 CONVECTIVE_STRIPE_ROWS_WITHOUT_DCAPE = int(
     os.getenv("METEOLABX_FORECAST_CONVECTIVE_STRIPE_ROWS_NO_DCAPE", "64")
 )
@@ -891,13 +882,18 @@ def _convective_outputs(
     12,3. El resultado es idéntico; lo que se ahorra es el trabajo repetido.
     """
     shape = terrain.shape
-    # Aquí es donde la banda deja de ser almacenamiento y pasa a ser cálculo.
-    pressure = _as_float64(pressure)
-    temperature = _as_float64(temperature)
-    dewpoint = _as_float64(dewpoint)
-    u_profile = _as_float64(u_profile)
-    v_profile = _as_float64(v_profile)
-    vertical_velocity = _as_float64(vertical_velocity)
+    # The dedicated native DCAPE pass reads stored profiles directly. Height
+    # calculation owns temporary promotions; the rest of the diagnostics keep
+    # their existing double-precision inputs.
+    native_dcape_only = only_dcape and os.getenv("METEOLABX_DCAPE_ENGINE", "python").lower() in ("cpp", "cpp-column")
+    if not native_dcape_only:
+        pressure = _as_float64(pressure)
+        temperature = _as_float64(temperature)
+        dewpoint = _as_float64(dewpoint)
+    if not only_dcape:
+        u_profile = _as_float64(u_profile)
+        v_profile = _as_float64(v_profile)
+        vertical_velocity = _as_float64(vertical_velocity)
     # La altura la recalcula también la helicidad del ascenso, que trocea con
     # halo y no puede reutilizar ésta. Son 54 ms por banda: compartirla
     # obligaría a unificar dos troceados distintos para ahorrar 0,3 s de los
@@ -1404,6 +1400,38 @@ def _packages_available() -> bool:
     }
 
 
+def _native_field_from_cached_ip1(product_id, run, valid_time, *, overlay=False):
+    """Read one native map only when IP1 is already on disk; never download."""
+    fields = {
+        "temperature-850": ("temperature", 850.0, "C"),
+        "temperature-500": ("temperature", 500.0, "C"),
+        "relative-humidity-700": ("relative_humidity", 700.0, "%"),
+    }
+    if product_id not in fields or not _packages_available():
+        return None
+    from server.services.arome_packages import _package_path, block_range
+    from rasterio.errors import RasterioError
+    if not package_ready("IP1", run, valid_time):
+        return None
+    element, level, units = fields[product_id]
+    if overlay:
+        if product_id not in ("temperature-850", "temperature-500"):
+            return None
+        element, units = "geopotential", "m^2/s^2"
+    try:
+        path = _package_path("IP1", run, block_range(run, valid_time))
+        values, geometry = read_isobaric_profile(path, valid_time, [level], (element,))
+        data = values.get(element, {}).get(level)
+        if data is None:
+            return None
+        field = RasterField(data, *geometry, units)
+    except (AromePackageError, OSError, RasterioError) as exc:
+        logger.info("IP1 local no utilizable para %s; se usa WCS: %s", product_id, exc)
+        return None
+    logger.info("Mapa %s %s servido desde IP1 local.", product_id, valid_time.isoformat())
+    return field
+
+
 def _isobaric_fields_from_package(
     reference: RasterField,
     run: datetime,
@@ -1753,24 +1781,20 @@ def _convective_frames(
 
     fetched: dict[tuple[str, float | None], RasterField | None] = {}
     tasks: dict[Any, tuple[str, float | None]] = {}
-    def throttled(function, *args):
-        # La API ciblée WCS limita campos 2D y aplica cuota. Espaciar los
-        # inicios evita ráfagas HTTP 429 mientras se prepara el backend de
-        # paquetes GRIB2 multimensaje para producción.
-        _wait_for_profile_request_slot()
-        return function(*args)
-
+    # GetCoverage reserves its global rate-limit slot inside the HTTP client,
+    # on each actual attempt. Do not reserve another slot here: that doubled
+    # the wait and also throttled requests already served from cache.
     with ThreadPoolExecutor(max_workers=4, thread_name_prefix="arome-profile") as executor:
         pendientes = ("terrain",) if surface_package else (
             "dewpoint", "pressure", "u", "v", "terrain"
         )
         for name in pendientes:
-            tasks[executor.submit(throttled, fetch_surface, name)] = (name, None)
+            tasks[executor.submit(fetch_surface, name)] = (name, None)
         for level_hpa in levels:
             for variable in level_variables:
                 if variable == "dewpoint" and package_dewpoint and level_hpa in package_dewpoint:
                     continue
-                tasks[executor.submit(throttled, fetch_level, variable, level_hpa)] = (variable, level_hpa)
+                tasks[executor.submit(fetch_level, variable, level_hpa)] = (variable, level_hpa)
         for future in as_completed(tasks):
             fetched[tasks[future]] = future.result()
     # Future conserva su resultado: vaciar fetched no bastaba para liberar
@@ -2210,15 +2234,17 @@ def _computed_frame(
             field_times = _complete_hourly_times(run, valid_time, times)
             if not field_times:
                 field_times = [valid_time]
-        field = client.get_field(
-            catalog,
-            prefixes["field"],
-            run,
-            field_times[0],
-            float(native_level) if native_level is not None else None,
-            str(native_vertical_kind) if native_vertical_kind else None,
-            period=str(config["period"]) if config.get("period") else None,
-        )
+        field = _native_field_from_cached_ip1(product_id, run, field_times[0])
+        if field is None:
+            field = client.get_field(
+                catalog,
+                prefixes["field"],
+                run,
+                field_times[0],
+                float(native_level) if native_level is not None else None,
+                str(native_vertical_kind) if native_vertical_kind else None,
+                period=str(config["period"]) if config.get("period") else None,
+            )
         if config.get("accumulate_from_run"):
             from server.services.arome_wcs import _align
 
@@ -2253,14 +2279,18 @@ def _computed_frame(
             from server.services.arome_wcs import _align, _height_from_geopotential
 
             try:
-                overlay_field = client.get_field(
-                    catalog,
-                    prefixes["overlay"],
-                    run,
-                    field_times[0],
-                    float(native_level) if native_level is not None else None,
-                    str(native_vertical_kind) if native_vertical_kind else None,
+                overlay_field = _native_field_from_cached_ip1(
+                    product_id, run, field_times[0], overlay=True
                 )
+                if overlay_field is None:
+                    overlay_field = client.get_field(
+                        catalog,
+                        prefixes["overlay"],
+                        run,
+                        field_times[0],
+                        float(native_level) if native_level is not None else None,
+                        str(native_vertical_kind) if native_vertical_kind else None,
+                    )
             except AromeError as error:
                 logger.info(
                     "Sin geopotencial para %s %s, el mapa sale sin isohipsas: %s",
@@ -2536,8 +2566,18 @@ def _serialize_grid(
     arrays = [values]
     has_vectors = field.vector_u is not None and field.vector_v is not None
     if has_vectors:
-        vector_u = np.where(inside, field.vector_u, np.nan).astype("<f4")
-        vector_v = np.where(inside, field.vector_v, np.nan).astype("<f4")
+        # El viento de 10 m existe aunque el campo en color no: en el mapa del
+        # NCL, la mayor parte del dominio se queda sin dato porque la parcela
+        # no tiene nivel de convección libre, y recortarlo con esa máscara
+        # dejaba las líneas de corriente hechas trozos justo donde interesa
+        # ver si convergen.
+        vectors_inside = inside
+        if config.get("vectors_own_mask") and calculation_scope != "catalonia":
+            vectors_inside = np.isfinite(
+                np.asarray(field.vector_u, dtype=float)
+            ) & np.isfinite(np.asarray(field.vector_v, dtype=float))
+        vector_u = np.where(vectors_inside, field.vector_u, np.nan).astype("<f4")
+        vector_v = np.where(vectors_inside, field.vector_v, np.nan).astype("<f4")
         arrays.extend((vector_u, vector_v))
     has_overlay = field.overlay is not None
     if has_overlay:
@@ -2572,6 +2612,7 @@ def _serialize_grid(
         vector_v=arrays[2] if has_vectors else None,
         overlay=arrays[-1] if has_overlay else None,
         overlay_unit=field.overlay_units if has_overlay else None,
+        vectors_own_mask=bool(config.get("vectors_own_mask")) and calculation_scope != "catalonia",
         overlay_own_mask=bool(config.get("overlay_own_mask")) and calculation_scope != "catalonia",
         metadata={
             # El máximo sale de la cabecera HTTP, que ya lo calculó sobre el

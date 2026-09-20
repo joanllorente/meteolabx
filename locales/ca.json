@@ -168,6 +168,12 @@
     ],
     "privacy_contact_title": "Contacte",
     "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_211_improvements": [
+      "Millorada la detecció dels eixos de vaguada.",
+      "Millorada la detecció dels centres de pressió.",
+      "Millorat el traçat de les isòbares.",
+      "Millorades les línies de corrent del vent."
+    ],
     "release_210_improvements": [
       "Afegits nous proveïdors oficials de Lituània, Polònia, Dinamarca i Suïssa.",
       "La cerca per ubicació ara recorda les darreres estacions visitades.",

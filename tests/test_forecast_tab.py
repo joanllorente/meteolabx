@@ -191,10 +191,13 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "precipitationPalette" in grid
     assert "Math.log1p" in grid
     assert "makeStreamlinePaths" in grid
-    assert "integrateStream" in grid
+    # El trazado vive en su módulo: reparto a distancia pareja, no semillas en
+    # una malla fija que se pisan entre ellas.
+    assert "evenlySpacedStreamlines" in grid
+    assert "streamlineArrows" in grid
     # Los glifos se calculan sobre el encuadre asentado, no sobre el gesto en
     # curso: integrarlos en cada pointermove bloqueaba el hilo principal.
-    assert "baseSeedStep / viewZoom" in grid
+    assert "/ viewZoom" in grid
     assert "visibleSourceBounds()" in grid
     assert "class=\"streamline\"" in grid
     assert "class=\"stream-particle\"" in grid

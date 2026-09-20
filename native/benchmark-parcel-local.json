@@ -1,0 +1,38 @@
+{
+  "source": "synthetic",
+  "stage": "parcel",
+  "runs": [
+    {
+      "engine": "python",
+      "shape": [
+        29,
+        128,
+        1121
+      ],
+      "loaded_peak_rss_bytes": 104103936,
+      "peak_rss_bytes": 979566592,
+      "seconds": 1.779391874995781
+    },
+    {
+      "engine": "cpp",
+      "shape": [
+        29,
+        128,
+        1121
+      ],
+      "loaded_peak_rss_bytes": 104120320,
+      "peak_rss_bytes": 116981760,
+      "seconds": 1.6018980420194566
+    }
+  ],
+  "max_abs_differences": {
+    "cape": 0.0,
+    "cin": 0.0,
+    "li500": 0.0,
+    "equilibrium_height_m": 0.0,
+    "equilibrium_pressure_hpa": 0.0,
+    "lfc_height_m": 0.0,
+    "lfc_pressure_hpa": 0.0,
+    "lcl_height_m": 0.0
+  }
+}

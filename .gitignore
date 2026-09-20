@@ -31,3 +31,7 @@ static/temperature_field_*.png
 static/wind_field_*.png
 static/precipitation_field_*.png
 static/map_field_assets.json
+
+# Extensión DCAPE compilada para cada plataforma
+server/services/_dcape_native*.so
+server/services/_dcape_native*.pyd

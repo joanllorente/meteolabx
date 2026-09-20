@@ -1,0 +1,53 @@
+{
+  "source": "synthetic",
+  "stage": "all",
+  "runs": [
+    {
+      "engine": "python",
+      "shape": [
+        29,
+        128,
+        1121
+      ],
+      "loaded_peak_rss_bytes": 136347648,
+      "peak_rss_bytes": 1760002048,
+      "seconds": 8.422315333009465
+    },
+    {
+      "engine": "cpp",
+      "shape": [
+        29,
+        128,
+        1121
+      ],
+      "loaded_peak_rss_bytes": 136544256,
+      "peak_rss_bytes": 984596480,
+      "seconds": 7.565014457999496
+    }
+  ],
+  "max_abs_differences": {
+    "mucape": 0.0,
+    "muli": 0.0,
+    "mlcape": 0.0,
+    "mlli": 0.0,
+    "sbcape": 0.0,
+    "sbli": 0.0,
+    "dcape": null,
+    "cell_u": 0.0,
+    "cell_v": 0.0,
+    "cell_speed": 0.0,
+    "ebwd": 0.0,
+    "ebwd_u": 0.0,
+    "ebwd_v": 0.0,
+    "ship": 0.0,
+    "srh_01": 0.0,
+    "srh_03": 0.0,
+    "esrh": 0.0,
+    "scp": null,
+    "stp": null,
+    "vv_lfc": 0.0,
+    "ml_lfc_height": 0.0,
+    "bunkers_u": 0.0,
+    "bunkers_v": 0.0
+  }
+}
