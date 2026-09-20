@@ -142,6 +142,35 @@ def test_record_error_and_summary(tmp_path):
     kinds = {k["kind"]: k for k in summary["error_kinds"]}
     assert kinds["timeout"]["total"] == 2
     assert kinds["unauthorized"]["total"] == 1
+    # El panel pregunta «¿hay algo fallando ahora?»: cada tipo trae su cuenta
+    # del día, no solo la del mes.
+    assert kinds["timeout"]["d1"] == 2
+    assert kinds["unauthorized"]["d1"] == 1
+
+
+def test_los_tipos_de_error_separan_lo_de_hoy_de_lo_antiguo(tmp_path):
+    """Un fallo de hace tres semanas no puede leerse como uno de ahora."""
+    import sqlite3
+    import time
+
+    settings = _settings(tmp_path)
+    usage_stats.record_error("AEMET", "0076", error_kind="timeout", settings=settings)
+    with sqlite3.connect(settings.usage_stats_path) as connection:
+        connection.execute(
+            "INSERT INTO station_errors(provider, station_id, name, error_kind,"
+            " status_code, epoch) VALUES (?, ?, ?, ?, ?, ?)",
+            ("AEMET", "0076", "BCN", "network", 0, int(time.time()) - 10 * 24 * 3600),
+        )
+
+    kinds = {k["kind"]: k for k in usage_stats.visit_summary(settings=settings)["error_kinds"]}
+    assert kinds["timeout"]["d1"] == 1
+    assert kinds["network"]["d1"] == 0
+    assert kinds["network"]["d30"] == 1
+
+    detalle = usage_stats.station_detail("AEMET", "0076", settings=settings)
+    tipos = {t["kind"]: t for t in detalle["error_kinds"]}
+    assert tipos["timeout"]["d1"] == 1
+    assert tipos["network"]["d1"] == 0
 
 
 def test_error_table_added_without_wiping_existing_db(tmp_path):

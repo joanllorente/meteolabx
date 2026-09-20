@@ -135,7 +135,9 @@
 
   // Nombres legibles de las secciones. El identificador que se guarda es
   // estable (y así debe seguir, para no partir el histórico), pero leer
-  // «forecast.streamlit» en una tabla no dice gran cosa.
+  // «map.precipitation» en una tabla no dice gran cosa. Un identificador sin
+  // nombre aquí se enseña tal cual, que es lo que toca con los históricos:
+  // «forecast.streamlit» dejó de registrarse al retirar aquella interfaz.
   const NOMBRES_SECCION = {
     observation: 'Observación',
     trends: 'Tendencias',
@@ -145,11 +147,17 @@
     'map.wind': 'Mapa · viento',
     'map.precipitation': 'Mapa · precipitación',
     'forecast.app': 'Predicción · desde la web',
-    'forecast.streamlit': 'Predicción · desde Streamlit (retirado)',
     'forecast.direct': 'Predicción · entrada directa',
     ranking: 'Ranking'
   };
   const nombreSeccion = (id) => NOMBRES_SECCION[id] || id;
+
+  // La app de Streamlit se retiró con la 2.0.0 y su sección no puede volver a
+  // crecer. Su fila solo servía para hacer mirar dos veces una cifra congelada,
+  // así que no se enseña; lo registrado en su día sigue en la base y en la API,
+  // y sigue contando en los totales de arriba.
+  const SECCIONES_RETIRADAS = new Set(['forecast.streamlit']);
+  const secciones = $derived((data?.sections || []).filter((f) => !SECCIONES_RETIRADAS.has(f.section)));
 
   // Columnas de la tabla de estaciones: etiqueta, valor con el que se ordena y
   // si es texto (se ordena alfabéticamente y empieza ascendente) o número.
@@ -160,7 +168,7 @@
     { clave: 'd7', etiqueta: '7 d', valor: (f) => f.d7 || 0 },
     { clave: 'd30', etiqueta: '30 d', valor: (f) => f.d30 || 0 },
     { clave: 'total', etiqueta: 'Total', valor: (f) => f.total || 0 },
-    { clave: 'errores', etiqueta: 'Errores (30 d)', valor: (f) => f.errors?.d30 || 0 },
+    { clave: 'errores', etiqueta: 'Errores (hoy)', valor: (f) => f.errors?.d1 || 0 },
     { clave: 'visita', etiqueta: 'Última visita', valor: (f) => f.last_epoch || 0 }
   ];
 
@@ -424,7 +432,7 @@
         ['30 días', data.totals.d30],
         ['Desde el inicio', data.totals.total],
         ['Estaciones', data.totals.stations],
-        ['Errores (30 d)', data.totals.errors?.d30]
+        ['Errores (hoy)', data.totals.errors?.d1]
       ] as [etiqueta, valor] (etiqueta)}
         <article><span>{etiqueta}</span><strong>{numero(valor)}</strong></article>
       {/each}
@@ -513,7 +521,7 @@
     <table>
       <thead><tr><th>Sección</th><th>Hoy</th><th>7 d</th><th>30 d</th><th>Total</th><th>Última</th></tr></thead>
       <tbody>
-        {#each data.sections as fila (fila.section)}
+        {#each secciones as fila (fila.section)}
           <tr>
             <td title={fila.section}>{nombreSeccion(fila.section)}</td>
             <td class="n">{numero(fila.d1)}</td>
@@ -761,10 +769,15 @@
     {#if data.error_kinds?.length}
       <h2>Tipos de error</h2>
       <table>
-        <thead><tr><th>Tipo</th><th>30 d</th><th>Total</th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Hoy</th><th>30 d</th><th>Total</th></tr></thead>
         <tbody>
           {#each data.error_kinds as fila (fila.kind)}
-            <tr><td>{fila.kind}</td><td class="n">{numero(fila.d30)}</td><td class="n">{numero(fila.total)}</td></tr>
+            <tr>
+              <td>{fila.kind}</td>
+              <td class="n" class:mal={fila.d1 > 0}>{numero(fila.d1)}</td>
+              <td class="n">{numero(fila.d30)}</td>
+              <td class="n">{numero(fila.total)}</td>
+            </tr>
           {/each}
         </tbody>
       </table>
@@ -807,7 +820,7 @@
             <td class="n">{numero(fila.d7)}</td>
             <td class="n">{numero(fila.d30)}</td>
             <td class="n">{numero(fila.total)}</td>
-            <td class="n" class:mal={fila.errors?.d30 > 0}>{numero(fila.errors?.d30)}</td>
+            <td class="n" class:mal={fila.errors?.d1 > 0}>{numero(fila.errors?.d1)}</td>
             <td class="fecha">{fecha(fila.last_epoch)}</td>
           </tr>
           {#if abierta === clave}
@@ -931,11 +944,12 @@
                         <h3>Errores por tipo</h3>
                         {#if d.error_kinds?.length}
                           <table>
-                            <thead><tr><th>Tipo</th><th>30 d</th><th>Total</th><th>Último</th></tr></thead>
+                            <thead><tr><th>Tipo</th><th>Hoy</th><th>30 d</th><th>Total</th><th>Último</th></tr></thead>
                             <tbody>
                               {#each d.error_kinds as tipo (tipo.kind)}
                                 <tr>
                                   <td>{tipo.kind}</td>
+                                  <td class="n" class:mal={tipo.d1 > 0}>{numero(tipo.d1)}</td>
                                   <td class="n">{numero(tipo.d30)}</td>
                                   <td class="n">{numero(tipo.total)}</td>
                                   <td class="fecha">{fecha(tipo.last_epoch)}</td>

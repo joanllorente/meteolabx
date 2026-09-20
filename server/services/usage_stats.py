@@ -798,12 +798,13 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
             """
             SELECT error_kind,
                    COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30
             FROM station_errors
             GROUP BY error_kind
             ORDER BY total DESC
             """,
-            (now - WINDOWS["d30"],),
+            (now - WINDOWS["d1"], now - WINDOWS["d30"],),
         ).fetchall()
         section_rows = connection.execute(
             """
@@ -1062,6 +1063,7 @@ def visit_summary(*, settings=None, limit: int = 500) -> Dict[str, Any]:
         "error_kinds": [
             {
                 "kind": row["error_kind"],
+                "d1": int(row["d1"] or 0),
                 "d30": int(row["d30"] or 0),
                 "total": int(row["total"] or 0),
             }
@@ -1155,6 +1157,7 @@ def station_detail(
             """
             SELECT error_kind,
                    COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
                    SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
                    MAX(epoch) AS last_epoch
             FROM station_errors
@@ -1162,7 +1165,7 @@ def station_detail(
             GROUP BY error_kind
             ORDER BY total DESC
             """,
-            (now - WINDOWS["d30"], *clave),
+            (now - WINDOWS["d1"], now - WINDOWS["d30"], *clave),
         ).fetchall()
         by_language_rows = connection.execute(
             """
@@ -1261,6 +1264,7 @@ def station_detail(
         "error_kinds": [
             {
                 "kind": str(row["error_kind"]),
+                "d1": int(row["d1"] or 0),
                 "d30": int(row["d30"] or 0),
                 "total": int(row["total"] or 0),
                 "last_epoch": int(row["last_epoch"] or 0),
