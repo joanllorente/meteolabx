@@ -300,7 +300,13 @@ def build_report(
 
     problemas: list[str] = []
     severidad = "ok"
-    if status != "complete":
+    # Una pasada con todos sus frames y sin un solo error está terminada,
+    # diga lo que diga la etiqueta. El estado lo fija el worker y ha llegado a
+    # quedarse en «publicando» por su cuenta: avisar entonces de que «no
+    # terminó» manda a mirar una pasada que está entera, que es la forma más
+    # rápida de que dejen de leerse estos correos.
+    terminada = status == "complete" or (percent >= 99.95 and total_errores == 0)
+    if not terminada:
         problemas.append(
             f"La pasada no llegó a completarse: sigue en «{status}» con {percent:.1f} % publicado."
         )
@@ -311,7 +317,7 @@ def build_report(
             + (f" (y {len(vacios) - 6} más)" if len(vacios) > 6 else "")
         )
         severidad = "fail"
-    if percent < COMPLETE_ENOUGH_PERCENT and status == "complete":
+    if percent < COMPLETE_ENOUGH_PERCENT and terminada:
         problemas.append(f"Publicado solo el {percent:.1f} % de los frames esperados.")
         severidad = "fail" if severidad == "fail" else "warn"
     if total_errores > TOLERATED_ERRORS:

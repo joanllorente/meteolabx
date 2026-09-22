@@ -809,6 +809,51 @@ def test_finished_and_failed_jobs_add_their_busy_time():
     assert manifiesto["progress"]["active_jobs"] == []
 
 
+def test_an_incomplete_run_says_what_it_is_waiting_for(caplog):
+    """Una pasada al 100 % que no se completa bloqueaba su informe en silencio."""
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    horas = [f"2026-09-2{2 + ((18 + h) // 24)}T{(18 + h) % 24:02d}:00:00Z" for h in range(52)]
+    manifiesto = {
+        "run": "2026-09-22T18:00:00Z",
+        # El catálogo llegó a +51 h, así que el horizonte no es el problema.
+        "expected_times": horas,
+        # Una hora que el catálogo anunció y el cálculo nunca llegó a tener:
+        # así se queda una pasada que el panel marca al 100 %.
+        "catalog_products": {"temperature-850": {"valid_times": horas}},
+        "products": {"temperature-850": {"available_times": horas[:-1]}},
+        "progress": {},
+    }
+    with caplog.at_level(logging.INFO, logger=trabajador.logger.name):
+        trabajador._finish_status(manifiesto)
+        trabajador._finish_status(manifiesto)
+
+    assert manifiesto["status"] == "publishing"
+    avisos = [r.getMessage() for r in caplog.records if "sigue en publicando" in r.getMessage()]
+    assert len(avisos) == 1, "el motivo se registra una vez, no en cada ciclo"
+    assert "faltan" in avisos[0]
+
+
+def _complete_report_manifest():
+    from datetime import datetime, timedelta, timezone
+    import scripts.forecast_worker as worker
+
+    run = datetime(2026, 8, 27, 6, tzinfo=timezone.utc)
+    hours = [(run + timedelta(hours=h)).isoformat().replace("+00:00", "Z")
+             for h in range(52)]
+    manifest = {"run": hours[0], "expected_times": hours,
+                "expected_hours": {"native": 52, "diagnostic": 36},
+                "status": "publishing", "catalog_products": {}, "products": {}}
+    for product in worker.PERSISTED_FORECAST_PRODUCTS:
+        start = worker._first_available_hour(product)
+        expected = hours[start:start + worker._expected_hours(manifest, product)]
+        manifest["catalog_products"][product] = {"valid_times": list(expected)}
+        manifest["products"][product] = {"available_times": list(expected)}
+    return manifest
+
+
 def test_the_run_report_sees_the_last_frame(monkeypatch):
     """El informe se emite con el progreso al día, no con el del ciclo anterior.
 
@@ -825,14 +870,9 @@ def test_the_run_report_sees_the_last_frame(monkeypatch):
         trabajador, "_emit_run_report",
         lambda store, m: bool(vistos.append(copy.deepcopy(m["progress"]))) or True,
     )
-    manifiesto = {
-        "run": "2026-08-27T06:00:00Z",
-        "status": "publishing",
-        "expected_times": ["2026-08-29T09:00:00Z"],
-        "products": {},
-        # Un recuento imposible: si el informe lo ve, es que llegó sin refrescar.
-        "progress": {"frames_available": -1, "frames_total": -1},
-    }
+    manifiesto = _complete_report_manifest()
+    # A stale counter must be refreshed before building the report.
+    manifiesto["progress"] = {"frames_available": -1, "frames_total": -1}
     trabajador._finish_status(manifiesto, store=object())
 
     assert manifiesto["status"] == "complete"
@@ -853,18 +893,11 @@ def test_the_summary_only_appears_once(caplog):
     # ese valor para no repetirlo.
     trabajador._log_run_summary = lambda m: bool(veces.append(m) or True)
     try:
-        manifiesto = {
-            "run": "2026-08-27T06:00:00Z",
-            "status": "publishing",
-            "expected_times": ["2026-08-29T09:00:00Z"],
-            "products": {},
-            "tier_timing": {"0": {"first_start": "2026-08-27T06:10:00Z",
-                                  "last_start": "2026-08-27T06:40:00Z", "jobs": 1}},
-        }
+        manifiesto = _complete_report_manifest()
         trabajador._finish_status(manifiesto)
         primera = len(veces)
         trabajador._finish_status(manifiesto)
-        assert len(veces) == primera, "no debe repetirse en ciclos posteriores"
+        assert len(veces) == primera == 1, "no debe repetirse en ciclos posteriores"
     finally:
         trabajador._log_run_summary = original
 
@@ -923,3 +956,50 @@ def test_grib_release_is_logged_only_when_it_changes(monkeypatch, caplog):
         "Caché de GRIB: no se libera, alguna pasada conservada no está completa.",
         "Caché de GRIB: se libera tras cada ciclo.",
     ]
+
+
+@pytest.mark.parametrize("product,missing", [("wind-level", 1), ("wind-level", 52),
+                                            ("ship", 1), ("precip-1h", 1)])
+def test_partial_catalog_does_not_close_or_send_report(monkeypatch, product, missing):
+    import copy
+    import scripts.forecast_worker as worker
+
+    manifest = _complete_report_manifest()
+    full_times = list(manifest["catalog_products"][product]["valid_times"])
+    manifest["catalog_products"][product]["valid_times"] = full_times[:-missing]
+    manifest["products"][product]["available_times"] = full_times[:-missing]
+    reports, summaries = [], []
+    monkeypatch.setattr(worker, "_record_downloads", lambda m: None)
+    monkeypatch.setattr(worker, "_log_run_summary", lambda m: summaries.append(m["run"]) or True)
+    monkeypatch.setattr(worker, "_emit_run_report",
+                        lambda store, m: reports.append(copy.deepcopy(m)) or True)
+    # Another product already reaches +51; the global horizon alone is insufficient.
+    worker._finish_status(manifest, store=object())
+    assert manifest["status"] == "publishing"
+    assert "catálogo aún no anuncia" in manifest["incomplete_reason"]
+    assert not reports and not summaries
+    # Publication alone is not enough: the newly announced frames need calculation.
+    manifest["catalog_products"][product]["valid_times"] = full_times
+    worker._finish_status(manifest, store=object())
+    assert manifest["status"] == "publishing"
+    assert not reports
+    manifest["products"][product]["available_times"] = full_times
+    worker._finish_status(manifest, store=object())
+    worker._finish_status(manifest, store=object())
+    assert manifest["status"] == "complete"
+    assert len(reports) == len(summaries) == 1
+    assert reports[0]["progress"]["frames_available"] == reports[0]["progress"]["frames_total"] == 1370
+
+
+def test_no_report_until_last_active_job_finishes(monkeypatch):
+    import scripts.forecast_worker as worker
+    manifest = _complete_report_manifest()
+    manifest["progress"] = {"active_jobs": [{"id": "still-finishing"}]}
+    reports = []
+    monkeypatch.setattr(worker, "_log_run_summary", lambda m: True)
+    monkeypatch.setattr(worker, "_emit_run_report", lambda *a: reports.append(True) or True)
+    worker._finish_status(manifest, store=object())
+    assert manifest["status"] == "publishing" and not reports
+    manifest["progress"]["active_jobs"] = []
+    worker._finish_status(manifest, store=object())
+    assert manifest["status"] == "complete" and reports == [True]

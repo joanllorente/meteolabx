@@ -3,6 +3,7 @@ import asyncio
 import ctypes
 import gc
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -125,6 +126,38 @@ def collect_and_trim():
     return collected, trimmed
 
 
+_snapshot = None
+
+
+def growth_by_source(limit=5):
+    """Qué líneas de código han pedido más memoria desde la vuelta anterior.
+
+    Solo con METEOLABX_MEMORY_TRACE=1, porque `tracemalloc` encarece cada
+    asignación. Las cachés están limitadas a 500 entradas, así que cuando la
+    API crece en gigas no es por guardar más cosas sino por guardarlas más
+    grandes, y el número de entradas no dice cuáles. Esto sí.
+    """
+    global _snapshot
+    if os.getenv('METEOLABX_MEMORY_TRACE', '').lower() not in ('1', 'true', 'yes'):
+        return None
+    import tracemalloc
+    if not tracemalloc.is_tracing():
+        tracemalloc.start(1)
+        _snapshot = tracemalloc.take_snapshot()
+        return 'trazando desde ahora'
+    actual = tracemalloc.take_snapshot()
+    previo, _snapshot = _snapshot, actual
+    if previo is None:
+        return 'trazando desde ahora'
+    crecimiento = [linea for linea in actual.compare_to(previo, 'lineno')
+                   if linea.size_diff > 0][:limit]
+    if not crecimiento:
+        return 'sin crecimiento medible'
+    return ' · '.join(
+        f'{linea.traceback[0].filename.split("/")[-1]}:{linea.traceback[0].lineno} '
+        f'+{linea.size_diff / _MB:.0f} MB' for linea in crecimiento)
+
+
 async def maintain_once():
     started = time.monotonic()
     before = anonymous_bytes()
@@ -143,6 +176,10 @@ async def maintain_once():
     reparto = await asyncio.to_thread(container_memory)
     result['container'] = reparto
     logger.info('Memoria del contenedor: %s', describe_container_memory(reparto))
+    crecimiento = await asyncio.to_thread(growth_by_source)
+    if crecimiento:
+        result['growth'] = crecimiento
+        logger.info('Quién pidió la memoria: %s', crecimiento)
     return result
 
 

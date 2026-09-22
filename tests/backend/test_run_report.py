@@ -53,7 +53,10 @@ def test_con_nivel_all_tambien_escribe_la_pasada_limpia(monkeypatch):
 
 def test_el_nivel_all_no_tapa_las_pasadas_con_problemas(monkeypatch):
     monkeypatch.setenv("METEOLABX_ALERT_EMAIL_LEVEL", "all")
-    informe = run_report.build_report(_manifiesto(status="publishing"))
+    informe = run_report.build_report(_manifiesto(
+        status="publishing",
+        progress={"frames_available": 100, "frames_total": 344, "percent": 29.1},
+    ))
     aviso = run_report.alert_for_report(informe)
     assert aviso.severity == "fail"
     assert aviso.subject.startswith("🔴")
@@ -117,8 +120,10 @@ def test_una_pasada_mucho_mas_lenta_que_las_suyas_avisa():
 
 def test_una_pasada_parada_se_detecta_aunque_el_worker_no_pueda_avisar():
     ahora = datetime(2026, 9, 19, 16, 30, tzinfo=timezone.utc)
-    manifiesto = _manifiesto(status="publishing",
-                             worker_heartbeat_at="2026-09-19T15:20:00Z")
+    manifiesto = _manifiesto(
+        status="publishing", worker_heartbeat_at="2026-09-19T15:20:00Z",
+        progress={"frames_available": 100, "frames_total": 344, "percent": 29.1},
+    )
     aviso = health_alerts.stalled_alert(manifiesto, now=ahora)
     assert aviso is not None
     assert aviso.severity == "fail"
@@ -128,7 +133,10 @@ def test_una_pasada_parada_se_detecta_aunque_el_worker_no_pueda_avisar():
 
 def test_una_pasada_que_acaba_de_latir_no_se_da_por_atascada():
     ahora = datetime(2026, 9, 19, 15, 30, tzinfo=timezone.utc)
-    manifiesto = _manifiesto(status="publishing")
+    manifiesto = _manifiesto(
+        status="publishing",
+        progress={"frames_available": 100, "frames_total": 344, "percent": 29.1},
+    )
     assert health_alerts.stalled_alert(manifiesto, now=ahora) is None
 
 
@@ -202,7 +210,13 @@ def test_un_correo_que_no_sale_se_reintenta_la_proxima_vez(monkeypatch, tmp_path
 
 def test_el_resumen_diario_cuenta_las_pasadas_limpias():
     resumen = health_alerts.digest_alert(
-        [_manifiesto(), _manifiesto(run="2026-09-19T06:00:00Z", status="publishing")],
+        [
+            _manifiesto(),
+            _manifiesto(
+                run="2026-09-19T06:00:00Z", status="publishing",
+                progress={"frames_available": 100, "frames_total": 344, "percent": 29.1},
+            ),
+        ],
         now=datetime(2026, 9, 20, 6, 0, tzinfo=timezone.utc),
     )
     assert resumen.subject.startswith("🔴")
@@ -225,7 +239,10 @@ def test_el_informe_de_la_pasada_en_curso_se_calcula_al_vuelo():
         write_json,
     )
 
-    write_json(get_forecast_store(), LATEST_MANIFEST_KEY, _manifiesto(status="publishing"))
+    write_json(get_forecast_store(), LATEST_MANIFEST_KEY, _manifiesto(
+        status="publishing",
+        progress={"frames_available": 100, "frames_total": 344, "percent": 29.1},
+    ))
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: Settings(
         arome_api_key="test-token", ranking_refresh_enabled=False
@@ -326,7 +343,10 @@ def test_el_color_del_asunto_dice_la_gravedad_sin_abrir_el_correo():
     assert proveedor.subject.startswith("⚠️")
 
     parada = health_alerts.stalled_alert(
-        _manifiesto(status="publishing", worker_heartbeat_at="2026-09-19T15:20:00Z"),
+        _manifiesto(
+            status="publishing", worker_heartbeat_at="2026-09-19T15:20:00Z",
+            progress={"frames_available": 100, "frames_total": 344, "percent": 29.1},
+        ),
         now=datetime(2026, 9, 19, 17, 0, tzinfo=timezone.utc),
     )
     assert parada.subject.startswith("🔴")
@@ -496,3 +516,97 @@ def test_el_tiempo_de_reloj_no_cuenta_dos_veces_lo_que_se_solapa():
     # Una dentro de otra no suma nada.
     assert _wall_seconds([(0, 100), (10, 20)]) == pytest.approx(100.0)
     assert _wall_seconds([]) == 0.0
+
+
+# --- La pasada entera que se quedaba en «publicando» -----------------------
+
+def test_una_pasada_entera_no_se_denuncia_por_la_etiqueta():
+    """Caso real del 22/09/2026: 1.370/1.370 frames, 0 errores, «publishing».
+
+    El planificador devolvía el estado a «publicando» en cada renovación del
+    catálogo y ya no había trabajos que lo recalcularan. El informe la daba
+    por fallida y mandaba un correo rojo de una pasada que estaba entera.
+    """
+    informe = run_report.build_report(_manifiesto(
+        status="publishing",
+        progress={"frames_available": 1370, "frames_total": 1370, "percent": 100.0},
+    ))
+    assert informe["severity"] == "ok"
+    assert informe["issues"] == []
+    assert run_report.alert_for_report(informe) is None
+
+
+def test_una_pasada_a_medias_sigue_denunciandose():
+    informe = run_report.build_report(_manifiesto(
+        status="publishing",
+        progress={"frames_available": 900, "frames_total": 1370, "percent": 65.7},
+    ))
+    assert informe["severity"] == "fail"
+    assert "no llegó a completarse" in run_report.alert_for_report(informe).body
+
+
+def test_una_pasada_entera_con_errores_sigue_contandolos():
+    """Todo publicado pero con errores por medio: eso sí hay que mirarlo."""
+    informe = run_report.build_report(_manifiesto(
+        status="publishing",
+        progress={"frames_available": 1370, "frames_total": 1370, "percent": 100.0},
+        products={"dcape": {"available_times": ["2026-09-19T13:00:00Z"], "errors": {
+            f"2026-09-19T{h:02d}:00:00Z": "WCS 500" for h in range(9)
+        }}},
+    ))
+    assert informe["severity"] == "fail"
+
+
+def test_el_vigilante_no_despierta_por_una_pasada_entera():
+    from datetime import datetime, timezone
+
+    entera = _manifiesto(
+        status="publishing",
+        worker_heartbeat_at="2026-09-19T15:20:00Z",
+        progress={"frames_available": 1370, "frames_total": 1370, "percent": 100.0,
+                  "error_count": 0},
+    )
+    ahora = datetime(2026, 9, 19, 18, 0, tzinfo=timezone.utc)
+    assert health_alerts.stalled_alert(entera, now=ahora) is None
+
+    # Y una que se quedó a medias sí despierta, aunque lleve el mismo retraso.
+    a_medias = dict(entera, progress={"frames_available": 900, "frames_total": 1370,
+                                      "percent": 65.7, "error_count": 0})
+    assert health_alerts.stalled_alert(a_medias, now=ahora) is not None
+
+
+def test_renovar_el_catalogo_no_devuelve_a_publicando_una_pasada_hecha(monkeypatch, tmp_path):
+    """La raíz: `_prepare_latest_manifest` marcaba «publishing» a ciegas."""
+    import scripts.forecast_worker as trabajador
+    from server.services.forecast_store import LocalObjectStore, read_json, run_manifest_key
+
+    store = LocalObjectStore(root=tmp_path)
+    run = "2026-09-22T12:00:00Z"
+    horas = [
+        f"2026-09-{22 + (12 + h) // 24:02d}T{(12 + h) % 24:02d}:00:00Z"
+        for h in range(52)
+    ]
+    catalogo = {"products": {
+        producto: {
+            "run": run,
+            # Como el catálogo de Météo-France: los acumulativos no anuncian
+            # la hora de la propia pasada, que no pueden tener.
+            "valid_times": horas[trabajador._first_available_hour(producto):],
+        }
+        for producto in trabajador.PERSISTED_FORECAST_PRODUCTS
+    }}
+    # Manifiesto de una pasada ya publicada entera, como la deja el último
+    # trabajo terminado.
+    existente = trabajador.new_manifest(run, horas, catalog_products=catalogo["products"])
+    existente["status"] = "complete"
+    existente["expected_hours"] = {"native": 52, "diagnostic": 52}
+    for producto in trabajador.PERSISTED_FORECAST_PRODUCTS:
+        primera = trabajador._first_available_hour(producto)
+        existente["products"][producto] = {"available_times": horas[primera:], "errors": {}}
+    monkeypatch.setattr(trabajador, "_latest_persisted_run", lambda catalog: run)
+
+    devuelto = trabajador._prepare_latest_manifest(
+        store, catalogo, "model", 52, existing=existente, maintain_retention=False,
+    )
+    assert devuelto["status"] == "complete"
+    assert read_json(store, run_manifest_key(run))["status"] == "complete"

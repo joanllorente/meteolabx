@@ -43,3 +43,26 @@ def test_prefetch_never_discards_pages(monkeypatch, tmp_path):
     monkeypatch.setattr(cache.threading, 'enumerate', lambda: [Thread()])
     assert cache.release_completed_grib_cache() == {'skipped': 'prefetch_active'}
     assert not advised
+
+
+def test_a_stuck_old_run_does_not_block_the_completed_one(monkeypatch, tmp_path):
+    """Basta con que la pasada del fichero esté completa.
+
+    Exigirlo de todas las conservadas dejaba que una vieja atascada en
+    «publishing» bloqueara la liberación para siempre: 7,2 GB de caché de
+    páginas durante todo el día, que Railway factura.
+    """
+    advised = setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(forecast_store, 'retained_manifests', lambda _: [
+        {'run': '2026-09-12T12:00:00Z', 'status': 'complete'},
+        {'run': '2026-09-12T06:00:00Z', 'status': 'publishing'},
+    ])
+    completa = tmp_path / 'IP1-20260912T12-00H06H.grib2'
+    atascada = tmp_path / 'IP1-20260912T06-00H06H.grib2'
+    completa.write_bytes(b'grib-input')
+    atascada.write_bytes(b'en curso')
+
+    assert cache.release_completed_grib_cache() == {'files_advised': 1, 'file_bytes': 10}
+    # La que sigue publicando conserva sus páginas: alguien puede estar leyéndola.
+    assert len(advised) == 1
+    assert atascada.read_bytes() == b'en curso'

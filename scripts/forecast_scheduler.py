@@ -248,9 +248,11 @@ def run_watch(w, args, stop):
                         try:
                             registry.retain_when_idle()
                             rebuild()  # Do not resurrect jobs from pruned runs.
-                            if not pending:
-                                from server.services.grib_page_cache import release_completed_grib_cache
-                                w._report_grib_release(release_completed_grib_cache())
+                            # Sin condicionarlo a la cola: entre pasadas casi
+                            # siempre queda alguna hora esperando publicación, y
+                            # la caché de páginas se quedaba sin liberar.
+                            from server.services.grib_page_cache import release_completed_grib_cache
+                            w._report_grib_release(release_completed_grib_cache())
                             w._trim_worker_memory()
                         except Exception:
                             logger.exception("No se pudo completar el mantenimiento; continúa AROME.")

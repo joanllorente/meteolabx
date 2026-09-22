@@ -20,15 +20,22 @@ def release_completed_grib_cache() -> dict:
     if not hasattr(os, 'posix_fadvise') or not hasattr(os, 'POSIX_FADV_DONTNEED'):
         return {'skipped': 'unsupported'}
     manifests = retained_manifests(get_forecast_store())
-    if not manifests or any(m.get('status') != 'complete' for m in manifests):
+    # Basta con que la pasada del fichero esté completa. Exigirlo de todas las
+    # conservadas dejaba que una vieja atascada en «publishing» bloqueara la
+    # liberación para siempre: el 22/09/2026 fueron 7,2 GB de caché de páginas
+    # durante todo el día, que Railway factura.
+    completas = {str(m['run']).replace('-', '').replace(':', '')[:11]
+                 for m in manifests if m.get('status') == 'complete'}
+    if not completas:
         return {'skipped': 'unfinished_runs'}
     if any(t.name.startswith('arome-prefetch') and t.is_alive()
            for t in threading.enumerate()):
         return {'skipped': 'prefetch_active'}
     root = Path(os.getenv('METEOLABX_AROME_PACKAGE_CACHE_DIR') or
                 str(Path(tempfile.gettempdir()) / 'meteolabx-arome-packages'))
-    stamps = {str(m['run']).replace('-', '').replace(':', '')[:11] for m in manifests}
-    # Los paquetes tienen nombres IP1-YYYYMMDDTHH-00H06H.grib2.
+    # Los paquetes tienen nombres IP1-YYYYMMDDTHH-00H06H.grib2. Los de una
+    # pasada aún en curso se dejan en paz: alguien los está leyendo.
+    stamps = completas
     count = total = 0
     for path in root.glob('*.grib2'):
         parts = path.stem.split('-')

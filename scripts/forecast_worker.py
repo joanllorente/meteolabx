@@ -420,7 +420,6 @@ def _prepare_latest_manifest(
             },
             key=_parse_iso,
         )
-        manifest["status"] = "publishing"
         # Un contenedor anterior pudo morir con una tarea marcada como activa.
         if existing is None:
             manifest.setdefault("progress", {})["current_job"] = None
@@ -432,6 +431,15 @@ def _prepare_latest_manifest(
         "diagnostic": diagnostic_max_hours or EXPECTED_NATIVE_HOURS,
     }
     manifest["worker_heartbeat_at"] = _utc_now()
+    # El estado se recalcula con el catálogo nuevo delante, en vez de darlo por
+    # «publicando» a ciegas. Aquí se marcaba así porque el worker por ciclos
+    # volvía a evaluar cada manifiesto al cerrar el ciclo; el planificador solo
+    # lo hace cuando termina un trabajo, así que una pasada sin trabajos
+    # pendientes —o sea, una pasada terminada— se quedaba en «publicando» para
+    # siempre: al 100 %, sin errores y dando un informe de fallo al retirarla.
+    # Va después de fijar los horizontes, que es de donde el recuento saca su
+    # denominador.
+    _finish_status(manifest, store)
     _persist_manifest(store, manifest, latest_run=run_iso)
     if maintain_retention:
         _publish_run_slot(store, manifest)
@@ -1193,6 +1201,52 @@ def _mark_job_failed(
     _clear_active_job(manifest, job)
 
 
+def _log_why_incomplete(
+    manifest: dict[str, Any], all_complete: bool, final_horizon: int
+) -> None:
+    """Dice qué falta para dar la pasada por completa, una vez por motivo.
+
+    Una pasada que se queda en «publicando» con el progreso al 100 % bloquea su
+    informe y, hasta ahora, también la liberación de la caché de GRIB. Las dos
+    causas posibles se arreglan distinto, así que conviene saber cuál es:
+    horas que el catálogo anunció y luego retiró —nadie las puede calcular ya—,
+    o un horizonte que no llega a +51 h.
+    """
+    if not all_complete:
+        faltan = []
+        sin_anunciar = []
+        for product in PERSISTED_FORECAST_PRODUCTS:
+            disponibles = set(
+                ((manifest.get("products") or {}).get(product) or {}).get(
+                    "available_times", ()
+                )
+            )
+            esperadas = set(_product_expected_times(manifest, product))
+            deficit_catalogo = max(0, _expected_hours(manifest, product) - len(esperadas))
+            if deficit_catalogo:
+                sin_anunciar.append((product, deficit_catalogo))
+            pendientes = sorted(esperadas - disponibles)
+            if pendientes:
+                faltan.append((product, pendientes))
+        total = sum(len(horas) for _p, horas in faltan)
+        motivos = []
+        if faltan:
+            motivos.append(f"faltan {total} frames en {len(faltan)} productos; el primero es "
+                           f"{faltan[0][0]} {faltan[0][1][0]}")
+        if sin_anunciar:
+            motivos.append(f"el catálogo aún no anuncia {sum(n for _, n in sin_anunciar)} "
+                           f"horas de producto previstas; el primero es {sin_anunciar[0][0]}")
+        motivo = "; ".join(motivos)
+    elif manifest.get("progress", {}).get("active_jobs"):
+        motivo = "todavía hay trabajos activos"
+    else:
+        motivo = f"el horizonte final es +{final_horizon} h y se exigen +51"
+    if manifest.get("incomplete_reason") == motivo:
+        return
+    manifest["incomplete_reason"] = motivo
+    logger.info("Pasada %s sigue en publicando: %s.", manifest.get("run"), motivo)
+
+
 def _finish_status(manifest: dict[str, Any], store: Any = None) -> None:
     _record_downloads(manifest)
     all_complete = True
@@ -1203,7 +1257,11 @@ def _finish_status(manifest: dict[str, Any], store: Any = None) -> None:
                 "available_times", ()
             )
         )
-        if not expected_product.issubset(available_product):
+        # An exhausted partial catalog is not a completed RUN. Check each
+        # product's full configured horizon, including the shorter diagnostic
+        # horizon and products whose first valid hour is +1.
+        if (len(expected_product) < _expected_hours(manifest, product)
+                or not expected_product.issubset(available_product)):
             all_complete = False
             break
     run_time = _parse_iso(str(manifest["run"]))
@@ -1216,9 +1274,13 @@ def _finish_status(manifest: dict[str, Any], store: Any = None) -> None:
         default=-1,
     )
     manifest["status"] = (
-        "complete" if all_complete and final_horizon >= 51 else "publishing"
+        "complete" if (all_complete and final_horizon >= 51
+                       and not manifest.get("progress", {}).get("active_jobs")) else "publishing"
     )
+    if manifest["status"] != "complete":
+        _log_why_incomplete(manifest, all_complete, final_horizon)
     if manifest["status"] == "complete":
+        manifest.pop("incomplete_reason", None)
         # El resumen y el informe leen el progreso del manifiesto, que solo se
         # refrescaba después, al persistir. Cerraban la pasada con el recuento
         # de antes del último frame —1.369/1.370 en cada correo— mientras el

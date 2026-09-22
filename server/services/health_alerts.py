@@ -87,6 +87,13 @@ def stalled_alert(manifest: dict[str, Any], *, now: datetime | None = None) -> A
     """Aviso si la pasada lleva demasiado tiempo sin avanzar."""
     if not manifest or str(manifest.get("status")) == "complete":
         return None
+    progreso = manifest.get("progress") or {}
+    if float(progreso.get("percent", 0.0) or 0.0) >= 99.95 and not int(
+        progreso.get("error_count", 0) or 0
+    ):
+        # Publicada entera: que el estado siga diciendo «publicando» es asunto
+        # del worker, no un fallo del que haya que despertar a nadie.
+        return None
     momento = now or _now()
     latido = _parse(manifest.get("worker_heartbeat_at")) or _parse(manifest.get("updated_at"))
     if latido is None:

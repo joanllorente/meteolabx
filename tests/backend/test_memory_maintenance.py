@@ -80,3 +80,22 @@ def test_container_memory_splits_processes_and_page_cache(tmp_path):
 def test_container_memory_without_proc_is_none(tmp_path):
     assert maintenance.container_memory(tmp_path / 'no', tmp_path / 'hay') is None
     assert maintenance.describe_container_memory(None) == 'sin datos del contenedor'
+
+
+def test_growth_by_source_is_opt_in_and_compares_snapshots(monkeypatch):
+    """Sin la variable no traza nada; con ella, nombra quién pidió la memoria."""
+    monkeypatch.delenv('METEOLABX_MEMORY_TRACE', raising=False)
+    assert maintenance.growth_by_source() is None
+
+    monkeypatch.setenv('METEOLABX_MEMORY_TRACE', '1')
+    monkeypatch.setattr(maintenance, '_snapshot', None)
+    import tracemalloc
+    try:
+        assert maintenance.growth_by_source() == 'trazando desde ahora'
+        retenido = [bytearray(400_000) for _ in range(30)]
+        linea = maintenance.growth_by_source()
+        assert 'test_memory_maintenance.py:' in linea and 'MB' in linea
+        assert len(retenido) == 30
+    finally:
+        tracemalloc.stop()
+        maintenance._snapshot = None
