@@ -78,6 +78,9 @@ def _resources(manifest: dict[str, Any], duration_min: float | None) -> dict[str
     pico = int(uso.get("memory_peak_bytes", 0) or 0)
     descargas = uso.get("downloads") or {}
     segundos_descarga = float(descargas.get("seconds", 0.0) or 0.0)
+    # Tiempo de reloj con alguna descarga activa. Los manifiestos anteriores a
+    # esta cuenta no lo traen: sin él no hay caudal real ni reparto honesto.
+    reloj_descarga = float(descargas.get("wall_seconds", 0.0) or 0.0)
     bytes_descargados = int(descargas.get("bytes", 0) or 0)
     return {
         "memory_peak_gb": round(pico / gb, 2) if pico else None,
@@ -90,11 +93,18 @@ def _resources(manifest: dict[str, Any], duration_min: float | None) -> dict[str
             "packages": int(descargas.get("packages", 0) or 0),
             "gb": round(bytes_descargados / gb, 2),
             "minutes": round(segundos_descarga / 60, 1),
+            "wall_minutes": round(reloj_descarga / 60, 1) if reloj_descarga else None,
+            # Velocidad media de UNA descarga: lo que da cada conexión.
             "mb_s": round(bytes_descargados / 1e6 / segundos_descarga, 1)
             if segundos_descarga else None,
-            # Qué parte de la pasada se fue en esperar a Météo-France.
-            "share_of_run": round(segundos_descarga / 60 / duration_min, 2)
-            if duration_min and segundos_descarga else None,
+            # Lo que entró al contenedor por segundo de reloj, sumando las que
+            # iban a la vez. Es la cifra que dice si hay banda de sobra.
+            "throughput_mb_s": round(bytes_descargados / 1e6 / reloj_descarga, 1)
+            if reloj_descarga else None,
+            # Qué parte de la pasada hubo alguna descarga en marcha. Con la
+            # suma de duraciones podía pasar del 100 %.
+            "share_of_run": round(reloj_descarga / 60 / duration_min, 2)
+            if duration_min and reloj_descarga else None,
         },
     }
 
@@ -167,7 +177,8 @@ def _tier_segments(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], floa
     for clave in sorted(tiempos, key=lambda item: int(item)):
         tramo = tiempos[clave]
         desde = _parse(tramo.get("first_start"))
-        hasta = _parse(tramo.get("last_start"))
+        # El final del último trabajo, si se apuntó; si no, su arranque.
+        hasta = _parse(tramo.get("last_end")) or _parse(tramo.get("last_start"))
         if not desde or not hasta:
             continue
         tramos.append({
@@ -176,8 +187,43 @@ def _tier_segments(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], floa
             "jobs": int(tramo.get("jobs", 0)),
             "start_min": round((desde - inicio).total_seconds() / 60, 1),
             "end_min": round((hasta - inicio).total_seconds() / 60, 1),
+            **_occupancy(tramo, (hasta - desde).total_seconds()),
         })
     return tramos, round((fin - inicio).total_seconds() / 60, 1)
+
+
+def _occupancy(tramo: dict[str, Any], span_s: float) -> dict[str, Any]:
+    """Qué parte del tiempo del nivel estuvieron trabajando sus huecos.
+
+    Segundos ocupados entre huecos × duración del nivel. Lo que falta hasta el
+    100 % es tiempo parado: el vaciado al final de cada ciclo, la espera a un
+    paquete sin publicar o el freno de memoria. Los niveles se solapan en los
+    cambios, así que el reparto entre ellos es aproximado; el total no.
+    """
+    huecos = int(tramo.get("slots", 0) or 0)
+    ocupado = float(tramo.get("busy_seconds", 0.0) or 0.0)
+    if not huecos or not ocupado or span_s <= 0:
+        return {}
+    return {
+        "slots": huecos,
+        "busy_min": round(ocupado / 60, 1),
+        "occupancy": round(min(1.0, ocupado / (huecos * span_s)), 2),
+    }
+
+
+def _overall_occupancy(manifest: dict[str, Any]) -> float | None:
+    """Ocupación de la pasada entera, con los huecos del nivel más ancho."""
+    tiempos = manifest.get("tier_timing") or {}
+    huecos = max((int(t.get("slots", 0) or 0) for t in tiempos.values()), default=0)
+    ocupado = sum(float(t.get("busy_seconds", 0.0) or 0.0) for t in tiempos.values())
+    inicios = [m for m in (_parse(t.get("first_start")) for t in tiempos.values()) if m]
+    finales = [m for m in (_parse(t.get("last_end")) for t in tiempos.values()) if m]
+    if not huecos or not ocupado or not inicios or not finales:
+        return None
+    span = (max(finales) - min(inicios)).total_seconds()
+    if span <= 0:
+        return None
+    return round(min(1.0, ocupado / (huecos * span)), 2)
 
 
 def _errors_by_product(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -310,6 +356,7 @@ def build_report(
         "percent": round(percent, 1),
         "error_count": total_errores,
         "tiers": tramos,
+        "occupancy": _overall_occupancy(manifest),
         "resources": recursos,
         "failures": fallos,
         "cost": coste,
@@ -342,11 +389,18 @@ def render_text(report: dict[str, Any]) -> str:
 
     if report.get("tiers"):
         lineas.append("")
-        lineas.append("Reparto por nivel:")
+        titulo = "Reparto por nivel"
+        if report.get("occupancy") is not None:
+            titulo += f" (ocupación total {report['occupancy'] * 100:.0f} %)"
+        lineas.append(titulo + ":")
         for tramo in report["tiers"]:
+            ocupacion = (
+                f" · ocupación {tramo['occupancy'] * 100:.0f} % de {tramo['slots']} huecos"
+                if tramo.get("occupancy") is not None else ""
+            )
             lineas.append(
                 f"  · {tramo['name']:<12} {tramo['jobs']:>4} trabajos "
-                f"{tramo['start_min']:.0f}-{tramo['end_min']:.0f} min"
+                f"{tramo['start_min']:.0f}-{tramo['end_min']:.0f} min" + ocupacion
             )
 
     recursos = report.get("resources") or {}
@@ -371,12 +425,27 @@ def render_text(report: dict[str, Any]) -> str:
                 f" ({descargas['share_of_run'] * 100:.0f} % de la pasada)"
                 if descargas.get("share_of_run") else ""
             )
-            lineas.append(
-                f"  · {'GRIB':<10} {descargas['packages']} paquetes · "
-                f"{descargas['gb']} GB en {descargas['minutes']:.0f} min"
-                + (f" a {descargas['mb_s']} MB/s" if descargas.get("mb_s") else "")
-                + reparto
-            )
+            if descargas.get("wall_minutes"):
+                # Minutos de reloj y caudal real; la velocidad por descarga,
+                # aparte, porque la suma de duraciones no es tiempo de reloj.
+                lineas.append(
+                    f"  · {'GRIB':<10} {descargas['packages']} paquetes · "
+                    f"{descargas['gb']} GB en {descargas['wall_minutes']:.0f} min de reloj"
+                    + (f" a {descargas['throughput_mb_s']} MB/s"
+                       if descargas.get("throughput_mb_s") else "")
+                    + reparto
+                )
+                if descargas.get("mb_s"):
+                    lineas.append(
+                        f"  · {'':<10} {descargas['mb_s']} MB/s por descarga"
+                    )
+            else:
+                lineas.append(
+                    f"  · {'GRIB':<10} {descargas['packages']} paquetes · "
+                    f"{descargas['gb']} GB en {descargas['minutes']:.0f} min"
+                    + (f" a {descargas['mb_s']} MB/s por descarga"
+                       if descargas.get("mb_s") else "")
+                )
 
     if report.get("failures"):
         reparto = {

@@ -377,6 +377,9 @@ def _prepare_latest_manifest(
     catalog: dict[str, Any],
     calculation_scope: str,
     diagnostic_max_hours: int = 0,
+    *,
+    existing: dict[str, Any] | None = None,
+    maintain_retention: bool = True,
 ) -> dict[str, Any]:
     run_iso = _latest_persisted_run(catalog)
     catalog_products = {
@@ -393,7 +396,7 @@ def _prepare_latest_manifest(
         },
         key=_parse_iso,
     )
-    manifest = read_json(store, run_manifest_key(run_iso))
+    manifest = existing if existing is not None else read_json(store, run_manifest_key(run_iso))
     if (
         not manifest
         or manifest.get("run") != run_iso
@@ -419,8 +422,9 @@ def _prepare_latest_manifest(
         )
         manifest["status"] = "publishing"
         # Un contenedor anterior pudo morir con una tarea marcada como activa.
-        manifest.setdefault("progress", {})["current_job"] = None
-        manifest["progress"]["active_jobs"] = []
+        if existing is None:
+            manifest.setdefault("progress", {})["current_job"] = None
+            manifest["progress"]["active_jobs"] = []
     # Con los horizontes guardados, el progreso conoce su denominador desde el
     # primer ciclo en vez de deducirlo de lo publicado hasta ese momento.
     manifest["expected_hours"] = {
@@ -429,8 +433,9 @@ def _prepare_latest_manifest(
     }
     manifest["worker_heartbeat_at"] = _utc_now()
     _persist_manifest(store, manifest, latest_run=run_iso)
-    _publish_run_slot(store, manifest)
-    _prune_old_runs(store, run_iso)
+    if maintain_retention:
+        _publish_run_slot(store, manifest)
+        _prune_old_runs(store, run_iso)
     return manifest
 
 
@@ -663,11 +668,11 @@ PREFETCH_BLOCKS = max(
 # largo de la pasada es el ciclo siguiente, que vuelve a lanzarlo: los bloques
 # ya descargados se resuelven al instante contra el disco.
 PREFETCH_RETRY_S = max(10, int(os.getenv("METEOLABX_FORECAST_PREFETCH_RETRY_S", "45")))
-# Bloques que se bajan a la vez. Uno solo no alcanza al nivel 2 cuando los
+# Paquetes que se bajan a la vez. Uno solo no alcanza al nivel 2 cuando los
 # niveles previos son rápidos; pasarse satura la red y roba ancho de banda a
 # las descargas que el diagnóstico sí está esperando ahora mismo.
 PREFETCH_STREAMS = max(
-    1, int(os.getenv("METEOLABX_FORECAST_PREFETCH_STREAMS", "2"))
+    1, int(os.getenv("METEOLABX_FORECAST_PREFETCH_STREAMS", "4"))
 )
 # Horizonte que se persigue, en horas de predicción. Debe cubrir el mismo que
 # los diagnósticos, o quedarían horas sin paquete al final de la pasada.
@@ -688,8 +693,8 @@ def _blocks_ahead(jobs: Sequence[ForecastJob], limit: int) -> list[tuple[datetim
     horizonte se sabe de antemano, y un bloque que todavía no exista fallará y
     se reintentará, que es justo lo que se busca.
 
-    El primero se deja para el final: es el que está usando alguien ahora, y
-    esperar en su cerrojo retrasaría a los que de verdad hacen falta pronto.
+    Prioriza el bloque de la primera hora pendiente y los siguientes.
+    Los paquetes ya en descarga se saltan sin ocupar un hilo de precarga.
     """
     run = next(
         (_parse_iso(job.run) for job in jobs if job.tier >= 1),
@@ -701,7 +706,16 @@ def _blocks_ahead(jobs: Sequence[ForecastJob], limit: int) -> list[tuple[datetim
         (run, run + timedelta(hours=horizonte))
         for horizonte in blocks_up_to(PREFETCH_HORIZON_H)
     ]
-    return (bloques[1:] + bloques[:1])[:limit]
+    from server.services.arome_packages import block_range
+    first = min((_parse_iso(job.valid_time) for job in jobs
+                 if job.tier >= 1 and _parse_iso(job.run) == run), default=run)
+    try:
+        current_start = int(block_range(run, first)[:2])
+    except AromePackageError:
+        current_start = 0
+    current = run + timedelta(hours=current_start)
+    bloques.sort(key=lambda item: (item[1] < current, item[1]))
+    return bloques[:limit]
 
 
 def _start_package_prefetch(
@@ -730,47 +744,36 @@ def _start_package_prefetch(
         # menos de un minuto por hora, adelanta a la publicación. Insistir
         # hasta que aparezcan es lo que evita que las horas siguientes acaben
         # bajando el perfil campo a campo por el WCS.
-        pendientes = list(objetivos)
+        # Queue per package, nearest block first. Four slots can fetch IP1,
+        # IP3 and the two small surface packages together for the next profile.
+        pendientes = [(paquete, run, valid_time) for run, valid_time in objetivos
+                      for paquete in ("IP1", "IP3", "SP1", "SP2")]
         while pendientes and not stop.is_set():
-            quedan: list[tuple[datetime, datetime]] = []
+            def bajar_paquete(objetivo):
+                if stop.is_set():
+                    return False
+                paquete, run, valid_time = objetivo
+                try:
+                    # A worker may already own this download: don't spend a
+                    # prefetch slot waiting on its lock. Retry next round.
+                    ensure_package(paquete, run, valid_time, lock_timeout_s=0)
+                    return True
+                except (AromePackageError, MeteoFranceAuthError):
+                    return False
 
-            def bajar_bloque(objetivo: tuple[datetime, datetime]) -> int:
-                """Los cuatro paquetes de un bloque, en orden de urgencia."""
-                run, valid_time = objetivo
-                hechos = 0
-                # IP3 va detrás de IP1 y antes que los de superficie: lo
-                # necesitan tanto DCAPE como los mapas de velocidad vertical
-                # del nivel 2, y es el que más tarda en bajar. Los SP pesan
-                # cincuenta megas y llegan enseguida.
-                for paquete in ("IP1", "IP3", "SP1", "SP2"):
-                    if stop.is_set():
-                        return hechos
-                    try:
-                        ensure_package(paquete, run, valid_time)
-                        hechos += 1
-                    except (AromePackageError, MeteoFranceAuthError):
-                        # Todavía no publicado: se reintenta en la vuelta
-                        # siguiente, sin abandonar los bloques posteriores.
-                        quedan.append(objetivo)
-                        return hechos
-                return hechos
-
-            # Los bloques se bajan de varios en varios porque el nivel 2 los
-            # consume más deprisa de lo que tarda uno en llegar: cuatro
-            # minutos frente a menos de tres. Mientras los niveles 0 y 1
-            # duraban casi una hora eso daba igual —la precarga terminaba con
-            # tiempo de sobra—, pero al acelerarlos deja de dar.
             with ThreadPoolExecutor(
                 max_workers=PREFETCH_STREAMS, thread_name_prefix="arome-prefetch"
             ) as descargas:
-                bajados += sum(descargas.map(bajar_bloque, pendientes))
+                resultados = list(descargas.map(bajar_paquete, pendientes))
+            bajados += sum(resultados)
+            quedan = [objetivo for objetivo, listo in zip(pendientes, resultados) if not listo]
             if stop.is_set():
                 return
             if not quedan:
                 break
             if time.monotonic() - inicio > PREFETCH_DEADLINE_S:
                 logger.info(
-                    "Se deja de perseguir %d bloques sin publicar tras %.0f min; "
+                    "Se deja de perseguir %d paquetes pendientes tras %.0f min; "
                     "esas horas se resolverán por el WCS.",
                     len(quedan), (time.monotonic() - inicio) / 60.0,
                 )
@@ -810,6 +813,10 @@ def _isolated_job_entry(result_queue, payload: dict[str, Any]) -> None:
         token = str(settings.arome_api_key or "").strip()
         if not token:
             raise RuntimeError("METEOLABX_AROME_API_KEY no está configurada.")
+        scheduled = payload.pop("scheduled", False)
+        if scheduled:
+            # Only this spawned child: no shared environment mutation.
+            os.environ["METEOLABX_AROME_SCHEDULED_PACKAGES"] = "1"
         job = ForecastJob(**payload)
         _calculate_and_store_job(token, get_forecast_store(), job)
         result_queue.put(("ok", ""))
@@ -817,7 +824,7 @@ def _isolated_job_entry(result_queue, payload: dict[str, Any]) -> None:
         result_queue.put(("error", f"{type(exc).__name__}: {exc}"[:500]))
 
 
-def _run_isolated_job(job: ForecastJob, timeout_s: int) -> None:
+def _run_isolated_job(job: ForecastJob, timeout_s: int, *, scheduled: bool = False) -> None:
     context = multiprocessing.get_context("spawn")
     result_queue = context.Queue(maxsize=1)
     process = context.Process(
@@ -834,12 +841,28 @@ def _run_isolated_job(job: ForecastJob, timeout_s: int) -> None:
                 # que cubre, y el padre daría por publicadas horas que nadie
                 # ha calculado.
                 "valid_times": job.valid_times,
+                **({"scheduled": True} if scheduled else {}),
             },
         ),
         name=f"arome-{job.products[0]}-{job.valid_time[11:13]}",
     )
     process.start()
-    process.join(timeout=max(1, timeout_s))
+    if scheduled and job.tier >= 2:
+        deadline = time.monotonic() + max(1, timeout_s)
+        peak_anon = None
+        while process.is_alive() and time.monotonic() < deadline:
+            try:
+                for line in Path(f"/proc/{process.pid}/status").read_text().splitlines():
+                    if line.startswith("RssAnon:"):
+                        peak_anon = max(peak_anon or 0, int(line.split()[1]) * 1024)
+            except (OSError, ValueError):
+                pass
+            process.join(timeout=min(0.5, max(0, deadline - time.monotonic())))
+        if peak_anon is not None:
+            logger.info("Memoria por trabajo RUN %s %s nivel=%d pico_anon_muestreado_MB=%.1f",
+                        job.run, job.valid_time, job.tier, peak_anon / 1e6)
+    else:
+        process.join(timeout=max(1, timeout_s))
     if process.is_alive():
         process.terminate()
         process.join(10)
@@ -899,7 +922,9 @@ def _run_job(
         _calculate_and_store_job(token, store, job)
 
 
-def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int) -> None:
+def _mark_job_started(
+    manifest: dict[str, Any], job: ForecastJob, timeout_s: int, *, slots: int = 1
+) -> None:
     now = _utc_now()
     manifest["worker_heartbeat_at"] = now
     manifest["updated_at"] = now
@@ -919,6 +944,10 @@ def _mark_job_started(manifest: dict[str, Any], job: ForecastJob, timeout_s: int
     tramo.setdefault("first_start", now)
     tramo["last_start"] = now
     tramo["jobs"] = int(tramo.get("jobs", 0)) + 1
+    # Los huecos que el nivel podía ocupar, para medir su ocupación al cerrar
+    # la pasada. Se guarda el máximo: la pasada sobrevive a reinicios y un
+    # worker arrancado con menos no debe rebajar lo que otro llegó a tener.
+    tramo["slots"] = max(int(tramo.get("slots", 0)), int(slots))
 
     progress = manifest.setdefault("progress", {})
     active = [
@@ -994,12 +1023,40 @@ def _job_id(job: ForecastJob) -> str:
 
 def _clear_active_job(manifest: dict[str, Any], job: ForecastJob) -> None:
     progress = manifest.setdefault("progress", {})
+    _add_busy_time(manifest, job, progress.get("active_jobs", ()))
     active = [
         item for item in progress.get("active_jobs", ())
         if item.get("id") != _job_id(job)
     ]
     progress["active_jobs"] = active
     progress["current_job"] = active[0] if active else None
+
+
+def _add_busy_time(
+    manifest: dict[str, Any], job: ForecastJob, active_jobs: Sequence[dict[str, Any]]
+) -> None:
+    """Suma a su nivel lo que ocupó el trabajo que acaba de terminar.
+
+    Con los segundos ocupados y los huecos del nivel, el informe calcula qué
+    parte del tiempo estuvieron trabajando los workers. Sin eso no hay forma de
+    saber cuánto se pierde esperando al final de cada ciclo o a un paquete que
+    Météo-France aún no ha publicado.
+    """
+    entrada = next(
+        (item for item in active_jobs if item.get("id") == _job_id(job)), None
+    )
+    if not entrada or not entrada.get("started_at"):
+        return
+    try:
+        inicio = _parse_iso(str(entrada["started_at"]))
+    except ValueError:
+        return
+    ahora = datetime.now(timezone.utc)
+    tramo = manifest.setdefault("tier_timing", {}).setdefault(str(job.tier), {})
+    tramo["busy_seconds"] = round(
+        float(tramo.get("busy_seconds", 0.0)) + max(0.0, (ahora - inicio).total_seconds()), 1
+    )
+    tramo["last_end"] = ahora.isoformat().replace("+00:00", "Z")
 
 
 # Última lectura de CPU de ESTE proceso. El consumo se acumula por deltas
@@ -1161,6 +1218,12 @@ def _finish_status(manifest: dict[str, Any], store: Any = None) -> None:
     manifest["status"] = (
         "complete" if all_complete and final_horizon >= 51 else "publishing"
     )
+    if manifest["status"] == "complete":
+        # El resumen y el informe leen el progreso del manifiesto, que solo se
+        # refrescaba después, al persistir. Cerraban la pasada con el recuento
+        # de antes del último frame —1.369/1.370 en cada correo— mientras el
+        # visor, que lee el manifiesto ya persistido, la daba por completa.
+        _refresh_progress(manifest)
     # Con una marca propia y no con el estado anterior: el manifiesto se
     # reconstruye entre ciclos, así que comparar contra su estado previo
     # repetía el resumen en cada vuelta mientras la pasada siguiera completa.
@@ -1278,8 +1341,8 @@ def _effective_heavy_workers(heavy_workers: int, workers: int) -> int:
 def tier_capacity_for(tier: int, workers: int, heavy_workers: int) -> int:
     """Cuántos trabajos de ese nivel caben a la vez.
 
-    Los perfiles convectivos (nivel 2 en adelante) cuestan unos 3 GB cada uno,
-    así que admiten un tope propio. A 0 no hay tope fijo: se intentan tantos
+    Los perfiles convectivos (nivel 2 en adelante) admiten un tope propio.
+    La reserva de 3 GB es conservadora, pendiente de medir los kernels C++. A 0 no hay tope fijo: se intentan tantos
     como workers y es la memoria libre del momento la que frena, que es lo que
     conviene cuando no se sabe de antemano cuánta RAM tiene la máquina.
     """
@@ -1321,6 +1384,70 @@ def _parallel_work_order(
             min(PRODUCT_ORDER.get(product, 999) for product in item[1].products),
         ),
     )
+
+
+# Por debajo de esto, lo que suelta un recorte es ruido y no merece una línea
+# INFO por minuto.
+TRIM_LOG_THRESHOLD_B = 32 * 1024 * 1024
+
+
+def _trim_worker_memory() -> int | None:
+    """Recoge ciclos y devuelve al sistema lo libre del montón del padre.
+
+    Los cálculos pesados corren en procesos hijos que lo sueltan todo al
+    terminar, pero este proceso vive todo el día en --watch: catálogos,
+    manifiestos y los frames de ECMWF de cada ciclo pasan por su montón, y sin
+    `malloc_trim` glibc se queda con las páginas liberadas. La API ya lo hacía
+    cada cuarto de hora; el worker no lo había hecho nunca.
+
+    Quien lleve el bucle de vigilancia debe llamarla al terminar cada ciclo,
+    con los hijos ya recogidos.
+    """
+    from server.services.memory_maintenance import anonymous_bytes, collect_and_trim
+
+    antes = anonymous_bytes()
+    try:
+        collect_and_trim()
+    except Exception:
+        logger.debug("No se pudo recortar la memoria del worker", exc_info=True)
+        return None
+    despues = anonymous_bytes()
+    if antes is None or despues is None:
+        return None
+    liberado = antes - despues
+    registrar = logger.info if liberado >= TRIM_LOG_THRESHOLD_B else logger.debug
+    registrar(
+        "Worker: %.0f MB devueltos tras el ciclo (%.0f → %.0f MB anónimos).",
+        liberado / 1024**2, antes / 1024**2, despues / 1024**2,
+    )
+    return liberado
+
+
+_ULTIMA_LIBERACION_GRIB: str | None = None
+
+
+def _report_grib_release(resultado: dict[str, Any] | None) -> None:
+    """Deja en el log cuándo la caché de GRIB pasa a liberarse o deja de hacerlo.
+
+    Se consulta cada minuto, así que registrar cada vuelta llenaría el log.
+    Pero si una pasada conservada se queda sin completar, la liberación se
+    salta para siempre, y antes eso solo se veía a nivel debug: la caché de
+    páginas de los GRIB podía quedarse como meseta sin que nada lo contara.
+    """
+    global _ULTIMA_LIBERACION_GRIB
+    estado = str((resultado or {}).get("skipped") or "liberando")
+    if estado == _ULTIMA_LIBERACION_GRIB:
+        return
+    _ULTIMA_LIBERACION_GRIB = estado
+    motivos = {
+        "unfinished_runs": "alguna pasada conservada no está completa",
+        "prefetch_active": "hay una precarga en marcha",
+        "unsupported": "el sistema no admite posix_fadvise",
+    }
+    if estado == "liberando":
+        logger.info("Caché de GRIB: se libera tras cada ciclo.")
+    else:
+        logger.info("Caché de GRIB: no se libera, %s.", motivos.get(estado, estado))
 
 
 def _cgroup_anonymous_bytes() -> int | None:
@@ -1564,7 +1691,7 @@ def _run_parallel_work(
                     _bring_forward_a_ready_hour(pending, launch_group)
                 manifest, job = pending.pop(0)
                 timeout_s = derived_timeout_s if job.tier > 0 else native_timeout_s
-                _mark_job_started(manifest, job, timeout_s)
+                _mark_job_started(manifest, job, timeout_s, slots=tier_capacity(job.tier))
                 _persist_manifest(store, manifest, latest_run=latest_run)
                 # El reparto por nivel importa: los workers son del contenedor
                 # entero, no de cada nivel, así que ver cuatro perfiles no
@@ -1933,9 +2060,12 @@ def main() -> int:
         # comprueba también pasadas retenidas y descargas en segundo plano.
         from server.services.grib_page_cache import release_completed_grib_cache
         try:
-            release_completed_grib_cache()
+            _report_grib_release(release_completed_grib_cache())
         except Exception:
             logger.exception("No se pudo liberar la caché de GRIB; el ciclo sigue válido.")
+        # Con los hijos ya recogidos, lo que quede libre en el montón del padre
+        # es meseta pagada hasta el ciclo siguiente.
+        _trim_worker_memory()
         return result
 
     if not args.watch:
@@ -1943,35 +2073,16 @@ def main() -> int:
         logger.info("Ciclo terminado: %s", result)
         return 0 if result["failures"] == 0 else 2
 
-    stopping = False
+    from scripts.forecast_scheduler import run_watch
+    stopping = threading.Event()
 
     def stop(_signum, _frame):
-        nonlocal stopping
-        stopping = True
+        stopping.set()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    interval = max(30, args.interval)
-    while not stopping:
-        cycle_started = time.monotonic()
-        try:
-            result = run_cycle()
-            # En vigilancia, la inmensa mayoría de ciclos solo comprueba si
-            # apareció una pasada nueva. No llenar producción con cuatro
-            # líneas INFO por minuto cuando no se ha hecho ningún trabajo.
-            log_cycle = (
-                logger.info
-                if result.get("tasks_seen") or result.get("failures")
-                else logger.debug
-            )
-            log_cycle("Ciclo terminado: %s", result)
-        except Exception:
-            logger.exception("El ciclo incremental ha fallado; se reintentará.")
-        remaining = max(0.0, interval - (time.monotonic() - cycle_started))
-        while remaining > 0 and not stopping:
-            sleep_for = min(1.0, remaining)
-            time.sleep(sleep_for)
-            remaining -= sleep_for
+    import sys
+    run_watch(sys.modules[__name__], args, stopping)
     logger.info("Worker detenido correctamente.")
     return 0
 

@@ -4,6 +4,8 @@
 
   import AppShell from '$lib/components/AppShell.svelte';
   import ObservationPanel from '$lib/components/ObservationPanel.svelte';
+  import ManualDailyNotice from '$lib/components/ManualDailyNotice.svelte';
+  import { isManualDaily } from '$lib/observation/manual-daily.js';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import { ui } from '$lib/i18n/ui.js';
   import { observationModel } from '$lib/observation/model.js';
@@ -36,7 +38,8 @@
 
   $effect(() => {
     live = null;
-    if (station.is_historical_only) return;
+    // Un pluviómetro manual no tiene lectura en vivo que refrescar.
+    if (station.is_historical_only || isManualDaily(station)) return;
     return startLiveObservation(
       {
         provider: station.provider,
@@ -69,7 +72,9 @@
       language: lang,
       entry: classifyEntry(document.referrer, location.host, { interna: Boolean(from) })
     });
-    if (!model.available && !station.is_historical_only) {
+    // Ni la histórica ni la manual fallan al no tener lectura actual: es lo
+    // que son. Contarlo como error llenaba el panel de falsas alarmas.
+    if (!model.available && !station.is_historical_only && !isManualDaily(station)) {
       recordConnectionError({
         ...estacion,
         kind: unavailableKey(observation?.unavailable),
@@ -142,6 +147,12 @@
         </a>.
       </p>
     {/if}
+  {:else if isManualDaily(station)}
+    <ManualDailyNotice
+      language={lang}
+      daily={data.dailyPrecip}
+      historyHref={observationTabs({ language: lang, slug }).find((tab) => tab.id === 'historical')?.href}
+    />
   {:else if !model.available}
     <!-- El motivo importa: un 401 de la red no es una estación callada, y
          decirlo igual manda a buscar el fallo donde no está. -->
@@ -155,7 +166,9 @@
     <p class="offline">⚠️ {ui(lang, 'unreliable_data')}</p>
   {/if}
 
-  <ObservationPanel {model} language={lang} stationName={meta.name} />
+  {#if !isManualDaily(station)}
+    <ObservationPanel {model} language={lang} stationName={meta.name} />
+  {/if}
 
   <SiteFooter language={lang} />
 </AppShell>

@@ -35,3 +35,48 @@ async def test_loop_can_be_cancelled():
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+def _proceso(raiz, pid, cmdline, anon_kb):
+    carpeta = raiz / str(pid)
+    carpeta.mkdir()
+    (carpeta / 'cmdline').write_bytes(cmdline.replace(' ', '\0').encode())
+    (carpeta / 'status').write_text(f'Name:\tpython\nRssAnon:\t{anon_kb} kB\nRssFile:\t10 kB\n')
+
+
+def test_container_memory_splits_processes_and_page_cache(tmp_path):
+    """La meseta se reparte por proceso y separa la caché de ficheros."""
+    proc, cgroup = tmp_path / 'proc', tmp_path / 'cgroup'
+    proc.mkdir(); cgroup.mkdir()
+    _proceso(proc, 10, 'python -m uvicorn server.main:app', 1024 * 1024)
+    _proceso(proc, 11, 'python -m scripts.forecast_worker --watch', 512 * 1024)
+    _proceso(proc, 12, 'python -c from multiprocessing.spawn import spawn_main', 256 * 1024)
+    _proceso(proc, 13, 'python -c from multiprocessing.spawn import spawn_main', 256 * 1024)
+    # Hilo del núcleo: sin línea de órdenes, no cuenta.
+    (proc / '2').mkdir()
+    (proc / '2' / 'cmdline').write_bytes(b'')
+    (proc / '2' / 'status').write_text('Name:\tkthreadd\n')
+    (proc / 'self').mkdir()
+    gib = 1024 ** 3
+    (cgroup / 'memory.current').write_text(str(3 * gib))
+    (cgroup / 'memory.stat').write_text(
+        f'anon {2 * gib}\nfile {gib}\nactive_file {gib // 4}\ninactive_file {3 * gib // 4}\nshmem 0\n')
+
+    reparto = maintenance.container_memory(proc, cgroup)
+    procesos = reparto['processes']
+    assert procesos['api'] == {'count': 1, 'anon_mb': 1024.0}
+    assert procesos['worker'] == {'count': 1, 'anon_mb': 512.0}
+    assert procesos['trabajo'] == {'count': 2, 'anon_mb': 512.0}
+    assert reparto['cgroup']['file_mb'] == 1024.0
+    assert reparto['cgroup']['anon_mb'] == 2048.0
+
+    linea = maintenance.describe_container_memory(reparto)
+    assert 'total 3.00 GB' in linea
+    assert 'caché de ficheros 1.00 GB (activa 0.25)' in linea
+    assert 'api 1.00 GB' in linea and 'trabajo×2 0.50 GB' in linea
+    assert 'shmem' not in linea
+
+
+def test_container_memory_without_proc_is_none(tmp_path):
+    assert maintenance.container_memory(tmp_path / 'no', tmp_path / 'hay') is None
+    assert maintenance.describe_container_memory(None) == 'sin datos del contenedor'

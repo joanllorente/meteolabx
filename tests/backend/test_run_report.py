@@ -346,7 +346,9 @@ def _manifiesto_con_recursos(**cambios):
             "memory_samples": 40,
             "memory_limit_bytes": 32 * gb,
             "cpu_seconds": 18_600.0,
-            "downloads": {"packages": 18, "bytes": int(8.2 * gb), "seconds": 1080.0},
+            # 18 min sumando cada descarga, pero solapadas en 10 de reloj.
+            "downloads": {"packages": 18, "bytes": int(8.2 * gb), "seconds": 1080.0,
+                          "wall_seconds": 600.0},
         },
     )
     base.update(cambios)
@@ -369,9 +371,48 @@ def test_el_informe_cuenta_las_descargas_de_grib():
     assert descargas["gb"] == pytest.approx(8.2, abs=0.05)
     assert descargas["minutes"] == pytest.approx(18.0)
     # 8,2 GiB en 18 min: los GB del informe son binarios, los MB/s decimales.
+    # Es la velocidad de cada descarga, no lo que entró al contenedor.
     assert descargas["mb_s"] == pytest.approx(8.2 * 1024 ** 3 / 1e6 / 1080, abs=0.1)
-    # La pasada dura 80 min y 18 se fueron esperando a Météo-France.
-    assert descargas["share_of_run"] == pytest.approx(18 / 80, abs=0.01)
+    # El caudal real divide entre el tiempo de reloj, que es menor al solaparse.
+    assert descargas["wall_minutes"] == pytest.approx(10.0)
+    assert descargas["throughput_mb_s"] == pytest.approx(8.2 * 1024 ** 3 / 1e6 / 600, abs=0.1)
+    # La pasada dura 80 min y en 10 hubo alguna descarga en marcha.
+    assert descargas["share_of_run"] == pytest.approx(10 / 80, abs=0.01)
+
+
+def test_sin_tiempo_de_reloj_no_se_inventa_caudal_ni_reparto():
+    """Los manifiestos anteriores no traen wall_seconds: mejor nada que la suma."""
+    gb = 1024 ** 3
+    manifiesto = _manifiesto_con_recursos()
+    manifiesto["resource_usage"]["downloads"] = {
+        "packages": 18, "bytes": int(8.2 * gb), "seconds": 1080.0,
+    }
+    descargas = run_report.build_report(manifiesto)["resources"]["downloads"]
+    assert descargas["mb_s"] is not None
+    assert descargas["throughput_mb_s"] is None
+    assert descargas["share_of_run"] is None
+    assert "por descarga" in run_report.render_text(run_report.build_report(manifiesto))
+
+
+def test_el_informe_mide_la_ocupacion_de_los_huecos():
+    """Segundos ocupados entre huecos × duración: lo que falta es tiempo parado."""
+    manifiesto = _manifiesto_con_recursos()
+    manifiesto["tier_timing"] = {
+        # 4 huecos durante 60 min = 240 min disponibles; 180 ocupados.
+        "2": {"first_start": "2026-09-19T13:00:00Z", "last_start": "2026-09-19T13:55:00Z",
+              "last_end": "2026-09-19T14:00:00Z", "jobs": 36,
+              "slots": 4, "busy_seconds": 180 * 60.0},
+    }
+    informe = run_report.build_report(manifiesto)
+    tramo = informe["tiers"][0]
+    assert tramo["slots"] == 4
+    assert tramo["occupancy"] == pytest.approx(0.75)
+    # El tramo termina con el último trabajo, no con su arranque.
+    assert tramo["end_min"] == pytest.approx(60.0)
+    assert informe["occupancy"] == pytest.approx(0.75)
+    texto = run_report.render_text(informe)
+    assert "ocupación 75 % de 4 huecos" in texto
+    assert "ocupación total 75 %" in texto
 
 
 def test_el_coste_sale_de_las_tarifas_de_railway():
@@ -438,7 +479,20 @@ def test_las_descargas_se_apuntan_aunque_las_haga_otro_proceso(tmp_path, monkeyp
     arome_packages._record_download("SP1", run, "00H06H", 128_000_000, 11.0)
 
     resumen = arome_packages.download_stats(run)
+    reloj = resumen.pop("wall_seconds")
     assert resumen == {"packages": 2, "bytes": 640_000_000, "seconds": 73.0}
+    # Se apuntaron casi a la vez: la de 11 s cabe dentro de la de 62.
+    assert reloj == pytest.approx(62.0, abs=1.0)
     # Otra pasada no hereda las descargas de la anterior.
     otra = datetime(2026, 9, 20, 12, tzinfo=timezone.utc)
     assert arome_packages.download_stats(otra)["packages"] == 0
+
+
+def test_el_tiempo_de_reloj_no_cuenta_dos_veces_lo_que_se_solapa():
+    from server.services.arome_packages import _wall_seconds
+
+    # Dos solapadas (0-60 y 30-90) y una aparte (200-210): 90 + 10.
+    assert _wall_seconds([(30, 90), (0, 60), (200, 210)]) == pytest.approx(100.0)
+    # Una dentro de otra no suma nada.
+    assert _wall_seconds([(0, 100), (10, 20)]) == pytest.approx(100.0)
+    assert _wall_seconds([]) == 0.0

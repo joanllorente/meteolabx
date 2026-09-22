@@ -613,6 +613,10 @@ def _lifecycle_metadata(raw_json: Any) -> Dict[str, Any]:
         # conoce (IMGW). Fin vacío = la serie sigue.
         "series_start": _iso_day(raw.get("archive_start")),
         "series_end": _iso_day(raw.get("archive_end")),
+        # Solo cuando el catálogo lo declara. `manual` no basta: las COOP de
+        # IEM son manuales y sí tienen lectura actual; los pluviómetros de
+        # MeteoSwiss no, y su ficha acababa vacía y contada como error.
+        "realtime": raw.get("realtime") if isinstance(raw.get("realtime"), bool) else None,
     }
 
 

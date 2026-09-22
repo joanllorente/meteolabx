@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { liveCacheControl } from '$lib/server/cache-control.js';
 
 import {
   ApiError,
@@ -64,7 +65,10 @@ export async function load({ params, url, fetch, setHeaders }) {
     : fetchRecentSeries(station, { daysBack: DAYS_BACK }, { fetch })
   ).catch(() => null);
 
-  setHeaders({ 'cache-control': 'public, max-age=300, stale-while-revalidate=900' });
+  // Sin serie no se guarda: ver `cache-control.js`.
+  setHeaders({
+    'cache-control': liveCacheControl(series !== null, 'public, max-age=300, stale-while-revalidate=900')
+  });
 
   return {
     lang,

@@ -665,6 +665,14 @@ class StationInfo(BaseModel):
             "en tiempo real."
         ),
     )
+    realtime: Optional[bool] = Field(
+        default=None,
+        description=(
+            "``False`` si la red NO publica lectura actual de esta estación "
+            "(los pluviómetros manuales de MeteoSwiss: solo lluvia diaria, con "
+            "dos días de retraso). ``None`` cuando el catálogo no lo declara."
+        ),
+    )
     sensors: Optional[Dict[str, bool]] = Field(
         default=None,
         description=(
@@ -784,3 +792,21 @@ class ProcessedCurrentObservationRequest(_ProviderStationRequest, _CalibrationRe
             "presión absoluta y la termodinámica (θ, ρ, q…)."
         ),
     )
+
+
+class LatestDailyPrecipitation(BaseModel):
+    """
+    Respuesta de ``GET /v1/observations/daily/latest``.
+
+    Para las estaciones sin lectura actual (``realtime`` falso): los
+    pluviómetros manuales de MeteoSwiss solo publican la lluvia de cada día, y
+    con dos días de retraso. Es lo que la ficha de Observación puede enseñar de
+    ellas en vez de quedarse en blanco.
+    """
+
+    provider: str
+    station_id: str
+    day: str = Field(description="Día de inicio de la ventana (ISO).")
+    window_start_utc: str = Field(description="Inicio de la ventana de medida (ISO, UTC).")
+    window_end_utc: str = Field(description="Fin de la ventana de medida (ISO, UTC).")
+    precip_mm: float = Field(description="Lluvia de la ventana, en mm.")

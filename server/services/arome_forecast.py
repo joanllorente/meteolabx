@@ -32,6 +32,7 @@ from server.services.arome_packages import (
     SURFACE_ELEMENTS,
     read_surface_fields,
     AromePackageError,
+    AromePackageNotReady,
     discard_packages_before,
     ensure_package,
     open_isobaric_extras,
@@ -1519,6 +1520,34 @@ class _CamposPerezosos:
         self._niveles.clear()
 
 
+def _ensure_profile_package(package, run, valid_time):
+    """Give publication a bounded grace period before expanding into WCS calls.
+
+    Another downloader may exceed this deadline while its partial file grows;
+    ensure_package abandons only after its separate inactivity timeout.
+    A transfer we start uses the HTTP timeouts, not this publication budget.
+    """
+    if os.getenv("METEOLABX_AROME_SCHEDULED_PACKAGES") == "1":
+        # The scheduler already waited for publication outside a compute slot.
+        # Only follow an already running transfer (the prefetch may have
+        # acquired its lock since admission); never initiate another download.
+        return ensure_package(package, run, valid_time, download_if_missing=False)
+    deadline = time.monotonic() + max(0.0, float(
+        os.getenv("METEOLABX_AROME_PACKAGE_WAIT_S", "180")))
+    while True:
+        try:
+            return ensure_package(package, run, valid_time)
+        except AromePackageNotReady as exc:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            logger.info("Esperando publicación de %s para %s; quedan %.0f s: %s",
+                        package, valid_time.isoformat(), remaining, exc)
+            time.sleep(min(max(1.0, exc.retry_after), remaining))
+            if time.monotonic() >= deadline:
+                raise
+
+
 def _isobaric_levels_from_package(
     run: datetime,
     valid_time: datetime,
@@ -1533,7 +1562,7 @@ def _isobaric_levels_from_package(
     if not _packages_available():
         return None
     try:
-        path = ensure_package("IP1", run, valid_time)
+        path = _ensure_profile_package("IP1", run, valid_time)
         package = open_isobaric_profile(path, valid_time, levels, elements)
     except (AromePackageError, MeteoFranceAuthError) as exc:
         logger.info("Paquete IP1 no disponible, se usa el WCS: %s", exc)
@@ -1577,7 +1606,7 @@ def _isobaric_extras_lazily_from_package(
     if not esperar and not package_ready("IP3", run, valid_time):
         return None
     try:
-        path = ensure_package("IP3", run, valid_time)
+        path = _ensure_profile_package("IP3", run, valid_time)
         # Leer un elemento que nadie va a usar son 150 MB por hora tirados.
         buscar = (
             {nombre: IP3_ELEMENTS[nombre] for nombre in campos_pedidos}
@@ -1613,7 +1642,8 @@ def _surface_fields_from_package(
     campos: dict[str, RasterField] = {}
     for paquete, elementos in SURFACE_ELEMENTS.items():
         try:
-            path = ensure_package(paquete, run, valid_time)
+            path = _ensure_profile_package(paquete, run, valid_time) if os.getenv(
+                "METEOLABX_AROME_SCHEDULED_PACKAGES") == "1" else ensure_package(paquete, run, valid_time)
             leidos, geometria = read_surface_fields(path, valid_time, elementos)
         except (AromePackageError, MeteoFranceAuthError) as exc:
             logger.info("Paquete %s no disponible, se usa el WCS: %s", paquete, exc)

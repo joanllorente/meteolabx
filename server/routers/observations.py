@@ -43,6 +43,7 @@ from server.schemas.observation import (
     CurrentObservation,
     CurrentObservationRequest,
     DailyExtremes,
+    LatestDailyPrecipitation,
     ObservationDerivatives,
     ProcessedCurrentObservationRequest,
     ProcessedCurrentObservationResponse,
@@ -1118,6 +1119,56 @@ async def post_today_series(
         station_lon=_float_or_nan(station.get("lon")),
         station_tz=str(station.get("tz") or ""),
     ))
+
+
+@router.get(
+    "/daily/latest",
+    response_model=LatestDailyPrecipitation,
+    summary="Última lluvia diaria de una estación sin lectura actual",
+    description=(
+        "Para los pluviómetros manuales de MeteoSwiss (``realtime`` falso en "
+        "la ficha de la estación): la última lluvia de 6 a 6 UTC publicada. "
+        "Llega con dos días de retraso, que es lo que tarda MeteoSwiss."
+    ),
+    responses={404: {"model": ErrorResponse, "description": "Sin lluvia diaria publicada."}},
+)
+async def get_latest_daily_precipitation(
+    provider: str,
+    station_id: str,
+    http: httpx.AsyncClient = Depends(get_http_client),
+) -> LatestDailyPrecipitation:
+    """La ficha de una estación manual quedaba en blanco teniendo el dato.
+
+    Lenzerheide (MeteoSwiss) sumó dos errores el primer día que alguien entró:
+    la ficha pedía una lectura actual que la estación no tiene, respondía
+    «sin datos» y el panel lo contaba como fallo. La lluvia diaria estaba
+    publicada, pero solo la leía el Histórico.
+    """
+    from datetime import timedelta
+
+    from server.services import meteoswiss_climo
+
+    proveedor = str(provider or "").strip().upper()
+    ultima = None
+    if proveedor == "METEOSWISS":
+        ultima = await meteoswiss_climo.latest_daily_precip(http, station_id)
+    if ultima is None:
+        raise ProviderError(
+            "data_unavailable",
+            provider=proveedor or "?",
+            detail=f"Sin lluvia diaria publicada para {station_id}",
+            status_code=404,
+        )
+    dia, lluvia = ultima
+    inicio = datetime(dia.year, dia.month, dia.day, 6, tzinfo=timezone.utc)
+    return LatestDailyPrecipitation(
+        provider=proveedor,
+        station_id=meteoswiss.normalize_station_id(station_id),
+        day=dia.isoformat(),
+        window_start_utc=inicio.isoformat(),
+        window_end_utc=(inicio + timedelta(days=1)).isoformat(),
+        precip_mm=round(float(lluvia), 1),
+    )
 
 
 @router.post(

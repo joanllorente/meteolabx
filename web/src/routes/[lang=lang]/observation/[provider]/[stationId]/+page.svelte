@@ -20,6 +20,8 @@
    */
   import AppShell from '$lib/components/AppShell.svelte';
   import ObservationPanel from '$lib/components/ObservationPanel.svelte';
+  import ManualDailyNotice from '$lib/components/ManualDailyNotice.svelte';
+  import { isManualDaily } from '$lib/observation/manual-daily.js';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import { calibrationPayload, loadCalibrations } from '$lib/calibration.svelte.js';
   import { credentialsFor, loadCredentials } from '$lib/credentials.svelte.js';
@@ -166,6 +168,8 @@
     // Las redes con credencial ya tienen su propio ciclo más abajo.
     live = null;
     if (data.personal || !data.station || data.station.is_historical_only) return;
+    // Un pluviómetro manual no tiene lectura en vivo que refrescar.
+    if (isManualDaily(data.station)) return;
     return startLiveObservation(
       {
         provider: data.station.provider,
@@ -234,6 +238,12 @@
 >
   {#if station.is_historical_only}
     <p class="offline">{ui(lang, 'historical_station')}</p>
+  {:else if isManualDaily(data.station)}
+    <ManualDailyNotice
+      language={lang}
+      daily={data.dailyPrecip}
+      historyHref={observationTabs({ language: lang, provider: data.provider, stationId: data.stationId }).find((tab) => tab.id === 'historical')?.href}
+    />
   {:else if data.personal && personal.loading}
     <!-- Mientras se consulta no se sabe si hay datos: decir que no los hay es
          mentir a medias, y es lo que se veía al conectar una estación propia. -->
@@ -265,7 +275,9 @@
     </p>
   {/if}
 
-  <ObservationPanel {model} language={lang} stationName={name} />
+  {#if !isManualDaily(data.station)}
+    <ObservationPanel {model} language={lang} stationName={name} />
+  {/if}
   <SiteFooter language={lang} />
 </AppShell>
 

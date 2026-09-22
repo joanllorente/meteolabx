@@ -71,6 +71,14 @@ class AromePackageError(RuntimeError):
     """El paquete no se pudo descargar o no contiene lo esperado."""
 
 
+class AromePackageNotReady(AromePackageError):
+    """Transient publication/rate-limit failure, safe to retry within a budget."""
+
+    def __init__(self, message: str, retry_after: float = 15.0):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 def _cache_dir() -> Path:
     configured = os.getenv("METEOLABX_AROME_PACKAGE_CACHE_DIR", "").strip()
     if configured:
@@ -115,7 +123,7 @@ def _downloads_log(run: datetime) -> Path:
     return _cache_dir() / f"downloads-{stamp}.jsonl"
 
 
-def _record_download(package: str, run: datetime, block: str, size: int, seconds: float) -> None:
+def _record_download(package: str, run: datetime, block: str, size: int, seconds: float, **metrics) -> None:
     """Apunta una descarga para poder resumir después lo que costó la pasada.
 
     Se escribe en disco, no en memoria: cada trabajo aislado es un proceso
@@ -124,6 +132,7 @@ def _record_download(package: str, run: datetime, block: str, size: int, seconds
     necesita coordinar a nadie.
     """
     linea = json.dumps({
+        **metrics,
         "package": package, "block": block,
         "bytes": int(size), "seconds": round(float(seconds), 1),
         "at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -136,13 +145,42 @@ def _record_download(package: str, run: datetime, block: str, size: int, seconds
         logger.debug("No se pudo apuntar la descarga de %s %s", package, block)
 
 
+def _wall_seconds(intervalos: list[tuple[float, float]]) -> float:
+    """Tiempo de reloj con al menos una descarga en marcha.
+
+    Sumar la duración de cada descarga cuenta dos veces lo que se solapa: con
+    cuatro a la vez, un minuto de reloj eran cuatro «minutos de descarga», y
+    los bytes divididos entre esa suma daban la velocidad de cada una, no la
+    que entraba al contenedor.
+    """
+    total = 0.0
+    fin_tramo = None
+    inicio_tramo = None
+    for inicio, fin in sorted(intervalos):
+        if fin_tramo is None or inicio > fin_tramo:
+            if fin_tramo is not None:
+                total += fin_tramo - inicio_tramo
+            inicio_tramo, fin_tramo = inicio, fin
+        else:
+            fin_tramo = max(fin_tramo, fin)
+    if fin_tramo is not None:
+        total += fin_tramo - inicio_tramo
+    return total
+
+
 def download_stats(run: datetime) -> dict[str, Any]:
-    """Cuántos paquetes, cuántos bytes y cuánto tiempo lleva esta pasada."""
-    resumen = {"packages": 0, "bytes": 0, "seconds": 0.0}
+    """Cuántos paquetes, cuántos bytes y cuánto tiempo lleva esta pasada.
+
+    `seconds` suma la duración de cada descarga; `wall_seconds` es el tiempo de
+    reloj en que hubo alguna activa. Bytes entre el primero dan la velocidad
+    media de una descarga; entre el segundo, el caudal real del contenedor.
+    """
+    resumen = {"packages": 0, "bytes": 0, "seconds": 0.0, "wall_seconds": 0.0}
     try:
         contenido = _downloads_log(run).read_text(encoding="utf-8")
     except OSError:
         return resumen
+    intervalos: list[tuple[float, float]] = []
     for linea in contenido.splitlines():
         try:
             registro = json.loads(linea)
@@ -150,8 +188,22 @@ def download_stats(run: datetime) -> dict[str, Any]:
             continue
         resumen["packages"] += 1
         resumen["bytes"] += int(registro.get("bytes", 0))
-        resumen["seconds"] += float(registro.get("seconds", 0.0))
+        duracion = float(registro.get("seconds", 0.0))
+        resumen["seconds"] += duracion
+        try:
+            # `at` se apunta al terminar, así que el tramo va de at - seconds a at.
+            fin = datetime.fromisoformat(str(registro["at"]).replace("Z", "+00:00")).timestamp()
+            intervalos.append((fin - duracion, fin))
+        except (KeyError, ValueError):
+            pass
+        if "headers_seconds" in registro:
+            resumen["timed_packages"] = resumen.get("timed_packages", 0) + 1
+            for key in ("headers_seconds", "first_chunk_seconds", "body_seconds", "transfer_seconds"):
+                resumen[key] = round(resumen.get(key, 0.0) + float(registro.get(key, 0.0)), 3)
+            resumen["max_observed_downloads"] = max(resumen.get("max_observed_downloads", 0),
+                int(registro.get("active_downloads_start", 0)), int(registro.get("active_downloads_end", 0)))
     resumen["seconds"] = round(resumen["seconds"], 1)
+    resumen["wall_seconds"] = round(_wall_seconds(intervalos), 1)
     return resumen
 
 
@@ -162,7 +214,21 @@ def _is_downloaded(destination: Path) -> bool:
         return False
 
 
-def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
+def _partial_sizes(destination: Path) -> dict[tuple[str, int], int]:
+    """Snapshot only this package's partial files; no locks or mutations."""
+    sizes = {}
+    for path in destination.parent.glob(f"{destination.stem}.*.part"):
+        try:
+            stat = path.stat()
+            sizes[(path.name, stat.st_ino)] = stat.st_size
+        except OSError:
+            continue
+    return sizes
+
+
+def ensure_package(package: str, run: datetime, valid_time: datetime, *,
+                   lock_timeout_s: float | None = None,
+                   download_if_missing: bool = True) -> Path:
     """Descarga el bloque que contiene esa hora, si no está ya en disco.
 
     Un bloque cubre siete plazos y los procesos van por horas consecutivas, así
@@ -180,7 +246,30 @@ def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
     lock_path = destination.with_suffix(".lock")
     espera = time.monotonic()
     with lock_path.open("a+", encoding="ascii") as lock_handle:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        # None: follow growth, not a wall-clock deadline. Explicit timeouts
+        # retain their meaning; prefetch uses zero to skip an occupied lock.
+        stall_budget = max(0.0, float(os.getenv("METEOLABX_AROME_PACKAGE_STALL_S", "60")))
+        previous_sizes = _partial_sizes(destination)
+        last_progress = espera
+        while True:
+            try:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                now = time.monotonic()
+                if lock_timeout_s is not None:
+                    remaining = max(0.0, lock_timeout_s) - (now - espera)
+                else:
+                    sizes = _partial_sizes(destination)
+                    if any(size > previous_sizes.get(key, 0) for key, size in sizes.items()):
+                        last_progress = now
+                    previous_sizes = sizes
+                    remaining = stall_budget - (now - last_progress)
+                if remaining <= 0:
+                    reason = (f"sin progreso durante {stall_budget:.0f} s" if lock_timeout_s is None
+                              else f"tras {max(0.0, lock_timeout_s):.0f} s de espera")
+                    raise AromePackageError(f"{package} {block}: descarga en curso {reason}")
+                time.sleep(min(0.25, remaining))
         turno = time.monotonic() - espera
         try:
             # Puede haberlo bajado otro mientras esperábamos el turno.
@@ -191,12 +280,10 @@ def ensure_package(package: str, run: datetime, valid_time: datetime) -> Path:
                         "de una segunda descarga.", package, block, turno
                     )
                 return destination
+            if not download_if_missing:
+                raise AromePackageError(f"{package} {block}: paquete no preparado")
             descarga = time.monotonic()
             resultado = _download_package(package, run, block, destination)
-            _record_download(
-                package, run, block,
-                resultado.stat().st_size, time.monotonic() - descarga,
-            )
             logger.info(
                 "%s %s descargado: %.0f MB en %.0f s%s.",
                 package, block,
@@ -217,6 +304,11 @@ def package_ready(package: str, run: datetime, valid_time: datetime) -> bool:
         return False
 
 
+def _active_download_count() -> int:
+    """Non-intrusive approximation: includes orphaned .part files after crashes."""
+    return sum(1 for _ in _cache_dir().glob("*.part"))
+
+
 def _download_package(
     package: str, run: datetime, block: str, destination: Path
 ) -> Path:
@@ -224,30 +316,63 @@ def _download_package(
     url = f"{PACKAGE_BASE}/models/AROME/grids/0.025/packages/{package}/productARO"
     parameters = {
         "referencetime": run.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "time": block,
-        "format": "grib2",
+        "time": block, "format": "grib2",
     }
+    # Obtain credentials before timing the HTTP request itself.
+    headers = authorization_headers()
+    started = time.monotonic()
+    first_chunk = None
+    size = 0
     try:
-        with requests.get(
-            url,
-            headers=authorization_headers(),
-            params=parameters,
-            timeout=1800,
-            stream=True,
-        ) as response:
+        # Visible while awaiting HTTP headers as well as while receiving data.
+        partial.touch()
+        active_start = _active_download_count()
+        with requests.get(url, headers=headers, params=parameters,
+                          timeout=(30, 1800), stream=True) as response:
+            headers_at = time.monotonic()
             if response.status_code != 200:
-                raise AromePackageError(
-                    f"El paquete {package} {block} no está disponible "
-                    f"(HTTP {response.status_code})."
-                )
+                message = f"El paquete {package} {block} no está disponible (HTTP {response.status_code})."
+                if response.status_code in (404, 429, 500, 502, 503, 504):
+                    try:
+                        retry_after = max(1.0, float(response.headers.get("Retry-After", "15")))
+                    except (TypeError, ValueError):
+                        retry_after = 15.0
+                    raise AromePackageNotReady(message, retry_after)
+                raise AromePackageError(message)
             with partial.open("wb") as handle:
-                for chunk in response.iter_content(1024 * 1024):
+                for chunk in response.iter_content(64 * 1024):
+                    if not chunk:
+                        continue
+                    if first_chunk is None:
+                        first_chunk = time.monotonic()
                     handle.write(chunk)
-        # Se renombra al final para que nadie lea un fichero a medio bajar.
+                    size += len(chunk)
+        finished = time.monotonic()
+        if size == 0:
+            raise AromePackageError(f"Paquete vacío: {package} {block}")
+        active_end = _active_download_count()
         partial.replace(destination)
+        body_seconds = finished - headers_at
+        transfer_seconds = finished - first_chunk
+        metrics = {
+            "headers_seconds": round(headers_at - started, 3),
+            "first_chunk_seconds": round(first_chunk - started, 3),
+            "body_seconds": round(body_seconds, 3),
+            "transfer_seconds": round(transfer_seconds, 3),
+            "body_mb_s": round(size / 1e6 / max(body_seconds, 1e-6), 3),
+            "active_downloads_start": active_start,
+            "active_downloads_end": active_end,
+        }
+        _record_download(package, run, block, size, finished - started, **metrics)
+        logger.info("Descarga %s %s: bytes=%d headers=%.3fs first_chunk=%.3fs "
+                    "body=%.3fs transfer=%.3fs body_rate=%.3f MB/s active_start=%d active_end=%d",
+                    package, block, size, metrics["headers_seconds"], metrics["first_chunk_seconds"],
+                    body_seconds, transfer_seconds, metrics["body_mb_s"],
+                    active_start, metrics["active_downloads_end"])
     except requests.RequestException as exc:
-        partial.unlink(missing_ok=True)
         raise AromePackageError(f"No se pudo descargar {package} {block}: {exc}") from exc
+    finally:
+        partial.unlink(missing_ok=True)
     return destination
 
 

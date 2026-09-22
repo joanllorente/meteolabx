@@ -1,5 +1,8 @@
 import { error, redirect } from '@sveltejs/kit';
-import { ApiError, fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
+import { isManualDaily } from '$lib/observation/manual-daily.js';
+import { liveCacheControl } from '$lib/server/cache-control.js';
+import { ApiError, fetchLatestDailyPrecip,
+  fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
 import { contentEtag, observationVersion } from '$lib/server/etag.js';
 import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import {
@@ -66,11 +69,19 @@ export async function load({ params, fetch, setHeaders }) {
 
   // Que el proveedor falle no puede tumbar la página: la ficha se sirve
   // igual y el panel lo dice.
+  // Pluviómetro manual: no hay lectura actual que pedir, pedirla daba «sin
+  // datos» y un error en el panel. Se enseña la última lluvia diaria.
+  const manual = isManualDaily(station) && !station.is_historical_only;
+  const dailyPrecip = manual
+    ? await fetchLatestDailyPrecip(station, { fetch }).catch(() => null)
+    : null;
   const observation = station.is_historical_only
     ? { unavailable: { status: 410, code: 'historical_station' } }
-    : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
-        unavailable: describeFailure(cause)
-      }));
+    : manual
+      ? { unavailable: { status: 200, code: 'manual_daily_station' } }
+      : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
+          unavailable: describeFailure(cause)
+        }));
 
   // Una hora en el navegador y cinco minutos sirviendo el anterior mientras se
   // revalida: las estaciones publican cada 10-60 minutos, así que no hay nada
@@ -81,9 +92,19 @@ export async function load({ params, fetch, setHeaders }) {
   // `s-maxage` más corto a lo compartible. Una copia del borde la ven todos
   // los visitantes, así que caducarla antes cuesta poco y evita que una ficha
   // se quede una hora enseñando una observación vieja.
-  const version = observationVersion(observation);
+  // Una ficha sin datos no se guarda: el fallo es de este instante, y en caché
+  // se repetiría a cada visitante (ver `cache-control.js`). La histórica sí:
+  // no publicar observaciones es su estado permanente, no un tropiezo.
+  // La manual se guarda si llegó su lluvia; la versión es el día publicado,
+  // para que el ETag cambie cuando MeteoSwiss publique el siguiente.
+  const consultaBuena = manual
+    ? dailyPrecip !== null
+    : !observation.unavailable || station.is_historical_only;
+  const version = manual
+    ? dailyPrecip && `manual-${dailyPrecip.day}`
+    : observationVersion(observation);
   setHeaders({
-    'cache-control': 'public, max-age=3600, stale-while-revalidate=300',
+    'cache-control': liveCacheControl(consultaBuena, 'public, max-age=3600, stale-while-revalidate=300'),
     ...(version
       ? { etag: contentEtag('observation', lang, station.url_slug, version, replacementPath) }
       : {})
@@ -93,7 +114,7 @@ export async function load({ params, fetch, setHeaders }) {
   // visitantes en el CDN, y un dato de quien pidió primero acabaría contado
   // como el de todos los demás. El navegador sabe sus propios idiomas y los
   // manda aparte al registrar la visita.
-  return { lang, slug: station.url_slug, station, meta, observation, replacementPath };
+  return { lang, slug: station.url_slug, station, meta, observation, dailyPrecip, replacementPath };
 }
 
 function describeFailure(cause) {

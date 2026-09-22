@@ -104,22 +104,11 @@ def _trabajo(hora, tier=2, run="2026-08-26T12:00:00Z", dia=26):
     )
 
 
-def test_prefetch_skips_the_block_already_in_use():
-    """Se adelanta el bloque siguiente, no el que se está usando.
-
-    El bloque en curso ya lo está bajando quien lo necesita; pedirlo otra vez
-    solo serviría para quedarse esperando en su cerrojo sin adelantar nada.
-    """
+def test_prefetch_prioritizes_the_first_pending_block():
     import scripts.forecast_worker as trabajador
-
-    # 12Z: las horas 12-18 son el bloque 00H06H y las 19+ el siguiente.
-    trabajos = [_trabajo(h) for h in (12, 13, 14, 15, 19, 20, 26)]
-
-    objetivos = trabajador._blocks_ahead(trabajos, limit=1)
-
-    assert len(objetivos) == 1
-    _, hora = objetivos[0]
-    assert hora.hour == 19, "debe adelantar el segundo bloque, no el primero"
+    trabajos = [_trabajo(h) for h in (19,20)] + [_trabajo(2,dia=27)]
+    objetivos = trabajador._blocks_ahead(trabajos, limit=2)
+    assert [hora.hour for _,hora in objetivos] == [19,1]
 
 
 def test_prefetch_ignores_jobs_that_do_not_use_packages():
@@ -186,7 +175,7 @@ def test_prefetch_keeps_going_when_one_block_is_not_published_yet(monkeypatch):
     monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
     pedidos = []
 
-    def a_veces_falla(paquete, run, valid_time):
+    def a_veces_falla(paquete, run, valid_time, **kwargs):
         pedidos.append((paquete, valid_time.hour))
         if valid_time.hour == 19:
             raise trabajador.AromePackageError("todavía no publicado")
@@ -339,7 +328,7 @@ def test_prefetch_retries_blocks_that_are_not_published_yet(monkeypatch):
     monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
     intentos = {"n": 0}
 
-    def publicado_a_la_tercera(paquete, run, valid_time):
+    def publicado_a_la_tercera(paquete, run, valid_time, **kwargs):
         intentos["n"] += 1
         if intentos["n"] < 3:
             raise trabajador.AromePackageError("todavía no publicado")
@@ -368,7 +357,7 @@ def test_prefetch_gives_up_after_the_deadline(monkeypatch):
     monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
     monkeypatch.setattr(trabajador, "PREFETCH_DEADLINE_S", 0)
 
-    def nunca(paquete, run, valid_time):
+    def nunca(paquete, run, valid_time, **kwargs):
         raise trabajador.AromePackageError("nunca se publica")
 
     monkeypatch.setattr(trabajador, "ensure_package", nunca)
@@ -392,7 +381,7 @@ def test_prefetch_stops_when_the_cycle_ends(monkeypatch):
     monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
     parar = threading.Event()
 
-    def falla_y_para(paquete, run, valid_time):
+    def falla_y_para(paquete, run, valid_time, **kwargs):
         parar.set()
         raise trabajador.AromePackageError("todavía no publicado")
 
@@ -458,10 +447,9 @@ def test_prefetch_does_not_depend_on_what_the_catalog_has_announced():
 
     assert len(bloques) >= 5, f"con la cola corta solo persigue {bloques}"
     assert "31H36H" in bloques, "el final de la pasada también hace falta"
-    # El que está en uso se deja para el final: esperar en su cerrojo
-    # retrasaría a los que harán falta antes.
-    assert bloques[0] != "00H06H"
-    assert bloques[-1] == "00H06H"
+    # The immediate block goes first; prefetch never waits on another owner.
+    assert bloques[0] == "00H06H"
+    assert bloques[-1] == "31H36H"
 
 
 def test_prefetch_horizon_covers_the_diagnostics_horizon():
@@ -610,10 +598,11 @@ def test_prefetch_also_brings_the_dcape_package(monkeypatch):
 
     monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
     monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    monkeypatch.setattr(trabajador, "PREFETCH_STREAMS", 1)
     pedidos = []
     monkeypatch.setattr(
         trabajador, "ensure_package",
-        lambda paquete, run, vt: pedidos.append(paquete) or "ruta",
+        lambda paquete, run, vt, **kwargs: pedidos.append(paquete) or "ruta",
     )
 
     hilo = trabajador._start_package_prefetch([_trabajo(12), _trabajo(19)], threading.Event())
@@ -704,13 +693,14 @@ def test_prefetch_downloads_several_blocks_at_once(monkeypatch):
 
     monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
     monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
-    assert trabajador.PREFETCH_STREAMS >= 2
+    monkeypatch.setattr(trabajador, "PREFETCH_STREAMS", 4)
 
     a_la_vez = []
     corriendo = []
     cerrojo = threading.Lock()
 
-    def descarga_lenta(paquete, run, valid_time):
+    def descarga_lenta(paquete, run, valid_time, **kwargs):
+        assert kwargs["lock_timeout_s"] == 0
         with cerrojo:
             corriendo.append(1)
             a_la_vez.append(len(corriendo))
@@ -727,7 +717,7 @@ def test_prefetch_downloads_several_blocks_at_once(monkeypatch):
     assert hilo is not None
     hilo.join(timeout=10)
 
-    assert max(a_la_vez) >= 2, f"nunca hubo dos descargas a la vez: {a_la_vez}"
+    assert max(a_la_vez) == 4, f"debe usar exactamente cuatro slots: {a_la_vez}"
 
 
 def test_parallel_prefetch_still_retries_what_is_not_published(monkeypatch):
@@ -742,7 +732,7 @@ def test_parallel_prefetch_still_retries_what_is_not_published(monkeypatch):
     intentos = {"n": 0}
     cerrojo = threading.Lock()
 
-    def publicado_tarde(paquete, run, valid_time):
+    def publicado_tarde(paquete, run, valid_time, **kwargs):
         with cerrojo:
             intentos["n"] += 1
             if intentos["n"] < 4:
@@ -788,6 +778,67 @@ def test_a_finished_run_summarises_itself(caplog):
     assert "Pasada 2026-08-27T06:00:00Z completada en 80 min" in texto
     assert "nativos 306 trabajos 0-30 min" in texto
     assert "convectivos 38 trabajos 34-80 min" in texto
+
+
+def test_finished_and_failed_jobs_add_their_busy_time():
+    """Cada trabajo suma a su nivel lo que ocupó, termine bien o mal."""
+    from datetime import datetime, timedelta, timezone
+
+    import scripts.forecast_worker as trabajador
+
+    manifiesto = {"run": "2026-08-27T06:00:00Z", "products": {}}
+    trabajos = [
+        trabajador.ForecastJob("2026-08-27T06:00:00Z", f"2026-08-27T{hora:02d}:00:00Z",
+                               ("mucape",), "model", 2)
+        for hora in (7, 8)
+    ]
+    for trabajo in trabajos:
+        trabajador._mark_job_started(manifiesto, trabajo, 600, slots=3)
+    # Como si hubieran arrancado hace dos minutos.
+    hace = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+    for entrada in manifiesto["progress"]["active_jobs"]:
+        entrada["started_at"] = hace.replace("+00:00", "Z")
+
+    trabajador._mark_job_finished(manifiesto, trabajos[0])
+    trabajador._mark_job_failed(manifiesto, trabajos[1], "WCS 500")
+
+    tramo = manifiesto["tier_timing"]["2"]
+    assert tramo["slots"] == 3
+    assert tramo["busy_seconds"] == pytest.approx(240.0, abs=5.0)
+    assert tramo["last_end"]
+    assert manifiesto["progress"]["active_jobs"] == []
+
+
+def test_the_run_report_sees_the_last_frame(monkeypatch):
+    """El informe se emite con el progreso al día, no con el del ciclo anterior.
+
+    `_finish_status` corre antes de `_persist_manifest`, que es quien refrescaba
+    el progreso: el correo de cierre siempre contaba un frame de menos.
+    """
+    import copy
+
+    import scripts.forecast_worker as trabajador
+
+    vistos = []
+    monkeypatch.setattr(trabajador, "_log_run_summary", lambda m: True)
+    monkeypatch.setattr(
+        trabajador, "_emit_run_report",
+        lambda store, m: bool(vistos.append(copy.deepcopy(m["progress"]))) or True,
+    )
+    manifiesto = {
+        "run": "2026-08-27T06:00:00Z",
+        "status": "publishing",
+        "expected_times": ["2026-08-29T09:00:00Z"],
+        "products": {},
+        # Un recuento imposible: si el informe lo ve, es que llegó sin refrescar.
+        "progress": {"frames_available": -1, "frames_total": -1},
+    }
+    trabajador._finish_status(manifiesto, store=object())
+
+    assert manifiesto["status"] == "complete"
+    fresco = trabajador._refresh_progress(copy.deepcopy(manifiesto))
+    assert vistos and vistos[0]["frames_available"] == fresco["frames_available"]
+    assert vistos[0]["frames_total"] == fresco["frames_total"]
 
 
 def test_the_summary_only_appears_once(caplog):
@@ -836,3 +887,39 @@ def test_a_run_without_timings_is_not_marked_as_summarised():
                               "last_start": "2026-08-28T14:30:00Z", "jobs": 12}},
     }
     assert trabajador._log_run_summary(con_marcas) is True
+
+
+def test_the_worker_trims_its_heap_and_reports_what_it_freed(monkeypatch, caplog):
+    """El padre del worker recorta su montón: la API lo hacía, él no."""
+    import logging
+
+    import scripts.forecast_worker as trabajador
+    from server.services import memory_maintenance
+
+    lecturas = iter([900 * 1024**2, 600 * 1024**2])
+    monkeypatch.setattr(memory_maintenance, "anonymous_bytes", lambda: next(lecturas))
+    llamadas = []
+    monkeypatch.setattr(memory_maintenance, "collect_and_trim", lambda: llamadas.append(1) or (0, 1))
+    with caplog.at_level(logging.INFO, logger=trabajador.logger.name):
+        liberado = trabajador._trim_worker_memory()
+    assert llamadas == [1]
+    assert liberado == 300 * 1024**2
+    assert "300 MB devueltos" in caplog.text
+
+
+def test_grib_release_is_logged_only_when_it_changes(monkeypatch, caplog):
+    """Cada minuto se consulta; solo se cuenta cuando cambia, y el atasco se ve."""
+    import logging
+
+    import scripts.forecast_worker as trabajador
+
+    monkeypatch.setattr(trabajador, "_ULTIMA_LIBERACION_GRIB", None)
+    with caplog.at_level(logging.INFO, logger=trabajador.logger.name):
+        trabajador._report_grib_release({"skipped": "unfinished_runs"})
+        trabajador._report_grib_release({"skipped": "unfinished_runs"})
+        trabajador._report_grib_release({"files_advised": 3, "file_bytes": 1})
+    mensajes = [r.getMessage() for r in caplog.records if "Caché de GRIB" in r.getMessage()]
+    assert mensajes == [
+        "Caché de GRIB: no se libera, alguna pasada conservada no está completa.",
+        "Caché de GRIB: se libera tras cada ciclo.",
+    ]

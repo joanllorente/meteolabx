@@ -1,6 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
+import { isManualDaily } from '$lib/observation/manual-daily.js';
+import { liveCacheControl } from '$lib/server/cache-control.js';
 
-import { ApiError, fetchProcessedObservation, fetchStation } from '$lib/server/api.js';
+import { ApiError, fetchLatestDailyPrecip,
+  fetchProcessedObservation, fetchStation } from '$lib/server/api.js';
 import { describeRequestFailure } from '$lib/observation/unavailable.js';
 import { observationPath } from '$lib/seo/station.js';
 import { contentEtag, observationVersion } from '$lib/server/etag.js';
@@ -51,17 +54,35 @@ export async function load({ params, fetch, setHeaders }) {
     redirect(301, observationPath(lang, slugPayload.url_slug));
   }
 
+  // Pluviómetro manual: no hay lectura actual que pedir, pedirla daba «sin
+  // datos» y un error en el panel. Se enseña la última lluvia diaria.
+  const manual = isManualDaily(station) && !station.is_historical_only;
+  const dailyPrecip = manual
+    ? await fetchLatestDailyPrecip(station, { fetch }).catch(() => null)
+    : null;
   const observation = station.is_historical_only
     ? { unavailable: { status: 410, code: 'historical_station' } }
-    : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
-        unavailable: describeRequestFailure(cause, { ApiError })
-      }));
+    : manual
+      ? { unavailable: { status: 200, code: 'manual_daily_station' } }
+      : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
+          unavailable: describeRequestFailure(cause, { ApiError })
+        }));
 
-  const version = observationVersion(observation);
+  // Una ficha sin datos no se guarda: el fallo es de este instante, y en caché
+  // se repetiría a cada visitante (ver `cache-control.js`). La histórica sí:
+  // no publicar observaciones es su estado permanente, no un tropiezo.
+  // La manual se guarda si llegó su lluvia; la versión es el día publicado,
+  // para que el ETag cambie cuando MeteoSwiss publique el siguiente.
+  const consultaBuena = manual
+    ? dailyPrecip !== null
+    : !observation.unavailable || station.is_historical_only;
+  const version = manual
+    ? dailyPrecip && `manual-${dailyPrecip.day}`
+    : observationVersion(observation);
   setHeaders({
-    'cache-control': 'public, max-age=3600, stale-while-revalidate=300',
+    'cache-control': liveCacheControl(consultaBuena, 'public, max-age=3600, stale-while-revalidate=300'),
     ...(version ? { etag: contentEtag('observation', lang, provider, stationId, version) } : {})
   });
 
-  return { lang, provider, stationId, station, observation, personal: false };
+  return { lang, provider, stationId, station, observation, dailyPrecip, personal: false };
 }

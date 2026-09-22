@@ -100,6 +100,21 @@ function providerStationId(station) {
  * termodinámicas, extremos del día y serie. Es el mismo endpoint que alimenta
  * la pestaña de observación de la app.
  */
+/**
+ * Última lluvia diaria de una estación sin lectura actual (`realtime` falso).
+ *
+ * Los pluviómetros manuales de MeteoSwiss no tienen observación en vivo: pedirla
+ * daba «sin datos» y un error en el panel. Lo que sí publican es la lluvia de
+ * cada día, con dos días de retraso, y eso es lo que enseña su ficha.
+ */
+export function fetchLatestDailyPrecip(station, options = {}) {
+  const query = new URLSearchParams({
+    provider: station.provider,
+    station_id: providerStationId(station)
+  });
+  return request(`/v1/observations/daily/latest?${query}`, options);
+}
+
 export function fetchProcessedObservation(station, options = {}) {
   return request('/v1/observations/current/processed', {
     ...options,

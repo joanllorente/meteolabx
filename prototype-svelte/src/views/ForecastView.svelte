@@ -1,7 +1,7 @@
 <script>
   import {
     Calendar, ChevronDown, ChevronLeft, ChevronRight, Download,
-    Info, Layers, Maximize2, Pause, Play, RefreshCw, Search
+    Info, Layers, Maximize2, Minimize2, Pause, Play, RefreshCw, Search
   } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import ForecastGrid from '../components/ForecastGrid.svelte';
@@ -53,6 +53,8 @@
   // repintarse cuando cambia, solo leerlo al volver a montar el mapa.
   let mapView = null;
   let mapContainer = $state();
+  let mapCard = $state();
+  let fullscreen = $state(false);
   // Blanco o negro, según lo que haya bajo la marca de agua. Lo mide el
   // componente del mapa, que es quien tiene los píxeles.
   let mapInk = $state('');
@@ -85,9 +87,11 @@
   }
 
   function toggleFullscreen() {
-    if (!mapContainer) return;
+    // Pantalla completa sobre la tarjeta entera, no solo el mapa: así la
+    // cabecera y la barra de horas siguen a mano para pasar de hora.
+    if (!mapCard) return;
     if (document.fullscreenElement) document.exitFullscreen?.();
-    else mapContainer.requestFullscreen?.();
+    else mapCard.requestFullscreen?.();
   }
 
   const model = $derived(forecastModels.find((item) => item.id === selectedModel) || forecastModels[0]);
@@ -357,6 +361,17 @@
     hourIndex = Math.max(0, Math.min(activeHours.length - 1, hourIndex + delta));
   }
 
+  function keyboardHours(event) {
+    if (event.key === 'Escape') unitMenuOpen = false;
+    // Flechas para pasar de hora, sobre todo en pantalla completa; no se
+    // roban a los campos que ya las usan (buscador, selects, deslizador).
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target?.closest?.('input, select, textarea, [contenteditable]')) return;
+    event.preventDefault();
+    step(event.key === 'ArrowLeft' ? -1 : 1);
+  }
+
   function nextReadyHourIndex(fromIndex) {
     return activeHours.findIndex((hour, index) => index > fromIndex && hourIsReady(hour));
   }
@@ -529,9 +544,11 @@
   });
 </script>
 
+<svelte:document onfullscreenchange={() => (fullscreen = Boolean(mapCard) && document.fullscreenElement === mapCard)} />
+
 <svelte:window
   onclick={() => (unitMenuOpen = false)}
-  onkeydown={(event) => { if (event.key === 'Escape') unitMenuOpen = false; }}
+  onkeydown={keyboardHours}
 />
 
 <section class="forecast-head">
@@ -628,7 +645,7 @@
         </div>
       </section>
     {:else}
-    <section class="map-card">
+    <section class="map-card" bind:this={mapCard}>
       <header class="map-head">
         <div class="map-product">
           <span class="product-mark" style:--product-accent={product.accent}></span>
@@ -649,7 +666,9 @@
             disabled={!frameMatchesSelection || exporting}
             onclick={downloadPng}
           ><Download size={16} /></button>
-          <button type="button" title={tr('fullscreen')} onclick={toggleFullscreen}><Maximize2 size={16} /></button>
+          <button type="button" title={tr(fullscreen ? 'exitFullscreen' : 'fullscreen')} aria-label={tr(fullscreen ? 'exitFullscreen' : 'fullscreen')} onclick={toggleFullscreen}>
+            {#if fullscreen}<Minimize2 size={16} />{:else}<Maximize2 size={16} />{/if}
+          </button>
         </div>
       </header>
 
@@ -838,7 +857,7 @@
   .unit-menu button:hover{color:#fff;background:rgba(255,255,255,.08)}
   .unit-menu button.active{color:#06131c;background:#68bdf1;font-weight:750}
   .map-watermark{position:absolute;left:14px;bottom:13px;z-index:7;display:flex;align-items:center;gap:8px;color:var(--map-ink,#e6f1f8);pointer-events:none;user-select:none}.map-watermark img{width:27px;height:27px;border-radius:7px}.map-watermark span{display:flex;flex-direction:column;line-height:1}.map-watermark strong{font-size:.56rem;letter-spacing:.12em}.map-watermark small{margin-top:4px;font-size:.46rem;letter-spacing:.16em;text-transform:uppercase}:global(.theme-light) .map-watermark{color:var(--map-ink,#1b3a4e)}
-  .forecast-map:fullscreen{min-height:100vh}
+  .map-card:fullscreen{display:flex;flex-direction:column;border:0;border-radius:0}.map-card:fullscreen .forecast-map{flex:1;height:auto;min-height:0}
   .level-rail{position:absolute;right:12px;top:58px;bottom:54px;z-index:14;display:flex;width:92px;flex-direction:column;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8f2f7;background:rgba(5,14,22,.78);backdrop-filter:blur(10px);overflow:hidden}.level-rail header{padding:9px 9px 7px;border-bottom:1px solid rgba(255,255,255,.1)}.level-rail header strong,.level-rail header small{display:block}.level-rail header strong{font-size:.62rem}.level-rail header small{margin-top:2px;color:rgba(235,244,251,.55);font-size:.47rem}.level-kind{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px}.level-kind button,.level-list button{border:0;color:rgba(235,244,251,.62);background:transparent;font-size:.5rem}.level-kind button{padding:5px 2px;border-radius:5px}.level-kind button.active{color:#06131c;background:#68bdf1;font-weight:750}.level-list{display:flex;min-height:0;flex:1;flex-direction:column;overflow-y:auto;padding:2px 5px 6px}.level-list button{flex:0 0 25px;border-left:2px solid transparent;text-align:right}.level-list button:hover{color:#fff;background:rgba(255,255,255,.06)}.level-list button.active{border-left-color:#68bdf1;border-radius:4px;color:#8ed3ff;background:rgba(76,163,219,.12);font-weight:750}
   .timeline{display:grid;grid-template-columns:34px 34px 1fr 34px;align-items:center;gap:7px;padding:12px 14px 14px;border-top:1px solid var(--border)}.timeline>button{width:34px;height:34px;border-radius:9px}.timeline>button:disabled{opacity:.35;cursor:default}.timeline .play{color:#76bfff}.timeline .play.active{color:#08141f;background:#76bfff}.time-range{min-width:0;padding:0 5px}.time-labels{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.57rem}.time-labels strong{color:var(--ink);font-size:.63rem}.time-range input{width:100%;margin:9px 0 2px;accent-color:#5faeea}.ticks{display:flex;justify-content:space-between;padding:0 3px}.ticks i{width:2px;height:4px;border-radius:2px;background:var(--border-2)}.ticks i.major{height:7px}.ticks i.ready{background:#43c98a}.ticks i.pending{background:var(--border-2);opacity:.62}
   .product-explainer{margin-top:14px;padding:17px}.product-explainer>header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.explainer-identity{display:flex;align-items:center;gap:11px}.explainer-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;color:#6ab7ef;background:rgba(62,142,208,.11)}.explainer-identity small{display:block;margin-bottom:3px;color:var(--muted);font-size:.56rem}.explainer-identity h3{font-size:.88rem}.source-tag{padding:5px 8px;border-radius:6px;color:#78baf0;background:rgba(62,142,208,.11);font-size:.55rem;font-weight:740;text-transform:uppercase}.source-tag.derived{color:#f08b9d;background:rgba(240,112,134,.1)}.product-explainer h4{margin-bottom:7px;color:var(--ink-2);font-size:.61rem;text-transform:uppercase;letter-spacing:.065em}.explanation-overview{display:grid;grid-template-columns:1fr;gap:19px;padding-top:17px}.explanation-overview p,.interpretation li,.calculation-detail p,.calculation-detail li{color:var(--muted);font-size:.65rem;line-height:1.62}.interpretation ul{display:grid;gap:8px;margin:0;padding-left:17px}.interpretation li::marker,.calculation-copy li::marker{color:#67b7ef}.calculation-detail{margin-top:19px;padding-top:17px;border-top:1px solid var(--border)}.calculation-copy{min-width:0}.calculation-copy ol{display:grid;gap:5px;margin:11px 0 0;padding-left:18px}.calculation-copy code{display:block;margin-top:12px;padding:7px 9px;border-radius:7px;color:#70b9ef;background:var(--panel-2);font-size:.52rem;overflow-wrap:anywhere}.technical-sources{display:grid;grid-template-columns:1fr;gap:12px;margin-top:17px;padding-top:14px;border-top:1px solid var(--border)}.technical-sources>strong{color:var(--ink-2);font-size:.58rem;text-transform:uppercase;letter-spacing:.055em}.technical-sources>div{display:flex;flex-wrap:wrap;gap:6px}.technical-sources a{padding:5px 7px;border:1px solid var(--border);border-radius:6px;color:#6db5e9;background:var(--panel-2);font-size:.53rem;line-height:1.35;text-decoration:none}.technical-sources a:hover{border-color:rgba(109,181,233,.42);color:#8bcbf8}

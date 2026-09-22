@@ -124,6 +124,39 @@ async def _block(
     return block
 
 
+async def latest_daily_precip(
+    client: httpx.AsyncClient,
+    station_id: str,
+    *,
+    today_date: Optional[date] = None,
+) -> Optional[Tuple[date, float]]:
+    """Última lluvia diaria publicada: ``(día, mm)`` o ``None``.
+
+    Es lo único que publican los pluviómetros manuales, y la ficha de
+    Observación los dejaba en blanco: el dato estaba en la pestaña de al lado.
+    Sale del mismo ``d_recent`` que el Histórico, con su misma caché. En los
+    primeros días de enero ``recent`` aún puede no traer nada del año, y se
+    mira el histórico.
+
+    El día es el de INICIO de la ventana de 6 a 6 UTC: el 19 es la lluvia del
+    19 a las 6 al 20 a las 6, que el observador lee la mañana del 20 y MeteoSwiss
+    publica el 21.
+    """
+    code = meteoswiss.normalize_station_id(station_id)
+    if not code:
+        return None
+    today = today_date or datetime.now(timezone.utc).date()
+    collection = str(meteoswiss._station_row(code).get("collection") or meteoswiss.DEFAULT_COLLECTION)
+    columna = FIELDS.index("precip_total")
+    for span in ("recent", "historical"):
+        days, values = await _block(client, collection, code, span, today=today)
+        for index in range(len(days) - 1, -1, -1):
+            value = float(values[index][columna])
+            if not math.isnan(value):
+                return date.fromordinal(int(days[index])), value
+    return None
+
+
 async def fetch_climo_daily_for_periods(
     client: httpx.AsyncClient,
     station_id: str,

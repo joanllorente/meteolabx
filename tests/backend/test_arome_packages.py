@@ -266,7 +266,7 @@ def test_surface_package_falls_back_to_wcs_when_a_field_is_missing(monkeypatch):
     from server.services import arome_forecast as prevision
 
     monkeypatch.setattr(prevision, "_packages_available", lambda: True)
-    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a, **kw: Path("da-igual"))
     def solo_el_rocio(path, valid_time, wanted):
         # Faltan la presión y las dos componentes del viento.
         return {"surface_dewpoint": (np.zeros((3, 4)), "C")}, ("t", "c", "b")
@@ -464,7 +464,7 @@ def test_only_the_requested_ip3_fields_are_read(monkeypatch):
     stamp = int(RUN.timestamp())
     monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: _IsobaricoFalso(stamp))
     monkeypatch.setattr(prevision, "_packages_available", lambda: True)
-    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a, **kw: Path("da-igual"))
 
     solo_rocio = prevision._isobaric_extras_lazily_from_package(
         RUN, RUN, [850.0], ("dewpoint",)
@@ -599,7 +599,7 @@ def test_the_lazy_levels_deliver_the_same_fields_as_the_eager_ones(monkeypatch):
     doble = _DatasetContado(stamp)
     monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
     monkeypatch.setattr(prevision, "_packages_available", lambda: True)
-    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a, **kw: Path("da-igual"))
 
     ansioso = prevision._isobaric_fields_from_package(
         None, RUN, RUN, [850.0, 500.0], ("temperature", "u")
@@ -647,7 +647,7 @@ def test_the_lazy_ip3_extras_only_open_what_is_asked(monkeypatch):
     doble = _Ip3Contado(stamp)
     monkeypatch.setattr(paquetes.rasterio, "open", lambda _p: doble)
     monkeypatch.setattr(prevision, "_packages_available", lambda: True)
-    monkeypatch.setattr(prevision, "ensure_package", lambda *a: Path("da-igual"))
+    monkeypatch.setattr(prevision, "ensure_package", lambda *a, **kw: Path("da-igual"))
 
     solo_rocio = prevision._isobaric_extras_lazily_from_package(
         RUN, RUN, [850.0, 500.0], ("dewpoint",)

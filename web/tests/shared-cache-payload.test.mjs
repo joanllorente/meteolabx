@@ -71,7 +71,9 @@ test('ninguna página compartida en el CDN lee datos del visitante', async () =>
     // Solo cuentan las que piden `public`: las de red personal conviven bajo
     // la misma ruta y declaran `private, no-store`, así que el CDN las deja
     // pasar y pueden mirar lo que necesiten.
-    if (!/['"]cache-control['"]\s*:\s*['"]public/.test(fuente)) continue;
+    // `liveCacheControl(ok, 'public, …')` también cuenta: es `public` cuando
+    // la consulta sale bien, que es justo cuando se comparte.
+    if (!/['"]cache-control['"]\s*:\s*(['"]public|liveCacheControl\()/.test(fuente)) continue;
     const firma = firmaDelLoad(fuente);
     for (const campo of ['cookies', 'request']) {
       if (new RegExp(`\\b${campo}\\b`).test(firma)) culpables.push(`${camino} recibe \`${campo}\``);

@@ -1325,7 +1325,7 @@ def test_dcape_does_wait_for_ip3(monkeypatch):
     pedidos = []
     monkeypatch.setattr(
         arome_forecast, "ensure_package",
-        lambda *a: pedidos.append(a[0]) or (_ for _ in ()).throw(
+        lambda *a, **k: pedidos.append(a[0]) or (_ for _ in ()).throw(
             arome_forecast.AromePackageError("aún no")
         ),
     )
