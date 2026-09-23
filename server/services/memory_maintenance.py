@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from server.services.cache import LIVE_CACHES
+from server.services.memory_diagnostics import memory_sample
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,17 @@ def describe_container_memory(reparto):
     return ' · '.join(partes)
 
 
+def _release_idle_frame_caches():
+    """Las cachés de mapas de AROME guardan por número de entradas, no por
+    tiempo: en cuanto nadie mira el visor son meseta pagada por minuto."""
+    try:
+        from server.services.arome_forecast import release_idle_frame_caches
+    except Exception:
+        logger.debug('No se pudieron vaciar las cachés de mapas', exc_info=True)
+        return {}
+    return release_idle_frame_caches()
+
+
 def collect_and_trim():
     collected = gc.collect()
     trimmed = None
@@ -200,16 +212,19 @@ def untracked_memory(limit=3):
 async def maintain_once():
     started = time.monotonic()
     before = anonymous_bytes()
+    native_before = await asyncio.to_thread(memory_sample)
     purged = 0
     for cache in list(LIVE_CACHES):
         purged += await cache.purge_expired()
         await asyncio.sleep(0)
+    result_mapas = await asyncio.to_thread(_release_idle_frame_caches)
     # El trabajo nativo se ejecuta fuera del hilo del event loop. La recogida
     # de ciclos puede tomar el GIL brevemente; por eso se limita la frecuencia.
     collected, trimmed = await asyncio.to_thread(collect_and_trim)
-    result = dict(purged=purged, collected=collected, trimmed=trimmed,
+    result = dict(purged=purged, maps=result_mapas, collected=collected, trimmed=trimmed,
                   anon_before=before, anon_after=anonymous_bytes(),
                   seconds=round(time.monotonic() - started, 3))
+    native_after_trim = await asyncio.to_thread(memory_sample)
     logger.info('Mantenimiento de memoria: %s', result)
     # Aparte, y después del recorte: lo que queda es la meseta de verdad.
     reparto = await asyncio.to_thread(container_memory)
@@ -223,6 +238,11 @@ async def maintain_once():
     if fuera:
         result['untracked'] = fuera
         logger.info('Memoria que Python no rastrea: %s', fuera)
+    native_after_diagnostics = await asyncio.to_thread(memory_sample)
+    result['allocator_samples'] = {'before_cleanup': native_before,
+        'after_cleanup': native_after_trim, 'after_diagnostics': native_after_diagnostics}
+    logger.info('Diagnóstico asignador (MiB; reservas no equivalen a RSS y no se suman '
+                'a Python; diferencias incluyen actividad concurrente): %s', result['allocator_samples'])
     return result
 
 

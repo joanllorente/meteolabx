@@ -2661,3 +2661,43 @@ def _serialize_grid(
             "boundary_scope": calculation_scope,
         },
     )
+
+
+# Las cachés de mapas no caducan: guardan por número de entradas, no por
+# tiempo. Al terminar una pasada, la API se queda con los últimos doce cálculos
+# (tres matrices de viento cada uno, ~222 MB) y treinta y dos mapas ya
+# serializados (~83 MB) hasta que alguien pida otra cosa. De madrugada eso es
+# un cuarto de giga de meseta que nadie va a volver a leer, y la meseta se paga
+# por minuto.
+_CACHES_DE_MAPAS = (
+    ("cálculos", lambda: _computed_frame),
+    ("mapas PNG", lambda: frame_png),
+    ("rejillas", lambda: frame_grid),
+    ("perfiles convectivos", lambda: _convective_frames),
+)
+_USOS_PREVIOS: dict[str, int] = {}
+
+
+def release_idle_frame_caches() -> dict[str, int]:
+    """Vacía las cachés de mapas que nadie ha usado desde la vuelta anterior.
+
+    Una petición durante el intervalo las conserva enteras: quien está mirando
+    el visor no paga el recálculo. El coste de equivocarse es un cálculo de más
+    tras quince minutos de silencio.
+    """
+    liberadas: dict[str, int] = {}
+    inactiva: dict[str, bool] = {}
+    for nombre, obtener in _CACHES_DE_MAPAS:
+        funcion = obtener()
+        info = funcion.cache_info()
+        usos = info.hits + info.misses
+        inactiva[nombre] = _USOS_PREVIOS.get(nombre) == usos
+        _USOS_PREVIOS[nombre] = usos
+        if inactiva[nombre] and info.currsize:
+            funcion.cache_clear()
+            liberadas[nombre] = info.currsize
+    # Comparte los campos con el último cálculo: sin él no le sirve a nadie.
+    if _SURFACE_WIND_CACHE and inactiva.get('cálculos'):
+        liberadas['viento en superficie'] = len(_SURFACE_WIND_CACHE)
+        _SURFACE_WIND_CACHE.clear()
+    return liberadas

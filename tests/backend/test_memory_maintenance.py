@@ -150,3 +150,22 @@ def test_total_diagnostic_reuses_snapshot_and_reports_tracer_overhead(monkeypatc
     text = maintenance.untracked_memory()
     assert 'metadatos de trazado 3 MB' in text
     assert 'diferencia RSS anónima−rastreada 30 MB' in text
+
+
+@pytest.mark.asyncio
+async def test_allocator_samples_bracket_cleanup_and_diagnostics(monkeypatch):
+    events = []
+    def sample():
+        events.append('sample')
+        return {'sample_number': events.count('sample')}
+    monkeypatch.setattr(maintenance, 'memory_sample', sample)
+    monkeypatch.setattr(maintenance, 'LIVE_CACHES', [])
+    monkeypatch.setattr(maintenance, 'anonymous_bytes', lambda: 100)
+    monkeypatch.setattr(maintenance, '_release_idle_frame_caches', lambda: {})
+    monkeypatch.setattr(maintenance, 'collect_and_trim', lambda: (events.append('trim') or 0, 1))
+    monkeypatch.setattr(maintenance, 'container_memory', lambda: None)
+    monkeypatch.setattr(maintenance, 'growth_by_source', lambda: events.append('snapshot'))
+    monkeypatch.setattr(maintenance, 'untracked_memory', lambda: None)
+    result = await maintenance.maintain_once()
+    assert events == ['sample', 'trim', 'sample', 'snapshot', 'sample']
+    assert result['allocator_samples']['after_diagnostics'] == {'sample_number': 3}
