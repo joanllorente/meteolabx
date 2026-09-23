@@ -99,3 +99,54 @@ def test_growth_by_source_is_opt_in_and_compares_snapshots(monkeypatch):
     finally:
         tracemalloc.stop()
         maintenance._snapshot = None
+
+
+def test_untracked_memory_contrasts_what_is_traced_with_the_rss(monkeypatch):
+    """La API creció 1,4 GB y la lista de crecimiento solo sumaba 250 MB.
+
+    Comparar dos instantáneas se pierde lo que sube a goteo: el total
+    acumulado frente a la RSS anónima dice de una vez si lo que falta pasa
+    por el asignador de Python o no.
+    """
+    monkeypatch.setenv('METEOLABX_MEMORY_TRACE', '1')
+    monkeypatch.setattr(maintenance, 'anonymous_bytes', lambda: 400 * maintenance._MB)
+    import tracemalloc
+    tracemalloc.start(1)
+    retenido = [bytearray(400_000) for _ in range(30)]
+    try:
+        texto = maintenance.untracked_memory()
+    finally:
+        tracemalloc.stop()
+    assert len(retenido) == 30
+    assert 'rastreada 1' in texto  # los 12 MB retenidos, más lo que traiga pytest
+    assert 'diferencia RSS anónima−rastreada' in texto
+    assert 'metadatos de trazado' in texto
+    assert 'test_memory_maintenance.py:' in texto
+
+
+def test_untracked_memory_is_opt_in(monkeypatch):
+    monkeypatch.delenv('METEOLABX_MEMORY_TRACE', raising=False)
+    assert maintenance.untracked_memory() is None
+
+
+def test_untracked_memory_says_nothing_before_tracing_starts(monkeypatch):
+    monkeypatch.setenv('METEOLABX_MEMORY_TRACE', '1')
+    assert maintenance.untracked_memory() is None
+
+
+def test_total_diagnostic_reuses_snapshot_and_reports_tracer_overhead(monkeypatch):
+    import tracemalloc
+    from types import SimpleNamespace
+
+    monkeypatch.setenv('METEOLABX_MEMORY_TRACE', '1')
+    monkeypatch.setattr(tracemalloc, 'is_tracing', lambda: True)
+    monkeypatch.setattr(tracemalloc, 'get_traced_memory', lambda: (10 * maintenance._MB, 20 * maintenance._MB))
+    monkeypatch.setattr(tracemalloc, 'get_tracemalloc_memory', lambda: 3 * maintenance._MB)
+    monkeypatch.setattr(maintenance, 'anonymous_bytes', lambda: 40 * maintenance._MB)
+    monkeypatch.setattr(maintenance, '_snapshot', SimpleNamespace(statistics=lambda key: []))
+    def unexpected_snapshot():
+        raise AssertionError('must reuse the existing snapshot')
+    monkeypatch.setattr(tracemalloc, 'take_snapshot', unexpected_snapshot)
+    text = maintenance.untracked_memory()
+    assert 'metadatos de trazado 3 MB' in text
+    assert 'diferencia RSS anónima−rastreada 30 MB' in text

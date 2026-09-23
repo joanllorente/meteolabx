@@ -158,6 +158,45 @@ def growth_by_source(limit=5):
         f'+{linea.size_diff / _MB:.0f} MB' for linea in crecimiento)
 
 
+def untracked_memory(limit=3):
+    """Cuánta memoria del proceso NO pasa por el asignador de Python, y dónde
+    está la que sí.
+
+    `growth_by_source` compara dos instantáneas y solo ve el crecimiento del
+    último cuarto de hora: si la API sube 120 MB cada hora en trozos pequeños,
+    esa lista sale plana. Esto mira el total acumulado, que es lo que se paga,
+    y lo contrasta con la RSS anónima. La diferencia es orientativa: incluye
+    asignaciones anteriores al inicio del trazado, el propio diagnóstico,
+    memoria nativa y memoria retenida por los asignadores. No identifica por
+    sí sola una fuga ni permite atribuir toda la diferencia a código C.
+    """
+    if os.getenv('METEOLABX_MEMORY_TRACE', '').lower() not in ('1', 'true', 'yes'):
+        return None
+    import tracemalloc
+    if not tracemalloc.is_tracing():
+        return None
+    rastreada, pico = tracemalloc.get_traced_memory()
+    partes = [f'rastreada {rastreada / _MB:.0f} MB (pico {pico / _MB:.0f})']
+    # This is bookkeeping overhead, not part of get_traced_memory(). RSS minus
+    # traced bytes also includes pre-tracing allocations, snapshots and allocator
+    # retention: it is not evidence of a leak in a C extension.
+    overhead = tracemalloc.get_tracemalloc_memory()
+    partes.append(f'metadatos de trazado {overhead / _MB:.0f} MB')
+    anon = anonymous_bytes()
+    if anon is not None:
+        partes.append(f'diferencia RSS anónima−rastreada {(anon - rastreada) / _MB:.0f} MB '
+                      '(no atribuible directamente a memoria nativa)')
+    # maintain_once just captured a snapshot. Reuse it instead of allocating
+    # a second full snapshot while the first remains alive.
+    snapshot = _snapshot if _snapshot is not None else tracemalloc.take_snapshot()
+    mayores = snapshot.statistics('lineno')[:limit]
+    if mayores:
+        partes.append('las mayores: ' + ', '.join(
+            f'{e.traceback[0].filename.split("/")[-1]}:{e.traceback[0].lineno} '
+            f'{e.size / _MB:.0f} MB' for e in mayores))
+    return ' · '.join(partes)
+
+
 async def maintain_once():
     started = time.monotonic()
     before = anonymous_bytes()
@@ -180,6 +219,10 @@ async def maintain_once():
     if crecimiento:
         result['growth'] = crecimiento
         logger.info('Quién pidió la memoria: %s', crecimiento)
+    fuera = await asyncio.to_thread(untracked_memory)
+    if fuera:
+        result['untracked'] = fuera
+        logger.info('Memoria que Python no rastrea: %s', fuera)
     return result
 
 

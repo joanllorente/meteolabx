@@ -66,3 +66,43 @@ def test_a_stuck_old_run_does_not_block_the_completed_one(monkeypatch, tmp_path)
     # La que sigue publicando conserva sus páginas: alguien puede estar leyéndola.
     assert len(advised) == 1
     assert atascada.read_bytes() == b'en curso'
+
+
+def test_map_pages_only_for_completed_inactive_runs_and_files_survive(monkeypatch, tmp_path):
+    advised = setup(monkeypatch, tmp_path)
+    store = forecast_store.LocalObjectStore(tmp_path / 'store')
+    monkeypatch.setattr(forecast_store, 'get_forecast_store', lambda: store)
+    manifests = [
+        {'run': '2026-09-12T12:00:00Z', 'status': 'complete'},
+        {'run': '2026-09-12T18:00:00Z', 'status': 'publishing'},
+        {'run': '2026-09-12T06:00:00Z', 'status': 'complete',
+         'progress': {'active_jobs': [{'id': 'running'}]}},
+    ]
+    monkeypatch.setattr(forecast_store, 'retained_manifests', lambda _: manifests)
+    paths = []
+    for m in manifests:
+        key = forecast_store.frame_key(m['run'], 'temperature-2m', m['run'])
+        store.put(key, b'compressed-map', 'application/gzip')
+        paths.append(store._path(key))
+    result = cache.release_completed_grib_cache()
+    assert result['map_files_advised'] == result['files_advised'] == 1
+    assert result['map_file_bytes'] == len(b'compressed-map')
+    assert len(advised) == 1
+    assert all(p.read_bytes() == b'compressed-map' for p in paths)
+
+
+def test_map_cleanup_respects_scope_and_ignores_temporary_files(monkeypatch, tmp_path):
+    advised = setup(monkeypatch, tmp_path)
+    store = forecast_store.LocalObjectStore(tmp_path / 'store')
+    monkeypatch.setattr(forecast_store, 'get_forecast_store', lambda: store)
+    run = '2026-09-12T12:00:00Z'
+    monkeypatch.setattr(forecast_store, 'retained_manifests', lambda _: [
+        {'run': run, 'status': 'complete', 'calculation_scope': 'peninsula'}])
+    for scope in ('model', 'peninsula'):
+        key = forecast_store.frame_key(run, 'wind-level', run, scope=scope)
+        store.put(key, b'map', 'application/gzip')
+    temp = store._path(key).parent / 'unfinished.tmp'
+    temp.write_bytes(b'partial')
+    assert cache.release_completed_grib_cache()['map_files_advised'] == 1
+    assert len(advised) == 1
+    assert temp.read_bytes() == b'partial'
