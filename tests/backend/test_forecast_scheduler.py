@@ -82,36 +82,86 @@ def test_growing_download_outlives_publication_budget_but_orphan_expires(ready, 
 def test_cross_tier_ready_and_combined_heavy_capacity(ready, monkeypatch):
     monkeypatch.setattr(s.packages, "package_ready", lambda p, r, v: v.hour == 2)
     pending = [({}, job()), ({}, job(3, H2))]
-    assert s.select_ready(w, pending, {}, ready, 100, 0, 4, 2) == (1, "ready")
+    assert s.select_ready(w, pending, {}, ready, 100, [0], 4, 2) == (1, "ready")
     active = {1: ({}, job(2, "2026-09-21T03:00:00Z"), "ready"),
               2: ({}, job(3, "2026-09-21T04:00:00Z"), "ready")}
-    assert s.select_ready(w, pending, active, ready, 100, 0, 4, 2) is None
+    assert s.select_ready(w, pending, active, ready, 100, [0], 4, 2) is None
     # Native work can still use the other slots.
     pending.append(({}, job(0, products=("temperature-850",))))
-    assert s.select_ready(w, pending, active, ready, 100, 0, 4, 2) == (2, "ready")
+    assert s.select_ready(w, pending, active, ready, 100, [0], 4, 2) == (2, "ready")
 
 
 def test_wcs_serialization_does_not_block_a_cached_dcape(ready, monkeypatch):
     monkeypatch.setattr(s.packages, "package_ready", lambda p, r, v: v.hour == 2)
     active = {1: ({}, job(2, "2026-09-21T03:00:00Z"), "wcs")}
     pending = [({}, job()), ({}, job(3, H2))]
-    assert s.select_ready(w, pending, active, ready, 200, 180, 4, 4) == (1, "ready")
-    assert s.select_ready(w, pending[:1], active, ready, 200, 180, 4, 4) is None
+    assert s.select_ready(w, pending, active, ready, 200, [180], 4, 4) == (1, "ready")
+    assert s.select_ready(w, pending[:1], active, ready, 200, [180], 4, 4) is None
 
 
 def test_memory_and_15_seconds_still_gate_heavy_jobs(ready, monkeypatch):
     monkeypatch.setattr(s.packages, "package_ready", lambda *a: True)
+    # Sin cgroup legible no hay con qué descontar al que crece: se espera.
+    monkeypatch.setattr(w, "_cgroup_memory", lambda: None)
     pending = [({}, job(3, H2))]
     active = {1: ({}, job(), "ready")}
-    assert s.select_ready(w, pending, active, ready, 14, 0, 4, 4) is None
+    assert s.select_ready(w, pending, active, ready, 14, [0], 4, 4) is None
     monkeypatch.setattr(w, "_room_for_another_profile", lambda: False)
-    assert s.select_ready(w, pending, active, ready, 16, 0, 4, 4) is None
+    assert s.select_ready(w, pending, active, ready, 16, [0], 4, 4) is None
+
+
+def test_ample_memory_admits_heavy_jobs_without_the_15_second_gap(ready, monkeypatch):
+    """Con memoria de sobra, los pesados no salen en fila de uno cada 15 s.
+
+    El 24/09 los 36 DCAPE del final salieron de uno en uno durante 9 min con
+    seis huecos parados y 23 GB libres.
+    """
+    monkeypatch.setattr(s.packages, "package_ready", lambda *a: True)
+    libres = {"perfiles": 10}
+    monkeypatch.setattr(w, "_room_for_profiles", lambda growing: growing + 1 <= libres["perfiles"])
+    pending = [({}, job(3, H2))]
+    active = {1: ({}, job(), "ready")}
+    assert s.select_ready(w, pending, active, ready, 14, [0], 4, 4) == (0, "ready")
+    # Si solo cabe uno, el que aún crece guarda su sitio y el siguiente espera.
+    libres["perfiles"] = 1
+    why = []
+    assert s.select_ready(w, pending, active, ready, 14, [0], 4, 4, why) is None
+    assert why == ["espaciado"]
+    # Pasados 15 s su memoria ya se ve en el cgroup y no se descuenta dos veces.
+    assert s.select_ready(w, pending, active, ready, 16, [0], 4, 4) == (0, "ready")
+
+
+def test_select_ready_says_why_the_first_job_waits(ready, monkeypatch):
+    """Lo que frena al trabajo más prioritario es lo que tiene parados los huecos."""
+    monkeypatch.setattr(s.packages, "package_ready", lambda *a: False)
+    why = []
+    assert s.select_ready(w, [({}, job(3))], {}, ready, 10, [0], 4, 4, why) is None
+    assert why == ["paquete"]
+    monkeypatch.setattr(w, "_room_for_another_profile", lambda: False)
+    why = []
+    active = {1: ({}, job(2, H2), "ready")}
+    assert s.select_ready(w, [({}, job(3)), ({}, job(3, H2))], active, ready, 100, [0], 4, 4, why) is None
+    assert why == ["memoria"]
+
+
+def test_idle_slots_only_count_inside_an_unfinished_pass():
+    manifest = {"status": "publishing"}
+    s.account_idle(manifest, "sin_trabajo", 3, 2.0)
+    assert "idle_slot_seconds" not in manifest  # Todavía no ha empezado.
+    manifest["tier_timing"] = {"0": {}}
+    s.account_idle(manifest, "sin_trabajo", 3, 2.0)
+    s.account_idle(manifest, "sin_trabajo", 1, 0.5)
+    s.account_idle(manifest, "memoria", 2, 1.0)
+    assert manifest["idle_slot_seconds"] == {"sin_trabajo": 6.5, "memoria": 2.0}
+    manifest["status"] = "complete"
+    s.account_idle(manifest, "memoria", 7, 60.0)
+    assert manifest["idle_slot_seconds"]["memoria"] == 2.0
 
 
 def test_overlapping_group_is_not_launched_after_catalog_expansion(ready):
     old = w.ForecastJob(RUN, H1, ("accumulated-precip",), "model", 1, (H1,))
     expanded = w.ForecastJob(RUN, H1, old.products, "model", 1, (H1, H2))
-    assert s.select_ready(w, [({}, expanded)], {1: ({}, old, "ready")}, ready, 200, 0, 4, 4) is None
+    assert s.select_ready(w, [({}, expanded)], {1: ({}, old, "ready")}, ready, 200, [0], 4, 4) is None
 
 
 def test_scheduled_profile_does_not_repeat_publication_wait(monkeypatch, tmp_path):

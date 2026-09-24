@@ -683,3 +683,38 @@ def test_decode_preserves_mask_and_float64_precision():
     np.testing.assert_array_equal(result, source.astype(float).filled(np.nan))
     assert result.dtype == np.float64
     assert source.data[1] == 9999
+
+
+def test_a_silent_download_is_abandoned_after_the_stall_budget(monkeypatch, tmp_path):
+    """La lectura se corta con el mismo silencio que da por parada la descarga.
+
+    Con 1800 s, una transferencia muerta retuvo el cerrojo media hora.
+    """
+    monkeypatch.setenv("METEOLABX_AROME_PACKAGE_STALL_S", "60")
+    monkeypatch.setattr(paquetes, "authorization_headers", lambda: {})
+    monkeypatch.setattr(paquetes, "_active_download_count", lambda: 0)
+    vistos = {}
+
+    def get(url, **kwargs):
+        vistos["timeout"] = kwargs["timeout"]
+        raise paquetes.requests.ReadTimeout("sin datos")
+
+    monkeypatch.setattr(paquetes.requests, "get", get)
+    with pytest.raises(paquetes.AromePackageError):
+        paquetes._download_package("IP1", RUN, "19H24H", tmp_path / "IP1-19H24H.grib2")
+    assert vistos["timeout"] == (30, 60.0)
+    assert not list(tmp_path.glob("*.part")), "el cerrojo y el parcial se sueltan"
+
+
+def test_scheduled_level_maps_never_start_a_package_download(monkeypatch):
+    """Bajo el planificador, un mapa de índices sin paquete va al WCS sin descargar."""
+    from server.services import arome_forecast as prevision
+
+    monkeypatch.setenv("METEOLABX_AROME_SCHEDULED_PACKAGES", "1")
+    monkeypatch.setattr(prevision, "_packages_available", lambda: True)
+    monkeypatch.setattr(prevision, "package_ready", lambda *a: False)
+    monkeypatch.setattr(
+        prevision, "ensure_package",
+        lambda *a, **kw: pytest.fail("un trabajo no debe iniciar la descarga"),
+    )
+    assert prevision._isobaric_fields_from_package(None, RUN, RUN, [850.0]) is None

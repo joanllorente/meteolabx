@@ -11,8 +11,15 @@ En vigilancia la precarga sobrevive a las renovaciones del catálogo.
 Fuera del planificador continuo, los workers también pueden iniciar descargas:
 cuatro no es el límite global
 de conexiones del contenedor. El bloqueo por archivo evita descargar el
-mismo paquete dos veces. La precarga no espera ese bloqueo; vuelve a probar
-en la siguiente ronda para poder adelantar otros paquetes mientras tanto.
+mismo paquete dos veces. La precarga no espera ese bloqueo: el paquete vuelve
+a la cola y se reintenta pasados `METEOLABX_FORECAST_PREFETCH_RETRY_S` (45 s).
+
+La precarga no va por rondas. Cada una de las cuatro conexiones toma el
+paquete más prioritario que ya se pueda intentar en cuanto suelta el suyo, y
+cada fallo espera su propio reintento. Así, una descarga lenta o parada solo
+ocupa su conexión. Pasado `METEOLABX_FORECAST_PREFETCH_DEADLINE_S` (600 s) ya
+no se reintenta nada, pero lo que no se ha probado nunca todavía se intenta
+una vez.
 
 ## Alternativa WCS
 
@@ -37,7 +44,8 @@ Los mapas que leen paquetes ya en disco siguen siendo oportunistas.
 
 Los 180 segundos NO son un plazo absoluto para recibir un paquete: una
 transferencia propia conserva un timeout de conexión de 30 s y de lectura
-inactiva de 1800 s. No se interrumpe la descarga de otro proceso al abandonar
+inactiva igual a `METEOLABX_AROME_PACKAGE_STALL_S` (60 s, mínimo 10). Antes eran
+1800 s, y una transferencia muerta podía retener el cerrojo media hora. No se interrumpe la descarga de otro proceso al abandonar
 la espera. Al fallar una transferencia se elimina su archivo parcial.
 
 ## Medición

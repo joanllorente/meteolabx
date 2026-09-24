@@ -28,12 +28,20 @@ La cola conserva la prioridad por pasada y nivel y escoge el primer trabajo
   superficie siguen compartiendo el limitador global de peticiones.
 
 Los trabajos pesados se cuentan juntos entre niveles. Se conserva el límite
-`heavy_workers`, el intervalo de 15 s cuando hay otro pesado activo y la
-admisión por memoria anónima libre. La reserva de 3 GiB no se ha reducido.
+`heavy_workers` y la admisión por memoria anónima libre, con la reserva de
+`METEOLABX_FORECAST_HEAVY_PROFILE_GB` por perfil. Un pesado lanzado hace menos
+de 15 s todavía no se ve entero en el cgroup, así que cada uno de ellos
+descuenta su reserva: el siguiente entra si caben él y todos los que aún
+crecen. Sin cgroup legible se conserva la espera fija de 15 s. Antes la espera
+se aplicaba siempre y, como un DCAPE dura unos 17 s, los del final de la
+pasada salían de uno en uno.
 
 En los hijos del planificador, la lectura de paquetes no inicia transferencias
 ni repite los 180 s: toma el paquete listo o sigue una descarga que ya tenga el
-cerrojo mientras progrese. La precarga mantiene su propio ciclo de vida, con
+cerrojo mientras progrese. Los mapas de índices isobáricos (nivel 1) ni
+siquiera siguen una descarga ajena: si IP1 no está en disco, van al WCS. Antes
+iniciaban su propia descarga y uno retuvo el cerrojo media hora con una
+transferencia muerta. La precarga mantiene su propio ciclo de vida, con
 cuatro transferencias por defecto, y ECMWF se ejecuta en un hilo independiente.
 SIGTERM detiene nuevas admisiones y espera a los cálculos activos, respetando
 sus timeouts, y al ciclo ECMWF actual. Las descargas anticipadas conservan el

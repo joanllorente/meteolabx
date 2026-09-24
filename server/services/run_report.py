@@ -187,32 +187,54 @@ def _tier_segments(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], floa
             "jobs": int(tramo.get("jobs", 0)),
             "start_min": round((desde - inicio).total_seconds() / 60, 1),
             "end_min": round((hasta - inicio).total_seconds() / 60, 1),
-            **_occupancy(tramo, (hasta - desde).total_seconds()),
+            **_tier_work(tramo),
         })
+    _work_shares(tramos)
     return tramos, round((fin - inicio).total_seconds() / 60, 1)
 
 
-def _occupancy(tramo: dict[str, Any], span_s: float) -> dict[str, Any]:
-    """Qué parte del tiempo del nivel estuvieron trabajando sus huecos.
+def _tier_work(tramo: dict[str, Any]) -> dict[str, Any]:
+    """Minutos de trabajo del nivel.
 
-    Segundos ocupados entre huecos × duración del nivel. Lo que falta hasta el
-    100 % es tiempo parado: el vaciado al final de cada ciclo, la espera a un
-    paquete sin publicar o el freno de memoria. Los niveles se solapan en los
-    cambios, así que el reparto entre ellos es aproximado; el total no.
+    No se da una ocupación por nivel: los niveles comparten los mismos huecos
+    y se solapan casi toda la pasada, así que dividir lo de uno entre todos
+    los huecos daba cifras del 9 % que parecían huecos parados y solo eran la
+    parte del trabajo que le tocó. Por nivel se reparte el trabajo; la
+    ocupación es de la pasada entera.
     """
     huecos = int(tramo.get("slots", 0) or 0)
     ocupado = float(tramo.get("busy_seconds", 0.0) or 0.0)
-    if not huecos or not ocupado or span_s <= 0:
+    if not huecos or not ocupado:
         return {}
-    return {
-        "slots": huecos,
-        "busy_min": round(ocupado / 60, 1),
-        "occupancy": round(min(1.0, ocupado / (huecos * span_s)), 2),
-    }
+    return {"slots": huecos, "busy_min": round(ocupado / 60, 1)}
 
 
-def _overall_occupancy(manifest: dict[str, Any]) -> float | None:
-    """Ocupación de la pasada entera, con los huecos del nivel más ancho."""
+def _work_shares(tramos: list[dict[str, Any]]) -> None:
+    """Qué parte del trabajo total se llevó cada nivel."""
+    total = sum(tramo.get("busy_min", 0.0) for tramo in tramos)
+    if not total:
+        return
+    for tramo in tramos:
+        if tramo.get("busy_min"):
+            tramo["share"] = round(tramo["busy_min"] / total, 2)
+
+
+# Por qué estaban libres los huecos, tal como lo apunta el planificador.
+IDLE_REASONS = {
+    "sin_trabajo": "nada publicado todavía",
+    "paquete": "esperando paquete GRIB",
+    "memoria": "freno de memoria",
+    "espaciado": "15 s entre perfiles",
+    "tope_pesados": "tope de perfiles",
+    "wcs": "un solo WCS a la vez",
+    "solapado": "hora ya en cálculo",
+    "cuota": "cuota de admisiones",
+    "otro": "otros",
+}
+
+
+def _pass_span(manifest: dict[str, Any]) -> tuple[int, float, float] | None:
+    """Huecos, segundos ocupados y duración de la pasada, del primer al último trabajo."""
     tiempos = manifest.get("tier_timing") or {}
     huecos = max((int(t.get("slots", 0) or 0) for t in tiempos.values()), default=0)
     ocupado = sum(float(t.get("busy_seconds", 0.0) or 0.0) for t in tiempos.values())
@@ -221,9 +243,50 @@ def _overall_occupancy(manifest: dict[str, Any]) -> float | None:
     if not huecos or not ocupado or not inicios or not finales:
         return None
     span = (max(finales) - min(inicios)).total_seconds()
-    if span <= 0:
+    return (huecos, ocupado, span) if span > 0 else None
+
+
+def _overall_occupancy(manifest: dict[str, Any]) -> float | None:
+    """Ocupación de la pasada entera, con los huecos del nivel más ancho."""
+    medida = _pass_span(manifest)
+    if medida is None:
         return None
+    huecos, ocupado, span = medida
     return round(min(1.0, ocupado / (huecos * span)), 2)
+
+
+def _idle(manifest: dict[str, Any]) -> dict[str, Any] | None:
+    """Huecos libres de la pasada y en qué se fueron.
+
+    ``slot_min`` es lo que falta hasta el 100 %, deducido de la ocupación.
+    ``by_reason`` es lo que midió el planificador, que solo existe desde que
+    lo apunta: en las pasadas anteriores sale vacío y no se inventa el reparto.
+    """
+    medida = _pass_span(manifest)
+    if medida is None:
+        return None
+    huecos, ocupado, span = medida
+    apuntado = {
+        motivo: float(segundos)
+        for motivo, segundos in (manifest.get("idle_slot_seconds") or {}).items()
+        if float(segundos or 0.0) > 0
+    }
+    total = sum(apuntado.values())
+    return {
+        "slot_min": round(max(0.0, huecos * span - ocupado) / 60, 1),
+        "measured_min": round(total / 60, 1),
+        "by_reason": [
+            {
+                "reason": motivo,
+                "label": IDLE_REASONS.get(motivo, motivo),
+                "minutes": round(segundos / 60, 1),
+                "share": round(segundos / total, 2),
+            }
+            for motivo, segundos in sorted(
+                apuntado.items(), key=lambda item: item[1], reverse=True
+            )
+        ],
+    }
 
 
 def _errors_by_product(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -363,6 +426,7 @@ def build_report(
         "error_count": total_errores,
         "tiers": tramos,
         "occupancy": _overall_occupancy(manifest),
+        "idle": _idle(manifest),
         "resources": recursos,
         "failures": fallos,
         "cost": coste,
@@ -400,14 +464,25 @@ def render_text(report: dict[str, Any]) -> str:
             titulo += f" (ocupación total {report['occupancy'] * 100:.0f} %)"
         lineas.append(titulo + ":")
         for tramo in report["tiers"]:
-            ocupacion = (
-                f" · ocupación {tramo['occupancy'] * 100:.0f} % de {tramo['slots']} huecos"
-                if tramo.get("occupancy") is not None else ""
-            )
+            trabajo = ""
+            if tramo.get("busy_min"):
+                trabajo = f" · {tramo['busy_min']:.0f} min de trabajo"
+                if tramo.get("share"):
+                    trabajo += f" ({tramo['share'] * 100:.0f} % del total)"
             lineas.append(
                 f"  · {tramo['name']:<12} {tramo['jobs']:>4} trabajos "
-                f"{tramo['start_min']:.0f}-{tramo['end_min']:.0f} min" + ocupacion
+                f"{tramo['start_min']:.0f}-{tramo['end_min']:.0f} min" + trabajo
             )
+        # Los huecos libres, con su motivo cuando el planificador lo apuntó.
+        parado = report.get("idle") or {}
+        if parado.get("slot_min"):
+            linea = f"  · {'parados':<12} {parado['slot_min']:.0f} min de hueco libres"
+            if parado.get("by_reason"):
+                linea += ": " + ", ".join(
+                    f"{motivo['label']} {motivo['share'] * 100:.0f} %"
+                    for motivo in parado["by_reason"]
+                )
+            lineas.append(linea)
 
     recursos = report.get("resources") or {}
     coste = report.get("cost") or {}

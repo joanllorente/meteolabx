@@ -1003,3 +1003,66 @@ def test_no_report_until_last_active_job_finishes(monkeypatch):
     manifest["progress"]["active_jobs"] = []
     worker._finish_status(manifest, store=object())
     assert manifest["status"] == "complete" and reports == [True]
+
+
+def test_a_stalled_download_does_not_hold_back_the_other_prefetch_slots(monkeypatch):
+    """Una descarga parada ocupa su hueco, no los otros tres.
+
+    Con rondas, la ronda esperaba a sus cuatro descargas: el 24/09 una se quedó
+    33 min y los IP3 ya publicados de los bloques siguientes no se bajaron.
+    """
+    import threading
+
+    import scripts.forecast_worker as trabajador
+    from server.services import arome_forecast
+
+    monkeypatch.setattr(arome_forecast, "_packages_available", lambda: True)
+    monkeypatch.setattr(trabajador, "PREFETCH_RETRY_S", 0)
+    soltar = threading.Event()
+    # El primer bloque de la pasada de las 12 y el siguiente.
+    PRIMERO, SIGUIENTE = "2026-08-26T12:00:00+00:00", "2026-08-26T19:00:00+00:00"
+    pedidos = []
+    cerrojo = threading.Lock()
+
+    def ip1_parado(paquete, run, valid_time, **kwargs):
+        with cerrojo:
+            pedidos.append((paquete, valid_time.isoformat()))
+            intentos_ip3 = pedidos.count(("IP3", SIGUIENTE))
+        if (paquete, valid_time.isoformat()) == ("IP1", PRIMERO):
+            soltar.wait(5)
+        elif (paquete, valid_time.isoformat()) == ("IP3", SIGUIENTE) and intentos_ip3 == 1:
+            raise trabajador.AromePackageError("todavía no publicado")
+        return "ruta"
+
+    monkeypatch.setattr(trabajador, "ensure_package", ip1_parado)
+    trabajos = [_trabajo(12), _trabajo(19), _trabajo(1, dia=27)]
+    hilo = trabajador._start_package_prefetch(trabajos, threading.Event())
+    assert hilo is not None
+    for _ in range(200):
+        with cerrojo:
+            if pedidos.count(("IP3", SIGUIENTE)) >= 2:
+                break
+        __import__("time").sleep(0.01)
+    # El IP3 que no estaba se reintenta mientras el IP1 sigue parado.
+    assert pedidos.count(("IP3", SIGUIENTE)) == 2
+    assert hilo.is_alive()
+    soltar.set()
+    hilo.join(timeout=5)
+    assert not hilo.is_alive()
+
+
+def test_growing_profiles_keep_their_reserve_until_they_show(monkeypatch):
+    """Los pesados que aún crecen descuentan su reserva; no hace falta esperar 15 s."""
+    import scripts.forecast_worker as trabajador
+
+    GB = 1024**3
+    monkeypatch.setattr(trabajador, "HEAVY_PROFILE_BYTES", 4 * GB)
+    monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: (6 * GB, 30 * GB))
+    # 24 GB libres: cabe otro además de cinco que crecen (6 × 4 = 24).
+    assert trabajador._room_for_profiles(5)
+    assert not trabajador._room_for_profiles(6)
+    assert trabajador._growing_profiles([0.0, 10.0, 14.0], now=20.0) == 2
+    # Sin cgroup legible se conserva la espera: nada mientras otro crece.
+    monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: None)
+    assert trabajador._room_for_profiles(0)
+    assert not trabajador._room_for_profiles(1)

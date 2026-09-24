@@ -1451,6 +1451,18 @@ def _isobaric_fields_from_package(
     """
     if not _packages_available():
         return None
+    if os.getenv("METEOLABX_AROME_SCHEDULED_PACKAGES") == "1" and not package_ready(
+        "IP1", run, valid_time
+    ):
+        # Bajo el planificador las descargas son de la precarga: un mapa de
+        # índices que se pone a bajar medio giga ocupa un hueco mientras dure,
+        # y el 24/09 uno se quedó 30 min con el cerrojo de una descarga muerta.
+        # Si el paquete no está, estos pocos niveles salen antes por el WCS.
+        logger.info(
+            "Paquete IP1 no disponible, se usa el WCS: aún no descargado para %s.",
+            valid_time.isoformat(),
+        )
+        return None
     try:
         path = ensure_package("IP1", run, valid_time)
         profile, geometria = read_isobaric_profile(

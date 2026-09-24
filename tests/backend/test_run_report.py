@@ -426,13 +426,56 @@ def test_el_informe_mide_la_ocupacion_de_los_huecos():
     informe = run_report.build_report(manifiesto)
     tramo = informe["tiers"][0]
     assert tramo["slots"] == 4
-    assert tramo["occupancy"] == pytest.approx(0.75)
+    assert tramo["busy_min"] == pytest.approx(180.0)
     # El tramo termina con el último trabajo, no con su arranque.
     assert tramo["end_min"] == pytest.approx(60.0)
     assert informe["occupancy"] == pytest.approx(0.75)
+    assert informe["idle"]["slot_min"] == pytest.approx(60.0)
     texto = run_report.render_text(informe)
-    assert "ocupación 75 % de 4 huecos" in texto
     assert "ocupación total 75 %" in texto
+    assert "60 min de hueco libres" in texto
+
+
+def test_los_niveles_solapados_reparten_trabajo_no_ocupacion():
+    """Cuatro niveles a la vez en los mismos huecos: el 9 % de DCAPE no es tiempo parado.
+
+    Es la pasada de las 12Z del 24/09, que daba 26, 48, 15 y 9 % por nivel
+    con una ocupación real del 77 %.
+    """
+    manifiesto = _manifiesto_con_recursos()
+    def tramo(desde, hasta, minutos):
+        return {"first_start": desde, "last_start": hasta, "last_end": hasta,
+                "jobs": 10, "slots": 7, "busy_seconds": minutos * 60.0}
+    manifiesto["tier_timing"] = {
+        "0": tramo("2026-09-24T15:03:00Z", "2026-09-24T15:58:48Z", 101.7),
+        "1": tramo("2026-09-24T15:07:18Z", "2026-09-24T16:00:12Z", 176.9),
+        "2": tramo("2026-09-24T15:13:48Z", "2026-09-24T16:05:48Z", 53.3),
+        "3": tramo("2026-09-24T15:39:24Z", "2026-09-24T16:07:42Z", 17.1),
+    }
+    manifiesto["idle_slot_seconds"] = {"sin_trabajo": 75 * 60.0, "paquete": 25 * 60.0}
+    informe = run_report.build_report(manifiesto)
+    assert informe["occupancy"] == pytest.approx(0.77)
+    assert all("occupancy" not in tramo for tramo in informe["tiers"])
+    assert [tramo["share"] for tramo in informe["tiers"]] == [0.29, 0.51, 0.15, 0.05]
+    assert informe["idle"]["slot_min"] == pytest.approx(104.0, abs=0.5)
+    assert [m["reason"] for m in informe["idle"]["by_reason"]] == ["sin_trabajo", "paquete"]
+    texto = run_report.render_text(informe)
+    assert "ocupación 9 %" not in texto
+    assert "(5 % del total)" in texto
+    assert "nada publicado todavía 75 %, esperando paquete GRIB 25 %" in texto
+
+
+def test_sin_motivos_apuntados_no_se_inventa_el_reparto():
+    """Las pasadas anteriores a la medida dicen cuánto, pero no por qué."""
+    manifiesto = _manifiesto_con_recursos()
+    manifiesto["tier_timing"] = {
+        "0": {"first_start": "2026-09-19T13:00:00Z", "last_start": "2026-09-19T14:00:00Z",
+              "last_end": "2026-09-19T14:00:00Z", "jobs": 5, "slots": 2,
+              "busy_seconds": 60 * 60.0},
+    }
+    informe = run_report.build_report(manifiesto)
+    assert informe["idle"]["by_reason"] == []
+    assert "60 min de hueco libres\n" in run_report.render_text(informe) + "\n"
 
 
 def test_el_coste_sale_de_las_tarifas_de_railway():

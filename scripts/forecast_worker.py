@@ -746,7 +746,6 @@ def _start_package_prefetch(
 
     def adelantar() -> None:
         inicio = time.monotonic()
-        bajados = 0
         # Al principio de una pasada los bloques largos todavía no existen:
         # Météo-France los publica poco a poco y la cizalladura, que va a
         # menos de un minuto por hora, adelanta a la publicación. Insistir
@@ -754,44 +753,82 @@ def _start_package_prefetch(
         # bajando el perfil campo a campo por el WCS.
         # Queue per package, nearest block first. Four slots can fetch IP1,
         # IP3 and the two small surface packages together for the next profile.
-        pendientes = [(paquete, run, valid_time) for run, valid_time in objetivos
-                      for paquete in ("IP1", "IP3", "SP1", "SP2")]
-        while pendientes and not stop.is_set():
-            def bajar_paquete(objetivo):
-                if stop.is_set():
-                    return False
-                paquete, run, valid_time = objetivo
+        #
+        # Sin rondas: cada hueco coge el siguiente paquete en cuanto suelta el
+        # suyo, y lo que falla vuelve a la cola con su propia espera. Con
+        # rondas, una descarga lenta o parada retenía a las otras tres y al
+        # plazo máximo, que solo se comprobaba entre ronda y ronda: el 24/09 una
+        # ronda se quedó 33 min sin bajar IP3 ya publicados.
+        cola = [
+            [orden, 0.0, (paquete, run, valid_time)]
+            for orden, (paquete, run, valid_time) in enumerate(
+                (paquete, run, valid_time) for run, valid_time in objetivos
+                for paquete in ("IP1", "IP3", "SP1", "SP2")
+            )
+        ]
+        cerrojo = threading.Lock()
+        cuenta = {"bajados": 0}
+
+        def siguiente() -> tuple[list | None, float]:
+            """El paquete más prioritario ya reintentable, o cuánto esperar."""
+            ahora = time.monotonic()
+            with cerrojo:
+                vencido = time.monotonic() - inicio > PREFETCH_DEADLINE_S
+                # Pasado el plazo solo se prueba lo que no se ha intentado
+                # nunca; los reintentos se dejan al WCS.
+                candidatos = [
+                    item for item in cola
+                    if item[1] <= ahora and not (vencido and item[1] > 0)
+                ]
+                if candidatos:
+                    elegido = min(candidatos, key=lambda item: item[0])
+                    cola.remove(elegido)
+                    return elegido, 0.0
+                vivos = [item for item in cola if not (vencido and item[1] > 0)]
+                if not vivos:
+                    return None, 0.0
+                return None, max(0.05, min(item[1] for item in vivos) - ahora)
+
+        def hueco() -> None:
+            while not stop.is_set():
+                item, espera = siguiente()
+                if item is None:
+                    if not espera:
+                        return
+                    stop.wait(min(espera, 1.0))
+                    continue
+                paquete, run, valid_time = item[2]
                 try:
                     # A worker may already own this download: don't spend a
-                    # prefetch slot waiting on its lock. Retry next round.
+                    # prefetch slot waiting on its lock. Retry later.
                     ensure_package(paquete, run, valid_time, lock_timeout_s=0)
-                    return True
+                    with cerrojo:
+                        cuenta["bajados"] += 1
                 except (AromePackageError, MeteoFranceAuthError):
-                    return False
+                    with cerrojo:
+                        item[1] = time.monotonic() + PREFETCH_RETRY_S
+                        cola.append(item)
 
-            with ThreadPoolExecutor(
-                max_workers=PREFETCH_STREAMS, thread_name_prefix="arome-prefetch"
-            ) as descargas:
-                resultados = list(descargas.map(bajar_paquete, pendientes))
-            bajados += sum(resultados)
-            quedan = [objetivo for objetivo, listo in zip(pendientes, resultados) if not listo]
-            if stop.is_set():
-                return
-            if not quedan:
-                break
-            if time.monotonic() - inicio > PREFETCH_DEADLINE_S:
-                logger.info(
-                    "Se deja de perseguir %d paquetes pendientes tras %.0f min; "
-                    "esas horas se resolverán por el WCS.",
-                    len(quedan), (time.monotonic() - inicio) / 60.0,
-                )
-                break
-            pendientes = quedan
-            stop.wait(PREFETCH_RETRY_S)
+        huecos = [
+            threading.Thread(target=hueco, name=f"arome-prefetch-{n}", daemon=True)
+            for n in range(PREFETCH_STREAMS)
+        ]
+        for hilo_hueco in huecos:
+            hilo_hueco.start()
+        for hilo_hueco in huecos:
+            hilo_hueco.join()
+        if stop.is_set():
+            return
+        if cola:
+            logger.info(
+                "Se deja de perseguir %d paquetes pendientes tras %.0f min; "
+                "esas horas se resolverán por el WCS.",
+                len(cola), (time.monotonic() - inicio) / 60.0,
+            )
         logger.info(
             "Adelantados %d paquetes de %d bloques en %.0f s; los perfiles "
             "convectivos no deberían esperar descargas.",
-            bajados, len(objetivos), time.monotonic() - inicio,
+            cuenta["bajados"], len(objetivos), time.monotonic() - inicio,
         )
 
     hilo = threading.Thread(target=adelantar, name="arome-prefetch", daemon=True)
@@ -1633,11 +1670,33 @@ def _room_for_another_profile() -> bool:
     entero, así que se compara el hueco que queda con lo que uno ocupa. Sin
     cgroup legible se responde que sí, que es como se comportaba antes.
     """
+    return _room_for_profiles(0)
+
+
+# Lo que tarda un perfil recién lanzado en notarse en el cgroup.
+HEAVY_GROWTH_S = 15.0
+
+
+def _room_for_profiles(growing: int) -> bool:
+    """Si cabe otro perfil además de los ``growing`` que aún están creciendo.
+
+    Un perfil lanzado hace menos de ``HEAVY_GROWTH_S`` todavía no aparece
+    entero en el cgroup, así que se le guarda su reserva aparte. Antes se
+    esperaba sin más 15 s entre uno y otro, y como un DCAPE dura unos 17 s,
+    salían en fila: 36 seguidos eran 9 min con un hueco trabajando y seis
+    parados, con 23 GB libres. Sin cgroup legible no hay con qué descontar y
+    se conserva aquella espera.
+    """
     medida = _cgroup_memory()
     if medida is None:
-        return True
+        return growing == 0
     usada, limite = medida
-    return (limite - usada) >= HEAVY_PROFILE_BYTES
+    return (limite - usada) >= (growing + 1) * HEAVY_PROFILE_BYTES
+
+
+def _growing_profiles(launches: Sequence[float], now: float) -> int:
+    """Pesados lanzados hace tan poco que su memoria aún no se ve."""
+    return sum(1 for momento in launches if now - momento < HEAVY_GROWTH_S)
 
 
 def _run_parallel_work(
@@ -1663,7 +1722,7 @@ def _run_parallel_work(
     tasks_completed = 0
     frames_completed = 0
     failures = 0
-    last_heavy_launch = 0.0
+    heavy_launches: collections.deque[float] = collections.deque(maxlen=64)
 
     def tier_capacity(tier: int) -> int:
         return tier_capacity_for(tier, workers, heavy_workers)
@@ -1729,9 +1788,11 @@ def _run_parallel_work(
                 # bandas de 192 filas en vez de 64 porque su selección de capa
                 # de origen depende de cómo se particione la rejilla.
                 if launch_tier is not None and launch_tier >= 2 and active:
-                    # El perfil anterior todavía está creciendo. Esperar permite
-                    # medir el cgroup cuando ya se le nota, no antes.
-                    if time.monotonic() - last_heavy_launch < 15.0:
+                    # Los perfiles recién lanzados todavía están creciendo:
+                    # cada uno descuenta su reserva hasta que se le nota.
+                    if not _room_for_profiles(
+                        _growing_profiles(heavy_launches, time.monotonic())
+                    ):
                         break
                     if not _room_for_another_profile():
                         # Sin esta traza, unos workers configurados pero nunca
@@ -1784,7 +1845,7 @@ def _run_parallel_work(
                 future = executor.submit(_run_isolated_job, job, timeout_s)
                 active[future] = (manifest, job)
                 if job.tier >= 2:
-                    last_heavy_launch = time.monotonic()
+                    heavy_launches.append(time.monotonic())
                 tasks_started += 1
                 task_limit_reached = max_tasks > 0 and tasks_started >= max_tasks
 

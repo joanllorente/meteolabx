@@ -5,6 +5,7 @@ forecast_worker's bounded-cycle contract. No data retention runs with live jobs.
 """
 from __future__ import annotations
 
+import collections
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import os
@@ -64,27 +65,61 @@ class Readiness:
         return "wcs"
 
 
-def select_ready(worker, pending, active, readiness, now, last_heavy, workers, heavy_workers):
-    """Highest priority admissible work; one shared heavy and WCS allowance."""
+def select_ready(worker, pending, active, readiness, now, heavy_launches, workers, heavy_workers,
+                 why=None):
+    """Highest priority admissible work; one shared heavy and WCS allowance.
+
+    ``heavy_launches`` son los instantes en que salieron los últimos pesados:
+    los que aún crecen reservan su memoria aparte.
+
+    Con ``why`` (una lista), si no sale nada se apunta por qué no pudo salir el
+    trabajo más prioritario: es lo que tiene parados los huecos libres.
+    """
     if len(active) >= workers:
         return None
     occupied = set().union(*(claims(job) for _, job, _ in active.values())) if active else set()
     heavy = sum(job.tier >= 2 for _, job, _ in active.values())
     wcs = any(mode == "wcs" for _, _, mode in active.values())
+
+    def skip(reason):
+        if why is not None and not why:
+            why.append(reason)
+
     for index, (_, job) in enumerate(pending):
         if claims(job) & occupied:
+            skip("solapado")
             continue
         if job.tier >= 2:
             if heavy >= worker.tier_capacity_for(2, workers, heavy_workers):
-                continue
-            if heavy and now - last_heavy < 15:
+                skip("tope_pesados")
                 continue
             if not worker._room_for_another_profile():
+                skip("memoria")
+                continue
+            growing = worker._growing_profiles(heavy_launches, now) if heavy else 0
+            if growing and not worker._room_for_profiles(growing):
+                skip("espaciado")
                 continue
         mode = readiness.mode(job, now)
         if mode == "ready" or (mode == "wcs" and not wcs):
             return index, mode
+        skip("wcs" if mode == "wcs" else "paquete")
     return None
+
+
+def account_idle(manifest, reason, free_slots, seconds):
+    """Suma a la pasada los huecos que estuvieron libres y por qué.
+
+    Solo cuenta entre el primer trabajo de la pasada y su cierre, que es el
+    tramo sobre el que el informe calcula la ocupación: fuera de él, esperar a
+    la pasada siguiente no es tiempo perdido de esta.
+    """
+    if not manifest or free_slots <= 0 or seconds <= 0:
+        return
+    if manifest.get("status") == "complete" or not manifest.get("tier_timing"):
+        return
+    parados = manifest.setdefault("idle_slot_seconds", {})
+    parados[reason] = float(parados.get(reason, 0.0)) + free_slots * seconds
 
 
 class Manifests:
@@ -162,7 +197,9 @@ def run_watch(w, args, stop):
     catalog_future = None
     next_catalog = 0.0
     admitted = 0
-    last_heavy = float("-inf")
+    # (pasada, motivo, huecos libres, instante) de la vuelta anterior.
+    parado = None
+    heavy_launches = collections.deque(maxlen=64)
     prefetch = None
     next_prefetch = 0.0
     background_stop = threading.Event()
@@ -190,6 +227,9 @@ def run_watch(w, args, stop):
                 now = time.monotonic()
                 if stop.is_set():
                     background_stop.set()
+                if parado is not None:
+                    account_idle(parado[0], parado[1], parado[2], now - parado[3])
+                    parado = None
                 for future in [f for f in active if f.done()]:
                     manifest, job, mode = active.pop(future)
                     try:
@@ -224,9 +264,11 @@ def run_watch(w, args, stop):
                         next_prefetch = now + 45
                     # Refresh does not drain running tasks or block dispatch.
                     # max_tasks is an admission quota per refreshed catalog.
+                    why = []
                     while not limit and not stop.is_set():
-                        selected = select_ready(w, pending, active, readiness, now, last_heavy,
-                                                workers, max(0, args.heavy_workers))
+                        why = []
+                        selected = select_ready(w, pending, active, readiness, now, heavy_launches,
+                                                workers, max(0, args.heavy_workers), why)
                         if selected is None:
                             break
                         index, mode = selected
@@ -239,9 +281,18 @@ def run_watch(w, args, stop):
                         logger.info("Procesando RUN %s %s nivel=%d vía=%s activos=%d/%d", job.run,
                                     job.valid_time, job.tier, mode, len(active), workers)
                         if job.tier >= 2:
-                            last_heavy = now
+                            heavy_launches.append(now)
                         admitted += 1
                         limit = args.max_tasks > 0 and admitted >= args.max_tasks
+                    libres = workers - len(active)
+                    if libres > 0 and registry.latest:
+                        # Sin nada en cola es que Météo-France no ha publicado
+                        # más horas (o el catálogo aún no las ha visto); con
+                        # cola, lo que frena al trabajo más prioritario.
+                        motivo = ("sin_trabajo" if not pending else "cuota" if limit
+                                  else why[0] if why else "otro")
+                        pasada = pending[0][0] if pending else registry.items.get(registry.latest)
+                        parado = (pasada, motivo, libres, now)
                 if not active and registry.latest and now >= next_maintenance:
                     # Prefetch may still be reading/writing these same packages.
                     if prefetch is None or not prefetch.is_alive():

@@ -309,6 +309,15 @@ def _active_download_count() -> int:
     return sum(1 for _ in _cache_dir().glob("*.part"))
 
 
+def _read_stall_seconds() -> float:
+    """Silencio máximo de una descarga antes de abandonarla."""
+    try:
+        valor = float(os.getenv("METEOLABX_AROME_PACKAGE_STALL_S", "60"))
+    except ValueError:
+        valor = 60.0
+    return max(10.0, valor)
+
+
 def _download_package(
     package: str, run: datetime, block: str, destination: Path
 ) -> Path:
@@ -327,8 +336,12 @@ def _download_package(
         # Visible while awaiting HTTP headers as well as while receiving data.
         partial.touch()
         active_start = _active_download_count()
+        # La lectura se corta tras el mismo silencio con el que los demás dan
+        # por parada la descarga. Con 1800 s, una transferencia muerta retuvo
+        # el cerrojo del IP1 19H24H media hora el 24/09 y dejó los perfiles
+        # de esas horas saliendo de uno en uno por el WCS.
         with requests.get(url, headers=headers, params=parameters,
-                          timeout=(30, 1800), stream=True) as response:
+                          timeout=(30, _read_stall_seconds()), stream=True) as response:
             headers_at = time.monotonic()
             if response.status_code != 200:
                 message = f"El paquete {package} {block} no está disponible (HTTP {response.status_code})."
