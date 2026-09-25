@@ -16,6 +16,7 @@ import { fetchIndexableCatalog } from './api.js';
 import seo from '$lib/seo/seo-i18n.generated.js';
 import { SITE_URL, languageCodesForCountry } from '$lib/seo/i18n.js';
 import { observationUrl } from '$lib/seo/station.js';
+import { forecastSitemapUrls } from './forecast-page.js';
 
 const PROVIDER_COUNTRIES = seo.provider_countries;
 
@@ -23,8 +24,11 @@ export const SITEMAP_URL_LIMIT = 50_000;
 const CATALOG_PAGE_SIZE = 25_000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-/** Las mismas dos URLs sueltas que ya listaba el generador estático. */
-export const STATIC_URLS = [`${SITE_URL}/`, `${SITE_URL}/forecast`];
+/**
+ * La portada y Predicción: su índice y una página por mapa en cada idioma con
+ * guía. `/forecast` ya no va: redirige a `/es/forecast`.
+ */
+export const STATIC_URLS = [`${SITE_URL}/`, ...forecastSitemapUrls()];
 
 /**
  * Sitemap que sigue generando Python con los directorios, los índices de red

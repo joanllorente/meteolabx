@@ -87,11 +87,12 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     for category in (
         "Temperatura",
         "Precipitación",
-        "Dinámica atmosférica",
-        "Convección",
-        "Humedad",
-        "Nubosidad",
-        "Radiación",
+        "Viento y dinámica",
+        "Inestabilidad",
+        "Cizalladura y helicidad",
+        "Forzamiento y cinemática",
+        "Tiempo severo",
+        "Nubes, humedad y radiación",
     ):
         assert f"label: '{category}'" in products
 
@@ -417,7 +418,8 @@ def test_every_selected_forecast_product_has_a_technical_guide():
     assert "radial-gradient" not in forecast_app
     assert "MODELO ACTIVO" not in forecast_app
     assert "model-chip" not in forecast_app
-    assert "let selectedProduct = $state(null)" in view
+    # Sin mapa en la URL (`/es/forecast`) el visor arranca sin ninguno elegido.
+    assert "let selectedProduct = $state(entryProduct?.id || null)" in view
     assert "tr('noneSelected')" in view and "noneSelected: 'Ningún mapa seleccionado'" in i18n
     assert "empty-forecast" in view
     assert "map-watermark" in view

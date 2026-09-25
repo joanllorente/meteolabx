@@ -35,11 +35,12 @@ export const DEFAULT_FORECAST_MODEL = 'arome';
 export const forecastCategories = [
   { id: 'temperature', label: 'Temperatura' },
   { id: 'precipitation', label: 'Precipitación' },
-  { id: 'dynamics', label: 'Dinámica atmosférica' },
-  { id: 'convection', label: 'Convección' },
-  { id: 'humidity', label: 'Humedad' },
-  { id: 'clouds', label: 'Nubosidad' },
-  { id: 'radiation', label: 'Radiación' }
+  { id: 'dynamics', label: 'Viento y dinámica' },
+  { id: 'instability', label: 'Inestabilidad' },
+  { id: 'shear', label: 'Cizalladura y helicidad' },
+  { id: 'forcing', label: 'Forzamiento y cinemática' },
+  { id: 'severe', label: 'Tiempo severo' },
+  { id: 'clouds', label: 'Nubes, humedad y radiación' }
 ];
 
 const allForecastProducts = [
@@ -144,28 +145,28 @@ const allForecastProducts = [
     method: 'Racha máxima de AROME (WIND_SPEED_GUST_MAX) a 10 m durante la hora anterior.', coverage: 'WIND SPEED GUST MAX · 10 m · 1 h'
   },
   {
-    id: 'shear-01', category: 'dynamics', label: 'Cizalladura 0–1 km', short: 'CIZ 0–1 km', kind: 'derived',
+    id: 'shear-01', category: 'shear', label: 'Cizalladura 0–1 km', short: 'CIZ 0–1 km', kind: 'derived',
     unit: 'm/s', min: 0, max: 26, palette: 'shear', accent: '#57b6ff', vectors: true,
     description: 'Cizalladura vectorial entre el viento a 10 m y 1.000 m sobre el terreno. Describe el cambio de viento en la capa más baja.',
     method: '√[(u₁₀₀₀ − u₁₀)² + (v₁₀₀₀ − v₁₀)²]. Las flechas muestran el vector diferencia.',
     coverage: 'Diagnóstico MeteoLabX · U/V 10 y 1.000 m'
   },
   {
-    id: 'shear-03', category: 'dynamics', label: 'Cizalladura 0–3 km', short: 'CIZ 0–3 km', kind: 'derived',
+    id: 'shear-03', category: 'shear', label: 'Cizalladura 0–3 km', short: 'CIZ 0–3 km', kind: 'derived',
     unit: 'm/s', min: 0, max: 36, palette: 'shear', accent: '#7d8cff', vectors: true,
     description: 'Cizalladura vectorial entre el viento a 10 m y 3.000 m, relevante para la organización de la convección.',
     method: '√[(u₃₀₀₀ − u₁₀)² + (v₃₀₀₀ − v₁₀)²]. Las rejillas se alinean antes de operar.',
     coverage: 'Diagnóstico MeteoLabX · U/V 10 y 3.000 m'
   },
   {
-    id: 'shear-06', category: 'dynamics', label: 'Cizalladura 0–6 km', short: 'CIZ 0–6 km', kind: 'derived',
+    id: 'shear-06', category: 'shear', label: 'Cizalladura 0–6 km', short: 'CIZ 0–6 km', kind: 'derived',
     unit: 'm/s', min: 0, max: 52, palette: 'shear', accent: '#b87cff', vectors: true,
     description: 'Cizalladura profunda entre 10 m y 6 km sobre el terreno, un ingrediente importante para la organización de tormentas.',
     method: 'U/V se interpolan a terreno + 6.000 m entre niveles isobáricos antes de calcular el vector diferencia.',
     coverage: 'Diagnóstico MeteoLabX · U/V + geopotencial'
   },
   {
-    id: 'ebwd', category: 'dynamics', label: 'Cizalladura efectiva (EBWD)', short: 'EBWD', kind: 'derived',
+    id: 'ebwd', category: 'shear', label: 'Cizalladura efectiva (EBWD)', short: 'EBWD', kind: 'derived',
     unit: 'm/s', min: 0, max: 50, palette: 'shear', accent: '#8d75ff', vectors: true,
     description: 'Diferencia vectorial del viento sobre la mitad inferior de la profundidad efectiva de la tormenta.',
     method: 'Thompson et al. (2007): base de la capa con CAPE ≥ 100 J/kg y CIN ≥ −250 J/kg hasta el 50 % de la distancia al EL de la parcela MU.',
@@ -207,13 +208,13 @@ const allForecastProducts = [
     coverage: 'PRECIPITATION TYPE · 60 min'
   },
   {
-    id: 'relative-humidity-700', category: 'humidity', label: 'Humedad relativa a 700 hPa', short: 'HR 700 hPa', kind: 'native',
+    id: 'relative-humidity-700', category: 'clouds', label: 'Humedad relativa a 700 hPa', short: 'HR 700 hPa', kind: 'native',
     unit: '%', min: 0, max: 100, palette: 'humidity', accent: '#43bfaf', vectors: false,
     description: 'Humedad relativa en niveles medios, útil para reconocer bandas húmedas e intrusiones secas.',
     method: 'Campo nativo RELATIVE_HUMIDITY en la superficie isobárica de 700 hPa.', coverage: 'RELATIVE HUMIDITY · 700 hPa'
   },
   {
-    id: 'precipitable-water', category: 'humidity', label: 'Agua precipitable', short: 'PWAT', kind: 'native',
+    id: 'precipitable-water', category: 'clouds', label: 'Agua precipitable', short: 'PWAT', kind: 'native',
     unit: 'kg/m²', min: 0, max: 55, palette: 'humidity', accent: '#3db9bc', vectors: false,
     description: 'Contenido integrado de vapor de agua en toda la columna atmosférica.',
     method: 'Campo nativo PRECIPITABLE_WATER sobre la superficie.', coverage: 'PRECIPITABLE WATER · columna'
@@ -225,74 +226,74 @@ const allForecastProducts = [
     method: 'Campo nativo PLANETARY_BOUNDARY_LAYER_HEIGHT de AROME.', coverage: 'PLANETARY BOUNDARY LAYER HEIGHT'
   },
   {
-    id: 'shortwave-down', category: 'radiation', label: 'Radiación solar descendente', short: 'Solar ↓', kind: 'native',
+    id: 'shortwave-down', category: 'clouds', label: 'Radiación solar descendente', short: 'Solar ↓', kind: 'native',
     unit: 'W/m²', min: 0, max: 1000, palette: 'radiation', accent: '#f3be4f', vectors: false,
     description: 'Flujo de onda corta descendente que alcanza la superficie, incluyendo la componente directa y difusa.',
     method: 'Radiación de onda corta descendente de AROME (DOWNWARD_SHORT_WAVE_RADIATION_FLUX). AROME entrega la energía acumulada en la hora; MeteoLabX divide entre 3.600 para mostrar el flujo medio en W/m².', coverage: 'DOWNWARD SHORT WAVE RADIATION FLUX · 1 h → W/m²'
   },
   {
-    id: 'direct-shortwave', category: 'radiation', label: 'Radiación solar directa', short: 'Solar directa', kind: 'native',
+    id: 'direct-shortwave', category: 'clouds', label: 'Radiación solar directa', short: 'Solar directa', kind: 'native',
     unit: 'W/m²', min: 0, max: 1000, palette: 'radiation', accent: '#f29a47', vectors: false,
     description: 'Componente directa del flujo solar descendente prevista en superficie.',
     method: 'Campo nativo DOWNWARD_DIRECT_SHORT_WAVE_RADIATION_FLUX.', coverage: 'DIRECT SHORT WAVE RADIATION FLUX'
   },
   {
-    id: 'longwave-down', category: 'radiation', label: 'Radiación térmica descendente', short: 'Onda larga ↓', kind: 'native',
+    id: 'longwave-down', category: 'clouds', label: 'Radiación térmica descendente', short: 'Onda larga ↓', kind: 'native',
     unit: 'W/m²', min: 150, max: 500, palette: 'longwave', accent: '#db7d83', vectors: false,
     description: 'Flujo de radiación térmica descendente emitido por la atmósfera y las nubes hacia la superficie.',
     method: 'Campo nativo DOWNWARD_LONG_WAVE_RADIATION_FLUX.', coverage: 'DOWNWARD LONG WAVE RADIATION FLUX'
   },
   {
-    id: 'mu-ecape', category: 'convection', label: 'MU-ECAPE', short: 'MU-ECAPE', kind: 'native',
+    id: 'mu-ecape', category: 'instability', label: 'MU-ECAPE', short: 'MU-ECAPE', kind: 'native',
     unit: 'J/kg', min: 0, max: 3500, palette: 'convection', accent: '#f0b44f', vectors: false,
     description: 'CAPE con arrastre de la parcela más inestable en las capas bajas publicada por AROME.',
     method: 'Campo nativo CONVECTIVE_AVAILABLE_POTENTIAL_ENERGY de AROME. El algoritmo exacto de arrastre no se reproduce fuera del modelo.',
     coverage: 'AROME · parcela MU con arrastre'
   },
   {
-    id: 'ml-ecape', category: 'convection', label: 'ML-ECAPE', short: 'ML-ECAPE', kind: 'native',
+    id: 'ml-ecape', category: 'instability', label: 'ML-ECAPE', short: 'ML-ECAPE', kind: 'native',
     unit: 'J/kg', min: 0, max: 3500, palette: 'convection', accent: '#ef985d', vectors: false,
     description: 'CAPE con arrastre de una parcela representativa de la capa baja publicada por AROME.',
     method: 'Campo nativo MEAN_LAYER_CAPE de AROME. El algoritmo exacto de arrastre no se reproduce fuera del modelo.',
     coverage: 'AROME · parcela ML con arrastre'
   },
   {
-    id: 'mucape-muli', category: 'convection', label: 'MUCAPE + MULI', short: 'MUCAPE · MULI', kind: 'derived',
+    id: 'mucape-muli', category: 'instability', label: 'MUCAPE + MULI', short: 'MUCAPE · MULI', kind: 'derived',
     unit: 'J/kg', min: 0, max: 3500, palette: 'convection', accent: '#ed8d61', vectors: false,
     description: 'MUCAPE convencional en colores, con el Lifted Index de la misma parcela MU representado mediante isolíneas.',
     method: 'MeteoLabX calcula MUCAPE y MULI sin arrastre sobre el mismo perfil termodinámico AROME.',
     coverage: 'Diagnóstico MeteoLabX · MUCAPE + isolíneas MULI', overlay: 'MULI'
   },
   {
-    id: 'mlcape-mlli', category: 'convection', label: 'MLCAPE + MLLI', short: 'MLCAPE · MLLI', kind: 'derived',
+    id: 'mlcape-mlli', category: 'instability', label: 'MLCAPE + MLLI', short: 'MLCAPE · MLLI', kind: 'derived',
     unit: 'J/kg', min: 0, max: 3500, palette: 'convection', accent: '#e7816a', vectors: false,
     description: 'MLCAPE convencional en colores, con el Lifted Index de la misma parcela ML representado mediante isolíneas.',
     method: 'MeteoLabX calcula MLCAPE y MLLI sin arrastre sobre la misma parcela media del perfil AROME.',
     coverage: 'Diagnóstico MeteoLabX · MLCAPE + isolíneas MLLI', overlay: 'MLLI'
   },
   {
-    id: 'sbcape-sbli', category: 'convection', label: 'SBCAPE + SBLI', short: 'SBCAPE · SBLI', kind: 'derived',
+    id: 'sbcape-sbli', category: 'instability', label: 'SBCAPE + SBLI', short: 'SBCAPE · SBLI', kind: 'derived',
     unit: 'J/kg', min: 0, max: 3500, palette: 'convection', accent: '#e97973', vectors: false,
     description: 'CAPE de la parcela superficial en colores, con su índice Lifted representado mediante isolíneas.',
     method: 'MeteoLabX calcula SBCAPE y SBLI a partir del perfil termodinámico y las condiciones superficiales de AROME.',
     coverage: 'Diagnóstico MeteoLabX · SBCAPE + isolíneas SBLI', overlay: 'SBLI'
   },
   {
-    id: 'dcape', category: 'convection', label: 'DCAPE', short: 'DCAPE', kind: 'derived',
+    id: 'dcape', category: 'severe', label: 'DCAPE', short: 'DCAPE', kind: 'derived',
     unit: 'J/kg', min: 0, max: 1800, palette: 'convection', accent: '#df6d7f', vectors: false,
     description: 'Energía potencial disponible para corrientes descendentes, útil para valorar el potencial de reventones convectivos.',
     method: 'Diagnóstico MeteoLabX preparado a partir del descenso pseudoadiabático de una parcela representativa de niveles medios.',
     coverage: 'Diagnóstico MeteoLabX · perfil termodinámico AROME'
   },
   {
-    id: 'ordinary-cell-motion', category: 'convection', label: 'Movimiento de células ordinarias', short: 'Movimiento celular', kind: 'derived',
+    id: 'ordinary-cell-motion', category: 'forcing', label: 'Movimiento de células ordinarias', short: 'Movimiento celular', kind: 'derived',
     unit: 'm/s', min: 0, max: 35, palette: 'wind', accent: '#d96f91', vectors: true,
     description: 'Movimiento estimado de células convectivas ordinarias a partir del viento medio ponderado por presión dentro de la nube.',
     method: 'C⃗cel = (pLCL − pEL)⁻¹ ∫[pEL,pLCL] V⃗(p) dp. MeteoLabX usa el LCL y EL de la parcela de capa mezclada ML100; los colores muestran la velocidad y las streamlines la dirección.',
     coverage: 'Diagnóstico MeteoLabX · viento medio ML100 LCL–EL'
   },
   {
-    id: 'cin', category: 'convection', label: 'Inhibición convectiva', short: 'CIN', kind: 'native',
+    id: 'cin', category: 'instability', label: 'Inhibición convectiva', short: 'CIN', kind: 'native',
     unit: 'J/kg', min: -400, max: 0, palette: 'convection', accent: '#d69b56', vectors: false,
     description: 'Energía que se opone al ascenso libre de una parcela y puede mantener inhibida la convección.',
     method: 'Campo nativo CONVECTIVE_INHIBITION sobre la superficie.', coverage: 'CONVECTIVE INHIBITION'
@@ -310,13 +311,13 @@ const allForecastProducts = [
     coverage: 'AROME · REFLECTIVITY MAX DBZ · superficie'
   },
   {
-    id: 'lightning-density', category: 'convection', label: 'Densidad de rayos en 3 h', short: 'Rayos 3 h', kind: 'native',
+    id: 'lightning-density', category: 'severe', label: 'Densidad de rayos en 3 h', short: 'Rayos 3 h', kind: 'native',
     unit: 'rayos/km²', min: 0, max: 8, palette: 'lightning', accent: '#ecdb58', vectors: false,
     description: 'Densidad media de descargas eléctricas prevista por AROME durante tres horas.',
     method: 'Campo nativo AVERAGE_LIGHTNING_STRIKE_DENSITY_OVER_3HOURS.', coverage: 'LIGHTNING STRIKE DENSITY · 3 h'
   },
   {
-    id: 'ship', category: 'convection', label: 'SHIP', short: 'SHIP', kind: 'derived',
+    id: 'ship', category: 'severe', label: 'SHIP', short: 'SHIP', kind: 'derived',
     unit: '', min: 0, max: 5, palette: 'hail', accent: '#f07086', vectors: false,
     description: 'Significant Hail Parameter para identificar entornos favorables a granizo de tamaño significativo.',
     method: 'Formulación operacional SHARPpy/SPC: MUCAPE, razón de mezcla MU, gradiente 700–500, T500, BWD superficie–6 km y factores reductores.',
@@ -341,7 +342,7 @@ const allForecastProducts = [
     method: 'Campo nativo HIGH_CLOUD_COVER sobre la superficie.', coverage: 'HIGH CLOUD COVER'
   },
   {
-    id: 'vertical-totals', category: 'convection', label: 'Vertical Totals', short: 'VT', kind: 'derived',
+    id: 'vertical-totals', category: 'instability', label: 'Vertical Totals', short: 'VT', kind: 'derived',
     // Grados de diferencia entre dos niveles, no una temperatura: pasarlo a °F
     // con el desplazamiento de 32 daría un número sin significado.
     unit: '°C', unitFixed: true, min: 18, max: 34, palette: 'shear', accent: '#e0a458', vectors: false,
@@ -366,21 +367,21 @@ const allForecastProducts = [
     coverage: 'AROME · T y Td isobáricos · presión en superficie · MSLP'
   },
   {
-    id: 'srh-01', category: 'convection', label: 'Helicidad relativa 0–1 km', short: 'SRH 0–1', kind: 'derived',
+    id: 'srh-01', category: 'shear', label: 'Helicidad relativa 0–1 km', short: 'SRH 0–1', kind: 'derived',
     unit: 'm²/s²', min: -200, max: 500, palette: 'shear', accent: '#c084fc', vectors: true,
     description: 'Helicidad relativa a la tormenta en el primer kilómetro, referida al movimiento de la supercélula derecha de Bunkers. Mide el giro que una corriente ascendente puede heredar del entorno, y es el nivel que más se asocia con la tornadogénesis.',
     method: 'Integral del hodógrafo entre 0 y 1.000 m sobre el terreno, restando el movimiento Bunkers 2000 right mover. Sale del mismo perfil de viento que los demás diagnósticos convectivos.',
     coverage: 'Perfil de viento AROME · 0–1 km AGL'
   },
   {
-    id: 'esrh', category: 'convection', label: 'Helicidad efectiva', short: 'ESRH', kind: 'derived',
+    id: 'esrh', category: 'shear', label: 'Helicidad efectiva', short: 'ESRH', kind: 'derived',
     unit: 'm²/s²', min: -300, max: 600, palette: 'shear', accent: '#a855f7', vectors: true,
     description: 'Helicidad relativa a Bunkers derecho integrada en la capa efectiva de alimentación, incluso cuando es elevada.',
     method: 'Primera capa continua de parcelas con CAPE ≥ 100 J/kg y CIN ≥ −250 J/kg. Se reutilizan los perfiles, las parcelas y Bunkers; las flechas muestran el movimiento de la tormenta.',
     coverage: 'Diagnóstico MeteoLabX · capa efectiva AROME'
   },
   {
-    id: 'stp', category: 'convection', label: 'STP efectivo (con CIN)', short: 'STP efectivo', kind: 'derived',
+    id: 'stp', category: 'severe', label: 'STP efectivo (con CIN)', short: 'STP efectivo', kind: 'derived',
     unit: '', min: 0, max: 10, palette: 'hail', accent: '#ef476f', vectors: false,
     // Por debajo de 0,5 el STP no dice nada: el producto de los cinco factores
     // deja décimas en medio mar abierto y pintarlas cubre el dominio de azul
@@ -391,7 +392,7 @@ const allForecastProducts = [
     coverage: 'Diagnóstico MeteoLabX · STP efectivo con CIN · formulación SPC'
   },
   {
-    id: 'scp', category: 'convection', label: 'Supercell Composite Parameter', short: 'SCP', kind: 'derived',
+    id: 'scp', category: 'severe', label: 'Supercell Composite Parameter', short: 'SCP', kind: 'derived',
     unit: '', min: 0, max: 20, palette: 'hail', accent: '#f07086', vectors: false,
     // El umbral clásico del SCP es 1; por debajo el índice sólo recoge restos
     // de CAPE y helicidad que no organizan nada, así que se deja sin pintar.
@@ -401,14 +402,14 @@ const allForecastProducts = [
     coverage: 'Diagnóstico MeteoLabX · formulación SPC sobre perfiles AROME'
   },
   {
-    id: 'srh-03', category: 'convection', label: 'Helicidad relativa 0–3 km', short: 'SRH 0–3', kind: 'derived',
+    id: 'srh-03', category: 'shear', label: 'Helicidad relativa 0–3 km', short: 'SRH 0–3', kind: 'derived',
     unit: 'm²/s²', min: -300, max: 600, palette: 'shear', accent: '#a855f7', vectors: true,
     description: 'Helicidad relativa a la tormenta en los tres primeros kilómetros, referida al movimiento de la supercélula derecha de Bunkers. Es la capa habitual para valorar el potencial de rotación de una supercélula.',
     method: 'Integral del hodógrafo entre 0 y 3.000 m sobre el terreno, restando el movimiento Bunkers 2000 right mover. Sale del mismo perfil de viento que los demás diagnósticos convectivos.',
     coverage: 'Perfil de viento AROME · 0–3 km AGL'
   },
   {
-    id: 'vv-lfc', category: 'convection', label: 'Velocidad vertical en el NCL', short: 'w en NCL', kind: 'derived',
+    id: 'vv-lfc', category: 'forcing', label: 'Velocidad vertical en el NCL', short: 'w en NCL', kind: 'derived',
     unit: 'm/s', min: -5, max: 10, palette: 'shear', accent: '#4ade80', vectors: true,
     // El viento de 10 m va en líneas de corriente: es lo que enseña dónde
     // convergen las brisas, que es lo que fuerza el ascenso que pinta el mapa.
@@ -418,7 +419,7 @@ const allForecastProducts = [
     coverage: 'Diagnóstico MeteoLabX · velocidad vertical en niveles de presión · viento 10 m'
   },
   {
-    id: 'updraft-helicity', category: 'convection', label: 'Helicidad de la corriente ascendente 2–5 km', short: 'UH 2–5', kind: 'derived',
+    id: 'updraft-helicity', category: 'severe', label: 'Helicidad de la corriente ascendente 2–5 km', short: 'UH 2–5', kind: 'derived',
     unit: 'm²/s²', min: -50, max: 250, palette: 'shear', accent: '#f472b6', vectors: false,
     description: 'Diagnóstico de la rotación que el propio modelo genera dentro de una corriente ascendente: integra el producto de la velocidad vertical por la vorticidad vertical entre 2 y 5 km sobre el terreno. Mide cuánto coinciden el ascenso y el giro, así que separa una tormenta rotatoria de otra que sólo sube con fuerza: es el rastro que deja una supercélula en un modelo que resuelve la convección.',
     method: 'Vorticidad vertical de cada nivel isobárico con las distancias en metros, multiplicada por la velocidad vertical geométrica e integrada por trapecios entre 2.000 y 5.000 m AGL.',
@@ -429,42 +430,42 @@ const allForecastProducts = [
 // Selección inicial deliberadamente corta. El catálogo completo queda listo para
 // incorporar nuevos mapas cuando se decida qué variables formarán el producto.
 const initialProductIds = [
-  'z500-mslp',
-  'vertical-totals',
-  'reflectivity',
-  'mslp-theta-e-850',
-  'srh-01',
-  'srh-03',
-  'esrh',
-  'scp',
-  'stp',
-  'vv-lfc',
-  'updraft-helicity',
   'temperature-2m',
   'temperature-850',
   'temperature-500',
   'freezing-level',
+  'precip-1h',
+  'accumulated-precip',
+  'precip-type',
   'snow-level',
+  'reflectivity',
+  'z500-mslp',
+  'mslp-theta-e-850',
   'wind-level',
   'wind-gust',
+  'mucape-muli',
+  'mlcape-mlli',
+  'sbcape-sbli',
+  'mu-ecape',
+  'ml-ecape',
+  'vertical-totals',
   'shear-01',
   'shear-03',
   'shear-06',
   'ebwd',
-  'precip-1h',
-  'precip-type',
-  'accumulated-precip',
-  'relative-humidity-700',
-  'shortwave-down',
-  'mu-ecape',
-  'ml-ecape',
-  'mucape-muli',
-  'mlcape-mlli',
-  'sbcape-sbli',
-  'dcape',
+  'srh-01',
+  'srh-03',
+  'esrh',
+  'vv-lfc',
   'ordinary-cell-motion',
+  'stp',
+  'scp',
   'ship',
-  'cloud-cover'
+  'dcape',
+  'updraft-helicity',
+  'cloud-cover',
+  'relative-humidity-700',
+  'shortwave-down'
 ];
 
 export const forecastProducts = initialProductIds.map((id) => {

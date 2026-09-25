@@ -35,12 +35,12 @@ export function forecastText(language, key, params = {}) {
 export function forecastLocale(language) { return FORECAST_LOCALES[language] || FORECAST_LOCALES.es; }
 
 const CATEGORY_LABELS = {
-  ca: ['Temperatura', 'Precipitació', 'Dinàmica atmosfèrica', 'Convecció', 'Humitat', 'Nuvolositat', 'Radiació'],
-  en: ['Temperature', 'Precipitation', 'Atmospheric dynamics', 'Convection', 'Humidity', 'Cloud cover', 'Radiation'],
-  de: ['Temperatur', 'Niederschlag', 'Atmosphärische Dynamik', 'Konvektion', 'Feuchte', 'Bewölkung', 'Strahlung'],
-  fr: ['Température', 'Précipitations', 'Dynamique atmosphérique', 'Convection', 'Humidité', 'Nébulosité', 'Rayonnement'],
-  it: ['Temperatura', 'Precipitazioni', 'Dinamica atmosferica', 'Convezione', 'Umidità', 'Nuvolosità', 'Radiazione'],
-  pt: ['Temperatura', 'Precipitação', 'Dinâmica atmosférica', 'Convecção', 'Humidade', 'Nebulosidade', 'Radiação']
+  ca: ['Temperatura', 'Precipitació', 'Vent i dinàmica', 'Inestabilitat', 'Cisallament i helicitat', 'Forçament i cinemàtica', 'Temps sever', 'Núvols, humitat i radiació'],
+  en: ['Temperature', 'Precipitation', 'Wind and dynamics', 'Instability', 'Shear and helicity', 'Forcing and kinematics', 'Severe weather', 'Clouds, humidity and radiation'],
+  de: ['Temperatur', 'Niederschlag', 'Wind und Dynamik', 'Labilität', 'Scherung und Helizität', 'Antrieb und Kinematik', 'Unwetter', 'Wolken, Feuchte und Strahlung'],
+  fr: ['Température', 'Précipitations', 'Vent et dynamique', 'Instabilité', 'Cisaillement et hélicité', 'Forçage et cinématique', 'Temps violent', 'Nuages, humidité et rayonnement'],
+  it: ['Temperatura', 'Precipitazioni', 'Vento e dinamica', 'Instabilità', 'Wind shear ed elicità', 'Forzanti e cinematica', 'Fenomeni severi', 'Nubi, umidità e radiazione'],
+  pt: ['Temperatura', 'Precipitação', 'Vento e dinâmica', 'Instabilidade', 'Cisalhamento e helicidade', 'Forçamento e cinemática', 'Tempo severo', 'Nuvens, humidade e radiação']
 };
 
 const LABEL_REPLACEMENTS = {

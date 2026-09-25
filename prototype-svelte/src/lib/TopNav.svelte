@@ -15,20 +15,21 @@
   */
   import { LayoutDashboard, Map, Trophy } from '@lucide/svelte';
   import TABS from './tabs-i18n.generated.js';
+  import { forecastPath } from './forecast-route.js';
 
-  let { language = 'es', slug = '', observationPath = '', stationControls, themeControl } = $props();
+  let { language = 'es', slug = '', observationPath = '', product = '', stationControls, themeControl } = $props();
 
   const LANGUAGES = ['es', 'ca', 'en', 'de', 'fr', 'it', 'pt'];
   const labels = $derived(TABS[language] || TABS.es);
   const navIcons = { LayoutDashboard, Map, Trophy };
 
-  /** Predicción se lleva el idioma y la estación para poder volver a ellos. */
+  /**
+   * Predicción se lleva el idioma y la estación para poder volver a ellos.
+   * Cambiar de idioma conserva el mapa: `/es/forecast/ebwd` → `/en/forecast/ebwd`.
+   */
   const forecastHref = $derived((code) => {
-    const params = new URLSearchParams();
-    if (code !== 'es') params.set('lang', code);
-    if (slug) params.set('slug', slug);
-    const query = params.toString();
-    return query ? `/forecast?${query}` : '/forecast';
+    const query = slug ? `?${new URLSearchParams({ slug })}` : '';
+    return `${forecastPath(code, product)}${query}`;
   });
 
   const tabs = $derived([

@@ -119,3 +119,12 @@ test('la imagen copia todo lo que server.js necesita', async () => {
     );
   }
 });
+
+test('/forecast redirige al índice del visor en su idioma', async () => {
+  const { legacyForecastLocation } = await import('../src/lib/seo/ownership.js');
+  assert.equal(legacyForecastLocation('/forecast'), '/es/forecast');
+  assert.equal(legacyForecastLocation('/forecast/', '?lang=en&slug=abc&from=app'), '/en/forecast?slug=abc&from=app');
+  assert.equal(legacyForecastLocation('/forecast', '?lang=xx'), '/es/forecast');
+  assert.equal(legacyForecastLocation('/forecast/assets/forecast-abc.js'), null);
+  assert.equal(legacyForecastLocation('/es/forecast'), null);
+});

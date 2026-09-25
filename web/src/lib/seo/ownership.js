@@ -108,3 +108,23 @@ export function isDirectoryPath(pathname) {
   return rest.length === 1 ? rest[0].endsWith('.html') : rest[1].endsWith('.html');
 }
 
+
+/**
+ * `/forecast` fue la única URL del visor hasta que cada mapa tuvo la suya
+ * (`/{idioma}/forecast/{mapa}`). Devuelve adónde redirigirla —el idioma pasa
+ * de `?lang=` a la ruta y el resto de la consulta se conserva— o `null` si la
+ * petición no es esa.
+ *
+ * Lo consulta `server.js` antes que nada: `static/forecast/index.html` existe
+ * —es la plantilla del visor— y el servidor de estáticos la entregaría tal
+ * cual en `/forecast`, sin pasar por ninguna ruta de SvelteKit.
+ */
+export function legacyForecastLocation(pathname, search = '') {
+  if (!['/forecast', '/forecast/', '/forecast/index.html'].includes(pathname)) return null;
+  const params = new URLSearchParams(search);
+  const requested = params.get('lang') || '';
+  params.delete('lang');
+  const language = isLanguage(requested) ? requested : 'es';
+  const query = params.toString();
+  return `/${language}/forecast${query ? `?${query}` : ''}`;
+}

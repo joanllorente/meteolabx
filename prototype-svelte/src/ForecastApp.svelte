@@ -6,6 +6,7 @@
   import ForecastView from './views/ForecastView.svelte';
   import UnitPreferences from '../../web/src/lib/components/UnitPreferences.svelte';
   import { forecastText } from './lib/forecast-i18n.js';
+  import { forecastPath, parseForecastLocation } from './lib/forecast-route.js';
   // El tema es el mismo módulo que usa el resto del sitio: tres estados
   // —automático, claro y oscuro— y, en automático, nada guardado. El visor
   // tenía su propia copia de dos estados que al arrancar guardaba el tema
@@ -14,11 +15,28 @@
   import { currentMode, currentTheme, cycleTheme, loadTheme } from '../../web/src/lib/theme.svelte.js';
 
   const entryParams = new URLSearchParams(window.location.search);
-  // Idioma y estación conectada con los que se llegó desde el resto de la web.
-  // La barra los necesita para que salir del visor devuelva a donde se estaba.
-  const LANGUAGES = ['es', 'ca', 'en', 'de', 'fr', 'it', 'pt'];
-  const entryLanguage = entryParams.get('lang') || '';
-  const language = LANGUAGES.includes(entryLanguage) ? entryLanguage : 'es';
+  // Idioma y mapa salen de la ruta —`/en/forecast/shear-06`—; la estación
+  // conectada, de la consulta. La barra los necesita para que salir del visor
+  // devuelva a donde se estaba.
+  const entry = parseForecastLocation(window.location);
+  const language = entry.language;
+  // El mapa que se está viendo. La URL lo sigue para que se pueda compartir, y
+  // la barra lo conserva al cambiar de idioma.
+  let currentProduct = $state(entry.product);
+  function updateProduct(productId, label) {
+    currentProduct = productId || '';
+    const path = forecastPath(language, currentProduct);
+    if (path !== window.location.pathname) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${path}${window.location.search}${window.location.hash}`
+      );
+    }
+    document.title = label
+      ? `${label} · ${forecastText(language, 'pageTitle')}`
+      : forecastText(language, 'pageTitle');
+  }
   function readConnection() {
     try {
       const value = JSON.parse(localStorage.getItem('mlx-connection') || 'null');
@@ -45,11 +63,9 @@
   onMount(loadTheme);
 
   onMount(() => {
-    // El HTML del visor es uno solo y se sirve en español —es la versión
-    // indexada—, así que el título de la pestaña y el idioma del documento se
-    // ajustan aquí: quien llega desde la web en inglés veía la interfaz
-    // traducida y la pestaña en castellano.
-    document.title = forecastText(language, 'pageTitle');
+    // El servidor ya entrega el título y el idioma de cada URL; se repiten
+    // aquí para cuando el HTML llega sin ellos (el build local, sin servidor).
+    if (!currentProduct) document.title = forecastText(language, 'pageTitle');
     document.documentElement.lang = language;
     // El origen se usa una sola vez y se retira de la URL: si el visitante
     // copia después el enlace, la siguiente apertura contará como directa.
@@ -72,7 +88,7 @@
 </script>
 
 <div class="forecast-shell theme-{currentTheme()}">
-  <TopNav {language} {slug} {observationPath}>
+  <TopNav {language} {slug} {observationPath} product={currentProduct}>
     {#snippet stationControls()}
       <ForecastStationControls {language} onConnectionChange={updateConnection} />
     {/snippet}
@@ -109,7 +125,7 @@
   </TopNav>
 
   <main class="forecast-wrap">
-    <ForecastView {language} />
+    <ForecastView {language} initialProduct={entry.product} onProductChange={updateProduct} />
     <ForecastFooter {language} />
   </main>
 </div>

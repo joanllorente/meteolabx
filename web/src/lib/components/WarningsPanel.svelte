@@ -10,6 +10,7 @@
   import WarningsMap from './WarningsMap.svelte';
   import { locale, num } from '$lib/format.js';
   import { ui } from '$lib/i18n/ui.js';
+  import { forecastHref } from '$lib/tabs.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { convertUnit, unitLabel } from '$lib/units.js';
   import zones from '$lib/warnings/demo-zones.json';
@@ -240,7 +241,7 @@
         </dl>
 
         <div class="actions">
-          <a href={`/forecast?${language !== 'es' ? `lang=${language}&` : ''}from=app`} data-sveltekit-reload>
+          <a href={forecastHref(language)} data-sveltekit-reload>
             {ui(language, 'warnings_view_forecast')}
           </a>
           <a href={`/${language}/map`}>{ui(language, 'warnings_view_stations')}</a>

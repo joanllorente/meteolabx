@@ -15,6 +15,7 @@
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
   import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
   import { recordForecastMap } from '../lib/stats.js';
+  import { forecastPath } from '../lib/forecast-route.js';
   import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, fetchThermalProfile, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
   import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
@@ -24,7 +25,9 @@
   const liquidTypes = [1, 11, 3, 12].map((code) => precipitationType(code));
   const solidTypes = [5, 6, 7, 8, 9, 10].map((code) => precipitationType(code));
 
-  let { language = 'es' } = $props();
+  // `initialProduct` llega de la URL (`/es/forecast/ebwd`); cada cambio de
+  // mapa se avisa con `onProductChange` para que la URL lo siga.
+  let { language = 'es', initialProduct = '', onProductChange = () => {} } = $props();
   const tr = $derived((key, params = {}) => forecastText(language, key, params));
   const locale = $derived(forecastLocale(language));
 
@@ -35,9 +38,18 @@
     time: `${String((5 + i * 3) % 24).padStart(2, '0')}:00`
   }));
 
-  let selectedModel = $state(DEFAULT_FORECAST_MODEL);
-  let selectedProduct = $state(null);
-  let expandedCategory = $state('dynamics');
+  // El mapa de la URL, si existe en algún modelo público. Uno desconocido
+  // —un enlace viejo, un mapa retirado— deja el visor en su estado inicial.
+  const entryModel = forecastModels.find((item) =>
+    productsForModel(item.id).some((entry) => entry.id === initialProduct)
+  );
+  const entryProduct = entryModel
+    ? productsForModel(entryModel.id).find((entry) => entry.id === initialProduct)
+    : null;
+
+  let selectedModel = $state(entryModel?.id || DEFAULT_FORECAST_MODEL);
+  let selectedProduct = $state(entryProduct?.id || null);
+  let expandedCategory = $state(entryProduct?.category || 'dynamics');
   let search = $state('');
   let hourIndex = $state(5);
   let playing = $state(false);
@@ -307,6 +319,7 @@
     frameError = '';
     selectedProduct = item.id;
     expandedCategory = item.category;
+    onProductChange(item.id, item.label);
     // Solo lo que se elige a mano: el primer mapa que pone un cambio de
     // modelo no dice qué interesa a nadie.
     const original = productsForModel(selectedModel).find((entry) => entry.id === item.id);
@@ -331,6 +344,10 @@
     const first = productsForModel(modelId)[0];
     selectedProduct = first?.id || null;
     expandedCategory = first?.category || 'dynamics';
+    onProductChange(
+      first?.id || '',
+      localizedForecastProducts(first ? [first] : [], language)[0]?.label || ''
+    );
     selectedRun = '';
     hourIndex = 0;
     catalog = null;
@@ -654,11 +671,18 @@
             <div class="product-list">
               {#each category.products as item}
                 {@const availability = productProgress(item)}
-                <button
-                  type="button"
+                <!-- Enlaces de verdad, no botones: cada mapa tiene su URL y
+                     así el buscador la encuentra y se puede abrir en otra
+                     pestaña. El clic normal cambia de mapa sin recargar. -->
+                <a
+                  href={forecastPath(language, item.id)}
                   class:active={selectedProduct === item.id}
-                  aria-current={selectedProduct === item.id ? 'true' : undefined}
-                  onclick={() => selectProduct(item)}
+                  aria-current={selectedProduct === item.id ? 'page' : undefined}
+                  onclick={(event) => {
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    selectProduct(item);
+                  }}
                 >
                   <i style:--accent={item.accent}></i>
                   <span>{item.label}</span>
@@ -672,7 +696,7 @@
                       <img src={`${assetBase}mlx-logo.png`} alt={tr('calculatedBy')} title={tr('mlxDiagnostic')} />
                     {/if}
                   </span>
-                </button>
+                </a>
               {/each}
             </div>
           {/if}
@@ -908,7 +932,7 @@
   .profile-state button{position:absolute;top:6px;right:10px;border:0;color:#eaf2f8;background:transparent;font-size:1.4rem;cursor:pointer}.profile-state small{font-size:.72rem;line-height:1.5}
   .forecast-head{margin-bottom:16px}.forecast-title{display:flex;align-items:center;gap:8px}.forecast-title h2{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}.forecast-head p{margin-top:4px;color:var(--muted);font-size:.8rem;text-wrap:balance}.beta-badge{display:inline-flex;align-items:center;padding:.12rem .35rem;border:1px solid rgba(255,75,75,.42);border-radius:999px;background:rgba(255,75,75,.1);color:#ff4b4b;font-size:.58rem;font-weight:700;line-height:1}.status-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#43c98a;box-shadow:0 0 0 4px rgba(67,201,138,.14)}.status-dot.error{background:#ef6f76;box-shadow:0 0 0 4px rgba(239,111,118,.14)}.run-summary button,.map-actions button,.timeline>button{display:grid;place-items:center;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--card);transition:border-color .15s ease,color .15s ease,background .15s ease}.run-summary button:hover,.map-actions button:hover,.timeline>button:hover:not(:disabled){border-color:var(--border-2);color:var(--ink);background:var(--panel-2)}
   .control-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.control-bar label{display:flex;align-items:center;gap:7px;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--panel-2);font-size:.76rem;transition:border-color .15s ease,background .15s ease}.control-bar label:hover,.control-bar label:focus-within{border-color:var(--border-2);background:var(--card)}.control-bar select{height:100%;max-width:220px;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-weight:650;cursor:pointer}.run-summary{display:flex;align-items:center;gap:10px;height:40px;margin-left:auto;padding:0 4px 0 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-2)}.run-summary-copy{display:flex;min-width:0;flex-direction:column;gap:1px}.run-summary small{color:var(--ink-2);font-size:.62rem;line-height:1}.run-summary strong{max-width:330px;overflow:hidden;color:var(--ink);font-size:.71rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}.run-summary button{width:32px;height:32px}
-  .forecast-layout{display:grid;grid-template-columns:260px minmax(0,1fr);align-items:start;gap:14px}.product-selector,.map-card,.product-explainer{border:1px solid var(--border);border-radius:15px;background:var(--panel);overflow:hidden}.product-selector{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}.product-selector>header{padding:15px;border-bottom:1px solid var(--border)}.product-selector>header>div{display:flex;align-items:baseline;justify-content:space-between}.product-selector>header span{font-size:.82rem;font-weight:720}.product-selector>header small,.product-selector>header p{color:var(--muted);font-size:.57rem}.product-selector>header p{margin:5px 0 11px}.search-box{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2)}.search-box input{min-width:0;width:100%;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-size:.66rem}.category-list{overflow-y:auto;padding:7px}.category{border-bottom:1px solid var(--border)}.category:last-child{border:0}.category-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 8px;border:0;color:var(--ink-2);background:transparent;font-size:.68rem;font-weight:680;text-align:left}.category-toggle span{display:flex;align-items:center;gap:6px}.category-toggle small{display:grid;place-items:center;min-width:18px;height:18px;border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:.52rem}.category-toggle :global(svg){transition:transform .18s}.category-toggle :global(svg.open){transform:rotate(180deg)}.product-list{display:flex;flex-direction:column;gap:2px;padding:0 2px 8px}.product-list button{display:grid;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 7px;border:1px solid transparent;border-radius:8px;color:var(--muted);background:transparent;font-size:.63rem;text-align:left}.product-list button:hover{color:var(--ink);background:var(--panel-2)}.product-list button.active{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--ink);background:var(--card)}.product-list>button>i{width:3px;height:20px;border-radius:4px;background:var(--accent)}.product-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px}.product-list img{width:20px;height:20px;border-radius:6px}.product-status{display:grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border-radius:6px;font-size:.48rem;font-weight:780;font-variant-numeric:tabular-nums}.product-status.complete{color:#143c2b;background:rgba(67,201,138,.78)}.product-status.partial{color:#5a3a09;background:rgba(240,178,78,.82)}.product-status.pending{color:var(--muted);background:var(--panel-2);font-size:.82rem}.product-selector>footer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);background:var(--panel-2);font-size:.55rem;line-height:1.35}.product-selector>footer img{width:22px;height:22px;border-radius:6px}
+  .forecast-layout{display:grid;grid-template-columns:260px minmax(0,1fr);align-items:start;gap:14px}.product-selector,.map-card,.product-explainer{border:1px solid var(--border);border-radius:15px;background:var(--panel);overflow:hidden}.product-selector{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}.product-selector>header{padding:15px;border-bottom:1px solid var(--border)}.product-selector>header>div{display:flex;align-items:baseline;justify-content:space-between}.product-selector>header span{font-size:.82rem;font-weight:720}.product-selector>header small,.product-selector>header p{color:var(--muted);font-size:.57rem}.product-selector>header p{margin:5px 0 11px}.search-box{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2)}.search-box input{min-width:0;width:100%;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-size:.66rem}.category-list{overflow-y:auto;padding:7px}.category{border-bottom:1px solid var(--border)}.category:last-child{border:0}.category-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 8px;border:0;color:var(--ink-2);background:transparent;font-size:.68rem;font-weight:680;text-align:left}.category-toggle span{display:flex;align-items:center;gap:6px}.category-toggle small{display:grid;place-items:center;min-width:18px;height:18px;border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:.52rem}.category-toggle :global(svg){transition:transform .18s}.category-toggle :global(svg.open){transform:rotate(180deg)}.product-list{display:flex;flex-direction:column;gap:2px;padding:0 2px 8px}.product-list a{display:grid;text-decoration:none;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 7px;border:1px solid transparent;border-radius:8px;color:var(--muted);background:transparent;font-size:.63rem;text-align:left}.product-list a:hover{color:var(--ink);background:var(--panel-2)}.product-list a.active{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--ink);background:var(--card)}.product-list>a>i{width:3px;height:20px;border-radius:4px;background:var(--accent)}.product-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px}.product-list img{width:20px;height:20px;border-radius:6px}.product-status{display:grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border-radius:6px;font-size:.48rem;font-weight:780;font-variant-numeric:tabular-nums}.product-status.complete{color:#143c2b;background:rgba(67,201,138,.78)}.product-status.partial{color:#5a3a09;background:rgba(240,178,78,.82)}.product-status.pending{color:var(--muted);background:var(--panel-2);font-size:.82rem}.product-selector>footer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);background:var(--panel-2);font-size:.55rem;line-height:1.35}.product-selector>footer img{width:22px;height:22px;border-radius:6px}
   .viewer-column{min-width:0}.empty-map-card{display:grid;place-items:center;min-height:clamp(620px,64vh,780px);background:var(--panel)}.empty-forecast{display:flex;align-items:center;flex-direction:column;color:var(--ink);text-align:center}.empty-forecast img{width:62px;height:62px;margin-bottom:18px;border-radius:16px;opacity:.88}.empty-forecast strong{font-size:1.72rem;letter-spacing:.14em}.empty-forecast span{margin-top:7px;color:var(--muted);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase}.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}.map-product{display:flex;align-items:center;gap:10px}.product-mark{width:4px;height:35px;border-radius:5px;background:var(--product-accent);box-shadow:0 0 16px color-mix(in srgb,var(--product-accent) 45%,transparent)}.product-title{display:flex;align-items:center;gap:7px}.product-title strong{font-size:.82rem}.product-title img{width:21px;height:21px;border-radius:6px}.map-head small{display:block;margin-top:3px;color:var(--muted);font-size:.61rem;font-variant-numeric:tabular-nums}.map-actions{display:flex;align-items:center;gap:5px}.map-actions button{width:31px;height:31px;border-radius:8px}.map-actions button:disabled{opacity:.45}.export-error{max-width:210px;color:#e8846b;font-size:.52rem;line-height:1.25}
   /* El lienzo del mapa lleva un fondo claro fijo, no el del tema: las
      fronteras se trazan casi en negro (`.region-boundary`) y sobre un fondo
@@ -957,7 +981,7 @@
   .search-box input{font-size:.76rem}
   .category-toggle{font-size:.77rem}
   .category-toggle small{color:var(--ink-2);font-size:.61rem}
-  .product-list button{min-height:40px;color:var(--ink-2);font-size:.72rem}
+  .product-list a{min-height:40px;color:var(--ink-2);font-size:.72rem}
   .product-status{font-size:.56rem}
   .product-selector>footer{color:var(--ink-2);font-size:.64rem}
   .product-title strong{font-size:.9rem}

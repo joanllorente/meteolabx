@@ -8,21 +8,19 @@
 import { ui } from '$lib/i18n/ui.js';
 
 /**
- * Predicción se lleva el idioma y la estación en la URL.
+ * Predicción se lleva el idioma en la ruta y la estación en la consulta.
  *
  * Es un SPA aparte: no comparte estado con este frontend, y sin esos dos datos
  * su barra saldría en español y con las pestañas de estación apagadas, que es
- * justo la discontinuidad que se quería evitar. El idioma por defecto no viaja
- * para no ensuciar la URL que está indexada.
+ * justo la discontinuidad que se quería evitar.
  */
-function forecastHref(language, slug) {
+export function forecastHref(language, slug = '') {
   const params = new URLSearchParams();
-  if (language !== 'es') params.set('lang', language);
   if (slug) params.set('slug', slug);
   // Marca de procedencia para el panel de uso: sin ella, entrar por la pestaña
   // y teclear la dirección contaban igual («forecast.direct»).
   params.set('from', 'app');
-  return `/forecast?${params.toString()}`;
+  return `/${language}/forecast?${params.toString()}`;
 }
 
 /**

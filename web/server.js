@@ -7,8 +7,9 @@
  * Hubo aquí un proxy que mandaba a la aplicación de Streamlit todo lo que
  * este servicio no reconocía, incluido el `upgrade` de WebSocket que aquella
  * necesitaba para no quedarse en blanco. Ya no queda nada al otro lado: todas
- * las secciones están migradas y el visor de predicción se sirve como
- * estático desde `web/static/forecast`.
+ * las secciones están migradas. El visor de predicción es un SPA estático en
+ * `web/static/forecast`, que SvelteKit entrega en `/{idioma}/forecast/…` con
+ * los metadatos y la guía de cada mapa.
  *
  *   PORT               puerto público (Railway lo inyecta)
  *   METEOLABX_API_URL  backend FastAPI para el renderizado en servidor
@@ -19,7 +20,7 @@ import httpProxy from 'http-proxy';
 import { createApiAgent } from './src/lib/server/proxy-agent.js';
 
 import { handler } from './build/handler.js';
-import { isApiPath } from './src/lib/seo/ownership.js';
+import { isApiPath, legacyForecastLocation } from './src/lib/seo/ownership.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -63,6 +64,14 @@ const server = createServer((request, response) => {
   const path = pathOf(request);
   if (isApiPath(path)) {
     apiProxy.web(request, response);
+    return;
+  }
+  // La dirección antigua del visor, antes de que la conteste su plantilla
+  // estática: 301 a `/{idioma}/forecast`.
+  const forecast = legacyForecastLocation(path, new URL(request.url, 'http://localhost').search);
+  if (forecast) {
+    response.writeHead(301, { location: forecast, 'cache-control': 'public, max-age=3600' });
+    response.end();
     return;
   }
   if (REVALIDATE.has(path)) {
