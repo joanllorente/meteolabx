@@ -37,7 +37,7 @@ LANGUAGES = ("es", "ca", "en", "de", "fr", "it", "pt")
 # antigua. El orden es el del propio modal en Streamlit.
 # La serie 1 se retiró con la 2.0.0: sus notas hablaban de una interfaz
 # que ya no existe.
-RELEASES = ("211", "210", "203", "202", "201", "200")
+RELEASES = ("212", "211", "210", "203", "202", "201", "200")
 
 
 def _app_version() -> str:

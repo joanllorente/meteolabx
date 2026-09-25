@@ -25,14 +25,14 @@
   let {
     frame, productLabel, language = 'es', resetKey = 0, formatProbe = null,
     scaleBreaks = null, scaleAnchors = null, zeroFloor = 0,
-    displayMin = null, displayMax = null, contourStep = 0, formatContour = null,
+    displayMin = null, displayMax = null, contourStep = 0, contourLayerId = 'isotherms', formatContour = null,
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
     cityLabels = false,
     troughAxes = false, overlayLabel = '',
     // Viento dibujado como líneas de corriente en vez de flechas sueltas: se
     // ve el flujo entero y, con él, dónde converge.
     flowLines = false,
-    pressureCentres = false, overlaySmoothing = 4, overlayLayerLabel = '',
+    pressureCentres = false, multipleSolutions = false, overlaySmoothing = 4, overlayLayerLabel = '',
     onink = null,
     // Encuadre guardado fuera del componente: `{ key, zoom, panX, panY }`.
     // La vista desmonta el mapa mientras llega el frame de la hora siguiente,
@@ -46,10 +46,12 @@
   // lectura del resto sin competir con ella.
   // Capas que este mapa puede ofrecer, y cuáles están encendidas ahora mismo.
   const availableLayers = $derived(LAYERS.filter((capa) => (
-    capa.id === 'isotherms' ? contourStep > 0
+    capa.id === 'isotherms' || capa.id === 'snowContours' || capa.id === 'freezingContours'
+      ? contourStep > 0 && capa.id === contourLayerId
       : capa.id === 'isohypses' ? overlayStep > 0
       : capa.id === 'troughs' ? troughAxes && Boolean(frame.overlay)
       : capa.id === 'cities' ? cityLabels
+      : capa.id === 'multipleSolutions' ? multipleSolutions && Boolean(frame.overlay)
       : pressureCentres && Boolean(frame.overlay)
   // La capa superpuesta se llama distinto según el campo: isohipsas en un
   // mapa de geopotencial e isobaras en uno de presión. El nombre alternativo
@@ -61,7 +63,7 @@
       ? { ...capa, labelKey: 'isobars', label: overlayLayerLabel }
       : capa
   )));
-  const showIsotherms = $derived(contourStep > 0 && layerPreferences.isotherms);
+  const showValueContours = $derived(contourStep > 0 && layerPreferences[contourLayerId]);
   const showIsohypses = $derived(overlayStep > 0 && layerPreferences.isohypses);
 
   // Ancho de rejilla con el que se ajustaron los rótulos: el dominio nativo de
@@ -115,6 +117,7 @@
     });
   });
   const showCentres = $derived(pressureCentres && layerPreferences.centres);
+  const showMultipleSolutions = $derived(multipleSolutions && layerPreferences.multipleSolutions);
 
   const EMPHASISED_LEVELS = [0, 10, 20, 30];
 
@@ -130,6 +133,7 @@
   let layer;
   let surface;
   let raster;
+  let multipleRaster = $state();
   let hover = $state(null);
   let zoom = $state(1);
   let panX = $state(0);
@@ -297,6 +301,26 @@
         const slot = (value - low) * linearScale;
         canvas32[index] = lut[slot > last ? last : slot < 0 ? 0 : slot | 0];
       }
+    }
+    context.putImageData(pixels, 0, 0);
+  }
+
+  function renderMultipleSolutions() {
+    if (!multipleSolutions || !multipleRaster || !frame.overlay) return;
+    const { width, height } = frame;
+    multipleRaster.width = width;
+    multipleRaster.height = height;
+    const context = multipleRaster.getContext('2d', { alpha: true });
+    const pixels = context.createImageData(width, height);
+    for (let index = 0; index < frame.overlay.length; index += 1) {
+      if (!(frame.overlay[index] >= 0.5)) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const offset = index * 4;
+      pixels.data[offset] = 255;
+      pixels.data[offset + 1] = 174;
+      pixels.data[offset + 2] = 42;
+      pixels.data[offset + 3] = (x + y) % 7 < 2 ? 205 : 75;
     }
     context.putImageData(pixels, 0, 0);
   }
@@ -470,7 +494,7 @@
   // El contorno del índice superpuesto va crudo, como estaba: es una línea de
   // referencia sobre un campo ya suave, no el dibujo principal del mapa.
   const contourPaths = $derived.by(() => {
-    if (!frame.overlay) return [];
+    if (!frame.overlay || multipleSolutions) return [];
     if (overlayStep > 0) {
       // Isohipsas: el geopotencial es un campo mucho más suave que la
       // temperatura, así que basta con medio sigma y con tirar los anillos
@@ -708,7 +732,7 @@
         priority: (level) => (isMajorOverlay(level) ? 3 : 1)
       });
     }
-    if (showIsotherms && formatContour) {
+    if (showValueContours && formatContour) {
       groups.push({
         kind: 'value',
         contours: valueContours,
@@ -890,6 +914,10 @@
     zeroFloor;
     renderGrid();
   });
+  $effect(() => {
+    frame;
+    renderMultipleSolutions();
+  });
 
   // La tinta de la marca de agua se mide después de pintar, en el fotograma
   // siguiente: si se calculara dentro del mismo efecto se leerían los píxeles
@@ -969,6 +997,15 @@
       style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
       aria-hidden="true"
     ></canvas>
+    {#if multipleSolutions}
+      <canvas
+        class="grid-raster multiple-raster"
+        bind:this={multipleRaster}
+        style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
+        style:display={showMultipleSolutions ? 'block' : 'none'}
+        aria-hidden="true"
+      ></canvas>
+    {/if}
     <svg class="vector-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} preserveAspectRatio="none" aria-hidden="true">
       <g transform={vectorTransform()}>
         {#each streamlineData.segments as tramo}
@@ -990,7 +1027,7 @@
             <path class="vector-arrow" d={arrowGlyphs.path} />
           </g>
         {/each}
-        {#each showIsotherms ? valueContours : [] as contour}
+        {#each showValueContours ? valueContours : [] as contour}
           <path
             class="value-contour-halo"
             class:strong={emphasis(contour.level) > 0}
@@ -1068,7 +1105,8 @@
     <div class="grid-tooltip" style:left={`${hover.x}px`} style:top={`${hover.y}px`}>
       <strong>{productLabel}</strong>
       <span>{formatProbe ? formatProbe(hover.value) : `${hover.value.toFixed(frame.product === 'ship' ? 2 : 1)} ${frame.unit}`}</span>
-      {#if Number.isFinite(hover.overlay)}<span class="overlay-value">{overlayLabel ? `${overlayLabel} ` : ''}{hover.overlay.toFixed(1)} {frame.overlay_unit}</span>{/if}
+      {#if showMultipleSolutions && hover.overlay >= 0.5}<span class="overlay-value">{forecastLayerLabel(language, 'multipleSolutions')}</span>
+      {:else if !multipleSolutions && Number.isFinite(hover.overlay)}<span class="overlay-value">{overlayLabel ? `${overlayLabel} ` : ''}{hover.overlay.toFixed(1)} {frame.overlay_unit}</span>{/if}
       <small>{hover.latitude.toFixed(3)}° N · {hover.longitude.toFixed(3)}° E</small>
     </div>
   {/if}
@@ -1105,6 +1143,7 @@
   .vector-overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   /* El raster se compone en GPU: el encuadre no vuelve a rasterizar la malla. */
   .grid-raster{position:absolute;inset:0;display:block;width:100%;height:100%;image-rendering:pixelated;transform-origin:center;will-change:transform}
+  .multiple-raster{pointer-events:none}
   .vector-overlay{overflow:visible;pointer-events:none}
   .vector-arrow,.vector-arrow-halo{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
   .vector-arrow-halo{stroke:rgba(239,247,250,.62);stroke-width:1.9}

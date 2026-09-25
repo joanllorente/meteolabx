@@ -109,6 +109,22 @@ const allForecastProducts = [
     coverage: 'TEMPERATURE · 500 hPa'
   },
   {
+    id: 'freezing-level', category: 'temperature', label: 'Altura de la iso 0 °C', short: 'Iso 0 °C', kind: 'derived',
+    unit: 'm', unitFixed: true, min: 0, max: 5000, palette: 'temperature', accent: '#a5d4f2', vectors: false,
+    contourStep: 250, contourLayerId: 'freezingContours', multipleSolutions: true,
+    description: 'Altitud de la isoterma de 0 °C del aire. Si el perfil la cruza varias veces, se muestra el cruce más alto.',
+    method: 'Interpolación lineal de la temperatura entre los niveles isobáricos de AROME y la temperatura a 2 m, con altura geopotencial y orografía del modelo. La capa opcional señala perfiles con varios cruces.',
+    coverage: 'Diagnóstico MeteoLabX · temperatura/geopotencial del perfil'
+  },
+  {
+    id: 'snow-level', category: 'precipitation', label: 'Cota de nieve', short: 'Cota nieve', kind: 'derived',
+    unit: 'm', unitFixed: true, min: 0, max: 3500, palette: 'temperature', accent: '#8bcce8', vectors: false,
+    multipleSolutions: true, contourStep: 250, contourLayerId: 'snowContours',
+    description: 'Altitud de la isoterma de bulbo húmedo de 0,5 °C cuando se prevé precipitación. Si el perfil tiene varios cruces, se muestra el más alto.',
+    method: 'Bulbo húmedo por ecuación psicrométrica con presión local. Se interpolan los cruces entre la superficie y los niveles isobáricos de AROME; la capa opcional señala los perfiles con varios cruces.',
+    coverage: 'Diagnóstico MeteoLabX · perfil T/HR/geopotencial · precipitación 1 h'
+  },
+  {
     id: 'wet-bulb-2m', category: 'temperature', label: 'Temperatura de bulbo húmedo', short: 'Tw 2 m', kind: 'native',
     unit: '°C', min: -8, max: 30, palette: 'humidity', accent: '#45c4c6', vectors: false,
     description: 'Temperatura de bulbo húmedo cerca de superficie. Ayuda a estimar enfriamiento evaporativo y transiciones del tipo de precipitación.',
@@ -427,6 +443,8 @@ const initialProductIds = [
   'temperature-2m',
   'temperature-850',
   'temperature-500',
+  'freezing-level',
+  'snow-level',
   'wind-level',
   'wind-gust',
   'shear-01',

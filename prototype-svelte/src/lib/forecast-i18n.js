@@ -57,12 +57,26 @@ export function localizedForecastCategories(categories, language) {
   return labels ? categories.map((item, index) => ({ ...item, label: labels[index] })) : categories;
 }
 
+const SNOW_LEVEL_NAMES = {
+  ca: 'Cota de neu', en: 'Snow level', de: 'Schneegrenze',
+  fr: 'Limite pluie-neige', it: 'Quota neve', pt: 'Cota de neve'
+};
+
+const FREEZING_LEVEL_NAMES = {
+  ca: 'Altura de la iso 0 °C', en: 'Freezing-level height',
+  de: 'Höhe der Nullgradgrenze', fr: 'Altitude de l’isotherme 0 °C',
+  it: 'Quota dello zero termico', pt: 'Altitude da isoterma de 0 °C'
+};
+
 export function localizedForecastProducts(products, language) {
   const replacements = LABEL_REPLACEMENTS[language];
   if (!replacements) return products;
   return products.map((item) => ({
     ...item,
-    label: replacements.reduce((text, [from, to]) => text.replace(from, to), item.label),
+    label: item.id === 'snow-level' || item.id === 'freezing-level'
+      ? (item.id === 'snow-level' ? SNOW_LEVEL_NAMES : FREEZING_LEVEL_NAMES)[language] || item.label
+      : replacements.reduce((text, [from, to]) => text.replace(from, to), item.label),
+    short: item.id === 'snow-level' ? SNOW_LEVEL_NAMES[language] || item.short : item.short,
     contents: item.contents
       ? replacements.reduce((text, [from, to]) => text.replace(from, to), item.contents)
       : item.contents
@@ -79,6 +93,30 @@ const LAYER_LABELS = {
   pt: { isotherms: 'Isotérmicas', isohypses: 'Isoípsas', troughs: 'Eixos de cavado', centres: 'Centros de pressão', cities: 'Cidades', isobars: 'Isóbaras' }
 };
 
+const MULTIPLE_LABELS = {
+  es: 'Zonas con varias soluciones', ca: 'Zones amb diverses solucions',
+  en: 'Multiple altitude solutions', de: 'Mehrere Höhenlösungen',
+  fr: 'Plusieurs altitudes possibles', it: 'Più quote possibili',
+  pt: 'Várias cotas possíveis'
+};
+
+const SNOW_CONTOUR_LABELS = {
+  es: 'Isolíneas de cota de nieve', ca: 'Isolínies de cota de neu',
+  en: 'Snow-level contours', de: 'Schneegrenzen-Isolinien',
+  fr: 'Isolignes de limite pluie-neige', it: 'Isolinee della quota neve',
+  pt: 'Isolinhas da cota de neve'
+};
+
+const FREEZING_CONTOUR_LABELS = {
+  es: 'Isolíneas de altura de la iso 0 °C', ca: 'Isolínies d’altura de la iso 0 °C',
+  en: 'Freezing-level contours', de: 'Isolinien der Nullgradgrenze',
+  fr: 'Isolignes de hauteur de l’isotherme 0 °C', it: 'Isolinee dello zero termico',
+  pt: 'Isolinhas da altitude da isoterma de 0 °C'
+};
+
 export function forecastLayerLabel(language, id, fallback) {
+  if (id === 'multipleSolutions') return MULTIPLE_LABELS[language] || MULTIPLE_LABELS.es;
+  if (id === 'snowContours') return SNOW_CONTOUR_LABELS[language] || SNOW_CONTOUR_LABELS.es;
+  if (id === 'freezingContours') return FREEZING_CONTOUR_LABELS[language] || FREEZING_CONTOUR_LABELS.es;
   return (LAYER_LABELS[language] || LAYER_LABELS.es)[id] || fallback;
 }

@@ -16,9 +16,10 @@ from typing import Any, Protocol
 
 
 DERIVED_FORECAST_PRODUCTS = (
-    # Sale de dos niveles de IP1, no de una cobertura propia: va con los
-    # derivados para que el paquete ya esté bajado cuando le toque.
+    # Los derivados de IP1 van tras la descarga de los paquetes.
     "vertical-totals",
+    "freezing-level",
+    "snow-level",
     # Los convectivos tienen que estar todos aquí: NATIVE_PRODUCTS se define
     # como «lo que no es derivado», así que faltar en esta lista los encola
     # además en el nivel 0, donde cada uno recalcula el perfil entero con el
@@ -48,6 +49,8 @@ PERSISTED_FORECAST_PRODUCTS = (
     "temperature-2m",
     "temperature-850",
     "temperature-500",
+    "freezing-level",
+    "snow-level",
     "wind-level",
     "wind-gust",
     "shear-01",
@@ -101,10 +104,9 @@ CONVECTIVE_FORECAST_PRODUCTS = (
 
 # Diagnósticos cuyo horizonte se recorta: una hora convectiva cuesta minutos
 # y una nativa segundos, así que se calculan menos plazos de ellos.
-# Indices que salen de dos niveles isobaricos en vez de un perfil entero. No
-# pasan por el nivel 2, pero su paquete solo se adelanta hasta el horizonte de
-# los diagnosticos, asi que se recortan igual.
-LEVEL_INDEX_PRODUCTS = ("vertical-totals",)
+# Productos de IP1 con horizonte diagnóstico. Vertical Totals usa dos niveles;
+# iso 0 y cota de nieve recorren el perfil completo desde superficie.
+LEVEL_INDEX_PRODUCTS = ("vertical-totals", "freezing-level", "snow-level")
 
 CAPPED_FORECAST_PRODUCTS = tuple(
     product

@@ -83,6 +83,7 @@ from server.services.forecast_grid import (
     quantization_step,
     quantize_array,
 )
+from server.services.thermal_levels import IsothermLevelAccumulator, wet_bulb_celsius
 
 
 logger = logging.getLogger("meteolabx.arome_forecast")
@@ -110,6 +111,15 @@ PRODUCTS = {
         "level": 500.0, "vertical_kind": "pressure", "value_mode": "temperature_c",
         "vmin": -42.0, "vmax": -2.0, "unit": "°C",
         "overlay_prefix_kind": "geopotential", "overlay_unit": "dam",
+    },
+    "freezing-level": {
+        "kind": "freezing_level", "vmin": 0.0, "vmax": 5000.0, "unit": "m",
+        "overlay_own_mask": True,
+    },
+    "snow-level": {
+        "kind": "snow_level", "starts_at_hour": 1,
+        "vmin": 0.0, "vmax": 3500.0, "unit": "m",
+        "overlay_own_mask": True,
     },
     "shear-01": {"kind": "shear", "depth_m": 1000, "vmax": 26.0, "unit": "m/s"},
     "shear-03": {"kind": "shear", "depth_m": 3000, "vmax": 36.0, "unit": "m/s"},
@@ -547,6 +557,24 @@ def _product_context(
             "surface_pressure": catalog.resolve("surface_pressure"),
             "overlay": catalog.resolve("mean_sea_level_pressure"),
         }
+    elif config["kind"] == "snow_level":
+        prefixes = {
+            "height_temperature": catalog.resolve("height_temperature"),
+            "height_dewpoint": catalog.resolve("height_dewpoint"),
+            "surface_pressure": catalog.resolve("surface_pressure"),
+            "pressure_temperature": catalog.resolve("pressure_temperature"),
+            "pressure_dewpoint": catalog.resolve("pressure_dewpoint"),
+            "geopotential": catalog.resolve("geopotential"),
+            "precipitation": catalog.resolve("precipitation_1h"),
+            "terrain": catalog.resolve("terrain"),
+        }
+    elif config["kind"] == "freezing_level":
+        prefixes = {
+            "height_temperature": catalog.resolve("height_temperature"),
+            "pressure_temperature": catalog.resolve("pressure_temperature"),
+            "geopotential": catalog.resolve("geopotential"),
+            "terrain": catalog.resolve("terrain"),
+        }
     elif config["kind"] == "convective":
         prefixes = _convective_prefixes(catalog)
     elif config["kind"] == "wind":
@@ -569,12 +597,14 @@ def _product_context(
     # isohipsas, en vez de dejar de publicarse por una línea de adorno.
     required = [
         prefix for key, prefix in prefixes.items()
-        if key not in {"terrain", "overlay"}
+        if key not in {"terrain", "overlay", "precipitation"}
     ]
     period = config.get("period")
     common_runs = catalog.runs_for(required[0], period)
     for prefix in required[1:]:
         common_runs &= catalog.runs_for(prefix)
+    if config["kind"] == "snow_level":
+        common_runs &= catalog.runs_for(prefixes["precipitation"], "PT1H")
     if not common_runs:
         raise AromeError("No hay un run común para todas las variables requeridas.")
 
@@ -585,12 +615,22 @@ def _product_context(
     if not common_runs:
         raise AromeError("Todavía no hay un RUN principal 00/06/12/18Z disponible.")
 
+    def available_times(selected_run: datetime) -> list[datetime]:
+        reference = catalog.coverage_id(required[0], selected_run, period=period)
+        result = client.describe(reference).valid_times(selected_run)
+        if config["kind"] == "snow_level":
+            precip_reference = catalog.coverage_id(
+                prefixes["precipitation"], selected_run, period="PT1H"
+            )
+            precipitation_times = set(client.describe(precip_reference).valid_times(selected_run))
+            result = [valid for valid in result if valid in precipitation_times]
+        return result
+
     if run_iso:
         requested_run = _parse_time(run_iso)
         if requested_run not in common_runs:
             raise AromeError("El RUN solicitado ya no está disponible en Météo-France.")
-        reference = catalog.coverage_id(required[0], requested_run, period=period)
-        requested_times = client.describe(reference).valid_times(requested_run)
+        requested_times = available_times(requested_run)
         if not requested_times:
             raise AromeError("El RUN solicitado no contiene horas disponibles.")
         return config, client, catalog, prefixes, requested_run, requested_times
@@ -607,8 +647,7 @@ def _product_context(
     run = max(common_runs)
     times = []
     for candidate in sorted(common_runs, reverse=True):
-        reference = catalog.coverage_id(required[0], candidate, period=period)
-        candidate_times = client.describe(reference).valid_times(candidate)
+        candidate_times = available_times(candidate)
         if not times:
             run, times = candidate, candidate_times
         if len(candidate_times) >= MINIMUM_RUN_HOURS:
@@ -2151,6 +2190,145 @@ def _level_difference_field(
     )
 
 
+def _snow_level_field(client, catalog, prefixes, run, valid_time) -> RasterField:
+    """Cota Tw=0,5 °C de todo el dominio; overlay=cruces múltiples."""
+    from server.services.arome_wcs import _align, _height_from_geopotential
+
+    reference = client.get_field(
+        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
+    )
+    terrain_runs = catalog.by_prefix[prefixes["terrain"]]
+    terrain_run = run if run in terrain_runs else max(terrain_runs)
+    terrain_field = client.get_field(
+        catalog, prefixes["terrain"], terrain_run, None, None, None
+    )
+    surface_package = _surface_fields_from_package(reference, run, valid_time)
+    dewpoint_field = surface_package["surface_dewpoint"] if surface_package else client.get_field(
+        catalog, prefixes["height_dewpoint"], run, valid_time, 2.0, "height"
+    )
+    pressure_field = surface_package["surface_pressure"] if surface_package else client.get_field(
+        catalog, prefixes["surface_pressure"], run, valid_time, None, None
+    )
+    precip_field = client.get_field(
+        catalog, prefixes["precipitation"], run, valid_time, None, None, period="PT1H"
+    )
+    terrain = _align(reference, terrain_field)
+    surface_t = _as_kelvin(reference.data, reference.units) - 273.15
+    surface_td = _as_kelvin(_align(reference, dewpoint_field), dewpoint_field.units) - 273.15
+    pressure = _as_hpa(_align(reference, pressure_field), pressure_field.units)
+    precipitation = _align(reference, precip_field)
+    level = IsothermLevelAccumulator(
+        wet_bulb_celsius(surface_t, surface_td, pressure), terrain + 2.0, 0.5
+    )
+
+    levels = _pressure_levels(client, catalog, prefixes["pressure_temperature"], run)
+    package = _isobaric_levels_from_package(
+        run, valid_time, levels, ("temperature", "relative_humidity", "geopotential")
+    )
+    try:
+        for pressure_hpa in levels:
+            if package and all(
+                pressure_hpa in package[name]
+                for name in ("temperature", "relative_humidity", "geopotential")
+            ):
+                t_field = package["temperature"][pressure_hpa]
+                rh_field = package["relative_humidity"][pressure_hpa]
+                gp_field = package["geopotential"][pressure_hpa]
+                t = _as_kelvin(_align(reference, t_field), t_field.units) - 273.15
+                rh = _as_percent(_align(reference, rh_field), rh_field.units)
+                td = _dewpoint_from_relative_humidity_c(t, rh)
+            else:
+                t_field = client.get_field(
+                    catalog, prefixes["pressure_temperature"], run, valid_time,
+                    pressure_hpa, "pressure"
+                )
+                td_field = client.get_field(
+                    catalog, prefixes["pressure_dewpoint"], run, valid_time,
+                    pressure_hpa, "pressure"
+                )
+                gp_field = client.get_field(
+                    catalog, prefixes["geopotential"], run, valid_time,
+                    pressure_hpa, "pressure"
+                )
+                t = _as_kelvin(_align(reference, t_field), t_field.units) - 273.15
+                td = _as_kelvin(_align(reference, td_field), td_field.units) - 273.15
+            height = _height_from_geopotential(
+                _align(reference, gp_field), gp_field.units
+            )
+            above_terrain = height > terrain + 2.0
+            tw = wet_bulb_celsius(t, td, pressure_hpa)
+            level.add(np.where(above_terrain, tw, np.nan),
+                      np.where(above_terrain, height, np.nan))
+    finally:
+        if package:
+            for field in package.values():
+                field.clear()
+    values, multiple = level.result(precipitation)
+    field = RasterField(
+        values, reference.transform, reference.crs, reference.bounds, "m"
+    )
+    field.overlay = multiple
+    field.overlay_units = ""
+    return field
+
+
+def _freezing_level_field(client, catalog, prefixes, run, valid_time) -> RasterField:
+    """Altitud de la isoterma de 0 °C, con el cruce más alto del perfil."""
+    from server.services.arome_wcs import _align, _height_from_geopotential
+
+    reference = client.get_field(
+        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
+    )
+    terrain_runs = catalog.by_prefix[prefixes["terrain"]]
+    terrain_run = run if run in terrain_runs else max(terrain_runs)
+    terrain_field = client.get_field(
+        catalog, prefixes["terrain"], terrain_run, None, None, None
+    )
+    terrain = _align(reference, terrain_field)
+    surface_t = _as_kelvin(reference.data, reference.units) - 273.15
+    level = IsothermLevelAccumulator(surface_t, terrain + 2.0, 0.0)
+
+    levels = _pressure_levels(client, catalog, prefixes["pressure_temperature"], run)
+    package = _isobaric_levels_from_package(
+        run, valid_time, levels, ("temperature", "geopotential")
+    )
+    try:
+        for pressure_hpa in levels:
+            if package and all(
+                pressure_hpa in package[name]
+                for name in ("temperature", "geopotential")
+            ):
+                t_field = package["temperature"][pressure_hpa]
+                gp_field = package["geopotential"][pressure_hpa]
+            else:
+                t_field = client.get_field(
+                    catalog, prefixes["pressure_temperature"], run, valid_time,
+                    pressure_hpa, "pressure"
+                )
+                gp_field = client.get_field(
+                    catalog, prefixes["geopotential"], run, valid_time,
+                    pressure_hpa, "pressure"
+                )
+            temperature = _as_kelvin(_align(reference, t_field), t_field.units) - 273.15
+            height = _height_from_geopotential(
+                _align(reference, gp_field), gp_field.units
+            )
+            above_terrain = height > terrain + 2.0
+            level.add(np.where(above_terrain, temperature, np.nan),
+                      np.where(above_terrain, height, np.nan))
+    finally:
+        if package:
+            for field in package.values():
+                field.clear()
+    values, multiple = level.result()
+    field = RasterField(
+        values, reference.transform, reference.crs, reference.bounds, "m"
+    )
+    field.overlay = multiple
+    field.overlay_units = ""
+    return field
+
+
 @lru_cache(maxsize=12)
 def _computed_frame(
     token: str,
@@ -2188,6 +2366,10 @@ def _computed_frame(
         )
         field = frames[product_id]
         run = diagnostic_run
+    elif config["kind"] == "snow_level":
+        field = _snow_level_field(client, catalog, prefixes, run, valid_time)
+    elif config["kind"] == "freezing_level":
+        field = _freezing_level_field(client, catalog, prefixes, run, valid_time)
     elif config["kind"] == "level_difference":
         field = _level_difference_field(
             client, catalog, prefixes, config, run, valid_time

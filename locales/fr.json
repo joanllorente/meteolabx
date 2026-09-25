@@ -168,6 +168,10 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à",
+    "release_212_improvements": [
+      "Ajout de la carte de la limite pluie-neige.",
+      "Ajout de la carte de l'isotherme zéro."
+    ],
     "release_211_improvements": [
       "Détection améliorée des axes de talweg.",
       "Détection améliorée des centres de pression.",

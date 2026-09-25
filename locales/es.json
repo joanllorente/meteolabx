@@ -168,6 +168,10 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para cualquier consulta sobre privacidad o sobre el tratamiento de la información, puedes escribir a",
+    "release_212_improvements": [
+      "Añadido el mapa de cota de nieve.",
+      "Añadido el mapa de isocero."
+    ],
     "release_211_improvements": [
       "Mejorada la detección de los ejes de vaguada.",
       "Mejorada la detección de los centros de presión.",

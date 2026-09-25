@@ -10,13 +10,17 @@ const STORAGE_KEY = 'mlx-forecast-layers';
 
 export const LAYERS = [
   { id: 'isotherms', label: 'Isotermas' },
+  { id: 'snowContours', label: 'Isolíneas de cota de nieve' },
+  { id: 'freezingContours', label: 'Isolíneas de altura de la iso 0 °C' },
   { id: 'isohypses', label: 'Isohipsas' },
   { id: 'troughs', label: 'Ejes de vaguada' },
   { id: 'centres', label: 'Centros de presión' },
-  { id: 'cities', label: 'Ciudades' }
+  { id: 'cities', label: 'Ciudades' },
+  { id: 'multipleSolutions', label: 'Zonas con varias soluciones' }
 ];
 
 const defaults = Object.fromEntries(LAYERS.map((capa) => [capa.id, true]));
+defaults.multipleSolutions = false;
 
 function stored() {
   try {

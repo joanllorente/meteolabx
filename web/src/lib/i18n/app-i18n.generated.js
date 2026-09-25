@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.1.1",
+  "app_version": "2.1.2",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -512,6 +512,10 @@ export default {
         "Millorat el traçat de les isòbares.",
         "Millorades les línies de corrent del vent."
       ],
+      "release_212_improvements": [
+        "Afegit el mapa de cota de neu.",
+        "Afegit el mapa d'isozero."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -626,6 +630,10 @@ export default {
         "Verbesserte Erkennung von Druckzentren.",
         "Verbesserte Darstellung der Isobaren.",
         "Verbesserte Windstromlinien."
+      ],
+      "release_212_improvements": [
+        "Karte der Schneefallgrenze hinzugefügt.",
+        "Karte der Nullgradgrenze hinzugefügt."
       ],
       "sources": "Quellen",
       "unaffiliated": "Nicht verbunden",
@@ -742,6 +750,10 @@ export default {
         "Improved isobar rendering.",
         "Improved wind streamlines."
       ],
+      "release_212_improvements": [
+        "Added the snow level map.",
+        "Added the freezing level map."
+      ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
       "version": "Version {version}",
@@ -856,6 +868,10 @@ export default {
         "Mejorada la detección de los centros de presión.",
         "Mejorado el trazado de las isobaras.",
         "Mejoradas las líneas de corriente del viento."
+      ],
+      "release_212_improvements": [
+        "Añadido el mapa de cota de nieve.",
+        "Añadido el mapa de isocero."
       ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
@@ -972,6 +988,10 @@ export default {
         "Tracé amélioré des isobares.",
         "Lignes de courant du vent améliorées."
       ],
+      "release_212_improvements": [
+        "Ajout de la carte de la limite pluie-neige.",
+        "Ajout de la carte de l'isotherme zéro."
+      ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
       "version": "Version {version}",
@@ -1087,6 +1107,10 @@ export default {
         "Migliorato il tracciamento delle isobare.",
         "Migliorate le linee di flusso del vento."
       ],
+      "release_212_improvements": [
+        "Aggiunta la mappa della quota neve.",
+        "Aggiunta la mappa dello zero termico."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -1201,6 +1225,10 @@ export default {
         "Melhorada a deteção dos centros de pressão.",
         "Melhorado o traçado das isóbaras.",
         "Melhoradas as linhas de corrente do vento."
+      ],
+      "release_212_improvements": [
+        "Adicionado o mapa da cota de neve.",
+        "Adicionado o mapa do nível de congelamento."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -2506,6 +2534,7 @@ export default {
     }
   },
   "releases": [
+    "212",
     "211",
     "210",
     "203",
