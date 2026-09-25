@@ -1613,6 +1613,46 @@ def _cgroup_total_bytes() -> int | None:
     return None
 
 
+def _cpu_quota() -> float | None:
+    """Cuántas CPU permite el cgroup, no cuántas tiene la máquina.
+
+    `os.cpu_count()` cuenta las del host: en Railway son muchas más de las que
+    el contenedor puede usar, así que decidir el número de workers con ese
+    número lleva a oversubscripción segura.
+    """
+    try:
+        cuota, periodo = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if cuota == "max":
+            return None
+        return int(cuota) / int(periodo)
+    except (OSError, ValueError):
+        return None
+
+
+def log_worker_resources(args) -> str:
+    """Deja en el arranque con qué recursos cuenta el worker.
+
+    Sin esto, subir `--workers` es a ciegas: un perfil convectivo ocupa tres
+    hilos mientras diagnostica, así que lo que decide si otro worker acelera o
+    solo reparte la misma CPU es la cuota del contenedor.
+    """
+    cuota = _cpu_quota()
+    medida = _cgroup_memory()
+    from server.services.arome_forecast import CONVECTIVE_THREADS
+
+    partes = [
+        f"{args.workers} workers × {CONVECTIVE_THREADS} hilos por perfil",
+        f"CPU del contenedor: {cuota:.1f}" if cuota else "CPU del contenedor: sin límite",
+        f"hilos si todos calculan un perfil: {args.workers * CONVECTIVE_THREADS}",
+    ]
+    if medida:
+        partes.append(f"memoria: {medida[1] / 1024**3:.1f} GB de límite")
+    partes.append(f"reserva por perfil: {HEAVY_PROFILE_BYTES / 1024**3:.1f} GB")
+    linea = " · ".join(partes)
+    logger.info("Recursos del worker: %s", linea)
+    return linea
+
+
 def _cgroup_memory() -> tuple[int, int] | None:
     """Memoria usada y límite, en bytes.
 
@@ -2205,6 +2245,7 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     import sys
+    log_worker_resources(args)
     run_watch(sys.modules[__name__], args, stopping)
     logger.info("Worker detenido correctamente.")
     return 0

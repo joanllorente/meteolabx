@@ -549,8 +549,8 @@
   /**
    * Bajas y anticiclones del campo superpuesto.
    *
-   * La prominencia exigida baja al ampliar: con el mapa entero solo interesan
-   * los centros sinópticos, y de cerca sí aporta ver los secundarios.
+   * El criterio físico es estable al ampliar: el zoom no añade mínimos
+   * débiles ni cambia la clasificación del mismo campo.
    */
   const centres = $derived(
     showCentres && frame.overlay
@@ -559,7 +559,7 @@
           height: frame.height,
           cellKm,
           block: centreBlock,
-          prominenceHpa: Math.max(0.5, CENTRE_PROMINENCE_HPA / Math.min(1.5, viewZoom))
+          prominenceHpa: CENTRE_PROMINENCE_HPA
         })
       : []
   );

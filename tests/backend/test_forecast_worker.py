@@ -1066,3 +1066,41 @@ def test_growing_profiles_keep_their_reserve_until_they_show(monkeypatch):
     monkeypatch.setattr(trabajador, "_cgroup_memory", lambda: None)
     assert trabajador._room_for_profiles(0)
     assert not trabajador._room_for_profiles(1)
+
+
+def test_the_worker_says_what_it_has_to_work_with(monkeypatch, caplog, tmp_path):
+    """Subir `--workers` a ciegas reparte la misma CPU en vez de acelerar.
+
+    Un perfil convectivo ocupa tres hilos mientras diagnostica, así que lo que
+    decide si otro worker sirve de algo es la cuota del contenedor, no las CPU
+    del host que cuenta `os.cpu_count()`.
+    """
+    import argparse
+    import logging
+    import scripts.forecast_worker as worker
+
+    monkeypatch.setattr(worker, '_cpu_quota', lambda: 4.0)  # cuota de cuatro CPU
+    monkeypatch.setattr(worker, '_cgroup_memory', lambda: (0, 32 * 1024**3))
+    args = argparse.Namespace(workers=7)
+
+    with caplog.at_level(logging.INFO):
+        linea = worker.log_worker_resources(args)
+
+    assert '7 workers × 3 hilos por perfil' in linea
+    assert 'CPU del contenedor: 4.0' in linea
+    assert 'hilos si todos calculan un perfil: 21' in linea
+    assert '32.0 GB de límite' in linea
+    assert 'Recursos del worker' in caplog.text
+
+
+def test_the_cpu_quota_comes_from_the_cgroup_not_the_host(tmp_path, monkeypatch):
+    import scripts.forecast_worker as worker
+
+    archivo = tmp_path / 'cpu.max'
+    monkeypatch.setattr(worker, 'Path', lambda _: archivo)
+    archivo.write_text('250000 100000\n')
+    assert worker._cpu_quota() == 2.5
+    archivo.write_text('max 100000\n')
+    assert worker._cpu_quota() is None
+    archivo.unlink()
+    assert worker._cpu_quota() is None

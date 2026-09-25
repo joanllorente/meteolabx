@@ -1,0 +1,14 @@
+{
+  "width": 1121,
+  "height": 717,
+  "bounds": [
+    -12.0125,
+    37.487500000000004,
+    16.012500000000003,
+    55.4125
+  ],
+  "run": "2026-09-25T06:00:00Z",
+  "valid_time": "2026-09-26T00:00:00Z",
+  "source": "https://www.meteolabx.com/v1/forecast/arome/frames.grid",
+  "product": "mslp-theta-e-850"
+}

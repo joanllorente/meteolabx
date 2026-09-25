@@ -16,29 +16,16 @@ import { gaussianBlur } from './contours.js';
 /** Lado del bloque de engrosado, en celdas de AROME. */
 export const CENTRE_BLOCK = 4;
 /** σ del suavizado, en km: solo para la detección. */
-export const CENTRE_SIGMA_KM = 40;
+export const CENTRE_SIGMA_KM = 25;
 /** Radio en el que un centro tiene que ser el extremo, en km. */
 export const CENTRE_RADIUS_KM = 200;
-/**
- * Prominencia mínima para dibujar un centro, en hPa.
- *
- * Es la puerta de los centros relativos, las a y b minúsculas. Con 2 hPa no
- * salía ninguno en situaciones de pantano barométrico: el 16/09/2026 AEMET
- * marcaba bajas relativas en el golfo de León y el valle del Po que en AROME
- * cierran 0,9 hPa sobre el campo suavizado. Con 0,75 salen esas y la baja
- * térmica peninsular, entre cero y cuatro por hora, y ninguna arruga suelta.
- */
-export const CENTRE_PROMINENCE_HPA = 0.75;
-/**
- * Cierre mínimo para que un centro sea principal, en hPa.
- *
- * Tres cuartos del intervalo entre isobaras, que es de cuatro: con ese cierre
- * el centro tiene su propia isobara cerrada casi en cualquier fase, y sin él
- * es un abombamiento del campo. El cuatro de antes se ajustó cuando la medida
- * del cierre estaba rota —el nivel del agua no era monótono y devolvía
- * centésimas donde había hectopascales—, así que era un umbral calibrado
- * contra números que no medían nada.
- */
+/** Cierre mínimo del campo suavizado para conservar un centro relativo. */
+export const CENTRE_PROMINENCE_HPA = 0.6;
+/** Extensión mínima: descarta irregularidades pequeñas aunque tengan cierre. */
+export const CENTRE_MIN_RADIUS_KM = 100;
+/** Intervalo de las isobaras sinópticas usadas para identificar A/B. */
+export const CENTRE_ISOBAR_STEP_HPA = 4;
+/** Cierre suficiente para un principal, incluso si el dominio corta la cuenca. */
 export const CENTRE_MAIN_DEPTH_HPA = 3;
 /** Radio equivalente mínimo de un centro principal, en km. */
 export const CENTRE_MAIN_RADIUS_KM = 150;
@@ -195,6 +182,49 @@ export function closureDepth(field, width, height, start, sign, maxCells = 30000
   return { depth: nivel - base, cells: celdas, open: true };
 }
 
+/** Área interior a una isobara: un recinto que toca el borde no está cerrado. */
+function enclosedRadius(field, width, height, centre, level, cellKm) {
+  const seen = new Uint8Array(field.length);
+  const queue = [centre.y * width + centre.x];
+  seen[queue[0]] = 1;
+  for (let head = 0; head < queue.length; head += 1) {
+    const index = queue[head];
+    const x = index % width;
+    const y = Math.floor(index / width);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) return 0;
+      const next = ny * width + nx;
+      if (!Number.isFinite(field[next])) return 0;
+      if (seen[next] || centre.sign * (field[next] - level) <= 0) continue;
+      seen[next] = 1;
+      queue.push(next);
+    }
+  }
+  return Math.sqrt(queue.length / Math.PI) * cellKm;
+}
+
+function originalExtreme(field, width, height, centre, block, searchRadius) {
+  const cx = centre.x * block + (block - 1) / 2;
+  const cy = centre.y * block + (block - 1) / 2;
+  const radius = Math.max(block / 2, searchRadius);
+  let best = null;
+  let distance = Infinity;
+  for (let y = Math.max(0, Math.floor(cy - radius)); y <= Math.min(height - 1, Math.ceil(cy + radius)); y += 1) {
+    for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(width - 1, Math.ceil(cx + radius)); x += 1) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (d > radius) continue;
+      const value = field[y * width + x];
+      if (!Number.isFinite(value)) continue;
+      if (!best || centre.sign * (value - best.value) > 0 || (value === best.value && d < distance)) {
+        best = { x: x + 0.5, y: y + 0.5, value };
+        distance = d;
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * Centros de presión de un campo, ordenados de más a menos marcados.
  *
@@ -211,6 +241,8 @@ export function pressureCentres(field, {
   sigmaKm = CENTRE_SIGMA_KM,
   radiusKm = CENTRE_RADIUS_KM,
   prominenceHpa = CENTRE_PROMINENCE_HPA,
+  minRadiusKm = CENTRE_MIN_RADIUS_KM,
+  isobarStepHpa = CENTRE_ISOBAR_STEP_HPA,
   mainDepthHpa = CENTRE_MAIN_DEPTH_HPA,
   mainRadiusKm = CENTRE_MAIN_RADIUS_KM,
   mainOpenRadiusKm = CENTRE_MAIN_OPEN_RADIUS_KM,
@@ -236,7 +268,10 @@ export function pressureCentres(field, {
           for (let dx = -radio; dx <= radio; dx += 1) {
             if (dx === 0 && dy === 0) continue;
             if (dx * dx + dy * dy > radio * radio) continue;
-            const vecino = suave[(row + dy) * grueso.width + (column + dx)];
+            const nx = column + dx;
+            const ny = row + dy;
+            if (nx < 0 || ny < 0 || nx >= grueso.width || ny >= grueso.height) continue;
+            const vecino = suave[ny * grueso.width + nx];
             if (!Number.isFinite(vecino)) continue;
             if (sign * vecino > sign * value) {
               esExtremo = false;
@@ -251,13 +286,12 @@ export function pressureCentres(field, {
     }
   }
 
-  // Se agrupa antes de medir. Una meseta anticiclónica tiene varios máximos a
-  // décimas unos de otros, y midiéndolos por separado se anulan entre sí: cada
-  // uno encuentra a su vecino como terreno más alto y sale con dos décimas de
-  // cierre. Agrupados, el representante mide contra lo que hay de verdad
-  // alrededor de la meseta.
+  // Priorizar por intensidad dentro de cada signo. Mezclar signos en el
+  // comparador no es transitivo y podía conservar un centro más débil al
+  // aplicar la separación mínima. La inundación sigue usando todo el campo.
   candidatos.sort((izquierda, derecha) => (
-    izquierda.sign * derecha.value - izquierda.sign * izquierda.value
+    izquierda.type.localeCompare(derecha.type)
+      || izquierda.sign * (derecha.value - izquierda.value)
   ));
   const elegidos = [];
   for (const candidato of candidatos) {
@@ -277,27 +311,26 @@ export function pressureCentres(field, {
     // Radio equivalente de lo que tiene cerrado: una borrasca de manual abarca
     // cientos de kilómetros y un mínimo encajado en una vaguada, cuatro celdas.
     const radiusKm = Math.sqrt((cierre.cells * kmPorCelda * kmPorCelda) / Math.PI);
+    if (radiusKm < minRadiusKm) continue;
+    // Una isobara sinóptica cerrada y extensa también define un principal:
+    // el cierre necesario depende de la fase del centro respecto a 1020, 1024…
+    const isobar = centro.sign > 0
+      ? (Math.ceil(centro.value / isobarStepHpa) - 1) * isobarStepHpa
+      : (Math.floor(centro.value / isobarStepHpa) + 1) * isobarStepHpa;
+    const isobarDepth = Math.abs(centro.value - isobar);
+    const closedRadiusKm = cierre.depth > isobarDepth
+      ? enclosedRadius(suave, grueso.width, grueso.height, centro, isobar, kmPorCelda)
+      : 0;
+    // Localizar el extremo próximo en el dato original. Posición y etiqueta
+    // salen de la misma celda que consulta el cursor; suavizar no redondea.
+    const anchor = originalExtreme(field, width, height, centro, block, sigmaKm / cellKm);
+    if (!anchor) continue;
     centros.push({
       type: centro.type,
-      // Principal el que cierra de verdad y ocupa lo que debe; relativo el
-      // resto, en minúscula, como en los mapas de AEMET.
-      //
-      // Las dos condiciones son suficientes, no alternativas. Cuando la cuenca
-      // se sale del mapa lo medido es una cota inferior: si aun así llega a los
-      // 4 hPa, el centro cierra de sobra y no hay nada que discutir —es el caso
-      // de una borrasca en el dominio pequeño de AROME, donde el agua alcanza
-      // el borde con siete hectopascales encima—; y si no llega, todavía puede
-      // salvarlo el tamaño, que sí se ha medido. Ponerlo como disyuntiva era un
-      // error: el tope de 30.000 celdas de la inundación deja el radio de AROME
-      // en 977 km como mucho, así que la regla del tamaño no se cumplía nunca
-      // ahí y una borrasca de manual se quedaba en minúscula.
-      main: (cierre.depth >= mainDepthHpa && radiusKm >= mainRadiusKm)
+      main: closedRadiusKm >= mainRadiusKm
+        || (cierre.depth >= mainDepthHpa && radiusKm >= mainRadiusKm)
         || (cierre.open && radiusKm >= mainOpenRadiusKm),
-      x: centro.x * block + block / 2,
-      y: centro.y * block + block / 2,
-      // El valor se lee del campo suavizado a propósito: el crudo tiene ruido
-      // de celda y la etiqueta bailaría un hectopascal de una hora a otra.
-      value: centro.value,
+      ...anchor,
       prominence: cierre.depth,
       radiusKm,
       open: cierre.open
