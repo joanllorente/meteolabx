@@ -120,7 +120,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "MUCAPE + MULI" in products
     assert "SHIP" in products
     assert "'wind-level'" in products
-    assert "TOTAL PRECIPITATION · superficie · PT1H" in products
+    assert "TOTAL PRECIPITATION · 1 h" in products
     assert "'precip-1h'" in products
     assert "initialProductIds" in products
     assert "item.kind === 'derived'" in view
@@ -256,7 +256,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     assert "LI {hover.overlay" not in grid, "el nombre de la capa no puede ir a mano"
     assert "contourLabels" not in grid and "overlayLabels" not in grid
     assert "toggleLayer" in grid
-    assert "showIsotherms" in grid and "showIsohypses" in grid and "showTroughs" in grid
+    assert "showValueContours" in grid and "showIsohypses" in grid and "showTroughs" in grid
     capas = (ROOT / "prototype-svelte" / "src" / "lib" / "layerPreferences.svelte.js").read_text(encoding="utf-8")
     assert "mlx-forecast-layers" in capas
     assert "localStorage.setItem" in capas
@@ -389,7 +389,7 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 33
+    assert len(selected_ids) == 36
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 

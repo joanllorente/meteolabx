@@ -214,6 +214,15 @@ PREFIX_CANDIDATES = {
         "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE",
         "PRECIP__GROUND",
     ],
+    "precipitation_type_1h": [
+        "PRECIPITATION_TYPE_60_MIN__GROUND_OR_WATER_SURFACE",
+        "PRECIPITATION_TYPE__GROUND_OR_WATER_SURFACE",
+        "TYPE_OF_PRECIPITATION__GROUND_OR_WATER_SURFACE",
+        "PTYPE_60__GROUND_OR_WATER_SURFACE",
+        "PTYPE_60__GROUND",
+        "PTYPE_60",
+        "PRECIPITATION_TYPE_60_MIN",
+    ],
     "wind_gust_1h": [
         # Solo alias de ráfaga MÁXIMA: el producto se publica como tal, y
         # FF_RAF/WIND_SPEED_GUST son la ráfaga sin más.
@@ -613,6 +622,17 @@ class CoverageCatalog:
             if candidate in self.by_prefix:
                 return candidate
 
+        if kind == "precipitation_type_1h":
+            # Algunas versiones del catálogo conservan PTYPE_60 y otras
+            # publican un nombre CF. Limitarse al campo de superficie evita
+            # confundir el diagnóstico con la precipitación acumulada.
+            for prefix in self.prefixes:
+                if (("PRECIPITATION_TYPE" in prefix or "TYPE_OF_PRECIPITATION" in prefix
+                     or "PTYPE_60" in prefix) and (
+                    "GROUND" in prefix or "PTYPE_60" in prefix
+                )):
+                    return prefix
+
         if kind in {"height_u", "height_v"}:
             combined = self.resolve_optional("height_wind")
             if combined:
@@ -800,6 +820,52 @@ class AromeWCS:
             detail = content[:800].decode("utf-8", errors="replace").replace("\n", " ")
             raise AromeError(f"GetCoverage devolvió XML en vez de GRIB2: {detail}")
         return _read_raster(content, component=component)
+
+    def get_point_isobaric(
+        self, catalog: CoverageCatalog, prefix: str, run: datetime,
+        valid_time: datetime, latitude: float, longitude: float,
+    ) -> dict[float, tuple[float, str]]:
+        """Pide todos los niveles de una columna en una sola cobertura pequeña."""
+        coverage_id = catalog.coverage_id(prefix, run)
+        params: List[Tuple[str, str]] = [
+            ("service", "WCS"), ("version", "2.0.1"), ("coverageid", coverage_id),
+            ("subset", f"time({_iso_utc(valid_time)})"),
+            ("subset", f"lat({latitude - 0.04:.5f},{latitude + 0.04:.5f})"),
+            ("subset", f"long({longitude - 0.04:.5f},{longitude + 0.04:.5f})"),
+            ("format", "application/wmo-grib"),
+        ]
+        content, content_type = _api_get(
+            f"{WCS_BASE}/GetCoverage", tuple(params), self.token
+        )
+        if "xml" in content_type or content.lstrip().startswith(b"<"):
+            raise AromeError("AROME no devolvió el perfil isobárico en GRIB2.")
+        output: dict[float, tuple[float, str]] = {}
+        try:
+            with MemoryFile(content) as memory_file, memory_file.open() as dataset:
+                row, col = dataset.index(longitude, latitude)
+                if not (0 <= row < dataset.height and 0 <= col < dataset.width):
+                    raise AromeError("El punto está fuera del perfil solicitado.")
+                for band in range(1, dataset.count + 1):
+                    tags = dataset.tags(band)
+                    short_name = tags.get("GRIB_SHORT_NAME", "")
+                    if not short_name.endswith("-ISBL"):
+                        continue
+                    try:
+                        encoded_level = int(short_name.split("-", 1)[0])
+                        pressure_hpa = encoded_level / 100.0 if encoded_level > 2_000 else float(encoded_level)
+                    except ValueError:
+                        continue
+                    value = float(dataset.read(band, window=((row, row + 1), (col, col + 1)))[0, 0])
+                    if dataset.nodata is not None and np.isclose(value, dataset.nodata):
+                        value = float("nan")
+                    units = ((dataset.units[band - 1] if dataset.units else None)
+                             or tags.get("GRIB_UNIT") or "")
+                    output[pressure_hpa] = (value, str(units))
+        except rasterio.errors.RasterioError as exc:
+            raise AromeError("No se pudo leer el perfil GRIB2 de AROME.") from exc
+        if not output:
+            raise AromeError("La cobertura no contiene niveles isobáricos reconocibles.")
+        return output
 
 
 def _format_number(value: float) -> str:

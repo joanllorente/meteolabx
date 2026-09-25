@@ -13,7 +13,8 @@
  * sin fuentes.
  */
 const GUIDE_LOADERS = {
-  en: () => import('../data/forecastProductGuides.en.js')
+  en: () => import('../data/forecastProductGuides.en.js'),
+  fr: () => import('../data/forecastProductGuides.fr.js')
 };
 
 let loadedGuides = $state({});

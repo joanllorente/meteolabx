@@ -11,11 +11,12 @@
     CENTRE_PROMINENCE_HPA, pressureCentres as detectPressureCentres,
   } from '../lib/pressureCentres.js';
   import {
-    STREAM_FADE, evenlySpacedStreamlines, fadeSegments, streamlineArrows
+    STREAM_FADE, evenlySpacedStreamlines, fadeSegments, sampleVectorField, streamlineArrows
   } from '../lib/streamlines.js';
   import { colorDeFondo, mezclaSobre, tintaLegible } from '../lib/ink.js';
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
   import { forecastLayerLabel, forecastText } from '../lib/forecast-i18n.js';
+  import { precipitationType } from '../data/precipitationTypes.js';
 
   // `formatProbe` trae ya la unidad elegida en la leyenda; sin ella se cae a la
   // que manda el backend en la cabecera del frame. `scaleBreaks` y `zeroFloor`
@@ -33,6 +34,7 @@
     // ve el flujo entero y, con él, dónde converge.
     flowLines = false,
     pressureCentres = false, multipleSolutions = false, overlaySmoothing = 4, overlayLayerLabel = '',
+    onprofileclick = null,
     onink = null,
     // Encuadre guardado fuera del componente: `{ key, zoom, panX, panY }`.
     // La vista desmonta el mapa mientras llega el frame de la hora siguiente,
@@ -118,6 +120,12 @@
   });
   const showCentres = $derived(pressureCentres && layerPreferences.centres);
   const showMultipleSolutions = $derived(multipleSolutions && layerPreferences.multipleSolutions);
+  const profileHint = $derived(({
+    es: 'Pulsa para ver el perfil', ca: 'Prem per veure el perfil',
+    en: 'Click to view the profile', fr: 'Cliquer pour voir le profil',
+    de: 'Klicken für das Profil', it: 'Clicca per vedere il profilo',
+    pt: 'Clica para ver o perfil'
+  })[language] || 'Pulsa para ver el perfil');
 
   const EMPHASISED_LEVELS = [0, 10, 20, 30];
 
@@ -261,6 +269,23 @@
     context.imageSmoothingEnabled = false;
     const pixels = context.createImageData(width, height);
     const canvas32 = new Uint32Array(pixels.data.buffer);
+    if (frame.product === 'precip-type') {
+      const colors = new Map();
+      for (let index = 0; index < values.length; index += 1) {
+        const type = precipitationType(values[index]);
+        if (!type) continue;
+        if (!colors.has(type.code)) {
+          const hex = type.color.slice(1);
+          colors.set(type.code, packColor(
+            parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16),
+            parseInt(hex.slice(4, 6), 16), 235
+          ));
+        }
+        canvas32[index] = colors.get(type.code);
+      }
+      context.putImageData(pixels, 0, 0);
+      return;
+    }
     const isPrecipitation = frame.product === 'precip-1h';
     const last = LUT_SIZE - 1;
     const palette = isPrecipitation || scaleBreaks?.length
@@ -435,23 +460,7 @@
   }
 
   function sampleVector(x, y) {
-    if (x < 0 || y < 0 || x >= frame.width - 1 || y >= frame.height - 1) return null;
-    const x0 = Math.floor(x);
-    const y0 = Math.floor(y);
-    const tx = x - x0;
-    const ty = y - y0;
-    const indexes = [
-      y0 * frame.width + x0,
-      y0 * frame.width + x0 + 1,
-      (y0 + 1) * frame.width + x0,
-      (y0 + 1) * frame.width + x0 + 1
-    ];
-    if (indexes.some((index) => !Number.isFinite(frame.values[index]) || !Number.isFinite(frame.u[index]) || !Number.isFinite(frame.v[index]))) return null;
-    const weights = [(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty];
-    const u = indexes.reduce((sum, index, i) => sum + frame.u[index] * weights[i], 0);
-    const v = indexes.reduce((sum, index, i) => sum + frame.v[index] * weights[i], 0);
-    const magnitude = Math.hypot(u, v);
-    return magnitude >= .35 ? { u, v, magnitude } : null;
+    return sampleVectorField(frame, x, y);
   }
 
 
@@ -879,6 +888,8 @@
   }
 
   function endDrag(event) {
+    const clicked = activePointers.size === 1 && dragStart
+      && Math.hypot(event.clientX - dragStart.x, event.clientY - dragStart.y) < 6;
     activePointers.delete(event.pointerId);
     pinchDistance = 0;
     dragging = false;
@@ -890,6 +901,12 @@
     }
     settleViewport();
     if (surface?.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
+    if (clicked && showMultipleSolutions && onprofileclick) {
+      inspect(event);
+      if (hover?.overlay >= 0.5) {
+        onprofileclick({ latitude: hover.latitude, longitude: hover.longitude });
+      }
+    }
     /* Si queda un dedo tras terminar el pellizco, puede continuar desplazando
        el mapa sin tener que levantarlo y volverlo a apoyar. */
     if (activePointers.size === 1) {
@@ -983,6 +1000,7 @@
     role="application"
     aria-label={forecastText(language, 'interactiveMap', { product: productLabel })}
     class:dragging
+    class:profile-target={showMultipleSolutions && hover?.overlay >= 0.5}
     onwheel={zoomWithWheel}
     onpointerdown={beginDrag}
     onpointermove={movePointer}
@@ -1105,7 +1123,7 @@
     <div class="grid-tooltip" style:left={`${hover.x}px`} style:top={`${hover.y}px`}>
       <strong>{productLabel}</strong>
       <span>{formatProbe ? formatProbe(hover.value) : `${hover.value.toFixed(frame.product === 'ship' ? 2 : 1)} ${frame.unit}`}</span>
-      {#if showMultipleSolutions && hover.overlay >= 0.5}<span class="overlay-value">{forecastLayerLabel(language, 'multipleSolutions')}</span>
+      {#if showMultipleSolutions && hover.overlay >= 0.5}<span class="overlay-value">{forecastLayerLabel(language, 'multipleSolutions')} · {profileHint}</span>
       {:else if !multipleSolutions && Number.isFinite(hover.overlay)}<span class="overlay-value">{overlayLabel ? `${overlayLabel} ` : ''}{hover.overlay.toFixed(1)} {frame.overlay_unit}</span>{/if}
       <small>{hover.latitude.toFixed(3)}° N · {hover.longitude.toFixed(3)}° E</small>
     </div>
@@ -1140,6 +1158,7 @@
      fronteras y zonas sin fenómeno se fundían con él. */
   .map-surface{position:relative;max-width:100%;max-height:100%;width:auto;height:100%;aspect-ratio:var(--grid-ratio);filter:drop-shadow(0 12px 24px rgba(0,0,0,.24));pointer-events:auto;cursor:grab;touch-action:none}
   .map-surface.dragging{cursor:grabbing}
+  .map-surface.profile-target:not(.dragging){cursor:pointer}
   .vector-overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   /* El raster se compone en GPU: el encuadre no vuelve a rasterizar la malla. */
   .grid-raster{position:absolute;inset:0;display:block;width:100%;height:100%;image-rendering:pixelated;transform-origin:center;will-change:transform}

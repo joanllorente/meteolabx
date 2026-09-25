@@ -7,12 +7,27 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  STREAM_MIN_LENGTH, STREAM_TEST_RATIO, evenlySpacedStreamlines, fadeSegments,
+  STREAM_MIN_LENGTH, STREAM_TEST_RATIO, evenlySpacedStreamlines, fadeSegments, sampleVectorField,
   streamlineArrows
 } from '../src/lib/streamlines.js';
 
 const CUADRO = { west: 0, east: 200, north: 0, south: 200 };
 const SEPARACION = 10;
+
+test('el viento de 10 m se traza aunque falte el diagnóstico vertical', () => {
+  const frame = {
+    width: 4, height: 4,
+    values: new Float32Array(16).fill(NaN),
+    u: new Float32Array(16).fill(4),
+    v: new Float32Array(16).fill(1)
+  };
+  const sample = sampleVectorField(frame, 1.5, 1.5);
+  assert.ok(sample);
+  assert.equal(sample.u, 4);
+  assert.equal(sample.v, 1);
+  frame.u[5] = NaN;
+  assert.equal(sampleVectorField(frame, 1.5, 1.5), null);
+});
 
 const trazar = (sample, extra = {}) => evenlySpacedStreamlines({
   sample, bounds: CUADRO, separation: SEPARACION, ...extra

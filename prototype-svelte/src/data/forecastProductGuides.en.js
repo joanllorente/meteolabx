@@ -75,6 +75,58 @@ const CELL_MOTION = {
 };
 
 export const forecastProductGuides = {
+  'precip-type': {
+    what: 'The form in which the precipitation forecast by AROME would reach the ground in each cell during the selected hour: liquid, frozen or a mix. It does not say how much falls, but what falls. It depends mainly on the temperatures the precipitation passes through on the way down: almost all of it starts as ice or snow in the clouds, and what reaches the ground depends on whether it meets layers above 0 °C where it melts and, below them, cold layers where it freezes again. The map shows eleven classes, including no precipitation.',
+    interpretation: [
+      'Rain: drops of liquid water larger than half a millimetre. It is the usual result when the layer above 0 °C is deep enough to melt completely the snow falling from the clouds.',
+      'Drizzle: very fine, closely spaced drops smaller than half a millimetre that seem to float. It comes from low, shallow clouds such as stratus or thick fog, and leaves small amounts, although it can soak everything for hours.',
+      'Freezing precipitation and freezing drizzle: they arrive liquid but below 0 °C, supercooled, and freeze instantly on contact with the ground, cars, power lines or trees. They form a layer of clear ice, glaze, which is very dangerous on roads. They occur when snow melts in a warm layer aloft and then falls through a cold layer at the surface that is too shallow to refreeze it.',
+      'Ice pellets: small, hard, transparent balls of ice that bounce when they land. They are raindrops that have refrozen in the air. The setting is similar to freezing precipitation, but with a cold layer near the ground deep enough to freeze the drops before they arrive.',
+      'Dry snow: flakes that arrive without having melted, light and loose, typical when the whole column is below zero. It settles easily and the wind lifts it and piles it into drifts.',
+      'Wet snow: flakes that have started to melt, large and heavy, with liquid water inside. It falls with surface temperatures close to 0 °C. It sticks to trees, power lines and roofs, and because of its weight it is the snow that breaks the most branches and lines. The map also includes here the particularly sticky snow that the model diagnoses separately.',
+      'Rain and snow: drops and half-melted flakes arrive together, what is known as sleet. It marks the transition from rain to snow and usually appears right around the snow level.',
+      'Snow pellets: white, opaque, soft balls smaller than 5 mm that crush between the fingers. They form when a snowflake collects supercooled droplets that freeze onto it until it loses its crystal shape. They are typical of cold-air showers, often thundery, in winter and spring. They should not be confused with ice pellets, which are hard and transparent.',
+      'Hail: stones of ice 5 mm or larger, hard and often layered. They grow inside thunderstorms, where updraughts keep them aloft while water freezes onto them. The map does not say how large the stones would get.',
+      'Snow pellets and hail do not come from the temperatures along the fall, but from the amount of graupel the model simulates inside the storm: a moderate amount marks the cell as snow pellets, and a large amount, as hail.',
+      'Read it together with the snow level and freezing level maps, which explain why it rains in one place and snows in another, and with the precipitation maps, which say how much. A 2.5 km cell is not a point observation: along the boundaries between two types, especially over rugged terrain, reality may be a few kilometres or a few hundred metres of altitude away from where the model puts it.'
+    ],
+    method: 'MeteoLabX shows the precipitation-type diagnosis that AROME publishes for each hour, without recomputing it. The model decides the type from the vertical temperature profile and the hydrometeors it simulates in the column, and for snow pellets and hail, from the amount of graupel inside the cloud. Some model categories are variants of another, such as intermittent precipitation or sticky snow, and they are grouped with their main type to keep the legend clear.',
+    equations: [],
+    steps: [
+      'Read the precipitation type for the valid hour over the whole AROME domain.',
+      'Group the variants: intermittent rain, snow and mixed precipitation go to their main type, and sticky snow to wet snow.',
+      'Paint each type with a fixed colour, without blending colours between categories. Cells without data or with a type the model does not document are left transparent.'
+    ],
+    sources: [{ label: 'Météo-France · AROME PTYPE codes and diagnosis', url: 'https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/1674051588/Comprendre+les+diagnostics+de+type+de+pr+cipitation+dans+les+mod+les+AROME+de+M+t+o-France' }]
+  },
+  'stp': {
+    what: 'Effective-layer Significant Tornado Parameter with CIN: a dimensionless index that summarises environmental ingredients associated with significant tornadoes in right-moving supercells.',
+    interpretation: ['A high value indicates coincidence of ingredients, not a probability or a guarantee that a tornado will form. It also depends on initiation and convective mode.', 'The effective base must reach the ground. If it is elevated the index is zeroed out; an unknown base is left without data.', 'High cloud bases and strong inhibition reduce the index. A low value does not rule out tornadoes in configurations that this composite does not represent.'],
+    method: 'Effective version of the Storm Prediction Center (SPC) STP. It combines five ingredients from the same profile and hour: the energy (MLCAPE) and inhibition (MLCIN) of a parcel representing the mean air of the lowest 100 hPa, the height of its cloud base (LCL) above the terrain, and the helicity (ESRH) and shear (EBWD) of the layer that would feed the storm.',
+    equations: [{ label: 'Effective STP with CIN', latex: String.raw`\mathrm{STP}=\frac{\mathrm{MLCAPE}}{1500}\frac{\mathrm{ESRH}}{150}\,f_{\mathrm{LCL}}\,f_{\mathrm{EBWD}}\,f_{\mathrm{CIN}}` }],
+    steps: ['LCL: factor (2000 − MLLCL)/1000, clipped between zero and one; heights in metres above ground.', 'CIN: factor (MLCIN + 200)/150, clipped between zero and one; negative CIN in J/kg.', 'EBWD: zero below 12.5 m/s, EBWD/20 up to 30 m/s and a maximum of 1.5.', 'With an elevated effective base, STP is zero. Missing ingredients leave the result without data. The index is clipped to the non-negative range for the Bunkers right mover.'],
+    sources: [{ label: 'SPC · Definition of effective STP', url: 'https://origin-west-www-spc.woc.noaa.gov/exper/mesoanalysis/help/begin.html' }, { label: 'NOAA · STP thresholds', url: 'https://vlab.noaa.gov/web/oclo/nsharp-hail-and-tornado-reference' }]
+  },
+  'esrh': {
+    what: 'Storm-relative helicity in the effective inflow layer (ESRH), in m²/s². The base can be elevated above the ground.',
+    interpretation: [
+      'Positive values indicate helicity favourable to the Bunkers right-moving supercell. The sign is preserved; the arrows represent its estimated motion.',
+      'The effective layer selects air capable of feeding convection. It is not the same as 0–1 km or 0–3 km SRH, and on its own it is not a tornado forecast.',
+      'Without a layer of positive depth and defined limits, or without full wind coverage, no value is published.'
+    ],
+    method: 'From the surface up to 500 hPa, MeteoLabX searches for the first continuous sequence of parcels with CAPE ≥ 100 J/kg and CIN ≥ −250 J/kg. The base and top are the first and last level that meet this, closing at the next level that fails. An unobserved top is left without data. The integral uses every hodograph segment, clipped to both limits, and the Bunkers motion already computed.',
+    equations: [{ label: 'Effective helicity', latex: String.raw`\mathrm{ESRH}=\int_{z_b}^{z_t}\left[(v-C_v)\frac{\partial u}{\partial z}-(u-C_u)\frac{\partial v}{\partial z}\right]dz` }],
+    steps: ['Test each level as a parcel origin, from the surface upwards, until the effective layer is found.', 'Keep the effective base used by EBWD and determine the top along the same pass.', 'Integrate the wind relative to the Bunkers motion between the base and the top.'],
+    sources: [{ label: 'SPC · Effective storm-relative helicity', url: 'https://www.spc.noaa.gov/exper/mesoanalysis/help/help_esrh.html' }]
+  },
+  'scp': {
+    what: 'Effective-layer Supercell Composite Parameter: a dimensionless index combining instability, effective helicity and effective shear.',
+    interpretation: ['Increasing positive values indicate a greater coincidence of ingredients favourable to right-moving supercells; they do not represent a probability.', 'It does not guarantee initiation or an isolated storm mode. It should be read alongside forcing, inhibition and the expected evolution.', 'The scale shows the positive range. The diagnosis preserves the sign of ESRH and missing data; a missing ingredient is not replaced with zero.'],
+    method: 'SPC effective-layer formulation, computed directly from the shared MUCAPE, ESRH and EBWD. The shear factor is zero for EBWD < 10 m/s, EBWD/20 between 10 and 20 m/s, and one for EBWD > 20 m/s.',
+    equations: [{ label: 'SCP', latex: String.raw`\mathrm{SCP}=\frac{\mathrm{MUCAPE}}{1000\,\mathrm{J\,kg^{-1}}}\frac{\mathrm{ESRH}}{50\,\mathrm{m^2\,s^{-2}}}f(\mathrm{EBWD})` }],
+    steps: ['Obtain the three ingredients from the same lead time, profile and grid.', 'Apply the EBWD thresholds in m/s and multiply the normalised factors.'],
+    sources: [{ label: 'MetPy · SCP and SPC formulation', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.supercell_composite.html' }]
+  },
   'z500-mslp': {
     what: '500 hPa geopotential height in colour and mean sea level pressure as isobars, over the Atlantic and Europe. This is the classic synoptic pair: the height of the 500 hPa surface draws the wave that steers the weather several days ahead, and the surface pressure shows where it ends up anchored.',
     interpretation: [
@@ -83,15 +135,15 @@ export const forecastProductGuides = {
       'The gradient between height contours is proportional to the wind at 500 hPa: where they tighten lies the jet stream, and with it the corridor along which the lows travel.',
       'At +144 h the map is not a forecast of detail but of pattern. It tells you whether a ridge is settling in or a trough is arriving, not what time it will rain.'
     ],
-    method: 'Two messages per lead time from the ECMWF open data, read by byte range from the global 0.25° GRIB2 using the index that ECMWF publishes alongside it. The 500 hPa geopotential height is converted from geopotential metres to decametres and the mean sea level pressure from pascals to hectopascals; the crop to the Euro-Atlantic domain is done while reading, not afterwards.',
+    method: 'Two variables from the ECMWF open data for each lead time: the 500 hPa geopotential height, converted from geopotential metres to decametres, and the mean sea level pressure, converted from pascals to hectopascals. Both are cropped to the Euro-Atlantic domain.',
     equations: [
       { label: 'Geopotential height in decametres', latex: String.raw`Z_{500}[\mathrm{dam}]=\frac{Z_{500}[\mathrm{gpm}]}{10}` },
       { label: 'Mean sea level pressure', latex: String.raw`p_{\mathrm{mar}}[\mathrm{hPa}]=\frac{p_{\mathrm{mar}}[\mathrm{Pa}]}{100}` }
     ],
     steps: [
-      '`.index` file for the lead time: one JSON line per message, with offset and length.',
-      'Partial download of the two messages: gh at 500 hPa and msl at the surface.',
-      'Crop to the Euro-Atlantic window and packing into the same grid format used by the AROME maps.'
+      'ECMWF variables: geopotential height (gh) at 500 hPa and mean sea level pressure (msl).',
+      'Unit conversion: from geopotential metres to decametres and from pascals to hectopascals.',
+      'Crop to the Euro-Atlantic window, without smoothing the colour field.'
     ],
     sources: [ECMWF_OPEN_DATA]
   },
@@ -102,32 +154,31 @@ export const forecastProductGuides = {
       'The maxima and minima let you follow daytime heating, nocturnal cooling, frost and heat episodes. Tight gradients usually mark sea breezes, fronts, inversions or land–sea contrasts.',
       'Topography, land use and boundary-layer mixing strongly condition this field. Narrow valleys, hillsides, urban cores and cold pools can differ from a 2.5 km cell; read it as a temperature representative of the cell, not as a station reading.'
     ],
-    method: 'AROME publishes TEMPERATURE on the 2 m specific height level. MeteoLabX selects the valid time and the WCS cell, keeps the grid and converts to degrees Celsius when the coverage arrives in kelvin.',
+    method: 'AROME publishes the temperature 2 m above the ground. MeteoLabX selects the valid time, keeps the grid and converts to degrees Celsius when the data arrives in kelvin.',
     equations: [
       { label: 'Conversion applied when the native unit is kelvin', latex: String.raw`T_{2\,\mathrm m}[{}^\circ\mathrm C]=T_{2\,\mathrm m}[\mathrm K]-273.15` }
     ],
     steps: [
-      'Native coverage: TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND.',
-      'Selected level: 2 m; no interpolation between hours and no smoothing of the grid.',
+      'AROME variable: TEMPERATURE 2 m above the ground.',
+      'No interpolation between hours and no smoothing of the grid.',
       'The palette changes only the display, never the value queried from the cell.'
     ],
     sources: [MF_AROME, MF_API]
   },
 'vv-lfc': {
-    what: 'Model vertical velocity at the level of free convection of the mixed-layer parcel, in m/s. Positive upwards.',
+    what: 'Model vertical velocity at the level of free convection of the mixed-layer parcel, in m/s, positive upwards. On top, as streamlines, the surface wind (10 m), which shows where the air converges and what may be forcing the ascent.',
     interpretation: [
-      'It answers the question the instability maps leave open: whether the ascent reaches the height at which the parcel becomes buoyant. Once the LFC is reached, convection fires on its own; below it, the convergence bottles up under the inversion and nothing happens.',
-      'That is why it complements the CAPE fields instead of repeating them: those say how much energy is available, this one says whether something is going to release it. A high value over an area with appreciable CAPE points to where and when.',
-      'AROME partly resolves convection, so in cells that are already developed this field picks up the updraft itself and not only the forcing that preceded it. It remains useful as a detector of where the model is convecting, but it is worth knowing that it is not always the cause.',
+      'The CAPE maps say how much energy is available, but not whether something will release it. This map shows whether the rising air reaches the level at which the parcel starts to rise on its own, the LFC. If it does, convection can start; if the ascent stalls below it, usually under an inversion, the energy goes unused.',
+      'AROME represents storms explicitly, so where the model has already developed one, the high value at the LFC is the storm’s own updraft, not the forcing that triggers it. In those cases the map shows where there is convection in the model, but not what caused it.',
       'The streamlines are the 10 m wind, not the wind at the level the colours show: they tell you what is forcing the ascent — a sea breeze, a convergence line, the terrain — and which way anything that fires would propagate.',
-      'Where two streamlines come together or meet head on there is surface convergence, and that is where to look when the colours say the ascent reaches the LFC. A parallel, loose flow forces nothing on its own, however strong it is.'
+      'Where the streamlines come together or collide there is surface convergence, and that is where to look for colours showing that the ascent reaches the LFC. In mountainous areas, wind blowing against a slope also forces the air to rise, so the colours can show ascent from orographic forcing even where the streamlines do not converge.'
     ],
-    method: 'Geometric vertical velocity from the isobaric levels of the IP3 package, linearly interpolated to the height of the LFC. The LFC comes from the mixed-layer parcel of the lowest 100 hPa, the same one used for MLCAPE.',
+    method: 'AROME geometric vertical velocity on the pressure levels, linearly interpolated to the height of the LFC. The LFC comes from the mixed-layer parcel of the lowest 100 hPa, the same one used for MLCAPE.',
     equations: [
       { label: 'Interpolation to the LFC', latex: String.raw`w_{\mathrm{NCL}}=w_k+\frac{z_{\mathrm{NCL}}-z_k}{z_{k+1}-z_k}\,(w_{k+1}-w_k)` }
     ],
     steps: [
-      'Vertical velocity on the isobaric levels of the IP3 package, already downloaded for the DCAPE dew point.',
+      'AROME geometric vertical velocity on the pressure levels.',
       'Height of the level of free convection of the ML100 parcel, above the terrain.',
       'No value where the parcel never gains buoyancy: there is no level to look at.'
     ],
@@ -138,23 +189,22 @@ export const forecastProductGuides = {
     what: 'Updraft helicity between 2 and 5 km above the terrain, in m²/s². It diagnoses the rotation the model itself generates inside an updraft: it combines vertical velocity with vertical vorticity between 2,000 and 5,000 metres above ground.',
     interpretation: [
       'Positive values mean that ascent and cyclonic rotation coincide, which in the northern hemisphere is the usual signature of a right-moving supercell. Negative values mean anticyclonic rotation accompanying the ascent: it may correspond to a left-moving supercell, but the sign alone does not prove it.',
-      'It measures coincidence, not intensity: a strong updraft without rotation gives little UH, and so does an area with vorticity but no ascent.',
+      'It measures the coincidence of ascent and rotation, not the strength of either: it is the product of the two, so if one is missing — a strong updraft without spin, or an area with spin but no ascent — the result is zero or close to zero.',
       'High UH identifies a simulated mid-level mesocyclone. It does not automatically mean a tornado or severe weather at the surface, so it should be read alongside MLCAPE, storm-relative helicity, effective-layer shear, the vertical velocity at the LFC and the evolution from hour to hour.',
       'Unlike CAPE or shear, it does not describe the environment but what the model is producing: it appears where AROME has already developed the storm, not before. That is why it complements the environmental fields rather than replacing them.',
-      'As a rough guide for 2–4 km models, around 25–50 m²/s² may indicate organised rotation, 75–150 a strong signal and above 150 very intense rotation. These ranges depend on the model, the resolution and the time aggregation — published studies have used thresholds from 50 to 150 — so for AROME they call for calibration of their own.'
+      'MeteoLabX computes UH at a single instant, the output hour, from the published pressure levels. A simulated mesocyclone is short-lived and moves, so it can occur between two hours without being captured, and the spacing between levels smooths the peaks. That is why its values are usually lower than those in the literature, which uses the hourly maximum computed by the model itself, and they are best read in relative terms: comparing areas and hours with each other, not against fixed thresholds.'
     ],
-    method: 'Vertical vorticity at each isobaric level computed with horizontal distances in metres — longitude corrected by the cosine of latitude — multiplied by the geometric vertical velocity from IP3 and integrated by trapezoids between 2,000 and 5,000 m above the terrain, with the end points interpolated.',
+    method: 'At each pressure level the vertical vorticity is computed, that is, how much the wind turns in the horizontal, and multiplied by the vertical velocity. These products are added up between 2,000 and 5,000 m above the terrain, interpolating the values exactly at those two heights.',
     equations: [
       { label: 'Vertical vorticity', latex: String.raw`\zeta=\frac{\partial v}{\partial x}-\frac{\partial u}{\partial y}` },
       { label: 'Updraft helicity', latex: String.raw`\mathrm{UH}_{2-5}=\int_{2000}^{5000} w\,\zeta\;\mathrm{d}z` }
     ],
     steps: [
-      'Pressure, temperature, humidity and horizontal wind from the isobaric levels of IP1, and geometric vertical velocity from IP3.',
+      'Pressure, temperature, humidity, horizontal wind and geometric vertical velocity on the AROME pressure levels.',
       'Height of each level reconstructed with the hypsometric equation, minus the terrain: the layer is above the ground, not above the sea.',
-      'Vertical vorticity in the plane, with degrees converted to metres and the longitudinal distance corrected by the cosine of latitude. The grid rows run from north to south, and that sign is what gives ∂u/∂y its own.',
+      'Vertical vorticity in the plane, with degrees converted to metres and the longitudinal distance corrected by the cosine of latitude.',
       'Product of vertical velocity and vorticity at each level, interpolated exactly at 2,000 and 5,000 m.',
       'Trapezoidal integration of every segment contained in that layer.',
-      'The band-by-band processing reads one halo row on each side so that the derivatives leave no seams at the joins.',
       'No value where the column does not cover the whole layer or is missing one of the intermediate levels: a partial value would read as weak rotation when it is missing data.'
     ],
     sources: [MF_AROME, MF_API, NAYLOR_2012]
@@ -171,7 +221,7 @@ export const forecastProductGuides = {
     method: 'Native AROME field, with no computation of our own: MeteoLabX only crops it to the domain and serves it. The scale runs in classes of 5 dBZ, like a radar, instead of a continuous gradient.',
     equations: [],
     steps: [
-      'REFLECTIVITY_MAX_DBZ coverage over the surface, one per hour.',
+      'AROME variable: REFLECTIVITY_MAX_DBZ, one per hour.',
       'Classes of 5 dBZ up to 70; below 5 nothing is painted.'
     ],
     sources: [MF_AROME, MF_API]
@@ -186,7 +236,7 @@ export const forecastProductGuides = {
       'The 850 hPa level is chosen because it lies above surface friction and the daily cycle, yet still within the air that feeds convection.',
       'No value where the surface pressure does not reach 850 hPa: there that level is underground and the model publishes an extrapolation that is nobody’s air. That is what leaves the Alps and much of the Spanish plateau blank.'
     ],
-    method: 'Bolton (1980) theta-e with the MetPy implementation, over the native 850 hPa temperature and dew point. The dew point is clipped to the temperature to absorb the model’s numerical supersaturations, the pressure is taken as constant at 850 hPa and the computation runs in kelvin; only the map is converted to degrees. The mean sea level pressure travels in the overlay layer of the same frame.',
+    method: 'Bolton (1980) theta-e, computed with MetPy from the AROME temperature and dew point at 850 hPa. In reality the dew point never exceeds the temperature, but the model sometimes puts it a few tenths above because of small computational errors; in those cells it is set equal to the temperature. The pressure is that of the level itself, 850 hPa, the same across the whole map, and the computation is done in kelvin: only the result is converted to degrees Celsius. The isobars come from the mean sea level pressure of the same lead time.',
     equations: [
       { label: 'Vapour pressure', latex: String.raw`e=6{,}112\exp\!\left(\frac{17{,}67\,T_d}{T_d+243{,}5}\right)` },
       { label: 'Mixing ratio', latex: String.raw`r=\frac{0{,}622\,e}{p-e}` },
@@ -194,13 +244,545 @@ export const forecastProductGuides = {
       { label: 'Theta-e', latex: String.raw`\theta_e=T\left(\frac{1000}{p-e}\right)^{\kappa}\left(\frac{T}{T_L}\right)^{0{,}28r}\exp\!\left[\left(\frac{3036}{T_L}-1{,}78\right)r(1+0{,}448r)\right]` }
     ],
     steps: [
-      'Isobaric temperature and dew point at 850 hPa, surface pressure and mean sea level pressure: four coverages per hour, because none of them comes ready made.',
-      'The dew point never above the temperature, and the pressure constant at 850 hPa.',
-      'Theta-e through MetPy, not through the shared function used by the convective diagnostics: that one mixes two Bolton variants and drifts by 0.02 to 0.19 K, little but for no reason, and changing it would move MUCAPE, MULI and SHIP all at once.',
+      'AROME variables: temperature and dew point at 850 hPa, surface pressure and mean sea level pressure.',
+      'Where the model gives a dew point above the temperature, it is set equal to it; the pressure is 850 hPa in every cell.',
+      'Theta-e computed with MetPy, which applies the Bolton (1980) formulation, in kelvin; only the result is converted to degrees Celsius.',
       'Isobars every 4 hPa over the unsmoothed field, with one in five labelled.',
-      'Lows and highs: the field is smoothed to 40 km only to find them, they must be the extreme within 200 km around and beat their surroundings by 2.5 hPa. Two of the same sign closer than 300 km are the same one. Zooming in lowers the bar and the secondary centres appear.'
+      'Lows and highs: each centre must be the pressure extreme within 200 km around and be closed, that is, surrounded by pressures at least 0.6 hPa higher —or lower, for a high— over a radius of 100 km or more. Main centres (A for highs, B for lows) are those enclosed by a map isobar or by a 3 hPa margin over at least 150 km of radius; the rest are relative centres (a and b). Two centres of the same type closer than 300 km count as one, and zooming does not change which ones appear.'
     ],
     sources: [MF_AROME, MF_API, BOLTON_1980, METPY]
+  },
+  'srh-01': {
+    what: 'Storm-relative helicity between the ground and 1,000 m above the terrain, in m²/s². It measures how much rotation a storm can draw from the surrounding wind.',
+    interpretation: [
+      'This is the layer most closely associated with tornadogenesis. Values above 100 m²/s² are already favourable and above 150 they are significant, always alongside instability and a low cloud base.',
+      'The sign matters: positive indicates cyclonic rotation and negative, anticyclonic. High SRH without CAPE describes a sheared environment but without storms; it should be read alongside the CAPE maps and 0–6 km shear.',
+      'The arrows are the estimated motion of the right-moving supercell, not the wind: they show where the storm this helicity refers to would move.'
+    ],
+    method: 'Hodograph integral between 0 and 1,000 m AGL, subtracting the Bunkers 2000 right-mover motion. Every level of the profile is traversed, not just the endpoints, and the upper limit is interpolated. Heights are above the terrain and underground isobaric levels are excluded. There is no CAPE filter: it is a kinematic field of the environment.',
+    equations: [
+      { label: 'Storm-relative helicity', latex: String.raw`\mathrm{SRH}=\sum_i\left[(u_{i+1}-C_u)(v_i-C_v)-(u_i-C_u)(v_{i+1}-C_v)\right]` },
+      { label: 'Bunkers motion', latex: String.raw`\mathbf{C}_R=\overline{\mathbf{V}}_{0-6}+7{,}5\,\frac{(\Delta v,\,-\Delta u)}{|\Delta \mathbf{V}|}` }
+    ],
+    steps: [
+      'Wind profile from the AROME pressure levels, with the 10 m wind as the base.',
+      'Bunkers motion: 0–6 km mean wind deviated 7.5 m/s perpendicular to the shear between the 0–0.5 and 5.5–6 km layers.',
+      'The means are weighted by thickness and not by pressure, as specified in Bunkers et al. (2000): there it is shown that weighting by pressure does not reduce the error. MetPy integrates those same layers in pressure coordinates, so its motion comes out slightly different — 1.1 m/s per component in a test hodograph — without either formulation being wrong.',
+      'No value where the profile does not reach 6 km: the Bunkers deviation is left undefined.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+  'srh-03': {
+    what: 'Storm-relative helicity between the ground and 3,000 m above the terrain, in m²/s². Same quantity as the 0–1 km one, over the layer that spans the bulk of the updraft.',
+    interpretation: [
+      'This is the usual layer for assessing a supercell’s rotation potential. Above 150 m²/s² the environment favours supercells and above 300 the rotation is marked.',
+      'Comparing 0–3 with 0–1 km shows where the rotation sits: if the 0–1 km value is proportionally high, shear is concentrated near the ground, which is the configuration associated with tornadoes.',
+      'The arrows are the estimated motion of the right-moving supercell, the same one that is subtracted to compute the helicity.'
+    ],
+    method: 'Hodograph integral between 0 and 3,000 m AGL, subtracting the Bunkers 2000 right-mover motion. Every level of the profile is traversed, not just the endpoints, and the upper limit is interpolated. Heights are above the terrain and underground isobaric levels are excluded. There is no CAPE filter: it is a kinematic field of the environment.',
+    equations: [
+      { label: 'Storm-relative helicity', latex: String.raw`\mathrm{SRH}=\sum_i\left[(u_{i+1}-C_u)(v_i-C_v)-(u_i-C_u)(v_{i+1}-C_v)\right]` },
+      { label: 'Bunkers motion', latex: String.raw`\mathbf{C}_R=\overline{\mathbf{V}}_{0-6}+7{,}5\,\frac{(\Delta v,\,-\Delta u)}{|\Delta \mathbf{V}|}` }
+    ],
+    steps: [
+      'Wind profile from the AROME pressure levels, with the 10 m wind as the base.',
+      'Bunkers motion: 0–6 km mean wind deviated 7.5 m/s perpendicular to the shear between the 0–0.5 and 5.5–6 km layers.',
+      'The means are weighted by thickness and not by pressure, as specified in Bunkers et al. (2000). MetPy integrates those same layers in pressure and gets a slightly different motion; the helicity, starting from the same motion, matches between the two down to the last digit.',
+      'No value where the profile does not reach 6 km: the Bunkers deviation is left undefined.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+  'vertical-totals': {
+    what: 'Vertical Totals: temperature difference between the 850 and 500 hPa isobaric surfaces. It shows how quickly the air cools with height between roughly 1,500 and 5,500 m: the larger the difference, the more unstable the column.',
+    interpretation: [
+      'It describes the environment, not a specific parcel. That is its value alongside the CAPE fields: where MUCAPE and MLCAPE disagree because the source layer is uncertain, VT has no such ambiguity, because it does not depend on which parcel is chosen.',
+      'Values around 26 °C indicate a gradient sufficient for convection; above 30 °C the gradient is marked. A high VT with little low-level moisture points to a dry-downburst environment, where the descending air cools little by evaporation but accelerates through the gradient.',
+      'It does not include moisture: on its own it does not distinguish an unstable, moist atmosphere from an unstable, dry one. It should be read alongside low-level humidity or DCAPE.'
+    ],
+    method: 'Direct subtraction of the AROME temperature at two pressure levels, 850 and 500 hPa.',
+    equations: [
+      { label: 'Vertical Totals', latex: String.raw`\mathrm{VT}=T_{850}-T_{500}` }
+    ],
+    steps: [
+      'AROME variable: TEMPERATURE at 850 and 500 hPa.',
+      'Difference in kelvin, equivalent to the difference in degrees Celsius.',
+      'No value where p_s < 850 hPa: the isobaric surface is underground.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+  'temperature-850': {
+    what: 'Air temperature on the 850 hPa isobaric surface. It represents the low-troposphere air mass, usually above most of the surface’s immediate thermal influence.',
+    interpretation: [
+      'It is useful for tracking warm or cold advection and comparing air masses. A sharp gradient alongside the 850 hPa wind signals thermal transport, but on its own it does not determine the 2 m temperature.',
+      'Combined with humidity, thickness and the vertical profile it helps assess the snow level or stability. Where the surface pressure is below 850 hPa — high terrain — the isobaric surface is underground and the value has no physical atmospheric interpretation.'
+    ],
+    method: 'AROME temperature at the 850 hPa level. MeteoLabX only selects the level and converts kelvin to Celsius when applicable.',
+    equations: [
+      { label: 'Unit conversion', latex: String.raw`T_{850}[{}^\circ\mathrm C]=T_{850}[\mathrm K]-273.15` }
+    ],
+    steps: [
+      'AROME variable: TEMPERATURE on pressure levels.',
+      'Level: 850 hPa.',
+      'Must be ignored or masked where p_s < 850 hPa.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'temperature-500': {
+    what: 'Air temperature at 500 hPa, a mid-troposphere reference sitting roughly between 5 and 6 km altitude depending on the state of the column.',
+    interpretation: [
+      'Cold pools, troughs and upper-level lows show up as thermal minima. Colder air at 500 hPa above a warm, moist low layer increases the vertical temperature gradient and can raise buoyancy.',
+      'This is not a storm map: convection also needs moisture, parcel instability, forcing and a suitable wind environment all at once. Geopotential and advection are also worth checking, not just temperature.'
+    ],
+    method: 'AROME temperature at the 500 hPa level. MeteoLabX keeps the cell value and expresses it in degrees Celsius.',
+    equations: [
+      { label: 'Unit conversion', latex: String.raw`T_{500}[{}^\circ\mathrm C]=T_{500}[\mathrm K]-273.15` }
+    ],
+    steps: [
+      'AROME variable: TEMPERATURE on pressure levels.',
+      'Level: 500 hPa.',
+      'No CAPE or vertical gradient is inferred from this map alone.'
+    ],
+    sources: [MF_AROME, MF_API, NOAA_CAPE]
+  },
+
+  'freezing-level': {
+    what: 'Altitude above sea level at which the air temperature crosses 0 °C, known as the freezing level or zero-degree isotherm. Above it, cloud water tends to freeze and snowflakes survive; below it, whatever falls starts to melt. It is the most direct thermal reference for how far the cold air reaches in the vertical, and the starting point for estimating the snow level.',
+    interpretation: [
+      'It tracks the arrival and retreat of air masses: a freezing level dropping from 3,000 to 1,200 m in a day marks a cold outbreak, and one rising above 4,000 m in summer, a very warm air mass. In winter, with the freezing level at 1,500 m, the mountains above that height are below zero even if the valleys are mild.',
+      'It is not the snow level. Flakes do not melt as soon as they pass 0 °C: it takes them a few hundred metres, and if the air is dry evaporation cools them and they last even lower. That is why snow usually reaches 300 to 600 m below the freezing level, and further still in dry air. That is what the snow level map is for.',
+      'If the surface is already below zero and there is no warmer layer above, the freezing level sits at ground level and the map shows the altitude of the model terrain itself. That terrain is smoothed: narrow valleys and summits appear lower or higher than they really are.',
+      'A single column can cross 0 °C more than once. It happens mostly with temperature inversions: a pool of sub-zero air in a valley or a plain, with a milder layer above that cools again higher up. There are then several stacked freezing levels and the map shows the highest, which marks where falling precipitation starts to melt. Turning on the “Multiple altitude solutions” layer shows the cells where this happens; there, bear in mind that another freezing level lies below, sometimes close to the ground, which the colour does not show.',
+      'It is plotted as altitude, not height above ground: 1,500 m means the same on the coast as in the Pyrenees. Other indices, such as SHIP, use height above ground.'
+    ],
+    method: 'MeteoLabX builds the vertical temperature profile of each cell by joining the 2 m temperature with that of the AROME pressure levels, each at its real altitude computed from the geopotential. It then walks the profile from the bottom up and, every time the temperature passes from one side of 0 °C to the other between two levels, interpolates the exact altitude of the crossing along a straight line.',
+    equations: [
+      { label: 'Altitude of each level from the geopotential', latex: String.raw`z_i=\frac{\Phi_i}{g_0}` },
+      { label: 'Crossing interpolated between two consecutive levels', latex: String.raw`z_{0}=z_i+\frac{0-T_i}{T_{i+1}-T_i}\,\left(z_{i+1}-z_i\right)` }
+    ],
+    steps: [
+      'Anchor the profile to the ground. The first point is the 2 m temperature, placed at the altitude of the model terrain plus those 2 m.',
+      'Add the upper levels. The pressure levels above the terrain are added; those that fall underground in mountain areas are discarded.',
+      'Find the crossings. Levels are compared two by two, from the bottom up, and each pass through 0 °C is interpolated linearly. The accuracy depends on the spacing between levels, a few hundred metres: the crossing is exact if the temperature changes steadily between them.',
+      'Choose the solution. With a single crossing, that is the value. With several, the highest is shown and the cell is flagged as having multiple solutions. If the whole column is below zero from the ground up, the value is the terrain altitude.',
+      'Leave doubtful cells empty. If an intermediate level is missing, no crossing is invented across the gap and the cell is left without data.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+  'snow-level': {
+    what: 'Approximate altitude above which the forecast precipitation would fall as snow. MeteoLabX places it where the wet-bulb temperature of the air crosses 0.5 °C. The wet bulb is the temperature air cools to when water evaporates into it until it is saturated, and it is what a snowflake actually feels as it falls: on the way down it melts from the heat of the air, but at the same time it loses water by evaporation and sublimation, which cools it. That is why in dry air it snows at much lower altitudes than the temperature alone would suggest. The map only has values where the model forecasts precipitation in that hour.',
+    interpretation: [
+      'It is the transition from rain to snow, not an exact line. Some 200–300 m above it snow usually falls without trouble; around it, sleet or wet snow that struggles to settle is typical, and below it, rain.',
+      'Compare it with the freezing level: if the snow level is far below it, the air is dry and evaporation is cooling the precipitation. When rain persists that air gradually moistens and the snow level can rise through the episode.',
+      'With heavy precipitation the real snow level can drop further than forecast: as they melt, flakes take heat from the air and cool it, and in enclosed valleys that cold air pools. The profile of a single cell only partly captures this process.',
+      'There can be more than one solution. With a temperature inversion the wet bulb crosses 0.5 °C several times: for example, cold air hugging the ground, a milder layer above and cold air again higher up. The map shows the highest crossing, where snow starts to melt, but below the mild layer the air is cold again and precipitation may reach the ground as sleet, snow or even freezing rain. The “Multiple altitude solutions” layer flags those cells: there the colour is not enough and the full profile is worth a look.',
+      'Where there is no precipitation the map is empty: with nothing falling, a snow level makes no sense. If the whole column is below the threshold from the ground up, the value is the altitude of the model terrain, that is, snow down to the ground.',
+      'It is an altitude above sea level and relies on smoothed terrain, so on valley floors and steep slopes it may differ from what is observed.'
+    ],
+    method: 'MeteoLabX computes the wet-bulb temperature at the surface and at each AROME pressure level from temperature, humidity and pressure. With that profile it searches, from the bottom up, for the altitude at which the wet bulb crosses 0.5 °C, interpolating between levels. The 0.5 °C threshold rather than 0 °C reflects that flakes do not melt instantly: they need to travel through some above-zero air before turning into rain.',
+    equations: [
+      { label: 'Psychrometric equation defining the wet bulb', latex: String.raw`e_s(T_w)-\gamma\,(T-T_w)=e,\qquad \gamma=\frac{c_p\,p}{0.622\,L_v}` },
+      { label: 'Saturation vapour pressure', latex: String.raw`e_s(T)=6.112\,\exp\!\left(\frac{17.67\,T}{T+243.5}\right)` },
+      { label: 'Crossing interpolated between two consecutive levels', latex: String.raw`z_{T_w=0.5}=z_i+\frac{0.5-T_{w,i}}{T_{w,i+1}-T_{w,i}}\,\left(z_{i+1}-z_i\right)` }
+    ],
+    steps: [
+      'Get the humidity of each level. At the surface the 2 m dew point is used; aloft, the dew point is derived from relative humidity and temperature.',
+      'Compute the wet bulb. The psychrometric equation is solved by successive approximations with the real pressure of each level, because evaporative cooling depends on it. The result always lies between the dew point and the temperature.',
+      'Build the profile. The first point is the surface, at the model terrain altitude plus 2 m; above it come the pressure levels, each with its altitude taken from the geopotential. Levels that fall underground are discarded.',
+      'Find the 0.5 °C crossings. The column is walked from the bottom up and each pass through the threshold is interpolated linearly. If there are several, the highest is shown and the cell is flagged as having multiple solutions.',
+      'Filter by precipitation. The snow level is only shown where that hour’s precipitation reaches at least 0.05 mm. If an intermediate level is missing, the cell is left without data rather than inventing a crossing.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'wind-level': {
+    what: 'Horizontal wind at the selected level. Colours represent speed and the streamlines follow the direction the air is moving towards.',
+    interpretation: [
+      'At above-ground levels it lets you locate channelling, low-level jets, convergence lines and orographic acceleration. At isobaric levels it shows the synoptic circulation and the relative position of ridges, troughs and jet streams.',
+      'Streamlines converging or spreading apart suggests horizontal convergence or divergence, but does not quantify it: that requires computing spatial derivatives. At an isobaric level, cells where p_s < p_level are hidden because the level would be underground.'
+    ],
+    method: 'MeteoLabX takes the AROME U and V wind components at the chosen level, either a height above the ground or a pressure level, and computes the speed. The streamlines follow the direction of U and V and become denser when zooming in; they do not alter the field.',
+    equations: [
+      { label: 'Horizontal speed shown in colour', latex: String.raw`|\vec V|=\sqrt{u^2+v^2}` },
+      { label: 'Directional field followed by the streamlines', latex: String.raw`\frac{d\vec x}{ds}=\frac{\vec V(\vec x)}{|\vec V(\vec x)|}` }
+    ],
+    steps: [
+      'AROME variables: U and V wind components at the chosen level.',
+      'Speed computed cell by cell from U and V.',
+      'On pressure levels only the cells where the level lies above the terrain are shown (p_s ≥ p_level).',
+      'The orientation is the meteorological flow direction; these are not time trajectories of particles.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'wind-gust': {
+    what: 'Maximum 10 m wind gust forecast within the hour ending at the map’s valid time.',
+    interpretation: [
+      'It highlights brief maxima that the mean wind does not show: frontal passages, turbulent mixing, terrain channelling and possible convective gusts.',
+      'It is a sub-hourly maximum parameterised by the model, not a sustained speed or an observation. In small storms there can be position and intensity errors; it is worth cross-checking with DCAPE, precipitation, reflectivity and cell evolution.'
+    ],
+    method: 'AROME maximum gust (WIND_SPEED_GUST_MAX) at 10 m over the preceding hour. MeteoLabX does not reconstruct the gust: it directly shows the published maximum for that interval.',
+    equations: [
+      { label: 'Temporal meaning of the field', latex: String.raw`G_{1h}(t)=\max_{\tau\in(t-1\,h,\,t]}|\vec V_{10m}(\tau)|` }
+    ],
+    steps: [
+      'AROME variable: WIND_SPEED_GUST_MAX at 10 m.',
+      'Level: 10 m; period: the preceding hour.',
+      'The viewer keeps m/s; the palette does not alter the maximum.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'shear-01': {
+    what: 'The 0–1 km vector shear represents the change in the wind vector between the surface and 1 km altitude. Its magnitude shows how much the wind changes and its direction shows where that change occurs.',
+    interpretation: [
+      'High CIZ1 values indicate stronger shear and, therefore, greater low-level horizontal vorticity, which can be tilted and turned into vertical rotation by updrafts. This favours convective organisation and low-level rotation, especially in supercells and organised convective systems.',
+      'In supercells, strong shear favourably oriented relative to the cell’s motion can increase the amount of streamwise vorticity ingested by the updraft, increasing 0–1 km SRH and favouring rotation of the low-level mesocyclone.',
+      'In storm lines, a low-level shear component perpendicular to the line usually favours its maintenance more, since it can offset the circulation associated with the cold pool and keep new updrafts close to the gust front.',
+      'When the shear is more parallel to the line’s axis, it favours propagation and regeneration of cells along the system’s own axis rather than reinforcing frontal regeneration perpendicular to the line.',
+      'CIZ roughly perpendicular to the line: favours more frontal regeneration, close to the leading edge, and can help maintain a compact line when the circulation associated with the cold pool and the environmental shear are reasonably balanced.'
+    ],
+    method: 'Diagnostic computed entirely by MeteoLabX from the native AROME U/V components at 10 m and 1,000 m AGL for the same hour. Both grids are spatially aligned onto the 10 m level grid and the vector difference between the two levels is computed.',
+    equations: [
+      { label: '0–1 km shear vector', latex: String.raw`\Delta\vec V_{0-1}=\vec V_{1000\,m}-\vec V_{10\,m}` },
+      { label: 'Magnitude shown', latex: String.raw`\mathrm{CIZ}_{0-1}=\sqrt{(u_{1000}-u_{10})^2+(v_{1000}-v_{10})^2}` },
+      { label: 'Approximate relation with horizontal vorticity', latex: String.raw`\vec\omega_h\approx\hat{k}\times\frac{\partial\vec V}{\partial z}` }
+    ],
+    steps: [
+      'The direction of the arrows corresponds to the orientation of the difference vector, not to the wind direction or storm motion.',
+      'The colours and the value shown at the pointer keep the full resolution of the grid; the arrows may group several cells purely to improve legibility.',
+      'High CIZ0–1 values indicate an intense wind change in the first kilometre of the atmosphere and a greater availability of horizontal vorticity.'
+    ],
+    sources: [RKW_1988, LINE_ORIENTATION, MF_API]
+  },
+
+  'shear-03': {
+    what: 'The 0–3 km vector shear represents the change in the wind vector between the surface and 3 km altitude. Its magnitude shows how much the wind changes in the low troposphere and its direction shows the orientation of that change.',
+    interpretation: [
+      'High CIZ3 values indicate a substantial wind change through the first 3 km of the atmosphere and, therefore, greater availability of horizontal vorticity. They favour more organised convection, with a greater ability to sustain multicell structures, convective lines, QLCS and, when the full profile is favourable, supercells.',
+      'In storm lines, the component of CIZ3 perpendicular to the line’s axis is especially important. Adequate perpendicular shear can offset the circulation generated by the cold pool and keep new updrafts close to the gust front, favouring the line’s persistence and organisation. However, increasing shear does not necessarily mean an increasingly intense line: optimal maintenance depends on the balance between environmental shear and cold-pool intensity.',
+      'When CIZ3 is mainly parallel to the line, it contributes less to the frontal balance with the cold pool. It can influence the propagation, succession and regeneration of cells along the system’s axis and the distribution of precipitation, but on its own it does not determine the line’s direction of motion.'
+    ],
+    method: 'Diagnostic computed entirely by MeteoLabX from the U/V components at 10 m and 3,000 m AGL for the same hour. After spatially aligning both grids onto the lower level’s grid, the vector difference between the two levels is computed.',
+    equations: [
+      { label: 'Vector and magnitude', latex: String.raw`\Delta\vec V_{0-3}=\vec V_{3000\,m}-\vec V_{10\,m},\qquad \mathrm{CIZ}_{0-3}=|\Delta\vec V_{0-3}|` },
+      { label: 'Components', latex: String.raw`|\Delta\vec V|=\sqrt{(\Delta u)^2+(\Delta v)^2}` }
+    ],
+    steps: [
+      'The direction of the arrows corresponds to the orientation of the difference vector, not to the wind direction or storm motion.',
+      'The colours and the value shown at the pointer keep the full resolution of the grid; the arrows may group several cells purely to improve legibility.',
+      'High CIZ0–3 values indicate an intense wind change through the first 3 km and a greater availability of horizontal vorticity to interact with updrafts.'
+    ],
+    sources: [RKW_1988, LINE_ORIENTATION, MF_API]
+  },
+
+  'shear-06': {
+    what: 'The 0–6 km vector shear represents the change in the wind vector between the surface and 6 km altitude. Its magnitude measures how much the wind changes across a deep layer of the troposphere and its direction shows the orientation of that change. It is a key indicator of the environment’s ability to organise and sustain deep convection.',
+    interpretation: [
+      'High CIZ6 values favour spatial separation between the updraft, the downdraft and the precipitation, reducing their interference and allowing more organised and longer-lived storms. Weak CIZ6 is usually associated with pulsing or short-lived cells; moderate or strong values favour organised multicells, convective lines and supercells, provided there is enough instability.',
+      'In supercells, deep shear facilitates the tilting of horizontal vorticity and helps sustain a rotating updraft separated from the precipitation. CIZ6 is especially useful for estimating the organisation and persistence of deep convection, but on its own it does not guarantee that a storm becomes a supercell.',
+      'Strong deep shear also favours the separation of the right- and left-moving members during storm splitting. The path and intensity of each member depend on the hodograph, the mean wind and its dynamic propagation, not on the direction of CIZ6 in isolation.',
+      'In convective lines, the component of CIZ6 perpendicular to the line’s axis can help separate the updrafts from the precipitation and favour the system’s deep organisation. A more parallel component has a greater influence on the propagation and regeneration of cells along the axis. To specifically analyse the balance between the cold pool and the shear at the gust front, the 0–3 km layer is usually more representative than the full CIZ6.'
+    ],
+    method: 'Diagnostic computed entirely by MeteoLabX from the native AROME U/V components at 10 m and 6,000 m AGL for the same hour. After spatially aligning both grids onto the lower level’s grid, the vector difference between the two levels is computed.',
+    equations: [
+      { label: '0–6 km shear vector', latex: String.raw`\Delta\vec V_{0-6}=\vec V_{6000\,m}-\vec V_{10\,m}` },
+      { label: 'Magnitude shown', latex: String.raw`\mathrm{CIZ}_{0-6}=\sqrt{(u_{6000}-u_{10})^2+(v_{6000}-v_{10})^2}` },
+      { label: 'Approximate relation with horizontal vorticity', latex: String.raw`\vec\omega_h\approx\hat{k}\times\frac{\partial\vec V}{\partial z}` }
+    ],
+    steps: [
+      'The direction of the arrows corresponds to the orientation of the difference vector, not to the wind direction or storm motion.',
+      'The colours and the value shown at the pointer keep the full resolution of the grid; the arrows may group several cells purely to improve legibility.',
+      'The calculation does not by itself incorporate CAPE, storm motion, SRH, hodograph curvature, effective storm depth or cold-pool intensity. CIZ6 should be interpreted alongside these factors.'
+    ],
+    sources: [LINE_ORIENTATION, MF_API, NOAA_CAPE]
+  },
+
+  ebwd: {
+    what: 'EBWD (Effective Bulk Wind Difference) measures how much the wind changes, as a vector, within the lower half of the storm’s effective depth. The calculation starts at the base of the inflow layer that can actually feed convection and ends halfway to the equilibrium level of the most unstable parcel. That is why it does not always use a fixed layer from the surface to 6 km. Unlike CIZ6, EBWD adapts both to the inflow height and to the storm’s depth. The difference is especially useful in elevated convection and in storms shallower or deeper than usual.',
+    interpretation: [
+      'The colours express the magnitude of EBWD: the higher the value, the greater the wind change within the effective layer. In the presence of instability and a triggering mechanism, a higher EBWD usually favours more organised and persistent storms because it helps separate the updraft from the downdraft and the precipitation.',
+      'As an operational reference, the environment becomes progressively more favourable for supercells when EBWD enters roughly the 25 to 40 kt range or exceeds it.',
+      'The EBWD arrow shows the orientation of the wind change between the effective base and top; it is not the wind direction or the storm motion. Its effect depends on the relative orientation: perpendicular to a boundary favours cells separating and staying more discrete, while parallel increases their interactions and linear evolution. In a line, the perpendicular component helps more to sustain frontal regeneration and the parallel one transports and reorganises cells along the axis.',
+      'If no parcel meets the CAPE and CIN criteria, the effective layer does not exist and EBWD is left undefined.'
+    ],
+    method: 'MeteoLabX computes the diagnostic directly from the AROME thermodynamic and U/V profile, following the effective-layer definition of Thompson et al. (2007); it does not call SHARPpy to obtain EBWD. The result is sensitive to the vertical resolution and the interpolation between levels.',
+    equations: [
+      { label: 'Effective inflow criterion', latex: String.raw`\mathrm{CAPE}_{parcela}\ge100\ \mathrm{J\,kg^{-1}},\qquad \mathrm{CIN}_{parcela}\ge-250\ \mathrm{J\,kg^{-1}}` },
+      { label: 'Top of the EBWD layer', latex: String.raw`z_{top}=z_{base}+\tfrac12\left(z_{EL,MU}-z_{base}\right)` },
+      { label: 'Effective vector', latex: String.raw`\mathrm{EBWD}=\left|\vec V(z_{top})-\vec V(z_{base})\right|` }
+    ],
+    steps: [
+      'Build the profile. MeteoLabX combines the surface with the AROME isobaric levels to obtain temperature, humidity, height and U/V components in a single column.',
+      'Find the effective base. Parcels from the surface up to 500 hPa are tested. The first one meeting CAPE ≥ 100 J/kg and CIN ≥ −250 J/kg sets the base of the layer.',
+      'Place the effective top. The midpoint, in height, between that base and the equilibrium level of the most unstable parcel is taken.',
+      'Compute the vector difference. U and V are linearly interpolated at the base and at the top; the base vector is then subtracted from the top vector and its magnitude is computed.'
+    ],
+    sources: [THOMPSON_2007, SHARPPY]
+  },
+
+  'precip-1h': {
+    what: 'Total precipitation accumulated during the hour immediately before the map’s valid time. It includes rain and every other precipitation phase expressed as liquid-water equivalent.',
+    interpretation: [
+      'The map shows the amount accumulated in one hour, not the storm’s severity or its instantaneous intensity. The total depends both on how much the system precipitates and on how long it stays over each point.',
+      'That is why a relatively weak but slow-moving or stationary cell can leave high hourly accumulations. Conversely, a very intense or severe storm moving quickly can produce small accumulations at each point, even while generating hail, strong wind or intense lightning activity.',
+      'Convective precipitation has a significant phase and position error. A cell forecast a few kilometres out of place can produce a large local error even when the overall weather pattern is correct. The map should not be read as an exact point measurement.',
+      'This field does not diagnose convective severity: it does not directly report hail, gusts, lightning, rotation or organisation. Nor does it distinguish the phase that reached the ground, because all of them are converted to liquid equivalent.'
+    ],
+    method: 'AROME total precipitation (TOTAL_PRECIPITATION) accumulated over one hour. MeteoLabX selects the requested hour, clips any negative value to zero and applies the water equivalence 1 kg/m² = 1 mm.',
+    equations: [
+      { label: 'Accumulation over the interval', latex: String.raw`P_{1h}(t)=\int_{t-1h}^{t} R(\tau)\,d\tau` },
+      { label: 'Water equivalence', latex: String.raw`1\ \mathrm{kg\,m^{-2}}=1\ \mathrm{mm}` }
+    ],
+    steps: [
+      'Select the variable. It is TOTAL_PRECIPITATION accumulated over the hour.',
+      'Assign the interval. The map valid at hour t represents exclusively the interval (t−1 h, t].',
+      'Show the accumulation. Values are expressed in millimetres and are not summed with neighbouring hours in this product.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'accumulated-precip': {
+    what: 'Sum of the hourly precipitation from the start of the RUN to the selected valid hour, cell by cell and in water equivalent.',
+    interpretation: [
+      'It shows the total footprint of the episode as forecast by a single RUN and helps locate persistent or orographic maxima. As the timeline advances it should never decrease at a given cell.',
+      'It also accumulates the intensity and position errors of each hour. Comparing accumulations from different RUNs requires clearly stating the interval, because they do not necessarily share the same time window.'
+    ],
+    method: 'MLX diagnostic: sum of the precipitation of each hour (TOTAL_PRECIPITATION) between H+01 and H+n. H+00 is set to zero because it does not belong to the period after the RUN start.',
+    equations: [
+      { label: 'Discrete sum over the grid', latex: String.raw`P_{acum}(H+n,\,i,j)=\sum_{k=1}^{n}\max\!\left[P_{1h}(H+k,\,i,j),0\right]` }
+    ],
+    steps: [
+      'Take the precipitation of each hour from the same RUN.',
+      'Set to zero the small negative values the data may contain.',
+      'Sum cell by cell, with no spatial or hourly interpolation.',
+      'Includes rain and snow as the liquid equivalent of the TOTAL_PRECIPITATION field.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'relative-humidity-700': {
+    what: 'Relative humidity of the air on the 700 hPa isobaric surface, expressed relative to saturation at that level’s own temperature.',
+    interpretation: [
+      'Moist bands help locate mid-level clouds, ascent and the feeding of systems; dry intrusions can favour evaporation, downdrafts or cloud erosion when they coincide with precipitation.',
+      'Relative humidity depends strongly on temperature: a decrease does not necessarily mean a loss of vapour. It does not replace precipitable water or describe the whole column. Over terrain with p_s < 700 hPa the level would be underground.'
+    ],
+    method: 'AROME relative humidity (RELATIVE_HUMIDITY) at 700 hPa. MeteoLabX converts it to percentage when it arrives as a 0–1 fraction and clips the result to 0–100 %.',
+    equations: [
+      { label: 'Physical reference definition', latex: String.raw`RH=100\,\frac{e}{e_s(T)}\ \%` },
+      { label: 'Normalisation applied if AROME delivers a fraction', latex: String.raw`RH_{\%}=100\,RH_{0-1}` }
+    ],
+    steps: [
+      'AROME variable: RELATIVE_HUMIDITY on pressure levels.',
+      'Level: 700 hPa.',
+      'MeteoLabX does not recompute e or e_s: it uses the published RH.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'shortwave-down': {
+    what: 'Hourly mean flux of downward shortwave solar radiation reaching the surface, the sum of the direct and diffuse components.',
+    interpretation: [
+      'Maxima follow insolation, solar elevation and clear skies; local drops usually signal cloud cover, fog, aerosols or orographic shading represented by the model. It is useful for solar energy and the surface balance.',
+      'The value shown is an hourly mean, not instantaneous irradiance. Near sunrise and sunset the average can differ greatly from the maximum within the interval; at night it should approach zero.'
+    ],
+    method: 'AROME publishes the downward shortwave radiation (DOWNWARD_SHORT_WAVE_RADIATION_FLUX) accumulated over one hour. Although the metadata may advertise W/m², the data contains the energy received during that hour, in J/m²; MeteoLabX divides by 3,600 s to obtain the hourly mean flux.',
+    equations: [
+      { label: 'Conversion from accumulated energy to mean flux', latex: String.raw`\overline{F}_{SW\downarrow}=\frac{E_{SW\downarrow,\,PT1H}}{3600\ \mathrm s}` },
+      { label: 'Physical decomposition', latex: String.raw`F_{SW\downarrow}=F_{dir}+F_{dif}` }
+    ],
+    steps: [
+      'AROME variable: DOWNWARD_SHORT_WAVE_RADIATION_FLUX accumulated over one hour.',
+      'Negative values are clipped to zero.',
+      'The only MLX transformation: multiplication by 1/3600.'
+    ],
+    sources: [MF_AROME, MF_API]
+  },
+
+  'mu-ecape': {
+    what: 'MU-ECAPE is AROME’s native CAPE associated with the most unstable parcel in the low layers. The model’s product includes its own dilution or entrainment effects, that is, the mixing of environmental air into the parcel as it rises. MeteoLabX uses the name MU-ECAPE to distinguish this field from its conventional MUCAPE, computed without entrainment.',
+    interpretation: [
+      'The map looks for the part of the environment with the greatest potential buoyancy. That is why it can show high instability even when the surface is stable. A high value indicates that, even after the dilution represented by AROME, a significant amount of energy remains available to accelerate an updraft.',
+      'The most useful comparison is with MUCAPE MLX and with ML-ECAPE. If MU-ECAPE clearly exceeds ML-ECAPE, the most unstable layer may be elevated or not very representative of the low-layer average. If MU-ECAPE is much lower than MUCAPE MLX, AROME’s product is representing a significant reduction in buoyancy from dilution.'
+    ],
+    method: 'MeteoLabX shows the CONVECTIVE_AVAILABLE_POTENTIAL_ENERGY variable published by AROME, in J/kg. It does not reconstruct the parcel, does not recompute the energy, and does not use SHARPpy.',
+    equations: [
+      { label: 'General physical form of a diluted-parcel CAPE', latex: String.raw`\mathrm{ECAPE}=\int_{LFC}^{EL} g\,\frac{T_{v,p}^{(entr)}-T_{v,e}}{T_{v,e}}\,dz` }
+    ],
+    steps: [
+      'Origin of the data. The selection of the MU parcel, its path and the entrainment belong to AROME’s native product.',
+      'MeteoLabX handling. The value is shown without corrections or combination with the MLX Lifted Index, which is computed without entrainment.',
+      'The public API does not document the exact formulation of the diluted parcel’s virtual temperature, the entrainment rate, the closure or the precise parcel-selection procedure. For that reason, MU-ECAPE should not be compared one-to-one with MUCAPE MLX as if only one known constant changed.'
+    ],
+    sources: [MF_AROME, MF_API, NOAA_CAPE]
+  },
+
+  'ml-ecape': {
+    what: 'ML-ECAPE is AROME’s native CAPE for a parcel representative of a mixed low layer, with dilution or entrainment included by the model’s own product. MeteoLabX labels it this way to tell it apart from MLCAPE MLX, which uses a conventional mixed-layer parcel without entrainment.',
+    interpretation: [
+      'By representing a low-layer average, ML-ECAPE is usually less sensitive than a surface-based parcel to very local temperature or humidity maxima. It better represents the mean instability available to storms that feed on boundary-layer air.',
+      'It should be read alongside MU-ECAPE. Similar values suggest that the mixed low layer represents the most favourable parcel well; a clearly higher MU-ECAPE can point to a more unstable elevated layer or an especially warm and moist ribbon that the ML average smooths out. Comparison with MLCAPE MLX helps appreciate the reduction associated with the entrainment product.'
+    ],
+    method: 'MeteoLabX shows the MEAN_LAYER_CAPE variable published by AROME, in J/kg without reconstructing the parcel or modifying the energy.',
+    equations: [
+      { label: 'General physical form', latex: String.raw`\mathrm{ML\!\!-\!ECAPE}=\int_{LFC}^{EL} g\,\frac{T_{v,p,ML}^{(entr)}-T_{v,e}}{T_{v,e}}\,dz` }
+    ],
+    steps: [
+      'Origin of the data. The selection of the ML layer, the mixing depth and the entrainment are internal to the AROME field.',
+      'MeteoLabX handling. The field is plotted without further corrections.',
+      'The public API does not document the exact mixing depth or the entrainment scheme, so ML-ECAPE should not be assumed to use exactly the lowest 100 hPa used by MeteoLabX’s conventional MLCAPE.',
+      'The field expresses potential energy; to assess whether that energy can be realised and what type of storm it could produce, it must be combined with CIN, forcing, humidity, shear and vertical structure.'
+    ],
+    sources: [MF_AROME, MF_API, NOAA_CAPE]
+  },
+
+  'mucape-muli': {
+    what: 'MUCAPE is the conventional, entrainment-free CAPE of the most unstable parcel in the lowest 300 hPa of the profile. MeteoLabX shows it in colour and draws MULI, the Lifted Index computed for exactly the same MU parcel, as isolines.',
+    interpretation: [
+      'MUCAPE identifies the greatest potential buoyancy, even if the source parcel is elevated. MULI describes that parcel’s buoyancy at 500 hPa: a negative value means the parcel arrives warmer than the environment. High MUCAPE and very negative MULI reinforce the instability signal, but do not guarantee that a trigger exists or that the parcel can overcome the inhibition.',
+      'Since the ascent does not include entrainment, water loading or lateral mixing, MUCAPE works as an idealised upper bound on the updraft’s energy. It is worth comparing with MU-ECAPE to appreciate the reduction represented by AROME, and with CIN to assess whether the parcel can reach the level of free convection (LFC).'
+    ],
+    method: 'MeteoLabX applies its own parcel computation. It selects the maximum Bolton equivalent potential temperature between the surface and 300 hPa above it, lifts the parcel dry to the LCL and pseudoadiabatically above that. Buoyancy uses virtual temperature and the energy is integrated by trapezoids. It does not call SHARPpy’s params.cape.',
+    equations: [
+      { label: 'MU selection', latex: String.raw`p_{MU}=\operatorname*{arg\,max}_{p_s-300\le p\le p_s}\theta_e(p)` },
+      { label: 'Positive energy', latex: String.raw`\mathrm{MUCAPE}=\int_{LFC}^{EL} g\,\frac{T_{v,p}-T_{v,e}}{T_{v,e}}\,dz` },
+      { label: 'Lifted Index of the same parcel', latex: String.raw`\mathrm{MULI}=T_e(500\,hPa)-T_{p,MU}(500\,hPa)` }
+    ],
+    steps: [
+      'Select the MU parcel. The maximum θe within the lowest 300 hPa is sought.',
+      'Lift the parcel. The ascent is dry to the LCL and pseudoadiabatic above it, with the condensate removed and no entrainment.',
+      'Integrate the CAPE between the first LFC and the last equilibrium level. The exact point where the parcel starts or stops being buoyant is computed between the two nearest levels, and if along the way there are stretches where it is colder again than the surrounding air, that negative energy is subtracted. If the parcel is still buoyant at the highest available level, the sum stops there and the equilibrium level is left without a value, because it lies above the data. Heights come from hypsometric integration.',
+      'Compute MULI. The MU parcel’s temperature is subtracted from the ambient one at 500 hPa.'
+    ],
+    sources: [NOAA_CAPE, NOAA_LI, SHARPPY]
+  },
+
+  'mlcape-mlli': {
+    what: 'MLCAPE is the entrainment-free CAPE of a parcel representative of the lowest 100 hPa. MeteoLabX mixes that layer using the mean potential temperature and mixing ratio. Colours show MLCAPE and the isolines show that same parcel’s MLLI.',
+    interpretation: [
+      'MLCAPE smooths out very local temperature or humidity spikes and usually represents a well-mixed boundary layer better. It is appropriate for convection that ingests a depth of air, not just the conditions of the first level near 2 m.',
+      'A negative MLLI reinforces the instability signal at 500 hPa. An SBCAPE much greater than MLCAPE can reveal an extremely thin warm or moist surface layer; an MUCAPE clearly greater than MLCAPE can indicate that the most unstable layer is elevated.'
+    ],
+    method: 'MeteoLabX averages θ and the mixing ratio r over the lowest 100 hPa, reconstructs temperature and dew point at the surface pressure, and lifts the parcel with the same pseudoadiabatic, virtual, entrainment-free scheme used for MU.',
+    equations: [
+      { label: 'ML100 parcel properties', latex: String.raw`\bar\theta=\frac{1}{\Delta p}\int_{p_s-100}^{p_s}\theta\,dp,\qquad \bar r=\frac{1}{\Delta p}\int_{p_s-100}^{p_s}r\,dp` },
+      { label: 'Energy and LI', latex: String.raw`\mathrm{MLCAPE}=\int_{LFC}^{EL}B\,dz,\qquad \mathrm{MLLI}=T_e(500)-T_{p,ML}(500)` }
+    ],
+    steps: [
+      'Define the ML100 layer. The 100 hPa immediately above the surface pressure are taken.',
+      'Mix its properties. θ and r are averaged and T and Td of the parcel are reconstructed at p_s.',
+      'Lift and integrate. The parcel rises dry to the LCL and pseudoadiabatically to the EL; the CAPE uses virtual buoyancy.',
+      'Compute MLLI. The isolines use the temperature at 500 hPa of exactly that same ML parcel.'
+    ],
+    sources: [NOAA_CAPE, NOAA_LI, SHARPPY]
+  },
+
+  'sbcape-sbli': {
+    what: 'SBCAPE is the entrainment-free CAPE of a parcel starting from the profile’s surface conditions, built with temperature and dew point close to 2 m. Colours show SBCAPE and the isolines show that same parcel’s SBLI.',
+    interpretation: [
+      'It is especially sensitive to the diurnal cycle, sea breezes, gust fronts and cold pools. It is useful for convection clearly rooted at the surface, though it can exaggerate an overly thin warm or moist layer.',
+      'High SBCAPE with negative SBLI indicates potential buoyancy of a surface-based parcel, but does not ensure it overcomes the inhibition. If SBCAPE decreases while MUCAPE remains high, the instability may have risen above a stable surface layer.'
+    ],
+    method: 'MeteoLabX inserts surface T and Td as the first level and lifts that parcel with the same pseudoadiabatic, virtual-temperature, entrainment-free scheme used for the other MLX CAPEs.',
+    equations: [
+      { label: 'Surface-based energy', latex: String.raw`\mathrm{SBCAPE}=\int_{LFC}^{EL} g\,\frac{T_{v,p,SFC}-T_{v,e}}{T_{v,e}}\,dz` },
+      { label: 'Surface-based index', latex: String.raw`\mathrm{SBLI}=T_e(500\,hPa)-T_{p,SFC}(500\,hPa)` }
+    ],
+    steps: [
+      'Fix the origin. The surface pressure and T/Td of the first level are used.',
+      'Lift the parcel. The ascent is dry to the LCL and pseudoadiabatic above it.',
+      'Compute the energy and the index. The CAPE is integrated in height and the LI is evaluated at 500 hPa.',
+      'Plot the result. SBCAPE is shown in colour and SBLI in isolines.'
+    ],
+    sources: [NOAA_CAPE, NOAA_LI]
+  },
+
+  dcape: {
+    what: 'DCAPE measures the energy that could accelerate a parcel of air downward. It can be understood as the descending equivalent of CAPE: while CAPE adds up the positive buoyancy that drives an updraft, DCAPE adds up the negative buoyancy that can drive a downdraft. When rain, hail or snow fall through unsaturated air, part of the water evaporates or sublimates. These phase changes consume heat and cool the air surrounding the hydrometeors. The cooled air becomes denser than the environment, and that density difference produces a downward force. The parcel warms by compression as it descends, but in a low layer with a strong thermal gradient the environment can warm towards the ground even faster. When the descending core reaches the ground, it spreads out horizontally, forms the gust front and can produce a downburst.',
+    interpretation: [
+      'High DCAPE usually appears when there is relatively dry air in the low or mid levels together with a marked decrease of temperature with height. The combination allows a lot of evaporative cooling and keeps the parcel cold during the descent, so it points to environments favourable for downbursts.',
+      'As an idealised scale, if all the energy were converted into vertical velocity, the downdraft could be approximated by w ≈ √(2 · DCAPE).',
+      'This relationship does not compute the surface gust. Part of the energy is lost to mixing, friction and incomplete evaporation, and the observed wind also depends on how much momentum the storm transports from higher levels and on how the flow organises once it reaches the ground.',
+      'Low DCAPE does not rule out damaging wind either.'
+    ],
+    method: 'MeteoLabX reproduces the SPC/SHARPpy procedure and looks for a parcel especially favourable to cooling within the lowest 400 hPa of the profile. The implementation uses ordinary temperature, as in SHARPpy’s params.dcape, and a trapezoidal integration. If SHARPpy is not available, MeteoLabX obtains the parcel temperature by inverting the saturated θe.',
+    equations: [
+      { label: 'Selection of the source layer', latex: String.raw`p_0=p_{base,\,\min\overline{\theta_e}}-50\,hPa` },
+      { label: 'Integration of the negative buoyancy', latex: String.raw`\mathrm{DCAPE}=-R_d\int_{p_s}^{p_0}\left(T_e-T_p\right)d\ln p` },
+      { label: 'Idealised vertical-velocity scale', latex: String.raw`w_{ideal}\approx\sqrt{2\,\mathrm{DCAPE}}` }
+    ],
+    steps: [
+      'Find the source air. Moving 100 hPa layers are tested and the one with the lowest mean equivalent potential temperature is chosen.',
+      'Place the parcel. The parcel starts at the centre of that 100 hPa layer.',
+      'Represent the initial cooling. Its temperature is brought to the wet bulb, as an approximation of the cooling produced by precipitation evaporating until it reaches saturation.',
+      'Make it descend. The parcel descends pseudoadiabatically to the surface and is compared at each level with the ambient temperature.',
+      'Add up the negative buoyancy. The thermal difference is integrated throughout the descent, with ordinary temperature and no virtual-temperature correction; a colder parcel than the environment and a deeper layer produce a higher DCAPE.'
+    ],
+    sources: [SHARPPY]
+  },
+
+  'ordinary-cell-motion': {
+    what: 'An estimate of the advective component of the motion of an ordinary convective cell. It is computed with the pressure-weighted mean wind inside the cloud of an ML100 parcel, between its LCL and its EL.',
+    interpretation: [
+      'The colours show the estimated speed and the streamlines the direction of translation by the mean flow. It is useful for anticipating where a non-supercell cell would move and how long it might remain over an area.',
+      'It does not include propagation from new development, cold pools, supercell splitting, boundary interaction or orographic anchoring.'
+    ],
+    method: 'MeteoLabX first computes the LCL and the EL of the ML100 parcel. It then integrates U and V by trapezoids over pressure, clips each isobaric layer to the cloud interval and divides by the pressure depth.',
+    equations: [
+      { label: 'Ordinary-motion vector', latex: String.raw`\vec C_{cel}=\frac{1}{p_{LCL}-p_{EL}}\int_{p_{EL}}^{p_{LCL}}\vec V(p)\,dp` },
+      { label: 'Speed shown in colour', latex: String.raw`C_{cel}=\sqrt{C_u^2+C_v^2}` }
+    ],
+    steps: [
+      'Define the cloud. LCL and EL come from the ML100 parcel computed by MeteoLabX.',
+      'Build the wind profile. U/V come from the surface and the AROME isobaric levels.',
+      'Average by pressure. The exact overlap of each layer with the LCL–EL interval is computed and integrated linearly by trapezoids.',
+      'Plot the vector. The magnitude appears in colour and the direction via streamlines.',
+      'This is not Bunkers or Corfidi and does not represent supercells or systems. It only describes advection by the mean wind inside the cloud.'
+    ],
+    sources: [CELL_MOTION, NOAA_CAPE]
+  },
+
+  ship: {
+    what: 'SHIP summarises the extent to which the environment could allow a storm to produce very large hail. It is not meant to detect any hail event: it was designed to recognise environments associated with significant hail, roughly 5 cm or more in its original United States context. The index combines several requirements that must coincide: an updraft capable of sustaining the stones, moisture supplying supercooled water, a cold layer where hail can grow, and enough shear for the storm to remain organised. If one of these ingredients is clearly unfavourable, the result decreases.',
+    interpretation: [
+      'MUCAPE represents the energy available to accelerate the updraft. A strong updraft can keep the hail suspended for longer and allow it to keep growing.',
+      'The MU parcel’s moisture favours the storm producing abundant supercooled liquid water. The 700–500 hPa gradient and the 500 hPa temperature describe a cold mid layer with a strong thermal decrease. The 0–6 km shear helps separate the updraft from the precipitation, and the 0 °C height locates the freezing and melting zones.',
+      'A high value means that several favourable ingredients coincide at the same place and time. If a storm develops that taps into that parcel and manages to organise, the environment allows efficient hail growth.',
+      'SHIP does not represent the forecast stone size, the amount of hail or the probability of hail at a point. A low value does not rule out severe hail either.',
+      'The thresholds come from the operational context of the United States SPC and are not calibrated for Europe. They should be used as a relative guide, not as universal risk categories.'
+    ],
+    method: 'MeteoLabX obtains SHIP through SHARPpy’s sharppy.sharptab.params.ship function. For each point on the map it prepares the ingredients of the most unstable parcel and the ambient profile, and applies the operational formulation.',
+    equations: [
+      { label: 'Core of the SHARPpy/SPC formulation', latex: String.raw`\mathrm{SHIP}_0=-\frac{\mathrm{MUCAPE}\;r_{MU}\;\Gamma_{700-500}\;T_{500}\;\mathrm{BWD}_{0-6}}{42\,000\,000}` },
+      { label: 'Reduction factors', latex: String.raw`\mathrm{SHIP}=\max(0,\mathrm{SHIP}_0)\,f_C\,f_\Gamma\,f_F` },
+      { label: 'Definition of the reduction factors', latex: String.raw`f_C=\min\!\left(1,\frac{\mathrm{MUCAPE}}{1300}\right),\quad f_\Gamma=\min\!\left(1,\frac{\Gamma_{700-500}}{5.8}\right),\quad f_F=\min\!\left(1,\frac{z_{0^\circ C}}{2400}\right)` }
+    ],
+    steps: [
+      'Prepare the MU parcel. The MLX MUCAPE and the mixing ratio of that same most-unstable parcel are taken, so that energy and moisture describe the same source air.',
+      'Build the vertical fields. From the AROME profile, the 700–500 hPa thermal gradient, the 500 hPa temperature, the geometric 0–6 km BWD and the AGL height of the 0 °C level are computed.',
+      'Evaluate SHIP with SHARPpy. MeteoLabX passes these ingredients to sharppy.sharptab.params.ship, which combines them cell by cell using the SPC formulation.',
+      'Apply the operational limits. The function restricts the MU moisture to the 11–13.6 g/kg range and the 0–6 km BWD to 7–27 m/s, and applies a −5.5 °C limit to T500.',
+      'Reduce and close off the result. A MUCAPE below 1300 J/kg, a 700–500 hPa gradient below 5.8 °C/km or a 0 °C level below 2400 m AGL progressively reduce SHIP. The final value is dimensionless and is truncated to zero. SHIP does not use EBWD in this formulation.'
+    ],
+    sources: [SHARPPY]
+  },
+
+  'cloud-cover': {
+    what: 'Total fraction of the cell covered by clouds at any level of the atmospheric column, expressed as a percentage.',
+    interpretation: [
+      'High values indicate widely overcast sky and usually reduce solar radiation; gradients mark the edges of cloud systems. A value of 100 % gives no information about thickness, base, top, phase or precipitation.',
+      'Total cloud cover can be dominated by a thin high layer or by dense low stratus, meteorologically distinct situations. It should be combined with cloud levels, humidity, precipitation and radiation.'
+    ],
+    method: 'AROME total cloud cover (TOTAL_CLOUD_COVER). MeteoLabX uses the published value; if it arrives as a 0–1 fraction, it multiplies by 100 and clips the result to the physical 0–100 % range.',
+    equations: [
+      { label: 'Unit normalisation when applicable', latex: String.raw`C_{total}[\%]=100\,C_{total}[0,1]` }
+    ],
+    steps: [
+      'AROME variable: TOTAL_CLOUD_COVER.',
+      'It is not reconstructed by summing low, mid and high clouds.',
+      'The internal layer-overlap rule belongs to the model and is not derived from the API.'
+    ],
+    sources: [MF_AROME, MF_API]
   }
 };
 

@@ -75,3 +75,57 @@ def test_native_geopotential_overlay_cache_and_fallback(monkeypatch,product,leve
     np.testing.assert_allclose(result.data,-5.)
     np.testing.assert_allclose(result.overlay,[[150.,np.nan],[500.,0.]])
     assert result.overlay_units=='dam'
+
+
+def _paquetes_listos(monkeypatch,*,temperatura=None,humedad=None,presion=None):
+    geometry=('transform','crs','bounds')
+    monkeypatch.setattr(f,'_packages_available',lambda:True)
+    monkeypatch.setattr(f,'package_ready',lambda *args:True)
+    monkeypatch.setattr(f,'ensure_package',lambda *args:pytest.fail('must not download'))
+    valores={}
+    if temperatura is not None:valores['temperature']={850.:temperatura}
+    if humedad is not None:valores['relative_humidity']={850.:humedad}
+    monkeypatch.setattr(f,'read_isobaric_profile',lambda *a:(valores,geometry))
+    lectura={} if presion is None else {'surface_pressure':(presion,'Pa')}
+    monkeypatch.setattr(f,'read_surface_fields',lambda *a:(lectura,geometry))
+
+
+def test_the_air_mass_map_takes_three_of_its_four_coverages_from_disk(monkeypatch):
+    """Era el producto más caro de la pasada: 1.738 s de los 7.484 del 24/09.
+
+    Cuesta cuatro coberturas WCS por hora y tres están en paquetes que ya se
+    bajan para los perfiles. La MSLP no la publica ninguno y sigue por el WCS.
+    """
+    _paquetes_listos(monkeypatch,temperatura=np.full((1,2),273.15+10.),
+                     humedad=np.full((1,2),100.),presion=np.full((1,2),101325.))
+    campos=f._theta_e_inputs_from_cached_packages(RUN,RUN,850.)
+
+    assert set(campos)=={'temperature','dewpoint','surface_pressure'}
+    assert campos['temperature'].units=='K'
+    # Con humedad del 100 % el rocío es la propia temperatura.
+    np.testing.assert_allclose(campos['dewpoint'].data,273.15+10.,atol=0.05)
+    np.testing.assert_allclose(campos['surface_pressure'].data,101325.)
+
+
+def test_a_missing_surface_package_sends_the_air_mass_map_back_to_wcs(monkeypatch):
+    _paquetes_listos(monkeypatch,temperatura=np.zeros((1,2)),humedad=np.zeros((1,2)))
+    assert f._theta_e_inputs_from_cached_packages(RUN,RUN,850.) is None
+
+
+def test_an_incomplete_ip1_sends_the_air_mass_map_back_to_wcs(monkeypatch):
+    _paquetes_listos(monkeypatch,temperatura=np.zeros((1,2)),presion=np.zeros((1,2)))
+    assert f._theta_e_inputs_from_cached_packages(RUN,RUN,850.) is None
+
+
+def test_the_air_mass_map_never_downloads_a_package(monkeypatch):
+    monkeypatch.setattr(f,'_packages_available',lambda:True)
+    monkeypatch.setattr(f,'package_ready',lambda paquete,*a:paquete=='IP1')
+    monkeypatch.setattr(f,'read_isobaric_profile',lambda *a:pytest.fail('must not read'))
+    assert f._theta_e_inputs_from_cached_packages(RUN,RUN,850.) is None
+
+
+def test_every_product_the_scheduler_waits_for_can_be_served_from_ip1():
+    """Si se añade uno a la lista sin darle lectura de paquete, esperaría en balde."""
+    assert f.IP1_BACKED_PRODUCTS=={'temperature-850','temperature-500',
+                                   'relative-humidity-700','mslp-theta-e-850'}
+    assert f.IP1_BACKED_PRODUCTS<=set(f.PRODUCTS)

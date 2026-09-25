@@ -5,6 +5,7 @@
   } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import ForecastGrid from '../components/ForecastGrid.svelte';
+  import ThermalProfile from '../components/ThermalProfile.svelte';
   import MathFormula from '../components/MathFormula.svelte';
   import {
     DEFAULT_FORECAST_MODEL, catalogSummaryFor, forecastCategories, forecastModels,
@@ -14,10 +15,14 @@
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
   import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
   import { recordForecastMap } from '../lib/stats.js';
-  import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
+  import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, fetchThermalProfile, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
   import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
   import { loadForecastGuides, localizedForecastGuide } from '../lib/forecast-guides.svelte.js';
+  import { precipitationType, precipitationTypeLabel } from '../data/precipitationTypes.js';
+
+  const liquidTypes = [1, 11, 3, 12].map((code) => precipitationType(code));
+  const solidTypes = [5, 6, 7, 8, 9, 10].map((code) => precipitationType(code));
 
   let { language = 'es' } = $props();
   const tr = $derived((key, params = {}) => forecastText(language, key, params));
@@ -60,8 +65,44 @@
   let mapInk = $state('');
   let exporting = $state(false);
   let exportError = $state('');
+  let profilePoint = $state(null);
+  let profileData = $state.raw(null);
+  let profileLoading = $state(false);
+  let profileError = $state('');
+  let profileRequest = null;
   let frameRequest = null;
   let catalogRequest = null;
+
+  function closeThermalProfile() {
+    profileRequest?.abort();
+    profileRequest = null;
+    profilePoint = null;
+    profileData = null;
+    profileLoading = false;
+    profileError = '';
+  }
+
+  async function openThermalProfile(point) {
+    if (document.fullscreenElement) await document.exitFullscreen?.();
+    closeThermalProfile();
+    profilePoint = point;
+    profileLoading = true;
+    const request = new AbortController();
+    profileRequest = request;
+    try {
+      profileData = await fetchThermalProfile({
+        product: product.id, validTime: valid.iso,
+        run: selectedRunCatalog.run, ...point, signal: request.signal
+      });
+    } catch (error) {
+      if (error.name !== 'AbortError') profileError = error.message;
+    } finally {
+      if (profileRequest === request) {
+        profileLoading = false;
+        profileRequest = null;
+      }
+    }
+  }
 
   /**
    * Descarga el mapa tal y como está en pantalla.
@@ -141,6 +182,10 @@
     product.id === 'wind-level' ? windLevelKind : '',
     product.id === 'wind-level' ? windLevel : ''
   ].join('|'));
+  $effect(() => {
+    activeFrameKey;
+    closeThermalProfile();
+  });
   // Una selección nueva no puede reutilizar visualmente el frame anterior:
   // sus valores se repintarían durante un instante con la paleta y los límites
   // del producto recién pulsado, produciendo un mapa de colores falsos.
@@ -207,7 +252,9 @@
     (value) => `${formatValue(value, product, displayUnit, 0)}${displayUnitLabel}`
   );
   const formatProbe = $derived(
-    (value) => `${formatValue(value, product, displayUnit, product.id === 'ship' ? 2 : undefined)} ${displayUnitLabel}`.trim()
+    (value) => product.id === 'precip-type'
+      ? precipitationTypeLabel(precipitationType(value), language)
+      : `${formatValue(value, product, displayUnit, product.id === 'ship' ? 2 : undefined)} ${displayUnitLabel}`.trim()
   );
   const runLabel = $derived(connectedProduct
     ? `${new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(connectedProduct.run))} UTC`
@@ -362,7 +409,11 @@
   }
 
   function keyboardHours(event) {
-    if (event.key === 'Escape') unitMenuOpen = false;
+    if (event.key === 'Escape') {
+      unitMenuOpen = false;
+      if (profilePoint) closeThermalProfile();
+    }
+    if (profilePoint) return;
     // Flechas para pasar de hora, sobre todo en pantalla completa; no se
     // roban a los campos que ya las usan (buscador, selects, deslizador).
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -673,7 +724,7 @@
       </header>
 
       <div class="forecast-map palette-{product.palette}" bind:this={mapContainer} style:--map-ink={mapInk || null}>
-        {#if frameMatchesSelection}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} contourLayerId={product.contourLayerId || 'isotherms'} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} flowLines={Boolean(product.flowLines)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} multipleSolutions={Boolean(product.multipleSolutions)} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameMatchesSelection}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} contourLayerId={product.contourLayerId || 'isotherms'} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} flowLines={Boolean(product.flowLines)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} multipleSolutions={Boolean(product.multipleSolutions)} onprofileclick={openThermalProfile} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label={tr('windLevel')}>
             <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
@@ -698,7 +749,21 @@
             <span><strong>METEOLABX</strong><small>{tr('title')}</small></span>
           </div>
           <div class="legend" class:legend-classes={legendBands.length > 0 || legendAnchorMarks.length > 0}>
-            {#if legendAnchorMarks.length}
+            {#if product.id === 'precip-type'}
+              <div class="ptype-legend">
+                <span class="ptype-none"><i style:background-color={precipitationType(0).color}></i>{precipitationTypeLabel(precipitationType(0), language)}</span>
+                <div class="ptype-group">
+                  {#each liquidTypes as type}
+                    <span><i style:background-color={type.color}></i>{precipitationTypeLabel(type, language)}</span>
+                  {/each}
+                </div>
+                <div class="ptype-group">
+                  {#each solidTypes as type}
+                    <span><i style:background-color={type.color}></i>{precipitationTypeLabel(type, language)}</span>
+                  {/each}
+                </div>
+              </div>
+            {:else if legendAnchorMarks.length}
               <div class="band-scale">
                 <i class="ramp"></i>
                 <div class="band-marks">
@@ -717,7 +782,7 @@
             {:else}
               <span>{legendMin}</span><i></i><span>{legendMax}</span>
             {/if}
-            {#if displayUnitOptions.length > 1}
+            {#if product.id !== 'precip-type' && displayUnitOptions.length > 1}
               <div class="unit-picker">
                 <button
                   type="button"
@@ -745,7 +810,7 @@
                   </div>
                 {/if}
               </div>
-            {:else}
+            {:else if product.id !== 'precip-type'}
               <span class="unit-static">{product.unit}</span>
             {/if}
           </div>
@@ -823,7 +888,24 @@
   </main>
 </div>
 
+{#if profilePoint}
+  {#if profileData}
+    <ThermalProfile profile={profileData} {language} onclose={closeThermalProfile} />
+  {:else}
+    <div class="profile-state-backdrop">
+      <dialog open class="profile-state" aria-modal="true" aria-label="Perfil térmico">
+        <button type="button" onclick={closeThermalProfile} aria-label="Cerrar">×</button>
+        {#if profileLoading}<span class="spinner"></span><strong>{language === 'en' ? 'Loading vertical profile…' : 'Cargando perfil vertical…'}</strong>{/if}
+        {#if profileError}<strong>{language === 'en' ? 'Could not load the profile' : 'No se pudo cargar el perfil'}</strong><small>{profileError}</small>{/if}
+      </dialog>
+    </div>
+  {/if}
+{/if}
+
 <style>
+  .profile-state-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:rgba(2,9,17,.72);backdrop-filter:blur(6px)}
+  .profile-state{position:relative;display:flex;align-items:center;flex-direction:column;gap:12px;margin:0;width:min(340px,calc(100vw - 32px));padding:30px;border:1px solid rgba(163,199,227,.25);border-radius:14px;color:#eaf2f8;background:#142235;text-align:center}
+  .profile-state button{position:absolute;top:6px;right:10px;border:0;color:#eaf2f8;background:transparent;font-size:1.4rem;cursor:pointer}.profile-state small{font-size:.72rem;line-height:1.5}
   .forecast-head{margin-bottom:16px}.forecast-title{display:flex;align-items:center;gap:8px}.forecast-title h2{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}.forecast-head p{margin-top:4px;color:var(--muted);font-size:.8rem;text-wrap:balance}.beta-badge{display:inline-flex;align-items:center;padding:.12rem .35rem;border:1px solid rgba(255,75,75,.42);border-radius:999px;background:rgba(255,75,75,.1);color:#ff4b4b;font-size:.58rem;font-weight:700;line-height:1}.status-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#43c98a;box-shadow:0 0 0 4px rgba(67,201,138,.14)}.status-dot.error{background:#ef6f76;box-shadow:0 0 0 4px rgba(239,111,118,.14)}.run-summary button,.map-actions button,.timeline>button{display:grid;place-items:center;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--card);transition:border-color .15s ease,color .15s ease,background .15s ease}.run-summary button:hover,.map-actions button:hover,.timeline>button:hover:not(:disabled){border-color:var(--border-2);color:var(--ink);background:var(--panel-2)}
   .control-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.control-bar label{display:flex;align-items:center;gap:7px;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--panel-2);font-size:.76rem;transition:border-color .15s ease,background .15s ease}.control-bar label:hover,.control-bar label:focus-within{border-color:var(--border-2);background:var(--card)}.control-bar select{height:100%;max-width:220px;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-weight:650;cursor:pointer}.run-summary{display:flex;align-items:center;gap:10px;height:40px;margin-left:auto;padding:0 4px 0 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-2)}.run-summary-copy{display:flex;min-width:0;flex-direction:column;gap:1px}.run-summary small{color:var(--ink-2);font-size:.62rem;line-height:1}.run-summary strong{max-width:330px;overflow:hidden;color:var(--ink);font-size:.71rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}.run-summary button{width:32px;height:32px}
   .forecast-layout{display:grid;grid-template-columns:260px minmax(0,1fr);align-items:start;gap:14px}.product-selector,.map-card,.product-explainer{border:1px solid var(--border);border-radius:15px;background:var(--panel);overflow:hidden}.product-selector{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}.product-selector>header{padding:15px;border-bottom:1px solid var(--border)}.product-selector>header>div{display:flex;align-items:baseline;justify-content:space-between}.product-selector>header span{font-size:.82rem;font-weight:720}.product-selector>header small,.product-selector>header p{color:var(--muted);font-size:.57rem}.product-selector>header p{margin:5px 0 11px}.search-box{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2)}.search-box input{min-width:0;width:100%;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-size:.66rem}.category-list{overflow-y:auto;padding:7px}.category{border-bottom:1px solid var(--border)}.category:last-child{border:0}.category-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 8px;border:0;color:var(--ink-2);background:transparent;font-size:.68rem;font-weight:680;text-align:left}.category-toggle span{display:flex;align-items:center;gap:6px}.category-toggle small{display:grid;place-items:center;min-width:18px;height:18px;border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:.52rem}.category-toggle :global(svg){transition:transform .18s}.category-toggle :global(svg.open){transform:rotate(180deg)}.product-list{display:flex;flex-direction:column;gap:2px;padding:0 2px 8px}.product-list button{display:grid;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 7px;border:1px solid transparent;border-radius:8px;color:var(--muted);background:transparent;font-size:.63rem;text-align:left}.product-list button:hover{color:var(--ink);background:var(--panel-2)}.product-list button.active{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--ink);background:var(--card)}.product-list>button>i{width:3px;height:20px;border-radius:4px;background:var(--accent)}.product-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px}.product-list img{width:20px;height:20px;border-radius:6px}.product-status{display:grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border-radius:6px;font-size:.48rem;font-weight:780;font-variant-numeric:tabular-nums}.product-status.complete{color:#143c2b;background:rgba(67,201,138,.78)}.product-status.partial{color:#5a3a09;background:rgba(240,178,78,.82)}.product-status.pending{color:var(--muted);background:var(--panel-2);font-size:.82rem}.product-selector>footer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);background:var(--panel-2);font-size:.55rem;line-height:1.35}.product-selector>footer img{width:22px;height:22px;border-radius:6px}
@@ -846,6 +928,11 @@
   .band-marks span:last-child{transform:translateX(-100%)}
   .unit-picker{position:relative}
   .legend .unit-static{margin-left:-4px}
+  .ptype-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 12px;width:min(390px,calc(100vw - 50px))}
+  .ptype-none{grid-column:1/-1}
+  .ptype-group{display:flex;flex-direction:column;gap:5px}
+  .ptype-legend span{display:flex;align-items:center;gap:6px;min-width:0;line-height:1.2}
+  .ptype-legend i{flex:0 0 12px;width:12px;height:12px;border-radius:3px;background:none;box-shadow:0 0 0 1px rgba(255,255,255,.38)}
   .unit-button{display:flex;align-items:center;gap:3px;padding:3px 5px 3px 7px;border:1px solid rgba(140,205,246,.42);border-radius:6px;color:#9fd8ff;background:rgba(76,163,219,.16);font-size:.6rem;font-weight:720;line-height:1;cursor:pointer}
   .unit-button :global(svg){opacity:.75;transition:transform .14s ease}
   .unit-button:hover{border-color:rgba(140,205,246,.75);color:#cfeaff;background:rgba(76,163,219,.3)}

@@ -31,6 +31,19 @@ class Readiness:
         self.wait = max(0, float(os.getenv("METEOLABX_AROME_PACKAGE_WAIT_S", "180")))
         self.stall = max(0, float(os.getenv("METEOLABX_AROME_PACKAGE_STALL_S", "60")))
 
+    def _only_ip1_products(self, job):
+        """Si todo lo que calcula el trabajo se ahorra peticiones con IP1.
+
+        Un trabajo mixto no espera: sus otros productos irían al WCS
+        igualmente y la espera no ahorraría nada. El mapa de masas de aire sí
+        cuenta aunque siga pidiendo la MSLP: con IP1 pasa de cuatro
+        coberturas a una.
+        """
+        from server.services.arome_forecast import IP1_BACKED_PRODUCTS
+
+        productos = set(job.products)
+        return bool(productos) and productos <= IP1_BACKED_PRODUCTS
+
     def observe(self, manifest, now):
         # First catalog observation, even if earlier tiers still have work.
         for valid in manifest.get("expected_times", ()):
@@ -47,11 +60,23 @@ class Readiness:
         return bool(sizes) and now - changed < self.stall
 
     def mode(self, job, now):
-        if job.tier < 2:
+        if job.tier < 2 and not self._only_ip1_products(job):
             return "ready"
         if not _packages_available():
             return "wcs"
         run, valid = self.w._parse_iso(job.run), self.w._parse_iso(job.valid_time)
+        if job.tier < 2:
+            # Nativos que IP1 sirve enteros. Merece la pena esperar a que el
+            # bloque esté: son seis peticiones por hora, y el barrido de
+            # nativos adelanta a la precarga porque recorre las 52 horas en un
+            # cuarto de hora. La espera es la misma que la de los perfiles y
+            # tiene la misma salida: pasado el plazo, WCS.
+            if packages.package_ready("IP1", run, valid):
+                return "ready"
+            if self.downloading("IP1", run, valid, now):
+                return "downloading"
+            first = self.seen.setdefault((job.run, job.valid_time), now)
+            return "publication" if now - first < self.wait else "wcs"
         # IP3 supplies vertical velocity for profiles, dewpoint for DCAPE.
         missing = [p for p in ("IP1", "IP3") if not packages.package_ready(p, run, valid)]
         if not missing:

@@ -86,8 +86,9 @@ def test_cross_tier_ready_and_combined_heavy_capacity(ready, monkeypatch):
     active = {1: ({}, job(2, "2026-09-21T03:00:00Z"), "ready"),
               2: ({}, job(3, "2026-09-21T04:00:00Z"), "ready")}
     assert s.select_ready(w, pending, active, ready, 100, [0], 4, 2) is None
-    # Native work can still use the other slots.
-    pending.append(({}, job(0, products=("temperature-850",))))
+    # Native work can still use the other slots. Con un producto que el WCS
+    # sirve entero: los isobáricos esperan ahora a su paquete.
+    pending.append(({}, job(0, products=("reflectivity",))))
     assert s.select_ready(w, pending, active, ready, 100, [0], 4, 2) == (2, "ready")
 
 
@@ -213,7 +214,7 @@ def test_watch_refresh_never_drains_deduplicates_and_stops_orderly(monkeypatch, 
         def submit(self, function, *args, **kwargs):
             if self.catalog:
                 refreshes.append(clock.now)
-                value = {"products": {"temperature-850": {"run": RUN, "valid_times": hours}}}
+                value = {"products": {"reflectivity": {"run": RUN, "valid_times": hours}}}
                 future = Deferred(clock.now + (1.5 if len(refreshes) > 1 else 0), value)
             else:
                 work = args[0]
@@ -238,7 +239,7 @@ def test_watch_refresh_never_drains_deduplicates_and_stops_orderly(monkeypatch, 
     assert len(completions) == len(submitted)  # SIGTERM drains live work only.
     assert all(t < 106 for t, _ in submitted)
     saved = read_json(store, run_manifest_key(RUN))
-    assert len(saved["products"]["temperature-850"]["available_times"]) == len(submitted)
+    assert len(saved["products"]["reflectivity"]["available_times"]) == len(submitted)
     assert saved["progress"]["active_jobs"] == []
     if quota == 0:
         assert any(refreshes[1] < t < refreshes[1] + 1.5 for t, _ in submitted)
@@ -293,3 +294,45 @@ def test_retired_slot_is_public_before_old_run_is_safe_to_delete(monkeypatch, tm
     registry.retain_when_idle()
     assert RUN not in registry.items
     assert read_json(registry.store, run_manifest_key(RUN)) is None
+
+
+def test_a_native_that_ip1_serves_waits_for_its_package(ready, monkeypatch):
+    """El barrido de nativos adelanta a la precarga y se pierde el paquete.
+
+    El 25/09 solo 8 de 104 mapas isobáricos encontraron su IP1 en disco: los
+    nativos recorren las 52 horas en un cuarto de hora y la precarga baja los
+    bloques en orden. Esperar un poco convierte seis peticiones por hora en
+    una.
+    """
+    isobarico = job(0, products=("temperature-850", "temperature-500"))
+    monkeypatch.setattr(s.packages, "package_ready", lambda p, *a: False)
+    assert ready.mode(isobarico, 10) == "publication"
+    # Pasado el plazo no se queda esperando para siempre: sale por el WCS.
+    assert ready.mode(isobarico, 10 + ready.wait + 1) == "wcs"
+    monkeypatch.setattr(s.packages, "package_ready", lambda p, *a: p == "IP1")
+    assert ready.mode(isobarico, 400) == "ready"
+
+
+def test_a_native_that_ip1_does_not_serve_never_waits(ready, monkeypatch):
+    """Esperar por un producto que va al WCS igualmente solo retrasa."""
+    monkeypatch.setattr(s.packages, "package_ready", lambda *a: False)
+    assert ready.mode(job(0, products=("reflectivity",)), 10) == "ready"
+    # Mixto: el resto de sus productos pedirían al WCS, así que no espera.
+    mixto = job(0, products=("temperature-850", "reflectivity"))
+    assert ready.mode(mixto, 10) == "ready"
+
+
+def test_the_air_mass_map_counts_even_though_it_still_asks_for_the_mslp(ready, monkeypatch):
+    """Con IP1 pasa de cuatro coberturas a una: la espera se paga sola."""
+    monkeypatch.setattr(s.packages, "package_ready", lambda *a: False)
+    assert ready.mode(job(0, products=("mslp-theta-e-850",)), 10) == "publication"
+
+
+def test_a_growing_ip1_holds_the_native_beyond_the_budget(ready, monkeypatch):
+    monkeypatch.setattr(s.packages, "package_ready", lambda *a: False)
+    tamano = [1]
+    monkeypatch.setattr(s.packages, "_partial_sizes", lambda p: {("partial", 1): tamano[0]})
+    isobarico = job(0, products=("temperature-850",))
+    assert ready.mode(isobarico, 10) == "downloading"
+    tamano[0] += 1
+    assert ready.mode(isobarico, 10 + ready.wait + 1) == "downloading"

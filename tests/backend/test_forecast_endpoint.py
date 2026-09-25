@@ -389,6 +389,10 @@ def test_debug_backend_allows_local_forecast_origin(monkeypatch):
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:8501"
 
 
+def _unexpected_remote_regions():
+    raise AssertionError("el dominio completo no debe consultar fronteras remotas")
+
+
 def test_domain_boundaries_are_cached_without_changing_the_result(tmp_path, monkeypatch):
     """Las fronteras cacheadas deben coincidir con el recorte directo.
 
@@ -400,9 +404,10 @@ def test_domain_boundaries_are_cached_without_changing_the_result(tmp_path, monk
     monkeypatch.setenv("METEOLABX_FORECAST_BOUNDARY_CACHE_DIR", str(tmp_path))
     sa._boundary_payload_from_disk.cache_clear()
     bounds = sa.AROME_MODEL_GRID_BOUNDS
+    monkeypatch.setattr(sa, "_load_forecast_regions_geojson", _unexpected_remote_regions)
 
     directo = sa._boundary_payload(
-        sa._model_boundary_geojson(sa._load_forecast_regions_geojson(), bounds)
+        sa._model_boundary_geojson({"features": []}, bounds)
     )
     generado = sa._domain_boundary_payload(bounds, "model")
     assert generado == directo
@@ -422,9 +427,10 @@ def test_boundary_cache_falls_back_when_the_directory_is_unusable(tmp_path, monk
     monkeypatch.setenv("METEOLABX_FORECAST_BOUNDARY_CACHE_DIR", str(bloqueado))
     sa._boundary_payload_from_disk.cache_clear()
     bounds = sa.AROME_MODEL_GRID_BOUNDS
+    monkeypatch.setattr(sa, "_load_forecast_regions_geojson", _unexpected_remote_regions)
 
     esperado = sa._boundary_payload(
-        sa._model_boundary_geojson(sa._load_forecast_regions_geojson(), bounds)
+        sa._model_boundary_geojson({"features": []}, bounds)
     )
     assert sa._domain_boundary_payload(bounds, "model") == esperado
 

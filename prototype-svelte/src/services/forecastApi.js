@@ -172,13 +172,28 @@ async function getJson(path, { signal } = {}) {
     signal
   });
   if (!response.ok) {
-    throw new Error(`Forecast API ${response.status}`);
+    let detail = `Forecast API ${response.status}`;
+    try {
+      const payload = await response.json();
+      detail = describeApiDetail(payload.detail) || detail;
+    } catch {
+      // El proxy puede devolver una página de error sin JSON.
+    }
+    throw new Error(detail);
   }
   return response.json();
 }
 
 export function fetchForecastCatalog({ model = DEFAULT_MODEL, signal } = {}) {
   return getJson(`/v1/forecast/${model}/catalog`, { signal });
+}
+
+export function fetchThermalProfile({ product, validTime, run, latitude, longitude, signal }) {
+  const params = new URLSearchParams({
+    product, valid_time: validTime, run,
+    latitude: String(latitude), longitude: String(longitude)
+  });
+  return getJson(`/v1/forecast/arome/thermal-profile?${params}`, { signal });
 }
 
 export function fetchForecastFrame({ model = DEFAULT_MODEL, product, validTime, run, verticalKind, level, signal } = {}) {

@@ -60,7 +60,7 @@ const allForecastProducts = [
     pressureCentres: true,
     nationalBoundariesOnly: true,
     description: 'Altura geopotencial de 500 hPa en color, con la presión al nivel del mar en isobaras. Es el mapa sinóptico de referencia: arriba la onda que dirige el tiempo, abajo los centros de acción que la acompañan en superficie.',
-    method: 'Dos mensajes del open data de ECMWF por plazo, leídos por rango de bytes del GRIB2 global: altura geopotencial en 500 hPa, que se pasa de gpm a decámetros, y presión al nivel del mar, de Pa a hPa.',
+    method: 'Altura geopotencial en 500 hPa y presión al nivel del mar del open data de ECMWF, pasadas a decámetros y a hectopascales.',
     coverage: 'ECMWF IFS 0,25° · gh 500 hPa · msl'
   },
   {
@@ -92,7 +92,7 @@ const allForecastProducts = [
     // del propio frame. Cada 3 dam, y una de cada dos más marcada.
     overlayStep: 3, overlayMajorStep: 6,
     description: 'Temperatura en la superficie isobárica de 850 hPa, útil para reconocer masas de aire por encima de la capa superficial.',
-    method: 'Campo AROME de temperatura sobre superficie isobárica, seleccionado en 850 hPa mediante DescribeCoverage.',
+    method: 'Temperatura de AROME en el nivel de 850 hPa, con el geopotencial de ese nivel en isohipsas.',
     coverage: 'TEMPERATURE · 850 hPa'
   },
   {
@@ -105,23 +105,23 @@ const allForecastProducts = [
     // la onda se lee sin que el relieve la enmascare.
     troughAxes: true,
     description: 'Temperatura prevista en la superficie isobárica de 500 hPa, representativa de la troposfera media y útil para valorar el aire frío en altura.',
-    method: 'Campo AROME TEMPERATURE sobre superficie isobárica, seleccionado en 500 hPa mediante DescribeCoverage.',
+    method: 'Temperatura de AROME en el nivel de 500 hPa, con el geopotencial de ese nivel en isohipsas.',
     coverage: 'TEMPERATURE · 500 hPa'
   },
   {
     id: 'freezing-level', category: 'temperature', label: 'Altura de la iso 0 °C', short: 'Iso 0 °C', kind: 'derived',
     unit: 'm', unitFixed: true, min: 0, max: 5000, palette: 'temperature', accent: '#a5d4f2', vectors: false,
     contourStep: 250, contourLayerId: 'freezingContours', multipleSolutions: true,
-    description: 'Altitud de la isoterma de 0 °C del aire. Si el perfil la cruza varias veces, se muestra el cruce más alto.',
-    method: 'Interpolación lineal de la temperatura entre los niveles isobáricos de AROME y la temperatura a 2 m, con altura geopotencial y orografía del modelo. La capa opcional señala perfiles con varios cruces.',
+    description: 'Altitud sobre el nivel del mar a la que el aire cruza los 0 °C. Con inversiones puede haber varias isoceros; se muestra la más alta.',
+    method: 'Perfil de temperatura desde 2 m hasta los niveles de presión de AROME, con el cruce de 0 °C interpolado entre niveles. La capa «Zonas con varias soluciones» marca las columnas que lo cruzan más de una vez.',
     coverage: 'Diagnóstico MeteoLabX · temperatura/geopotencial del perfil'
   },
   {
     id: 'snow-level', category: 'precipitation', label: 'Cota de nieve', short: 'Cota nieve', kind: 'derived',
     unit: 'm', unitFixed: true, min: 0, max: 3500, palette: 'temperature', accent: '#8bcce8', vectors: false,
     multipleSolutions: true, contourStep: 250, contourLayerId: 'snowContours',
-    description: 'Altitud de la isoterma de bulbo húmedo de 0,5 °C cuando se prevé precipitación. Si el perfil tiene varios cruces, se muestra el más alto.',
-    method: 'Bulbo húmedo por ecuación psicrométrica con presión local. Se interpolan los cruces entre la superficie y los niveles isobáricos de AROME; la capa opcional señala los perfiles con varios cruces.',
+    description: 'Altitud a partir de la cual la precipitación prevista caería como nieve, donde el bulbo húmedo cruza los 0,5 °C. Solo donde hay precipitación; con inversiones se muestra el cruce más alto.',
+    method: 'Bulbo húmedo de cada nivel a partir de temperatura, humedad y presión, con el cruce de 0,5 °C interpolado entre la superficie y los niveles de presión de AROME. La capa «Zonas con varias soluciones» marca las columnas con más de un cruce.',
     coverage: 'Diagnóstico MeteoLabX · perfil T/HR/geopotencial · precipitación 1 h'
   },
   {
@@ -141,7 +141,7 @@ const allForecastProducts = [
     id: 'wind-gust', category: 'dynamics', label: 'Racha máxima horaria a 10 m', short: 'Racha máx. 10 m', kind: 'native',
     unit: 'm/s', min: 0, max: 45, palette: 'wind', accent: '#62a9f5', vectors: false,
     description: 'Racha máxima prevista durante la hora, útil para localizar aceleraciones por relieve, frentes y convección.',
-    method: 'Campo nativo WIND_SPEED_GUST_MAX de AROME en altura específica de 10 m y periodo PT1H.', coverage: 'WIND SPEED GUST MAX · 10 m · 1 h'
+    method: 'Racha máxima de AROME (WIND_SPEED_GUST_MAX) a 10 m durante la hora anterior.', coverage: 'WIND SPEED GUST MAX · 10 m · 1 h'
   },
   {
     id: 'shear-01', category: 'dynamics', label: 'Cizalladura 0–1 km', short: 'CIZ 0–1 km', kind: 'derived',
@@ -176,8 +176,8 @@ const allForecastProducts = [
     unit: 'mm', min: 0, max: 60, palette: 'precipitation', accent: '#38a8ad', vectors: false,
     cityLabels: true,
     description: 'Precipitación total prevista durante la hora que termina en la hora válida seleccionada.',
-    method: 'Campo WCS nativo TOTAL_PRECIPITATION con periodo de acumulación PT1H. Incluye precipitación líquida y sólida en equivalente de agua.',
-    coverage: 'TOTAL PRECIPITATION · superficie · PT1H'
+    method: 'Precipitación total de AROME (TOTAL_PRECIPITATION) acumulada en una hora. Incluye precipitación líquida y sólida en equivalente de agua.',
+    coverage: 'TOTAL PRECIPITATION · 1 h'
   },
   {
     id: 'accumulated-precip', category: 'precipitation', label: 'Precipitación acumulada', short: 'Precip. acumulada', kind: 'derived',
@@ -190,8 +190,8 @@ const allForecastProducts = [
     zeroFloor: 0.05,
     cityLabels: true,
     description: 'Precipitación total acumulada desde el inicio de la pasada hasta la hora válida seleccionada.',
-    method: 'MeteoLabX suma celda a celda los campos horarios TOTAL_PRECIPITATION PT1H comprendidos entre H+01 y la hora seleccionada. Incluye precipitación líquida y sólida en equivalente de agua.',
-    coverage: 'Diagnóstico MeteoLabX · suma TOTAL PRECIPITATION PT1H desde el RUN'
+    method: 'MeteoLabX suma celda a celda la precipitación de cada hora (TOTAL_PRECIPITATION) entre H+01 y la hora seleccionada. Incluye precipitación líquida y sólida en equivalente de agua.',
+    coverage: 'Diagnóstico MeteoLabX · suma de TOTAL PRECIPITATION desde el RUN'
   },
   {
     id: 'snow-precip', category: 'precipitation', label: 'Precipitación de nieve', short: 'Nieve', kind: 'native',
@@ -201,9 +201,9 @@ const allForecastProducts = [
   },
   {
     id: 'precip-type', category: 'precipitation', label: 'Tipo de precipitación', short: 'Tipo precip.', kind: 'native',
-    unit: 'clase', min: 0, max: 8, palette: 'ptype', accent: '#83a8ef', vectors: false,
-    description: 'Tipo de precipitación más frecuente durante una hora: lluvia, nieve, aguanieve u otras clases publicadas por el modelo.',
-    method: 'Campo categórico nativo PRECIPITATION_TYPE_60_MIN; la leyenda usará las clases del catálogo.',
+    unit: 'clase', min: 0, max: 12, palette: 'ptype', accent: '#83a8ef', vectors: false,
+    description: 'Qué llegaría al suelo durante la hora seleccionada: lluvia, llovizna, nieve seca o húmeda, aguanieve, precipitación engelante, gránulos de hielo, nieve granulada o granizo.',
+    method: 'Diagnóstico de tipo de precipitación que publica AROME para cada hora. Las variantes intermitentes y la nieve pegajosa se agrupan con su tipo principal.',
     coverage: 'PRECIPITATION TYPE · 60 min'
   },
   {
@@ -228,7 +228,7 @@ const allForecastProducts = [
     id: 'shortwave-down', category: 'radiation', label: 'Radiación solar descendente', short: 'Solar ↓', kind: 'native',
     unit: 'W/m²', min: 0, max: 1000, palette: 'radiation', accent: '#f3be4f', vectors: false,
     description: 'Flujo de onda corta descendente que alcanza la superficie, incluyendo la componente directa y difusa.',
-    method: 'Campo DOWNWARD_SHORT_WAVE_RADIATION_FLUX PT1H. AROME entrega la energía integrada de la hora; MeteoLabX divide entre 3.600 para mostrar el flujo medio en W/m².', coverage: 'DOWNWARD SHORT WAVE RADIATION FLUX · PT1H → W/m²'
+    method: 'Radiación de onda corta descendente de AROME (DOWNWARD_SHORT_WAVE_RADIATION_FLUX). AROME entrega la energía acumulada en la hora; MeteoLabX divide entre 3.600 para mostrar el flujo medio en W/m².', coverage: 'DOWNWARD SHORT WAVE RADIATION FLUX · 1 h → W/m²'
   },
   {
     id: 'direct-shortwave', category: 'radiation', label: 'Radiación solar directa', short: 'Solar directa', kind: 'native',
@@ -346,7 +346,7 @@ const allForecastProducts = [
     // con el desplazamiento de 32 daría un número sin significado.
     unit: '°C', unitFixed: true, min: 18, max: 34, palette: 'shear', accent: '#e0a458', vectors: false,
     description: 'Diferencia de temperatura entre 850 y 500 hPa. Mide el gradiente térmico del entorno sin depender de qué parcela se elija, así que no comparte las ambigüedades de los CAPE. Valores altos con poca humedad en niveles bajos señalan el ambiente de reventones secos.',
-    method: 'T850 menos T500, ambos del paquete isobárico IP1 que ya se descarga para los perfiles.',
+    method: 'Temperatura de AROME en 850 hPa menos la de 500 hPa.',
     coverage: 'TEMPERATURE · 850 y 500 hPa'
   },
   {
@@ -414,15 +414,15 @@ const allForecastProducts = [
     // convergen las brisas, que es lo que fuerza el ascenso que pinta el mapa.
     flowLines: true,
     description: 'Velocidad vertical del modelo interpolada al nivel de convección libre de la parcela de capa mezclada, con el viento de 10 m en líneas de corriente. Un ascenso que alcanza ese nivel dispara la convección; el que se queda por debajo se embotella bajo la inversión, y una convergencia en superficie no distingue esos dos casos. Donde las líneas de corriente se juntan o chocan hay convergencia en superficie, que es lo que suele forzar el ascenso.',
-    method: 'Velocidad vertical geométrica del paquete isobárico IP3, interpolada a la altura del NCL que calcula la parcela ML100. Las líneas de corriente son el viento de 10 m.',
-    coverage: 'IP3 · velocidad vertical en niveles isobáricos'
+    method: 'Velocidad vertical geométrica de AROME en los niveles de presión, interpolada a la altura del NCL de la parcela de capa mezclada (ML100). Las líneas de corriente son el viento de 10 m.',
+    coverage: 'Diagnóstico MeteoLabX · velocidad vertical en niveles de presión · viento 10 m'
   },
   {
     id: 'updraft-helicity', category: 'convection', label: 'Helicidad de la corriente ascendente 2–5 km', short: 'UH 2–5', kind: 'derived',
     unit: 'm²/s²', min: -50, max: 250, palette: 'shear', accent: '#f472b6', vectors: false,
     description: 'Diagnóstico de la rotación que el propio modelo genera dentro de una corriente ascendente: integra el producto de la velocidad vertical por la vorticidad vertical entre 2 y 5 km sobre el terreno. Mide cuánto coinciden el ascenso y el giro, así que separa una tormenta rotatoria de otra que sólo sube con fuerza: es el rastro que deja una supercélula en un modelo que resuelve la convección.',
-    method: 'Vorticidad vertical de cada nivel isobárico con las distancias en metros, multiplicada por la velocidad vertical de IP3 e integrada por trapecios entre 2.000 y 5.000 m AGL.',
-    coverage: 'IP1 · viento y geopotencial · IP3 · velocidad vertical'
+    method: 'Vorticidad vertical de cada nivel isobárico con las distancias en metros, multiplicada por la velocidad vertical geométrica e integrada por trapecios entre 2.000 y 5.000 m AGL.',
+    coverage: 'Diagnóstico MeteoLabX · viento, geopotencial y velocidad vertical en niveles de presión'
   },
 ];
 
@@ -452,6 +452,7 @@ const initialProductIds = [
   'shear-06',
   'ebwd',
   'precip-1h',
+  'precip-type',
   'accumulated-precip',
   'relative-humidity-700',
   'shortwave-down',

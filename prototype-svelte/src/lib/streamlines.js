@@ -59,6 +59,31 @@ export const STREAM_MAX_LENGTH = 60;
  */
 export const STREAM_SELF_SKIP = 2.5;
 
+/**
+ * Interpola el vector sin exigir que el campo escalar del mapa tenga dato.
+ * En productos como la velocidad vertical en el NCL, el viento de 10 m sigue
+ * estando definido incluso donde no se puede calcular el diagnóstico vertical.
+ */
+export function sampleVectorField(frame, x, y) {
+  if (x < 0 || y < 0 || x >= frame.width - 1 || y >= frame.height - 1) return null;
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const tx = x - x0;
+  const ty = y - y0;
+  const indexes = [
+    y0 * frame.width + x0,
+    y0 * frame.width + x0 + 1,
+    (y0 + 1) * frame.width + x0,
+    (y0 + 1) * frame.width + x0 + 1
+  ];
+  if (indexes.some((index) => !Number.isFinite(frame.u[index]) || !Number.isFinite(frame.v[index]))) return null;
+  const weights = [(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty];
+  const u = indexes.reduce((sum, index, i) => sum + frame.u[index] * weights[i], 0);
+  const v = indexes.reduce((sum, index, i) => sum + frame.v[index] * weights[i], 0);
+  const magnitude = Math.hypot(u, v);
+  return magnitude >= .35 ? { u, v, magnitude } : null;
+}
+
 /** Rejilla de cubos para preguntar «¿hay algún punto cerca?» en tiempo constante. */
 function makeGrid(cell) {
   const buckets = new Map();

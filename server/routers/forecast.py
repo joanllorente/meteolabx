@@ -15,6 +15,7 @@ from server.services.arome_forecast import (
     domain_boundaries,
     frame_grid,
     frame_png,
+    thermal_point_profile,
 )
 from server.services.forecast_store import (
     PERSISTED_FORECAST_PRODUCTS,
@@ -247,6 +248,23 @@ def get_frame(
         media_type="image/png",
         headers=_http_headers({**headers, "Cache-Control": "public, max-age=900"}),
     )
+
+
+@router.get("/thermal-profile", summary="Perfil térmico puntual para cruces múltiples")
+def get_thermal_profile(
+    product: str = Query(pattern="^(freezing-level|snow-level)$"),
+    valid_time: str = Query(min_length=10, max_length=40),
+    run: str = Query(min_length=10, max_length=40),
+    latitude: float = Query(ge=37.0, le=56.0),
+    longitude: float = Query(ge=-13.0, le=17.0),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    try:
+        return thermal_point_profile(
+            _token(settings), product, valid_time, run, latitude, longitude
+        )
+    except AromeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/frames.grid", summary="Rejilla Float32 interactiva AROME")

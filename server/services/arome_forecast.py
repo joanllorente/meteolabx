@@ -224,6 +224,11 @@ PRODUCTS = {
         "vmax": 60.0,
         "unit": "mm",
     },
+    "precip-type": {
+        "kind": "native", "prefix_kind": "precipitation_type_1h",
+        "starts_at_hour": 1, "value_mode": "precipitation_type",
+        "vmin": 0.0, "vmax": 12.0, "unit": "clase",
+    },
     "accumulated-precip": {
         "kind": "native", "prefix_kind": "precipitation_1h",
         "period": "PT1H", "value_mode": "nonnegative",
@@ -367,7 +372,10 @@ def _boundary_payload_from_disk(
         pass
     payload = _boundary_payload(
         _model_boundary_geojson(
-            _load_forecast_regions_geojson(),
+            # Las fronteras del dominio salen de los GeoJSON locales. La
+            # consulta remota de comunidades solo hace falta al recortar el
+            # producto a Cataluña, no para generar esta capa compartida.
+            {"features": []},
             bounds,
             include_admin1=include_admin1,
             simplify=simplify,
@@ -721,6 +729,20 @@ def _hex_rgb(value: str) -> np.ndarray:
     return np.asarray([int(value[index:index + 2], 16) for index in (0, 2, 4)])
 
 
+def _precipitation_type_classes(values: np.ndarray) -> np.ndarray:
+    """Reduce los diagnósticos intermitentes/pegajosos a las 11 clases del mapa.
+
+    Los códigos ausentes, desconocidos y 9999 conservan la máscara sin dato.
+    """
+    raw = np.asarray(values, dtype=float)
+    result = np.full(raw.shape, np.nan, dtype=float)
+    for code in (0, 1, 3, 5, 6, 7, 8, 9, 10, 11, 12):
+        result[raw == code] = code
+    for source, target in ((193, 6), (201, 1), (205, 5), (206, 6), (207, 7), (213, 6)):
+        result[raw == source] = target
+    return result
+
+
 def _rgba_field(values: np.ndarray, vmax: float) -> np.ndarray:
     valid = np.isfinite(values)
     normalized = np.clip(np.nan_to_num(values, nan=0.0) / vmax, 0.0, 1.0)
@@ -733,6 +755,22 @@ def _rgba_field(values: np.ndarray, vmax: float) -> np.ndarray:
     rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
     rgba[..., :3] = rgb.astype(np.uint8)
     rgba[..., 3] = np.where(valid, 224, 0).astype(np.uint8)
+    return rgba
+
+
+PRECIPITATION_TYPE_COLORS = {
+    0: "#8795a3", 1: "#1479b8", 3: "#0b8f91", 5: "#bba4e8",
+    6: "#855cc7", 7: "#7c83d1", 8: "#6970bf", 9: "#4b61aa",
+    10: "#304887", 11: "#73b9d9", 12: "#59b9a7",
+}
+
+
+def _rgba_precipitation_type(values: np.ndarray) -> np.ndarray:
+    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
+    for code, color in PRECIPITATION_TYPE_COLORS.items():
+        mask = values == code
+        rgba[mask, :3] = _hex_rgb(color)
+        rgba[mask, 3] = 235
     return rgba
 
 
@@ -787,19 +825,22 @@ def _draw_boundary(image: Image.Image, field, geometry) -> None:
         draw.line(points, fill=(232, 240, 247, 220), width=3, joint="curve")
 
 
-def _render_png(field, vmax: float) -> bytes:
-    regions_geojson = _load_forecast_regions_geojson()
+def _render_png(field, vmax: float, product_id: str = "") -> bytes:
     if forecast_calculation_scope() == "catalonia":
-        visible_geojson = _catalonia_only_geojson(regions_geojson)
+        visible_geojson = _catalonia_only_geojson(_load_forecast_regions_geojson())
         geometry = _catalonia_geometry(visible_geojson)
         values = _mask_to_catalonia(field, geometry)
     else:
-        visible_geojson = _model_boundary_geojson(regions_geojson, field.bounds)
+        visible_geojson = _model_boundary_geojson({"features": []}, field.bounds)
         geometry = _catalonia_geometry(visible_geojson)
         values = np.asarray(field.data, dtype=float)
-    raw = Image.fromarray(_rgba_field(values, vmax), mode="RGBA")
+    categorical = product_id == "precip-type"
+    colors = _rgba_precipitation_type(values) if categorical else _rgba_field(values, vmax)
+    raw = Image.fromarray(colors, mode="RGBA")
     output_size = (960, 680)
-    image = raw.resize(output_size, Image.Resampling.BILINEAR)
+    image = raw.resize(
+        output_size, Image.Resampling.NEAREST if categorical else Image.Resampling.BILINEAR
+    )
     _draw_vectors(image, field, output_size)
     _draw_boundary(image, field, geometry)
     buffer = BytesIO()
@@ -1470,6 +1511,71 @@ def _native_field_from_cached_ip1(product_id, run, valid_time, *, overlay=False)
         return None
     logger.info("Mapa %s %s servido desde IP1 local.", product_id, valid_time.isoformat())
     return field
+
+
+# Productos nativos que IP1 puede servir sin pedir nada al WCS. El
+# planificador los espera un poco en vez de mandarlos al WCS en cuanto salen:
+# el barrido de nativos recorre las 52 horas en quince minutos y adelanta a la
+# precarga, así que el 25/09 solo 8 de 104 mapas encontraron su paquete.
+IP1_BACKED_PRODUCTS = frozenset({
+    "temperature-850", "temperature-500", "relative-humidity-700",
+    "mslp-theta-e-850",
+})
+
+
+def _theta_e_inputs_from_cached_packages(run, valid_time, level):
+    """Temperatura, rocío y presión de superficie sin tocar el WCS.
+
+    El mapa de masas de aire cuesta cuatro coberturas por hora y es el
+    producto más caro de la pasada: 1.738 s de los 7.484 que se fueron en
+    descargas el 24/09. Tres de las cuatro están en paquetes que ya se bajan
+    para los perfiles. La MSLP no la publica ninguno y sigue por el WCS.
+
+    Devuelve None si los paquetes no están ya en disco: nunca los descarga,
+    porque un nativo esperando media hora a medio giga sale más caro que las
+    cuatro peticiones que ahorra.
+    """
+    if not _packages_available():
+        return None
+    if not package_ready("IP1", run, valid_time) or not package_ready("SP2", run, valid_time):
+        return None
+    from rasterio.errors import RasterioError
+    from server.services.arome_packages import _package_path, block_range
+
+    try:
+        valores, geometria = read_isobaric_profile(
+            _package_path("IP1", run, block_range(run, valid_time)),
+            valid_time, [level], ("temperature", "relative_humidity"),
+        )
+        temperatura = valores.get("temperature", {}).get(level)
+        humedad = valores.get("relative_humidity", {}).get(level)
+        if temperatura is None or humedad is None:
+            return None
+        superficie, geometria_sp = read_surface_fields(
+            _package_path("SP2", run, block_range(run, valid_time)),
+            valid_time, SURFACE_ELEMENTS["SP2"],
+        )
+        presion = superficie.get("surface_pressure")
+        if presion is None:
+            return None
+    except (AromePackageError, OSError, RasterioError) as exc:
+        logger.info("Paquetes locales no utilizables para theta-e; se usa WCS: %s", exc)
+        return None
+
+    # IP1 da la temperatura en kelvin y la humedad en porcentaje; el rocío se
+    # deriva con la misma fórmula que ya usan los perfiles convectivos.
+    campo_t = RasterField(temperatura, *geometria, "K")
+    celsius = _as_kelvin(np.asarray(temperatura, dtype=float), "K") - 273.15
+    rocio = _dewpoint_from_relative_humidity_c(
+        celsius, _as_percent(np.asarray(humedad, dtype=float), "%")
+    )
+    logger.info("Mapa mslp-theta-e-850 %s servido desde IP1 y SP2 locales.",
+                valid_time.isoformat())
+    return {
+        "temperature": campo_t,
+        "dewpoint": RasterField(rocio + 273.15, *geometria, "K"),
+        "surface_pressure": RasterField(presion[0], *geometria_sp, presion[1]),
+    }
 
 
 def _isobaric_fields_from_package(
@@ -2329,6 +2435,170 @@ def _freezing_level_field(client, catalog, prefixes, run, valid_time) -> RasterF
     return field
 
 
+def _thermal_crossings(levels: list[dict[str, float]], threshold_c: float,
+                       value_key: str) -> list[dict[str, float]]:
+    """Cruces con la misma regla de signos e interpolación del mapa de cotas."""
+    crossings: list[dict[str, float]] = []
+    if levels and levels[0][value_key] == threshold_c:
+        crossings.append({
+            "height_m": levels[0]["height_m"],
+            "pressure_hpa": levels[0]["pressure_hpa"],
+        })
+    for lower, upper in zip(levels, levels[1:]):
+        delta0 = lower[value_key] - threshold_c
+        delta1 = upper[value_key] - threshold_c
+        if not ((delta0 < 0 <= delta1) or (delta0 > 0 >= delta1)):
+            continue
+        fraction = -delta0 / (delta1 - delta0)
+        crossings.append({
+            "height_m": lower["height_m"] + fraction * (upper["height_m"] - lower["height_m"]),
+            "pressure_hpa": math.exp(
+                math.log(lower["pressure_hpa"]) + fraction
+                * (math.log(upper["pressure_hpa"]) - math.log(lower["pressure_hpa"]))
+            ),
+        })
+    return crossings
+
+
+def thermal_point_profile(
+    token: str, product_id: str, valid_time_iso: str, run_iso: str,
+    latitude: float, longitude: float,
+) -> dict[str, Any]:
+    """Reconstruye solo la columna pulsada de iso 0 o cota de nieve."""
+    if product_id not in {"freezing-level", "snow-level"}:
+        raise AromeError("El producto no tiene perfil térmico.")
+    from rasterio.transform import rowcol
+    from server.services.arome_wcs import _align, _height_from_geopotential
+
+    _, client, catalog, prefixes, run, times = _product_context(
+        token, product_id, run_iso=run_iso
+    )
+    valid_time = _parse_time(valid_time_iso)
+    if valid_time not in times:
+        raise AromeError("La hora solicitada no está disponible en ese RUN.")
+    reference = client.get_field(
+        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
+    )
+    row, col = rowcol(reference.transform, longitude, latitude)
+    if not (0 <= row < reference.data.shape[0] and 0 <= col < reference.data.shape[1]):
+        raise AromeError("El punto está fuera del dominio del mapa.")
+
+    def sample(values: np.ndarray) -> float:
+        return float(np.asarray(values)[row, col])
+
+    terrain_runs = catalog.by_prefix[prefixes["terrain"]]
+    terrain_run = run if run in terrain_runs else max(terrain_runs)
+    terrain_field = client.get_field(
+        catalog, prefixes["terrain"], terrain_run, None, None, None
+    )
+    terrain_m = sample(_align(reference, terrain_field))
+    surface_t = sample(_as_kelvin(reference.data, reference.units) - 273.15)
+    if not np.isfinite(terrain_m) or not np.isfinite(surface_t):
+        raise AromeError("No hay perfil válido en esa celda.")
+
+    surface_package = (
+        _surface_fields_from_package(reference, run, valid_time)
+        if product_id == "snow-level" else None
+    )
+    pressure_field = (surface_package or {}).get("surface_pressure") or client.get_field(
+        catalog, prefixes.get("surface_pressure") or catalog.resolve("surface_pressure"),
+        run, valid_time, None, None
+    )
+    surface_p = sample(_as_hpa(_align(reference, pressure_field), pressure_field.units))
+    surface_td = float("nan")
+    if product_id == "snow-level":
+        dewpoint_field = (surface_package or {}).get("surface_dewpoint") or client.get_field(
+            catalog, prefixes["height_dewpoint"], run, valid_time, 2.0, "height"
+        )
+        surface_td = sample(_as_kelvin(_align(reference, dewpoint_field), dewpoint_field.units) - 273.15)
+        if not np.isfinite(surface_td):
+            raise AromeError("No hay humedad válida en esa celda.")
+    if not np.isfinite(surface_p) or surface_p <= 0:
+        raise AromeError("No hay presión válida en esa celda.")
+    surface_tw = float(wet_bulb_celsius(surface_t, surface_td, surface_p)) if product_id == "snow-level" else None
+    levels: list[dict[str, Any]] = [{
+        "pressure_hpa": surface_p, "height_m": terrain_m + 2.0,
+        "temperature_c": surface_t, "dewpoint_c": surface_td if product_id == "snow-level" else None,
+        "wet_bulb_c": surface_tw,
+    }]
+    pressure_levels = _pressure_levels(client, catalog, prefixes["pressure_temperature"], run)
+    elements = ("temperature", "relative_humidity", "geopotential") if product_id == "snow-level" else ("temperature", "geopotential")
+    package = (
+        _isobaric_levels_from_package(run, valid_time, pressure_levels, elements)
+        if _packages_available() and package_ready("IP1", run, valid_time) else None
+    )
+    point_fields = None
+    if package is None or any(
+        not all(level in package[name] for name in elements)
+        for level in pressure_levels
+    ):
+        # Cuando no está el paquete IP1, tres recortes verticales pequeños
+        # sustituyen decenas de GetCoverage de dominio completo.
+        point_fields = {
+            name: client.get_point_isobaric(
+                catalog, prefixes[prefix], run, valid_time, latitude, longitude
+            )
+            for name, prefix in (
+                (("temperature", "pressure_temperature"),
+                 ("dewpoint", "pressure_dewpoint"),
+                 ("geopotential", "geopotential"))
+                if product_id == "snow-level" else
+                (("temperature", "pressure_temperature"),
+                 ("geopotential", "geopotential"))
+            )
+        }
+    try:
+        for pressure_hpa in pressure_levels:
+            if package and all(pressure_hpa in package[name] for name in elements):
+                t_field = package["temperature"][pressure_hpa]
+                gp_field = package["geopotential"][pressure_hpa]
+                temperature = sample(_as_kelvin(_align(reference, t_field), t_field.units) - 273.15)
+                if product_id == "snow-level":
+                    rh_field = package["relative_humidity"][pressure_hpa]
+                    rh = sample(_as_percent(_align(reference, rh_field), rh_field.units))
+                    dewpoint = float(_dewpoint_from_relative_humidity_c(
+                        np.asarray(temperature), np.asarray(rh)
+                    ))
+                else:
+                    dewpoint = float("nan")
+                height_m = sample(_height_from_geopotential(
+                    _align(reference, gp_field), gp_field.units
+                ))
+            else:
+                t_value, t_unit = point_fields["temperature"].get(pressure_hpa, (float("nan"), ""))
+                gp_value, gp_unit = point_fields["geopotential"].get(pressure_hpa, (float("nan"), ""))
+                temperature = float(_as_kelvin(np.asarray(t_value), t_unit) - 273.15)
+                height_m = float(_height_from_geopotential(np.asarray(gp_value), gp_unit))
+                if product_id == "snow-level":
+                    td_value, td_unit = point_fields["dewpoint"].get(pressure_hpa, (float("nan"), ""))
+                    dewpoint = float(_as_kelvin(np.asarray(td_value), td_unit) - 273.15)
+                else:
+                    dewpoint = float("nan")
+            if not np.isfinite(height_m) or height_m <= terrain_m + 2.0:
+                continue
+            if not np.isfinite(temperature) or (product_id == "snow-level" and not np.isfinite(dewpoint)):
+                raise AromeError("El perfil tiene niveles sin datos por encima del terreno.")
+            wet_bulb = float(wet_bulb_celsius(temperature, dewpoint, pressure_hpa)) if product_id == "snow-level" else None
+            levels.append({
+                "pressure_hpa": pressure_hpa, "height_m": height_m,
+                "temperature_c": temperature, "dewpoint_c": dewpoint if product_id == "snow-level" else None,
+                "wet_bulb_c": wet_bulb,
+            })
+    finally:
+        if package:
+            for field in package.values():
+                field.clear()
+    key = "wet_bulb_c" if product_id == "snow-level" else "temperature_c"
+    threshold = 0.5 if product_id == "snow-level" else 0.0
+    crossings = _thermal_crossings(levels, threshold, key)
+    return {
+        "product": product_id, "run": run_iso, "valid_time": valid_time_iso,
+        "latitude": latitude, "longitude": longitude,
+        "terrain_m": terrain_m, "threshold_c": threshold,
+        "levels": levels, "crossings": crossings,
+    }
+
+
 @lru_cache(maxsize=12)
 def _computed_frame(
     token: str,
@@ -2415,15 +2685,21 @@ def _computed_frame(
         )
 
         level = float(config["level"])
-        field = client.get_field(
-            catalog, prefixes["temperature"], run, valid_time, level, "pressure"
-        )
-        dewpoint_field = client.get_field(
-            catalog, prefixes["dewpoint"], run, valid_time, level, "pressure"
-        )
-        surface_field = client.get_field(
-            catalog, prefixes["surface_pressure"], run, valid_time, None, None
-        )
+        paquetes = _theta_e_inputs_from_cached_packages(run, valid_time, level)
+        if paquetes is not None:
+            field = paquetes["temperature"]
+            dewpoint_field = paquetes["dewpoint"]
+            surface_field = paquetes["surface_pressure"]
+        else:
+            field = client.get_field(
+                catalog, prefixes["temperature"], run, valid_time, level, "pressure"
+            )
+            dewpoint_field = client.get_field(
+                catalog, prefixes["dewpoint"], run, valid_time, level, "pressure"
+            )
+            surface_field = client.get_field(
+                catalog, prefixes["surface_pressure"], run, valid_time, None, None
+            )
         temperature = _as_kelvin(np.asarray(field.data, dtype=float), field.units)
         dewpoint = _as_kelvin(_align(field, dewpoint_field), dewpoint_field.units)
         surface = _align(field, surface_field)
@@ -2494,6 +2770,8 @@ def _computed_frame(
             values = _as_kelvin(values, field.units) - 273.15
         elif value_mode == "percent":
             values = _as_percent(values, field.units)
+        elif value_mode == "precipitation_type":
+            values = _precipitation_type_classes(values)
         else:
             values = np.maximum(values, 0.0)
         values = values * float(config.get("scale", 1.0))
@@ -2589,7 +2867,7 @@ def frame_png(
     field, config, headers = _computed_frame(
         token, product_id, valid_time_iso, vertical_kind, level, run_iso
     )
-    return _render_png(field, float(config["vmax"])), headers
+    return _render_png(field, float(config["vmax"]), product_id), headers
 
 
 # El formato de rejilla vive en `forecast_grid`: lo comparten AROME y ECMWF, y

@@ -580,9 +580,8 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     total = sum(
         trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
     )
-    # Sube al añadir un mapa: theta-e + MSLP y la reflectividad aportaron sus
-    # 52 plazos nativos cada uno.
-    assert total == 1441, f"el denominador de una pasada completa es 1441, no {total}"
+    # El tipo de precipitación se añade desde H+1: 51 plazos más.
+    assert total == 1492, f"el denominador de una pasada completa es 1492, no {total}"
 
 
 def test_prefetch_also_brings_the_dcape_package(monkeypatch):
@@ -988,7 +987,7 @@ def test_partial_catalog_does_not_close_or_send_report(monkeypatch, product, mis
     worker._finish_status(manifest, store=object())
     assert manifest["status"] == "complete"
     assert len(reports) == len(summaries) == 1
-    assert reports[0]["progress"]["frames_available"] == reports[0]["progress"]["frames_total"] == 1441
+    assert reports[0]["progress"]["frames_available"] == reports[0]["progress"]["frames_total"] == 1492
 
 
 def test_no_report_until_last_active_job_finishes(monkeypatch):

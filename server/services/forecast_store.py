@@ -58,6 +58,7 @@ PERSISTED_FORECAST_PRODUCTS = (
     "shear-06",
     "ebwd",
     "precip-1h",
+    "precip-type",
     "accumulated-precip",
     "relative-humidity-700",
     "shortwave-down",
