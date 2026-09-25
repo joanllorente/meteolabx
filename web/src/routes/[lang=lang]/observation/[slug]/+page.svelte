@@ -9,7 +9,7 @@
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import { ui } from '$lib/i18n/ui.js';
   import { observationModel } from '$lib/observation/model.js';
-  import { unavailableKey } from '$lib/observation/unavailable.js';
+  import { isSnapshotMissing, unavailableKey } from '$lib/observation/unavailable.js';
   import { hasUnreliableData } from '$lib/observation/warnings.js';
   import { displayName } from '$lib/seo/i18n.js';
   import {
@@ -74,7 +74,8 @@
     });
     // Ni la histórica ni la manual fallan al no tener lectura actual: es lo
     // que son. Contarlo como error llenaba el panel de falsas alarmas.
-    if (!model.available && !station.is_historical_only && !isManualDaily(station)) {
+    if (!model.available && !station.is_historical_only && !isManualDaily(station)
+      && !isSnapshotMissing(observation?.unavailable)) {
       recordConnectionError({
         ...estacion,
         kind: unavailableKey(observation?.unavailable),
@@ -153,7 +154,7 @@
       daily={data.dailyPrecip}
       historyHref={observationTabs({ language: lang, slug }).find((tab) => tab.id === 'historical')?.href}
     />
-  {:else if !model.available}
+  {:else if !model.available && !isSnapshotMissing(observation?.unavailable)}
     <!-- El motivo importa: un 401 de la red no es una estación callada, y
          decirlo igual manda a buscar el fallo donde no está. -->
     <p class="offline">{ui(lang, unavailableKey(observation?.unavailable))}</p>

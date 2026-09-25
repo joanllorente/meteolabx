@@ -78,6 +78,12 @@ test('ninguna página compartida en el CDN lee datos del visitante', async () =>
     for (const campo of ['cookies', 'request']) {
       if (new RegExp(`\\b${campo}\\b`).test(firma)) culpables.push(`${camino} recibe \`${campo}\``);
     }
+    // `locals.crawler` sí se permite: la versión del buscador lleva la lectura
+    // guardada en vez de la actual, y por eso esa rama tiene que declararse
+    // `no-store` ella misma, además de lo que ya fuerza `hooks.server.js`.
+    if (/\blocals\b/.test(firma) && !/crawler\s*\?\s*NO_STORE/.test(fuente)) {
+      culpables.push(`${camino} lee \`locals\` sin declarar no-store para el rastreador`);
+    }
     if (/from\s+['"]\$lib\/server\/language\.js['"]/.test(fuente)) {
       culpables.push(`${camino} importa el negociador de idioma`);
     }

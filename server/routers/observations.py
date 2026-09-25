@@ -45,6 +45,7 @@ from server.schemas.observation import (
     DailyExtremes,
     LatestDailyPrecipitation,
     ObservationDerivatives,
+    ObservationSnapshot,
     ProcessedCurrentObservationRequest,
     ProcessedCurrentObservationResponse,
     RecentSeries,
@@ -1168,6 +1169,96 @@ async def get_latest_daily_precipitation(
         window_start_utc=inicio.isoformat(),
         window_end_utc=(inicio + timedelta(days=1)).isoformat(),
         precip_mm=round(float(lluvia), 1),
+    )
+
+
+# Una lectura guardada más vieja que esto ya no es «la actual»: una estación
+# parada desde la madrugada enseñaría frío nocturno a mediodía.
+SNAPSHOT_MAX_AGE_S = 6 * 3600
+
+
+@router.get(
+    "/snapshot",
+    response_model=ObservationSnapshot,
+    summary="Última lectura guardada, sin consultar al proveedor",
+    description=(
+        "La lectura más reciente de la estación que ya está en el almacén del "
+        "ranking (temperatura, viento, lluvia y extremos del día). No llama "
+        "nunca al proveedor, así que no gasta cuota: es lo que recibe un "
+        "buscador al rastrear una ficha. Misma forma que ``/current/processed``."
+    ),
+    responses={404: {"model": ErrorResponse, "description": "Sin lectura reciente guardada."}},
+)
+async def get_observation_snapshot(
+    request: Request,
+    provider: str,
+    station_id: str,
+) -> ObservationSnapshot:
+    """Googlebot recibía un «vuelve a intentarlo» en cada ficha.
+
+    Desde que los rastreadores dejaron de consultar datos en vivo (para no
+    gastar la cuota de AEMET, Meteocat… en cada URL del sitemap), la ficha que
+    veía Google era un error sin un solo valor, y las impresiones se hundieron.
+    Lo que ya tenemos guardado basta para enseñarle una ficha de verdad.
+    """
+    store: ranking_svc.RankingStore | None = getattr(request.app.state, "ranking_store", None)
+    proveedor = str(provider or "").strip().upper()
+    snapshot = _snapshot_from_ranking_store(store, proveedor, station_id)
+    if snapshot is None:
+        raise ProviderError(
+            "data_unavailable",
+            provider=proveedor or "?",
+            detail=f"Sin lectura reciente guardada para {station_id}",
+            status_code=404,
+        )
+    return snapshot
+
+
+def _snapshot_from_ranking_store(
+    store: ranking_svc.RankingStore | None,
+    provider: str,
+    station_id: str,
+    *,
+    now: Optional[datetime] = None,
+) -> ObservationSnapshot | None:
+    if store is None:
+        return None
+    record = store.station_daily(provider, station_id)
+    if record is None:
+        return None
+    now_epoch = int((now or datetime.now(tz=timezone.utc)).timestamp())
+    cutoff = now_epoch - SNAPSHOT_MAX_AGE_S
+
+    def reciente(value, at) -> bool:
+        return (
+            isinstance(value, (int, float)) and not _is_nan_value(float(value))
+            and isinstance(at, (int, float)) and cutoff <= int(at) <= now_epoch + 600
+        )
+
+    observation: dict = {}
+    epochs: list[int] = []
+    if reciente(record.tcur, record.tcur_at):
+        observation["Tc"] = float(record.tcur)
+        epochs.append(int(record.tcur_at))
+    if reciente(record.wind, record.wind_at):
+        observation["wind"] = float(record.wind)
+        if isinstance(record.wind_dir, (int, float)) and not _is_nan_value(float(record.wind_dir)):
+            observation["wind_dir_deg"] = float(record.wind_dir) % 360.0
+        epochs.append(int(record.wind_at))
+    if not epochs:
+        return None
+    observation["epoch"] = max(epochs)
+
+    # Máxima, mínima, racha y lluvia son del día civil: solo valen si el
+    # agregado es el de hoy en la estación.
+    extremes = _daily_extremes_from_ranking_store(store, provider, station_id, current_day_only=True)
+    if "precip_total" in extremes:
+        observation["precip_total"] = extremes.pop("precip_total")
+    return ObservationSnapshot(
+        provider=provider,
+        station_id=station_id,
+        observation=observation,
+        daily_extremes=extremes,
     )
 
 

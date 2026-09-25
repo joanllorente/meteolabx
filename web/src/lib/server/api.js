@@ -115,6 +115,20 @@ export function fetchLatestDailyPrecip(station, options = {}) {
   return request(`/v1/observations/daily/latest?${query}`, options);
 }
 
+/**
+ * Última lectura guardada, sin consultar al proveedor: la de los buscadores.
+ *
+ * Sale del almacén del ranking y tiene la forma de `fetchProcessedObservation`
+ * con menos variables, así que la ficha la pinta con el mismo panel.
+ */
+export function fetchObservationSnapshot(station, options = {}) {
+  const query = new URLSearchParams({
+    provider: station.provider,
+    station_id: providerStationId(station)
+  });
+  return request(`/v1/observations/snapshot?${query}`, options);
+}
+
 export function fetchProcessedObservation(station, options = {}) {
   return request('/v1/observations/current/processed', {
     ...options,

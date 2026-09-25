@@ -1,10 +1,10 @@
 import { error, redirect } from '@sveltejs/kit';
 import { isManualDaily } from '$lib/observation/manual-daily.js';
-import { liveCacheControl } from '$lib/server/cache-control.js';
-import { ApiError, fetchLatestDailyPrecip,
+import { NO_STORE, liveCacheControl } from '$lib/server/cache-control.js';
+import { ApiError, fetchLatestDailyPrecip, fetchObservationSnapshot,
   fetchProcessedObservation, fetchStationByUrlSlug } from '$lib/server/api.js';
 import { contentEtag, observationVersion } from '$lib/server/etag.js';
-import { describeRequestFailure } from '$lib/observation/unavailable.js';
+import { SNAPSHOT_MISSING, describeRequestFailure } from '$lib/observation/unavailable.js';
 import {
   observationPath,
   primaryLanguage,
@@ -21,7 +21,7 @@ import {
  * metadatos y el contenido indexable no dependen de que la estación esté
  * publicando ahora mismo.
  */
-export async function load({ params, fetch, setHeaders }) {
+export async function load({ params, fetch, setHeaders, locals }) {
   const { lang, slug } = params;
 
   let station;
@@ -71,6 +71,7 @@ export async function load({ params, fetch, setHeaders }) {
   // igual y el panel lo dice.
   // Pluviómetro manual: no hay lectura actual que pedir, pedirla daba «sin
   // datos» y un error en el panel. Se enseña la última lluvia diaria.
+  const crawler = Boolean(locals?.crawler);
   const manual = isManualDaily(station) && !station.is_historical_only;
   const dailyPrecip = manual
     ? await fetchLatestDailyPrecip(station, { fetch }).catch(() => null)
@@ -79,9 +80,16 @@ export async function load({ params, fetch, setHeaders }) {
     ? { unavailable: { status: 410, code: 'historical_station' } }
     : manual
       ? { unavailable: { status: 200, code: 'manual_daily_station' } }
-      : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
-          unavailable: describeFailure(cause)
-        }));
+      : crawler
+        // Un buscador no consulta al proveedor (ver `hooks.server.js`): recibe
+        // la última lectura guardada. Durante un tiempo recibió un 429 y Google
+        // vio en cada ficha un «vuelve a intentarlo» sin un solo valor.
+        ? await fetchObservationSnapshot(station, { fetch }).catch(() => ({
+            unavailable: { status: 404, code: SNAPSHOT_MISSING }
+          }))
+        : await fetchProcessedObservation(station, { fetch }).catch((cause) => ({
+            unavailable: describeFailure(cause)
+          }));
 
   // Una hora en el navegador y cinco minutos sirviendo el anterior mientras se
   // revalida: las estaciones publican cada 10-60 minutos, así que no hay nada
@@ -104,7 +112,12 @@ export async function load({ params, fetch, setHeaders }) {
     ? dailyPrecip && `manual-${dailyPrecip.day}`
     : observationVersion(observation);
   setHeaders({
-    'cache-control': liveCacheControl(consultaBuena, 'public, max-age=3600, stale-while-revalidate=300'),
+    // La versión del buscador lleva la lectura guardada, no la actual: que
+    // no la guarde nadie. `hooks.server.js` ya la saca del CDN; esto lo dice
+    // también la propia página.
+    'cache-control': crawler
+      ? NO_STORE
+      : liveCacheControl(consultaBuena, 'public, max-age=3600, stale-while-revalidate=300'),
     ...(version
       ? { etag: contentEtag('observation', lang, station.url_slug, version, replacementPath) }
       : {})

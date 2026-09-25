@@ -810,3 +810,25 @@ class LatestDailyPrecipitation(BaseModel):
     window_start_utc: str = Field(description="Inicio de la ventana de medida (ISO, UTC).")
     window_end_utc: str = Field(description="Fin de la ventana de medida (ISO, UTC).")
     precip_mm: float = Field(description="Lluvia de la ventana, en mm.")
+
+
+class ObservationSnapshot(BaseModel):
+    """
+    Respuesta de ``GET /v1/observations/snapshot``.
+
+    La última lectura que el servidor ya tiene guardada de una estación, sin
+    consultar al proveedor: sale del almacén del ranking, que se llena con las
+    descargas masivas de cada red. Es lo que se sirve a los buscadores, que no
+    pueden convertir cada URL rastreada en una consulta con cuota.
+
+    Tiene la misma forma que ``/current/processed`` —``observation``,
+    ``derivatives``, ``daily_extremes``— para que la ficha la pinte con el
+    mismo panel, solo que con menos variables.
+    """
+
+    provider: str
+    station_id: str
+    snapshot: bool = Field(default=True, description="Siempre verdadero: datos guardados, no en vivo.")
+    observation: Dict[str, Any] = Field(description="Lectura actual: ``epoch``, ``Tc``, ``wind``, ``wind_dir_deg``, ``precip_total``.")
+    derivatives: Dict[str, Any] = Field(default_factory=dict, description="Vacío: sin serie no hay derivadas.")
+    daily_extremes: Dict[str, Any] = Field(default_factory=dict, description="Máxima, mínima y racha del día local.")

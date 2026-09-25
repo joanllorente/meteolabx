@@ -7,11 +7,14 @@ import { LANGUAGE_COOKIE } from '$lib/server/language.js';
 import { matchesEtag } from '$lib/server/etag.js';
 import { isCrawlerRequest } from '$lib/server/crawler.js';
 
-const DATOS_VIVOS = /^\/v1\/(observations\/|climo\/summary)/;
+// `/observations/snapshot` no está: sirve lo ya guardado y no llega al
+// proveedor, que es justo lo que se les da a los rastreadores.
+const DATOS_VIVOS = /^\/v1\/(observations\/(?!snapshot)|climo\/summary)/;
 
 /**
  * Un crawler puede indexar la ficha y sus metadatos, pero no convertir cada
- * URL del sitemap en una consulta en vivo a AEMET, NWS, ECCC, etc.
+ * URL del sitemap en una consulta en vivo a AEMET, NWS, ECCC, etc. Lo que ve
+ * es la última lectura guardada (`/v1/observations/snapshot`).
  */
 export async function handleFetch({ event, request, fetch }) {
   const outbound = new URL(request.url);
@@ -36,6 +39,11 @@ export async function handleFetch({ event, request, fetch }) {
  * en el aire.
  */
 export async function handle({ event, resolve }) {
+  // Se decide aquí, una sola vez, si quien pide es un rastreador. Las páginas
+  // lo leen de `locals` en vez de mirar la petición, y su respuesta nunca se
+  // comparte en el CDN (ver `compartible` más abajo): lo que ve Google no
+  // puede acabar servido a un visitante.
+  (event.locals ||= {}).crawler = isCrawlerRequest(event.request);
   const pathLanguage = event.url.pathname.split('/')[1];
   const localized = LANGUAGE_CODES.includes(pathLanguage);
   // El selector hace una navegación completa: no se precarga una petición

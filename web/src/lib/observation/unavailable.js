@@ -60,3 +60,17 @@ export function describeRequestFailure(cause, { ApiError } = {}) {
   }
   return { status: 0, code: 'unreachable' };
 }
+
+/**
+ * Un buscador pidió la ficha y no había lectura guardada que enseñarle.
+ *
+ * Los rastreadores no consultan al proveedor en vivo (ver `hooks.server.js`),
+ * así que para ellos la falta de datos no es un fallo de nadie: la ficha se
+ * sirve sin aviso, con su ubicación y sus sensores, en vez de con un «vuelve a
+ * intentarlo» que Google leía en miles de páginas como error.
+ */
+export const SNAPSHOT_MISSING = 'snapshot_missing';
+
+export function isSnapshotMissing(unavailable) {
+  return unavailable?.code === SNAPSHOT_MISSING;
+}
