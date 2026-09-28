@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.1.2",
+  "app_version": "2.2.0",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -516,6 +516,20 @@ export default {
         "Afegit el mapa de cota de neu.",
         "Afegit el mapa d'isozero."
       ],
+      "release_220_fixes": [
+        "Millorada la fluïdesa als mapes amb streamlines.",
+        "Les streamlines ja no deixen zones buides segons el nivell de zoom.",
+        "Millorada la paleta de colors del mapa de vent per veure millor les streamlines.",
+        "Corregit un problema amb la projecció del vent sobre el domini d'AROME."
+      ],
+      "release_220_improvements": [
+        "Nous models: ECMWF 0,25° i AROME-IFS 0,025°.",
+        "AROME ara fa servir la projecció de Lambert en lloc de l'equirectangular.",
+        "Nous presets de zoom sobre el domini per als models mesoescalars.",
+        "Els ciclons tropicals actius apareixen amb el seu nom sobre la baixa del model.",
+        "Es conserven les quatre passades del dia de cada model en lloc de tres.",
+        "Millores generals a la interfície de «Predicció»."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -634,6 +648,20 @@ export default {
       "release_212_improvements": [
         "Karte der Schneefallgrenze hinzugefügt.",
         "Karte der Nullgradgrenze hinzugefügt."
+      ],
+      "release_220_fixes": [
+        "Flüssigere Darstellung der Karten mit Stromlinien.",
+        "Die Stromlinien lassen je nach Zoomstufe keine leeren Bereiche mehr.",
+        "Verbesserte Farbpalette der Windkarte für eine bessere Sichtbarkeit der Stromlinien.",
+        "Ein Problem mit der Windprojektion über dem AROME-Gebiet wurde behoben."
+      ],
+      "release_220_improvements": [
+        "Neue Modelle: ECMWF 0,25° und AROME-IFS 0,025°.",
+        "AROME verwendet jetzt eine Lambert-Projektion statt der äquirektangulären.",
+        "Neue Zoom-Voreinstellungen über dem Gebiet für die mesoskaligen Modelle.",
+        "Aktive tropische Wirbelstürme erscheinen mit ihrem Namen über dem Tief des Modells.",
+        "Pro Modell werden jetzt die vier Läufe des Tages statt drei aufbewahrt.",
+        "Allgemeine Verbesserungen der Oberfläche von „Vorhersage“."
       ],
       "sources": "Quellen",
       "unaffiliated": "Nicht verbunden",
@@ -754,6 +782,20 @@ export default {
         "Added the snow level map.",
         "Added the freezing level map."
       ],
+      "release_220_fixes": [
+        "Smoother maps with streamlines.",
+        "Streamlines no longer leave empty areas depending on the zoom level.",
+        "Improved colour palette on the wind map for better streamline visibility.",
+        "Fixed an issue with the wind projection over the AROME domain."
+      ],
+      "release_220_improvements": [
+        "New models: ECMWF 0.25° and AROME-IFS 0.025°.",
+        "AROME now uses a Lambert projection instead of equirectangular.",
+        "New zoom presets over the domain for the mesoscale models.",
+        "Active tropical cyclones are labelled with their name on the model's low.",
+        "The four runs of the day are now kept for each model instead of three.",
+        "General improvements to the “Forecast” interface."
+      ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
       "version": "Version {version}",
@@ -872,6 +914,20 @@ export default {
       "release_212_improvements": [
         "Añadido el mapa de cota de nieve.",
         "Añadido el mapa de isocero."
+      ],
+      "release_220_fixes": [
+        "Mejorada la fluidez en los mapas con streamlines.",
+        "Las streamlines ya no dejan zonas vacías según el nivel de zoom.",
+        "Mejorada la paleta de colores del mapa de viento para mejorar la visualización de las streamlines.",
+        "Corregido un problema con la proyección del viento sobre el dominio de AROME."
+      ],
+      "release_220_improvements": [
+        "Nuevos modelos: ECMWF 0,25° y AROME-IFS 0,025°.",
+        "AROME ahora usa proyección de Lambert en lugar de equirectangular.",
+        "Nuevos presets de zoom sobre el dominio para los modelos mesoescalares.",
+        "Los ciclones tropicales activos aparecen con su nombre sobre la baja del modelo.",
+        "Se conservan las cuatro pasadas del día de cada modelo en lugar de tres.",
+        "Mejoras generales en la interfaz de «Predicción»."
       ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
@@ -992,6 +1048,20 @@ export default {
         "Ajout de la carte de la limite pluie-neige.",
         "Ajout de la carte de l'isotherme zéro."
       ],
+      "release_220_fixes": [
+        "Meilleure fluidité des cartes avec lignes de courant.",
+        "Les lignes de courant ne laissent plus de zones vides selon le niveau de zoom.",
+        "Palette de couleurs de la carte du vent améliorée pour mieux voir les lignes de courant.",
+        "Correction d'un problème de projection du vent sur le domaine AROME."
+      ],
+      "release_220_improvements": [
+        "Nouveaux modèles : ECMWF 0,25° et AROME-IFS 0,025°.",
+        "AROME utilise désormais une projection de Lambert au lieu de l'équirectangulaire.",
+        "Nouveaux préréglages de zoom sur le domaine pour les modèles de méso-échelle.",
+        "Les cyclones tropicaux actifs apparaissent avec leur nom sur la dépression du modèle.",
+        "Les quatre réseaux du jour sont désormais conservés pour chaque modèle au lieu de trois.",
+        "Améliorations générales de l'interface « Prévision »."
+      ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
       "version": "Version {version}",
@@ -1111,6 +1181,20 @@ export default {
         "Aggiunta la mappa della quota neve.",
         "Aggiunta la mappa dello zero termico."
       ],
+      "release_220_fixes": [
+        "Maggiore fluidità nelle mappe con linee di flusso.",
+        "Le linee di flusso non lasciano più zone vuote a seconda del livello di zoom.",
+        "Migliorata la tavolozza dei colori della mappa del vento per vedere meglio le linee di flusso.",
+        "Corretto un problema con la proiezione del vento sul dominio AROME."
+      ],
+      "release_220_improvements": [
+        "Nuovi modelli: ECMWF 0,25° e AROME-IFS 0,025°.",
+        "AROME ora usa la proiezione di Lambert invece di quella equirettangolare.",
+        "Nuovi preset di zoom sul dominio per i modelli a mesoscala.",
+        "I cicloni tropicali attivi compaiono con il loro nome sul minimo del modello.",
+        "Si conservano le quattro corse del giorno di ogni modello invece di tre.",
+        "Miglioramenti generali all'interfaccia di «Previsione»."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -1229,6 +1313,20 @@ export default {
       "release_212_improvements": [
         "Adicionado o mapa da cota de neve.",
         "Adicionado o mapa do nível de congelamento."
+      ],
+      "release_220_fixes": [
+        "Maior fluidez nos mapas com linhas de corrente.",
+        "As linhas de corrente já não deixam zonas vazias consoante o nível de zoom.",
+        "Melhorada a paleta de cores do mapa de vento para ver melhor as linhas de corrente.",
+        "Corrigido um problema com a projeção do vento sobre o domínio do AROME."
+      ],
+      "release_220_improvements": [
+        "Novos modelos: ECMWF 0,25° e AROME-IFS 0,025°.",
+        "O AROME passa a usar a projeção de Lambert em vez da equiretangular.",
+        "Novos presets de zoom sobre o domínio para os modelos de mesoescala.",
+        "Os ciclones tropicais ativos aparecem com o seu nome sobre a baixa do modelo.",
+        "Passam a conservar-se as quatro corridas do dia de cada modelo em vez de três.",
+        "Melhorias gerais na interface de «Previsão»."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -2534,6 +2632,7 @@ export default {
     }
   },
   "releases": [
+    "220",
     "212",
     "211",
     "210",

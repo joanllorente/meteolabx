@@ -1,4 +1,11 @@
-"""Endpoints de predicción AROME para el visor Svelte."""
+"""Endpoints de predicción AROME para el visor Svelte.
+
+Sirven los dos AROME —el operativo y el acoplado a IFS— con las mismas
+funciones: el router se monta una vez por modelo y cada petición toma el suyo
+del prefijo por el que entró (`/forecast/arome/…`, `/forecast/arome-ifs/…`).
+Dentro de la petición, el almacén y el cálculo siguen a ese modelo sin que
+haya que pasárselo a cada llamada.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +14,7 @@ from functools import lru_cache
 import gzip
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from server.config import Settings, get_settings
 from server.services.arome_forecast import (
@@ -19,11 +26,11 @@ from server.services.arome_forecast import (
 )
 from server.services.forecast_store import (
     PERSISTED_FORECAST_PRODUCTS,
-    LATEST_MANIFEST_KEY,
     augment_catalog_with_manifest,
     frame_key,
     get_forecast_store,
     grid_metadata,
+    latest_manifest_key,
     read_compressed_grid,
     read_json,
     retained_manifests,
@@ -32,16 +39,40 @@ from server.services.forecast_store import (
 )
 import re
 
+from server.services.arome_models import (
+    AROME,
+    AROME_IFS,
+    AROME_SOURCES,
+    current_source,
+    using_model,
+)
 from server.services.arome_wcs import AromeError
 
 
-router = APIRouter(prefix="/forecast/arome", tags=["forecast"])
+# Las rutas se declaran sin prefijo y se montan abajo una vez por modelo.
+_routes = APIRouter(tags=["forecast"])
 # Se genera del catálogo, no a mano: una lista paralela se queda atrás al
 # añadir un mapa y la API responde 422, cuyo detalle es una lista de objetos
 # que el visor no sabe enseñar.
 FORECAST_PRODUCT_PATTERN = (
     "^(" + "|".join(re.escape(product) for product in PERSISTED_FORECAST_PRODUCTS) + ")$"
 )
+
+
+def _route_model(request: Request) -> str:
+    """Modelo de la petición: el segmento que sigue a `/forecast/`.
+
+    Es el prefijo con que se montó el router, así que no lo elige el cliente:
+    solo puede ser uno de los registrados.
+    """
+    segmentos = request.url.path.split("/")
+    try:
+        model = segmentos[segmentos.index("forecast") + 1]
+    except (ValueError, IndexError):
+        model = ""
+    if model not in AROME_SOURCES:
+        raise HTTPException(status_code=404, detail="Modelo AROME desconocido.")
+    return model
 
 
 def _token(settings: Settings) -> str:
@@ -69,11 +100,16 @@ def _gzip_headers(headers: dict[str, str], *, immutable: bool) -> dict[str, str]
     })
 
 
-@router.get("/progress", summary="Progreso de las pasadas AROME persistidas")
-def get_progress() -> dict:
+@_routes.get("/progress", summary="Progreso de las pasadas AROME persistidas")
+def get_progress(model: str = Depends(_route_model)) -> dict:
     """Devuelve solo los manifiestos locales, sin consultar Météo-France."""
+    with using_model(model):
+        return _progress()
+
+
+def _progress() -> dict:
     store = get_forecast_store()
-    latest = read_json(store, LATEST_MANIFEST_KEY)
+    latest = read_json(store, latest_manifest_key())
     runs = retained_manifests(store)
     return {
         "run": latest.get("run") if latest else None,
@@ -93,8 +129,11 @@ def get_progress() -> dict:
     }
 
 
-@router.get("/report", summary="Informe de una pasada AROME")
-def get_report(run: str = Query(default="", max_length=32)) -> dict:
+@_routes.get("/report", summary="Informe de una pasada AROME")
+def get_report(
+    run: str = Query(default="", max_length=32),
+    model: str = Depends(_route_model),
+) -> dict:
     """Informe de cómo fue una pasada: tiempos por nivel, huecos y errores.
 
     Existe para poder mirar lo que pasó sin depender del correo ni del log de
@@ -102,13 +141,18 @@ def get_report(run: str = Query(default="", max_length=32)) -> dict:
     la pasada en curso, calculado al vuelo: mientras publica todavía no hay
     informe guardado, y es justo cuando más se quiere mirar.
     """
+    with using_model(model):
+        return _report(run, model)
+
+
+def _report(run: str, model: str) -> dict:
     from server.services.run_report import build_report, report_key
 
     store = get_forecast_store()
     runs = retained_manifests(store)
     if run:
         try:
-            guardado = read_json(store, report_key(run))
+            guardado = read_json(store, report_key(run, model=model))
         except ValueError:
             raise HTTPException(status_code=422, detail="Pasada no válida.")
         if guardado:
@@ -117,16 +161,24 @@ def get_report(run: str = Query(default="", max_length=32)) -> dict:
         if not manifest:
             raise HTTPException(status_code=404, detail="Esa pasada no está en el volumen.")
     else:
-        manifest = read_json(store, LATEST_MANIFEST_KEY)
+        manifest = read_json(store, latest_manifest_key())
         if not manifest:
             raise HTTPException(status_code=404, detail="Todavía no hay ninguna pasada.")
     return build_report(manifest, previous=runs)
 
 
-@router.get("/catalog", summary="Catálogo de diagnósticos AROME conectados")
-def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
+@_routes.get("/catalog", summary="Catálogo de diagnósticos AROME conectados")
+def get_catalog(
+    settings: Settings = Depends(get_settings),
+    model: str = Depends(_route_model),
+) -> dict:
+    with using_model(model):
+        return _catalog(settings)
+
+
+def _catalog(settings: Settings) -> dict:
     store = get_forecast_store()
-    manifest = read_json(store, LATEST_MANIFEST_KEY)
+    manifest = read_json(store, latest_manifest_key())
     try:
         persisted_products = deepcopy((manifest or {}).get("catalog_products") or {})
         if persisted_products:
@@ -134,7 +186,7 @@ def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
             # Météo-France: el worker ya dejó en el volumen el catálogo exacto
             # de este RUN junto con sus horas disponibles.
             payload = {
-                "model": "AROME France",
+                "model": current_source().label,
                 "resolution": "0,025°",
                 "domain": {},
                 "products": persisted_products,
@@ -206,7 +258,7 @@ def _boundaries_gzip() -> bytes:
     return gzip.compress(payload, compresslevel=6)
 
 
-@router.get("/boundaries", summary="Contornos del dominio AROME")
+@_routes.get("/boundaries", summary="Contornos del dominio AROME")
 def get_boundaries(revision: str = Query(default="", max_length=40)) -> Response:
     """Fronteras compartidas por todos los frames.
 
@@ -229,7 +281,7 @@ def get_boundaries(revision: str = Query(default="", max_length=40)) -> Response
     )
 
 
-@router.get("/frames.png", summary="Frame PNG de cizalladura o SHIP")
+@_routes.get("/frames.png", summary="Frame PNG de cizalladura o SHIP")
 def get_frame(
     product: str = Query(pattern=FORECAST_PRODUCT_PATTERN),
     valid_time: str = Query(min_length=10, max_length=40),
@@ -237,10 +289,12 @@ def get_frame(
     level: float = Query(default=10.0, ge=10, le=3000),
     run: str = Query(default="", max_length=40),
     settings: Settings = Depends(get_settings),
+    model: str = Depends(_route_model),
 ) -> Response:
     try:
         arguments = (_token(settings), product, valid_time, vertical_kind, level)
-        content, headers = frame_png(*arguments, run_iso=run) if run else frame_png(*arguments)
+        with using_model(model):
+            content, headers = frame_png(*arguments, run_iso=run) if run else frame_png(*arguments)
     except AromeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(
@@ -250,7 +304,7 @@ def get_frame(
     )
 
 
-@router.get("/thermal-profile", summary="Perfil térmico puntual para cruces múltiples")
+@_routes.get("/thermal-profile", summary="Perfil térmico puntual para cruces múltiples")
 def get_thermal_profile(
     product: str = Query(pattern="^(freezing-level|snow-level)$"),
     valid_time: str = Query(min_length=10, max_length=40),
@@ -258,16 +312,18 @@ def get_thermal_profile(
     latitude: float = Query(ge=37.0, le=56.0),
     longitude: float = Query(ge=-13.0, le=17.0),
     settings: Settings = Depends(get_settings),
+    model: str = Depends(_route_model),
 ) -> dict:
     try:
-        return thermal_point_profile(
-            _token(settings), product, valid_time, run, latitude, longitude
-        )
+        with using_model(model):
+            return thermal_point_profile(
+                _token(settings), product, valid_time, run, latitude, longitude
+            )
     except AromeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/frames.grid", summary="Rejilla Float32 interactiva AROME")
+@_routes.get("/frames.grid", summary="Rejilla Float32 interactiva AROME")
 def get_grid(
     product: str = Query(pattern=FORECAST_PRODUCT_PATTERN),
     valid_time: str = Query(min_length=10, max_length=40),
@@ -275,10 +331,19 @@ def get_grid(
     level: float = Query(default=10.0, ge=10, le=3000),
     run: str = Query(default="", max_length=40),
     settings: Settings = Depends(get_settings),
+    model: str = Depends(_route_model),
+) -> Response:
+    with using_model(model):
+        return _grid(product, valid_time, vertical_kind, level, run, settings)
+
+
+def _grid(
+    product: str, valid_time: str, vertical_kind: str, level: float, run: str,
+    settings: Settings,
 ) -> Response:
     store = get_forecast_store()
     try:
-        manifest = read_json(store, run_manifest_key(run)) if run else read_json(store, LATEST_MANIFEST_KEY)
+        manifest = read_json(store, run_manifest_key(run)) if run else read_json(store, latest_manifest_key())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="El RUN no tiene un formato ISO 8601 válido.") from exc
     stored_run = run or (str(manifest.get("run")) if manifest else "")
@@ -338,3 +403,12 @@ def get_grid(
         media_type="application/vnd.meteolabx.arome-grid",
         headers=_gzip_headers(headers, immutable=False),
     )
+
+
+# Las mismas rutas para los dos modelos: cualquiera que se añada arriba aparece
+# en ambos. AROME-IFS se monta aparte porque main.py solo lo publica cuando se
+# activa.
+router = APIRouter(prefix=f"/forecast/{AROME.id}")
+router.include_router(_routes)
+ifs_router = APIRouter(prefix=f"/forecast/{AROME_IFS.id}")
+ifs_router.include_router(_routes)

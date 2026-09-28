@@ -641,8 +641,10 @@ def test_isolated_job_payload_keeps_every_covered_hour(monkeypatch):
     )
     forecast_worker._run_isolated_job(job, 60)
 
-    payload = capturado["payload"]
+    payload = dict(capturado["payload"])
     assert payload["valid_times"] == (H1, H2)
+    # El hijo fija el modelo antes de reconstruir el trabajo, como aquí.
+    assert payload.pop("model") == "arome"
     # Y el trabajo reconstruido en el hijo debe ser equivalente al del padre.
     assert forecast_worker.ForecastJob(**payload).covered_times == job.covered_times
 

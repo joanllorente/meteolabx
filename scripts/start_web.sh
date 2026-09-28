@@ -92,10 +92,31 @@ nice -n "${METEOLABX_FORECAST_WORKER_NICE:-10}" \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
 FORECAST_WORKER_PID=$!
 
+# 2b) Worker de AROME-IFS, solo si se activa. Es el mismo worker con otro
+# modelo: mismo código, pero sus propios manifiestos, paquetes y estado. Va con
+# menos huecos que el principal porque comparte con él memoria y la cuota del
+# WCS, y el que no puede quedarse atrás es AROME.
+AROME_IFS_WORKER_PID=""
+case "$(printf '%s' "${METEOLABX_ENABLE_AROME_IFS:-}" | tr '[:upper:]' '[:lower:]')" in
+  1|true|yes)
+    nice -n "${METEOLABX_FORECAST_WORKER_NICE:-10}" \
+      "${PYTHON}" -m scripts.forecast_worker \
+      --model arome-ifs \
+      --watch \
+      --isolate-tasks \
+      --workers "${METEOLABX_AROME_IFS_WORKERS:-2}" \
+      --heavy-workers "${METEOLABX_AROME_IFS_HEAVY_WORKERS:-1}" \
+      --diagnostic-max-hours "${METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS:-36}" \
+      --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
+    AROME_IFS_WORKER_PID=$!
+    echo "[start_web] Worker AROME-IFS en marcha (pid ${AROME_IFS_WORKER_PID})"
+    ;;
+esac
+
 BACKEND_READY_PID=""
 cleanup() {
   trap - EXIT TERM INT
-  for pid in "${BACKEND_READY_PID}" "${FORECAST_WORKER_PID}" "${UVICORN_PID}"; do
+  for pid in "${BACKEND_READY_PID}" "${AROME_IFS_WORKER_PID}" "${FORECAST_WORKER_PID}" "${UVICORN_PID}"; do
     if [ -n "${pid}" ]; then
       kill -TERM "${pid}" 2>/dev/null || true
     fi
@@ -139,7 +160,8 @@ echo "⏳ Backend FastAPI arrancando en ${BACKEND_HOST}:${BACKEND_PORT} ..."
 ) &
 BACKEND_READY_PID=$!
 
-# Si cualquiera de los dos cae, salimos → Railway reinicia el servicio.
-wait -n "${UVICORN_PID}" "${FORECAST_WORKER_PID}"
+# Si cualquiera cae, salimos → Railway reinicia el servicio.
+# shellcheck disable=SC2086 # sin AROME-IFS la variable va vacía y no cuenta
+wait -n "${UVICORN_PID}" "${FORECAST_WORKER_PID}" ${AROME_IFS_WORKER_PID}
 echo "✗ Un proceso (backend o worker AROME) terminó; reiniciando servicio" >&2
 exit 1

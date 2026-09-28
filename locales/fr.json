@@ -168,6 +168,20 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à",
+    "release_220_improvements": [
+      "Nouveaux modèles : ECMWF 0,25° et AROME-IFS 0,025°.",
+      "AROME utilise désormais une projection de Lambert au lieu de l'équirectangulaire.",
+      "Nouveaux préréglages de zoom sur le domaine pour les modèles de méso-échelle.",
+      "Les cyclones tropicaux actifs apparaissent avec leur nom sur la dépression du modèle.",
+      "Les quatre réseaux du jour sont désormais conservés pour chaque modèle au lieu de trois.",
+      "Améliorations générales de l'interface « Prévision »."
+    ],
+    "release_220_fixes": [
+      "Meilleure fluidité des cartes avec lignes de courant.",
+      "Les lignes de courant ne laissent plus de zones vides selon le niveau de zoom.",
+      "Palette de couleurs de la carte du vent améliorée pour mieux voir les lignes de courant.",
+      "Correction d'un problème de projection du vent sur le domaine AROME."
+    ],
     "release_212_improvements": [
       "Ajout de la carte de la limite pluie-neige.",
       "Ajout de la carte de l'isotherme zéro."

@@ -334,7 +334,7 @@ def run_watch(w, args, stop):
                             logger.exception("No se pudo completar el mantenimiento; continúa AROME.")
                         next_maintenance = now + interval
                 if registry.latest and now >= next_heartbeat:
-                    w.write_json(store, w.WORKER_STATE_KEY, {"version": 2, "last_run": registry.latest,
+                    w.write_json(store, w.worker_state_key(), {"version": 2, "last_run": registry.latest,
                         "heartbeat_at": w._utc_now(), "workers": workers})
                     logger.info("Planificador: %d/%d activos, %d pendientes, catálogo_en_curso=%s",
                                 len(active), workers, len(pending), catalog_future is not None)

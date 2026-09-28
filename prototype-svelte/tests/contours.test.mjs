@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { contourLines, polylineLength, simplify, stepLevels } from '../src/lib/contours.js';
+import { contourLines, polylineLength, simplify, stepLevels, toPath } from '../src/lib/contours.js';
 
 /** Anillo de doce lados: empieza y acaba en el mismo punto, como los de verdad. */
 function anillo(radio, centro = 20) {
@@ -84,4 +84,24 @@ test('la isolínea se traza curva y pasa por sus vértices', () => {
   // separa del dato, solo redondea lo que hay entre vértice y vértice.
   const finales = [...contorno.path.matchAll(/C[-\d.,\s]+?\s([-\d.]+),([-\d.]+)/g)];
   assert.ok(finales.length > 6, `solo ${finales.length} tramos`);
+});
+
+
+test('un tramo corto entre tramos largos no retrocede ni forma un gancho', () => {
+  const path = toPath([[0, 0], [30, 0], [30, 1], [30, 31]]);
+  const segments = [...path.matchAll(/C([^CZM]+)/g)].map((match) => match[1].trim().split(/[ ,]+/).map(Number));
+  const [x1, y1, x2, y2, x, y] = segments[1];
+  assert.ok(y1 >= 0 && y2 >= y1 && y2 <= 1, `controles que retroceden: ${y1}, ${y2}`);
+  assert.ok(Math.max(Math.abs(x1 - 30), Math.abs(x2 - 30)) < .5);
+  assert.equal(x, 30);
+  assert.equal(y, 1);
+});
+
+test('anillos y vértices repetidos producen curvas finitas y cerradas', () => {
+  const points = [[0, 0], [20, 0], [20, 0], [20, 1], [0, 10], [0, 0]];
+  const path = toPath(points, true);
+  assert.ok(path.endsWith('Z'));
+  assert.ok(!/NaN|Infinity/.test(path));
+  assert.equal((path.match(/C/g) || []).length, 4);
+  assert.equal(toPath([[1, 1], [1, 1]]), 'M1.000,1.000');
 });

@@ -14,6 +14,7 @@ dentro del otro:
 | --- | --- | --- |
 | AROME 0,025° | `/v1/forecast/arome/…` | `forecast/runs/…`, `forecast/manifests/…` |
 | ECMWF IFS 0,25° | `/v1/forecast/ecmwf/…` | `forecast/models/ecmwf/runs/…`, `forecast/models/ecmwf/manifests/…` |
+| AROME-IFS 0,025° | `/v1/forecast/arome-ifs/…` | `forecast/models/arome-ifs/runs/…`, `forecast/models/arome-ifs/manifests/…` |
 
 AROME se queda sin prefijo a propósito: el volumen de producción ya tiene sus
 pasadas escritas ahí y moverlas las dejaría huérfanas —invisibles para el visor
@@ -26,18 +27,24 @@ a subir `FORECAST_DATA_REVISION` en `services/forecastApi.js`.
 
 ## ECMWF IFS 0,25°
 
-Un solo mapa por ahora: geopotencial de 500 hPa en color con la presión al
-nivel del mar en isobaras.
+Tres mapas: geopotencial de 500 hPa con isobaras, vorticidad relativa a
+500 hPa con isohipsas cada 6 dam y vectores Q geostróficos a 700 hPa con divergencia de Q en color.
 
-- **Origen**: open data de ECMWF, sin clave. Cada plazo es un GRIB2 global de
-  unos 140 MB con 184 mensajes; se lee el `.index` que ECMWF publica al lado y
-  se bajan por rango de bytes solo los dos mensajes del mapa, ~0,9 MB. Bajar el
-  fichero entero costaría más que toda la pasada de AROME.
-- **Dominio**: la rejilla nativa es global (1440 × 721 = 1.038.240 celdas), pero
-  se recorta al leer a una ventana euroatlántica de 501 × 241. El frame queda en
-  ~150 KB comprimidos y la pasada entera en unos 7 MB.
-- **Coste**: entre uno y tres segundos por frame —descarga y decodificación, sin
-  perfiles verticales—. Una pasada completa de 49 plazos son unos 80 segundos.
+- **Origen**: open data de ECMWF, sin clave. Se consulta el `.index` y se
+  descargan por rangos únicamente los mensajes necesarios. Vorticidad usa
+  U/V/Z a 500 hPa y presión superficial; Q usa T/Z a 700 hPa y presión superficial.
+- **Dominio**: Europa y Atlántico oriental, de 30° O a 60° E y de 25° N a
+  75° N (361 × 201 celdas). Se configura con `METEOLABX_ECMWF_DOMAIN`.
+  Los diagnósticos leen un halo de 3° antes de recortar; los frames históricos
+  conservan su dominio y el visor los centra sobre Europa al abrirlos.
+- **Diagnósticos**: derivadas esféricas, máscara bajo tierra y unidades SI.
+  Vorticidad relativa sin Coriolis, presentada en 10⁻⁵ s⁻¹. Q usa viento
+  geostrófico, filtro previo de T/Z de σ=2 celdas y la convención sin dividir
+  por estabilidad estática. La divergencia se presenta en 10⁻¹⁶ m kg⁻¹ s⁻¹;
+  azul negativo indica convergencia, rojo positivo divergencia. Las flechas
+  indican dirección de Q, con longitud fija, y se conservan en SI en el frame.
+- **Coste**: dos mensajes por frame Z500/MSLP, cuatro por vorticidad/Z500 y tres por Q;
+  147 frames por pasada completa de 49 plazos. El coste depende de la red.
 - **Alcance**: hasta +144 h cada 3 h, que es lo que publican las cuatro pasadas.
   Las 00 y 12Z llegan a +360 h; ese tramo se deja fuera por defecto.
 - **Worker**: va primero en cada ciclo y aparte del grafo de trabajos de AROME.
@@ -58,6 +65,43 @@ Para publicar unos cuantos frames sin arrancar el worker entero:
 ```bash
 python -c "from server.services.ecmwf_forecast import run_cycle; print(run_cycle(max_frames=3))"
 ```
+
+## AROME-IFS 0,025°
+
+El mismo AROME, acoplado e inicializado con el IFS del CEPPM en vez de con
+ARPEGE. Météo-France lo publica sobre la misma rejilla (1121 × 717 a 0,025°),
+con los mismos 241 campos WCS, los mismos once paquetes GRIB, los mismos 24
+niveles isobáricos y los mismos bloques de plazos hasta +51 h. Solo corre en
+las cuatro pasadas principales, 00/06/12/18Z, que son las únicas que calcula
+AROME.
+
+Por eso no tiene código propio: es el pipeline de AROME con otro origen.
+
+- **Qué cambia**: el servicio WCS (`MF-NWP-HIGHRES-AROMEIFS-0025-FRANCE-WCS`,
+  dentro de la misma suscripción a la API AROME) y la API de paquetes
+  (`DPPaquetAROMEIFS`, modelo `AROMEIFS`, producto `productAROIFS`). Es una
+  suscripción aparte en el portal, pero va con la misma aplicación y el mismo
+  token OAuth.
+- **Cómo se elige**: `server/services/arome_models.py` define las dos fuentes
+  y cuál está activa. El worker la fija para todo el proceso (`--model`); la
+  API, para cada petición según el prefijo de la ruta. Las URL, las claves del
+  almacén y las cachés en memoria la leen de ahí.
+- **Qué comparten**: la cuota del WCS (50 peticiones por minuto para los dos)
+  y el token del portal. Los paquetes van a `…/meteolabx-arome-packages/arome-ifs/`,
+  para que la limpieza de un modelo no borre los del otro.
+- **Worker**: un segundo proceso, `forecast_worker --model arome-ifs`, con sus
+  manifiestos, su estado y sus avisos por correo. No publica ECMWF.
+
+Variables de entorno:
+
+| Variable | Por defecto | Para qué |
+| --- | --- | --- |
+| `METEOLABX_ENABLE_AROME_IFS` | vacío | Con `1` arranca su worker y publica su ruta en la API. |
+| `METEOLABX_AROME_IFS_WORKERS` | `2` | Huecos de su worker; comparte memoria con el de AROME. |
+| `METEOLABX_AROME_IFS_HEAVY_WORKERS` | `1` | Perfiles convectivos simultáneos. |
+
+El visor lo enseña siempre, igual que a ECMWF: sin la variable en el servicio,
+su pestaña aparece pero la API responde 404.
 
 ## Arquitectura Railway
 

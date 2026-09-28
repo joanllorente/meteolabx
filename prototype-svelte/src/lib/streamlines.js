@@ -60,6 +60,31 @@ export const STREAM_MAX_LENGTH = 60;
 export const STREAM_SELF_SKIP = 2.5;
 
 /**
+ * Pasa un vector físico (este, norte) a la dirección que tiene en la rejilla.
+ *
+ * Las rejillas son de latitud y longitud: una celda mide lo mismo en grados
+ * en los dos ejes, pero de este a oeste son cos φ veces menos kilómetros. Un
+ * viento de u m/s cruza por tanto más columnas que filas un viento de v m/s
+ * igual, y trazarlo con (u, v) tal cual lo giraba hacia el meridiano: a 60°
+ * un suroeste salía 18° desviado y las líneas cortaban las isobaras. El módulo
+ * se conserva, que es el que dice la intensidad.
+ */
+export function gridDirection(frame, u, v, y) {
+  // Sin límites geográficos no hay latitud con la que corregir; y un frame
+  // reproyectado a la LCC ya tiene celdas cuadradas y el viento girado.
+  if (!frame.bounds || frame.lcc) return { u, v, magnitude: Math.hypot(u, v) };
+  const [west, south, east, north] = frame.bounds;
+  const dLon = (east - west) / frame.width;
+  const dLat = (north - south) / frame.height;
+  const latitud = (north - y * dLat) * Math.PI / 180;
+  const gu = u / (dLon * Math.max(0.05, Math.cos(latitud)));
+  const gv = v / dLat;
+  const magnitude = Math.hypot(u, v);
+  const escala = magnitude / (Math.hypot(gu, gv) || 1);
+  return { u: gu * escala, v: gv * escala, magnitude };
+}
+
+/**
  * Interpola el vector sin exigir que el campo escalar del mapa tenga dato.
  * En productos como la velocidad vertical en el NCL, el viento de 10 m sigue
  * estando definido incluso donde no se puede calcular el diagnóstico vertical.
@@ -80,14 +105,18 @@ export function sampleVectorField(frame, x, y) {
   const weights = [(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty];
   const u = indexes.reduce((sum, index, i) => sum + frame.u[index] * weights[i], 0);
   const v = indexes.reduce((sum, index, i) => sum + frame.v[index] * weights[i], 0);
-  const magnitude = Math.hypot(u, v);
-  return magnitude >= .35 ? { u, v, magnitude } : null;
+  const vector = gridDirection(frame, u, v, y + 0.5);
+  return vector.magnitude >= .35 ? vector : null;
 }
 
 /** Rejilla de cubos para preguntar «¿hay algún punto cerca?» en tiempo constante. */
 function makeGrid(cell) {
   const buckets = new Map();
-  const key = (x, y) => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
+  // Clave numérica: con cadenas, construir y comparar el texto de cada cubo
+  // se llevaba buena parte del reparto. El desplazamiento admite índices
+  // negativos, que salen cuando el encuadre desborda la rejilla.
+  const cubo = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
+  const key = (x, y) => cubo(Math.floor(x / cell), Math.floor(y / cell));
   return {
     add(x, y) {
       const clave = key(x, y);
@@ -102,11 +131,11 @@ function makeGrid(cell) {
       const cy = Math.floor(y / cell);
       for (let dy = -1; dy <= 1; dy += 1) {
         for (let dx = -1; dx <= 1; dx += 1) {
-          const cubo = buckets.get(`${cx + dx},${cy + dy}`);
-          if (!cubo) continue;
-          for (let index = 0; index < cubo.length; index += 2) {
-            const ex = cubo[index] - x;
-            const ey = cubo[index + 1] - y;
+          const puntos = buckets.get(cubo(cx + dx, cy + dy));
+          if (!puntos) continue;
+          for (let index = 0; index < puntos.length; index += 2) {
+            const ex = puntos[index] - x;
+            const ey = puntos[index + 1] - y;
             if (ex * ex + ey * ey < limite) return true;
           }
         }
@@ -131,7 +160,10 @@ export function evenlySpacedStreamlines({
   testRatio = STREAM_TEST_RATIO,
   maxLength = STREAM_MAX_LENGTH * separation,
   minLength = separation * STREAM_MIN_LENGTH,
-  maxLines = 400
+  // Holgado: con 400 el viento de superficie, que se parte en muchas líneas
+  // cortas, gastaba el cupo antes de llegar a los bordes y el mapa ampliado
+  // se quedaba con zonas enteras en blanco, distintas según el zoom.
+  maxLines = 1500
 }) {
   const grid = makeGrid(separation);
   const testDistance = separation * testRatio;
@@ -244,9 +276,27 @@ export function evenlySpacedStreamlines({
     }
   }
 
-  while (semillas.length && lines.length < maxLines) {
-    const [x, y] = semillas.shift();
-    trazar(x, y);
+  // Cola con índice, no con `shift()`: cada línea aceptada deja dos semillas
+  // por punto, decenas de miles con el mapa ampliado, y `shift()` recoloca el
+  // array entero en cada vuelta. A ×2 el reparto tardaba casi un segundo.
+  let siguiente = 0;
+  const propagar = () => {
+    for (; siguiente < semillas.length && lines.length < maxLines; siguiente += 1) {
+      const [x, y] = semillas[siguiente];
+      trazar(x, y);
+    }
+  };
+  propagar();
+
+  // Las semillas solo nacen al lado de líneas aceptadas. Donde el viento
+  // converge o se encalma, las líneas salen cortas y se descartan, y lo que
+  // hay detrás no llega a recibir ninguna: quedaban zonas enteras vacías. Un
+  // barrido en rejilla busca esos huecos y vuelve a propagar desde cada uno.
+  const paso = separation * 2;
+  for (let y = bounds.north + paso / 2; y < bounds.south && lines.length < maxLines; y += paso) {
+    for (let x = bounds.west + paso / 2; x < bounds.east && lines.length < maxLines; x += paso) {
+      if (trazar(x, y)) propagar();
+    }
   }
   return lines;
 }
@@ -280,6 +330,51 @@ export function streamlineArrows(points, spacing) {
 }
 
 
+
+/**
+ * Junta en un solo trazo los tramos que comparten opacidad.
+ *
+ * Cada tramo era su propio `<path>`, y con su halo al lado: miles de nodos
+ * SVG que el navegador volvía a rasterizar en cada paso del gesto, y el mapa
+ * se arrastraba. Las opacidades son pocas —las de los escalones del
+ * desvanecido—, así que todo el mapa cabe en unos pocos trazos.
+ */
+export function pathsByOpacity(segments, toPath) {
+  const capas = new Map();
+  for (const tramo of segments) {
+    const opacidad = Math.round(tramo.opacity * 100) / 100;
+    const capa = capas.get(opacidad);
+    const d = toPath(tramo.points);
+    if (capa) capa.push(d);
+    else capas.set(opacidad, [d]);
+  }
+  return [...capas].sort(([a], [b]) => a - b).map(([opacity, trazos]) => ({ opacity, d: trazos.join('') }));
+}
+
+/**
+ * Todas las puntas de flecha en un solo trazo, en coordenadas de la rejilla.
+ *
+ * `size` es el tamaño en unidades de rejilla: quien llama lo divide por el
+ * zoom asentado para que en pantalla midan siempre lo mismo. Durante un gesto
+ * crecen o encogen con el mapa hasta que se vuelve a asentar, que es lo que
+ * cuesta no tener un nodo con su propia transformación por cada flecha.
+ */
+export function arrowHeadsPath(arrows, size) {
+  const ala = size * 0.62;
+  let d = '';
+  for (const { x, y, angle } of arrows) {
+    const radianes = angle * Math.PI / 180;
+    const cos = Math.cos(radianes);
+    const sin = Math.sin(radianes);
+    // Las dos alas, giradas con la línea: (−size, ±ala) en el sistema de la flecha.
+    const ax = x - size * cos + ala * sin;
+    const ay = y - size * sin - ala * cos;
+    const bx = x - size * cos - ala * sin;
+    const by = y - size * sin + ala * cos;
+    d += `M${ax.toFixed(2)},${ay.toFixed(2)}L${x.toFixed(2)},${y.toFixed(2)}L${bx.toFixed(2)},${by.toFixed(2)}`;
+  }
+  return d;
+}
 
 /** Largo del desvanecido de cada punta, en veces la separación. */
 export const STREAM_FADE = 1.6;

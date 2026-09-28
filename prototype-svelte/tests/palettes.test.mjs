@@ -70,3 +70,33 @@ test('cada valor rotulado en la leyenda está dentro de la escala', () => {
     assert.ok(tick >= T2M.min && tick <= T2M.max, `${tick} se sale de la escala`);
   }
 });
+
+test('la θe de ECMWF conserva los colores de siempre hasta 60 °C y sigue por encima', async () => {
+  const { thetaEPalette, defaultPalette, paletteStop, anchorFraction, LUT_SIZE } = await import('../src/lib/palettes.js');
+  const anchors = [[-10, 0], [60, 9 / 13], [90, 1]];
+  const last = LUT_SIZE - 1;
+  for (let valor = -10; valor <= 60; valor += 0.5) {
+    const antes = paletteStop(defaultPalette, (valor + 10) / 70 * last);
+    const ahora = paletteStop(thetaEPalette, anchorFraction(valor, anchors) * last);
+    for (let canal = 0; canal < 3; canal += 1) assert.ok(Math.abs(antes[canal] - ahora[canal]) <= 1, `${valor} °C`);
+  }
+  assert.notDeepEqual(
+    paletteStop(thetaEPalette, anchorFraction(70, anchors) * last),
+    paletteStop(thetaEPalette, anchorFraction(90, anchors) * last)
+  );
+});
+
+test('las streamlines oscuras se leen sobre el viento flojo y moderado', async () => {
+  const { windPalette, defaultPalette, paletteStop, LUT_SIZE } = await import('../src/lib/palettes.js');
+  const { tintaLegible, TINTA_OSCURA } = await import('../src/lib/ink.js');
+  const last = LUT_SIZE - 1;
+  // Hasta el naranja, que en el viento a 10 m (0–55 m/s) son unos 38 m/s: todo
+  // lo que se ve en superficie salvo temporales.
+  for (let posicion = 0; posicion <= last * 0.7; posicion += 1) {
+    assert.equal(tintaLegible([paletteStop(windPalette, posicion)]), TINTA_OSCURA, `posición ${posicion}`);
+  }
+  // Era el fallo: la calma de la paleta genérica pedía tinta clara.
+  assert.notEqual(tintaLegible([paletteStop(defaultPalette, 0)]), TINTA_OSCURA);
+  // Y el viento fuerte acaba en los mismos colores que antes.
+  assert.deepEqual(windPalette.slice(-7), defaultPalette.slice(-7));
+});

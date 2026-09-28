@@ -30,14 +30,13 @@ from server.services.arome_forecast import (
 )
 from server.services.forecast_store import (
     CONVECTIVE_FORECAST_PRODUCTS,
-    RUN_SLOTS_KEY,
     LEVEL_INDEX_PRODUCTS,
     DERIVED_FORECAST_PRODUCTS,
-    LATEST_MANIFEST_KEY,
     PERSISTED_FORECAST_PRODUCTS,
     delete_run,
     frame_key,
     get_forecast_store,
+    latest_manifest_key,
     mark_available,
     mark_error,
     new_manifest,
@@ -46,8 +45,16 @@ from server.services.forecast_store import (
     register_run_slot,
     retained_manifests,
     run_manifest_key,
+    run_slots_key,
     write_grid,
     write_json,
+)
+from server.services.arome_models import (
+    AROME_SOURCES,
+    DEFAULT_AROME_MODEL,
+    MODEL_ENV,
+    current_model,
+    set_process_model,
 )
 from server.services.arome_packages import (
     AromePackageError,
@@ -63,6 +70,18 @@ from server.services.arome_wcs import forecast_calculation_scope
 
 logger = logging.getLogger("meteolabx.forecast_worker")
 WORKER_STATE_KEY = "forecast/worker/state.json"
+
+
+def worker_state_key() -> str:
+    """Estado del worker del modelo que calcula este proceso.
+
+    Cada AROME tiene su propio worker, y compartir el fichero haría que uno
+    rotara las pasadas del otro al leer `last_run`.
+    """
+    model = current_model()
+    if model == DEFAULT_AROME_MODEL:
+        return WORKER_STATE_KEY
+    return f"forecast/models/{model}/worker/state.json"
 
 NATIVE_PRODUCTS = tuple(
     product
@@ -280,7 +299,7 @@ def _persist_manifest(
     _refresh_progress(manifest)
     write_json(store, run_manifest_key(str(manifest["run"])), manifest)
     if latest_run is None or str(manifest["run"]) == latest_run:
-        write_json(store, LATEST_MANIFEST_KEY, manifest)
+        write_json(store, latest_manifest_key(), manifest)
 
 
 def _publish_run_slot(store, manifest: dict[str, Any]) -> None:
@@ -309,7 +328,7 @@ def _oldest_unfinished_run(store, latest_run: str) -> str:
     diagnósticos convectivos o con DCAPE.
     """
     pendientes = [latest_run]
-    indice = read_json(store, RUN_SLOTS_KEY) or {}
+    indice = read_json(store, run_slots_key()) or {}
     for item in (indice.get("slots") or {}).values():
         run_iso = str((item or {}).get("run") or "")
         if not run_iso:
@@ -844,14 +863,21 @@ def _configure_logging() -> None:
     trabajo de verdad —qué tarda cada fase, qué paquetes se bajan, cuándo se
     cae al WCS— se pierde sin dejar rastro.
     """
+    # Con dos AROME calculando a la vez, sus líneas se mezclan en el mismo
+    # log de Railway: el que no es el operativo lleva su nombre delante.
+    model = current_model()
+    etiqueta = "" if model == DEFAULT_AROME_MODEL else f"[{model}] "
     logging.basicConfig(
         level=os.getenv("METEOLABX_LOG_LEVEL", "INFO").upper(),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        format=f"%(asctime)s %(levelname)s {etiqueta}%(name)s: %(message)s",
         force=True,
     )
 
 
 def _isolated_job_entry(result_queue, payload: dict[str, Any]) -> None:
+    # Antes que nada: el log, las URL y las claves dependen del modelo. El
+    # entorno ya lo trae, pero no se confía un dato así a una herencia.
+    set_process_model(payload.pop("model", DEFAULT_AROME_MODEL))
     _configure_logging()
     try:
         settings = get_settings()
@@ -886,10 +912,11 @@ def _run_isolated_job(job: ForecastJob, timeout_s: int, *, scheduled: bool = Fal
                 # que cubre, y el padre daría por publicadas horas que nadie
                 # ha calculado.
                 "valid_times": job.valid_times,
+                "model": current_model(),
                 **({"scheduled": True} if scheduled else {}),
             },
         ),
-        name=f"arome-{job.products[0]}-{job.valid_time[11:13]}",
+        name=f"{current_model()}-{job.products[0]}-{job.valid_time[11:13]}",
     )
     process.start()
     if scheduled and job.tier >= 2:
@@ -1415,7 +1442,7 @@ def _log_run_summary(manifest: dict[str, Any]) -> bool:
 def _rotated_manifests(store, manifests: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if len(manifests) < 2:
         return manifests
-    state = read_json(store, WORKER_STATE_KEY) or {}
+    state = read_json(store, worker_state_key()) or {}
     last_run = state.get("last_run")
     runs = [str(manifest.get("run")) for manifest in manifests]
     if last_run not in runs:
@@ -1773,7 +1800,7 @@ def _run_parallel_work(
         _persist_manifest(store, manifest, latest_run=latest_run)
         write_json(
             store,
-            WORKER_STATE_KEY,
+            worker_state_key(),
             {
                 "version": 2,
                 "last_run": run_iso,
@@ -2080,7 +2107,7 @@ def run_incremental_cycle(
                 _persist_manifest(store, manifest, latest_run=latest_run)
                 write_json(
                     store,
-                    WORKER_STATE_KEY,
+                    worker_state_key(),
                     {
                         "version": 1,
                         "last_run": run_iso,
@@ -2179,6 +2206,15 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--model",
+        choices=sorted(AROME_SOURCES),
+        default=os.getenv(MODEL_ENV, "").strip() or DEFAULT_AROME_MODEL,
+        help=(
+            "AROME que calcula este worker. Cada modelo necesita su propio "
+            "proceso: comparten código, pero no manifiestos ni paquetes."
+        ),
+    )
+    parser.add_argument(
         "--watch",
         action="store_true",
         default=os.getenv("METEOLABX_FORECAST_WORKER_WATCH", "").lower()
@@ -2192,6 +2228,11 @@ def main() -> int:
         help="Segundos entre ciclos cuando --watch está activo.",
     )
     args = parser.parse_args()
+    set_process_model(args.model)
+    if args.model != DEFAULT_AROME_MODEL:
+        # ECMWF es del worker principal. Dos procesos publicándolo a la vez se
+        # pisarían el manifiesto.
+        args.ecmwf_max_frames = -1
     _configure_logging()
 
     def run_cycle() -> dict[str, Any]:

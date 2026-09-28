@@ -264,7 +264,9 @@ export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } =
   const cabecera = tarjeta.querySelector('.map-head');
   const area = tarjeta.querySelector('.forecast-map');
   const raster = area?.querySelector('canvas.grid-raster');
-  const vector = area?.querySelector('svg.vector-overlay');
+  // Todas las capas vectoriales, en su orden: las streamlines van en una
+  // propia, debajo de fronteras, isolíneas y flechas.
+  const vectores = [...(area?.querySelectorAll('svg.vector-overlay') || [])];
   const superficie = area?.querySelector('.map-surface');
   if (!area || !raster) throw new Error('El mapa todavía no está en pantalla.');
 
@@ -305,7 +307,7 @@ export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } =
   ctx.drawImage(raster, rasterRect.x, rasterRect.y, rasterRect.width, rasterRect.height);
   ctx.imageSmoothingEnabled = true;
 
-  if (vector) {
+  for (const vector of vectores) {
     const imagen = await capaVectorial(vector, areaRect, origen);
     if (imagen) ctx.drawImage(imagen, areaRect.x, areaRect.y, areaRect.width, areaRect.height);
   }

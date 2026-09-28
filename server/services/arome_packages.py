@@ -27,10 +27,12 @@ import numpy as np
 import rasterio
 import requests
 
+from server.services.arome_models import AROME, current_source
 from server.services.meteofrance_auth import authorization_headers
 
 
-PACKAGE_BASE = "https://public-api.meteofrance.fr/previnum/DPPaquetAROME/v1"
+PACKAGE_ROOT = "https://public-api.meteofrance.fr/previnum"
+PACKAGE_BASE = f"{PACKAGE_ROOT}/{AROME.package_api}/v1"
 # Cada paquete cubre siete plazos horarios consecutivos.
 logger = logging.getLogger("meteolabx.arome_packages")
 
@@ -79,7 +81,7 @@ class AromePackageNotReady(AromePackageError):
         self.retry_after = retry_after
 
 
-def _cache_dir() -> Path:
+def _cache_root() -> Path:
     configured = os.getenv("METEOLABX_AROME_PACKAGE_CACHE_DIR", "").strip()
     if configured:
         return Path(configured)
@@ -88,6 +90,20 @@ def _cache_dir() -> Path:
     # pierde en cada reinicio y una pasada son unos 8 GB de bloques que habría
     # que volver a bajar, justo cuando el servicio acaba de caerse.
     return Path(tempfile.gettempdir()) / "meteolabx-arome-packages"
+
+
+def _cache_dir() -> Path:
+    """Directorio de paquetes del modelo activo.
+
+    AROME se queda en la raíz, donde ya estaban sus ficheros; cualquier otro
+    va a un subdirectorio. Los nombres llevan la pasada pero no el modelo, y
+    las dos pasadas de las 00Z se llamarían igual: además de pisarse, la
+    limpieza de un modelo borraría los paquetes que el otro está leyendo.
+    Todos los recorridos son `glob` sin recursión, así que no se cruzan.
+    """
+    source = current_source()
+    root = _cache_root()
+    return root if source.id == AROME.id else root / source.id
 
 
 def block_range(run: datetime, valid_time: datetime) -> str:
@@ -322,7 +338,11 @@ def _download_package(
     package: str, run: datetime, block: str, destination: Path
 ) -> Path:
     partial = destination.with_suffix(f".{os.getpid()}.part")
-    url = f"{PACKAGE_BASE}/models/AROME/grids/0.025/packages/{package}/productARO"
+    source = current_source()
+    url = (
+        f"{PACKAGE_ROOT}/{source.package_api}/v1/models/{source.package_model}"
+        f"/grids/0.025/packages/{package}/{source.package_product}"
+    )
     parameters = {
         "referencetime": run.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "time": block, "format": "grib2",

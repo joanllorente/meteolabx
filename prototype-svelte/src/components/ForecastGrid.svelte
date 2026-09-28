@@ -2,16 +2,18 @@
   import { Locate, Minus, Plus } from '@lucide/svelte';
   import {
     LUT_SIZE, anchorFraction, bandOfValue, bandPosition, defaultPalette,
-    paletteStop, precipitationPalette,
+    paletteStop, precipitationPalette, divergingPalette, thetaEPalette, windPalette,
   } from '../lib/palettes.js';
   import { contourLines, stepLevels } from '../lib/contours.js';
   import { placeCities } from '../lib/cityPlacement.js';
-  import { troughAxes as detectTroughAxes } from '../lib/troughs.js';
+  import { troughAxes as detectTroughAxes, troughAxesLonLat as detectTroughAxesLonLat, troughAxesProjected as detectTroughAxesProjected } from '../lib/troughs.js';
+  import { frameGeo } from '../lib/projection.js';
   import {
     CENTRE_PROMINENCE_HPA, pressureCentres as detectPressureCentres,
   } from '../lib/pressureCentres.js';
   import {
-    STREAM_FADE, evenlySpacedStreamlines, fadeSegments, sampleVectorField, streamlineArrows
+    STREAM_FADE, arrowHeadsPath, evenlySpacedStreamlines, fadeSegments, gridDirection, pathsByOpacity,
+    sampleVectorField, streamlineArrows
   } from '../lib/streamlines.js';
   import { colorDeFondo, mezclaSobre, tintaLegible } from '../lib/ink.js';
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
@@ -25,6 +27,7 @@
   // tramos en vez de a partes iguales por grado.
   let {
     frame, productLabel, language = 'es', resetKey = 0, formatProbe = null,
+    colorPalette = '', vectorMinMagnitude = .5, vectorScaleMagnitude = 0,
     scaleBreaks = null, scaleAnchors = null, zeroFloor = 0,
     displayMin = null, displayMax = null, contourStep = 0, contourLayerId = 'isotherms', formatContour = null,
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
@@ -32,8 +35,11 @@
     troughAxes = false, overlayLabel = '',
     // Viento dibujado como líneas de corriente en vez de flechas sueltas: se
     // ve el flujo entero y, con él, dónde converge.
-    flowLines = false,
+    flowLines = false, flowMinMagnitude = 0,
     pressureCentres = false, multipleSolutions = false, overlaySmoothing = 4, overlayLayerLabel = '',
+    // Ciclones con nombre: posición de la baja del modelo en el campo de
+    // presión de esta hora, la misma en todos los mapas.
+    stormLabels = [],
     onprofileclick = null,
     onink = null,
     // Encuadre guardado fuera del componente: `{ key, zoom, panX, panY }`.
@@ -61,8 +67,11 @@
   // queda en «isohipsas» en cuanto el idioma tiene traducción propia: el
   // respaldo solo entra cuando no la hay.
   )).map((capa) => (
+    // El nombre de la capa superpuesta se traduce por su clave: antes todo lo
+    // que declaraba un nombre propio salía como «Isobaras», también las
+    // isentrópicas de la frontogénesis.
     capa.id === 'isohypses' && overlayLayerLabel
-      ? { ...capa, labelKey: 'isobars', label: overlayLayerLabel }
+      ? { ...capa, labelKey: overlayLayerLabel === 'Isentrópicas' ? 'isentropes' : 'isobars', label: overlayLayerLabel }
       : capa
   )));
   const showValueContours = $derived(contourStep > 0 && layerPreferences[contourLayerId]);
@@ -99,9 +108,11 @@
    */
   // El respaldo evita una división por cero si un frame llegara sin límites:
   // la detección los usa como divisor y saldrían radios infinitos.
+  // Un frame reproyectado a la LCC ya trae su celda en km.
   const cellKm = $derived(
-    (frame.bounds?.[3] - frame.bounds?.[1]) / frame.height * 100 || 2.5
+    frame.cellKm || (frame.bounds?.[3] - frame.bounds?.[1]) / frame.height * 100 || 2.5
   );
+  const geo = $derived(frameGeo(frame));
   // El engrosado previo buscaba bloques de unos 10 km, que es lo que valían
   // las cuatro celdas de AROME. Donde la celda ya mide más, no hay nada que
   // engrosar.
@@ -143,6 +154,8 @@
   let raster;
   let multipleRaster = $state();
   let hover = $state(null);
+  // Hueco que necesita la tarjeta del cursor, con su separación: en píxeles.
+  const TOOLTIP_ROOM = { alto: 125, ancho: 200 };
   let zoom = $state(1);
   let panX = $state(0);
   let panY = $state(0);
@@ -288,7 +301,10 @@
     }
     const isPrecipitation = frame.product === 'precip-1h';
     const last = LUT_SIZE - 1;
-    const palette = isPrecipitation || scaleBreaks?.length
+    const palette = colorPalette === 'diverging' ? divergingPalette
+      : colorPalette === 'theta-e' ? thetaEPalette
+      : colorPalette === 'wind' ? windPalette
+      : isPrecipitation || scaleBreaks?.length
       ? precipitationPalette
       : defaultPalette;
     const lut = paletteLut(palette, 235);
@@ -352,24 +368,57 @@
 
   function makeBoundaryPaths() {
     if (!frame.boundaries?.length) return [];
-    const [west, south, east, north] = frame.bounds;
     const paths = [];
+    // El servidor recorta costas y fronteras a un recuadro de latitud y
+    // longitud, y el recorte cierra cada polígono por el borde del recuadro.
+    // En latitud y longitud ese cierre caía justo en el borde del mapa; en una
+    // LCC el recuadro es un abanico que cruza la vista, y los cierres salían
+    // como diagonales sueltas. Los tramos que corren a lo largo del borde del
+    // recorte —sus dos extremos en el mismo lado— no se dibujan.
+    let oeste = Infinity, este = -Infinity, sur = Infinity, norte = -Infinity;
+    for (const region of frame.boundaries) {
+      for (const ring of region.rings) {
+        for (const [longitude, latitude] of ring) {
+          if (longitude < oeste) oeste = longitude;
+          if (longitude > este) este = longitude;
+          if (latitude < sur) sur = latitude;
+          if (latitude > norte) norte = latitude;
+        }
+      }
+    }
+    const tolerancia = 1e-6;
+    const enBorde = ([lonA, latA], [lonB, latB]) => (
+      (Math.abs(lonA - oeste) < tolerancia && Math.abs(lonB - oeste) < tolerancia)
+      || (Math.abs(lonA - este) < tolerancia && Math.abs(lonB - este) < tolerancia)
+      || (Math.abs(latA - sur) < tolerancia && Math.abs(latB - sur) < tolerancia)
+      || (Math.abs(latA - norte) < tolerancia && Math.abs(latB - norte) < tolerancia)
+    );
+    const punto = ([longitude, latitude]) => {
+      const [x, y] = geo.toGrid(longitude, latitude);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    };
     for (const region of frame.boundaries) {
       // Los mapas con isolíneas propias se quedan solo con costas y fronteras
       // nacionales: sobre un campo ya cruzado de isotermas, las divisiones
       // interiores compiten con ellas y no aportan nada a la lectura.
       if (nationalBoundariesOnly && (region.level || 'country') !== 'country') continue;
       for (const ring of region.rings) {
-        const points = ring.map(([longitude, latitude]) => [
-          (longitude - west) / (east - west) * frame.width,
-          (north - latitude) / (north - south) * frame.height
-        ]);
-        if (points.length) {
-          paths.push({
-            path: `M${points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join('L')}Z`,
-            level: region.level || 'country'
-          });
+        if (ring.length < 2) continue;
+        // El anillo cerrado, tramo a tramo, empezando un trazo nuevo después
+        // de cada tramo de borde que se salta.
+        const cerrado = ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring : [...ring, ring[0]];
+        let trazo = '';
+        let abierto = false;
+        for (let i = 0; i < cerrado.length - 1; i += 1) {
+          if (enBorde(cerrado[i], cerrado[i + 1])) {
+            abierto = false;
+            continue;
+          }
+          if (!abierto) trazo += `M${punto(cerrado[i])}`;
+          trazo += `L${punto(cerrado[i + 1])}`;
+          abierto = true;
         }
+        if (trazo) paths.push({ path: trazo, level: region.level || 'country' });
       }
     }
     // Las divisiones interiores se dibujan primero para que la frontera nacional
@@ -427,11 +476,13 @@
       }
     }
     if (!count) return null;
-    const u = sumU / count;
-    const v = sumV / count;
-    const magnitude = Math.hypot(u, v);
-    if (magnitude < .5) return null;
-    return { x: sumX / count, y: sumY / count, angle: Math.atan2(-v, u) * 180 / Math.PI };
+    // La media se hace con las componentes físicas; solo el ángulo que se
+    // dibuja pasa a la rejilla, corregido por la latitud del grupo.
+    const x = sumX / count;
+    const y = sumY / count;
+    const { u, v, magnitude } = gridDirection(frame, sumU / count, sumV / count, y);
+    if (magnitude < vectorMinMagnitude) return null;
+    return { x, y, angle: Math.atan2(-v, u) * 180 / Math.PI, magnitude };
   }
 
   function makeArrowGlyphs() {
@@ -451,16 +502,26 @@
       }
     }
     const length = Math.max(3.8, baseStep * .58);
-    const half = length / 2;
-    const head = length * .3;
-    return {
-      arrows,
-      path: `M${(-half).toFixed(2)},0L${half.toFixed(2)},0M${(half - head).toFixed(2)},${(-head * .62).toFixed(2)}L${half.toFixed(2)},0L${(half - head).toFixed(2)},${(head * .62).toFixed(2)}`
+    const arrowPath = (size) => {
+      const half = size / 2;
+      const head = Math.min(size * .3, length * .3);
+      return `M${(-half).toFixed(2)},0L${half.toFixed(2)},0M${(half - head).toFixed(2)},${(-head * .62).toFixed(2)}L${half.toFixed(2)},0L${(half - head).toFixed(2)},${(head * .62).toFixed(2)}`;
     };
+    // Donde el módulo dice algo —vectores Q—, la flecha crece con él; el
+    // viento, en cambio, ya lleva la intensidad en el color.
+    if (vectorScaleMagnitude > 0) {
+      for (const arrow of arrows) {
+        arrow.path = arrowPath(length * Math.max(.3, Math.min(1, arrow.magnitude / vectorScaleMagnitude)));
+      }
+    }
+    return { arrows, path: arrowPath(length) };
   }
 
   function sampleVector(x, y) {
-    return sampleVectorField(frame, x, y);
+    const muestra = sampleVectorField(frame, x, y);
+    // Un umbral propio corta las líneas donde el viento no llega: en el jet
+    // stream quedan solo sobre el jet, donde está el color.
+    return muestra && muestra.magnitude >= flowMinMagnitude ? muestra : null;
   }
 
 
@@ -469,7 +530,7 @@
 
   function makeStreamlinePaths() {
     if (!frame.u || !frame.v || !flowLines) {
-      return { paths: [], segments: [], arrows: [], markerPath: '' };
+      return { particles: '', layers: [], arrows: '' };
     }
     // Separación entre líneas vecinas: el reparto la respeta por su cuenta,
     // así que esto fija la densidad del mapa y no dónde empieza cada línea.
@@ -481,20 +542,25 @@
       step: separacion / 4
     });
     const trazo = (puntos) => `M${puntos.map(([px, py]) => `${px.toFixed(2)},${py.toFixed(2)}`).join('L')}`;
+    // En píxeles de pantalla a zoom 1; en la rejilla, dividido por el zoom.
     const markerSize = Math.max(2.4, separacion * viewZoom * 0.16);
+    // Pocos trazos grandes en vez de un nodo por tramo y por flecha: con miles
+    // de nodos el mapa no se podía ni arrastrar.
     return {
-      // La línea entera, para la animación de partículas.
-      paths: lineas.map((linea) => trazo(linea.points)),
-      // Y partida en tramos con su tinta, para que las puntas se desvanezcan
+      // Las líneas enteras, para la animación de partículas.
+      particles: lineas.map((linea) => trazo(linea.points)).join(''),
+      // Y partidas en tramos con su tinta, para que las puntas se desvanezcan
       // en vez de cortarse en seco a media pantalla.
-      segments: lineas.flatMap((linea) => (
-        fadeSegments(linea.points, { fade: separacion * STREAM_FADE })
-          .map((tramo) => ({ d: trazo(tramo.points), opacity: tramo.opacity }))
-      )),
+      layers: pathsByOpacity(
+        lineas.flatMap((linea) => fadeSegments(linea.points, { fade: separacion * STREAM_FADE })),
+        trazo
+      ),
       // Una flecha cada dos separaciones y media: bastantes para seguir el
       // sentido sin que dos caigan sobre el mismo tramo de línea.
-      arrows: lineas.flatMap((linea) => streamlineArrows(linea.points, separacion * 2.5)),
-      markerPath: `M${(-markerSize).toFixed(2)},${(-markerSize * .62).toFixed(2)}L0,0L${(-markerSize).toFixed(2)},${(markerSize * .62).toFixed(2)}`
+      arrows: arrowHeadsPath(
+        lineas.flatMap((linea) => streamlineArrows(linea.points, separacion * 2.5)),
+        markerSize / viewZoom
+      )
     };
   }
 
@@ -505,20 +571,12 @@
   const contourPaths = $derived.by(() => {
     if (!frame.overlay || multipleSolutions) return [];
     if (overlayStep > 0) {
-      // Isohipsas: el geopotencial es un campo mucho más suave que la
-      // temperatura, así que basta con medio sigma y con tirar los anillos
-      // pequeños; no hace falta la limpieza entera.
       return contourLines(frame.overlay, {
         width: frame.width,
         height: frame.height,
         levels: stepLevels(frame.overlay, overlayStep),
-        // El geopotencial es liso de verdad: los dientes que salían no eran
-        // meteorología, sino el escalón de la cuantización uint16 del frame.
-        // Con más sigma y más tolerancia la isohipsa queda como dibujada a
-        // mano y no se pierde nada del campo.
-        // Las isobaras van sin suavizar: mover la línea la separaría del dato.
-        // El geopotencial sí se suaviza, que es liso de verdad y sus dientes
-        // vienen del escalón de la cuantización.
+        // Suavizado de dibujo configurado por producto y resolución.
+        // El campo original sigue disponible para las consultas y centros.
         sigma: overlaySmoothing,
         // En celdas, todos: un anillo o un tramo mínimo que valen para 2,5 km
         // piden diez veces más recorrido real en una rejilla de 25.
@@ -527,7 +585,11 @@
         // desde que la isolínea se traza como curva los vértices de más no
         // ensucian nada —la acercan al contorno calculado— mientras que los
         // de menos dejaban cuerdas rectas de veinte celdas entre esquinas.
-        tolerance: (overlaySmoothing > 0 ? 0.8 : 0.4) * labelScale,
+        // En rejillas globales, escalar solo por el ancho retenía vértices
+        // casi coincidentes y sus pequeños ganchos entre curvas Bézier.
+        tolerance: overlaySmoothing > 0
+          ? (pressureCentres ? Math.max(0.35, 0.8 * labelScale) : 0.8 * labelScale)
+          : 0.4 * labelScale,
         labelMinLength: 90 * labelScale,
         labelSpacing: 70 * labelScale
       });
@@ -539,7 +601,10 @@
       sigma: 0,
       minRingArea: 0,
       tolerance: 0,
-      labelMinLength: Infinity
+      // Rotuladas: sin el número no se sabe si una línea es el −2 o el −6.
+      // Solo en los tramos largos, que el campo crudo deja muchos pedazos.
+      labelMinLength: 60 * labelScale,
+      labelSpacing: 70 * labelScale
     });
   });
 
@@ -566,9 +631,23 @@
     troughAxes && frame.overlay
       // Con el paso de las isohipsas dibujadas: una baja rodeada por una de
       // ellas es circulación cerrada aunque sea somera, y no lleva eje.
-      ? detectTroughAxes(frame.overlay, {
-          width: frame.width, height: frame.height, contourStep: overlayStep
-        })
+      // En ECMWF el campo se reproyecta antes a una rejilla de 25 km reales:
+      // su dominio llega a 75° N, donde una celda de 0,25° es cuatro veces más
+      // alta que ancha, y el detector, que mide en celdas, veía las ondas del
+      // norte aplastadas. AROME sigue como estaba ajustado.
+      ? (frame.lcc && cellKm >= 10
+        ? detectTroughAxesProjected(frame.overlay, {
+            width: frame.width, height: frame.height, cellKm,
+            latitude: frame.lcc.latitude, sign: frame.lcc.sign, contourStep: overlayStep
+          })
+        : cellKm >= 10
+        ? detectTroughAxesLonLat(frame.overlay, {
+            width: frame.width, height: frame.height, bounds: frame.bounds,
+            contourStep: overlayStep
+          })
+        : detectTroughAxes(frame.overlay, {
+            width: frame.width, height: frame.height, contourStep: overlayStep
+          }))
       : { axes: [], lows: [] }
   );
 
@@ -596,6 +675,16 @@
         })
       : []
   );
+
+  const storms = $derived.by(() => {
+    if (!stormLabels?.length) return [];
+    return stormLabels
+      .map((storm) => {
+        const [x, y] = geo.toGrid(storm.longitude, storm.latitude);
+        return { ...storm, x, y, text: storm.stage === 'tropical' ? storm.name : `ex-${storm.name}` };
+      })
+      .filter((storm) => storm.x >= 0 && storm.y >= 0 && storm.x <= frame.width && storm.y <= frame.height);
+  });
 
   function axisPath(axis) {
     if (axis.length < 3) {
@@ -741,6 +830,18 @@
         priority: (level) => (isMajorOverlay(level) ? 3 : 1)
       });
     }
+    // Isolíneas del índice superpuesto (el LI de los mapas de CAPE). Pesan
+    // más cuanto más inestable: el −6 importa más que el +2.
+    if (frame.overlay && !multipleSolutions && !(overlayStep > 0)) {
+      groups.push({
+        kind: 'index',
+        contours: contourPaths,
+        format: (level) => (level < 0 ? `−${Math.abs(level)}` : `${level}`),
+        gapX: 110 * labelScale / viewZoom,
+        gapY: 70 * labelScale / viewZoom,
+        priority: (level) => (level <= -4 ? 2 : level < 0 ? 1 : 0)
+      });
+    }
     if (showValueContours && formatContour) {
       groups.push({
         kind: 'value',
@@ -789,9 +890,7 @@
       hover = null;
       return;
     }
-    const [west, south, east, north] = frame.bounds;
-    const longitude = west + (column + .5) / frame.width * (east - west);
-    const latitude = north - (row + .5) / frame.height * (north - south);
+    const [longitude, latitude] = geo.toGeo(column + .5, row + .5);
     const layerRect = layer.getBoundingClientRect();
     hover = {
       value,
@@ -799,11 +898,16 @@
       longitude,
       latitude,
       x: event.clientX - layerRect.left,
-      y: event.clientY - layerRect.top
+      y: event.clientY - layerRect.top,
+      // Cerca del borde superior o del derecho la tarjeta no cabe en su sitio
+      // de siempre —arriba a la derecha del cursor— y la recortaba el marco
+      // del mapa: se da la vuelta hacia donde sí hay hueco.
+      below: event.clientY - layerRect.top < TOOLTIP_ROOM.alto,
+      left: layerRect.right - event.clientX < TOOLTIP_ROOM.ancho
     };
   }
 
-  function setZoom(nextZoom, clientX, clientY) {
+  function setZoom(nextZoom, clientX, clientY, { settle = true } = {}) {
     if (!surface) return;
     const next = Math.max(1, Math.min(8, nextZoom));
     const rect = surface.getBoundingClientRect();
@@ -817,23 +921,50 @@
     zoom = next;
     if (next === 1) panX = panY = 0;
     hover = null;
-    // El zoom cambia la densidad de glifos: conviene rehacerlos de inmediato.
-    settleViewport();
+    // El zoom cambia la densidad de glifos: con los botones o el doble clic
+    // se rehacen de inmediato. La rueda y el trackpad mandan decenas de
+    // eventos por gesto, y rehacerlos en cada uno —las streamlines son 50 ms
+    // de cálculo y más de un mega de trazos— bloqueaba el hilo principal: el
+    // zoom iba a saltos y Safari, sin respuesta a tiempo, desplazaba la página.
+    if (settle) settleViewport();
+    else scheduleSettle();
   }
 
-  function vectorTransform() {
+  function vectorTransform(escala = zoom, desplazamientoX = panX, desplazamientoY = panY) {
     const renderedWidth = surface?.clientWidth || frame.width;
     const renderedHeight = surface?.clientHeight || frame.height;
-    const userPanX = panX * frame.width / renderedWidth;
-    const userPanY = panY * frame.height / renderedHeight;
+    const userPanX = desplazamientoX * frame.width / renderedWidth;
+    const userPanY = desplazamientoY * frame.height / renderedHeight;
     const centerX = frame.width / 2;
     const centerY = frame.height / 2;
-    return `translate(${userPanX} ${userPanY}) translate(${centerX} ${centerY}) scale(${zoom}) translate(${-centerX} ${-centerY})`;
+    return `translate(${userPanX} ${userPanY}) translate(${centerX} ${centerY}) scale(${escala}) translate(${-centerX} ${-centerY})`;
   }
+
+  /**
+   * Lo que se ha movido el mapa desde que se trazaron las streamlines.
+   *
+   * Las streamlines son decenas de miles de puntos: volver a rasterizarlas en
+   * cada paso del zoom era lo que lo hacía ir a saltos. Se dibujan con el
+   * encuadre asentado y, mientras dura el gesto, se desplaza y escala la capa
+   * ya pintada con CSS, como el ráster. Al asentarse se vuelven a trazar
+   * nítidas y esta transformación vuelve a ser la identidad.
+   */
+  const streamGesture = $derived.by(() => {
+    const k = zoom / viewZoom;
+    return {
+      moving: k !== 1 || panX !== viewPanX || panY !== viewPanY,
+      transform: `translate(${panX - k * viewPanX}px, ${panY - k * viewPanY}px) scale(${k})`
+    };
+  });
 
   function zoomWithWheel(event) {
     event.preventDefault();
-    setZoom(zoom * (event.deltaY < 0 ? 1.22 : 1 / 1.22), event.clientX, event.clientY);
+    // Proporcional al giro: un trackpad manda muchos eventos pequeños, y con
+    // un 22 % fijo por evento el zoom iba a trompicones. Un paso de ratón
+    // (100 px) sigue siendo más o menos ese 22 %.
+    const pixeles = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 800 : 1);
+    const factor = Math.min(1.6, Math.max(1 / 1.6, Math.exp(-pixeles * 0.002)));
+    setZoom(zoom * factor, event.clientX, event.clientY, { settle: false });
   }
 
   function beginDrag(event) {
@@ -862,7 +993,7 @@
       const centerX = (first.x + second.x) / 2;
       const centerY = (first.y + second.y) / 2;
       if (pinchDistance > 0 && distance > 0) {
-        setZoom(zoom * distance / pinchDistance, centerX, centerY);
+        setZoom(zoom * distance / pinchDistance, centerX, centerY, { settle: false });
       }
       pinchDistance = distance;
       return;
@@ -920,6 +1051,14 @@
     zoom = 1;
     panX = 0;
     panY = 0;
+    // Encuadre europeo para las pasadas antiguas de Europa guardadas con dominio atlántico;
+    // los demás dominios se ven enteros.
+    if (frame.forecast_model === 'ecmwf' && !frame.lcc && (!frame.domain || frame.domain === 'europe') && frame.bounds[0] < -60) {
+      const [west, south, east, north] = frame.bounds;
+      zoom = 1.7;
+      panX = (.5 - (5 - west) / (east - west)) * (surface?.clientWidth || frame.width) * zoom;
+      panY = (.5 - (north - 53) / (north - south)) * (surface?.clientHeight || frame.height) * zoom;
+    }
     hover = null;
     settleViewport();
   }
@@ -963,7 +1102,7 @@
       productLabel,
       frame.width,
       frame.height,
-      frame.bounds.join(',')
+      frame.bounds?.join(',') || JSON.stringify(frame.projection)
     ].join('|');
     if (key === lastViewportKey) return;
     const firstMount = lastViewportKey === '';
@@ -1024,25 +1163,34 @@
         aria-hidden="true"
       ></canvas>
     {/if}
+    {#if streamlineData.layers.length}
+      <svg
+        class="vector-overlay stream-overlay"
+        class:moving={streamGesture.moving}
+        style:transform={streamGesture.transform}
+        viewBox={`0 0 ${frame.width} ${frame.height}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <g transform={vectorTransform(viewZoom, viewPanX, viewPanY)}>
+          {#each streamlineData.layers as capa}
+            <path class="streamline-halo" d={capa.d} style={`opacity:${capa.opacity.toFixed(2)}`} />
+            <path class="streamline" d={capa.d} style={`opacity:${capa.opacity.toFixed(2)}`} />
+          {/each}
+          {#if streamlineData.particles}<path class="stream-particle" d={streamlineData.particles} />{/if}
+          {#if streamlineData.arrows}
+            <path class="stream-direction-halo" d={streamlineData.arrows} />
+            <path class="stream-direction" d={streamlineData.arrows} />
+          {/if}
+        </g>
+      </svg>
+    {/if}
     <svg class="vector-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} preserveAspectRatio="none" aria-hidden="true">
       <g transform={vectorTransform()}>
-        {#each streamlineData.segments as tramo}
-          <path class="streamline-halo" d={tramo.d} style={`opacity:${tramo.opacity.toFixed(2)}`} />
-          <path class="streamline" d={tramo.d} style={`opacity:${tramo.opacity.toFixed(2)}`} />
-        {/each}
-        {#each streamlineData.paths as streamline}
-          <path class="stream-particle" d={streamline} />
-        {/each}
-        {#each streamlineData.arrows as marker}
-          <g transform={`translate(${marker.x.toFixed(2)} ${marker.y.toFixed(2)}) rotate(${marker.angle.toFixed(2)}) scale(${(1 / zoom).toFixed(5)})`}>
-            <path class="stream-direction-halo" d={streamlineData.markerPath} />
-            <path class="stream-direction" d={streamlineData.markerPath} />
-          </g>
-        {/each}
         {#each arrowGlyphs.arrows || [] as arrow}
           <g transform={`translate(${arrow.x.toFixed(2)} ${arrow.y.toFixed(2)}) rotate(${arrow.angle.toFixed(2)}) scale(${(1 / zoom).toFixed(5)})`}>
-            <path class="vector-arrow-halo" d={arrowGlyphs.path} />
-            <path class="vector-arrow" d={arrowGlyphs.path} />
+            <path class="vector-arrow-halo" d={arrow.path || arrowGlyphs.path} />
+            <path class="vector-arrow" d={arrow.path || arrowGlyphs.path} />
           </g>
         {/each}
         {#each showValueContours ? valueContours : [] as contour}
@@ -1085,6 +1233,17 @@
             <text class="centre-value" y={centre.main ? 17 : 14} text-anchor="middle" dominant-baseline="central">{Math.round(centre.value)}</text>
           </g>
         {/each}
+        {#each storms as storm}
+          <g transform={`translate(${storm.x.toFixed(1)} ${storm.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+            {#if showCentres}
+              <!-- En el mapa de presión la baja ya lleva su B y su valor. -->
+              <text class="storm-name" y="31" text-anchor="middle" dominant-baseline="central">{storm.text}</text>
+            {:else}
+              <circle class="storm-mark" r="5" />
+              <text class="storm-name" y="15" text-anchor="middle" dominant-baseline="central">{storm.text}</text>
+            {/if}
+          </g>
+        {/each}
         {#each showTroughs ? troughs.lows : [] as low}
           <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
             <text class="centre-letter" text-anchor="middle" dominant-baseline="central">B</text>
@@ -1094,7 +1253,7 @@
         {#each mapLabels as label}
           <g transform={`translate(${label.x.toFixed(1)} ${label.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
             <text
-              class={label.kind === 'height' ? 'height-label' : 'contour-label'}
+              class={label.kind === 'height' ? 'height-label' : label.kind === 'index' ? 'index-label' : 'contour-label'}
               class:major={label.kind === 'height' && isMajorOverlay(label.level)}
               class:strong={label.kind === 'value' && emphasis(label.level) > 0}
               text-anchor="middle"
@@ -1120,7 +1279,7 @@
     </svg>
   </div>
   {#if hover}
-    <div class="grid-tooltip" style:left={`${hover.x}px`} style:top={`${hover.y}px`}>
+    <div class="grid-tooltip" class:below={hover.below} class:left={hover.left} style:left={`${hover.x}px`} style:top={`${hover.y}px`}>
       <strong>{productLabel}</strong>
       <span>{formatProbe ? formatProbe(hover.value) : `${hover.value.toFixed(frame.product === 'ship' ? 2 : 1)} ${frame.unit}`}</span>
       {#if showMultipleSolutions && hover.overlay >= 0.5}<span class="overlay-value">{forecastLayerLabel(language, 'multipleSolutions')} · {profileHint}</span>
@@ -1151,13 +1310,22 @@
 </div>
 
 <style>
-  .grid-layer{position:absolute;inset:4% 6%;z-index:4;display:grid;place-items:center;pointer-events:none}
+  /* Sin margen interior: el visor adopta la proporción del dominio, así que
+     el mapa lo llena entero. */
+  .grid-layer{position:absolute;inset:0;z-index:4;display:grid;place-items:center;pointer-events:none}
   /* El tema oscurece la interfaz, no el papel cartográfico. Los campos
      discontinuos dejan el cero transparente (precipitación, reflectividad,
      nieve…); sin este fondo heredaban el azul casi negro del visor y costas,
      fronteras y zonas sin fenómeno se fundían con él. */
   .map-surface{position:relative;max-width:100%;max-height:100%;width:auto;height:100%;aspect-ratio:var(--grid-ratio);filter:drop-shadow(0 12px 24px rgba(0,0,0,.24));pointer-events:auto;cursor:grab;touch-action:none}
   .map-surface.dragging{cursor:grabbing}
+  /* Durante el gesto las partículas se paran: animarlas obliga a repintar
+     todas las líneas en cada fotograma, además de moverlas. */
+  /* Durante el gesto las partículas se esconden: son un trazo con todas las
+     líneas y habría que volver a rasterizarlo a cada escala. */
+  .map-surface.dragging .stream-particle{animation-play-state:paused}
+  .stream-overlay.moving .stream-particle{display:none}
+  .stream-overlay{transform-origin:center;will-change:transform}
   .map-surface.profile-target:not(.dragging){cursor:pointer}
   .vector-overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
   /* El raster se compone en GPU: el encuadre no vuelve a rasterizar la malla. */
@@ -1211,12 +1379,17 @@
   /* Los relativos van en minúscula y algo más discretos, como en los mapas de
      AEMET: están, pero no compiten con el centro principal. */
   .centre-letter.relative{font-size:16px;stroke-width:3px}
+  .storm-name{fill:#ffd166;stroke:rgba(10,18,28,.7);stroke-width:2.8px;paint-order:stroke;font-size:11.5px;font-weight:800;font-style:italic;pointer-events:none}
+  .storm-mark{fill:none;stroke:#ffd166;stroke-width:2.2px;pointer-events:none}
   .height-label{fill:rgba(20,34,54,.96);stroke:rgba(252,253,255,.85);stroke-width:2.6px;paint-order:stroke;font-size:11px;font-weight:700;pointer-events:none}
   .height-label.major{font-size:12px;font-weight:800}
-  .layer-panel{position:absolute;right:calc(-6% + 4px);top:calc(-4% + 42px);z-index:15;display:flex;flex-direction:column;gap:3px;padding:7px 9px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(5,14,22,.78);backdrop-filter:blur(8px);pointer-events:auto}
+  .layer-panel{position:absolute;right:10px;top:48px;z-index:15;display:flex;flex-direction:column;gap:3px;padding:7px 9px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(5,14,22,.78);backdrop-filter:blur(8px);pointer-events:auto}
   .layer-panel label{display:flex;align-items:center;gap:6px;color:rgba(235,244,251,.82);font-size:.55rem;line-height:1;cursor:pointer;white-space:nowrap}
   .layer-panel label:hover{color:#fff}
   .layer-panel input{width:12px;height:12px;margin:0;accent-color:#68bdf1;cursor:pointer}
+  /* Como la isolínea: tinta oscura con halo claro, que se lee sobre toda la
+     rampa del CAPE, del gris del cero al granate del máximo. */
+  .index-label{fill:rgba(9,13,18,.94);stroke:rgba(250,252,253,.86);stroke-width:2.4px;paint-order:stroke;font-size:11px;font-weight:750;font-variant-numeric:tabular-nums;pointer-events:none}
   .contour-label{fill:rgba(58,42,30,.96);stroke:rgba(255,250,242,.82);stroke-width:2.6px;paint-order:stroke;font-size:12px;font-weight:700;letter-spacing:.01em;pointer-events:none}
   .contour-label.strong{font-size:13px}
   .scalar-contour.zero-contour{stroke:#f5f8fa;stroke-width:.9}
@@ -1228,9 +1401,10 @@
   .region-boundary{fill:none;stroke:#0b0f12;stroke-width:.7;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
   .region-boundary.admin-boundary{stroke:rgba(11,15,18,.54);stroke-width:.32}
   .grid-tooltip{position:absolute;z-index:12;display:flex;flex-direction:column;gap:2px;min-width:142px;padding:8px 9px;transform:translate(12px,calc(-100% - 10px));border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#eef6fa;background:rgba(5,14,22,.9);box-shadow:0 8px 24px rgba(0,0,0,.3);backdrop-filter:blur(8px);pointer-events:none}
+  .grid-tooltip.below{transform:translate(12px,16px)}.grid-tooltip.left{transform:translate(calc(-100% - 12px),calc(-100% - 10px))}.grid-tooltip.below.left{transform:translate(calc(-100% - 12px),16px)}
   .grid-tooltip strong{font-size:.59rem}.grid-tooltip span{color:#8ed1ff;font-size:.72rem;font-weight:720}.grid-tooltip small{color:rgba(235,244,251,.6);font-size:.5rem}
   .grid-tooltip .overlay-value{color:#f4d58a;font-size:.62rem}
-  .zoom-controls{position:absolute;right:calc(-6% + 4px);top:calc(-4% + 4px);z-index:15;display:grid;grid-template-columns:30px 30px 30px auto;align-items:center;gap:4px;pointer-events:auto}
+  .zoom-controls{position:absolute;right:10px;top:10px;z-index:15;display:grid;grid-template-columns:30px 30px 30px auto;align-items:center;gap:4px;pointer-events:auto}
   .zoom-controls button{display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,255,255,.15);border-radius:7px;color:#dceaf2;background:rgba(5,14,22,.76);backdrop-filter:blur(8px)}
   .zoom-controls button:hover{background:rgba(31,60,79,.9)}.zoom-controls button:disabled{opacity:.38}
   .zoom-controls span{min-width:38px;padding:5px 6px;border-radius:6px;color:rgba(235,244,251,.72);background:rgba(5,14,22,.66);font-size:.5rem;text-align:center}

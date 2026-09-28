@@ -36,6 +36,14 @@ test('un idioma desconocido cae al respaldo que le pasan', () => {
 
 test('la capa superpuesta pide su propia clave cuando el mapa la renombra', () => {
   const grid = readFileSync(new URL('../src/components/ForecastGrid.svelte', import.meta.url), 'utf8');
-  assert.match(grid, /labelKey: 'isobars'/);
+  // Isobaras por defecto; las isentrópicas de la frontogénesis, con la suya.
+  assert.match(grid, /labelKey: overlayLayerLabel === 'Isentrópicas' \? 'isentropes' : 'isobars'/);
   assert.match(grid, /forecastLayerLabel\(language, capa\.labelKey \|\| capa\.id, capa\.label\)/);
+});
+
+test('las isentrópicas tienen nombre propio en todos los idiomas', async () => {
+  const { forecastLayerLabel } = await import('../src/lib/forecast-i18n.js');
+  for (const [lang, word] of [['es', 'Isentrópicas'], ['en', 'Isentropes'], ['fr', 'Isentropes']]) {
+    assert.equal(forecastLayerLabel(lang, 'isentropes', 'Isentrópicas'), word);
+  }
 });

@@ -7,8 +7,6 @@ from __future__ import annotations
 import fcntl
 import logging
 import os
-from pathlib import Path
-import tempfile
 import threading
 
 logger = logging.getLogger(__name__)
@@ -33,8 +31,9 @@ def release_completed_grib_cache() -> dict:
     if any(t.name.startswith('arome-prefetch') and t.is_alive()
            for t in threading.enumerate()):
         return {'skipped': 'prefetch_active'}
-    root = Path(os.getenv('METEOLABX_AROME_PACKAGE_CACHE_DIR') or
-                str(Path(tempfile.gettempdir()) / 'meteolabx-arome-packages'))
+    # Los del modelo que calcula este proceso: cada AROME tiene su carpeta.
+    from server.services.arome_packages import _cache_dir
+    root = _cache_dir()
     # Los paquetes tienen nombres IP1-YYYYMMDDTHH-00H06H.grib2. Los de una
     # pasada aún en curso se dejan en paz: alguien los está leyendo.
     stamps = completas

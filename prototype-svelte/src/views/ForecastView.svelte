@@ -1,24 +1,26 @@
 <script>
   import {
     Calendar, ChevronDown, ChevronLeft, ChevronRight, Download,
-    Info, Layers, Maximize2, Minimize2, Pause, Play, RefreshCw, Search
+    Globe, Info, Maximize2, Minimize2, Pause, Play, RefreshCw, Search
   } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import ForecastGrid from '../components/ForecastGrid.svelte';
   import ThermalProfile from '../components/ThermalProfile.svelte';
   import MathFormula from '../components/MathFormula.svelte';
   import {
-    DEFAULT_FORECAST_MODEL, catalogSummaryFor, forecastCategories, forecastModels,
+    DEFAULT_FORECAST_MODEL, catalogSummaryFor, domainsForModel, forecastCategories, forecastModels, productFamily,
     productsForModel
   } from '../data/forecastProducts.js';
+  import { aromeProjection, projectFrame } from '../lib/projection.js';
+  import { nameStorms, stormsNear } from '../lib/storms.js';
   import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
-  import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette } from '../lib/palettes.js';
+  import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette, divergingPalette, thetaEPalette } from '../lib/palettes.js';
   import { recordForecastMap } from '../lib/stats.js';
   import { forecastPath } from '../lib/forecast-route.js';
-  import { fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, fetchThermalProfile, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
+  import { fetchActiveStorms, fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, fetchThermalProfile, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
-  import { forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
+  import { forecastDomainLabel, forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
   import { loadForecastGuides, localizedForecastGuide } from '../lib/forecast-guides.svelte.js';
   import { precipitationType, precipitationTypeLabel } from '../data/precipitationTypes.js';
 
@@ -48,6 +50,13 @@
     : null;
 
   let selectedModel = $state(entryModel?.id || DEFAULT_FORECAST_MODEL);
+  // Dominio dentro del modelo. En ECMWF cada uno es otro cálculo del
+  // servidor; en AROME, una zona que se recorta del mapa ya descargado.
+  let selectedDomain = $state(domainsForModel(entryModel?.id || DEFAULT_FORECAST_MODEL)[0]?.id || '');
+  const domainOptions = $derived(domainsForModel(selectedModel));
+  const domain = $derived(domainOptions.find((item) => item.id === selectedDomain) || domainOptions[0] || null);
+  // Solo los dominios del servidor viajan en las peticiones.
+  const serverDomain = $derived(domain?.server ? domain.id : '');
   let selectedProduct = $state(entryProduct?.id || null);
   let expandedCategory = $state(entryProduct?.category || 'dynamics');
   let search = $state('');
@@ -57,6 +66,33 @@
   let selectedRun = $state('');
   let catalogError = $state('');
   let frameData = $state.raw(null);
+  // Lo que se dibuja, reproyectado a una cónica conforme de Lambert. ECMWF la
+  // trae en la cabecera de cada dominio. En AROME se hace aquí, a medida de la
+  // zona: el dominio completo o una ventana suya, sacada del mismo frame y
+  // metida dentro del dominio con dato. Las celdas de 2,5 km son las de siempre, así
+  // que los ajustes de isobaras, centros y vaguadas no se mueven.
+  // Una zona fuera de los datos del frame —en local AROME solo cubre
+  // Cataluña— enseña el frame entero, como hacía el recorte.
+  const aromeDisplayProjection = $derived(
+    frameData?.bounds && !frameData.projection && productFamily(selectedModel) === 'arome'
+      ? aromeProjection(frameData.bounds, domain?.bounds || null)
+      : null
+  );
+  const displayFrame = $derived(
+    frameData?.projection ? projectFrame(frameData)
+      : aromeDisplayProjection ? projectFrame(frameData, aromeDisplayProjection, { nearest: frameData.product === 'precip-type' })
+      : frameData
+  );
+  // Proporción del dominio del último mapa cargado. El recuadro la adopta para
+  // que el mapa lo llene sin márgenes; se conserva mientras llega el siguiente
+  // frame para que el visor no cambie de alto a cada hora.
+  let mapRatio = $state(0);
+  $effect(() => {
+    if (displayFrame?.width && displayFrame?.height) mapRatio = displayFrame.width / displayFrame.height;
+  });
+  // Ciclones tropicales activos (NHC) y los que se nombran en la hora visible.
+  let activeStorms = $state.raw([]);
+  let stormLabels = $state.raw([]);
   let loadedFrameKey = $state('');
   let frameLoading = $state(false);
   let framePending = $state(false);
@@ -70,7 +106,7 @@
   // repintarse cuando cambia, solo leerlo al volver a montar el mapa.
   let mapView = null;
   let mapContainer = $state();
-  let mapCard = $state();
+  let forecastLayout = $state();
   let fullscreen = $state(false);
   // Blanco o negro, según lo que haya bajo la marca de agua. Lo mide el
   // componente del mapa, que es quien tiene los píxeles.
@@ -103,7 +139,7 @@
     profileRequest = request;
     try {
       profileData = await fetchThermalProfile({
-        product: product.id, validTime: valid.iso,
+        model: selectedModel, product: product.id, validTime: valid.iso,
         run: selectedRunCatalog.run, ...point, signal: request.signal
       });
     } catch (error) {
@@ -140,11 +176,12 @@
   }
 
   function toggleFullscreen() {
-    // Pantalla completa sobre la tarjeta entera, no solo el mapa: así la
-    // cabecera y la barra de horas siguen a mano para pasar de hora.
-    if (!mapCard) return;
+    // Pantalla completa sobre la barra de mapas y la tarjeta, no solo el mapa:
+    // la cabecera y la barra de horas siguen a mano para pasar de hora, y la
+    // lista de mapas para cambiar de mapa sin salir.
+    if (!forecastLayout) return;
     if (document.fullscreenElement) document.exitFullscreen?.();
-    else mapCard.requestFullscreen?.();
+    else forecastLayout.requestFullscreen?.();
   }
 
   const model = $derived(forecastModels.find((item) => item.id === selectedModel) || forecastModels[0]);
@@ -188,6 +225,7 @@
   );
   const activeFrameKey = $derived([
     selectedModel,
+    serverDomain,
     selectedRunCatalog?.run || '',
     product.id,
     valid?.iso || '',
@@ -338,6 +376,7 @@
     playing = false;
     unitMenuOpen = false;
     selectedModel = modelId;
+    selectedDomain = domainsForModel(modelId)[0]?.id || '';
     // Ni el producto ni el RUN ni la hora se pueden heredar: cada modelo
     // publica los suyos, y arrastrarlos dejaba el visor pidiendo un mapa que
     // el otro modelo no tiene.
@@ -354,7 +393,26 @@
     frameData = null;
     loadedFrameKey = '';
     catalogError = '';
-    fetchDomainBoundaries(modelId).catch(() => {});
+    fetchDomainBoundaries(modelId, domainsForModel(modelId)[0]?.server ? domainsForModel(modelId)[0].id : '').catch(() => {});
+    refreshCatalog();
+  }
+
+  function selectDomain(domainId) {
+    if (domainId === selectedDomain) return;
+    const destino = domainOptions.find((item) => item.id === domainId);
+    if (!destino) return;
+    selectedDomain = domainId;
+    // El encuadre de otra zona no sirve: se vuelve a la vista entera.
+    mapView = null;
+    mapResetKey += 1;
+    if (!destino.server) return;
+    // Un dominio del servidor tiene su propio catálogo y sus propios mapas.
+    playing = false;
+    catalog = null;
+    frameData = null;
+    loadedFrameKey = '';
+    catalogError = '';
+    fetchDomainBoundaries(selectedModel, domainId).catch(() => {});
     refreshCatalog();
   }
 
@@ -466,11 +524,12 @@
     }, 20_000);
     catalogRequest = controller;
     const requestedModel = selectedModel;
-    fetchForecastCatalog({ model: requestedModel, signal: controller.signal })
+    const requestedDomain = serverDomain;
+    fetchForecastCatalog({ model: requestedModel, domain: requestedDomain, signal: controller.signal })
       .then((payload) => {
-        // Un catálogo que llega tarde, después de cambiar de modelo, no debe
-        // pisar al del modelo que ya está en pantalla.
-        if (controller.signal.aborted || requestedModel !== selectedModel) return;
+        // Un catálogo que llega tarde, después de cambiar de modelo o de
+        // dominio, no debe pisar al que ya está en pantalla.
+        if (controller.signal.aborted || requestedModel !== selectedModel || requestedDomain !== serverDomain) return;
         catalog = payload;
         const availableRuns = payload.runs || [];
         if (!availableRuns.some((item) => item.run === selectedRun)) {
@@ -490,9 +549,11 @@
     // Las fronteras se piden a la vez que el catálogo, no cuando ya ha
     // llegado el primer frame: son las mismas para todas las horas y así
     // están listas antes de que haya un mapa que enmarcar.
-    fetchDomainBoundaries(selectedModel).catch(() => {});
+    fetchDomainBoundaries(selectedModel, serverDomain).catch(() => {});
     refreshCatalog();
-    const catalogTimer = window.setInterval(refreshCatalog, 30_000);
+    const refreshStorms = () => fetchActiveStorms().then((payload) => { activeStorms = payload?.storms || []; });
+    refreshStorms();
+    const catalogTimer = window.setInterval(() => { refreshCatalog(); refreshStorms(); }, 30_000);
     return () => {
       window.clearInterval(catalogTimer);
       catalogRequest?.abort();
@@ -533,7 +594,9 @@
       validTime,
       run: requestedRun,
       verticalKind: productId === 'wind-level' ? requestedWindKind : undefined,
-      level: productId === 'wind-level' ? requestedWindLevel : undefined
+      level: productId === 'wind-level' ? requestedWindLevel : undefined,
+      frameRevision: meta?.frame_revision || 0,
+      domain: serverDomain || undefined
     };
     const cachedFrame = getCachedForecastFrame(frameOptions);
     if (cachedFrame) {
@@ -568,6 +631,48 @@
     };
   });
 
+  // Nombres de los ciclones. Salen siempre del mapa de presión al nivel del
+  // mar de esa hora, aunque se esté viendo otro: así el nombre cae en el mismo
+  // sitio en todos los mapas, y si en el de presión deja de haber baja, deja de
+  // haber nombre en todos.
+  $effect(() => {
+    const storms = activeStorms;
+    const frame = frameData;
+    const validTime = frame?.valid_time;
+    const mslpId = selectedModel === 'ecmwf' ? 'ecmwf-mslp-theta-e-850' : 'mslp-theta-e-850';
+    const mslpMeta = selectedRunCatalog?.products?.[mslpId];
+    if (!frame || !validTime || !mslpMeta?.valid_times?.includes(validTime) || !stormsNear(storms, frame.bounds, validTime)) {
+      stormLabels = [];
+      return;
+    }
+    if (product.id === mslpId) {
+      stormLabels = nameStorms(frame, storms, validTime);
+      return;
+    }
+    const mslpOptions = {
+      model: selectedModel,
+      product: mslpId,
+      validTime,
+      run: selectedRunCatalog?.run,
+      frameRevision: mslpMeta.frame_revision || 0,
+      domain: serverDomain || undefined
+    };
+    // Con el de presión ya precargado, los círculos salen a la vez que el
+    // mapa. Si no, se quitan mientras llega: los de la hora anterior, puestos
+    // sobre la nueva, iban siempre un paso por detrás.
+    const cached = getCachedForecastFrame(mslpOptions);
+    if (cached) {
+      stormLabels = nameStorms(cached, storms, validTime);
+      return;
+    }
+    stormLabels = [];
+    let vigente = true;
+    fetchForecastFrame(mslpOptions)
+      .then((mslp) => { if (vigente) stormLabels = nameStorms(mslp, storms, validTime); })
+      .catch(() => { if (vigente) stormLabels = []; });
+    return () => { vigente = false; };
+  });
+
   // Precarga las horas contiguas una vez la actual está en pantalla, para que
   // el deslizador no vuelva a mostrar la tarjeta de carga. Se espera a que la
   // hora visible haya llegado: si no, competirían por el mismo ancho de banda.
@@ -589,8 +694,26 @@
       validTime: hour.iso,
       run: requestedRun,
       verticalKind: isWind ? windLevelKind : undefined,
-      level: isWind ? windLevel : undefined
+      level: isWind ? windLevel : undefined,
+      frameRevision: meta.frame_revision || 0,
+      domain: serverDomain || undefined
     })));
+    // Y el de presión de esas mismas horas, del que salen los nombres de los
+    // ciclones, para que no lleguen tarde al pasar de hora.
+    const mslpId = selectedModel === 'ecmwf' ? 'ecmwf-mslp-theta-e-850' : 'mslp-theta-e-850';
+    const mslpMeta = selectedRunCatalog?.products?.[mslpId];
+    if (productId !== mslpId && mslpMeta && stormsNear(activeStorms, frameData.bounds, currentIso)) {
+      prefetchForecastFrames(neighbours
+        .filter((hour) => mslpMeta.valid_times?.includes(hour.iso))
+        .map((hour) => ({
+          model: selectedModel,
+          product: mslpId,
+          validTime: hour.iso,
+          run: requestedRun,
+          frameRevision: mslpMeta.frame_revision || 0,
+          domain: serverDomain || undefined
+        })));
+    }
   });
 
   $effect(() => {
@@ -612,7 +735,7 @@
   });
 </script>
 
-<svelte:document onfullscreenchange={() => (fullscreen = Boolean(mapCard) && document.fullscreenElement === mapCard)} />
+<svelte:document onfullscreenchange={() => (fullscreen = Boolean(forecastLayout) && document.fullscreenElement === forecastLayout)} />
 
 <svelte:window
   onclick={() => (unitMenuOpen = false)}
@@ -629,9 +752,30 @@
   </div>
 </section>
 
+{#if forecastModels.length > 1}
+  <!-- Con tres modelos, un desplegable escondía justo lo que había que
+       elegir primero. Van todos a la vista y cada uno trae su RUN y su dominio
+       debajo. -->
+  <nav class="model-bar" aria-label={tr('model')}>
+    {#each forecastModels as item}
+      <button
+        type="button"
+        class:active={item.id === selectedModel}
+        aria-pressed={item.id === selectedModel}
+        onclick={() => selectModel(item.id)}
+      >
+        <strong>{item.label}</strong>
+        <small>{item.origin} · {item.horizon}</small>
+      </button>
+    {/each}
+  </nav>
+{/if}
+
 <section class="control-bar" aria-label={tr('modelConfig')}>
   <label><Calendar size={14} /><span>RUN</span><select value={selectedRun} onchange={(event) => selectRun(event.currentTarget.value)}>{#each runCatalogs as item}<option value={item.run}>{new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(new Date(item.run))} UTC · {runProgress(item).toLocaleString(locale)} %</option>{/each}</select></label>
-  <label><Layers size={14} /><span>{tr('model')}</span><select value={selectedModel} onchange={(event) => selectModel(event.currentTarget.value)}>{#each forecastModels as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
+  {#if domainOptions.length > 1}
+    <label><Globe size={14} /><span>{tr('domain')}</span><select value={domain?.id} onchange={(event) => selectDomain(event.currentTarget.value)}>{#each domainOptions as item}<option value={item.id}>{forecastDomainLabel(language, item)}</option>{/each}</select></label>
+  {/if}
   <div
     class="run-summary"
     title={latestProgress?.frames_total
@@ -647,7 +791,7 @@
   </div>
 </section>
 
-<div class="forecast-layout">
+<div class="forecast-layout" bind:this={forecastLayout}>
   <aside class="product-selector" aria-label={tr('mapSelector')}>
     <header>
       <div><span>{tr('maps')}</span><small>{modelSummary.total} {tr('selected')}</small></div>
@@ -720,7 +864,7 @@
         </div>
       </section>
     {:else}
-    <section class="map-card" bind:this={mapCard}>
+    <section class="map-card">
       <header class="map-head">
         <div class="map-product">
           <span class="product-mark" style:--product-accent={product.accent}></span>
@@ -728,6 +872,9 @@
             <span class="product-title">
               <strong>{product.label}</strong>
               {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt={tr('calculatedBy')} />{/if}
+              <!-- Con varios modelos, el mismo mapa existe en más de uno: sin
+                   esto, una captura no dice de cuál es. -->
+              <span class="model-tag" title={model.label}>{model.short}</span>
             </span>
             <small>{productContents}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · {tr('valid')} {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
           </div>
@@ -747,8 +894,8 @@
         </div>
       </header>
 
-      <div class="forecast-map palette-{product.palette}" bind:this={mapContainer} style:--map-ink={mapInk || null}>
-        {#if frameMatchesSelection}<ForecastGrid frame={frameData} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} contourLayerId={product.contourLayerId || 'isotherms'} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} flowLines={Boolean(product.flowLines)} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} multipleSolutions={Boolean(product.multipleSolutions)} onprofileclick={openThermalProfile} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+      <div class="forecast-map palette-{product.palette}" class:fitted={Boolean(mapRatio)} bind:this={mapContainer} style:--map-ink={mapInk || null} style:aspect-ratio={mapRatio || null}>
+        {#if frameMatchesSelection}<ForecastGrid colorPalette={product.palette} vectorMinMagnitude={product.vectorMinMagnitude ?? .5} vectorScaleMagnitude={product.vectorScaleMagnitude || 0} frame={displayFrame} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} contourLayerId={product.contourLayerId || 'isotherms'} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} {stormLabels} flowLines={Boolean(product.flowLines)} flowMinMagnitude={product.flowMinMagnitude || 0} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} multipleSolutions={Boolean(product.multipleSolutions)} onprofileclick={openThermalProfile} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedDomain}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label={tr('windLevel')}>
             <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
@@ -789,7 +936,7 @@
               </div>
             {:else if legendAnchorMarks.length}
               <div class="band-scale">
-                <i class="ramp"></i>
+                <i class="ramp" style:background={product.palette === 'diverging' ? `linear-gradient(90deg,${divergingPalette.join(',')})` : product.palette === 'theta-e' ? `linear-gradient(90deg,${thetaEPalette.join(',')})` : undefined}></i>
                 <div class="band-marks">
                   {#each legendAnchorMarks as mark}<span style:left={`${mark.at}%`}>{mark.label}</span>{/each}
                 </div>
@@ -931,6 +1078,8 @@
   .profile-state{position:relative;display:flex;align-items:center;flex-direction:column;gap:12px;margin:0;width:min(340px,calc(100vw - 32px));padding:30px;border:1px solid rgba(163,199,227,.25);border-radius:14px;color:#eaf2f8;background:#142235;text-align:center}
   .profile-state button{position:absolute;top:6px;right:10px;border:0;color:#eaf2f8;background:transparent;font-size:1.4rem;cursor:pointer}.profile-state small{font-size:.72rem;line-height:1.5}
   .forecast-head{margin-bottom:16px}.forecast-title{display:flex;align-items:center;gap:8px}.forecast-title h2{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}.forecast-head p{margin-top:4px;color:var(--muted);font-size:.8rem;text-wrap:balance}.beta-badge{display:inline-flex;align-items:center;padding:.12rem .35rem;border:1px solid rgba(255,75,75,.42);border-radius:999px;background:rgba(255,75,75,.1);color:#ff4b4b;font-size:.58rem;font-weight:700;line-height:1}.status-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#43c98a;box-shadow:0 0 0 4px rgba(67,201,138,.14)}.status-dot.error{background:#ef6f76;box-shadow:0 0 0 4px rgba(239,111,118,.14)}.run-summary button,.map-actions button,.timeline>button{display:grid;place-items:center;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--card);transition:border-color .15s ease,color .15s ease,background .15s ease}.run-summary button:hover,.map-actions button:hover,.timeline>button:hover:not(:disabled){border-color:var(--border-2);color:var(--ink);background:var(--panel-2)}
+  .product-title{flex-wrap:wrap;row-gap:4px}.model-tag{flex:0 0 auto;padding:2px 7px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));border-radius:999px;color:var(--ink-2);background:color-mix(in srgb,var(--accent) 12%,transparent);font-size:.58rem;font-weight:700;letter-spacing:.02em;line-height:1.4;white-space:nowrap}
+  .model-bar{display:flex;gap:6px;margin-bottom:8px;padding:5px;overflow-x:auto;border:1px solid var(--border);border-radius:13px;background:var(--panel);scrollbar-width:none}.model-bar::-webkit-scrollbar{display:none}.model-bar button{display:flex;flex:1 1 0;min-width:150px;flex-direction:column;align-items:flex-start;gap:3px;padding:8px 12px;border:1px solid transparent;border-radius:9px;color:var(--ink-2);background:transparent;text-align:left;cursor:pointer;transition:border-color .15s ease,background .15s ease,color .15s ease}.model-bar button:hover{color:var(--ink);background:var(--panel-2)}.model-bar button.active{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--ink);background:var(--card);box-shadow:inset 0 -2px 0 var(--accent)}.model-bar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.model-bar strong{font-size:.8rem;font-weight:700;white-space:nowrap}.model-bar small{color:var(--muted);font-size:.64rem;white-space:nowrap}
   .control-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.control-bar label{display:flex;align-items:center;gap:7px;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--panel-2);font-size:.76rem;transition:border-color .15s ease,background .15s ease}.control-bar label:hover,.control-bar label:focus-within{border-color:var(--border-2);background:var(--card)}.control-bar select{height:100%;max-width:220px;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-weight:650;cursor:pointer}.run-summary{display:flex;align-items:center;gap:10px;height:40px;margin-left:auto;padding:0 4px 0 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-2)}.run-summary-copy{display:flex;min-width:0;flex-direction:column;gap:1px}.run-summary small{color:var(--ink-2);font-size:.62rem;line-height:1}.run-summary strong{max-width:330px;overflow:hidden;color:var(--ink);font-size:.71rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}.run-summary button{width:32px;height:32px}
   .forecast-layout{display:grid;grid-template-columns:260px minmax(0,1fr);align-items:start;gap:14px}.product-selector,.map-card,.product-explainer{border:1px solid var(--border);border-radius:15px;background:var(--panel);overflow:hidden}.product-selector{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}.product-selector>header{padding:15px;border-bottom:1px solid var(--border)}.product-selector>header>div{display:flex;align-items:baseline;justify-content:space-between}.product-selector>header span{font-size:.82rem;font-weight:720}.product-selector>header small,.product-selector>header p{color:var(--muted);font-size:.57rem}.product-selector>header p{margin:5px 0 11px}.search-box{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2)}.search-box input{min-width:0;width:100%;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-size:.66rem}.category-list{overflow-y:auto;padding:7px}.category{border-bottom:1px solid var(--border)}.category:last-child{border:0}.category-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 8px;border:0;color:var(--ink-2);background:transparent;font-size:.68rem;font-weight:680;text-align:left}.category-toggle span{display:flex;align-items:center;gap:6px}.category-toggle small{display:grid;place-items:center;min-width:18px;height:18px;border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:.52rem}.category-toggle :global(svg){transition:transform .18s}.category-toggle :global(svg.open){transform:rotate(180deg)}.product-list{display:flex;flex-direction:column;gap:2px;padding:0 2px 8px}.product-list a{display:grid;text-decoration:none;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 7px;border:1px solid transparent;border-radius:8px;color:var(--muted);background:transparent;font-size:.63rem;text-align:left}.product-list a:hover{color:var(--ink);background:var(--panel-2)}.product-list a.active{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--ink);background:var(--card)}.product-list>a>i{width:3px;height:20px;border-radius:4px;background:var(--accent)}.product-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px}.product-list img{width:20px;height:20px;border-radius:6px}.product-status{display:grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border-radius:6px;font-size:.48rem;font-weight:780;font-variant-numeric:tabular-nums}.product-status.complete{color:#143c2b;background:rgba(67,201,138,.78)}.product-status.partial{color:#5a3a09;background:rgba(240,178,78,.82)}.product-status.pending{color:var(--muted);background:var(--panel-2);font-size:.82rem}.product-selector>footer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);background:var(--panel-2);font-size:.55rem;line-height:1.35}.product-selector>footer img{width:22px;height:22px;border-radius:6px}
   .viewer-column{min-width:0}.empty-map-card{display:grid;place-items:center;min-height:clamp(620px,64vh,780px);background:var(--panel)}.empty-forecast{display:flex;align-items:center;flex-direction:column;color:var(--ink);text-align:center}.empty-forecast img{width:62px;height:62px;margin-bottom:18px;border-radius:16px;opacity:.88}.empty-forecast strong{font-size:1.72rem;letter-spacing:.14em}.empty-forecast span{margin-top:7px;color:var(--muted);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase}.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}.map-product{display:flex;align-items:center;gap:10px}.product-mark{width:4px;height:35px;border-radius:5px;background:var(--product-accent);box-shadow:0 0 16px color-mix(in srgb,var(--product-accent) 45%,transparent)}.product-title{display:flex;align-items:center;gap:7px}.product-title strong{font-size:.82rem}.product-title img{width:21px;height:21px;border-radius:6px}.map-head small{display:block;margin-top:3px;color:var(--muted);font-size:.61rem;font-variant-numeric:tabular-nums}.map-actions{display:flex;align-items:center;gap:5px}.map-actions button{width:31px;height:31px;border-radius:8px}.map-actions button:disabled{opacity:.45}.export-error{max-width:210px;color:#e8846b;font-size:.52rem;line-height:1.25}
@@ -941,6 +1090,7 @@
      para este fondo. */
   .forecast-map{position:relative;min-height:clamp(620px,64vh,780px);overflow:hidden;background:#d5e1e6}.real-frame{position:absolute;inset:5% 7%;z-index:3;width:86%;height:90%;object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.25))}.frame-state{position:absolute;left:50%;top:50%;z-index:9;display:flex;align-items:center;flex-direction:column;gap:6px;width:min(280px,70%);padding:16px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#eaf3f8;background:rgba(6,16,25,.82);backdrop-filter:blur(10px);text-align:center}.frame-state strong{font-size:.72rem}.frame-state small{color:rgba(235,244,251,.65);font-size:.58rem;line-height:1.4}.frame-state.error{border-color:rgba(239,111,118,.32)}.frame-state button{margin-top:4px;padding:6px 9px;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#dceaf2;background:rgba(255,255,255,.06);font-size:.57rem}.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.18);border-top-color:#70b9ef;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.legend{position:absolute;right:12px;bottom:12px;z-index:18;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:rgba(235,244,251,.8);background:rgba(6,16,25,.62);font-size:.6rem}.legend i{width:130px;height:8px;border-radius:99px;background:linear-gradient(90deg,#3b4cc0,#3288bd,#66c2a5,#e6f598,#fdae61,#d73027,#762a83)}
   .palette-precipitation .legend i{background:linear-gradient(90deg,#28465f,#2f6f8e,#369aa1,#58bd91,#9bd275,#d7dc69,#f2c55a,#ed914c,#df6262,#b44f88)}
+  .palette-wind .legend i{background:linear-gradient(90deg,#dfe8f1,#a9c8e4,#6fa8d6,#66c2a5,#abdda4,#e6f598,#fee08b,#fdae61,#f46d43,#d73027,#762a83)}
   .legend-classes{align-items:flex-end;padding-bottom:6px}
   .band-scale{position:relative;padding-bottom:11px}
   .legend i.ramp{display:block;width:262px}
@@ -968,7 +1118,12 @@
   .unit-menu button:hover{color:#fff;background:rgba(255,255,255,.08)}
   .unit-menu button.active{color:#06131c;background:#68bdf1;font-weight:750}
   .map-watermark{position:absolute;left:14px;bottom:13px;z-index:7;display:flex;align-items:center;gap:8px;color:var(--map-ink,#e6f1f8);pointer-events:none;user-select:none}.map-watermark img{width:27px;height:27px;border-radius:7px}.map-watermark span{display:flex;flex-direction:column;line-height:1}.map-watermark strong{font-size:.56rem;letter-spacing:.12em}.map-watermark small{margin-top:4px;font-size:.46rem;letter-spacing:.16em;text-transform:uppercase}:global(.theme-light) .map-watermark{color:var(--map-ink,#1b3a4e)}
-  .map-card:fullscreen{display:flex;flex-direction:column;border:0;border-radius:0}.map-card:fullscreen .forecast-map{flex:1;height:auto;min-height:0}
+  /* Pantalla completa: la lista de mapas a la izquierda y la tarjeta ocupando
+     el resto. La explicación del mapa queda fuera; se lee al salir. */
+  .forecast-layout:fullscreen{grid-template-columns:260px minmax(0,1fr);grid-template-rows:minmax(0,1fr);align-items:stretch;height:100vh;padding:10px;background:var(--bg)}.forecast-layout:fullscreen .product-selector{position:static;height:100%;max-height:none;min-height:0}.forecast-layout:fullscreen .category-list{flex:1;min-height:0}.forecast-layout:fullscreen .viewer-column{display:flex;min-width:0;min-height:0;flex-direction:column}.forecast-layout:fullscreen .viewer-column>:not(.map-card){display:none}.forecast-layout:fullscreen .map-card{display:flex;flex:1;min-height:0;flex-direction:column}.forecast-layout:fullscreen .forecast-map{flex:1;height:auto;min-height:0;aspect-ratio:auto!important}
+  /* Con la proporción del dominio el recuadro ya mide lo que el mapa: sin alto
+     mínimo ni fijo, que volverían a dejar franjas grises. */
+  .forecast-map.fitted{min-height:0;height:auto}
   .level-rail{position:absolute;right:12px;top:58px;bottom:54px;z-index:14;display:flex;width:92px;flex-direction:column;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8f2f7;background:rgba(5,14,22,.78);backdrop-filter:blur(10px);overflow:hidden}.level-rail header{padding:9px 9px 7px;border-bottom:1px solid rgba(255,255,255,.1)}.level-rail header strong,.level-rail header small{display:block}.level-rail header strong{font-size:.62rem}.level-rail header small{margin-top:2px;color:rgba(235,244,251,.55);font-size:.47rem}.level-kind{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px}.level-kind button,.level-list button{border:0;color:rgba(235,244,251,.62);background:transparent;font-size:.5rem}.level-kind button{padding:5px 2px;border-radius:5px}.level-kind button.active{color:#06131c;background:#68bdf1;font-weight:750}.level-list{display:flex;min-height:0;flex:1;flex-direction:column;overflow-y:auto;padding:2px 5px 6px}.level-list button{flex:0 0 25px;border-left:2px solid transparent;text-align:right}.level-list button:hover{color:#fff;background:rgba(255,255,255,.06)}.level-list button.active{border-left-color:#68bdf1;border-radius:4px;color:#8ed3ff;background:rgba(76,163,219,.12);font-weight:750}
   .timeline{display:grid;grid-template-columns:34px 34px 1fr 34px;align-items:center;gap:7px;padding:12px 14px 14px;border-top:1px solid var(--border)}.timeline>button{width:34px;height:34px;border-radius:9px}.timeline>button:disabled{opacity:.35;cursor:default}.timeline .play{color:#76bfff}.timeline .play.active{color:#08141f;background:#76bfff}.time-range{min-width:0;padding:0 5px}.time-labels{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.57rem}.time-labels strong{color:var(--ink);font-size:.63rem}.time-range input{width:100%;margin:9px 0 2px;accent-color:#5faeea}.ticks{display:flex;justify-content:space-between;padding:0 3px}.ticks i{width:2px;height:4px;border-radius:2px;background:var(--border-2)}.ticks i.major{height:7px}.ticks i.ready{background:#43c98a}.ticks i.pending{background:var(--border-2);opacity:.62}
   .product-explainer{margin-top:14px;padding:17px}.product-explainer>header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.explainer-identity{display:flex;align-items:center;gap:11px}.explainer-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;color:#6ab7ef;background:rgba(62,142,208,.11)}.explainer-identity small{display:block;margin-bottom:3px;color:var(--muted);font-size:.56rem}.explainer-identity h3{font-size:.88rem}.source-tag{padding:5px 8px;border-radius:6px;color:#78baf0;background:rgba(62,142,208,.11);font-size:.55rem;font-weight:740;text-transform:uppercase}.source-tag.derived{color:#f08b9d;background:rgba(240,112,134,.1)}.product-explainer h4{margin-bottom:7px;color:var(--ink-2);font-size:.61rem;text-transform:uppercase;letter-spacing:.065em}.explanation-overview{display:grid;grid-template-columns:1fr;gap:19px;padding-top:17px}.explanation-overview p,.interpretation li,.calculation-detail p,.calculation-detail li{color:var(--muted);font-size:.65rem;line-height:1.62}.interpretation ul{display:grid;gap:8px;margin:0;padding-left:17px}.interpretation li::marker,.calculation-copy li::marker{color:#67b7ef}.calculation-detail{margin-top:19px;padding-top:17px;border-top:1px solid var(--border)}.calculation-copy{min-width:0}.calculation-copy ol{display:grid;gap:5px;margin:11px 0 0;padding-left:18px}.calculation-copy code{display:block;margin-top:12px;padding:7px 9px;border-radius:7px;color:#70b9ef;background:var(--panel-2);font-size:.52rem;overflow-wrap:anywhere}.technical-sources{display:grid;grid-template-columns:1fr;gap:12px;margin-top:17px;padding-top:14px;border-top:1px solid var(--border)}.technical-sources>strong{color:var(--ink-2);font-size:.58rem;text-transform:uppercase;letter-spacing:.055em}.technical-sources>div{display:flex;flex-wrap:wrap;gap:6px}.technical-sources a{padding:5px 7px;border:1px solid var(--border);border-radius:6px;color:#6db5e9;background:var(--panel-2);font-size:.53rem;line-height:1.35;text-decoration:none}.technical-sources a:hover{border-color:rgba(109,181,233,.42);color:#8bcbf8}
@@ -1008,7 +1163,7 @@
   .technical-sources a{font-size:.63rem}
 
   @media(max-width:980px){.forecast-layout{grid-template-columns:220px minmax(0,1fr)}.forecast-map{min-height:440px}}
-  @media(max-width:760px){.control-bar{flex-wrap:wrap}.run-summary{order:3;width:100%;margin-left:0}.forecast-layout{grid-template-columns:1fr}.product-selector{position:static;max-height:none}.category-list{max-height:360px}.forecast-map{min-height:clamp(390px,62vh,560px)}.map-head{align-items:flex-start}.map-actions button:nth-child(2){display:none}}
+  @media(max-width:760px){.forecast-layout:fullscreen{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);padding:6px;gap:6px}.forecast-layout:fullscreen .product-selector{height:auto;max-height:34vh}.forecast-layout:fullscreen .product-selector>header p,.forecast-layout:fullscreen .product-selector>footer{display:none}.control-bar{flex-wrap:wrap}.run-summary{order:3;width:100%;margin-left:0}.forecast-layout{grid-template-columns:1fr}.product-selector{position:static;max-height:none}.category-list{max-height:360px}.forecast-map{min-height:clamp(390px,62vh,560px)}.map-head{align-items:flex-start}.map-actions button:nth-child(2){display:none}}
   @media(max-width:640px){.bands{width:158px}.band-marks span:nth-child(even){display:none}}
   @media(max-width:480px){.control-bar label{min-width:0;flex:1}.control-bar label>span{display:none}.control-bar select{min-width:0;width:100%}.run-summary strong{max-width:220px}.forecast-map{height:clamp(320px,48vh,400px);min-height:0}.legend i{width:76px}.timeline{grid-template-columns:32px 32px minmax(150px,1fr) 32px;padding-inline:8px}.timeline>button{width:32px;height:32px}.time-labels>span{display:none}.time-labels{justify-content:center}.product-explainer>header{align-items:flex-start;flex-direction:column}.source-tag{margin-left:47px}}
 </style>

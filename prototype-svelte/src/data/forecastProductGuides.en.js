@@ -127,27 +127,6 @@ export const forecastProductGuides = {
     steps: ['Obtain the three ingredients from the same lead time, profile and grid.', 'Apply the EBWD thresholds in m/s and multiply the normalised factors.'],
     sources: [{ label: 'MetPy · SCP and SPC formulation', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.supercell_composite.html' }]
   },
-  'z500-mslp': {
-    what: '500 hPa geopotential height in colour and mean sea level pressure as isobars, over the Atlantic and Europe. This is the classic synoptic pair: the height of the 500 hPa surface draws the wave that steers the weather several days ahead, and the surface pressure shows where it ends up anchored.',
-    interpretation: [
-      'High values are a ridge — warm air and an expanded column, settled weather — and low values a trough or upper low. What matters is not so much the value as the shape: where the wave curves and which way it is moving.',
-      'The isobars are read on top of the heights, not separately. A geopotential minimum sitting right over a surface low is a mature, vertically stacked system with little left to give; displaced west of it, the system is still developing.',
-      'The gradient between height contours is proportional to the wind at 500 hPa: where they tighten lies the jet stream, and with it the corridor along which the lows travel.',
-      'At +144 h the map is not a forecast of detail but of pattern. It tells you whether a ridge is settling in or a trough is arriving, not what time it will rain.'
-    ],
-    method: 'Two variables from the ECMWF open data for each lead time: the 500 hPa geopotential height, converted from geopotential metres to decametres, and the mean sea level pressure, converted from pascals to hectopascals. Both are cropped to the Euro-Atlantic domain.',
-    equations: [
-      { label: 'Geopotential height in decametres', latex: String.raw`Z_{500}[\mathrm{dam}]=\frac{Z_{500}[\mathrm{gpm}]}{10}` },
-      { label: 'Mean sea level pressure', latex: String.raw`p_{\mathrm{mar}}[\mathrm{hPa}]=\frac{p_{\mathrm{mar}}[\mathrm{Pa}]}{100}` }
-    ],
-    steps: [
-      'ECMWF variables: geopotential height (gh) at 500 hPa and mean sea level pressure (msl).',
-      'Unit conversion: from geopotential metres to decametres and from pascals to hectopascals.',
-      'Crop to the Euro-Atlantic window, without smoothing the colour field.'
-    ],
-    sources: [ECMWF_OPEN_DATA]
-  },
-
   'temperature-2m': {
     what: 'Forecast air temperature 2 m above the model surface. It is the reference field for describing the thermal environment near the ground, but it is not the same as the skin temperature of the terrain.',
     interpretation: [

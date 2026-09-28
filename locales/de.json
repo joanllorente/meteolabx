@@ -168,6 +168,20 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_220_improvements": [
+      "Neue Modelle: ECMWF 0,25° und AROME-IFS 0,025°.",
+      "AROME verwendet jetzt eine Lambert-Projektion statt der äquirektangulären.",
+      "Neue Zoom-Voreinstellungen über dem Gebiet für die mesoskaligen Modelle.",
+      "Aktive tropische Wirbelstürme erscheinen mit ihrem Namen über dem Tief des Modells.",
+      "Pro Modell werden jetzt die vier Läufe des Tages statt drei aufbewahrt.",
+      "Allgemeine Verbesserungen der Oberfläche von „Vorhersage“."
+    ],
+    "release_220_fixes": [
+      "Flüssigere Darstellung der Karten mit Stromlinien.",
+      "Die Stromlinien lassen je nach Zoomstufe keine leeren Bereiche mehr.",
+      "Verbesserte Farbpalette der Windkarte für eine bessere Sichtbarkeit der Stromlinien.",
+      "Ein Problem mit der Windprojektion über dem AROME-Gebiet wurde behoben."
+    ],
     "release_212_improvements": [
       "Karte der Schneefallgrenze hinzugefügt.",
       "Karte der Nullgradgrenze hinzugefügt."

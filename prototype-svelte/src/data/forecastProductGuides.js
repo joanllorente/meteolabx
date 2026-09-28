@@ -116,25 +116,205 @@ export const forecastProductGuides = {
     steps: ['Obtener los tres ingredientes del mismo plazo, perfil y rejilla.', 'Aplicar los umbrales de EBWD en m/s y multiplicar los factores normalizados.'],
     sources: [{ label: 'MetPy · SCP y formulación SPC', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.supercell_composite.html' }]
   },
-  'z500-mslp': {
-    what: 'Altura geopotencial de 500 hPa en color y presión al nivel del mar en isobaras, sobre el Atlántico y Europa. Es el par clásico del análisis sinóptico: la altura de la superficie de 500 hPa dibuja la onda que dirige el tiempo a varios días vista, y la presión en superficie dice dónde acaba apoyándose.',
+  'ecmwf-temperature-850': {
+    what: 'Temperatura del aire en 850 hPa, en torno a 1.500 m de altitud, con las isohipsas de ese nivel en decámetros. Es el mapa clásico de masas de aire: a esa altura la temperatura ya no depende del ciclo diario del suelo y describe el aire que llega. Con ECMWF se sigue hasta seis días vista y sobre todo el Atlántico y Europa.',
     interpretation: [
-      'Los valores altos son dorsal —aire cálido y una columna dilatada, tiempo estable— y los bajos, vaguada o depresión en altura. Lo que importa no es tanto el valor como la forma: dónde se curva la onda y hacia dónde avanza.',
-      'Las isobaras se leen encima, no aparte. Un mínimo de geopotencial justo sobre una baja en superficie es un sistema maduro y vertical, ya sin apenas recorrido; desplazado al oeste de ella, es un sistema todavía en desarrollo.',
-      'El gradiente entre isohipsas es proporcional al viento en 500 hPa: donde se aprietan está la corriente en chorro, y con ella la banda por donde viajan las borrascas.',
-      'A +144 h el mapa no es un pronóstico de detalle sino de patrón. Sirve para ver si se instala una dorsal o entra una vaguada, no para decidir a qué hora llueve.'
+      'Sirve para seguir las entradas de aire frío y las advecciones cálidas, y para comparar masas de aire. Como orientación, en la península 20 °C o más en 850 hPa acompañan episodios de calor intenso, y valores bajo cero en invierno, entradas frías con nieve a cotas bajas.',
+      'Las isohipsas dicen de dónde viene el aire: el viento en 850 hPa sopla casi paralelo a ellas, con las alturas bajas a la izquierda. Donde las isohipsas cruzan las isotermas hay advección: de temperatura cálida si el viento va del lado cálido al frío, y fría en el caso contrario.',
+      'No es la temperatura en superficie. Con inversiones, de noche o en valles, el suelo puede estar mucho más frío que el aire en 850 hPa. Donde ese nivel queda bajo el relieve, como en los Alpes o el Atlas, el mapa queda vacío.',
+      'Con celdas de unos 25 km, ECMWF describe bien la masa de aire, pero no el detalle local. Para las primeras 51 horas, AROME da más detalle.'
     ],
-    method: 'Dos variables del open data de ECMWF para cada plazo: la altura geopotencial en 500 hPa, que se pasa de metros geopotenciales a decámetros, y la presión al nivel del mar, que se pasa de pascales a hectopascales. Ambas se recortan al dominio euroatlántico.',
+    method: 'Temperatura y altura geopotencial que publica ECMWF en 850 hPa. La temperatura se pasa de kelvin a grados Celsius y la altura, a decámetros. Se ocultan los puntos donde la presión en superficie es menor de 850 hPa, porque allí el nivel queda bajo tierra y el modelo solo extrapola.',
     equations: [
-      { label: 'Altura geopotencial en decámetros', latex: String.raw`Z_{500}[\mathrm{dam}]=\frac{Z_{500}[\mathrm{gpm}]}{10}` },
-      { label: 'Presión al nivel del mar', latex: String.raw`p_{\mathrm{mar}}[\mathrm{hPa}]=\frac{p_{\mathrm{mar}}[\mathrm{Pa}]}{100}` }
+      { label: 'Conversión de unidades', latex: String.raw`T[{}^\circ\mathrm C]=T[\mathrm K]-273.15,\qquad Z[\mathrm{dam}]=\frac{Z[\mathrm{gpm}]}{10}` }
     ],
     steps: [
-      'Variables de ECMWF: altura geopotencial (gh) en 500 hPa y presión al nivel del mar (msl).',
-      'Conversión de unidades: de metros geopotenciales a decámetros y de pascales a hectopascales.',
-      'Recorte a la ventana euroatlántica, sin suavizar el campo de colores.'
+      'Leer la temperatura y la altura geopotencial en 850 hPa, y la presión en superficie.',
+      'Ocultar los puntos donde 850 hPa queda bajo el relieve.',
+      'Mostrar la temperatura en color e isotermas cada 2 °C, y las isohipsas cada 3 dam.'
     ],
     sources: [ECMWF_OPEN_DATA]
+  },
+  'ecmwf-temperature-500': {
+    what: 'Temperatura del aire en 500 hPa, entre unos 5 y 6 km de altitud, con las isohipsas de ese nivel y los ejes de vaguada marcados. Es el nivel de referencia de la troposfera media: dibuja la onda que dirige el tiempo a varios días y el aire frío en altura.',
+    interpretation: [
+      'Las vaguadas y las depresiones aisladas en altura (DANAs) aparecen como bolsas de aire frío rodeadas por isohipsas curvadas o cerradas. Aire muy frío en 500 hPa sobre aire cálido y húmedo en capas bajas vuelve la atmósfera inestable y favorece chubascos y tormentas.',
+      'Los ejes de vaguada, en línea discontinua, marcan por dónde pasa el fondo de cada onda. Delante de un eje, el aire tiende a subir y a formar nubes y precipitación; detrás, a bajar y a despejar.',
+      'No es un mapa de tormentas: para la convección hacen falta a la vez humedad, inestabilidad, un mecanismo que dispare el ascenso y un viento adecuado. Conviene leerlo junto a la temperatura en 850 hPa y la presión en superficie.',
+      'Con celdas de unos 25 km, ECMWF representa bien la onda sinóptica y la posición de las DANAs a varios días, que es para lo que sirve este mapa.'
+    ],
+    method: 'Temperatura y altura geopotencial que publica ECMWF en 500 hPa. La temperatura se pasa a grados Celsius y la altura, a decámetros. Los ejes de vaguada se buscan sobre el geopotencial suavizado a escala sinóptica, donde las isohipsas tienen curvatura ciclónica marcada, y se unen en líneas a lo largo de la onda.',
+    equations: [
+      { label: 'Conversión de unidades', latex: String.raw`T[{}^\circ\mathrm C]=T[\mathrm K]-273.15,\qquad Z[\mathrm{dam}]=\frac{Z[\mathrm{gpm}]}{10}` }
+    ],
+    steps: [
+      'Leer la temperatura y la altura geopotencial en 500 hPa.',
+      'Mostrar la temperatura en color e isotermas cada 2 °C, y las isohipsas cada 6 dam.',
+      'Detectar los ejes de vaguada sobre el geopotencial, con los mismos criterios en kilómetros que en AROME, y marcar las depresiones cerradas.'
+    ],
+    sources: [ECMWF_OPEN_DATA]
+  },
+  'ecmwf-precip-6h': {
+    what: 'Precipitación total prevista por ECMWF durante las 6 horas que terminan en la hora seleccionada, en milímetros, con la presión al nivel del mar en isobaras y los centros de acción. Es el mapa de lluvia a varios días vista: dónde y cuándo llueve, y con qué sistemas.',
+    interpretation: [
+      'Los colores son clases de milímetros en 6 horas. Por debajo de 0,1 mm no se pinta nada, para que se distinga dónde no llueve. Como orientación, más de 10 mm en 6 horas ya es lluvia persistente o fuerte, y más de 30, un episodio intenso.',
+      'Las isobaras ponen la lluvia en su contexto: las bandas alargadas junto a una vaguada de isobaras suelen ser frentes, y las manchas sueltas en zonas de presiones débiles, chubascos o tormentas.',
+      'Incluye lluvia y nieve en agua equivalente: 10 mm de nieve en este mapa son unos 10 cm de nieve en el suelo, según lo húmeda que sea.',
+      'Con celdas de unos 25 km, ECMWF reparte la lluvia de forma más suave que la realidad: subestima los máximos de las tormentas y el efecto del relieve. Sirve para situar los episodios a varios días; para el detalle de las primeras 51 horas, AROME.'
+    ],
+    method: 'ECMWF publica la precipitación acumulada desde el inicio de la pasada. La de cada intervalo es la diferencia entre la hora válida y 6 horas antes, pasada de metros de agua a milímetros. Por eso el mapa empieza en la +6. Las diferencias negativas de centésimas que deja el redondeo del modelo se ponen a cero.',
+    equations: [
+      { label: 'Precipitación del intervalo', latex: String.raw`P_{6\,\mathrm h}(t)=1000\,\left[tp(t)-tp(t-6\,\mathrm h)\right]` }
+    ],
+    steps: [
+      'Leer la precipitación acumulada en la hora válida y 6 horas antes, y la presión al nivel del mar.',
+      'Restar las dos acumulaciones y pasar a milímetros.',
+      'Mostrar la precipitación por clases, las isobaras cada 4 hPa y los centros de presión.'
+    ],
+    sources: [ECMWF_OPEN_DATA]
+  },
+  'ecmwf-eady-850-500': {
+    what: 'Tasa de crecimiento de Eady en la capa 850-500 hPa, en día⁻¹: lo rápido que podría intensificarse una borrasca en ese entorno. Combina dos ingredientes: la cizalladura vertical del viento, que va ligada al contraste entre el aire frío y el cálido, y la estabilidad de la capa, que frena el crecimiento. Las isohipsas de 500 hPa sitúan la onda.',
+    interpretation: [
+      'Los valores altos marcan las zonas baroclinas: franjas donde el contraste térmico y la cizalladura son grandes y la estabilidad no los frena. Ahí es donde nacen y se profundizan las borrascas; fuera de ellas, una perturbación apenas crece.',
+      'Como orientación, 1 día⁻¹ significa que una perturbación podría multiplicar su amplitud por algo menos de 3 en un día. Por debajo de 0,3 día⁻¹ no se pinta.',
+      'No es lo mismo que el jet stream: con el mismo viento, una capa estable da poco crecimiento y una inestable mucho. Sirve para ver dónde está el «criadero» de borrascas a varios días vista, y se lee bien junto al jet y a la presión en superficie.',
+      'Es un índice del entorno: dice dónde podría crecer una borrasca, no dónde va a haber una. Tampoco incluye el calor que libera la condensación, que puede acelerar mucho la profundización.',
+      'Queda vacío donde 850 hPa roza el suelo, con presión en superficie por debajo de 900 hPa, porque ahí la cizalladura es la del rozamiento con el terreno; donde la capa es casi neutra, porque el índice se dispararía sin sentido; y al sur de 15° N, donde el efecto de la rotación de la Tierra es demasiado débil.'
+    ],
+    method: 'La cizalladura es la diferencia de viento entre 850 y 500 hPa dividida por la distancia vertical entre los dos niveles. La estabilidad se mide con la frecuencia de Brunt-Väisälä, a partir de la diferencia de temperatura potencial en la capa. Viento, temperatura y geopotencial se suavizan antes unos 40 km.',
+    equations: [
+      { label: 'Tasa de crecimiento de Eady', latex: String.raw`\sigma_E=0{,}31\,\frac{|f|}{N}\left|\frac{\Delta\vec V}{\Delta z}\right|` },
+      { label: 'Estabilidad de la capa', latex: String.raw`N^2=\frac{g}{\bar\theta}\frac{\Delta\theta}{\Delta z}` }
+    ],
+    steps: [
+      'Leer viento, temperatura y altura geopotencial en 850 y 500 hPa, y la presión en superficie.',
+      'Suavizar los campos unos 40 km.',
+      'Calcular la cizalladura, la temperatura potencial de cada nivel y la estabilidad de la capa.',
+      'Calcular la tasa de Eady y pasarla a día⁻¹. Ocultar las capas casi neutras (N² por debajo de 2·10⁻⁵ s⁻²), las latitudes por debajo de 15° y donde la presión en superficie baja de 900 hPa.'
+    ],
+    sources: [ECMWF_OPEN_DATA, { label: 'Hoskins y Valdes (1990) · tasa de crecimiento de Eady y trayectorias de borrascas', url: 'https://doi.org/10.1175/1520-0469(1990)047%3C1854:OTEOST%3E2.0.CO;2' }]
+  },
+  'ecmwf-jet-300': {
+    what: 'Velocidad del viento en 300 hPa, en torno a 9 km de altitud, a partir de 10 m/s, con su dirección en líneas de corriente. Muestra el jet stream: la franja de viento muy fuerte que guía las borrascas y marca la frontera entre el aire polar y el subtropical. Como el viento flojo no se pinta, la propia forma del jet dibuja la onda.',
+    interpretation: [
+      'Las borrascas nacen y se desplazan a lo largo del jet. Su posición dice por dónde entrarán los sistemas: un jet sobre la península trae un tiempo activo, y uno desplazado al norte, estabilidad.',
+      'Los máximos de viento dentro del jet, los «jet streaks», son clave. A la salida de uno por el lado izquierdo, y a la entrada por el lado derecho, el aire en altura diverge y favorece el ascenso y la profundización de las borrascas en superficie.',
+      'Un jet ondulado, con grandes curvas, suele ir con vaguadas y dorsales marcadas y tiempo cambiante; uno recto y zonal, con un flujo del oeste rápido. Donde el jet se parte en dos ramas o se curva en herradura puede estar aislándose una DANA.',
+      'En verano el jet sube y se debilita, y a veces queda mejor representado en 250 hPa que en 300.'
+    ],
+    method: 'Componentes U y V del viento de ECMWF en 300 hPa; la velocidad es el módulo del vector. Solo se colorean y se trazan las líneas de corriente donde supera 10 m/s.',
+    equations: [
+      { label: 'Velocidad del viento', latex: String.raw`V=\sqrt{u^2+v^2}` }
+    ],
+    steps: [
+      'Leer U y V en 300 hPa.',
+      'Calcular la velocidad y ocultar lo que no llega a 10 m/s.',
+      'Mostrar la velocidad en color y la dirección en líneas de corriente.'
+    ],
+    sources: [ECMWF_OPEN_DATA]
+  },
+  'ecmwf-frontogenesis-850': {
+    what: 'Frontogénesis en 850 hPa, en K por 100 km cada 3 horas. Las líneas son isentrópicas: unen los puntos con la misma temperatura potencial, cada 2 K, y marcan las masas de aire; donde se aprietan hay un frente. El color mide si el viento está apretando las isentrópicas —intensificando un frente— o separándolas. Los frentes son zonas estrechas donde la temperatura potencial cambia bruscamente, y este mapa dice cuáles se están reforzando y cuáles se deshacen.',
+    interpretation: [
+      'Las isentrópicas unen los puntos con la misma temperatura potencial. Donde van muy juntas, la temperatura potencial cambia mucho en poca distancia: hay un contraste fuerte entre dos masas de aire, y ahí está el frente. Donde van separadas, el aire es homogéneo. Las líneas sirven así para situar los frentes, y el color dice si se están intensificando o debilitando.',
+      'Rojo: frontogénesis, el contraste térmico aumenta y el frente se intensifica. Azul: frontólisis, el frente se debilita. Las bandas rojas deberían seguir las zonas donde las isentrópicas se aprietan.',
+      'La frontogénesis fuerza una circulación transversal al frente: el aire sube en el lado cálido y baja en el frío. Por eso las bandas de frontogénesis intensa suelen ir con bandas de nubosidad y precipitación en su lado cálido; se comparan bien con la velocidad vertical en 700 hPa y con la precipitación en 6 horas.',
+      'Como orientación, valores por encima de 1 K/100 km/3 h indican un frente activo, y por encima de 3, uno muy intenso. En el centro de las borrascas maduras aparece la espiral de la oclusión.',
+      'Con celdas de unos 25 km y un suavizado de unos 40 km, los frentes salen más anchos y suaves que en la realidad. Donde 850 hPa queda bajo el relieve, el mapa queda vacío.'
+    ],
+    method: 'Frontogénesis cinemática de Petterssen: el cambio del gradiente de temperatura potencial producido por la deformación y la convergencia del viento real, no del geostrófico, porque la convergencia es una parte esencial de los frentes. La temperatura potencial sale de la temperatura en 850 hPa. Temperatura y viento se suavizan antes unos 40 km, por igual en latitud y longitud, y las derivadas tienen en cuenta la curvatura de la Tierra.',
+    equations: [
+      { label: 'Temperatura potencial', latex: String.raw`\theta=T\left(\frac{1000}{p}\right)^{0{,}286}` },
+      { label: 'Frontogénesis cinemática', latex: String.raw`F=-\frac{1}{|\nabla\theta|}\left[\frac{\partial\theta}{\partial x}\left(\frac{\partial u}{\partial x}\frac{\partial\theta}{\partial x}+\frac{\partial v}{\partial x}\frac{\partial\theta}{\partial y}\right)+\frac{\partial\theta}{\partial y}\left(\frac{\partial u}{\partial y}\frac{\partial\theta}{\partial x}+\frac{\partial v}{\partial y}\frac{\partial\theta}{\partial y}\right)\right]` }
+    ],
+    steps: [
+      'Leer la temperatura y el viento en 850 hPa, y la presión en superficie para descartar el relieve.',
+      'Calcular la temperatura potencial y suavizar temperatura y viento unos 40 km.',
+      'Calcular la frontogénesis con derivadas en la esfera y ocultar los puntos bajo el relieve.',
+      'Mostrar el resultado en K por 100 km cada 3 horas y las isentrópicas cada 2 K.'
+    ],
+    sources: [ECMWF_OPEN_DATA, { label: 'MetPy · frontogenesis', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.frontogenesis.html' }]
+  },
+  'ecmwf-omega-700': {
+    what: 'Velocidad vertical del aire en 700 hPa, unos 3 km de altitud, según ECMWF, con las isohipsas de ese nivel. Se expresa como −ω en Pa/s: positivo (rojo) cuando el aire sube y negativo (azul) cuando baja. Es el movimiento vertical que el modelo produce de verdad, con todos sus mecanismos.',
+    interpretation: [
+      'El ascenso a gran escala enfría el aire hasta saturarlo, así que las zonas rojas amplias suelen coincidir con nubosidad y precipitación: delante de las vaguadas, en los frentes y alrededor de las borrascas. El descenso (azul) seca y estabiliza el aire.',
+      'Como orientación, 0,1 Pa/s son algo más de 1 cm/s de ascenso a ese nivel: poco en apariencia, pero sostenido durante horas basta para producir lluvia extensa. Por encima de 0,5 Pa/s el ascenso es intenso.',
+      'Se compara bien con el mapa de vectores Q, que está en el mismo nivel. Los vectores Q dicen dónde la dinámica a gran escala fuerza el ascenso; este mapa, dónde sube el aire en el modelo, sumando además el relieve, la convección y los frentes.',
+      'Sobre el relieve aparecen ondas de montaña, franjas alternas de ascenso y descenso a sotavento. Son reales en el modelo, pero no indican precipitación.'
+    ],
+    method: 'ECMWF publica ω, la velocidad vertical en coordenadas de presión, en Pa/s, positiva hacia abajo. Se cambia de signo para que el ascenso sea positivo y se suaviza con un filtro gaussiano de unos 40 km, igual en latitud y en longitud, para quitar el ruido de una o dos celdas de la convección y las ondas de montaña. Se oculta donde 700 hPa queda bajo el relieve.',
+    equations: [
+      { label: 'Relación aproximada con la velocidad vertical en m/s', latex: String.raw`w\approx-\frac{\omega}{\rho\,g}` }
+    ],
+    steps: [
+      'Leer ω en 700 hPa, la altura geopotencial de ese nivel y la presión en superficie.',
+      'Cambiar el signo, suavizar unos 40 km y ocultar los puntos bajo el relieve.',
+      'Mostrar −ω en color, con el rojo como ascenso, y las isohipsas cada 3 dam.'
+    ],
+    sources: [ECMWF_OPEN_DATA]
+  },
+  'relative-vorticity-500': {
+    what: 'Vorticidad relativa del viento a 500 hPa, en 10⁻⁵ s⁻¹. Mide la rotación local del aire sin incluir la rotación planetaria. Las isohipsas superpuestas muestran la altura geopotencial de 500 hPa cada 6 dam (60 m), con una línea destacada cada 12 dam.',
+    interpretation: ['En el hemisferio norte, los valores positivos (rojo) indican rotación ciclónica y los negativos (azul), anticiclónica. Cero se muestra en blanco.', 'Un máximo de vorticidad puede acompañar una vaguada. El valor por sí solo no determina el ascenso: también importan su advección y la estructura vertical.'],
+    method: 'Se usa la vorticidad relativa que publica el propio ECMWF, calculada en el espacio espectral del modelo, más exacta que derivarla aquí del viento. Se suaviza ligeramente, unos 28 km por igual en latitud y longitud, para quitar los filamentos de la escala de la rejilla y el rizado propio de un modelo espectral sin debilitar los máximos de las vaguadas. Se enmascaran los puntos donde 500 hPa queda bajo tierra.',
+    equations: [{ label: 'Vorticidad relativa esférica', latex: String.raw`\zeta=\frac{1}{a\cos\varphi}\frac{\partial v}{\partial\lambda}-\frac{1}{a}\frac{\partial u}{\partial\varphi}+\frac{u\tan\varphi}{a}` }],
+    steps: [
+      'Leer la vorticidad relativa y la altura geopotencial a 500 hPa, y la presión en superficie.',
+      'Suavizar la vorticidad con un filtro gaussiano de unos 28 km.',
+      'Multiplicar por 10⁵ para la escala del visor. Convertir la altura geopotencial a decámetros y trazar isohipsas cada 6 dam.'
+    ],
+    sources: [ECMWF_OPEN_DATA, { label: 'MetPy · vorticity', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.vorticity.html' }]
+  },
+  'q-vectors-700': {
+    what: 'Vectores Q a 700 hPa, con el forzamiento de movimiento vertical que producen en color y las isohipsas de 700 hPa encima. Los vectores Q resumen en un solo campo cómo el flujo a gran escala deforma el campo de temperatura, y su convergencia o divergencia indica dónde la dinámica cuasigeostrófica empuja el aire a subir o a bajar. Las flechas son vectores Q, no viento.',
+    interpretation: [
+      'Rojo: convergencia de Q, forzamiento de ascenso. Azul: divergencia de Q, forzamiento de descenso. Blanco: forzamiento débil. El ascenso a gran escala favorece nubosidad y precipitación extensas; el descenso, estabilidad y cielos más despejados.',
+      'Los vectores apuntan hacia donde se fuerza el ascenso, así que las zonas rojas aparecen donde las flechas convergen. Su longitud crece con la intensidad del forzamiento; las flechas muy débiles no se dibujan.',
+      'Las isohipsas sitúan el forzamiento respecto a vaguadas y dorsales. Lo típico es encontrar ascenso delante de una vaguada y descenso detrás, y bandas alargadas junto a los frentes, donde los vectores cruzan las isotermas.',
+      'Es un diagnóstico de la dinámica a gran escala, no la velocidad vertical del modelo ni una predicción de lluvia. No incluye el ascenso por relieve, por convección ni por procesos de pequeña escala, y pierde validez cerca del ecuador, que queda fuera del cálculo.',
+      'Donde el nivel de 700 hPa queda bajo el terreno, como en Groenlandia o los Alpes, y en una franja de unos 100 km alrededor, el mapa queda sin valor: el cálculo allí no sería fiable.'
+    ],
+    method: 'El viento geostrófico se obtiene de la altura geopotencial de 700 hPa y se combina con el gradiente de temperatura del mismo nivel para formar Q, sin dividir por la estabilidad estática. Antes, temperatura y geopotencial se suavizan a escala sinóptica, unos 165 km en todas las direcciones: Q depende de derivadas segundas y su divergencia de terceras, y sin ese suavizado el mapa sería ruido de la rejilla. Se tiene en cuenta la curvatura de la Tierra.',
+    equations: [
+      { label: 'Vector Q', latex: String.raw`\vec Q=-\frac{R_d}{p}\left(\frac{\partial \vec V_g}{\partial x}\cdot\nabla T,\ \frac{\partial \vec V_g}{\partial y}\cdot\nabla T\right)` },
+      { label: 'Forzamiento vertical mostrado en color', latex: String.raw`F=-2\,\nabla\cdot\vec Q` }
+    ],
+    steps: [
+      'Leer la temperatura y la altura geopotencial a 700 hPa, y la presión en superficie para descartar los puntos bajo tierra.',
+      'Suavizar temperatura y geopotencial con un filtro gaussiano de unos 165 km, igual en latitud y en longitud.',
+      'Calcular el viento geostrófico, los vectores Q y el forzamiento −2∇·Q. Las latitudes por debajo de 20° quedan fuera.',
+      'Descartar el terreno por encima de 700 hPa y una franja de cuatro celdas a su alrededor.',
+      'Mostrar el forzamiento multiplicado por 10¹⁷, los vectores Q promediados por zonas y las isohipsas de 700 hPa en decámetros.'
+    ],
+    sources: [ECMWF_OPEN_DATA, { label: 'MetPy · definición de Q-vector', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.q_vector.html' }]
+  },
+
+  'ecmwf-mslp-theta-e-850': {
+    what: 'Temperatura potencial equivalente en 850 hPa, en °C, con la presión al nivel del mar en isobaras y sus centros marcados. La theta-e resume en un solo número el calor y la humedad que trae el aire, y se conserva tanto si la masa sube seca como si condensa: por eso identifica a la masa misma y no al termómetro de un momento, y permite seguir los frentes que separan unas masas de otras. Con ECMWF, en todos sus dominios y hasta seis días vista.',
+    interpretation: [
+      'Es el mapa de masas de aire. Una lengua de theta-e alta que avanza sobre valores más bajos es advección cálida y húmeda; una irrupción de valores bajos, aire frío o seco que entra.',
+      'Sirve para identificar los frentes: están donde la theta-e se aprieta en una franja estrecha entre una masa cálida y húmeda y otra fría o seca, y el frente en superficie suele ir por el borde cálido de esa franja. Si la franja avanza hacia el aire cálido es un frente frío; si retrocede ante él, uno cálido. Las isobaras lo confirman, porque doblan en la vaguada que acompaña al frente.',
+      'Se lee junto a las isobaras: el aire va casi paralelo a ellas, así que dicen de dónde viene la masa que la theta-e describe.',
+      'La escala sigue por encima de 60 °C con una rampa aparte, del magenta al blanco, para el aire tropical. En latitudes bajas la theta-e en 850 hPa ronda los 65–80 °C, y el aire saturado que rodea a un huracán supera los 85 °C: sale como una mancha clara alrededor de la B. Ese máximo es sobre todo humedad: el núcleo cálido del ciclón, que es aire más caliente, no más húmedo, se ve mejor en la temperatura en 500 hPa.',
+      'Con celdas de unos 25 km, los frentes salen algo más anchos que en AROME, pero se siguen bien a varios días. Para las primeras 51 horas, AROME da más detalle.',
+      'Sin valor donde la presión en superficie no llega a 850 hPa: ahí ese nivel está bajo tierra y el modelo solo extrapola. Es lo que deja en blanco los Alpes o el Atlas.'
+    ],
+    method: 'Theta-e de Bolton (1980), calculada con MetPy sobre la temperatura de ECMWF en 850 hPa y un punto de rocío obtenido de la humedad específica. No se usa la humedad relativa del modelo porque, por debajo de 0 °C, ECMWF la mide respecto al hielo, y el rocío derivado de ella saldría sesgado justo en el aire frío. El cálculo se hace en kelvin y solo el resultado se pasa a grados Celsius. Las isobaras salen de la presión al nivel del mar del mismo plazo.',
+    equations: [
+      { label: 'Presión de vapor a partir de la humedad específica', latex: String.raw`e=\frac{q\,p}{0{,}622+0{,}378\,q}` },
+      { label: 'Punto de rocío (Magnus)', latex: String.raw`T_d=\frac{243{,}5\,\ln(e/6{,}112)}{17{,}67-\ln(e/6{,}112)}` },
+      { label: 'Theta-e', latex: String.raw`\theta_e=T\left(\frac{1000}{p-e}\right)^{\kappa}\left(\frac{T}{T_L}\right)^{0{,}28r}\exp\!\left[\left(\frac{3036}{T_L}-1{,}78\right)r(1+0{,}448r)\right]` }
+    ],
+    steps: [
+      'Variables de ECMWF: temperatura y humedad específica en 850 hPa, presión en superficie y presión al nivel del mar.',
+      'Punto de rocío a partir de la humedad específica, con la presión del propio nivel, 850 hPa.',
+      'Theta-e calculada con MetPy, que aplica la formulación de Bolton (1980), en kelvin; solo el resultado se pasa a grados Celsius.',
+      'Ocultar los puntos donde 850 hPa queda bajo el relieve.',
+      'Isobaras cada 4 hPa, con una de cada cinco marcada, y los centros de presión detectados con los mismos criterios en kilómetros que en AROME.'
+    ],
+    sources: [ECMWF_OPEN_DATA, BOLTON_1980, METPY]
   },
 
   'temperature-2m': {

@@ -31,7 +31,7 @@ from fastapi.responses import JSONResponse
 from server import __version__
 from server.config import Settings, get_settings
 from server.dependencies.http import http_client_lifespan
-from server.routers import climo, forecast, health, observations, ranking, stations, stats
+from server.routers import climo, forecast, health, observations, ranking, stations, stats, storms
 from server.schemas.errors import ProviderError
 
 logger = logging.getLogger(__name__)
@@ -199,6 +199,7 @@ def create_app() -> FastAPI:
     app.include_router(ranking.router, prefix=api_prefix)
     app.include_router(stats.router, prefix=api_prefix)
     app.include_router(forecast.router, prefix=api_prefix)
+    app.include_router(storms.router, prefix=api_prefix)
     # El código de ECMWF puede desplegarse sin publicar el modelo. Hasta que
     # se active expresamente no existe siquiera una ruta HTTP que permita
     # acceder a sus mapas adivinando la URL.
@@ -206,6 +207,10 @@ def create_app() -> FastAPI:
         from server.routers import ecmwf
 
         app.include_router(ecmwf.router, prefix=api_prefix)
+    # AROME-IFS, igual: el mismo código que AROME, publicado solo cuando su
+    # worker está en marcha y hay pasadas que servir.
+    if os.getenv("METEOLABX_ENABLE_AROME_IFS", "").lower() in {"1", "true", "yes"}:
+        app.include_router(forecast.ifs_router, prefix=api_prefix)
 
     return app
 

@@ -44,6 +44,8 @@ from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.ops import unary_union
 from zoneinfo import ZoneInfo
 
+from server.services.arome_models import AROME, AROME_SOURCES, current_source
+
 
 # ---------------------------------------------------------------------------
 # Caché con caducidad, en sustitución de ``@st.cache_data``.
@@ -95,10 +97,14 @@ def cache_clear() -> None:
         _CACHE.clear()
 
 
-WCS_BASE = (
-    "https://public-api.meteofrance.fr/public/arome/1.0/wcs/"
-    "MF-NWP-HIGHRES-AROME-0025-FRANCE-WCS"
-)
+WCS_ROOT = "https://public-api.meteofrance.fr/public/arome/1.0/wcs"
+WCS_BASE = f"{WCS_ROOT}/{AROME.wcs_service}"
+
+
+def wcs_base(model_id: Optional[str] = None) -> str:
+    """Servicio WCS del modelo; por omisión, el activo."""
+    source = AROME_SOURCES[model_id] if model_id else current_source()
+    return f"{WCS_ROOT}/{source.wcs_service}"
 
 
 FORECAST_CATALONIA_BBOX = (0.10, 40.45, 3.45, 42.95)
@@ -711,6 +717,9 @@ class AromeWCS:
         self.token = token.strip()
         if not self.token:
             raise AromeError("Falta la clave de la API de Météo-France.")
+        # Se fija al crearlo: el cliente puede acabar en hilos que no llevan
+        # el contexto de la petición que lo creó.
+        self.base = wcs_base()
 
     def capabilities(self) -> CoverageCatalog:
         params = (
@@ -719,7 +728,7 @@ class AromeWCS:
             ("language", "fre"),
         )
         content, _ = _api_get_metadata(
-            f"{WCS_BASE}/GetCapabilities", params, self.token
+            f"{self.base}/GetCapabilities", params, self.token
         )
         return CoverageCatalog(content)
 
@@ -730,7 +739,7 @@ class AromeWCS:
             ("coverageID", coverage_id),
         )
         content, _ = _api_get_metadata(
-            f"{WCS_BASE}/DescribeCoverage", params, self.token
+            f"{self.base}/DescribeCoverage", params, self.token
         )
         try:
             root = ET.fromstring(content)
@@ -814,7 +823,7 @@ class AromeWCS:
             )
         params.append(("format", "application/wmo-grib"))
         content, content_type = _api_get(
-            f"{WCS_BASE}/GetCoverage", tuple(params), self.token
+            f"{self.base}/GetCoverage", tuple(params), self.token
         )
         if "xml" in content_type or content.lstrip().startswith(b"<"):
             detail = content[:800].decode("utf-8", errors="replace").replace("\n", " ")
@@ -835,7 +844,7 @@ class AromeWCS:
             ("format", "application/wmo-grib"),
         ]
         content, content_type = _api_get(
-            f"{WCS_BASE}/GetCoverage", tuple(params), self.token
+            f"{self.base}/GetCoverage", tuple(params), self.token
         )
         if "xml" in content_type or content.lstrip().startswith(b"<"):
             raise AromeError("AROME no devolvió el perfil isobárico en GRIB2.")

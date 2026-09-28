@@ -17,6 +17,8 @@
  * potencias de dos porque el reparto de sitio ya frena por su cuenta: esto
  * fija cuándo una ciudad merece rótulo, no cuántos caben.
  */
+import { frameGeo } from './projection.js';
+
 export function cityRank(zoomLevel) {
   if (zoomLevel < 2.8) return 3;
   if (zoomLevel < 3.8) return 4;
@@ -55,8 +57,8 @@ export function cityRoom(zoomLevel) {
 export function placeCities({
   catalogue, frame, bounds, viewZoom, labelScale, format, max = 60
 }) {
-  if (!frame?.bounds) return [];
-  const [west, south, east, north] = frame.bounds;
+  if (!frame?.bounds && !frame?.lcc) return [];
+  const geo = frameGeo(frame);
   const limite = cityRank(viewZoom);
   // Los rótulos no se escalan con el zoom, así que el hueco que piden medido
   // en celdas encoge a medida que se amplía: es lo que hace que quepan más.
@@ -67,8 +69,7 @@ export function placeCities({
   for (const [name, latitude, longitude, rank] of catalogue) {
     if (rank > limite) continue;
     if (puestas.length >= max) break;
-    const x = (longitude - west) / (east - west) * frame.width;
-    const y = (north - latitude) / (north - south) * frame.height;
+    const [x, y] = geo.toGrid(longitude, latitude);
     if (x < bounds.west || x > bounds.east || y < bounds.north || y > bounds.south) continue;
     const column = Math.floor(x);
     const row = Math.floor(y);

@@ -865,6 +865,9 @@ export function troughAxes(field, {
   peakSpacingKm = TROUGH_PEAK_SPACING_KM,
   percentile = TROUGH_PERCENTILE,
   mergeKm = TROUGH_MERGE_KM,
+  // Distancia bajo la cual una cadena casi paralela a otra más larga se
+  // descarta como rama de la misma vaguada. Por defecto, la de fusión.
+  twinKm = mergeKm,
   maxTurnDeg = TROUGH_MAX_TURN_DEG,
   maxDriftDeg = TROUGH_MAX_DRIFT_DEG,
   minAmplitudeKm = TROUGH_MIN_AMPLITUDE_KM,
@@ -1056,7 +1059,7 @@ export function troughAxes(field, {
   // isohipsas se reparten los picos. Se queda la larga y se descarta la que va
   // pegada a ella, que es la rama corta del mismo eje y no otra vaguada.
   supervivientes.sort((izquierda, derecha) => axisLength(derecha) - axisLength(izquierda));
-  const radioFusion = Math.max(2, Math.round(mergeKm / kmPorCelda));
+  const radioFusion = Math.max(2, Math.round(twinKm / kmPorCelda));
   const elegidos = [];
   for (const eje of supervivientes) {
     const solapa = elegidos.some((previo) => {
@@ -1088,4 +1091,142 @@ export function troughAxes(field, {
       minimum: regionMinimum(field, width, height, centro.cells, grueso.width, block) ?? centro.value
     }))
   };
+}
+
+/**
+ * Proyección cónica conforme de Lambert, esférica, con paralelos 35 y 65° N.
+ *
+ * Entre 25 y 75° N deforma las distancias menos de un 10 %, y al ser conforme
+ * conserva la forma de las ondas, que es lo que mide el detector.
+ */
+function lambert(lat0 = 50, lon0 = 15, lat1 = 35, lat2 = 65) {
+  const R = 6371;
+  const rad = Math.PI / 180;
+  const t = (lat) => Math.tan(Math.PI / 4 + (lat * rad) / 2);
+  const n = Math.log(Math.cos(lat1 * rad) / Math.cos(lat2 * rad)) / Math.log(t(lat2) / t(lat1));
+  const F = (Math.cos(lat1 * rad) * t(lat1) ** n) / n;
+  const rho0 = (R * F) / t(lat0) ** n;
+  return {
+    forward(lon, lat) {
+      const rho = (R * F) / t(lat) ** n;
+      const theta = n * (lon - lon0) * rad;
+      return { x: rho * Math.sin(theta), y: rho0 - rho * Math.cos(theta) };
+    },
+    inverse(x, y) {
+      const rho = Math.sign(n) * Math.hypot(x, rho0 - y);
+      const theta = Math.atan2(x, rho0 - y);
+      return {
+        lon: lon0 + theta / n / rad,
+        lat: (2 * Math.atan((R * F / rho) ** (1 / n)) - Math.PI / 2) / rad
+      };
+    }
+  };
+}
+
+/**
+ * Ejes de vaguada de un campo en rejilla regular de latitud y longitud.
+ *
+ * El detector mide en celdas y las trata como cuadradas, y en latitud y
+ * longitud no lo son: a 60° N una celda es el doble de alta que de ancha, así
+ * que las ondas del norte se veían aplastadas y sin curvatura. Aquí el campo
+ * se reproyecta a una rejilla de `cellKm` km de lado real, se buscan los ejes
+ * y se devuelven a la rejilla original.
+ */
+// En ECMWF las isohipsas de 6 dam van más separadas que las de AROME y una
+// misma vaguada deja a veces dos cadenas a 150-200 km: se tratan como una.
+export const TROUGH_TWIN_KM_LONLAT = 250;
+
+// En el trópico las isohipsas son casi planas y el detector sacaba ejes sueltos
+// sin sentido sinóptico: por debajo de esta latitud no se buscan vaguadas.
+const TROUGH_MIN_LATITUDE = 20;
+
+export function troughAxesLonLat(field, { width, height, bounds, cellKm = 25, contourStep = 0, twinKm = TROUGH_TWIN_KM_LONLAT, ...opciones } = {}) {
+  if (!field || !bounds) return { axes: [], lows: [] };
+  const [west, south, east, north] = bounds;
+  // Hemisferio sur: allí las vaguadas se descuelgan hacia el norte, al revés
+  // de lo que busca el detector. Se le da la vuelta al campo de norte a sur
+  // —un espejo exacto del hemisferio—, se buscan los ejes como en el norte y
+  // se devuelven a su sitio.
+  if ((south + north) / 2 < 0) {
+    const espejo = new Float32Array(width * height);
+    for (let fila = 0; fila < height; fila += 1) {
+      espejo.set(field.subarray((height - 1 - fila) * width, (height - fila) * width), fila * width);
+    }
+    const reflejado = troughAxesLonLat(espejo, {
+      width, height, bounds: [west, -north, east, -south], cellKm, contourStep, twinKm, ...opciones
+    });
+    const volver = (punto) => ({ ...punto, y: height - punto.y });
+    return { axes: reflejado.axes.map((eje) => eje.map(volver)), lows: reflejado.lows.map(volver) };
+  }
+  const dLon = (east - west) / width;
+  const dLat = (north - south) / height;
+  const proyeccion = lambert((south + north) / 2, (west + east) / 2);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i <= 40; i += 1) {
+    for (const [lon, lat] of [
+      [west + (east - west) * i / 40, south], [west + (east - west) * i / 40, north],
+      [west, south + (north - south) * i / 40], [east, south + (north - south) * i / 40]
+    ]) {
+      const p = proyeccion.forward(lon, lat);
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+  }
+  const ancho = Math.ceil((maxX - minX) / cellKm);
+  const alto = Math.ceil((maxY - minY) / cellKm);
+  const proyectado = new Float32Array(ancho * alto).fill(NaN);
+  // Fila 0 al norte, como en la rejilla original.
+  for (let fila = 0; fila < alto; fila += 1) {
+    const y = maxY - (fila + 0.5) * cellKm;
+    for (let columna = 0; columna < ancho; columna += 1) {
+      const { lon, lat } = proyeccion.inverse(minX + (columna + 0.5) * cellKm, y);
+      if (Math.abs(lat) < TROUGH_MIN_LATITUDE) continue;
+      const gx = (lon - west) / dLon - 0.5;
+      const gy = (north - lat) / dLat - 0.5;
+      const x0 = Math.floor(gx);
+      const y0 = Math.floor(gy);
+      if (x0 < 0 || y0 < 0 || x0 + 1 >= width || y0 + 1 >= height) continue;
+      const fx = gx - x0;
+      const fy = gy - y0;
+      const a = field[y0 * width + x0];
+      const b = field[y0 * width + x0 + 1];
+      const c = field[(y0 + 1) * width + x0];
+      const d = field[(y0 + 1) * width + x0 + 1];
+      proyectado[fila * ancho + columna] = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+    }
+  }
+  const resultado = troughAxes(proyectado, { width: ancho, height: alto, cellKm, block: 1, contourStep, twinKm, ...opciones });
+  const aRejilla = (punto) => {
+    const { lon, lat } = proyeccion.inverse(minX + punto.x * cellKm, maxY - punto.y * cellKm);
+    return { ...punto, x: (lon - west) / dLon, y: (north - lat) / dLat };
+  };
+  return {
+    axes: resultado.axes.map((eje) => eje.map(aRejilla)),
+    lows: resultado.lows.map(aRejilla)
+  };
+}
+
+/**
+ * Ejes de vaguada sobre un frame ya reproyectado a la LCC del visor.
+ *
+ * Sus celdas ya son cuadradas y en km, así que no hace falta la reproyección
+ * de `troughAxesLonLat`: basta con el mismo corte de latitud y, en el
+ * hemisferio sur, el mismo espejo de norte a sur.
+ */
+export function troughAxesProjected(field, { width, height, cellKm, latitude, sign = 1, contourStep = 0, twinKm = TROUGH_TWIN_KM_LONLAT, ...opciones } = {}) {
+  if (!field) return { axes: [], lows: [] };
+  const campo = new Float32Array(width * height);
+  for (let fila = 0; fila < height; fila += 1) {
+    // En el sur la fila se toma del otro extremo: las vaguadas se descuelgan
+    // hacia el norte y el detector las busca hacia abajo.
+    const origen = sign < 0 ? height - 1 - fila : fila;
+    for (let columna = 0; columna < width; columna += 1) {
+      const indice = origen * width + columna;
+      campo[fila * width + columna] = Math.abs(latitude[indice]) < TROUGH_MIN_LATITUDE ? NaN : field[indice];
+    }
+  }
+  const resultado = troughAxes(campo, { width, height, cellKm, block: 1, contourStep, twinKm, ...opciones });
+  if (sign > 0) return resultado;
+  const volver = (punto) => ({ ...punto, y: height - punto.y });
+  return { axes: resultado.axes.map((eje) => eje.map(volver)), lows: resultado.lows.map(volver) };
 }

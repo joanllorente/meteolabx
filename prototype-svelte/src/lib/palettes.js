@@ -13,6 +13,32 @@ export const defaultPalette = [
   '#fee08b', '#fdae61', '#f46d43', '#d73027', '#762a83'
 ];
 
+/**
+ * θe con cola tropical: la paleta de siempre y, detrás, cuatro colores más.
+ *
+ * Con los nodos del producto, de −10 a 60 °C se recorren exactamente los
+ * diez colores de `defaultPalette`, igual que antes, y los frentes de latitudes
+ * medias no cambian. Por encima de 60 °C, donde el trópico y el núcleo de los
+ * huracanes antes se recortaban al último color, sigue una rampa del magenta
+ * al blanco.
+ */
+export const thetaEPalette = [...defaultPalette, '#a8409a', '#d46fb4', '#f2b3da', '#fff4fb'];
+
+/**
+ * Viento: la de siempre para el viento fuerte y un arranque claro para el flojo.
+ *
+ * Con `defaultPalette`, la calma caía en azul oscuro y el trazo negro de las
+ * streamlines desaparecía justo donde el flujo es más enrevesado. Los tres
+ * primeros colores se aclaran para que la tinta oscura siempre contraste;
+ * del verde en adelante sigue igual, que es donde ya se leía bien.
+ */
+export const windPalette = [
+  '#dfe8f1', '#a9c8e4', '#6fa8d6', '#66c2a5', '#abdda4', '#e6f598',
+  '#fee08b', '#fdae61', '#f46d43', '#d73027', '#762a83'
+];
+
+export const divergingPalette = ['#2166ac', '#67a9cf', '#d1e5f0', '#f7f7f7', '#fddbc7', '#ef8a62', '#b2182b'];
+
 export const precipitationPalette = [
   '#28465f', '#2f6f8e', '#369aa1', '#58bd91', '#9bd275',
   '#d7dc69', '#f2c55a', '#ed914c', '#df6262', '#b44f88'

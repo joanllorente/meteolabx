@@ -168,6 +168,20 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para qualquer questão sobre privacidade ou sobre o tratamento da informação, pode escrever para",
+    "release_220_improvements": [
+      "Novos modelos: ECMWF 0,25° e AROME-IFS 0,025°.",
+      "O AROME passa a usar a projeção de Lambert em vez da equiretangular.",
+      "Novos presets de zoom sobre o domínio para os modelos de mesoescala.",
+      "Os ciclones tropicais ativos aparecem com o seu nome sobre a baixa do modelo.",
+      "Passam a conservar-se as quatro corridas do dia de cada modelo em vez de três.",
+      "Melhorias gerais na interface de «Previsão»."
+    ],
+    "release_220_fixes": [
+      "Maior fluidez nos mapas com linhas de corrente.",
+      "As linhas de corrente já não deixam zonas vazias consoante o nível de zoom.",
+      "Melhorada a paleta de cores do mapa de vento para ver melhor as linhas de corrente.",
+      "Corrigido um problema com a projeção do vento sobre o domínio do AROME."
+    ],
     "release_212_improvements": [
       "Adicionado o mapa da cota de neve.",
       "Adicionado o mapa do nível de congelamento."

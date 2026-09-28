@@ -7,9 +7,8 @@
  * con `web/` como contexto de Docker y no ve este proyecto, así que los datos
  * viajan en un fichero generado, como el resto de `*.generated.js`.
  *
- * Solo sale lo público: los mapas de los modelos visibles en el build de
- * producción (sin `VITE_ENABLE_ECMWF`, AROME) y, por idioma, las guías que
- * existen de verdad. Una guía sin traducir no se exporta en ese idioma: la
+ * Solo sale lo público: los mapas de los modelos del visor y, por idioma, las
+ * guías que existen de verdad. Una guía sin traducir no se exporta en ese idioma: la
  * página correspondiente se sirve, pero no se indexa.
  *
  *   node scripts/export-forecast-seo.mjs
@@ -27,7 +26,7 @@ const TEXT_KEYS = ['pageTitle', 'title', 'subtitle', 'what', 'interpretation', '
 
 // `forecastProducts.js` usa `import.meta.env`, que solo existe dentro de Vite.
 const load = async (path) => (await runnerImport(resolve(ROOT, path))).module;
-const { forecastCategories, forecastModels, productsForModel } = await load('src/data/forecastProducts.js');
+const { forecastCategories, forecastModels, productFamily, productsForModel } = await load('src/data/forecastProducts.js');
 const i18n = await load('src/lib/forecast-i18n.js');
 const translated = {
   en: (await load('src/data/forecastProductGuides.en.js')).default,
@@ -48,6 +47,9 @@ function guideFields(guide) {
 
 const products = [];
 for (const model of forecastModels) {
+  // AROME-IFS enseña los mapas de AROME: cada página es de un mapa, no de un
+  // modelo, y exportarlos otra vez duplicaría todas las de AROME.
+  if (productFamily(model.id) !== model.id) continue;
   const base = productsForModel(model.id);
   const localized = Object.fromEntries(
     LANGUAGES.map((language) => [language, i18n.localizedForecastProducts(base, language)])

@@ -14,6 +14,8 @@ import struct
 import tempfile
 from typing import Any, Protocol
 
+from server.services.arome_models import AROME_SOURCES, current_model, is_arome_model
+
 
 DERIVED_FORECAST_PRODUCTS = (
     # Los derivados de IP1 van tras la descarga de los paquetes.
@@ -122,13 +124,20 @@ CAPPED_FORECAST_PRODUCTS = tuple(
 # al nivel del mar en isobaras. Es el mapa sinóptico de referencia y sale de
 # dos mensajes GRIB por plazo, así que sirve para medir el coste real del
 # modelo antes de ampliarlo.
-ECMWF_FORECAST_PRODUCTS = ("z500-mslp",)
+ECMWF_FORECAST_PRODUCTS = (
+    "ecmwf-mslp-theta-e-850", "ecmwf-temperature-850", "ecmwf-temperature-500",
+    "relative-vorticity-500", "q-vectors-700",
+    "ecmwf-precip-6h", "ecmwf-jet-300", "ecmwf-omega-700", "ecmwf-frontogenesis-850",
+    "ecmwf-eady-850-500",
+)
 
 # Qué publica cada modelo. El almacén deja de asumir que todo lo que hay en el
 # volumen es AROME: las claves y los manifiestos van por modelo, y así una
 # pasada de ECMWF no puede pisar ni contarse dentro de otra.
+# AROME-IFS publica lo mismo que AROME porque sale del mismo cálculo: solo
+# cambian los datos de entrada.
 FORECAST_MODEL_PRODUCTS: dict[str, tuple[str, ...]] = {
-    "arome": PERSISTED_FORECAST_PRODUCTS,
+    **{model_id: PERSISTED_FORECAST_PRODUCTS for model_id in AROME_SOURCES},
     "ecmwf": ECMWF_FORECAST_PRODUCTS,
 }
 DEFAULT_FORECAST_MODEL = "arome"
@@ -136,6 +145,15 @@ DEFAULT_FORECAST_MODEL = "arome"
 
 # Revisión científica independiente del formato binario. Solo invalida los
 # productos que cambian: los demás conservan sus frames y su disponibilidad.
+# Vorticidad, revisión 2: `vo` nativa con suavizado ligero (σ ≈ 28 km).
+# Q, revisión 2: suavizado sinóptico (σ ≈ 165 km) con núcleo de radio fijo,
+# sin las franjas horizontales de la 1; −2∇·Q e isohipsas.
+# Jet stream, revisión 1: sin isohipsas.
+# Frontogénesis, revisión 2: suavizado de ~40 km y sin franja en el relieve.
+ECMWF_PRODUCT_REVISIONS = {
+    "relative-vorticity-500": 2, "q-vectors-700": 2, "ecmwf-jet-300": 1,
+    "ecmwf-frontogenesis-850": 2,
+}
 AROME_CALCULATION_REVISION = 1
 REVISED_AROME_PRODUCTS = frozenset({
     "mucape-muli", "mlcape-mlli", "sbcape-sbli", "ebwd", "ship",
@@ -146,7 +164,7 @@ REVISED_AROME_PRODUCTS = frozenset({
 
 def _upgrade_calculation_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     if ("run" not in payload or "products" not in payload
-            or payload.get("forecast_model", "arome") != "arome"
+            or not is_arome_model(payload.get("forecast_model", "arome"))
             or payload.get("calculation_revision") == AROME_CALCULATION_REVISION):
         return payload
     removed = 0
@@ -193,13 +211,20 @@ def forecast_models() -> tuple[str, ...]:
     return tuple(FORECAST_MODEL_PRODUCTS)
 
 
-def persisted_products(model: str = DEFAULT_FORECAST_MODEL) -> tuple[str, ...]:
+def persisted_products(model: str | None = None) -> tuple[str, ...]:
     """Productos que ese modelo persiste; vacío si el modelo no existe."""
     return FORECAST_MODEL_PRODUCTS.get(_validate_model(model), ())
 
 
 def _validate_model(model: str | None) -> str:
-    name = str(model or DEFAULT_FORECAST_MODEL).strip().lower()
+    """Nombre del modelo; sin él, el AROME que se esté calculando.
+
+    El worker y el router de AROME son los mismos para AROME y AROME-IFS, y
+    llaman al almacén sin decir el modelo. Tomarlo del contexto hace que una
+    llamada olvidada no pueda escribir en las claves del otro. ECMWF siempre
+    lo pasa explícito.
+    """
+    name = str(model or current_model()).strip().lower()
     if name not in FORECAST_MODEL_PRODUCTS:
         raise ValueError(f"El modelo de predicción «{model}» no está registrado.")
     return name
@@ -217,18 +242,23 @@ def _model_prefix(model: str | None) -> str:
     return "" if name == DEFAULT_FORECAST_MODEL else f"models/{name}/"
 
 
-def latest_manifest_key(model: str = DEFAULT_FORECAST_MODEL) -> str:
+def _is_arome_family(model: str | None) -> bool:
+    return is_arome_model(_validate_model(model))
+
+
+def latest_manifest_key(model: str | None = None) -> str:
     return f"forecast/{_model_prefix(model)}manifests/latest.json"
 
 
-def run_slots_key(model: str = DEFAULT_FORECAST_MODEL) -> str:
+def run_slots_key(model: str | None = None) -> str:
     return f"forecast/{_model_prefix(model)}manifests/slots.json"
 
 
 # Se conservan como constantes porque media base de código las importa; son
-# las de AROME, que es el modelo sin prefijo.
-LATEST_MANIFEST_KEY = latest_manifest_key()
-RUN_SLOTS_KEY = run_slots_key()
+# las de AROME, que es el modelo sin prefijo. El código compartido con
+# AROME-IFS debe usar las funciones, que siguen al modelo activo.
+LATEST_MANIFEST_KEY = latest_manifest_key(DEFAULT_FORECAST_MODEL)
+RUN_SLOTS_KEY = run_slots_key(DEFAULT_FORECAST_MODEL)
 
 
 @dataclass(frozen=True)
@@ -400,13 +430,15 @@ def frame_key(
     scope: str = "model",
     vertical_kind: str | None = None,
     level: float | None = None,
-    model: str = DEFAULT_FORECAST_MODEL,
+    model: str | None = None,
 ) -> str:
     model_prefix = _model_prefix(model)
     scope_prefix = "" if scope == "model" else f"scopes/{_validate_key(scope)}/"
     product_slug = _validate_key(product)
-    if _validate_model(model) == "arome" and product in REVISED_AROME_PRODUCTS:
+    if _is_arome_family(model) and product in REVISED_AROME_PRODUCTS:
         product_slug += f"--calc{AROME_CALCULATION_REVISION}"
+    if model == "ecmwf" and product in ECMWF_PRODUCT_REVISIONS:
+        product_slug += f"--rev{ECMWF_PRODUCT_REVISIONS[product]}"
     if product == "wind-level":
         kind = "height" if vertical_kind not in {"height", "isobaric"} else vertical_kind
         numeric_level = 10.0 if level is None else float(level)
@@ -418,13 +450,13 @@ def frame_key(
     )
 
 
-def run_manifest_key(run_iso: str, *, model: str = DEFAULT_FORECAST_MODEL) -> str:
+def run_manifest_key(run_iso: str, *, model: str | None = None) -> str:
     return f"forecast/{_model_prefix(model)}manifests/{run_slug(run_iso)}.json"
 
 
 def manifest_model(manifest: dict[str, Any] | None) -> str:
     """Modelo de un manifiesto. Los escritos antes de separarlos son AROME."""
-    return _validate_model((manifest or {}).get("forecast_model"))
+    return _validate_model((manifest or {}).get("forecast_model") or DEFAULT_FORECAST_MODEL)
 
 
 def read_json(store: ObjectStore, key: str) -> dict[str, Any] | None:
@@ -464,11 +496,14 @@ def new_manifest(
     *,
     scope: str = "model",
     catalog_products: dict[str, Any] | None = None,
-    model: str = DEFAULT_FORECAST_MODEL,
+    model: str | None = None,
     model_label: str = "",
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    etiquetas = {"arome": "AROME France 0,025°", "ecmwf": "ECMWF IFS 0,25°"}
+    etiquetas = {
+        "arome": "AROME France 0,025°", "arome-ifs": "AROME-IFS 0,025°",
+        "ecmwf": "ECMWF IFS 0,25°",
+    }
     nombre = _validate_model(model)
     return {
         "version": 1,
@@ -477,7 +512,7 @@ def new_manifest(
         # escribe en el volumen.
         "model": model_label or etiquetas.get(nombre, nombre.upper()),
         "forecast_model": nombre,
-        "calculation_revision": AROME_CALCULATION_REVISION if nombre == "arome" else 0,
+        "calculation_revision": AROME_CALCULATION_REVISION if is_arome_model(nombre) else 0,
         "run": run_iso,
         "calculation_scope": scope,
         "status": "publishing",
@@ -526,23 +561,28 @@ def register_run_slot(store: ObjectStore, manifest: dict[str, Any]) -> str | Non
 
 
 def retained_run_limit() -> int:
-    """Pasadas que se conservan en el volumen."""
+    """Pasadas que se conservan en el volumen, por modelo.
+
+    Cuatro: un día entero, una por turno 00/06/12/18. El límite es de cada
+    modelo, así que AROME y AROME-IFS guardan cuatro cada uno.
+    """
     try:
-        return max(1, int(os.getenv("METEOLABX_FORECAST_RETAINED_RUNS", "3")))
+        return max(1, int(os.getenv("METEOLABX_FORECAST_RETAINED_RUNS", "4")))
     except ValueError:
-        return 3
+        return 4
 
 
 def prune_retained_runs(
     store: ObjectStore,
     keep: int | None = None,
     *,
-    model: str = DEFAULT_FORECAST_MODEL,
+    model: str | None = None,
 ) -> list[str]:
     """Deja solo las pasadas más recientes y borra las demás del volumen.
 
-    Cada pasada ocupa más de un gigabyte, así que retener las cuatro del día
-    desbordaba el volumen y el worker se quedaba sin poder escribir.
+    Cada pasada ocupa más de un gigabyte. Con el volumen de 5 GB, retener las
+    cuatro del día lo desbordaba y el worker se quedaba sin poder escribir;
+    con el de 100 GB caben las cuatro de cada modelo con margen.
     """
     limit = retained_run_limit() if keep is None else max(1, keep)
     slots_key = run_slots_key(model)
@@ -559,6 +599,12 @@ def prune_retained_runs(
     removed: list[str] = []
     for run_iso, slot in ordered[limit:]:
         manifest = read_json(store, run_manifest_key(run_iso, model=model)) or {}
+        # Los dominios de ECMWF guardan sus frames en ámbitos propios. Borrar
+        # solo el principal los dejaba en el volumen para siempre.
+        for extra in manifest.get("extra_scopes") or ():
+            store.delete_prefix(
+                f"forecast/{_model_prefix(model)}scopes/{_validate_key(str(extra))}/runs/{run_slug(run_iso)}"
+            )
         delete_run(
             store,
             run_iso,
@@ -574,7 +620,7 @@ def prune_retained_runs(
 
 
 def retained_manifests(
-    store: ObjectStore, *, model: str = DEFAULT_FORECAST_MODEL
+    store: ObjectStore, *, model: str | None = None
 ) -> list[dict[str, Any]]:
     index = read_json(store, run_slots_key(model)) or {}
     manifests = []
@@ -590,7 +636,7 @@ def delete_run(
     run_iso: str,
     *,
     scope: str = "model",
-    model: str = DEFAULT_FORECAST_MODEL,
+    model: str | None = None,
 ) -> None:
     slug = run_slug(run_iso)
     base = f"forecast/{_model_prefix(model)}"

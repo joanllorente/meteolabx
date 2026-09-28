@@ -573,14 +573,19 @@ def email_level() -> str:
 def alert_for_report(report: dict[str, Any]) -> Alert | None:
     """El aviso que merece esta pasada, o ninguno si salió bien y no toca."""
     run = str(report.get("run", "?"))
+    # Los dos AROME tienen pasadas a las mismas horas: sin el modelo en la
+    # clave, el aviso de uno silenciaría el del otro. AROME conserva la suya.
+    model = str(report.get("model", "arome"))
+    clave = f"forecast/run-report/{run}" if model == "arome" else f"forecast/run-report/{model}/{run}"
+    pasada = "pasada" if model == "arome" else f"pasada {report.get('model_label') or model}"
     if report.get("severity") == "ok":
         if email_level() != "all":
             return None
         duracion = report.get("duration_min")
         return Alert(
-            key=f"forecast/run-report/{run}",
+            key=clave,
             subject=(
-                f"{emoji('ok')} MeteoLabX · pasada {run[:13]}Z completa"
+                f"{emoji('ok')} MeteoLabX · {pasada} {run[:13]}Z completa"
                 + (f" en {duracion:.0f} min" if duracion else "")
             ),
             body=render_text(report),
@@ -593,8 +598,8 @@ def alert_for_report(report: dict[str, Any]) -> Alert | None:
         # La clave lleva la pasada: cada pasada avisa como mucho una vez, y un
         # problema que se repite turno tras turno sí vuelve a escribir, que es
         # lo que distingue un tropiezo de una avería.
-        key=f"forecast/run-report/{run}",
-        subject=f"{emoji(gravedad)} MeteoLabX · pasada {run[:13]}Z: {titular[:80]}",
+        key=clave,
+        subject=f"{emoji(gravedad)} MeteoLabX · {pasada} {run[:13]}Z: {titular[:80]}",
         body=render_text(report),
         severity=gravedad,
         details={"run": run},

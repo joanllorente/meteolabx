@@ -13,24 +13,73 @@ const connectedForecastModels = [
     horizon: '+51 h'
   },
   {
+    // El mismo AROME, acoplado e inicializado con el IFS del CEPPM en vez de
+    // con ARPEGE. Publica exactamente los mismos mapas —`products`— sobre el
+    // mismo dominio, porque sale del mismo cálculo.
+    id: 'arome-ifs',
+    label: 'AROME-IFS 0,025°',
+    short: 'AROME-IFS',
+    origin: 'Météo-France · IFS',
+    domain: 'Francia y entorno · 2,5 km',
+    horizon: '+51 h',
+    products: 'arome'
+  },
+  {
     id: 'ecmwf',
     label: 'ECMWF IFS 0,25°',
     short: 'ECMWF',
     origin: 'ECMWF · open data',
-    domain: 'Euroatlántico · 25 km',
+    domain: 'Europa y Atlántico oriental · 25 km',
     horizon: '+144 h'
   }
 ];
 
-// ECMWF puede viajar en el mismo despliegue sin quedar expuesto antes de
-// tiempo. Vite sustituye esta bandera al compilar; si no se declara, el
-// selector y toda la navegación pública siguen siendo exclusivamente AROME.
-const ecmwfPublic = import.meta.env.VITE_ENABLE_ECMWF === 'true';
-export const forecastModels = connectedForecastModels.filter(
-  (model) => model.id !== 'ecmwf' || ecmwfPublic
-);
+// Todos públicos. Sus rutas de la API siguen dependiendo de
+// METEOLABX_ENABLE_ECMWF y METEOLABX_ENABLE_AROME_IFS en el servicio: sin
+// ellas, el modelo aparece en la barra pero su catálogo responde 404.
+export const forecastModels = connectedForecastModels;
 
 export const DEFAULT_FORECAST_MODEL = 'arome';
+
+/**
+ * De qué modelo toma sus mapas y sus zonas. Casi siempre es él mismo;
+ * AROME-IFS usa los de AROME en vez de repetir la lista.
+ */
+export function productFamily(modelId = DEFAULT_FORECAST_MODEL) {
+  return connectedForecastModels.find((model) => model.id === modelId)?.products || modelId;
+}
+
+/**
+ * Dominios de cada modelo.
+ *
+ * Los de ECMWF son recortes que calcula el servidor: cada uno tiene sus
+ * propios mapas. Los de AROME son zonas del mismo dominio que el visor recorta
+ * del mapa ya descargado (`bounds`), así que cambiar de zona no pide nada.
+ * El primero de cada lista es el de entrada.
+ */
+export const forecastDomains = {
+  arome: [
+    { id: 'full', label: 'Dominio completo' },
+    { id: 'iberia', label: 'Península Ibérica', bounds: [-10, 37.5, 4.6, 44.2] },
+    { id: 'france', label: 'Francia', bounds: [-5.5, 41.2, 10, 51.3] },
+    { id: 'italy', label: 'Italia', bounds: [6.4, 37.5, 16, 47.2] },
+    { id: 'alps', label: 'Suiza y Austria', bounds: [5.8, 45.6, 16, 48.9] },
+    { id: 'british-isles', label: 'Islas Británicas', bounds: [-11, 49.8, 2.1, 55.4] },
+    { id: 'benelux-germany', label: 'Benelux y Alemania', bounds: [2.4, 47.2, 15.2, 55.2] }
+  ],
+  ecmwf: [
+    { id: 'europe', label: 'Europa y Atlántico', server: true },
+    { id: 'middle-east', label: 'Oriente Medio y Asia central', server: true },
+    { id: 'north-america', label: 'Norteamérica', server: true },
+    { id: 'east-asia', label: 'Asia oriental y Pacífico', server: true },
+    { id: 'south-america', label: 'Sudamérica', server: true },
+    { id: 'australia', label: 'Australia y Nueva Zelanda', server: true }
+  ]
+};
+
+export function domainsForModel(modelId = DEFAULT_FORECAST_MODEL) {
+  return forecastDomains[productFamily(modelId)] || [];
+}
 
 export const forecastCategories = [
   { id: 'temperature', label: 'Temperatura' },
@@ -45,24 +94,143 @@ export const forecastCategories = [
 
 const allForecastProducts = [
   {
-    id: 'z500-mslp', model: 'ecmwf', category: 'dynamics',
-    label: 'Geopotencial 500 hPa y presión al nivel del mar', short: 'Z500 · MSLP', kind: 'native',
-    unit: 'dam', min: 480, max: 600, palette: 'temperature', accent: '#7aa2f7', vectors: false,
-    contents: 'Altura geopotencial · Presión',
-    // Isobaras cada 4 hPa y una de cada cinco marcada. Aquí sí se suavizan, al
-    // revés que en el mapa de masas de aire de AROME: allí no hacía falta
-    // porque una celda mide 2,5 km, y aquí mide 25, así que las marcas de la
-    // rejilla se ven como dientes en la línea. Sigma de 2 celdas son unos 50 km
-    // sobre un campo cuyas estructuras miden más de mil: el giro mediano entre
-    // tramos cae de 33° a 18° y el campo se mueve 0,33 hPa de media cuadrática,
-    // un 8 % del intervalo entre isobaras.
+    id: 'ecmwf-temperature-850', model: 'ecmwf', category: 'temperature',
+    label: 'Temperatura y geopotencial 850 hPa', short: 'T/Z 850 hPa', kind: 'native',
+    unit: '°C', min: -24, max: 36, palette: 'temperature', accent: '#ed7f61', vectors: false,
+    contourStep: 2, nationalBoundariesOnly: true, contents: 'Temperatura · Geopotencial',
+    overlayStep: 3, overlayMajorStep: 6, overlaySmoothing: 1,
+    description: 'Temperatura en 850 hPa con las isohipsas de ese nivel: el mapa clásico de masas de aire a varios días vista.',
+    method: 'Temperatura y altura geopotencial de ECMWF en 850 hPa. Se ocultan los puntos donde ese nivel queda bajo el relieve.',
+    coverage: 'ECMWF IFS 0,25° · t y gh 850 hPa'
+  },
+  {
+    id: 'ecmwf-temperature-500', model: 'ecmwf', category: 'temperature',
+    label: 'Temperatura y geopotencial 500 hPa', short: 'T/Z 500 hPa', kind: 'native',
+    unit: '°C', min: -42, max: -2, palette: 'temperature', accent: '#bc6ed0', vectors: false,
+    contourStep: 2, nationalBoundariesOnly: true, contents: 'Temperatura · Geopotencial',
+    overlayStep: 6, overlayMajorStep: 12, overlaySmoothing: 1,
+    // Ejes de vaguada sobre el geopotencial de 500 hPa, como en AROME.
+    troughAxes: true,
+    description: 'Temperatura en 500 hPa con las isohipsas de ese nivel y los ejes de vaguada: aire frío en altura, DANAs y la onda que dirige el tiempo.',
+    method: 'Temperatura y altura geopotencial de ECMWF en 500 hPa. Los ejes de vaguada se detectan sobre el geopotencial.',
+    coverage: 'ECMWF IFS 0,25° · t y gh 500 hPa'
+  },
+  {
+    id: 'ecmwf-precip-6h', model: 'ecmwf', category: 'precipitation',
+    label: 'Precipitación en 6 horas y presión al nivel del mar', short: 'Precip. 6 h · MSLP', kind: 'native',
+    unit: 'mm', min: 0, max: 60, palette: 'precipitation', accent: '#38a8ad', vectors: false,
+    // Clases en mm, como el acumulado de AROME; por debajo de 0,1 mm no se
+    // pinta, para que se vea dónde no llueve.
+    scaleBreaks: [0.5, 1, 2, 5, 10, 15, 20, 30, 40, 60], zeroFloor: 0.1,
+    overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 2, overlay: '',
+    overlayLayerLabel: 'Isobaras', pressureCentres: true,
+    nationalBoundariesOnly: true, contents: 'Precipitación · Presión',
+    description: 'Precipitación total de las 6 horas que terminan en la hora seleccionada, con la presión al nivel del mar en isobaras y los centros de acción. Desde la +6 hasta seis días vista.',
+    method: 'Diferencia entre la precipitación acumulada de ECMWF en la hora válida y 6 horas antes. Incluye lluvia y nieve en equivalente de agua.',
+    coverage: 'ECMWF IFS 0,25° · tp · MSLP'
+  },
+  {
+    id: 'ecmwf-eady-850-500', model: 'ecmwf', category: 'dynamics',
+    label: 'Tasa de crecimiento de Eady 850-500 hPa', short: 'Eady 850-500', kind: 'derived',
+    unit: 'día⁻¹', min: 0.3, max: 2.5, palette: 'shear', accent: '#c46bd1', vectors: false,
+    // Por debajo de 0,3 día⁻¹ no se pinta: queda la zona baroclina, donde las
+    // borrascas pueden crecer, y no un fondo de color en todo el mapa.
+    zeroFloor: 0.3,
+    overlayStep: 6, overlayMajorStep: 12, overlaySmoothing: 1, overlay: '',
+    nationalBoundariesOnly: true, contents: 'Crecimiento baroclino · Geopotencial',
+    description: 'Lo rápido que podría crecer una borrasca en la capa 850-500 hPa, según la cizalladura del viento y la estabilidad, con las isohipsas de 500 hPa. Marca las zonas propicias para la ciclogénesis.',
+    method: 'Tasa de Eady con la cizalladura entre 850 y 500 hPa y la estabilidad de esa capa, de ECMWF, suavizadas unos 40 km. Se oculta donde 850 hPa queda a menos de unos 500 m del suelo.',
+    coverage: 'ECMWF IFS 0,25° · u, v, t y gh 850 y 500 hPa · presión en superficie'
+  },
+  {
+    id: 'ecmwf-jet-300', model: 'ecmwf', category: 'dynamics',
+    label: 'Jet stream en 300 hPa', short: 'Jet 300', kind: 'native',
+    unit: 'm/s', min: 10, max: 75, palette: 'wind', accent: '#4db6e8', vectors: true, flowLines: true,
+    // Por debajo de 10 m/s ni color ni líneas de corriente: queda el jet y,
+    // con él, la forma de la onda, sin necesidad de isohipsas.
+    zeroFloor: 10, flowMinMagnitude: 10,
+    nationalBoundariesOnly: true, contents: 'Viento',
+    description: 'Velocidad y dirección del viento en 300 hPa a partir de 10 m/s: el jet stream que guía las borrascas.',
+    method: 'Componentes U y V de ECMWF en 300 hPa; la velocidad es su módulo.',
+    coverage: 'ECMWF IFS 0,25° · u y v 300 hPa'
+  },
+  {
+    id: 'ecmwf-frontogenesis-850', model: 'ecmwf', category: 'forcing',
+    label: 'Frontogénesis a 850 hPa', short: 'Frontogénesis 850', kind: 'derived',
+    unit: 'K/100 km/3 h', min: -4, max: 4, palette: 'diverging', accent: '#e8826b', vectors: false,
+    // Casi todo el campo está por debajo de 1: esa franja se lleva el 60 % de
+    // la rampa para que se vean también los frentes débiles.
+    scaleAnchors: [[-4, 0], [-1, .2], [-.2, .4], [0, .5], [.2, .6], [1, .8], [4, 1]], scaleTicks: [-4, -1, 0, 1, 4],
+    // Isentrópicas de 850 hPa cada 2 K, con un suavizado de dibujo de dos
+    // celdas para que no tiemblen.
+    overlayStep: 2, overlayMajorStep: 10, overlaySmoothing: 2, overlay: '',
+    overlayLayerLabel: 'Isentrópicas',
+    nationalBoundariesOnly: true, contents: 'Frontogénesis · Temperatura potencial',
+    description: 'Dónde el viento en 850 hPa está intensificando (rojo) o debilitando (azul) los frentes. Las líneas son isentrópicas: unen puntos con la misma temperatura potencial, cada 2 K, y donde se aprietan hay un frente.',
+    method: 'Frontogénesis cinemática de Petterssen con el viento y la temperatura potencial de ECMWF en 850 hPa, suavizados unos 40 km.',
+    coverage: 'ECMWF IFS 0,25° · t, u y v 850 hPa · presión en superficie'
+  },
+  {
+    id: 'ecmwf-omega-700', model: 'ecmwf', category: 'forcing',
+    label: 'Velocidad vertical a 700 hPa', short: '−ω 700', kind: 'native',
+    unit: 'Pa/s', min: -1.5, max: 1.5, palette: 'diverging', accent: '#7aa2f7', vectors: false,
+    // Casi todo el campo está por debajo de 0,5 Pa/s: esa franja se lleva el
+    // 60 % de la rampa para que se lea el ascenso sinóptico, no solo el
+    // convectivo.
+    scaleAnchors: [[-1.5, 0], [-.5, .2], [-.1, .4], [0, .5], [.1, .6], [.5, .8], [1.5, 1]], scaleTicks: [-1.5, -.5, 0, .5, 1.5],
+    overlayStep: 3, overlayMajorStep: 12, overlaySmoothing: 1, overlay: '',
+    nationalBoundariesOnly: true, contents: 'Velocidad vertical · Geopotencial',
+    description: 'Movimiento vertical del aire en 700 hPa según ECMWF, con las isohipsas de ese nivel. Rojo: ascenso; azul: descenso.',
+    method: 'Velocidad vertical ω de ECMWF en 700 hPa, cambiada de signo para que el ascenso sea positivo y suavizada unos 40 km. Se oculta donde ese nivel queda bajo el relieve.',
+    coverage: 'ECMWF IFS 0,25° · w y gh 700 hPa · presión en superficie'
+  },
+  {
+    id: 'relative-vorticity-500', model: 'ecmwf', category: 'dynamics',
+    label: 'Vorticidad relativa a 500 hPa', short: 'Vorticidad 500', kind: 'derived',
+    unit: '10⁻⁵ s⁻¹', min: -30, max: 30, palette: 'diverging', accent: '#7aa2f7', vectors: false,
+    // La mayor parte del campo está entre −10 y 10: esa franja se lleva el
+    // 60 % de la rampa para que se lean también las vaguadas débiles.
+    scaleAnchors: [[-30, 0], [-10, .2], [-3, .4], [0, .5], [3, .6], [10, .8], [30, 1]], scaleTicks: [-30, -10, 0, 10, 30],
+    nationalBoundariesOnly: true, contents: 'Vorticidad relativa · Geopotencial',
+    overlayStep: 6, overlayMajorStep: 12, overlaySmoothing: 1, overlay: '',
+    description: 'Rotación del viento a 500 hPa: valores positivos ciclónicos y negativos anticiclónicos en el hemisferio norte.',
+    method: 'Vorticidad relativa que publica ECMWF a 500 hPa, sin sumar Coriolis, con un suavizado ligero de unos 28 km.',
+    coverage: 'ECMWF IFS · vorticidad y geopotencial 500 hPa · presión en superficie'
+  },
+  {
+    id: 'q-vectors-700', model: 'ecmwf', category: 'forcing',
+    label: 'Vectores Q y forzamiento vertical a 700 hPa', short: 'Q · −2∇·Q 700', kind: 'derived',
+    unit: '10⁻¹⁷ m kg⁻¹ s⁻¹', min: -4, max: 4, palette: 'diverging', accent: '#7aa2f7', vectors: true,
+    // |Q| típico: mediana ~2·10⁻¹³ y percentil 97 ~10⁻¹². Por debajo de 10⁻¹³
+    // la flecha no dice nada; a partir de 10⁻¹² alcanza su longitud máxima.
+    vectorMinMagnitude: 1e-13, vectorScaleMagnitude: 1e-12,
+    scaleAnchors: [[-4, 0], [-1.5, .15], [-.3, .38], [0, .5], [.3, .62], [1.5, .85], [4, 1]], scaleTicks: [-4, -1.5, 0, 1.5, 4],
+    overlayStep: 3, overlayMajorStep: 12, overlaySmoothing: 1, overlay: '',
+    nationalBoundariesOnly: true, contents: 'Vectores Q · Forzamiento vertical · Geopotencial',
+    description: 'Vectores Q a 700 hPa con el forzamiento vertical que producen en color e isohipsas de 700 hPa. Rojo: forzamiento de ascenso; azul: de descenso.',
+    method: 'Q a partir del viento geostrófico y la temperatura a 700 hPa, suavizados antes a escala sinóptica (unos 165 km). El color es −2∇·Q.',
+    coverage: 'ECMWF IFS · T/Z 700 hPa · presión en superficie'
+  },
+  {
+    id: 'ecmwf-mslp-theta-e-850', model: 'ecmwf', category: 'dynamics',
+    label: 'θₑ 850 hPa y presión al nivel del mar', short: 'θₑ 850 · MSLP', kind: 'derived',
+    unit: '°C', min: -10, max: 90, palette: 'theta-e', accent: '#5ac8a8', vectors: false,
+    // Hasta 60 °C, los diez colores de siempre con el mismo reparto (9 de los
+    // 13 tramos de la paleta); de 60 a 90, la cola tropical. En el trópico la
+    // θe en 850 hPa anda por 65–80 °C y el núcleo de un huracán pasa de 85, y
+    // con la escala anterior todo eso salía del mismo color.
+    scaleAnchors: [[-10, 0], [60, 9 / 13], [90, 1]], scaleTicks: [-10, 10, 30, 50, 70, 90],
+    contents: 'Masas de aire · Presión',
+    // Isobaras cada 4 hPa y una de cada cinco marcada, con un suavizado de
+    // dibujo de dos celdas: a 25 km el campo ya es suave y más filtro movería
+    // la línea respecto al dato.
     overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 2, overlay: '',
     overlayLayerLabel: 'Isobaras',
     pressureCentres: true,
     nationalBoundariesOnly: true,
-    description: 'Altura geopotencial de 500 hPa en color, con la presión al nivel del mar en isobaras. Es el mapa sinóptico de referencia: arriba la onda que dirige el tiempo, abajo los centros de acción que la acompañan en superficie.',
-    method: 'Altura geopotencial en 500 hPa y presión al nivel del mar del open data de ECMWF, pasadas a decámetros y a hectopascales.',
-    coverage: 'ECMWF IFS 0,25° · gh 500 hPa · msl'
+    description: 'Temperatura potencial equivalente en 850 hPa, en color, con la presión al nivel del mar en isobaras y los centros de acción marcados. Es el mapa de masas de aire y frentes, hasta seis días vista.',
+    method: 'Theta-e de Bolton (1980) calculada con MetPy sobre la temperatura y la humedad específica de ECMWF en 850 hPa. Se oculta donde ese nivel queda bajo el relieve.',
+    coverage: 'ECMWF IFS 0,25° · t y q 850 hPa · presión en superficie · MSLP'
   },
   {
     id: 'temperature-2m', category: 'temperature', label: 'Temperatura a 2 m', short: 'T 2 m', kind: 'native',
@@ -439,7 +607,16 @@ const initialProductIds = [
   'precip-type',
   'snow-level',
   'reflectivity',
-  'z500-mslp',
+  'ecmwf-mslp-theta-e-850',
+  'ecmwf-temperature-850',
+  'ecmwf-temperature-500',
+  'relative-vorticity-500',
+  'q-vectors-700',
+  'ecmwf-precip-6h',
+  'ecmwf-eady-850-500',
+  'ecmwf-jet-300',
+  'ecmwf-frontogenesis-850',
+  'ecmwf-omega-700',
   'mslp-theta-e-850',
   'wind-level',
   'wind-gust',
@@ -476,7 +653,8 @@ export const forecastProducts = initialProductIds.map((id) => {
 });
 
 export function productsForModel(modelId = DEFAULT_FORECAST_MODEL) {
-  return forecastProducts.filter((item) => item.model === modelId);
+  const family = productFamily(modelId);
+  return forecastProducts.filter((item) => item.model === family);
 }
 
 export function catalogSummaryFor(modelId = DEFAULT_FORECAST_MODEL) {

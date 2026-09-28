@@ -14,7 +14,7 @@ const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
 // `immutable` y un año de caché, así que sin tocar esto un navegador que ya
 // tenga la hora guardada seguiría enseñando la versión anterior —sin la capa
 // de geopotencial, en este caso— y ni recargando ni reiniciando la cambiaría.
-const FORECAST_DATA_REVISION = 'forecast-fields-v19';
+const FORECAST_DATA_REVISION = 'forecast-fields-v21';
 // Modelo por defecto: el visor nació con AROME y las llamadas que no lo
 // dicen siguen siendo suyas.
 const DEFAULT_MODEL = 'arome';
@@ -26,10 +26,11 @@ const geometryCache = new Map();
 const pendingFrames = new Map();
 let frameCacheBytes = 0;
 
-function frameCacheKey({ model, product, validTime, run, verticalKind, level } = {}) {
+function frameCacheKey({ model, product, validTime, run, verticalKind, level, frameRevision, domain } = {}) {
   // El modelo entra en la clave: dos modelos pueden publicar el mismo
-  // producto a la misma hora y no son el mismo mapa.
-  return [FORECAST_DATA_REVISION, model || DEFAULT_MODEL, run || '', product || '', validTime || '', verticalKind || '', level ?? ''].join('|');
+  // producto a la misma hora y no son el mismo mapa. La revisión del mapa,
+  // también: un mapa revisado es otro frame aunque la hora sea la misma.
+  return [FORECAST_DATA_REVISION, model || DEFAULT_MODEL, domain || '', run || '', product || '', validTime || '', verticalKind || '', level ?? '', frameRevision || 0].join('|');
 }
 
 export function getCachedForecastFrame(options = {}) {
@@ -84,20 +85,23 @@ function describeApiDetail(detail) {
   return partes.join(' · ');
 }
 
-export function fetchDomainBoundaries(model = DEFAULT_MODEL) {
-  if (!boundariesRequests.has(model)) {
+export function fetchDomainBoundaries(model = DEFAULT_MODEL, domain = '') {
+  // Cada dominio tiene sus fronteras: la clave de la caché los separa.
+  const clave = domain ? `${model}|${domain}` : model;
+  const consulta = domain ? `&domain=${encodeURIComponent(domain)}` : '';
+  if (!boundariesRequests.has(clave)) {
     // La revisión va en la URL para que la respuesta pueda declararse
     // inmutable y quedarse en la CDN: la geometría de una revisión dada no
     // cambia, y así el visitante no cruza el Atlántico a por las mismas costas.
-    boundariesRequests.set(model, getJson(`/v1/forecast/${model}/boundaries?revision=${FORECAST_DATA_REVISION}`)
+    boundariesRequests.set(clave, getJson(`/v1/forecast/${model}/boundaries?revision=${FORECAST_DATA_REVISION}${consulta}`)
       .then((payload) => payload.boundaries || [])
       .catch((error) => {
         // Sin contornos el mapa sigue siendo legible; se reintenta al siguiente.
-        boundariesRequests.delete(model);
+        boundariesRequests.delete(clave);
         throw error;
       }));
   }
-  return boundariesRequests.get(model);
+  return boundariesRequests.get(clave);
 }
 
 function shareFrameGeometry(header) {
@@ -184,20 +188,32 @@ async function getJson(path, { signal } = {}) {
   return response.json();
 }
 
-export function fetchForecastCatalog({ model = DEFAULT_MODEL, signal } = {}) {
-  return getJson(`/v1/forecast/${model}/catalog`, { signal });
+export function fetchForecastCatalog({ model = DEFAULT_MODEL, domain = '', signal } = {}) {
+  const consulta = domain ? `?domain=${encodeURIComponent(domain)}` : '';
+  return getJson(`/v1/forecast/${model}/catalog${consulta}`, { signal });
 }
 
-export function fetchThermalProfile({ product, validTime, run, latitude, longitude, signal }) {
+let stormsRequest = null;
+let stormsAt = 0;
+
+/** Ciclones tropicales activos del NHC; una consulta cada cuarto de hora. */
+export function fetchActiveStorms() {
+  if (stormsRequest && Date.now() - stormsAt < 15 * 60_000) return stormsRequest;
+  stormsAt = Date.now();
+  stormsRequest = getJson('/v1/forecast/storms').catch(() => ({ storms: [] }));
+  return stormsRequest;
+}
+
+export function fetchThermalProfile({ model = DEFAULT_MODEL, product, validTime, run, latitude, longitude, signal }) {
   const params = new URLSearchParams({
     product, valid_time: validTime, run,
     latitude: String(latitude), longitude: String(longitude)
   });
-  return getJson(`/v1/forecast/arome/thermal-profile?${params}`, { signal });
+  return getJson(`/v1/forecast/${model}/thermal-profile?${params}`, { signal });
 }
 
-export function fetchForecastFrame({ model = DEFAULT_MODEL, product, validTime, run, verticalKind, level, signal } = {}) {
-  const options = { model, product, validTime, run, verticalKind, level };
+export function fetchForecastFrame({ model = DEFAULT_MODEL, product, validTime, run, verticalKind, level, frameRevision, domain, signal } = {}) {
+  const options = { model, product, validTime, run, verticalKind, level, frameRevision, domain };
   const cached = getCachedForecastFrame(options);
   if (cached) return Promise.resolve(cached);
   const cacheKey = frameCacheKey(options);
@@ -213,6 +229,10 @@ export function fetchForecastFrame({ model = DEFAULT_MODEL, product, validTime, 
   if (run) params.set('run', run);
   if (verticalKind) params.set('vertical_kind', verticalKind);
   if (level != null) params.set('level', String(level));
+  // Los frames son inmutables en la caché del navegador: sin la revisión en
+  // la URL, un mapa recalculado seguiría saliendo con su versión anterior.
+  if (frameRevision) params.set('frame_revision', String(frameRevision));
+  if (domain) params.set('domain', domain);
   const request = fetch(`${API_BASE}/v1/forecast/${model}/frames.grid?${params}`, {
     headers: { Accept: 'application/vnd.meteolabx.arome-grid' },
     signal
@@ -233,7 +253,7 @@ export function fetchForecastFrame({ model = DEFAULT_MODEL, product, validTime, 
     const header = shareFrameGeometry(JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLength))));
     if (!header.boundaries?.length) {
       // Formato 3 en adelante: los contornos llegan por su propio endpoint.
-      header.boundaries = await fetchDomainBoundaries(header.forecast_model || model).catch(() => []);
+      header.boundaries = await fetchDomainBoundaries(header.forecast_model || model, header.domain || domain || '').catch(() => []);
     }
     return rememberForecastFrame(options, decodeFrameBody(buffer, header, 4 + headerLength));
   });

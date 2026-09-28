@@ -131,27 +131,6 @@ export const forecastProductGuides = {
     sources: [{ label: 'MetPy · SCP et formulation SPC', url: 'https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.supercell_composite.html' }]
   },
 
-  'z500-mslp': {
-    what: 'Altitude géopotentielle à 500 hPa en couleur et pression au niveau de la mer en isobares, sur l’Atlantique et l’Europe. C’est le duo classique de l’analyse synoptique : l’altitude de la surface de 500 hPa dessine l’onde qui guide le temps à plusieurs jours d’échéance, et la pression en surface montre où elle finit par s’ancrer.',
-    interpretation: [
-      'Les valeurs élevées sont une dorsale — air chaud et colonne dilatée, temps stable — et les valeurs basses, un thalweg ou une dépression d’altitude. Ce qui compte n’est pas tant la valeur que la forme : où l’onde se courbe et vers où elle avance.',
-      'Les isobares se lisent par-dessus, pas séparément. Un minimum de géopotentiel juste au-dessus d’une dépression de surface est un système mature et vertical, avec peu de marge d’évolution ; déplacé à l’ouest de celle-ci, c’est un système encore en développement.',
-      'Le gradient entre isohypses est proportionnel au vent à 500 hPa : là où elles se resserrent se trouve le courant-jet, et avec lui la bande par laquelle voyagent les dépressions.',
-      'À +144 h, la carte n’est pas une prévision de détail mais de configuration. Elle sert à voir si une dorsale s’installe ou si un thalweg arrive, pas à décider à quelle heure il pleuvra.'
-    ],
-    method: 'Deux variables des données ouvertes du CEPMMT pour chaque échéance : l’altitude géopotentielle à 500 hPa, convertie de mètres géopotentiels en décamètres, et la pression au niveau de la mer, convertie de pascals en hectopascals. Les deux sont découpées au domaine euro-atlantique.',
-    equations: [
-      { label: 'Altitude géopotentielle en décamètres', latex: String.raw`Z_{500}[\mathrm{dam}]=\frac{Z_{500}[\mathrm{gpm}]}{10}` },
-      { label: 'Pression au niveau de la mer', latex: String.raw`p_{\mathrm{mar}}[\mathrm{hPa}]=\frac{p_{\mathrm{mar}}[\mathrm{Pa}]}{100}` }
-    ],
-    steps: [
-      'Variables du CEPMMT : altitude géopotentielle (gh) à 500 hPa et pression au niveau de la mer (msl).',
-      'Conversion d’unités : de mètres géopotentiels en décamètres et de pascals en hectopascals.',
-      'Découpage à la fenêtre euro-atlantique, sans lisser le champ de couleurs.'
-    ],
-    sources: [ECMWF_OPEN_DATA]
-  },
-
   'temperature-2m': {
     what: 'Température de l’air prévue à 2 m au-dessus de la surface du modèle. C’est le champ de référence pour décrire l’ambiance thermique près du sol, mais elle n’équivaut pas à la température de peau du terrain.',
     interpretation: [

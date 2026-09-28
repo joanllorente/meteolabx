@@ -355,7 +355,7 @@ def record_section_visit(section: str, *, settings=None) -> None:
         )
 
 
-FORECAST_MODELS = frozenset({"arome", "ecmwf"})
+FORECAST_MODELS = frozenset({"arome", "arome-ifs", "ecmwf"})
 _FORECAST_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,59}$")
 
 

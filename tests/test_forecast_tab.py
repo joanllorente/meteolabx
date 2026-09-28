@@ -163,7 +163,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
     # con cada cambio de formato de la rejilla: la v17 es la que trae la capa
     # de geopotencial, y sin subirla el cambio no llega a quien ya tenga la
     # hora guardada, ni recargando ni reiniciando. La v19 es la vigente.
-    assert "forecast-fields-v19" in api
+    assert "forecast-fields-v21" in api
     assert "FRAME_CACHE_MAX_BYTES = 192 * 1024 * 1024" in api
     assert "shareFrameGeometry" in api
     assert "frameCacheBytes" in api
@@ -390,7 +390,7 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 36
+    assert len(selected_ids) == 45
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 

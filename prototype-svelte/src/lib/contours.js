@@ -351,40 +351,50 @@ export function anchorsAlong(points, spacing) {
  * una isolínea es una escalera de segmentos rectos. Con celdas de 2,5 km no se
  * nota; con las de 25 km de una rejilla global, la isobara sale con esquinas.
  *
- * Catmull-Rom pasada a Bézier, igual que los ejes de vaguada: la curva pasa por
- * todos los vértices —no se separa del dato en ninguno— y llega a cada uno con
- * la pendiente que marcan el anterior y el siguiente. En un anillo cerrado los
- * vecinos se buscan dando la vuelta, para que no quede un pico donde se cierra.
+ * Catmull-Rom centrípeta pasada a Bézier. La parametrización usa la raíz
+ * de la distancia entre vértices: tras simplificar, un tramo puede medir
+ * veinte celdas y el siguiente una décima. La variante uniforme usaba el
+ * mismo tiempo para ambos y proyectaba los controles del tramo corto hacia
+ * atrás, creando los picos y bucles visibles en las isobaras.
+ * La curva sigue pasando por los vértices calculados del contorno.
  */
-function toPath(points, closed = false) {
+export function toPath(points, closed = false) {
+  // Un nivel que pasa exactamente por una esquina puede repetir vértices.
+  const clean = points.filter((point, index) => index === 0
+    || Math.hypot(point[0] - points[index - 1][0], point[1] - points[index - 1][1]) > 1e-9);
+  if (!clean.length) return '';
+  const count = closed && clean.length > 1
+    && Math.hypot(clean[0][0] - clean.at(-1)[0], clean[0][1] - clean.at(-1)[1]) < 1e-9
+    ? clean.length - 1 : clean.length;
   const punto = (index) => {
-    if (closed) {
-      // El último vértice repite el primero: el ciclo son los demás.
-      const vueltas = points.length - 1;
-      return points[((index % vueltas) + vueltas) % vueltas];
-    }
-    return points[Math.max(0, Math.min(points.length - 1, index))];
+    if (closed) return clean[((index % count) + count) % count];
+    // Reflejar el extremo conserva su tangente sin intervalos de tiempo nulos.
+    if (index < 0) return [2 * clean[0][0] - clean[1][0], 2 * clean[0][1] - clean[1][1]];
+    if (index >= count) return [2 * clean[count - 1][0] - clean[count - 2][0], 2 * clean[count - 1][1] - clean[count - 2][1]];
+    return clean[index];
   };
-  let path = `M${points[0][0].toFixed(2)},${points[0][1].toFixed(2)}`;
-  if (points.length < 3) {
-    for (let index = 1; index < points.length; index += 1) {
-      path += `L${points[index][0].toFixed(2)},${points[index][1].toFixed(2)}`;
+  const pair = (point) => `${point[0].toFixed(3)},${point[1].toFixed(3)}`;
+  let path = `M${pair(clean[0])}`;
+  if (count < 3) {
+    for (let index = 1; index < count; index += 1) path += `L${pair(clean[index])}`;
+    return closed && count > 1 ? `${path}Z` : path;
+  }
+  for (let index = 0; index < (closed ? count : count - 1); index += 1) {
+    const p0 = punto(index - 1), p1 = punto(index), p2 = punto(index + 1), p3 = punto(index + 2);
+    const dt = (a, b) => Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1]));
+    const a = dt(p0, p1), b = dt(p1, p2), c = dt(p2, p3);
+    const c1 = [], c2 = [];
+    for (let axis = 0; axis < 2; axis += 1) {
+      const m1 = b * ((p1[axis] - p0[axis]) / a
+        - (p2[axis] - p0[axis]) / (a + b) + (p2[axis] - p1[axis]) / b);
+      const m2 = b * ((p2[axis] - p1[axis]) / b
+        - (p3[axis] - p1[axis]) / (b + c) + (p3[axis] - p2[axis]) / c);
+      c1.push(p1[axis] + m1 / 3);
+      c2.push(p2[axis] - m2 / 3);
     }
-    return path;
+    path += `C${pair(c1)} ${pair(c2)} ${pair(p2)}`;
   }
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const [x0, y0] = punto(index - 1);
-    const [x1, y1] = punto(index);
-    const [x2, y2] = punto(index + 1);
-    const [x3, y3] = punto(index + 2);
-    const c1x = x1 + (x2 - x0) / 6;
-    const c1y = y1 + (y2 - y0) / 6;
-    const c2x = x2 - (x3 - x1) / 6;
-    const c2y = y2 - (y3 - y1) / 6;
-    path += `C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)}`
-      + ` ${x2.toFixed(2)},${y2.toFixed(2)}`;
-  }
-  return path;
+  return closed ? `${path}Z` : path;
 }
 
 /** Niveles múltiplos del paso que el campo cruza de verdad. */

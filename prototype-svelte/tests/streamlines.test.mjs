@@ -160,3 +160,73 @@ test('una línea corta reparte el desvanecido sin quedarse sin cuerpo', () => {
   assert.deepEqual(tramos.at(-1).points.at(-1), corta.at(-1));
   assert.ok(tramos.every((tramo) => tramo.opacity > 0 && tramo.opacity <= 1));
 });
+
+test('el viento se traza con su dirección real en una rejilla de latitud y longitud', async () => {
+  const { gridDirection } = await import('../src/lib/streamlines.js');
+  // Rejilla de 1° entre 50 y 70° N: la fila 10,5 cae a 59,5° N.
+  const frame = { width: 20, height: 20, bounds: [0, 50, 20, 70] };
+  const { u, v, magnitude } = gridDirection(frame, 10, 10, 10.5);
+  // Un suroeste de 45° cruza 1/cos φ veces más columnas que filas.
+  const esperado = Math.atan(Math.cos(59.5 * Math.PI / 180)) * 180 / Math.PI;
+  assert.ok(Math.abs(Math.atan2(v, u) * 180 / Math.PI - esperado) < 1e-9);
+  assert.ok(Math.abs(magnitude - Math.hypot(10, 10)) < 1e-9);
+  assert.ok(Math.abs(Math.hypot(u, v) - magnitude) < 1e-9);
+  // Del oeste o del sur puros no cambian.
+  const oeste = gridDirection(frame, 10, 0, 10.5);
+  assert.ok(Math.abs(oeste.v) < 1e-12 && oeste.u > 0);
+});
+
+test('los tramos se juntan en un trazo por opacidad', async () => {
+  const { pathsByOpacity } = await import('../src/lib/streamlines.js');
+  const trazo = (puntos) => `M${puntos.map(([x, y]) => `${x},${y}`).join('L')}`;
+  const capas = pathsByOpacity([
+    { points: [[0, 0], [1, 0]], opacity: 1 },
+    { points: [[5, 5], [6, 5]], opacity: 0.4 },
+    { points: [[2, 0], [3, 0]], opacity: 1 },
+    { points: [[7, 5], [8, 5]], opacity: 0.4001 }
+  ], trazo);
+  assert.deepEqual(capas, [
+    { opacity: 0.4, d: 'M5,5L6,5M7,5L8,5' },
+    { opacity: 1, d: 'M0,0L1,0M2,0L3,0' }
+  ]);
+});
+
+test('las puntas de flecha apuntan en el sentido de la línea', async () => {
+  const { arrowHeadsPath } = await import('../src/lib/streamlines.js');
+  const numeros = (d) => d.match(/-?\d+(\.\d+)?/g).map(Number);
+  // Hacia la derecha: las alas quedan detrás (x menor), una a cada lado.
+  const [ax, ay, px, py, bx, by] = numeros(arrowHeadsPath([{ x: 10, y: 10, angle: 0 }], 4));
+  assert.deepEqual([px, py], [10, 10]);
+  assert.ok(ax < 10 && bx < 10);
+  assert.ok(Math.abs(ay - 10 + (by - 10)) < 1e-9 && ay !== by);
+  // Hacia abajo (90°): las alas quedan por encima.
+  const abajo = numeros(arrowHeadsPath([{ x: 10, y: 10, angle: 90 }], 4));
+  assert.ok(abajo[1] < 10 && abajo[5] < 10);
+  // Varias flechas, un solo trazo con un subtrazo por flecha.
+  assert.equal(arrowHeadsPath([{ x: 0, y: 0, angle: 0 }, { x: 5, y: 5, angle: 45 }], 2).split('M').length - 1, 2);
+});
+
+test('el reparto no se dispara con muchas semillas', () => {
+  // Con `shift()` sobre la cola, un encuadre ampliado tardaba casi un segundo
+  // por el coste cuadrático. Un campo que gira siempre deja miles de semillas.
+  const ancho = 600;
+  const sample = (x, y) => ({ u: Math.sin(y / 23) + 1.5, v: Math.cos(x / 31), magnitude: 1 });
+  const inicio = performance.now();
+  const lineas = evenlySpacedStreamlines({
+    sample, bounds: { west: 0, east: ancho, north: 0, south: ancho }, separation: 6, maxLines: 400
+  });
+  assert.ok(lineas.length > 50);
+  assert.ok(performance.now() - inicio < 1500, 'el reparto es cuadrático otra vez');
+});
+
+test('una zona a la que no llega la propagación también recibe líneas', () => {
+  // Dos islas de dato separadas por una franja vacía: las semillas nacen al
+  // lado de líneas aceptadas y no pueden cruzarla. Antes, la segunda isla se
+  // quedaba en blanco.
+  const sample = (x) => (x < 80 || x > 120 ? { u: 0, v: 1, magnitude: 1 } : null);
+  const lineas = trazar(sample);
+  const izquierda = lineas.filter((linea) => linea.points.every(([x]) => x < 80));
+  const derecha = lineas.filter((linea) => linea.points.every(([x]) => x > 120));
+  assert.ok(izquierda.length >= 5, `${izquierda.length} líneas a la izquierda`);
+  assert.ok(derecha.length >= 5, `${derecha.length} líneas a la derecha`);
+});

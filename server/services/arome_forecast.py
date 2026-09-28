@@ -39,6 +39,12 @@ from server.services.arome_packages import (
     open_isobaric_profile,
     read_isobaric_profile,
 )
+from server.services.arome_models import (
+    current_model,
+    current_source,
+    per_model_lru_cache,
+    run_in_model_context,
+)
 from server.services.meteofrance_auth import MeteoFranceAuthError
 from server.services.convective_diagnostics import (
     bunkers_right_motion,
@@ -684,7 +690,7 @@ def catalog_payload(token: str) -> dict[str, Any]:
     return _catalog_payload_cached(token, int(time.time() // refresh_s))
 
 
-@lru_cache(maxsize=16)
+@per_model_lru_cache(16)
 def _catalog_payload_cached(token: str, _minute_bucket: int) -> dict[str, Any]:
     """Devuelve pasadas y horas disponibles para los productos conectados."""
     products: dict[str, Any] = {}
@@ -712,10 +718,10 @@ def _catalog_payload_cached(token: str, _minute_bucket: int) -> dict[str, Any]:
                 client, coverage_catalog, run
             )
     return {
-        "model": "AROME France",
+        "model": current_source().label,
         "resolution": "0,025°",
         "domain": {
-            "label": "Dominio nativo AROME France",
+            "label": f"Dominio nativo {current_source().label}",
             "calculation_scope": forecast_calculation_scope(),
             "local_crop": forecast_calculation_scope() == "catalonia",
         },
@@ -1386,7 +1392,7 @@ def _convective_outputs_in_stripes(
     with ThreadPoolExecutor(
         max_workers=CONVECTIVE_THREADS, thread_name_prefix="arome-banda"
     ) as bandas_a_la_vez:
-        list(bandas_a_la_vez.map(una_banda, bandas))
+        list(bandas_a_la_vez.map(run_in_model_context(una_banda), bandas))
     return merged
 
 
@@ -1394,7 +1400,7 @@ def _convective_outputs_in_stripes(
 # campo, así que compartirlo evita repetir su descarga una vez por producto.
 # Se guarda una sola hora: el worker agrupa los tres productos por hora y cada
 # entrada ocupa dos rejillas completas.
-_SURFACE_WIND_CACHE: dict[tuple[str, str], tuple[RasterField, RasterField]] = {}
+_SURFACE_WIND_CACHE: dict[tuple[str, str, str], tuple[RasterField, RasterField]] = {}
 
 
 def _surface_wind_10m(
@@ -1405,7 +1411,7 @@ def _surface_wind_10m(
     valid_time: datetime,
 ) -> tuple[RasterField, RasterField]:
     """Viento a 10 m reutilizable. No modificar los campos devueltos."""
-    key = (run.isoformat(), valid_time.isoformat())
+    key = (current_model(), run.isoformat(), valid_time.isoformat())
     cached = _SURFACE_WIND_CACHE.get(key)
     if cached is not None:
         return cached
@@ -1823,7 +1829,7 @@ def _surface_fields_from_package(
     return campos
 
 
-@lru_cache(maxsize=2)
+@per_model_lru_cache(2)
 def _convective_frames(
     token: str,
     valid_time_iso: str,
@@ -1976,12 +1982,12 @@ def _convective_frames(
             "dewpoint", "pressure", "u", "v", "terrain"
         )
         for name in pendientes:
-            tasks[executor.submit(fetch_surface, name)] = (name, None)
+            tasks[executor.submit(run_in_model_context(fetch_surface), name)] = (name, None)
         for level_hpa in levels:
             for variable in level_variables:
                 if variable == "dewpoint" and package_dewpoint and level_hpa in package_dewpoint:
                     continue
-                tasks[executor.submit(fetch_level, variable, level_hpa)] = (variable, level_hpa)
+                tasks[executor.submit(run_in_model_context(fetch_level), variable, level_hpa)] = (variable, level_hpa)
         for future in as_completed(tasks):
             fetched[tasks[future]] = future.result()
     # Future conserva su resultado: vaciar fetched no bastaba para liberar
@@ -2599,7 +2605,7 @@ def thermal_point_profile(
     }
 
 
-@lru_cache(maxsize=12)
+@per_model_lru_cache(12)
 def _computed_frame(
     token: str,
     product_id: str,
@@ -2854,7 +2860,7 @@ def _computed_frame(
     return field, config, headers
 
 
-@lru_cache(maxsize=32)
+@per_model_lru_cache(32)
 def frame_png(
     token: str,
     product_id: str,
@@ -2879,7 +2885,7 @@ _quantize_array = quantize_array
 
 
 # Ya serializado y comprimido: barato de guardar, pero tampoco sin límite.
-@lru_cache(maxsize=32)
+@per_model_lru_cache(32)
 def frame_grid(
     token: str,
     product_id: str,
@@ -3126,7 +3132,7 @@ def _serialize_grid(
             "vertical_kind": headers.get("X-AROME-Level-Type"),
             "level": float(headers["X-AROME-Level"]) if "X-AROME-Level" in headers else None,
             "calculation_scope": calculation_scope,
-            "forecast_model": "arome",
+            "forecast_model": current_model(),
             # Las fronteras ya no viajan aquí: eran los mismos 293 KB repetidos
             # en cada frame, un cuarto del volumen y del tráfico. El visor las
             # pide una vez por dominio y las reutiliza.

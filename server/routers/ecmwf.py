@@ -18,6 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from server.config import Settings, get_settings
 from server.services.ecmwf_forecast import (
+    DEFAULT_DOMAIN_ID,
+    DOMAINS,
     FORECAST_MODEL,
     MODEL_LABEL,
     PRODUCTS,
@@ -25,12 +27,15 @@ from server.services.ecmwf_forecast import (
     EcmwfError,
     catalog_payload,
     domain_boundaries,
+    domain_bounds,
     frame_payload,
+    frame_scope,
     latest_run,
     parse_run,
     step_of,
 )
 from server.services.forecast_store import (
+    ECMWF_PRODUCT_REVISIONS,
     augment_catalog_with_manifest,
     frame_key,
     get_forecast_store,
@@ -45,6 +50,41 @@ from server.services.forecast_store import (
 
 router = APIRouter(prefix="/forecast/ecmwf", tags=["forecast"])
 PRODUCT_PATTERN = "^(" + "|".join(re.escape(product) for product in PRODUCTS) + ")$"
+DOMAIN_PATTERN = "^(" + "|".join(re.escape(domain) for domain in DOMAINS) + ")$"
+
+
+def _domain_view(manifest: dict | None, domain: str) -> dict | None:
+    """El manifiesto visto desde un dominio: sus mapas, con la clave de siempre.
+
+    El manifiesto es uno por pasada y guarda los mapas de los otros dominios
+    como `producto@dominio`. El catálogo y el progreso de un dominio son los
+    de esas claves sin el sufijo; los de Europa, los que no lo llevan.
+    """
+    if not manifest:
+        return manifest
+    vista = deepcopy(manifest)
+    for campo in ("products", "catalog_products", "expected_totals"):
+        original = manifest.get(campo) or {}
+        if domain == DEFAULT_DOMAIN_ID:
+            vista[campo] = {clave: valor for clave, valor in original.items() if "@" not in clave}
+        else:
+            sufijo = f"@{domain}"
+            vista[campo] = {
+                clave[: -len(sufijo)]: valor
+                for clave, valor in original.items()
+                if clave.endswith(sufijo)
+            }
+    # Un dominio que el worker aún no calcula tiene la misma pasada y los mismos
+    # plazos que Europa: se anuncian esos, y sus mapas se calculan al pedirlos.
+    # Montar el catálogo en directo eran ~50 HEAD a ECMWF por consulta, que
+    # también cuentan para su límite: con 429 daba la pasada por no publicada.
+    if domain != DEFAULT_DOMAIN_ID and not vista.get("catalog_products"):
+        vista["catalog_products"] = {
+            clave: valor
+            for clave, valor in (manifest.get("catalog_products") or {}).items()
+            if "@" not in clave
+        }
+    return vista
 
 
 def _http_headers(headers: dict[str, str]) -> dict[str, str]:
@@ -85,9 +125,17 @@ def get_progress() -> dict:
 
 
 @router.get("/catalog", summary="Catálogo de mapas ECMWF conectados")
-def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
+def get_catalog(
+    domain: str = Query(default=DEFAULT_DOMAIN_ID, pattern=DOMAIN_PATTERN),
+    settings: Settings = Depends(get_settings),
+) -> dict:
     store = get_forecast_store()
-    manifest = read_json(store, latest_manifest_key(FORECAST_MODEL))
+    manifest = _domain_view(read_json(store, latest_manifest_key(FORECAST_MODEL)), domain)
+    oeste, sur, este, norte = domain_bounds(domain)
+    datos_dominio = {
+        "id": domain, "label": DOMAINS[domain]["label"], "calculation_scope": "model",
+        "bounds": [oeste, sur, este, norte],
+    }
     try:
         persisted = deepcopy((manifest or {}).get("catalog_products") or {})
         if persisted:
@@ -96,16 +144,17 @@ def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
             payload = {
                 "model": MODEL_LABEL,
                 "resolution": RESOLUTION_LABEL,
-                "domain": {},
+                "domain": datos_dominio,
                 "products": persisted,
             }
         else:
-            payload = deepcopy(catalog_payload())
+            payload = deepcopy(catalog_payload(domain=domain))
         payload = augment_catalog_with_manifest(
             payload, manifest, precomputed_only=settings.forecast_precomputed_only
         )
         runs = []
         for retained in retained_manifests(store, model=FORECAST_MODEL):
+            retained = _domain_view(retained, domain)
             products = deepcopy(retained.get("catalog_products") or {})
             if not products:
                 continue
@@ -142,26 +191,41 @@ def get_catalog(settings: Settings = Depends(get_settings)) -> dict:
                     "publication": payload["publication"],
                 })
         payload["runs"] = runs
+        # Los dominios disponibles, para el selector del visor.
+        payload["domains"] = [
+            {"id": clave, "label": item["label"], "bounds": list(domain_bounds(clave))}
+            for clave, item in DOMAINS.items()
+        ]
+        # La revisión de cada mapa viaja en el catálogo para que el visor la
+        # meta en la URL del frame: los frames se sirven como inmutables, y sin
+        # ella el navegador seguía enseñando la versión anterior de un mapa
+        # revisado aunque el servidor ya tuviera la nueva.
+        for productos in [payload.get("products") or {}] + [run["products"] for run in runs]:
+            for product_id, item in productos.items():
+                item["frame_revision"] = ECMWF_PRODUCT_REVISIONS.get(product_id, 0)
         return payload
     except EcmwfError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@lru_cache(maxsize=4)
-def _boundaries_gzip() -> bytes:
-    """Cuerpo comprimido de las fronteras, hecho una vez por proceso."""
+@lru_cache(maxsize=8)
+def _boundaries_gzip(domain: str = DEFAULT_DOMAIN_ID) -> bytes:
+    """Cuerpo comprimido de las fronteras de un dominio, hecho una vez por proceso."""
     payload = json.dumps(
-        {"boundaries": domain_boundaries()}, separators=(",", ":")
+        {"boundaries": domain_boundaries(domain)}, separators=(",", ":")
     ).encode("utf-8")
     return gzip.compress(payload, compresslevel=6)
 
 
 @router.get("/boundaries", summary="Contornos del dominio ECMWF")
-def get_boundaries(revision: str = Query(default="", max_length=40)) -> Response:
+def get_boundaries(
+    revision: str = Query(default="", max_length=40),
+    domain: str = Query(default=DEFAULT_DOMAIN_ID, pattern=DOMAIN_PATTERN),
+) -> Response:
     """Fronteras del dominio; con `revision`, cacheables para siempre."""
     cache = "public, max-age=31536000, immutable" if revision else "public, max-age=86400"
     return Response(
-        content=_boundaries_gzip(),
+        content=_boundaries_gzip(domain),
         media_type="application/json",
         headers=_http_headers({
             "Content-Encoding": "gzip",
@@ -176,6 +240,7 @@ def get_grid(
     product: str = Query(pattern=PRODUCT_PATTERN),
     valid_time: str = Query(min_length=10, max_length=40),
     run: str = Query(default="", max_length=40),
+    domain: str = Query(default=DEFAULT_DOMAIN_ID, pattern=DOMAIN_PATTERN),
     settings: Settings = Depends(get_settings),
 ) -> Response:
     store = get_forecast_store()
@@ -192,7 +257,7 @@ def get_grid(
     stored_run = run or (str(manifest.get("run")) if manifest else "")
     if stored_run:
         content = read_compressed_grid(
-            store, frame_key(stored_run, product, valid_time, model=FORECAST_MODEL)
+            store, frame_key(stored_run, product, valid_time, model=FORECAST_MODEL, scope=frame_scope(domain))
         )
         if content is not None:
             return Response(
@@ -217,7 +282,7 @@ def get_grid(
     # parciales y unos segundos, no los minutos de un diagnóstico convectivo.
     try:
         pasada = parse_run(stored_run) if stored_run else latest_run()
-        content, headers = frame_payload(product, pasada, step_of(pasada, valid_time))
+        content, headers = frame_payload(product, pasada, step_of(pasada, valid_time), domain)
     except EcmwfError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     write_grid(
@@ -227,6 +292,7 @@ def get_grid(
             product,
             valid_time,
             model=FORECAST_MODEL,
+            scope=frame_scope(domain),
         ),
         content,
     )
