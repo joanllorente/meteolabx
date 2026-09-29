@@ -581,6 +581,27 @@ def test_older_run_waits_until_newest_is_fully_complete(monkeypatch):
         ecmwf_forecast.parse_run(older), latest)
 
 
+def test_backfill_does_not_replace_latest_visible_manifest(monkeypatch):
+    older = ecmwf_forecast.parse_run('2026-08-29T18:00:00Z')
+    latest = ecmwf_forecast.parse_run(RUN)
+    product = 'ecmwf-temperature-500'
+    valid = '2026-08-29T18:00:00Z'
+    monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
+    monkeypatch.setattr(ecmwf_forecast, '_run_for_store', lambda store: (older, latest))
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+        'products': {product: {'valid_times': [valid]}}
+    })
+    monkeypatch.setattr(ecmwf_forecast, 'read_json', lambda *a: None)
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda count, cached: count)
+    monkeypatch.setattr(ecmwf_forecast, 'frame_payload', lambda *a: (_frame_bytes(), {}))
+    monkeypatch.setattr(ecmwf_forecast, 'register_run_slot', lambda *a: None)
+    monkeypatch.setattr(ecmwf_forecast, 'prune_retained_runs', lambda *a, **kw: None)
+    writes = []
+    monkeypatch.setattr(ecmwf_forecast, 'write_json', lambda store, key, value: writes.append(key))
+    ecmwf_forecast.run_cycle(max_frames=1)
+    assert ecmwf_forecast.latest_manifest_key('ecmwf') not in writes
+
+
 def test_index_retries_rate_limit_before_marking_failure(monkeypatch):
     run = ecmwf_forecast.parse_run(RUN)
     calls = []
