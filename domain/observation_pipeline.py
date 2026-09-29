@@ -986,8 +986,29 @@ def process_observation(base: Dict[str, Any], ctx: ProcessingContext) -> Process
     if not _is_nan(uv):
         erythemal_irradiance_mw_m2 = 25.0 * float(uv)
 
-    # Intensidad instantánea desde la serie (no-WU típicamente).
-    inst_mm_h = _precip_rate_from_series(raw_series if isinstance(raw_series, Mapping) else {})
+    # WU publica el acumulado actual con más frecuencia que su serie diaria.
+    # Incorporar el punto actual evita mostrar 0 mm/h durante los minutos
+    # anteriores al siguiente intervalo de /all/1day.
+    rate_series = raw_series if isinstance(raw_series, Mapping) else {}
+    if ctx.provider_name == "WU":
+        epochs = list(rate_series.get("epochs", []) or [])
+        precips = list(rate_series.get("precips", []) or [])
+        current_ep = _safe_int(base.get("epoch", 0), 0)
+        current_total = base.get("precip_total", NaN)
+        valid_points = [
+            int(ep) for ep, rain in zip(epochs, precips)
+            if isinstance(ep, (int, float)) and isinstance(rain, (int, float))
+            and math.isfinite(float(ep)) and math.isfinite(float(rain))
+        ]
+        if (
+            valid_points and current_ep > max(valid_points)
+            and current_ep - max(valid_points) <= 15 * 60
+            and isinstance(current_total, (int, float))
+            and not _is_nan(float(current_total))
+        ):
+            rate_series = {"epochs": epochs + [current_ep],
+                           "precips": precips + [float(current_total)]}
+    inst_mm_h = _precip_rate_from_series(rate_series)
     inst_label = rain_intensity_label(inst_mm_h)
 
     # Owner del chart si hay datos.

@@ -109,6 +109,26 @@ def test_rain_intensity_label_nan_returns_sin_precipitacion() -> None:
     assert rain_intensity_label(float("nan")) == "Sin precipitación"
 
 
+def test_wu_rain_rate_uses_newer_current_accumulation() -> None:
+    base = _fresh_base(epoch=1_800_000_300, precip_total=1.2)
+    series = {"epochs": [1_799_999_700, 1_800_000_000],
+              "precips": [0.4, 0.4], "has_data": True}
+    result = process_observation(
+        base, ProcessingContext(provider_name="WU", series_override=series),
+    )
+    assert result.derivatives["inst_mm_h"] == pytest.approx(9.6)
+
+
+def test_wu_rain_rate_does_not_span_old_series_gap() -> None:
+    base = _fresh_base(epoch=1_800_002_000, precip_total=1.2)
+    series = {"epochs": [1_799_999_700, 1_800_000_000],
+              "precips": [0.4, 0.4], "has_data": True}
+    result = process_observation(
+        base, ProcessingContext(provider_name="WU", series_override=series),
+    )
+    assert result.derivatives["inst_mm_h"] == pytest.approx(0)
+
+
 # =====================================================================
 # Fixtures
 # =====================================================================
