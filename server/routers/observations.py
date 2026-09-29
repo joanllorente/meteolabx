@@ -101,10 +101,12 @@ CURRENT_TTL_BY_PROVIDER = {
 }
 
 # Meteocat entrega todas las variables de una estación en la misma serie
-# diaria. Mantenerla una hora evita repetir sus dos consultas (día UTC actual
-# y anterior) cuando entran más visitantes antes del siguiente refresco.
+# diaria. Dades Obertes puede publicar nuevos intervalos después de que ya
+# hayamos cacheado el día: una hora de TTL ocultaba una tormenta entera aunque
+# el proveedor ya tuviese las lecturas. El caché sigue coalesciendo visitantes
+# de la misma estación, pero se revisa cada cinco minutos.
 SERIES_TTL_BY_PROVIDER = {
-    "METEOCAT": 3600.0,
+    "METEOCAT": 300.0,
 }
 
 
@@ -1398,7 +1400,16 @@ async def post_current_processed(
     if body.provider == "AEMET":
         current_raw = _overlay_aemet_current_from_newer_series(current_raw, series_dict)
     if use_ranking_extremes:
-        current_raw = _overlay_daily_extremes(current_raw, ranking_extremes)
+        # El ranking Meteocat se actualiza por separado y puede llevar una
+        # hora de retraso. La lluvia de la ficha ya se ha sumado desde los
+        # intervalos de su serie recién obtenida; no la sustituyamos por un
+        # acumulado anterior del ranking (Canaletes: 96,9 -> 2,9 mm).
+        overlay = ranking_extremes
+        if body.provider == "METEOCAT" and not _is_nan_value(
+            _float_or_nan(current_raw.get("precip_total"))
+        ):
+            overlay = {key: value for key, value in ranking_extremes.items() if key != "precip_total"}
+        current_raw = _overlay_daily_extremes(current_raw, overlay)
 
     # ---- Calidad del pluviómetro (todos los proveedores) ----
     # Recorta del acumulado los saltos implausibles y deja la precipitación en

@@ -489,6 +489,39 @@ def test_fetch_today_series_filters_outside_local_day() -> None:
 # =====================================================================
 
 @pytest.mark.asyncio
+async def test_stale_xema_day_uses_fresher_open_data_rain(monkeypatch):
+    """Canaletes: XEMA se quedó antes del chaparrón, Dades Obertes lo tenía."""
+    from datetime import timezone
+    from server.services import meteocat_open_data
+
+    def epoch(hour, minute=0):
+        return int(datetime(2026, 9, 29, hour, minute, tzinfo=timezone.utc).timestamp())
+
+    async def stale_xema(*args, **kwargs):
+        return {32: [(epoch(5), 19.9)], 35: [(epoch(5), 2.9)]}
+
+    async def open_data(station_id, **kwargs):
+        assert station_id == "WP"
+        return {
+            32: [(epoch(5), 19.9), (epoch(7, 30), 18.0)],
+            35: [
+                (epoch(5), 2.9), (epoch(5, 30), 44.2),
+                (epoch(6), 24.9), (epoch(6, 30), 21.8),
+                (epoch(7), 2.6), (epoch(7, 30), 0.5),
+            ],
+        }
+
+    monkeypatch.setattr(meteocat, "_fetch_local_day_var_map", stale_xema)
+    monkeypatch.setattr(meteocat_open_data, "fetch_station_day_var_map", open_data)
+    now = datetime(2026, 9, 29, 10, 30, tzinfo=CAT_TZ)
+    async with httpx.AsyncClient() as client:
+        series = await meteocat.fetch_today_series("WP", "KEY", client=client, now=now)
+
+    assert series["epochs"][-1] == epoch(7, 30)
+    assert series["precip_total"] == pytest.approx(96.9)
+
+
+@pytest.mark.asyncio
 async def test_current_falls_back_to_open_data_when_xema_is_rate_limited(monkeypatch):
     """Agotada la cuota de XEMA, la estación se sirve por Dades Obertes.
 
