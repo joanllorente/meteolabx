@@ -52,8 +52,11 @@ from server.services.forecast_store import (
     new_manifest,
     prune_retained_runs,
     read_json,
+    delete_run,
     register_run_slot,
     retained_manifests,
+    run_slots_key,
+    run_slug,
     run_manifest_key,
     write_grid,
     write_json,
@@ -1022,6 +1025,48 @@ def emit_run_report(store, manifest: dict[str, Any]) -> bool:
         return False
 
 
+# Días hacia atrás que se barren al arrancar en busca de pasadas sustituidas.
+ORPHAN_SWEEP_DAYS = 7
+_orphans_swept = False
+
+
+def delete_ecmwf_run(store, run_iso: str) -> None:
+    """Borra una pasada entera: Europa, los demás dominios y su manifiesto."""
+    for domain in DOMAINS:
+        if domain != DEFAULT_DOMAIN_ID:
+            store.delete_prefix(
+                f"forecast/models/{FORECAST_MODEL}/scopes/{frame_scope(domain)}/runs/{run_slug(run_iso)}")
+    delete_run(store, run_iso, model=FORECAST_MODEL)
+
+
+def _retire_replaced_runs(store, run: datetime, sustituida: str | None) -> None:
+    """Borra la pasada que otra ha desplazado de su turno 00/06/12/18.
+
+    El visor solo lista las cuatro de los turnos, pero `register_run_slot`
+    solo devuelve la desplazada: AROME la borra y ECMWF no lo hacía. Cada día
+    quedaban cuatro pasadas huérfanas, unos 2,5 GB, sin nadie que las podara.
+    La primera vez en cada proceso se barren además los últimos días, para
+    recoger las que ya se habían quedado.
+    """
+    global _orphans_swept
+    retenidas = {
+        str(item.get("run"))
+        for item in ((read_json(store, run_slots_key(FORECAST_MODEL)) or {}).get("slots") or {}).values()
+    }
+    huerfanas = {sustituida} if sustituida else set()
+    if not _orphans_swept:
+        huerfanas |= {
+            (run - timedelta(hours=6 * salto)).isoformat().replace("+00:00", "Z")
+            for salto in range(1, ORPHAN_SWEEP_DAYS * 4 + 1)
+        }
+    for run_iso in sorted(huerfanas - retenidas):
+        try:
+            delete_ecmwf_run(store, run_iso)
+        except OSError:
+            logger.warning("ECMWF: no se pudo borrar la pasada sustituida %s", run_iso, exc_info=True)
+    _orphans_swept = True
+
+
 def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     """Publica los frames de ECMWF que falten de la pasada más reciente.
 
@@ -1151,7 +1196,7 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     # AROME. Registrarla solo al final del ciclo dejaba en cabeza la anterior,
     # ya terminada, y con ciclos largos el visor decía «Completa» mientras
     # calculaba la nueva.
-    register_run_slot(store, manifiesto)
+    _retire_replaced_runs(store, run, register_run_slot(store, manifiesto))
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="ecmwf-frame") as pool:
         for paso in pasos:
             if memory_deferred or (max_frames and publicados >= max_frames):
@@ -1224,7 +1269,7 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
         manifiesto["report_emitted"] = emit_run_report(store, manifiesto)
     write_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL), manifiesto)
     write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
-    register_run_slot(store, manifiesto)
+    _retire_replaced_runs(store, run, register_run_slot(store, manifiesto))
     prune_retained_runs(store, model=FORECAST_MODEL)
     return {
         "model": FORECAST_MODEL,

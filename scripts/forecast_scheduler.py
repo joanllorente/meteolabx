@@ -304,11 +304,19 @@ class SlotLending:
 def _ecmwf_loop(max_frames, stop, interval):
     from server.services.ecmwf_forecast import run_cycle
     while not stop.is_set():
+        espera = interval
         try:
-            logger.info("Ciclo ECMWF terminado: %s", run_cycle(max_frames=max(0, max_frames)))
+            resultado = run_cycle(max_frames=max(0, max_frames))
+            logger.info("Ciclo ECMWF terminado: %s", resultado)
+            # Con trabajo en marcha no se espera: el tope de frames acota cada
+            # ciclo, no el ritmo. Con los 60 s entre ciclos, la 12Z del 29/09
+            # tardó 33 min, de los que ~25 fueron esperas entre plazos que se
+            # calculaban en 2-4 s.
+            if resultado.get("frames_published") and not resultado.get("waiting_reason"):
+                espera = 1
         except Exception:
             logger.exception("ECMWF falló; AROME continúa.")
-        stop.wait(interval)
+        stop.wait(espera)
 
 
 def run_watch(w, args, stop):

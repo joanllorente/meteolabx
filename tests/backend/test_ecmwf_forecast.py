@@ -813,3 +813,22 @@ def test_known_steps_are_not_checked_again(monkeypatch):
     monkeypatch.setattr(ecmwf_forecast, '_index_exists', lambda r, step: checked.append(step) or step <= 6)
     assert ecmwf_forecast.available_steps(run, known=(0, 3)) == (0, 3, 6)
     assert sorted(checked) == [6, 9, 12]
+
+
+def test_a_run_displaced_from_its_slot_is_deleted_with_all_its_domains(monkeypatch):
+    """El visor solo lista cuatro pasadas, pero las desplazadas seguían en el volumen."""
+    store = get_forecast_store()
+    monkeypatch.setattr(ecmwf_forecast, '_orphans_swept', False)
+    viejo, huerfano = '2026-08-29T00:00:00Z', '2026-08-28T06:00:00Z'
+    for run_iso in (viejo, huerfano):
+        for domain in ecmwf_forecast.DOMAINS:
+            write_grid(store, frame_key(run_iso, 'ecmwf-temperature-500', run_iso, model='ecmwf',
+                                        scope=ecmwf_forecast.frame_scope(domain)), b'x')
+    register_run_slot(store, new_manifest(viejo, [viejo], model='ecmwf'))
+    _single_product_cycle(monkeypatch, lambda: ['2026-08-30T00:00:00Z'])
+    ecmwf_forecast.run_cycle()
+    for run_iso in (viejo, huerfano):
+        for domain in ecmwf_forecast.DOMAINS:
+            assert not store.exists(frame_key(run_iso, 'ecmwf-temperature-500', run_iso, model='ecmwf',
+                                              scope=ecmwf_forecast.frame_scope(domain)))
+    assert store.exists(frame_key(RUN, 'ecmwf-temperature-500', '2026-08-30T00:00:00Z', model='ecmwf'))

@@ -385,3 +385,21 @@ def test_the_state_is_rewritten_only_on_change_or_to_renew_it(tmp_path, monkeypa
     reloj.now += s.SlotLending.REWRITE_S
     arome.publish(3, 9)
     assert '"at": %s' % reloj.now in (tmp_path / "arome.json").read_text()
+
+
+def test_ecmwf_does_not_wait_between_cycles_while_it_has_work(monkeypatch):
+    """Con 60 s entre ciclos de 120 frames, la 12Z del 29/09 tardó 33 min."""
+    from server.services import ecmwf_forecast
+    results = iter([
+        {"frames_published": 120, "waiting_reason": None},
+        {"frames_published": 120, "waiting_reason": "memory"},
+        {"frames_published": 0, "waiting_reason": None},
+    ])
+    monkeypatch.setattr(ecmwf_forecast, "run_cycle", lambda max_frames: next(results))
+    waits = []
+
+    class Stop:
+        def is_set(self): return len(waits) >= 3
+        def wait(self, seconds): waits.append(seconds)
+    s._ecmwf_loop(120, Stop(), 60)
+    assert waits == [1, 60, 60]
