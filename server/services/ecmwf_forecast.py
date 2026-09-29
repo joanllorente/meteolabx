@@ -53,6 +53,7 @@ from server.services.forecast_store import (
     prune_retained_runs,
     read_json,
     register_run_slot,
+    retained_manifests,
     run_manifest_key,
     write_grid,
     write_json,
@@ -113,6 +114,10 @@ DEFAULT_MAX_HORIZON_H = 144
 PUBLICATION_DELAY_H = 6
 # Esperas ante un 429 o 503 del servidor de datos abiertos, en segundos.
 RATE_LIMIT_BACKOFF_S = (3.0, 8.0, 20.0)
+# Un índice publicado es inmutable. Recordar los éxitos evita repetir hasta
+# 49 HEAD en cada ciclo y que un 429 haga retroceder la pasada elegida.
+_published_steps: set[tuple[str, int]] = set()
+_published_steps_lock = threading.Lock()
 
 PRODUCTS: dict[str, dict[str, Any]] = {
     "ecmwf-mslp-theta-e-850": {
@@ -280,10 +285,14 @@ def read_index(run: datetime, step: int) -> list[dict[str, Any]]:
 def _read_index_cached(run_iso: str, step: int) -> list[dict[str, Any]]:
     run = datetime.fromisoformat(run_iso)
     url = index_url(run, step)
-    try:
-        respuesta = requests.get(url, timeout=_timeout())
-    except requests.RequestException as exc:
-        raise EcmwfError(f"No se pudo leer el índice de +{step} h: {exc}") from exc
+    for intento in range(len(RATE_LIMIT_BACKOFF_S) + 1):
+        try:
+            respuesta = requests.get(url, timeout=_timeout())
+        except requests.RequestException as exc:
+            raise EcmwfError(f"No se pudo leer el índice de +{step} h: {exc}") from exc
+        if respuesta.status_code not in (429, 503) or intento == len(RATE_LIMIT_BACKOFF_S):
+            break
+        time.sleep(RATE_LIMIT_BACKOFF_S[intento])
     if respuesta.status_code != 200:
         raise EcmwfError(
             f"El plazo +{step} h todavía no está publicado "
@@ -787,11 +796,22 @@ def step_of(run: datetime, valid_iso: str) -> int:
 
 
 def _index_exists(run: datetime, step: int) -> bool:
+    key = (run.astimezone(timezone.utc).isoformat(), step)
+    with _published_steps_lock:
+        if key in _published_steps:
+            return True
     try:
         respuesta = requests.head(index_url(run, step), timeout=_timeout())
     except requests.RequestException:
         return False
-    return respuesta.status_code == 200
+    if respuesta.status_code == 200:
+        with _published_steps_lock:
+            _published_steps.add(key)
+        return True
+    if respuesta.status_code in (429, 503):
+        logger.warning("ECMWF: HEAD del índice +%s h de %s devolvió HTTP %s; se reintentará.",
+                       step, key[0], respuesta.status_code)
+    return False
 
 
 def available_steps(run: datetime) -> tuple[int, ...]:
@@ -820,6 +840,48 @@ def latest_run(ahora: datetime | None = None) -> datetime:
         if _index_exists(run, 0):
             return run
     raise EcmwfError("Ninguna pasada reciente de ECMWF está publicada todavía.")
+
+
+def _run_for_store(store) -> tuple[datetime, datetime]:
+    """Termina la última pasada antes de recuperar una anterior."""
+    manifests = retained_manifests(store, model=FORECAST_MODEL)
+    known_runs = []
+    for manifest in manifests:
+        run_iso = manifest.get("run")
+        if not run_iso:
+            continue
+        run = parse_run(str(run_iso))
+        known_runs.append(run)
+        product = (manifest.get("catalog_products") or {}).get(next(iter(PRODUCTS)), {})
+        with _published_steps_lock:
+            _published_steps.update(
+                (run.isoformat(), step_of(run, valid_iso))
+                for valid_iso in product.get("valid_times", ())
+            )
+    try:
+        current = latest_run()
+    except EcmwfError:
+        if not known_runs:
+            raise
+        current = max(known_runs)
+    newest = max([current, *known_runs])
+    newest_manifest = next(
+        (item for item in manifests if item.get("run") == newest.isoformat().replace("+00:00", "Z")),
+        None,
+    )
+    # Solo se considera terminada con todos los plazos esperados. Un 429 en
+    # HEAD puede dar un `complete` provisional con un porcentaje menor.
+    if (newest_manifest and newest_manifest.get("status") == "complete"
+            and (newest_manifest.get("progress") or {}).get("percent") == 100.0):
+        older = sorted(
+            (item for item in manifests
+             if item.get("run") and parse_run(str(item["run"])) < newest
+             and item.get("status") != "complete"),
+            key=lambda item: str(item["run"]), reverse=True,
+        )
+        if older:
+            return parse_run(str(older[0]["run"])), newest
+    return newest, newest
 
 
 def manifest_product_key(product_id: str, domain: str = DEFAULT_DOMAIN_ID) -> str:
@@ -908,8 +970,21 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     un fallo de ECMWF podía retrasar un diagnóstico.
     """
     store = get_forecast_store()
-    run = latest_run()
+    run, newest = _run_for_store(store)
+    publishing_latest = run == newest
     run_iso = run.isoformat().replace("+00:00", "Z")
+    manifiesto = read_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL))
+    # Los plazos ya anunciados en el volumen siguen publicados aunque una
+    # comprobación HEAD de este ciclo reciba 429 o 503.
+    if manifiesto:
+        known_product = (manifiesto.get("catalog_products") or {}).get(
+            next(iter(PRODUCTS)), {}
+        )
+        with _published_steps_lock:
+            _published_steps.update(
+                (run.isoformat(), step_of(run, valid_iso))
+                for valid_iso in known_product.get("valid_times", ())
+            )
     catalogo = catalog_payload(run)
     # Mismas horas en todos los dominios: el catálogo de cada uno es el
     # europeo con su clave. Así el manifiesto sigue siendo uno por pasada.
@@ -918,7 +993,6 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
         for domain in DOMAINS
         for product_id, item in catalogo["products"].items()
     }
-    manifiesto = read_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL))
     if not manifiesto:
         manifiesto = new_manifest(
             run_iso,
@@ -971,7 +1045,8 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
         }
         manifiesto["worker_heartbeat_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         write_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL), manifiesto)
-        write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
+        if publishing_latest:
+            write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
 
     def calculate(product_id, paso, domain, valid_iso):
         contenido, _ = frame_payload(product_id, run, paso, domain)
@@ -1042,7 +1117,8 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
         datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     )
     write_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL), manifiesto)
-    write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
+    if publishing_latest:
+        write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
     register_run_slot(store, manifiesto)
     prune_retained_runs(store, model=FORECAST_MODEL)
     return {
