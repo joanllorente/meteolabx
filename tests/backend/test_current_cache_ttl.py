@@ -76,5 +76,5 @@ def test_personal_networks_are_the_only_ones_with_an_override(provider: str) -> 
     assert set(CURRENT_TTL_BY_PROVIDER) == {"WU", "WEATHERLINK"}
 
 
-def test_meteocat_series_uses_an_hourly_ttl() -> None:
-    assert SERIES_TTL_BY_PROVIDER == {"METEOCAT": 3600.0}
+def test_meteocat_series_refreshes_within_five_minutes() -> None:
+    assert SERIES_TTL_BY_PROVIDER == {"METEOCAT": 300.0}

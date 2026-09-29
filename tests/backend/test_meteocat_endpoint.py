@@ -164,7 +164,7 @@ def test_meteocat_current_processed_runs_pipeline() -> None:
     assert len(request_paths) == 2
 
 
-def test_meteocat_current_processed_prefers_current_day_ranking_extremes() -> None:
+def test_meteocat_current_processed_keeps_series_rain_over_stale_ranking() -> None:
     from server.services.ranking import StationDaily
 
     request_paths: list[str] = []
@@ -198,7 +198,9 @@ def test_meteocat_current_processed_prefers_current_day_ranking_extremes() -> No
     assert extremes["temp_max"] == pytest.approx(27.4)
     assert extremes["temp_min"] == pytest.approx(17.2)
     assert extremes["gust_max"] == pytest.approx(48.6)
-    assert extremes["precip_total"] == pytest.approx(6.7)
+    # Los extremos horarios pueden venir del ranking, pero su lluvia no debe
+    # pisar los intervalos más recientes de la serie de observación.
+    assert extremes["precip_total"] == pytest.approx(0.5)
     assert len(request_paths) == 2
 
 

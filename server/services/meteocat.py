@@ -529,6 +529,51 @@ def _series_from_first_available(var_map: VarMap, codes: List[int]) -> List[Tupl
     return []
 
 
+async def _prefer_fresher_open_data(
+    station_id: str,
+    var_map: VarMap,
+    client: httpx.AsyncClient,
+    *,
+    timeout_s: float,
+    now: Optional[datetime],
+) -> VarMap:
+    """Rescata un día XEMA retrasado si Dades Obertes ya publicó más lecturas.
+
+    La respuesta XEMA puede ser HTTP 200 y contener datos válidos, pero
+    detenerse antes de un episodio reciente. Solo consultamos la segunda
+    fuente cuando la lectura más nueva tiene al menos 90 minutos de edad.
+    """
+    latest = max((epoch for rows in var_map.values() for epoch, _ in rows), default=0)
+    moment = now or datetime.now(tz=timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=CAT_TZ)
+    if not latest or moment.timestamp() - latest <= 90 * 60:
+        return var_map
+
+    try:
+        from server.services import meteocat_open_data
+
+        alternative = await meteocat_open_data.fetch_station_day_var_map(
+            station_id, client=client, timeout_s=timeout_s, now=moment,
+        )
+    except ProviderError as exc:
+        logger.info(
+            "Meteocat: Dades Obertes no completó la serie antigua de %s (%s)",
+            station_id, exc.error_code,
+        )
+        return var_map
+    alternative_latest = max(
+        (epoch for rows in alternative.values() for epoch, _ in rows), default=0,
+    )
+    if alternative_latest > latest:
+        logger.info(
+            "Meteocat: Dades Obertes tiene lecturas más recientes para %s (%d > %d)",
+            station_id, alternative_latest, latest,
+        )
+        return alternative
+    return var_map
+
+
 async def fetch_current(
     station_id: str,
     api_key: str,
@@ -558,6 +603,10 @@ async def fetch_current(
             var_map = await _fetch_local_day_var_map(
                 station_id, api_key, client, timeout_s=timeout_s, now=now,
             )
+            if var_map:
+                var_map = await _prefer_fresher_open_data(
+                    station_id, var_map, client, timeout_s=timeout_s, now=now,
+                )
         except ProviderError as exc:
             xema_error = exc
             logger.warning(
@@ -721,6 +770,10 @@ async def fetch_today_series(
             var_map = await _fetch_local_day_var_map(
                 station_id, api_key, client, timeout_s=timeout_s, now=now,
             )
+            if var_map:
+                var_map = await _prefer_fresher_open_data(
+                    station_id, var_map, client, timeout_s=timeout_s, now=now,
+                )
         except ProviderError as exc:
             xema_error = exc
             logger.warning(
