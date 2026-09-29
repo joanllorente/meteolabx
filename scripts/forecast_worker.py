@@ -2225,7 +2225,7 @@ def main() -> int:
         type=int,
         default=int(os.getenv(
             "METEOLABX_ECMWF_MAX_FRAMES_PER_CYCLE",
-            "12" if os.getenv("METEOLABX_ENABLE_ECMWF", "").lower()
+            "120" if os.getenv("METEOLABX_ENABLE_ECMWF", "").lower()
             in {"1", "true", "yes"} else "-1",
         )),
         help=(

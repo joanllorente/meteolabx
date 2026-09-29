@@ -55,7 +55,7 @@ Variables de entorno:
 
 | Variable | Por defecto | Para qué |
 | --- | --- | --- |
-| `METEOLABX_ECMWF_MAX_FRAMES_PER_CYCLE` | `12` | Frames por ciclo; `0` los hace todos y `-1` desactiva el modelo. |
+| `METEOLABX_ECMWF_MAX_FRAMES_PER_CYCLE` | `120` | Frames por ciclo; agrupa varios plazos para reutilizar las descargas. `0` los hace todos y `-1` desactiva el modelo. |
 | `METEOLABX_ECMWF_MAX_HORIZON_H` | `144` | Alcance en horas. |
 | `METEOLABX_ECMWF_DOMAIN` | `-80.125,14.875,45.125,75.125` | Recorte «oeste,sur,este,norte». |
 | `METEOLABX_ECMWF_TIMEOUT_S` | `120` | Espera de lectura del open data. |
