@@ -529,6 +529,99 @@ def test_ecmwf_worker_limits(monkeypatch, raw, expected):
     assert ecmwf_forecast.calculation_workers() == expected
 
 
+def test_published_index_is_not_rechecked_when_ecmwf_rate_limits(monkeypatch):
+    run = ecmwf_forecast.parse_run(RUN)
+    key = (run.isoformat(), 12)
+    ecmwf_forecast._published_steps.discard(key)
+    calls = []
+    def head(*args, **kwargs):
+        calls.append(args)
+        return type('Response', (), {'status_code': 200})()
+    monkeypatch.setattr(ecmwf_forecast.requests, 'head', head)
+    try:
+        assert ecmwf_forecast._index_exists(run, 12)
+        assert ecmwf_forecast._index_exists(run, 12)
+        assert len(calls) == 1
+    finally:
+        ecmwf_forecast._published_steps.discard(key)
+
+
+def test_cycle_keeps_newest_persisted_run_when_head_fails(monkeypatch):
+    older = '2026-08-29T18:00:00Z'
+    newer = RUN
+    monkeypatch.setattr(ecmwf_forecast, 'retained_manifests', lambda *a, **kw: [
+        {'run': newer, 'catalog_products': {
+            'ecmwf-mslp-theta-e-850': {'valid_times': [VALID]}}},
+        {'run': older},
+    ])
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run',
+                        lambda: ecmwf_forecast.parse_run(older))
+    key = (ecmwf_forecast.parse_run(newer).isoformat(), 12)
+    try:
+        assert ecmwf_forecast._run_for_store(object()) == (
+            ecmwf_forecast.parse_run(newer), ecmwf_forecast.parse_run(newer))
+        assert key in ecmwf_forecast._published_steps
+    finally:
+        ecmwf_forecast._published_steps.discard(key)
+
+
+def test_older_run_waits_until_newest_is_fully_complete(monkeypatch):
+    older = '2026-08-29T18:00:00Z'
+    latest = ecmwf_forecast.parse_run(RUN)
+    current = {'run': RUN, 'status': 'publishing', 'progress': {'percent': 99.0}}
+    manifests = [current, {'run': older, 'status': 'publishing'}]
+    monkeypatch.setattr(ecmwf_forecast, 'retained_manifests', lambda *a, **kw: manifests)
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: latest)
+    assert ecmwf_forecast._run_for_store(object()) == (latest, latest)
+    current['status'] = 'complete'
+    current['progress']['percent'] = 66.4
+    assert ecmwf_forecast._run_for_store(object()) == (latest, latest)
+    current['progress']['percent'] = 100.0
+    assert ecmwf_forecast._run_for_store(object()) == (
+        ecmwf_forecast.parse_run(older), latest)
+
+
+def test_backfill_does_not_replace_latest_visible_manifest(monkeypatch):
+    older = ecmwf_forecast.parse_run('2026-08-29T18:00:00Z')
+    latest = ecmwf_forecast.parse_run(RUN)
+    product = 'ecmwf-temperature-500'
+    valid = '2026-08-29T18:00:00Z'
+    monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
+    monkeypatch.setattr(ecmwf_forecast, '_run_for_store', lambda store: (older, latest))
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+        'products': {product: {'valid_times': [valid]}}
+    })
+    monkeypatch.setattr(ecmwf_forecast, 'read_json', lambda *a: None)
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda count, cached: count)
+    monkeypatch.setattr(ecmwf_forecast, 'frame_payload', lambda *a: (_frame_bytes(), {}))
+    monkeypatch.setattr(ecmwf_forecast, 'register_run_slot', lambda *a: None)
+    monkeypatch.setattr(ecmwf_forecast, 'prune_retained_runs', lambda *a, **kw: None)
+    writes = []
+    monkeypatch.setattr(ecmwf_forecast, 'write_json', lambda store, key, value: writes.append(key))
+    ecmwf_forecast.run_cycle(max_frames=1)
+    assert ecmwf_forecast.latest_manifest_key('ecmwf') not in writes
+
+
+def test_index_retries_rate_limit_before_marking_failure(monkeypatch):
+    run = ecmwf_forecast.parse_run(RUN)
+    calls = []
+    def get(*args, **kwargs):
+        calls.append(args)
+        status = 429 if len(calls) == 1 else 200
+        return type('Response', (), {
+            'status_code': status,
+            'text': '{"param":"t"}\n',
+        })()
+    monkeypatch.setattr(ecmwf_forecast.requests, 'get', get)
+    monkeypatch.setattr(ecmwf_forecast.time, 'sleep', lambda _: None)
+    ecmwf_forecast._read_index_cached.cache_clear()
+    try:
+        assert ecmwf_forecast.read_index(run, 12) == [{'param': 't'}]
+        assert len(calls) == 2
+    finally:
+        ecmwf_forecast._read_index_cached.cache_clear()
+
+
 def test_cycle_runs_parallel_and_checkpoints_completed_batch(monkeypatch):
     import threading
     run = ecmwf_forecast.parse_run(RUN)
