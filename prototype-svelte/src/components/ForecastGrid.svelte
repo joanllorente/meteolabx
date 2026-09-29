@@ -92,6 +92,18 @@
    * deja su aspecto intacto y hace que cualquier otro modelo mida lo mismo.
    */
   const labelScale = $derived(frame.width / LABEL_REFERENCE_WIDTH);
+  // Ancho con que se pinta el mapa, en píxeles de pantalla.
+  let surfaceWidth = $state(0);
+  // Tamaño de los rótulos: celdas de la rejilla por píxel de pantalla, con un
+  // poco de aumento. `labelScale` sirve para la geometría —separación de
+  // isolíneas, anillos mínimos—, pero con él el texto encogía con el ancho
+  // pintado: en Lambert el dominio de AROME es casi cuadrado, a la misma
+  // altura se pinta al 60 % de ancho y las letras salían un 40 % más
+  // pequeñas. Así miden lo que dice su CSS en cualquier proyección.
+  const TEXT_ENLARGEMENT = 1.15;
+  const textScale = $derived(
+    surfaceWidth > 0 ? frame.width / surfaceWidth * TEXT_ENLARGEMENT : labelScale
+  );
 
   /**
    * Tamaño de celda del modelo, en km.
@@ -825,8 +837,8 @@
         contours: contourPaths,
         format: (level) => `${level} ${frame.overlay_unit || ''}`.trim(),
         // Un rótulo de isohipsa es más largo y pide más aire alrededor.
-        gapX: 230 * labelScale / viewZoom,
-        gapY: 118 * labelScale / viewZoom,
+        gapX: 230 * textScale / viewZoom,
+        gapY: 118 * textScale / viewZoom,
         priority: (level) => (isMajorOverlay(level) ? 3 : 1)
       });
     }
@@ -837,8 +849,8 @@
         kind: 'index',
         contours: contourPaths,
         format: (level) => (level < 0 ? `−${Math.abs(level)}` : `${level}`),
-        gapX: 110 * labelScale / viewZoom,
-        gapY: 70 * labelScale / viewZoom,
+        gapX: 110 * textScale / viewZoom,
+        gapY: 70 * textScale / viewZoom,
         priority: (level) => (level <= -4 ? 2 : level < 0 ? 1 : 0)
       });
     }
@@ -847,8 +859,8 @@
         kind: 'value',
         contours: valueContours,
         format: formatContour,
-        gapX: 170 * labelScale / viewZoom,
-        gapY: 92 * labelScale / viewZoom,
+        gapX: 170 * textScale / viewZoom,
+        gapY: 92 * textScale / viewZoom,
         priority: (level) => (emphasis(level) > 0 ? 2 : 0)
       });
     }
@@ -862,9 +874,12 @@
           frame,
           bounds: visibleSourceBounds(),
           viewZoom,
-          labelScale,
+          labelScale: textScale,
           format: (value) => (
-            formatProbe ? formatProbe(value) : `${value.toFixed(1)} ${frame.unit || ''}`.trim()
+            // En el tipo de precipitación, donde no precipita va solo el
+            // nombre: «Sin precipitación» bajo cada ciudad es ruido.
+            frame.product === 'precip-type' && Math.round(value) === 0 ? ''
+              : formatProbe ? formatProbe(value) : `${value.toFixed(1)} ${frame.unit || ''}`.trim()
           )
         })
       : []
@@ -1136,6 +1151,7 @@
   <div
     class="map-surface"
     bind:this={surface}
+    bind:clientWidth={surfaceWidth}
     role="application"
     aria-label={forecastText(language, 'interactiveMap', { product: productLabel })}
     class:dragging
@@ -1226,7 +1242,7 @@
           <path class="trough-axis" d={axisPath(axis)} />
         {/each}
         {#each centres as centre}
-          <g transform={`translate(${centre.x.toFixed(1)} ${centre.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+          <g transform={`translate(${centre.x.toFixed(1)} ${centre.y.toFixed(1)}) scale(${(textScale / zoom).toFixed(5)})`}>
             <text class="centre-letter" class:relative={!centre.main} text-anchor="middle" dominant-baseline="central">{centre.type === 'low'
               ? (centre.main ? 'B' : 'b')
               : (centre.main ? 'A' : 'a')}</text>
@@ -1234,7 +1250,7 @@
           </g>
         {/each}
         {#each storms as storm}
-          <g transform={`translate(${storm.x.toFixed(1)} ${storm.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+          <g transform={`translate(${storm.x.toFixed(1)} ${storm.y.toFixed(1)}) scale(${(textScale / zoom).toFixed(5)})`}>
             {#if showCentres}
               <!-- En el mapa de presión la baja ya lleva su B y su valor. -->
               <text class="storm-name" y="31" text-anchor="middle" dominant-baseline="central">{storm.text}</text>
@@ -1245,13 +1261,13 @@
           </g>
         {/each}
         {#each showTroughs ? troughs.lows : [] as low}
-          <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+          <g transform={`translate(${low.x.toFixed(1)} ${low.y.toFixed(1)}) scale(${(textScale / zoom).toFixed(5)})`}>
             <text class="centre-letter" text-anchor="middle" dominant-baseline="central">B</text>
             <text class="centre-value" y="17" text-anchor="middle" dominant-baseline="central">{Math.round(low.minimum)}</text>
           </g>
         {/each}
         {#each mapLabels as label}
-          <g transform={`translate(${label.x.toFixed(1)} ${label.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+          <g transform={`translate(${label.x.toFixed(1)} ${label.y.toFixed(1)}) scale(${(textScale / zoom).toFixed(5)})`}>
             <text
               class={label.kind === 'height' ? 'height-label' : label.kind === 'index' ? 'index-label' : 'contour-label'}
               class:major={label.kind === 'height' && isMajorOverlay(label.level)}
@@ -1269,10 +1285,10 @@
           />
         {/each}
         {#each cities as city}
-          <g transform={`translate(${city.x.toFixed(1)} ${city.y.toFixed(1)}) scale(${(labelScale / zoom).toFixed(5)})`}>
+          <g transform={`translate(${city.x.toFixed(1)} ${city.y.toFixed(1)}) scale(${(textScale / zoom).toFixed(5)})`}>
             <circle class="city-dot" r="1.9" />
             <text class="city-name" text-anchor="middle" y="-5.5">{city.name}</text>
-            <text class="city-value" text-anchor="middle" y="12">{city.text}</text>
+            {#if city.text}<text class="city-value" text-anchor="middle" y="12">{city.text}</text>{/if}
           </g>
         {/each}
       </g>

@@ -30,9 +30,16 @@ const DESCRIPTION_LENGTH = 158;
 const PRODUCTS = new Map(data.products.map((product) => [product.id, product]));
 
 const HUB_INTRO = {
-  es: 'Mapas horarios del modelo AROME a 2,5 km hasta 51 horas: temperatura en superficie y en altura, viento y rachas, precipitación y tipo de precipitación, cota de nieve, nubosidad y radiación, y los diagnósticos convectivos que calcula MeteoLabX —CAPE y ECAPE, cizalladura, helicidad, DCAPE, SHIP, STP o SCP— para analizar tormentas y entornos de supercélulas. Cada mapa explica qué representa, cómo se interpreta y cómo se calcula.',
-  en: 'Hourly maps from the AROME model at 2.5 km out to 51 hours: surface and upper-air temperature, wind and gusts, precipitation and precipitation type, snow level, cloud cover and radiation, plus the convective diagnostics computed by MeteoLabX —CAPE and ECAPE, shear, helicity, DCAPE, SHIP, STP and SCP— to analyse thunderstorms and supercell environments. Every map explains what it shows, how to read it and how it is calculated.',
-  fr: 'Cartes horaires du modèle AROME à 2,5 km jusqu’à 51 heures : température en surface et en altitude, vent et rafales, précipitations et type de précipitations, limite pluie-neige, nébulosité et rayonnement, ainsi que les diagnostics convectifs calculés par MeteoLabX —CAPE et ECAPE, cisaillement, hélicité, DCAPE, SHIP, STP ou SCP— pour analyser les orages et les environnements de supercellules. Chaque carte explique ce qu’elle représente, comment la lire et comment elle est calculée.'
+  es: 'Mapas de predicción de dos modelos. AROME, de Météo-France, a 2,5 km y hasta 51 horas: temperatura, viento y rachas, precipitación y su tipo, cota de nieve, nubosidad y los diagnósticos convectivos que calcula MeteoLabX —CAPE y ECAPE, cizalladura, helicidad, DCAPE, SHIP, STP o SCP— para analizar tormentas y supercélulas. ECMWF, a 25 km y hasta 144 horas, para la escala sinóptica: geopotencial y temperatura en altura, chorro, vorticidad, vectores Q, frontogénesis y precipitación. Cada mapa explica qué representa, cómo se interpreta y cómo se calcula.',
+  en: 'Forecast maps from two models. AROME, from Météo-France, at 2.5 km out to 51 hours: temperature, wind and gusts, precipitation and its type, snow level, cloud cover and the convective diagnostics computed by MeteoLabX —CAPE and ECAPE, shear, helicity, DCAPE, SHIP, STP and SCP— to analyse thunderstorms and supercells. ECMWF, at 25 km out to 144 hours, for the synoptic scale: upper-air height and temperature, jet stream, vorticity, Q-vectors, frontogenesis and precipitation. Every map explains what it shows, how to read it and how it is calculated.',
+  fr: 'Cartes de prévision de deux modèles. AROME, de Météo-France, à 2,5 km jusqu’à 51 heures : température, vent et rafales, précipitations et leur type, limite pluie-neige, nébulosité et les diagnostics convectifs calculés par MeteoLabX —CAPE et ECAPE, cisaillement, hélicité, DCAPE, SHIP, STP ou SCP— pour analyser les orages et les supercellules. ECMWF, à 25 km jusqu’à 144 heures, pour l’échelle synoptique : géopotentiel et température en altitude, courant-jet, tourbillon, vecteurs Q, frontogenèse et précipitations. Chaque carte explique ce qu’elle représente, comment la lire et comment elle est calculée.'
+};
+
+// Título del índice: el del visor nombra solo a AROME.
+const HUB_TITLE = {
+  es: 'Mapas de predicción AROME y ECMWF | MeteoLabX',
+  en: 'AROME and ECMWF forecast maps | MeteoLabX',
+  fr: 'Cartes de prévision AROME et ECMWF | MeteoLabX'
 };
 
 // Los textos que el visor no tiene: los de la página estática.
@@ -165,7 +172,7 @@ function productArticle(product, language) {
   const related = data.products.filter((item) => item.category === product.category && item.id !== product.id);
   const parts = [
     `<nav aria-label="breadcrumb"><a href="/${language}">MeteoLabX</a> › <a href="${hub}">${escapeHtml(uiText(language, 'title'))}</a> › ${escapeHtml(label)}</nav>`,
-    `<h1>${escapeHtml(label)}</h1>`,
+    `<h1>${escapeHtml(label)} · ${escapeHtml(product.modelLabel)}</h1>`,
     `<p>${escapeHtml(pageText(language, 'model', { model: product.modelLabel }))} · ${escapeHtml(categoryLabel(language, product.category))}</p>`
   ];
   if (guide) {
@@ -224,7 +231,7 @@ export function forecastPageContent(language, product = null) {
   const path = forecastPath(language, product?.id);
   const alternates = indexableLanguages(product);
   const indexable = alternates.includes(language);
-  const siteTitle = uiText(language, 'pageTitle');
+  const siteTitle = HUB_TITLE[language] || uiText(language, 'pageTitle');
   const hubCrumb = [uiText(language, 'title'), forecastPath(language)];
   if (!product) {
     const description = summarize(HUB_INTRO[language] || uiText(language, 'subtitle'));
@@ -242,7 +249,10 @@ export function forecastPageContent(language, product = null) {
   }
   const label = product.labels[language] || product.labels[DEFAULT_LANGUAGE];
   const guide = guideFor(product, language);
-  const title = `${label} · ${siteTitle}`;
+  // El modelo en el título: AROME y ECMWF tienen mapas con el mismo nombre
+  // («Temperatura y geopotencial 850 hPa») y sin él Google los vería
+  // duplicados. De paso el título es más corto y no lo corta.
+  const title = `${label} · ${product.modelLabel} | MeteoLabX`;
   const description = summarize(guide?.what || uiText(language, 'subtitle'));
   return {
     path, indexable, alternates, title, description,

@@ -11,7 +11,7 @@ export default {
  ],
  "text": {
   "es": {
-   "pageTitle": "Predicción meteorológica AROME | MeteoLabX",
+   "pageTitle": "Predicción meteorológica | MeteoLabX",
    "title": "Predicción numérica",
    "subtitle": "Mapas de modelos meteorológicos y diagnósticos de MeteoLabX.",
    "what": "Qué representa",
@@ -21,7 +21,7 @@ export default {
    "maps": "Mapas"
   },
   "ca": {
-   "pageTitle": "Predicció meteorològica AROME | MeteoLabX",
+   "pageTitle": "Predicció meteorològica | MeteoLabX",
    "title": "Predicció numèrica",
    "subtitle": "Mapes de models meteorològics i diagnòstics de MeteoLabX.",
    "what": "Què representa",
@@ -31,7 +31,7 @@ export default {
    "maps": "Mapes"
   },
   "en": {
-   "pageTitle": "AROME weather forecast | MeteoLabX",
+   "pageTitle": "Weather forecast | MeteoLabX",
    "title": "Numerical forecast",
    "subtitle": "Weather-model maps and MeteoLabX diagnostics.",
    "what": "What it shows",
@@ -41,7 +41,7 @@ export default {
    "maps": "Maps"
   },
   "de": {
-   "pageTitle": "AROME-Wettervorhersage | MeteoLabX",
+   "pageTitle": "Wettervorhersage | MeteoLabX",
    "title": "Numerische Vorhersage",
    "subtitle": "Wettermodellkarten und MeteoLabX-Diagnosen.",
    "what": "Darstellung",
@@ -51,7 +51,7 @@ export default {
    "maps": "Karten"
   },
   "fr": {
-   "pageTitle": "Prévision météo AROME | MeteoLabX",
+   "pageTitle": "Prévision météo | MeteoLabX",
    "title": "Prévision numérique",
    "subtitle": "Cartes de modèles météorologiques et diagnostics MeteoLabX.",
    "what": "Ce que représente la carte",
@@ -61,7 +61,7 @@ export default {
    "maps": "Cartes"
   },
   "it": {
-   "pageTitle": "Previsione meteo AROME | MeteoLabX",
+   "pageTitle": "Previsione meteo | MeteoLabX",
    "title": "Previsione numerica",
    "subtitle": "Mappe dei modelli meteorologici e diagnostica MeteoLabX.",
    "what": "Cosa rappresenta",
@@ -71,7 +71,7 @@ export default {
    "maps": "Mappe"
   },
   "pt": {
-   "pageTitle": "Previsão meteorológica AROME | MeteoLabX",
+   "pageTitle": "Previsão meteorológica | MeteoLabX",
    "title": "Previsão numérica",
    "subtitle": "Mapas de modelos meteorológicos e diagnósticos MeteoLabX.",
    "what": "O que representa",

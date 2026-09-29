@@ -14,6 +14,8 @@ desplazar el trabajo convectivo de AROME.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar, copy_context
+import threading
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import json
@@ -354,7 +356,7 @@ def _download_message(run: datetime, step: int, mensaje: dict[str, Any]) -> Path
 
 
 def _read_message_window(
-    ruta: Path, bounds: tuple[float, float, float, float]
+    ruta: Path, bounds: tuple[float, float, float, float] | None
 ) -> tuple[np.ndarray, tuple[float, float, float, float]]:
     """Lee el recorte del dominio, no la rejilla global entera.
 
@@ -362,7 +364,9 @@ def _read_message_window(
     así que la ventana se saca directamente de los límites pedidos.
     """
     with rasterio.Env(GDAL_CACHEMAX=64, GRIB_NORMALIZE_UNITS="NO"), rasterio.open(ruta) as dataset:
-        ventana = from_bounds(*bounds, transform=dataset.transform).round_offsets().round_lengths()
+        ventana = (rasterio.windows.Window(0, 0, dataset.width, dataset.height)
+                   if bounds is None else
+                   from_bounds(*bounds, transform=dataset.transform).round_offsets().round_lengths())
         # Un dominio que se salga de la rejilla se recorta a lo que existe.
         ventana = ventana.intersection(
             rasterio.windows.Window(0, 0, dataset.width, dataset.height)
@@ -373,32 +377,92 @@ def _read_message_window(
     return datos, tuple(float(valor) for valor in reales)
 
 
-# Mensajes ya descargados mientras dura una sesión compartida, por (pasada,
-# plazo, parámetro, tipo de nivel, nivel). Fuera de una sesión cada lectura
-# descarga y borra, como siempre.
-_mensajes_compartidos: dict[tuple, Path] | None = None
+# Una sesión por plazo: aislada de peticiones HTTP y de otros ciclos.
+_shared_fields: ContextVar = ContextVar("ecmwf_shared_fields", default=None)
 
 
 class shared_downloads:
-    """Reutiliza cada mensaje GRIB para todos los mapas y dominios del plazo.
+    """Descarga y decodifica cada campo global una vez por plazo.
 
-    El GRIB es global: el mismo mensaje sirve para Europa, Norteamérica o
-    Australia, y para varios mapas (la presión en superficie, el geopotencial,
-    la temperatura...). Sin esto, cinco dominios eran cinco veces más
-    peticiones, y el servidor de ECMWF ya contestaba 429 con uno solo.
+    Las tareas comparten la sesión explícitamente mediante copy_context.
+    Los bloqueos por campo evitan descargas duplicadas sin serializar campos
+    distintos. La memoria se libera al terminar el plazo (no toda la pasada).
     """
 
     def __enter__(self):
-        global _mensajes_compartidos
-        _mensajes_compartidos = {}
+        self.fields = {}
+        self.locks = {}
+        self.guard = threading.Lock()
+        self.token = _shared_fields.set(self)
         return self
 
     def __exit__(self, *exc):
-        global _mensajes_compartidos
-        ficheros, _mensajes_compartidos = _mensajes_compartidos or {}, None
-        for ruta in ficheros.values():
-            _discard_message(ruta)
+        _shared_fields.reset(self.token)
+        self.fields.clear()
         return False
+
+    def read(self, key, run, step, selector, bounds):
+        with self.guard:
+            lock = self.locks.setdefault(key, threading.Lock())
+        with lock:
+            if key not in self.fields:
+                message = _select_message(read_index(run, step), selector)
+                path = _download_message(run, step, message)
+                try:
+                    self.fields[key] = _read_message_window(path, None)
+                finally:
+                    _discard_message(path)
+            values, extent = self.fields[key]
+        height, width = values.shape
+        transform = rasterio.transform.from_bounds(*extent, width, height)
+        window = from_bounds(*bounds, transform=transform).round_offsets().round_lengths()
+        window = window.intersection(rasterio.windows.Window(0, 0, width, height))
+        rows, cols = window.toslices()
+        return values[rows, cols], tuple(rasterio.windows.bounds(window, transform))
+
+
+def calculation_workers() -> int:
+    """Concurrencia independiente de AROME y acotada para no saturar ECMWF."""
+    try:
+        return max(1, min(8, int(os.getenv("METEOLABX_ECMWF_WORKERS", "4"))))
+    except ValueError:
+        return 4
+
+
+def _memory_gb(name: str, default: float) -> int:
+    try:
+        value = float(os.getenv(name, str(default)))
+        if not np.isfinite(value) or value <= 0:
+            return int(default * 1024**3)
+        return max(1, int(value * 1024**3))
+    except ValueError:
+        return int(default * 1024**3)
+
+
+@lru_cache(maxsize=1)
+def _warn_unmeasured_memory():
+    logger.warning("ECMWF: sin memoria/límite legible; se limita a un worker. "
+                   "En contenedores sin límite, configura METEOLABX_FORECAST_MEMORY_LIMIT_GB.")
+
+
+def memory_worker_capacity(requested: int, cached_bytes: int = 0) -> int:
+    """Admite un lote completo antes de que sus arrays aparezcan en el cgroup.
+
+    Los lotes anteriores ya han terminado. Su caché sí aparece en la medida:
+    solo se reserva la parte del presupuesto de caché que aún puede crecer.
+    Las reservas son estimaciones conservadoras configurables, no picos medidos.
+    """
+    from server.services.forecast_memory import cgroup_memory
+
+    measured = cgroup_memory(_memory_gb("METEOLABX_FORECAST_MEMORY_LIMIT_GB", 0))
+    if measured is None:
+        _warn_unmeasured_memory()
+        return min(requested, 1)
+    used, limit = measured
+    per_worker = _memory_gb("METEOLABX_ECMWF_WORKER_MEMORY_GB", 0.5)
+    headroom = _memory_gb("METEOLABX_ECMWF_MEMORY_RESERVE_GB", 0.5)
+    cache_growth = max(0, _memory_gb("METEOLABX_ECMWF_CACHE_MEMORY_GB", 0.25) - cached_bytes)
+    return max(0, min(requested, (limit - used - headroom - cache_growth) // per_worker))
 
 
 def _discard_message(ruta: Path) -> None:
@@ -416,17 +480,15 @@ def _field(
         run.astimezone(timezone.utc).isoformat(), int(step),
         str(selector.get("param")), str(selector.get("levtype")), str(selector.get("levelist", "")),
     )
-    compartidos = _mensajes_compartidos
-    ruta = compartidos.get(clave) if compartidos is not None else None
-    if ruta is None:
+    session = _shared_fields.get()
+    if session is not None:
+        datos, reales = session.read(clave, run, step, selector, bounds)
+    else:
         mensaje = _select_message(read_index(run, step), selector)
         ruta = _download_message(run, step, mensaje)
-        if compartidos is not None:
-            compartidos[clave] = ruta
-    try:
-        datos, reales = _read_message_window(ruta, bounds)
-    finally:
-        if compartidos is None:
+        try:
+            datos, reales = _read_message_window(ruta, bounds)
+        finally:
             _discard_message(ruta)
     return datos * float(selector.get("scale", 1.0)) + float(selector.get("offset", 0.0)), reales
 
@@ -896,34 +958,68 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     })
     publicados = 0
     fallos = 0
-    for paso in pasos:
-        if max_frames and publicados >= max_frames:
-            break
-        valid_iso = (run + timedelta(hours=paso)).isoformat().replace("+00:00", "Z")
-        with shared_downloads():
-            for product_id in PRODUCTS:
-                if valid_iso not in catalogo["products"][product_id]["valid_times"]:
-                    continue
-                for domain in DOMAINS:
-                    clave_manifiesto = manifest_product_key(product_id, domain)
-                    if valid_iso in disponibles(clave_manifiesto):
-                        continue
-                    if max_frames and publicados >= max_frames:
+    memory_deferred = False
+    def checkpoint():
+        available = sum(len(disponibles(key)) for key in catalogo_total)
+        total = sum(manifiesto["expected_totals"].values())
+        manifiesto["status"] = "publishing"
+        manifiesto["progress"] = {
+            "frames_available": available, "frames_total": total,
+            "percent": round(100 * available / total, 1) if total else 0.0,
+            "error_count": fallos, "current_job": None, "active_jobs": [],
+            "last_completed": None,
+        }
+        manifiesto["worker_heartbeat_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        write_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL), manifiesto)
+        write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
+
+    def calculate(product_id, paso, domain, valid_iso):
+        contenido, _ = frame_payload(product_id, run, paso, domain)
+        write_grid(store, frame_key(run_iso, product_id, valid_iso,
+                   model=FORECAST_MODEL, scope=frame_scope(domain)), contenido)
+
+    workers = calculation_workers()
+    checkpoint()
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="ecmwf-frame") as pool:
+        for paso in pasos:
+            if memory_deferred or (max_frames and publicados >= max_frames):
+                break
+            valid_iso = (run + timedelta(hours=paso)).isoformat().replace("+00:00", "Z")
+            pending = [
+                (product, domain)
+                for product in PRODUCTS
+                if valid_iso in catalogo["products"][product]["valid_times"]
+                for domain in DOMAINS
+                if valid_iso not in disponibles(manifest_product_key(product, domain))
+            ]
+            # Batches acotados: respetar max_frames incluso con errores y no
+            # acumular payloads ni tareas de todos los plazos en memoria.
+            with shared_downloads() as shared:
+                while pending and (not max_frames or publicados < max_frames):
+                    count = min(workers, max_frames - publicados) if max_frames else workers
+                    cached_bytes = sum(values.nbytes for values, _ in shared.fields.values())
+                    count = memory_worker_capacity(min(count, len(pending)), cached_bytes)
+                    if count == 0:
+                        memory_deferred = True
+                        logger.info("ECMWF: lote aplazado por memoria; se libera la caché "
+                                    "y se reintentará en el siguiente ciclo.")
                         break
-                    clave = frame_key(
-                        run_iso, product_id, valid_iso, model=FORECAST_MODEL,
-                        scope=frame_scope(domain),
-                    )
-                    try:
-                        contenido, _ = frame_payload(product_id, run, paso, domain)
-                        write_grid(store, clave, contenido)
-                    except (EcmwfError, OSError) as exc:
-                        fallos += 1
-                        mark_error(manifiesto, clave_manifiesto, valid_iso, str(exc))
-                        logger.warning("ECMWF %s %s %s: %s", product_id, domain, valid_iso, exc)
-                        continue
-                    mark_available(manifiesto, clave_manifiesto, valid_iso)
-                    publicados += 1
+                    batch, pending = pending[:count], pending[count:]
+                    futures = [(product, domain, pool.submit(
+                        copy_context().run, calculate, product, paso, domain, valid_iso
+                    )) for product, domain in batch]
+                    for product, domain, future in futures:
+                        key = manifest_product_key(product, domain)
+                        try:
+                            future.result()
+                        except (EcmwfError, OSError) as exc:
+                            fallos += 1
+                            mark_error(manifiesto, key, valid_iso, str(exc))
+                            logger.warning("ECMWF %s %s %s: %s", product, domain, valid_iso, exc)
+                        else:
+                            mark_available(manifiesto, key, valid_iso)
+                            publicados += 1
+                    checkpoint()
 
     pendientes = sum(
         len(item["valid_times"]) - len(disponibles(clave))
@@ -932,6 +1028,7 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     disponibles_total = sum(len(disponibles(clave)) for clave in catalogo_total)
     total = sum(manifiesto["expected_totals"].values())
     manifiesto["status"] = "complete" if pendientes <= 0 else "publishing"
+    manifiesto["waiting_reason"] = "memory" if memory_deferred else None
     manifiesto["progress"] = {
         "frames_available": disponibles_total,
         "frames_total": total,
@@ -953,6 +1050,7 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
         "run": run_iso,
         "frames_published": publicados,
         "failures": fallos,
+        "waiting_reason": manifiesto["waiting_reason"],
         "status": manifiesto["status"],
         "progress": manifiesto["progress"],
     }

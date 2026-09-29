@@ -23,7 +23,7 @@
   // El mapa que se está viendo. La URL lo sigue para que se pueda compartir, y
   // la barra lo conserva al cambiar de idioma.
   let currentProduct = $state(entry.product);
-  function updateProduct(productId, label) {
+  function updateProduct(productId, label, model = '') {
     currentProduct = productId || '';
     const path = forecastPath(language, currentProduct);
     if (path !== window.location.pathname) {
@@ -33,8 +33,10 @@
         `${path}${window.location.search}${window.location.hash}`
       );
     }
+    // El mismo formato que entrega el servidor: mapa, modelo y marca. Con el
+    // título genérico delante, un mapa de ECMWF se anunciaba como AROME.
     document.title = label
-      ? `${label} · ${forecastText(language, 'pageTitle')}`
+      ? `${label} · ${model ? `${model} | ` : ''}MeteoLabX`
       : forecastText(language, 'pageTitle');
   }
   function readConnection() {

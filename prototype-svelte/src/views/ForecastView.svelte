@@ -16,7 +16,7 @@
   import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
   import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette, divergingPalette, thetaEPalette } from '../lib/palettes.js';
-  import { recordForecastMap } from '../lib/stats.js';
+  import { recordForecastMap, recordForecastModel } from '../lib/stats.js';
   import { forecastPath } from '../lib/forecast-route.js';
   import { fetchActiveStorms, fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, fetchThermalProfile, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
   import { exportarMapaPng } from '../lib/mapExport.js';
@@ -357,7 +357,7 @@
     frameError = '';
     selectedProduct = item.id;
     expandedCategory = item.category;
-    onProductChange(item.id, item.label);
+    onProductChange(item.id, item.label, model.short);
     // Solo lo que se elige a mano: el primer mapa que pone un cambio de
     // modelo no dice qué interesa a nadie.
     const original = productsForModel(selectedModel).find((entry) => entry.id === item.id);
@@ -376,6 +376,7 @@
     playing = false;
     unitMenuOpen = false;
     selectedModel = modelId;
+    recordForecastModel(modelId);
     selectedDomain = domainsForModel(modelId)[0]?.id || '';
     // Ni el producto ni el RUN ni la hora se pueden heredar: cada modelo
     // publica los suyos, y arrastrarlos dejaba el visor pidiendo un mapa que
@@ -385,7 +386,8 @@
     expandedCategory = first?.category || 'dynamics';
     onProductChange(
       first?.id || '',
-      localizedForecastProducts(first ? [first] : [], language)[0]?.label || ''
+      localizedForecastProducts(first ? [first] : [], language)[0]?.label || '',
+      forecastModels.find((item) => item.id === modelId)?.short || ''
     );
     selectedRun = '';
     hourIndex = 0;
@@ -546,6 +548,8 @@
   }
 
   onMount(() => {
+    // El modelo con el que se abre el visor también es una entrada.
+    recordForecastModel(selectedModel);
     // Las fronteras se piden a la vez que el catálogo, no cuando ya ha
     // llegado el primer frame: son las mismas para todas las horas y así
     // están listas antes de que haya un mapa que enmarcar.

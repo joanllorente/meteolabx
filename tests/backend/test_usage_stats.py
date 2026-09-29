@@ -770,3 +770,23 @@ def test_burst_purge_counts_first_and_only_deletes_the_pattern(tmp_path, monkeyp
     assert detail['visits']['total'] == 2
     assert detail['errors']['total'] == 1
     assert usage_stats.purge_visit_burst(**window)['visits'] == 0
+
+
+def test_forecast_summary_counts_model_entries_and_maps_per_model(tmp_path):
+    settings = _settings(tmp_path)
+    for _ in range(4):
+        usage_stats.record_forecast_model_view("ecmwf", settings=settings)
+    usage_stats.record_forecast_model_view("arome-ifs", settings=settings)
+    usage_stats.record_forecast_model_view("gfs", settings=settings)  # no existe
+    usage_stats.record_forecast_map_view("ecmwf", "q-vectors-700", settings=settings)
+    usage_stats.record_forecast_map_view("ecmwf", "ecmwf-jet-300", settings=settings)
+    usage_stats.record_forecast_map_view("ecmwf", "ecmwf-jet-300", settings=settings)
+    usage_stats.record_forecast_map_view("arome-ifs", "cape", settings=settings)
+
+    modelos = {row["model"]: row for row in usage_stats.forecast_map_summary(settings=settings)["models"]}
+
+    assert set(modelos) == {"arome", "arome-ifs", "ecmwf"}
+    assert (modelos["ecmwf"]["visits_d30"], modelos["ecmwf"]["maps_total"], modelos["ecmwf"]["distinct_maps"]) == (4, 3, 2)
+    assert (modelos["arome-ifs"]["visits_total"], modelos["arome-ifs"]["distinct_maps"]) == (1, 1)
+    # Un modelo sin nada aparece a cero, no desaparece del panel.
+    assert modelos["arome"]["visits_total"] == modelos["arome"]["maps_total"] == 0

@@ -23,7 +23,8 @@ test('cada mapa se sirve con sus metadatos y su guía en el HTML', () => {
     assert.ok(html.includes(`hreflang="${code}" href="${SITE}/${code}/forecast/ebwd"`));
   }
   assert.ok(html.includes(`hreflang="x-default" href="${SITE}/es/forecast/ebwd"`));
-  assert.ok(html.includes(`<h1>${product.labels.en}</h1>`));
+  assert.ok(html.includes(`<h1>${product.labels.en} · AROME</h1>`));
+  assert.ok(html.includes(`<title>${product.labels.en} · AROME | MeteoLabX</title>`));
   assert.ok(html.includes(product.guides.en.interpretation[0].slice(0, 40).replaceAll('&', '&amp;')));
   // Lo que traía el visor de serie no sobrevive: una sola descripción, un solo og:url.
   assert.equal(html.match(/name="description"/g).length, 1);
@@ -65,4 +66,11 @@ test('las descripciones caben en el resultado de búsqueda', () => {
     }
   }
   assert.equal(summarize('uno dos tres', 8), 'uno dos…');
+});
+
+test('los mapas homónimos de cada modelo no comparten título', () => {
+  const titles = data.products.map((product) => forecastPageContent('es', product).title);
+  assert.equal(new Set(titles).size, titles.length);
+  assert.match(forecastPageContent('es', forecastProduct('ecmwf-jet-300')).title, /· ECMWF \| MeteoLabX$/);
+  assert.ok(!forecastPageContent('es', forecastProduct('ecmwf-temperature-850')).title.includes('AROME'));
 });

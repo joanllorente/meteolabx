@@ -370,7 +370,7 @@ const allForecastProducts = [
   },
   {
     id: 'precip-type', category: 'precipitation', label: 'Tipo de precipitación', short: 'Tipo precip.', kind: 'native',
-    unit: 'clase', min: 0, max: 12, palette: 'ptype', accent: '#83a8ef', vectors: false,
+    unit: 'clase', min: 0, max: 12, palette: 'ptype', accent: '#83a8ef', vectors: false, cityLabels: true,
     description: 'Qué llegaría al suelo durante la hora seleccionada: lluvia, llovizna, nieve seca o húmeda, aguanieve, precipitación engelante, gránulos de hielo, nieve granulada o granizo.',
     method: 'Diagnóstico de tipo de precipitación que publica AROME para cada hora. Las variantes intermitentes y la nieve pegajosa se agrupan con su tipo principal.',
     coverage: 'PRECIPITATION TYPE · 60 min'

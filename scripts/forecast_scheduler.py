@@ -159,6 +159,8 @@ class Manifests:
         for manifest in worker.retained_manifests(store):
             if manifest.get("calculation_scope", "model") == scope:
                 manifest.setdefault("progress", {}).update(current_job=None, active_jobs=[])
+                # Las pasadas retenidas no vuelven a prepararse: se reparan al cargarlas.
+                worker._forget_missing_accumulated(store, manifest)
                 self.items[str(manifest["run"])] = manifest
 
     def merge(self, catalog):

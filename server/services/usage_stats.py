@@ -118,6 +118,16 @@ CREATE TABLE IF NOT EXISTS forecast_map_views (
 CREATE INDEX IF NOT EXISTS idx_forecast_map_views_product ON forecast_map_views(model, product);
 CREATE INDEX IF NOT EXISTS idx_forecast_map_views_epoch ON forecast_map_views(epoch);
 
+-- Entradas a cada modelo del visor: al abrirlo y al elegirlo en la barra, una
+-- vez por modelo y carga de página. Los mapas solo cuentan lo que se elige a
+-- mano, y sin esto no se sabía qué modelo mira la gente.
+CREATE TABLE IF NOT EXISTS forecast_model_views (
+    view_pk INTEGER PRIMARY KEY,
+    model TEXT NOT NULL,
+    epoch INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_forecast_model_views_model ON forecast_model_views(model, epoch);
+
 -- Instalación de la PWA. Una fila por evento, con el aparato en el que pasó:
 -- sistema, tipo de dispositivo, navegador y la forma de instalar que se le
 -- enseñó. Nada que identifique a la persona.
@@ -383,6 +393,18 @@ def record_forecast_map_view(
         )
 
 
+def record_forecast_model_view(model: str, *, settings=None) -> None:
+    """Registra que alguien ha entrado en un modelo del visor."""
+    model = str(model or "").strip().lower()
+    if model not in FORECAST_MODELS:
+        return
+    with _connect(settings) as connection:
+        connection.execute(
+            "INSERT INTO forecast_model_views(model, epoch) VALUES (?, ?)",
+            (model, int(time.time())),
+        )
+
+
 def forecast_map_summary(*, settings=None, now: Optional[int] = None) -> Dict[str, Any]:
     """Mapas de predicción más vistos, con las mismas ventanas que el resto."""
     now = int(now if now is not None else time.time())
@@ -418,6 +440,19 @@ def forecast_map_summary(*, settings=None, now: Optional[int] = None) -> Dict[st
             """,
             windows,
         ).fetchone()
+        visitas = connection.execute(
+            """
+            SELECT model,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d1,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d7,
+                   SUM(CASE WHEN epoch >= ? THEN 1 ELSE 0 END) AS d30,
+                   MAX(epoch) AS last_epoch
+            FROM forecast_model_views
+            GROUP BY model
+            """,
+            windows,
+        ).fetchall()
 
     maps = [
         {
@@ -445,8 +480,37 @@ def forecast_map_summary(*, settings=None, now: Optional[int] = None) -> Dict[st
         key=lambda row: (row["d30"], row["total"]),
         reverse=True,
     )
+    # Por modelo: cuántas veces se entra en él y cuántos mapas se abren dentro.
+    por_modelo: Dict[str, Dict[str, int]] = {
+        model: {"visits_d1": 0, "visits_d7": 0, "visits_d30": 0, "visits_total": 0,
+                "maps_d30": 0, "maps_total": 0, "distinct_maps": 0, "last_epoch": 0}
+        for model in FORECAST_MODELS
+    }
+    for row in visitas:
+        bucket = por_modelo.get(str(row["model"]))
+        if bucket is None:
+            continue
+        bucket.update(
+            visits_d1=int(row["d1"] or 0), visits_d7=int(row["d7"] or 0),
+            visits_d30=int(row["d30"] or 0), visits_total=int(row["total"] or 0),
+            last_epoch=max(bucket.get("last_epoch", 0), int(row["last_epoch"] or 0)),
+        )
+    for row in maps:
+        bucket = por_modelo.get(row["model"])
+        if bucket is None:
+            continue
+        bucket["maps_d30"] += row["d30"]
+        bucket["maps_total"] += row["total"]
+        bucket["distinct_maps"] += 1
+        bucket["last_epoch"] = max(bucket["last_epoch"], row["last_epoch"])
+    models = sorted(
+        ({"model": model, **valores} for model, valores in por_modelo.items()),
+        key=lambda row: (row["visits_d30"], row["maps_d30"], row["visits_total"]),
+        reverse=True,
+    )
     return {
         "maps": maps,
+        "models": models,
         "categories": categories,
         "totals": {
             "d1": int(totals["d1"] or 0),

@@ -297,7 +297,7 @@
     radiation: 'Radiación'
   };
   const nombreCategoria = (id) => CATEGORIAS_PREDICCION[id] || id || '—';
-  const MODELOS_PREDICCION = { arome: 'AROME', ecmwf: 'ECMWF' };
+  const MODELOS_PREDICCION = { arome: 'AROME', 'arome-ifs': 'AROME-IFS', ecmwf: 'ECMWF' };
 
   // Instalación de la app. Los identificadores son los de `platform.js`.
   const EVENTOS_PWA = {
@@ -328,6 +328,11 @@
   // Barra de cada fila, relativa al mapa más visto en 30 días.
   const maximoPrediccion = $derived(
     Math.max(1, ...(prediccion?.maps || []).map((fila) => fila.d30))
+  );
+  // Filtro de la tabla de mapas: todos, o solo los de un modelo.
+  let modeloPrediccion = $state('');
+  const mapasPrediccion = $derived(
+    (prediccion?.maps || []).filter((fila) => !modeloPrediccion || fila.model === modeloPrediccion)
   );
   let pestana = $state('uso');
 
@@ -555,8 +560,45 @@
         modelo no cuenta.
       </p>
 
+      {#if prediccion.models?.length}
+        <h2>Por modelo</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Modelo</th>
+              <th class="num">Entradas hoy</th><th class="num">7 d</th><th class="num">30 d</th><th class="num">Total</th>
+              <th class="num">Mapas 30 d</th><th class="num">Mapas total</th><th class="num">Mapas distintos</th><th>Último</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each prediccion.models as fila (fila.model)}
+              <tr>
+                <td>{MODELOS_PREDICCION[fila.model] || fila.model}</td>
+                <td class="n">{numero(fila.visits_d1)}</td>
+                <td class="n">{numero(fila.visits_d7)}</td>
+                <td class="n">{numero(fila.visits_d30)}</td>
+                <td class="n">{numero(fila.visits_total)}</td>
+                <td class="n">{numero(fila.maps_d30)}</td>
+                <td class="n">{numero(fila.maps_total)}</td>
+                <td class="n">{numero(fila.distinct_maps)}</td>
+                <td class="fecha">{fila.last_epoch ? fecha(fila.last_epoch) : '—'}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <p class="nota">
+          Una entrada es abrir el visor en ese modelo o elegirlo en la barra, una vez
+          por modelo y carga de página. Las entradas empezaron a contarse con la 2.2.0.
+        </p>
+      {/if}
+
       {#if prediccion.maps.length}
-        <h2>Mapas más vistos <small>({prediccion.maps.length})</small></h2>
+        <h2>Mapas más vistos <small>({mapasPrediccion.length})</small></h2>
+        <nav class="pestanas" aria-label="Filtrar por modelo">
+          {#each [['', 'Todos'], ...Object.entries(MODELOS_PREDICCION)] as [id, nombre] (id)}
+            <button type="button" class:activa={modeloPrediccion === id} onclick={() => (modeloPrediccion = id)}>{nombre}</button>
+          {/each}
+        </nav>
         <table>
           <thead>
             <tr>
@@ -566,7 +608,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each prediccion.maps as fila (`${fila.model}|${fila.product}`)}
+            {#each mapasPrediccion as fila (`${fila.model}|${fila.product}`)}
               <tr>
                 <td title={fila.product}>
                   {fila.label || fila.product}

@@ -476,3 +476,144 @@ def test_dominio_sin_calcular_hereda_el_catalogo_de_europa():
     assert _domain_view(manifiesto, "north-america")["catalog_products"] == {
         "ecmwf-temperature-850": {"valid_times": ["a"]}
     }
+
+
+def test_shared_fields_decode_once_and_preserve_crops(monkeypatch, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from contextvars import copy_context
+    import rasterio
+    from rasterio.transform import from_origin
+
+    path = tmp_path / 'global.tif'
+    values = np.arange(180 * 360, dtype='float64').reshape(180, 360)
+    with rasterio.open(path, 'w', driver='GTiff', width=360, height=180,
+                       count=1, dtype='float64', transform=from_origin(-180, 90, 1, 1)) as ds:
+        ds.write(values, 1)
+    bounds = [(-20.2, 30.1, 40.3, 75.4), (-179.9, -89.9, -80.2, -20.1)]
+    expected = [ecmwf_forecast._read_message_window(path, b) for b in bounds]
+    reads = []
+    reader = ecmwf_forecast._read_message_window
+    def read(*args):
+        reads.append(args)
+        return reader(*args)
+    monkeypatch.setattr(ecmwf_forecast, '_read_message_window', read)
+    monkeypatch.setattr(ecmwf_forecast, 'read_index', lambda *a: [{'param': 't'}])
+    monkeypatch.setattr(ecmwf_forecast, '_download_message', lambda *a: path)
+    monkeypatch.setattr(ecmwf_forecast, '_discard_message', lambda *a: None)
+    run = ecmwf_forecast.parse_run(RUN)
+    with ecmwf_forecast.shared_downloads(), ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(copy_context().run, ecmwf_forecast._field,
+                   run, 12, {'param': 't', 'offset': -273.15}, b) for b in bounds * 4]
+        for i, future in enumerate(futures):
+            result, extent = future.result()
+            np.testing.assert_array_equal(result, expected[i % 2][0] - 273.15)
+            assert extent == expected[i % 2][1]
+            result[:] = 0  # El consumidor no puede modificar la caché.
+    assert len(reads) == 1
+    assert ecmwf_forecast._shared_fields.get() is None
+
+
+def test_shared_fields_nested_sessions_restore_and_cleanup():
+    with ecmwf_forecast.shared_downloads() as outer:
+        with pytest.raises(RuntimeError):
+            with ecmwf_forecast.shared_downloads() as inner:
+                assert ecmwf_forecast._shared_fields.get() is inner
+                raise RuntimeError('abort')
+        assert ecmwf_forecast._shared_fields.get() is outer
+    assert ecmwf_forecast._shared_fields.get() is None
+
+
+@pytest.mark.parametrize('raw, expected', [('1', 1), ('8', 8), ('999', 8), ('0', 1), ('bad', 4)])
+def test_ecmwf_worker_limits(monkeypatch, raw, expected):
+    monkeypatch.setenv('METEOLABX_ECMWF_WORKERS', raw)
+    assert ecmwf_forecast.calculation_workers() == expected
+
+
+def test_cycle_runs_parallel_and_checkpoints_completed_batch(monkeypatch):
+    import threading
+    run = ecmwf_forecast.parse_run(RUN)
+    product = 'ecmwf-temperature-500'
+    monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+        'products': {product: {'valid_times': [VALID]}}
+    })
+    monkeypatch.setattr(ecmwf_forecast, 'read_json', lambda *a: None)
+    monkeypatch.setenv('METEOLABX_ECMWF_WORKERS', '3')
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda count, cached: count)
+    barrier = threading.Barrier(3)
+    def frame(*args):
+        barrier.wait(timeout=5)
+        return _frame_bytes(), {}
+    monkeypatch.setattr(ecmwf_forecast, 'frame_payload', frame)
+    snapshots = []
+    monkeypatch.setattr(ecmwf_forecast, 'write_json', lambda store, key, value:
+                        snapshots.append(json.loads(json.dumps(value))))
+    monkeypatch.setattr(ecmwf_forecast, 'register_run_slot', lambda *a: None)
+    monkeypatch.setattr(ecmwf_forecast, 'prune_retained_runs', lambda *a, **k: None)
+    result = ecmwf_forecast.run_cycle(max_frames=3)
+    assert result['frames_published'] == 3
+    assert snapshots[0]['progress']['frames_available'] == 0
+    assert snapshots[2]['progress']['frames_available'] == 3
+
+
+@pytest.mark.parametrize('used, cached, expected', [
+    (0, 0, 4), (2, 0, 2), (3, 0, 0), (3, 0.25, 1), (5, 0, 0),
+])
+def test_memory_capacity_reserves_whole_batch(monkeypatch, used, cached, expected):
+    from server.services import forecast_memory
+    gb = 1024**3
+    for key in ('WORKER_MEMORY_GB', 'MEMORY_RESERVE_GB', 'CACHE_MEMORY_GB'):
+        monkeypatch.delenv('METEOLABX_ECMWF_' + key, raising=False)
+    monkeypatch.setattr(forecast_memory, 'cgroup_memory', lambda *_: (used * gb, 4 * gb))
+    assert ecmwf_forecast.memory_worker_capacity(4, int(cached * gb)) == expected
+
+
+def test_unmeasured_memory_limits_ecmwf_to_one_worker(monkeypatch):
+    from server.services import forecast_memory
+    monkeypatch.setattr(forecast_memory, 'cgroup_memory', lambda *_: None)
+    assert ecmwf_forecast.memory_worker_capacity(8) == 1
+
+
+def test_cycle_defers_without_errors_and_resumes_when_memory_returns(monkeypatch):
+    product = 'ecmwf-temperature-500'
+    run = ecmwf_forecast.parse_run(RUN)
+    monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+        'products': {product: {'valid_times': [VALID]}}
+    })
+    capacities = iter([1, 0])
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda *a: next(capacities))
+    calls = []
+    def frame(*args):
+        calls.append(args[-1])
+        return _frame_bytes(), {}
+    monkeypatch.setattr(ecmwf_forecast, 'frame_payload', frame)
+    result = ecmwf_forecast.run_cycle()
+    assert result['frames_published'] == 1
+    assert result['waiting_reason'] == 'memory'
+    assert result['failures'] == 0
+    assert ecmwf_forecast._shared_fields.get() is None
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda count, cached: count)
+    resumed = ecmwf_forecast.run_cycle()
+    assert resumed['frames_published'] == len(ecmwf_forecast.DOMAINS) - 1
+    assert resumed['waiting_reason'] is None
+    assert len(calls) == len(set(calls))
+
+
+@pytest.mark.parametrize('stat, expected_used', [('anon 100\nfile 600\n', 100), (None, 700)])
+def test_shared_memory_reader_uses_declared_limit_and_anonymous_memory(tmp_path, stat, expected_used):
+    from server.services.forecast_memory import cgroup_memory
+    (tmp_path / 'memory.current').write_text('700')
+    (tmp_path / 'memory.max').write_text('max')
+    if stat:
+        (tmp_path / 'memory.stat').write_text(stat)
+    measurement = cgroup_memory(1000, path_factory=lambda p: tmp_path / p.rsplit('/', 1)[-1])
+    assert measurement == (expected_used, 1000)
+
+
+@pytest.mark.parametrize('raw', ['nan', 'inf', '-1', 'invalid', '0'])
+def test_memory_settings_reject_invalid_reservations(monkeypatch, raw):
+    monkeypatch.setenv('METEOLABX_ECMWF_WORKER_MEMORY_GB', raw)
+    assert ecmwf_forecast._memory_gb('METEOLABX_ECMWF_WORKER_MEMORY_GB', 0.5) == 512 * 1024**2

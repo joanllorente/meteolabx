@@ -646,6 +646,11 @@ def test_renovar_el_catalogo_no_devuelve_a_publicando_una_pasada_hecha(monkeypat
     for producto in trabajador.PERSISTED_FORECAST_PRODUCTS:
         primera = trabajador._first_available_hour(producto)
         existente["products"][producto] = {"available_times": horas[primera:], "errors": {}}
+    # Publicada de verdad: el acumulado tiene su mapa detrás, que es lo que se
+    # comprueba al preparar el manifiesto.
+    from server.services.forecast_store import frame_key, write_grid
+    for hora in existente["products"]["accumulated-precip"]["available_times"]:
+        write_grid(store, frame_key(run, "accumulated-precip", hora), b"frame")
     monkeypatch.setattr(trabajador, "_latest_persisted_run", lambda catalog: run)
 
     devuelto = trabajador._prepare_latest_manifest(

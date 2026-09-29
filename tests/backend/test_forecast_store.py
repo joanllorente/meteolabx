@@ -1838,3 +1838,47 @@ def test_the_lfc_map_keeps_the_surface_wind_where_there_is_no_free_convection(mo
     componente = _matriz_de(contenido, "u")
     assert np.isfinite(componente[2:6, 3:7]).all(), "el viento se ha ido con el hueco del campo"
     assert np.abs(componente[2:6, 3:7] - 4.0).max() < 0.05
+
+
+def test_accumulation_fails_when_the_series_stops_short(monkeypatch, tmp_path):
+    """Horas que la serie no llegó a escribir no pueden darse por publicadas.
+
+    El catálogo del momento solo anunciaba hasta la H+18 y la serie se paraba
+    ahí sin avisar: el trabajo acababa bien y el manifiesto marcaba hasta la
+    H+27, que el visor luego no encontraba.
+    """
+    store = LocalObjectStore(tmp_path)
+    horas = ("2026-08-24T13:00:00Z", "2026-08-24T14:00:00Z", "2026-08-24T15:00:00Z")
+
+    def serie_corta(_token, pendientes, **_kwargs):
+        # Solo la primera: el resto «aún no estaba en el catálogo».
+        yield pendientes[0], b"frame", {}
+
+    monkeypatch.setattr(forecast_worker, "accumulated_precip_series", serie_corta)
+    job = forecast_worker.ForecastJob(
+        run=RUN, valid_time=horas[-1], products=("accumulated-precip",),
+        scope="model", tier=1, valid_times=horas,
+    )
+    with pytest.raises(RuntimeError, match="2 horas"):
+        forecast_worker._store_accumulated_precip_series("token", store, job)
+    # Lo que sí se calculó queda, y el reintento solo pedirá lo que falta.
+    assert store.exists(frame_key(RUN, "accumulated-precip", horas[0]))
+    assert not store.exists(frame_key(RUN, "accumulated-precip", horas[1]))
+
+
+def test_published_accumulation_hours_without_map_are_recomputed(tmp_path):
+    store = LocalObjectStore(tmp_path)
+    horas = ["2026-08-24T13:00:00Z", "2026-08-24T14:00:00Z", "2026-08-24T15:00:00Z"]
+    manifest = new_manifest(RUN, horas, catalog_products={
+        "accumulated-precip": {"run": RUN, "valid_times": horas},
+    })
+    for hora in horas:
+        mark_available(manifest, "accumulated-precip", hora)
+    write_grid(store, frame_key(RUN, "accumulated-precip", horas[0]), b"frame")
+
+    assert forecast_worker._forget_missing_accumulated(store, manifest) == 2
+    assert manifest["products"]["accumulated-precip"]["available_times"] == [horas[0]]
+    # Y vuelven a la cola.
+    trabajos = forecast_worker._jobs_for_manifest(manifest)
+    cubiertas = {hora for job in trabajos if "accumulated-precip" in job.products for hora in job.covered_times}
+    assert set(horas[1:]) <= cubiertas

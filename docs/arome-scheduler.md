@@ -61,3 +61,37 @@ exacto: puede perder picos entre muestras. Comparar esos valores con el pico de
 memoria anónima del cgroup y varios RUN antes de ajustar la reserva o los hilos.
 El resumen del planificador cada 30 s muestra activos, pendientes y si hay una
 consulta al catálogo en curso; no mide por sí solo segundos de CPU desperdiciados.
+
+### Concurrencia ECMWF
+
+ECMWF usa su propio pool de 4 workers, independiente de `--workers` de
+AROME. `METEOLABX_ECMWF_WORKERS=1..8` permite ajustarlo; reiniciar el scheduler
+para aplicar cambios. Empezar por 4; probar 6 u 8 si hay CPU y memoria libres
+y no aumentan los HTTP 429/503. Subir los workers de AROME no acelera ECMWF.
+
+Cada plazo comparte los campos globales ya decodificados entre todos los
+productos y dominios. Se descargan y decodifican una sola vez por campo y
+plazo, conservando resolución, unidades y halos de los diagnósticos. La caché
+se libera al terminar el plazo. Un campo global float64 ocupa unos 8 MiB;
+a ello se suman los arrays temporales de cada worker. El progreso y los
+frames completados se guardan después de cada lote (hasta 4 frames por
+defecto), de modo que una interrupción permite retomar los lotes guardados.
+
+La admisión de ECMWF es dinámica: los workers configurados son un máximo.
+Antes de cada lote se consulta la misma lectura de memoria del contenedor
+que AROME (anónima en cgroup v2, total como alternativa conservadora), con
+`METEOLABX_FORECAST_MEMORY_LIMIT_GB` como límite cuando el cgroup dice `max`.
+Se descuenta el consumo actual de todo el contenedor, se deja margen y se
+reserva memoria para todos los mapas del lote antes de lanzarlos:
+
+- `METEOLABX_ECMWF_WORKER_MEMORY_GB`: 0.5 GiB por mapa simultáneo.
+- `METEOLABX_ECMWF_MEMORY_RESERVE_GB`: 0.5 GiB de margen libre.
+- `METEOLABX_ECMWF_CACHE_MEMORY_GB`: 0.25 GiB para la caché compartida por plazo;
+  se reserva solo lo que todavía no se ha cargado.
+
+Son estimaciones iniciales configurables, pendientes de medir los picos en
+producción. Si no cabe ningún mapa, se guarda `waiting_reason: "memory"`,
+se libera la caché y el scheduler reintenta en su siguiente ciclo sin marcar
+los mapas como errores. Si no se puede leer la memoria o su límite, se avisa
+y se usa un único worker. La admisión se revisa entre lotes; no interrumpe
+cálculos activos ni garantiza evitar OOM si otros trabajos crecen entretanto.

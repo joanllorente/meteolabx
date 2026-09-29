@@ -16,6 +16,23 @@ function statsExcluded() {
   }
 }
 
+// Una vez por modelo y carga de página, al abrir el visor y al elegirlo en la
+// barra: saltar de AROME a ECMWF y volver cuenta una entrada en cada uno.
+const seenModels = new Set();
+
+/** Cuenta la entrada en un modelo del visor. */
+export function recordForecastModel(model) {
+  if (!model || typeof fetch !== 'function' || seenModels.has(model)) return;
+  seenModels.add(model);
+  if (statsExcluded()) return;
+  fetch('/v1/stats/forecast-model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model }),
+    keepalive: true
+  }).catch(() => {});
+}
+
 // Una vez por mapa y carga de página: quien vuelve tres veces a la CAPE
 // mientras compara con la cizalladura ha visto un mapa, no tres.
 const seen = new Set();

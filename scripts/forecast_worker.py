@@ -428,6 +428,7 @@ def _prepare_latest_manifest(
             catalog_products=catalog_products,
         )
     else:
+        _forget_missing_accumulated(store, manifest)
         stored = manifest.get("catalog_products") or {}
         manifest["catalog_products"] = _merge_catalog_products(stored, catalog_products)
         manifest["expected_times"] = sorted(
@@ -678,6 +679,48 @@ def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> Non
             ),
             content,
         )
+    # La serie llega hasta la última hora que anuncia el catálogo en ese
+    # momento, y callaba las demás: el trabajo acababa bien y todas sus horas
+    # se daban por publicadas sin fichero detrás. El visor respondía 425 en
+    # tramos enteros de una pasada «completa». Mejor fallar: el reintento solo
+    # calcula lo que falte, porque arriba se mira qué hay ya en disco.
+    sin_fichero = [
+        valid_time for valid_time in pending
+        if not store.exists(
+            frame_key(job.run, ACCUMULATED_PRECIP_PRODUCT, valid_time, scope=job.scope)
+        )
+    ]
+    if sin_fichero:
+        raise RuntimeError(
+            f"El acumulado no llegó a {len(sin_fichero)} horas (la primera, "
+            f"{sin_fichero[0]}): el catálogo aún no las anunciaba."
+        )
+
+
+def _forget_missing_accumulated(store, manifest: dict[str, Any]) -> int:
+    """Quita del acumulado las horas dadas por publicadas que no tienen mapa.
+
+    Repara las pasadas escritas antes de que el guardado comprobara lo que
+    escribe: sin esto, esas horas no volvían a calcularse nunca. Son como mucho
+    52 consultas al volumen por pasada.
+    """
+    state = (manifest.get("products") or {}).get(ACCUMULATED_PRECIP_PRODUCT)
+    if not state or not state.get("available_times"):
+        return 0
+    scope = str(manifest.get("calculation_scope", "model"))
+    run_iso = str(manifest["run"])
+    presentes = [
+        valid_time for valid_time in state["available_times"]
+        if store.exists(frame_key(run_iso, ACCUMULATED_PRECIP_PRODUCT, valid_time, scope=scope))
+    ]
+    perdidas = len(state["available_times"]) - len(presentes)
+    if perdidas:
+        state["available_times"] = presentes
+        logger.warning(
+            "RUN %s: %d horas del acumulado estaban dadas por publicadas sin mapa; "
+            "se vuelven a calcular.", run_iso, perdidas,
+        )
+    return perdidas
 
 
 # Bloques GRIB que se adelantan mientras el resto trabaja. Una pasada de 52
@@ -1687,29 +1730,14 @@ def _cgroup_memory() -> tuple[int, int] | None:
     configurado a mano. Sin ninguno de los dos no se puede frenar nada, y se
     devuelve None avisando una sola vez.
     """
-    candidates = (
-        (Path("/sys/fs/cgroup/memory.current"), Path("/sys/fs/cgroup/memory.max")),
-        (
-            Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
-            Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
-        ),
+    from server.services.forecast_memory import cgroup_memory
+
+    measurement = cgroup_memory(
+        DECLARED_MEMORY_LIMIT_B, path_factory=Path,
+        anonymous_reader=_cgroup_anonymous_bytes,
     )
-    for current_path, limit_path in candidates:
-        try:
-            current = int(current_path.read_text().strip())
-            raw_limit = limit_path.read_text().strip()
-            if raw_limit == "max":
-                limit = DECLARED_MEMORY_LIMIT_B
-            else:
-                limit = int(raw_limit)
-            if limit <= 0:
-                continue
-            # La anónima cuando se puede leer; si no, el total, que es lo que
-            # había antes y peca de conservador.
-            anonima = _cgroup_anonymous_bytes()
-            return (anonima if anonima is not None else current), limit
-        except (FileNotFoundError, OSError, ValueError):
-            continue
+    if measurement is not None:
+        return measurement
     _warn_memory_is_unbounded()
     return None
 

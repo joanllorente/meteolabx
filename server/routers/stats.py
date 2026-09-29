@@ -113,6 +113,10 @@ class ForecastMapViewRequest(BaseModel):
     category: str = Field(default="", max_length=60)
 
 
+class ForecastModelViewRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=20)
+
+
 class SectionVisitRequest(BaseModel):
     section: Literal[
         "observation",
@@ -219,6 +223,21 @@ def post_forecast_map_view(
         )
     except Exception:
         logger.warning("stats: no se pudo registrar el mapa de predicción", exc_info=True)
+    return Response(status_code=204)
+
+
+@router.post("/forecast-model", status_code=204, summary="Registrar la entrada a un modelo de predicción")
+def post_forecast_model_view(
+    body: ForecastModelViewRequest, request: Request, settings: Settings = Depends(get_settings)
+) -> Response:
+    from server.services import usage_stats
+
+    if _is_crawler(request):
+        return Response(status_code=204)
+    try:
+        usage_stats.record_forecast_model_view(body.model, settings=settings)
+    except Exception:
+        logger.warning("stats: no se pudo registrar el modelo de predicción", exc_info=True)
     return Response(status_code=204)
 
 
