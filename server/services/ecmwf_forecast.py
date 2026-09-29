@@ -53,6 +53,7 @@ from server.services.forecast_store import (
     prune_retained_runs,
     read_json,
     register_run_slot,
+    retained_manifests,
     run_manifest_key,
     write_grid,
     write_json,
@@ -263,6 +264,23 @@ def grib_url(run: datetime, step: int) -> str:
     return f"{_file_base(run, step)}.grib2"
 
 
+_http_local = threading.local()
+
+
+def _http() -> requests.Session:
+    """Una sesión por hilo, que reutiliza la conexión con data.ecmwf.int.
+
+    Un plazo son ~19 peticiones de medio mega, y abrir TCP y TLS en cada una
+    costaba más que la transferencia: medido, 43 s en serie con conexiones
+    nuevas y 17 s reutilizándolas. `requests.Session` no es segura entre
+    hilos, así que cada uno tiene la suya.
+    """
+    sesion = getattr(_http_local, "session", None)
+    if sesion is None:
+        sesion = _http_local.session = requests.Session()
+    return sesion
+
+
 def _timeout() -> tuple[float, float]:
     return (10.0, float(os.getenv("METEOLABX_ECMWF_TIMEOUT_S", "120")))
 
@@ -281,7 +299,7 @@ def _read_index_cached(run_iso: str, step: int) -> list[dict[str, Any]]:
     run = datetime.fromisoformat(run_iso)
     url = index_url(run, step)
     try:
-        respuesta = requests.get(url, timeout=_timeout())
+        respuesta = _http().get(url, timeout=_timeout())
     except requests.RequestException as exc:
         raise EcmwfError(f"No se pudo leer el índice de +{step} h: {exc}") from exc
     if respuesta.status_code != 200:
@@ -330,7 +348,7 @@ def _download_message(run: datetime, step: int, mensaje: dict[str, Any]) -> Path
     esperas = RATE_LIMIT_BACKOFF_S
     for intento in range(len(esperas) + 1):
         try:
-            with requests.get(
+            with _http().get(
                 url,
                 headers={"Range": f"bytes={inicio}-{fin}"},
                 timeout=_timeout(),
@@ -401,7 +419,8 @@ class shared_downloads:
         self.fields.clear()
         return False
 
-    def read(self, key, run, step, selector, bounds):
+    def load(self, key, run, step, selector):
+        """Campo global de la caché; lo baja si nadie lo ha hecho todavía."""
         with self.guard:
             lock = self.locks.setdefault(key, threading.Lock())
         with lock:
@@ -412,7 +431,29 @@ class shared_downloads:
                     self.fields[key] = _read_message_window(path, None)
                 finally:
                     _discard_message(path)
-            values, extent = self.fields[key]
+            return self.fields[key]
+
+    def prefetch(self, pool, run, campos):
+        """Baja a la vez todos los mensajes que el plazo va a pedir.
+
+        Sin esto, cada mapa descargaba sus campos uno detrás de otro y los
+        demás hilos esperaban en el bloqueo del mismo campo: en producción,
+        un plazo eran ~60 s de descargas en fila y 2 s de cálculo. En paralelo
+        son ~12 s. Un fallo aquí no se anota: el mapa que necesite ese campo
+        lo vuelve a pedir y es él quien registra el error.
+        """
+        futuros = [
+            pool.submit(self.load, _field_key(run, paso, selector), run, paso, selector)
+            for paso, selector in campos
+        ]
+        for futuro in futuros:
+            try:
+                futuro.result()
+            except Exception as exc:  # noqa: BLE001 — el mapa lo reintenta y lo anota.
+                logger.debug("ECMWF: precarga fallida, el mapa lo reintentará: %s", exc)
+
+    def read(self, key, run, step, selector, bounds):
+        values, extent = self.load(key, run, step, selector)
         height, width = values.shape
         transform = rasterio.transform.from_bounds(*extent, width, height)
         window = from_bounds(*bounds, transform=transform).round_offsets().round_lengths()
@@ -473,13 +514,17 @@ def _discard_message(ruta: Path) -> None:
         pass
 
 
-def _field(
-    run: datetime, step: int, selector: dict[str, Any], bounds
-) -> tuple[np.ndarray, tuple[float, float, float, float]]:
-    clave = (
+def _field_key(run: datetime, step: int, selector: dict[str, Any]) -> tuple:
+    return (
         run.astimezone(timezone.utc).isoformat(), int(step),
         str(selector.get("param")), str(selector.get("levtype")), str(selector.get("levelist", "")),
     )
+
+
+def _field(
+    run: datetime, step: int, selector: dict[str, Any], bounds
+) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    clave = _field_key(run, step, selector)
     session = _shared_fields.get()
     if session is not None:
         datos, reales = session.read(clave, run, step, selector, bounds)
@@ -683,6 +728,47 @@ def _diagnostic_fields(product_id, run, step, bounds):
             None if overlay is None else overlay[crop])
 
 
+def required_fields(product_id: str, step: int) -> list[tuple[int, dict[str, Any]]]:
+    """Mensajes (plazo, selector) que `frame_payload` leerá para ese mapa.
+
+    Solo sirve para precargarlos en paralelo: si esta lista se queda corta,
+    el mapa baja lo que falte por su cuenta y sale igual, solo que más lento.
+    Un test comprueba que coincide con lo que cada mapa pide de verdad.
+    """
+    config = PRODUCTS[product_id]
+    kind = config.get("kind")
+
+    def pl(param, level):
+        return {"param": param, "levtype": "pl", "levelist": str(level)}
+
+    presion = {"param": "sp", "levtype": "sfc"}
+    if kind == "precip_accum":
+        horas = int(config["hours"])
+        if step < horas:
+            return []
+        tp = {"param": "tp", "levtype": "sfc"}
+        return [(step, tp), (step - horas, tp), (step, config["overlay"])]
+    if kind == "wind":
+        return [(step, pl(param, config["pressure"])) for param in ("u", "v")]
+    if kind == "frontogenesis":
+        return [(step, pl(param, config["pressure"])) for param in ("t", "u", "v")] + [(step, presion)]
+    if kind == "eady":
+        return [(step, pl(param, nivel)) for param in ("u", "v", "gh", "t") for nivel in (850, 500)] + [
+            (step, presion)]
+    if kind == "omega":
+        return [(step, pl("w", config["pressure"])), (step, presion), (step, config["overlay"])]
+    if kind == "theta_e":
+        return [(step, pl(param, config["level"])) for param in ("t", "q")] + [
+            (step, presion), (step, config["overlay"])]
+    if "level" in config:
+        nivel = config["level"]
+        return [(step, pl("vo" if nivel == 500 else "t", nivel)), (step, pl("gh", nivel)), (step, presion)]
+    campos = [(step, config["value"]), (step, config["overlay"])]
+    if config.get("mask_below_hpa"):
+        campos.append((step, presion))
+    return campos
+
+
 def frame_payload(
     product_id: str, run: datetime, step: int, domain: str = DEFAULT_DOMAIN_ID
 ) -> tuple[bytes, dict[str, str]]:
@@ -788,22 +874,29 @@ def step_of(run: datetime, valid_iso: str) -> int:
 
 def _index_exists(run: datetime, step: int) -> bool:
     try:
-        respuesta = requests.head(index_url(run, step), timeout=_timeout())
+        respuesta = _http().head(index_url(run, step), timeout=_timeout())
     except requests.RequestException:
         return False
     return respuesta.status_code == 200
 
 
-def available_steps(run: datetime) -> tuple[int, ...]:
+def available_steps(run: datetime, known: Iterable[int] = ()) -> tuple[int, ...]:
     """Plazos ya publicados de esa pasada, comprobados en paralelo.
 
-    Son 49 peticiones HEAD de nada, y evitan anunciar en el visor horas que
-    todavía no existen —que es lo que convierte un mapa vacío en un error.
+    Son hasta 49 peticiones HEAD de nada, y evitan anunciar en el visor horas
+    que todavía no existen —que es lo que convierte un mapa vacío en un error.
+    Los plazos de ``known`` ya se vieron publicados y no desaparecen: no se
+    vuelven a preguntar. Repetirlas cada minuto, con la pasada ya completa,
+    era lo que acababa en 429 del servidor de datos abiertos.
     """
     pasos = candidate_steps()
-    with ThreadPoolExecutor(max_workers=8, thread_name_prefix="ecmwf-head") as pool:
-        presentes = list(pool.map(lambda paso: _index_exists(run, paso), pasos))
-    return tuple(paso for paso, existe in zip(pasos, presentes) if existe)
+    conocidos = set(known) & set(pasos)
+    dudosos = [paso for paso in pasos if paso not in conocidos]
+    if dudosos:
+        with ThreadPoolExecutor(max_workers=8, thread_name_prefix="ecmwf-head") as pool:
+            presentes = list(pool.map(lambda paso: _index_exists(run, paso), dudosos))
+        conocidos |= {paso for paso, existe in zip(dudosos, presentes) if existe}
+    return tuple(paso for paso in pasos if paso in conocidos)
 
 
 def candidate_runs(ahora: datetime | None = None) -> list[datetime]:
@@ -832,10 +925,12 @@ def frame_scope(domain: str = DEFAULT_DOMAIN_ID) -> str:
     return "model" if domain == DEFAULT_DOMAIN_ID else domain
 
 
-def catalog_payload(run: datetime | None = None, domain: str = DEFAULT_DOMAIN_ID) -> dict[str, Any]:
+def catalog_payload(
+    run: datetime | None = None, domain: str = DEFAULT_DOMAIN_ID, known_steps: Iterable[int] = ()
+) -> dict[str, Any]:
     """Catálogo con la misma forma que el de AROME, para el mismo visor."""
     pasada = run or latest_run()
-    pasos = available_steps(pasada)
+    pasos = available_steps(pasada, known_steps)
     run_iso = pasada.isoformat().replace("+00:00", "Z")
     oeste, sur, este, norte = domain_bounds(domain)
     return {
@@ -899,6 +994,34 @@ def domain_boundaries(domain: str = DEFAULT_DOMAIN_ID) -> list[dict[str, Any]]:
     )
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def emit_run_report(store, manifest: dict[str, Any]) -> bool:
+    """Guarda el informe de la pasada y manda el correo, como en AROME.
+
+    ECMWF va fuera del worker de AROME y nunca pasaba por el suyo: sus pasadas
+    terminaban sin informe ni correo. Devuelve si llegó a escribirse, para no
+    repetirlo en cada ciclo.
+    """
+    try:
+        from server.services.alerts import send as send_alert
+        from server.services.run_report import alert_for_report, build_report, save_report
+
+        report = build_report(manifest, previous=retained_manifests(store, model=FORECAST_MODEL))
+        save_report(store, report)
+        aviso = alert_for_report(report)
+        if aviso is not None:
+            send_alert(aviso, store=store)
+        return True
+    except Exception:
+        # El informe cuenta cómo fue el trabajo; si falla, la pasada ya está
+        # publicada y eso es lo que importa.
+        logger.warning("ECMWF: no se pudo emitir el informe de la pasada", exc_info=True)
+        return False
+
+
 def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     """Publica los frames de ECMWF que falten de la pasada más reciente.
 
@@ -908,9 +1031,38 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     un fallo de ECMWF podía retrasar un diagnóstico.
     """
     store = get_forecast_store()
-    run = latest_run()
+    # La pasada nunca retrocede de la que el visor ya tiene publicada. Cuando
+    # el servidor contesta 429 a los HEAD, `latest_run` caía a una anterior:
+    # el 29/09 a las 13:34 recalculó la del día 28 a las 12Z y la dejó como la
+    # más reciente del visor.
+    publicada = (read_json(store, latest_manifest_key(FORECAST_MODEL)) or {}).get("run")
+    try:
+        run = latest_run()
+    except EcmwfError:
+        if not publicada:
+            raise
+        run = parse_run(publicada)
+    if publicada and run < parse_run(publicada):
+        logger.info("ECMWF: la comprobación ha fallado para la pasada %s; se sigue con ella.", publicada)
+        run = parse_run(publicada)
     run_iso = run.isoformat().replace("+00:00", "Z")
-    catalogo = catalog_payload(run)
+    manifiesto = read_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL))
+    conocidos = set()
+    for item in ((manifiesto or {}).get("catalog_products") or {}).values():
+        for valid_iso in item.get("valid_times") or ():
+            try:
+                conocidos.add(step_of(run, valid_iso))
+            except (EcmwfError, ValueError):
+                continue
+    catalogo = catalog_payload(run, known_steps=conocidos)
+    # Un plazo publicado no desaparece, pero cada ciclo los vuelve a comprobar
+    # con 49 HEAD y alguno falla (429, timeouts). Sustituir el catálogo por esa
+    # respuesta le quitaba horas a una pasada ya calculada: el visor dejaba de
+    # ofrecerlas y los mapas bajaban del 100 %.
+    anteriores = (manifiesto or {}).get("catalog_products") or {}
+    for product_id, item in catalogo["products"].items():
+        previas = (anteriores.get(product_id) or {}).get("valid_times") or ()
+        item["valid_times"] = sorted(set(item["valid_times"]) | set(previas))
     # Mismas horas en todos los dominios: el catálogo de cada uno es el
     # europeo con su clave. Así el manifiesto sigue siendo uno por pasada.
     catalogo_total = {
@@ -918,7 +1070,6 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
         for domain in DOMAINS
         for product_id, item in catalogo["products"].items()
     }
-    manifiesto = read_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL))
     if not manifiesto:
         manifiesto = new_manifest(
             run_iso,
@@ -949,6 +1100,22 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     def disponibles(clave: str) -> set[str]:
         return set((manifiesto.get("products", {}).get(clave) or {}).get("available_times", ()))
 
+    # Horas que cada mapa tendrá al acabar la pasada, publicadas o no. El
+    # estado y el progreso se miden contra ellas: contra las que ECMWF lleva
+    # publicadas, una pasada a medias —o una comprobación con HEAD fallidos—
+    # quedaba «complete».
+    horas_finales = {
+        manifest_product_key(product_id, domain): {
+            (run + timedelta(hours=paso)).isoformat().replace("+00:00", "Z")
+            for paso in product_steps(product_id, candidate_steps())
+        }
+        for domain in DOMAINS
+        for product_id in PRODUCTS
+    }
+
+    def publicados_finales() -> int:
+        return sum(len(disponibles(clave) & horas) for clave, horas in horas_finales.items())
+
     # Plazo a plazo y, dentro de cada plazo, todos los mapas y dominios: así
     # cada mensaje GRIB se descarga una vez y sirve para todo lo que lo usa.
     pasos = sorted({
@@ -960,7 +1127,7 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     fallos = 0
     memory_deferred = False
     def checkpoint():
-        available = sum(len(disponibles(key)) for key in catalogo_total)
+        available = publicados_finales()
         total = sum(manifiesto["expected_totals"].values())
         manifiesto["status"] = "publishing"
         manifiesto["progress"] = {
@@ -980,6 +1147,11 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
 
     workers = calculation_workers()
     checkpoint()
+    # La pasada entra en la lista del visor desde el primer frame, como en
+    # AROME. Registrarla solo al final del ciclo dejaba en cabeza la anterior,
+    # ya terminada, y con ciclos largos el visor decía «Completa» mientras
+    # calculaba la nueva.
+    register_run_slot(store, manifiesto)
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="ecmwf-frame") as pool:
         for paso in pasos:
             if memory_deferred or (max_frames and publicados >= max_frames):
@@ -995,6 +1167,12 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
             # Batches acotados: respetar max_frames incluso con errores y no
             # acumular payloads ni tareas de todos los plazos en memoria.
             with shared_downloads() as shared:
+                if pending:
+                    shared.prefetch(pool, run, list({
+                        _field_key(run, paso_campo, selector): (paso_campo, selector)
+                        for product in {product for product, _ in pending}
+                        for paso_campo, selector in required_fields(product, paso)
+                    }.values()))
                 while pending and (not max_frames or publicados < max_frames):
                     count = min(workers, max_frames - publicados) if max_frames else workers
                     cached_bytes = sum(values.nbytes for values, _ in shared.fields.values())
@@ -1005,6 +1183,9 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
                                     "y se reintentará en el siguiente ciclo.")
                         break
                     batch, pending = pending[:count], pending[count:]
+                    tramo = manifiesto.setdefault("tier_timing", {}).setdefault("0", {"jobs": 0})
+                    tramo.setdefault("first_start", _now_iso())
+                    tramo["last_start"] = _now_iso()
                     futures = [(product, domain, pool.submit(
                         copy_context().run, calculate, product, paso, domain, valid_iso
                     )) for product, domain in batch]
@@ -1019,15 +1200,13 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
                         else:
                             mark_available(manifiesto, key, valid_iso)
                             publicados += 1
+                    tramo["jobs"] = int(tramo.get("jobs", 0)) + len(batch)
+                    tramo["last_end"] = _now_iso()
                     checkpoint()
 
-    pendientes = sum(
-        len(item["valid_times"]) - len(disponibles(clave))
-        for clave, item in catalogo_total.items()
-    )
-    disponibles_total = sum(len(disponibles(clave)) for clave in catalogo_total)
+    disponibles_total = publicados_finales()
     total = sum(manifiesto["expected_totals"].values())
-    manifiesto["status"] = "complete" if pendientes <= 0 else "publishing"
+    manifiesto["status"] = "complete" if total and disponibles_total >= total else "publishing"
     manifiesto["waiting_reason"] = "memory" if memory_deferred else None
     manifiesto["progress"] = {
         "frames_available": disponibles_total,
@@ -1041,6 +1220,8 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     manifiesto["worker_heartbeat_at"] = (
         datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     )
+    if manifiesto["status"] == "complete" and not manifiesto.get("report_emitted"):
+        manifiesto["report_emitted"] = emit_run_report(store, manifiesto)
     write_json(store, run_manifest_key(run_iso, model=FORECAST_MODEL), manifiesto)
     write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
     register_run_slot(store, manifiesto)

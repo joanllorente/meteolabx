@@ -1710,8 +1710,10 @@ def log_worker_resources(args) -> str:
     medida = _cgroup_memory()
     from server.services.arome_forecast import CONVECTIVE_THREADS
 
+    prestados = max(0, getattr(args, "max_workers", 0) - args.workers)
     partes = [
-        f"{args.workers} workers × {CONVECTIVE_THREADS} hilos por perfil",
+        f"{args.workers} workers × {CONVECTIVE_THREADS} hilos por perfil"
+        + (f" (hasta {args.max_workers} si los demás workers paran)" if prestados else ""),
         f"CPU del contenedor: {cuota:.1f}" if cuota else "CPU del contenedor: sin límite",
         f"hilos si todos calculan un perfil: {args.workers * CONVECTIVE_THREADS}",
     ]
@@ -2206,6 +2208,16 @@ def main() -> int:
         type=int,
         default=int(os.getenv("METEOLABX_FORECAST_WORKERS", "6")),
         help="Número de cálculos simultáneos para campos base y derivados rápidos.",
+    )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=int(os.getenv("METEOLABX_FORECAST_MAX_WORKERS", "0")),
+        help=(
+            "Huecos que el worker puede tomar prestados mientras los demás "
+            "workers de AROME del contenedor están parados; 0 o menos que "
+            "--workers no presta nada."
+        ),
     )
     parser.add_argument(
         "--heavy-workers",

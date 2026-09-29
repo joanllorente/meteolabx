@@ -37,6 +37,13 @@ from server.services.forecast_store import (
 
 RUN = "2026-08-30T00:00:00Z"
 VALID = "2026-08-30T12:00:00Z"
+REQUIRED_FIELDS = ecmwf_forecast.required_fields
+
+
+@pytest.fixture(autouse=True)
+def sin_precarga(monkeypatch):
+    """Los ciclos de prueba simulan los mapas: la precarga saldría a la red."""
+    monkeypatch.setattr(ecmwf_forecast, 'required_fields', lambda *a: [])
 
 
 # --- Claves y manifiestos separados por modelo -----------------------------
@@ -329,7 +336,7 @@ def test_worker_upgrades_old_vorticity_frames_only_once(monkeypatch):
     write_json(store, run_manifest_key(RUN, model='ecmwf'), manifest)
     run = ecmwf_forecast.parse_run(RUN)
     monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
-    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda *_, **__: {
         'products': {product: {'valid_times': [VALID]} for product in ecmwf_forecast.PRODUCTS}
     })
     calls = []
@@ -535,7 +542,7 @@ def test_cycle_runs_parallel_and_checkpoints_completed_batch(monkeypatch):
     product = 'ecmwf-temperature-500'
     monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
     monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
-    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda *_, **__: {
         'products': {product: {'valid_times': [VALID]}}
     })
     monkeypatch.setattr(ecmwf_forecast, 'read_json', lambda *a: None)
@@ -580,7 +587,7 @@ def test_cycle_defers_without_errors_and_resumes_when_memory_returns(monkeypatch
     run = ecmwf_forecast.parse_run(RUN)
     monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
     monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
-    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda _: {
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda *_, **__: {
         'products': {product: {'valid_times': [VALID]}}
     })
     capacities = iter([1, 0])
@@ -617,3 +624,192 @@ def test_shared_memory_reader_uses_declared_limit_and_anonymous_memory(tmp_path,
 def test_memory_settings_reject_invalid_reservations(monkeypatch, raw):
     monkeypatch.setenv('METEOLABX_ECMWF_WORKER_MEMORY_GB', raw)
     assert ecmwf_forecast._memory_gb('METEOLABX_ECMWF_WORKER_MEMORY_GB', 0.5) == 512 * 1024**2
+
+
+def test_cycle_lists_the_run_while_it_is_still_calculating(monkeypatch):
+    """El visor toma la cabecera de la lista de pasadas.
+
+    Si la nueva solo entraba al acabar el ciclo, en cabeza seguía la anterior,
+    terminada, y el visor decía «Completa» mientras calculaba la nueva.
+    """
+    from server.services.forecast_store import retained_manifests
+    product = 'ecmwf-temperature-500'
+    run = ecmwf_forecast.parse_run(RUN)
+    monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda *_, **__: {
+        'products': {product: {'valid_times': [VALID]}}
+    })
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda count, cached: count)
+    listed = []
+    def frame(*args):
+        listed.append([
+            (item.get('run'), item.get('status'))
+            for item in retained_manifests(get_forecast_store(), model='ecmwf')
+        ])
+        return _frame_bytes(), {}
+    monkeypatch.setattr(ecmwf_forecast, 'frame_payload', frame)
+    ecmwf_forecast.run_cycle(max_frames=1)
+    assert listed and (RUN, 'publishing') in listed[0]
+
+
+def _single_product_cycle(monkeypatch, published):
+    """Un solo mapa y un horizonte de 6 h: plazos 0, 3 y 6."""
+    product = 'ecmwf-temperature-500'
+    run = ecmwf_forecast.parse_run(RUN)
+    monkeypatch.setenv('METEOLABX_ECMWF_MAX_HORIZON_H', '6')
+    monkeypatch.setattr(ecmwf_forecast, 'PRODUCTS', {product: ecmwf_forecast.PRODUCTS[product]})
+    from server.services import forecast_store
+    monkeypatch.setattr(forecast_store, 'persisted_products', lambda model=None: [product])
+    monkeypatch.setattr(ecmwf_forecast, 'ECMWF_PRODUCT_REVISIONS', {
+        key: value for key, value in ECMWF_PRODUCT_REVISIONS.items() if key == product
+    })
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: run)
+    monkeypatch.setattr(ecmwf_forecast, 'catalog_payload', lambda *_, **__: {
+        'products': {product: {'valid_times': list(published())}}
+    })
+    monkeypatch.setattr(ecmwf_forecast, 'memory_worker_capacity', lambda count, cached: count)
+    monkeypatch.setattr(ecmwf_forecast, 'frame_payload', lambda *a: (_frame_bytes(), {}))
+    return product
+
+
+def test_cycle_is_not_complete_while_steps_are_still_unpublished(monkeypatch):
+    """ECMWF publica los plazos poco a poco: calcular los que hay no acaba la pasada."""
+    _single_product_cycle(monkeypatch, lambda: ['2026-08-30T00:00:00Z'])
+    result = ecmwf_forecast.run_cycle()
+    assert result['status'] == 'publishing'
+    assert result['progress']['frames_available'] < result['progress']['frames_total']
+
+
+def test_failed_step_checks_do_not_shrink_the_catalog_or_complete_the_run(monkeypatch):
+    """Un HEAD fallido quitaba horas del catálogo y daba la pasada por terminada."""
+    todos = ['2026-08-30T00:00:00Z', '2026-08-30T03:00:00Z', '2026-08-30T06:00:00Z']
+    respuestas = iter([todos[:2], todos[:1], todos])
+    product = _single_product_cycle(monkeypatch, lambda: next(respuestas))
+    assert ecmwf_forecast.run_cycle()['status'] == 'publishing'
+    # El segundo ciclo solo «ve» el plazo 0: no puede olvidar el 3 ni acabar.
+    assert ecmwf_forecast.run_cycle()['status'] == 'publishing'
+    manifest = ecmwf_forecast.read_json(
+        get_forecast_store(), run_manifest_key(RUN, model='ecmwf'))
+    assert manifest['catalog_products'][product]['valid_times'] == todos[:2]
+    assert ecmwf_forecast.run_cycle()['status'] == 'complete'
+
+
+def test_completed_run_emits_its_report_once(monkeypatch):
+    """ECMWF no pasa por el worker de AROME: tiene que emitir su propio informe."""
+    from server.services import alerts
+    from server.services.run_report import report_key
+    monkeypatch.setenv('METEOLABX_ALERT_EMAIL_LEVEL', 'all')
+    sent = []
+    monkeypatch.setattr(alerts, 'send', lambda aviso, store=None: sent.append(aviso) or True)
+    _single_product_cycle(monkeypatch, lambda: [
+        '2026-08-30T00:00:00Z', '2026-08-30T03:00:00Z', '2026-08-30T06:00:00Z'])
+    assert ecmwf_forecast.run_cycle()['status'] == 'complete'
+    ecmwf_forecast.run_cycle()
+    assert len(sent) == 1
+    assert 'ECMWF' in sent[0].subject and 'completa' in sent[0].subject
+    report = ecmwf_forecast.read_json(get_forecast_store(), report_key(RUN, model='ecmwf'))
+    assert report['model'] == 'ecmwf' and report['severity'] == 'ok'
+    assert report['duration_min'] is not None
+
+
+def _synthetic_field(requested):
+    def field(run, step, selector, domain):
+        requested.append((step, selector['param'], selector['levtype'], str(selector.get('levelist', ''))))
+        west, south, east, north = domain
+        width, height = max(8, round((east-west)*4)), max(8, round((north-south)*4))
+        x, y = np.meshgrid(np.arange(width), np.arange(height))
+        # Más alto y más frío cuanto menor es la presión, como en la atmósfera.
+        level = float(selector.get('levelist') or 1000)
+        base = {
+            'u': 10. + y*.2 + (1000-level)*.02, 'v': x*.1, 'vo': 1e-5 + x*1e-7, 'w': .1 + x*1e-3,
+            't': 270. + (level-500)*.05 + x*.1, 'gh': (1000-level)*10 + y*y*.1 + x*y*.05,
+            'q': .005 + x*1e-6,
+            'sp': np.full((height, width), 100000.), 'msl': np.full((height, width), 101300.),
+            'tp': .01 + step*1e-3 + x*0.,
+        }
+        return base[selector['param']], domain
+    return field
+
+
+@pytest.mark.parametrize('product', sorted(ecmwf_forecast.PRODUCTS))
+def test_the_prefetch_list_matches_what_each_map_reads(monkeypatch, product):
+    """Si la lista se queda corta el mapa sale igual, pero baja en serie lo que falte."""
+    requested = []
+    monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: (-10.125, 39.875, .125, 50.125))
+    monkeypatch.setattr(ecmwf_forecast, '_field', _synthetic_field(requested))
+    ecmwf_forecast.frame_payload(product, ecmwf_forecast.parse_run(RUN), 12)
+    declared = {
+        (step, selector['param'], selector['levtype'], str(selector.get('levelist', '')))
+        for step, selector in REQUIRED_FIELDS(product, 12)
+    }
+    assert set(requested) == declared
+
+
+def test_a_step_downloads_its_messages_in_parallel_and_once(monkeypatch):
+    """En producción un plazo eran ~60 s de descargas en fila y 2 s de cálculo."""
+    import threading
+    import time as _time
+    from concurrent.futures import ThreadPoolExecutor
+
+    run = ecmwf_forecast.parse_run(RUN)
+    at_once, peak, downloads = [0], [0], []
+    guard = threading.Lock()
+    monkeypatch.setattr(ecmwf_forecast, 'read_index', lambda *a: [
+        {'param': p, 'levtype': 'pl', 'levelist': '500'} for p in ('t', 'gh', 'u', 'v')])
+
+    def download(run, step, message):
+        with guard:
+            at_once[0] += 1
+            peak[0] = max(peak[0], at_once[0])
+            downloads.append(message['param'])
+        _time.sleep(.05)
+        with guard:
+            at_once[0] -= 1
+        return message['param']
+    monkeypatch.setattr(ecmwf_forecast, '_download_message', download)
+    monkeypatch.setattr(ecmwf_forecast, '_read_message_window',
+                        lambda path, bounds: (np.zeros((4, 4)), (-1., -1., 1., 1.)))
+    monkeypatch.setattr(ecmwf_forecast, '_discard_message', lambda path: None)
+    campos = [(12, {'param': p, 'levtype': 'pl', 'levelist': '500'}) for p in ('t', 'gh', 'u', 'v')]
+    with ThreadPoolExecutor(4) as pool, ecmwf_forecast.shared_downloads() as shared:
+        shared.prefetch(pool, run, campos)
+        assert peak[0] > 1
+        # Lo que piden luego los mapas ya está en la caché.
+        shared.read(ecmwf_forecast._field_key(run, 12, campos[0][1]), run, 12, campos[0][1], (-1, -1, 1, 1))
+    assert sorted(downloads) == ['gh', 't', 'u', 'v']
+
+
+def test_a_failed_prefetch_is_left_for_the_map_to_report(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def broken(*a):
+        raise EcmwfError('429')
+    monkeypatch.setattr(ecmwf_forecast, 'read_index', broken)
+    run = ecmwf_forecast.parse_run(RUN)
+    with ThreadPoolExecutor(2) as pool, ecmwf_forecast.shared_downloads() as shared:
+        shared.prefetch(pool, run, [(12, {'param': 't', 'levtype': 'pl', 'levelist': '500'})])
+        assert shared.fields == {}
+
+
+def test_a_failed_check_never_takes_the_cycle_back_to_an_older_run(monkeypatch):
+    """El 29/09 a las 13:34 unos HEAD con 429 hicieron recalcular la pasada del día 28."""
+    product = _single_product_cycle(monkeypatch, lambda: ['2026-08-30T00:00:00Z'])
+    ecmwf_forecast.run_cycle()
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', lambda: ecmwf_forecast.parse_run('2026-08-29T12:00:00Z'))
+    assert ecmwf_forecast.run_cycle()['run'] == RUN
+
+    def unreachable():
+        raise EcmwfError('Ninguna pasada reciente de ECMWF está publicada todavía.')
+    monkeypatch.setattr(ecmwf_forecast, 'latest_run', unreachable)
+    assert ecmwf_forecast.run_cycle()['run'] == RUN
+    assert product
+
+
+def test_known_steps_are_not_checked_again(monkeypatch):
+    run = ecmwf_forecast.parse_run(RUN)
+    monkeypatch.setenv('METEOLABX_ECMWF_MAX_HORIZON_H', '12')
+    checked = []
+    monkeypatch.setattr(ecmwf_forecast, '_index_exists', lambda r, step: checked.append(step) or step <= 6)
+    assert ecmwf_forecast.available_steps(run, known=(0, 3)) == (0, 3, 6)
+    assert sorted(checked) == [6, 9, 12]

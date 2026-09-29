@@ -7,10 +7,16 @@ from __future__ import annotations
 
 import collections
 from concurrent.futures import ThreadPoolExecutor
+import json
 import logging
 import os
+from pathlib import Path
+import tempfile
 import threading
 import time
+# Aparte de `time`: los tests sustituyen ese módulo por un reloj virtual, y la
+# marca que leen los otros procesos tiene que ser la hora real.
+from time import time as _wall_clock
 
 from server.services import arome_packages as packages
 from server.services.arome_forecast import _packages_available
@@ -200,6 +206,101 @@ class Manifests:
         self.needs_retention = False
 
 
+class SlotLending:
+    """Huecos que un worker de AROME toma prestados cuando los demás paran.
+
+    AROME y AROME-IFS corren en procesos aparte del mismo contenedor, cada uno
+    con sus huecos fijos, y sus pasadas llegan con horas de diferencia: el
+    29/09 AROME-IFS pasó una hora a 2/2 con cientos de trabajos en cola
+    mientras los 7 huecos de AROME estaban parados y el contenedor usaba
+    2,6 GB de 30. Cada proceso deja en un fichero local cuántos trabajos lleva
+    y cuántos esperan; mientras todos los demás estén parados del todo, uno
+    puede subir de ``workers`` a ``max_workers``. En cuanto otro tiene trabajo,
+    el prestatario deja de admitir por encima de lo suyo y los prestados
+    terminan sin cortarse; el dueño arranca con sus huecos desde el principio.
+
+    Los perfiles convectivos suben lo mismo que los huecos si hay tope propio;
+    el freno por memoria de cada perfil sigue aplicándose igual.
+    """
+
+    # Un proceso que no reescribe su estado en este tiempo ha muerto o se ha
+    # colgado: no debe bloquear el préstamo para siempre.
+    STALE_S = 90.0
+    REWRITE_S = 20.0
+    READ_EVERY_S = 2.0
+
+    def __init__(self, name, workers, max_workers, heavy_workers, directory=None):
+        self.workers = workers
+        self.max_workers = max(workers, max_workers)
+        self.heavy_workers = heavy_workers
+        base = directory or os.getenv("METEOLABX_FORECAST_SLOTS_DIR", "").strip()
+        self.dir = Path(base) if base else Path(tempfile.gettempdir()) / "meteolabx-forecast-slots"
+        self.path = self.dir / f"{name}.json"
+        self._written = None
+        self._written_at = 0.0
+        self._idle = (float("-inf"), False)
+        self.borrowing = False
+
+    @property
+    def capacity(self):
+        return self.max_workers
+
+    def publish(self, active, pending):
+        """Deja el estado propio, solo si cambia o para renovar la marca."""
+        estado = (int(active), int(pending) > 0)
+        ahora = _wall_clock()
+        if estado == self._written and ahora - self._written_at < self.REWRITE_S:
+            return
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True)
+            temporal = self.path.with_suffix(".tmp")
+            temporal.write_text(json.dumps(
+                {"active": estado[0], "pending": estado[1], "at": ahora, "pid": os.getpid()}))
+            temporal.replace(self.path)
+        except OSError:
+            logger.warning("No se pudo publicar el estado de huecos en %s", self.path, exc_info=True)
+            return
+        self._written, self._written_at = estado, ahora
+
+    def others_idle(self):
+        ahora = _wall_clock()
+        leido, parados = self._idle
+        if ahora - leido < self.READ_EVERY_S:
+            return parados
+        parados = True
+        try:
+            ficheros = [f for f in self.dir.glob("*.json") if f != self.path]
+        except OSError:
+            ficheros = []
+        for fichero in ficheros:
+            try:
+                estado = json.loads(fichero.read_text())
+            except (OSError, ValueError):
+                continue  # A medio escribir o borrado: cuenta en la vuelta siguiente.
+            if ahora - float(estado.get("at", 0)) > self.STALE_S:
+                continue
+            if int(estado.get("active", 0)) > 0 or estado.get("pending"):
+                parados = False
+                break
+        self._idle = (ahora, parados)
+        return parados
+
+    def limits(self):
+        """Huecos y tope de perfiles que se pueden usar ahora."""
+        prestar = self.max_workers > self.workers and self.others_idle()
+        if prestar != self.borrowing:
+            self.borrowing = prestar
+            if prestar:
+                logger.info("Préstamo de huecos: los demás workers están parados; se sube de %d a %d.",
+                            self.workers, self.max_workers)
+            else:
+                logger.info("Préstamo de huecos: otro worker tiene trabajo; se vuelve a %d.", self.workers)
+        if not prestar:
+            return self.workers, self.heavy_workers
+        extra = self.max_workers - self.workers
+        return self.max_workers, self.heavy_workers + extra if self.heavy_workers > 0 else 0
+
+
 def _ecmwf_loop(max_frames, stop, interval):
     from server.services.ecmwf_forecast import run_cycle
     while not stop.is_set():
@@ -218,6 +319,8 @@ def run_watch(w, args, stop):
     registry = Manifests(w, store, w.forecast_calculation_scope(), max(0, args.diagnostic_max_hours))
     readiness = Readiness(w)
     workers = max(1, args.workers)
+    lending = SlotLending(w.current_model(), workers, max(0, getattr(args, "max_workers", 0) or 0),
+                          max(0, args.heavy_workers))
     interval = max(30, args.interval)
     budget = max(0, args.cycle_budget) or interval
     active, pending = {}, []
@@ -249,7 +352,7 @@ def run_watch(w, args, stop):
 
     try:
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix="arome-catalog") as catalogs, \
-             ThreadPoolExecutor(max_workers=workers, thread_name_prefix="arome-job") as jobs:
+             ThreadPoolExecutor(max_workers=lending.capacity, thread_name_prefix="arome-job") as jobs:
             while not stop.is_set() or active:
                 now = time.monotonic()
                 if stop.is_set():
@@ -285,6 +388,7 @@ def run_watch(w, args, stop):
                 limit = args.max_tasks > 0 and admitted >= args.max_tasks
                 if not stop.is_set() and catalog_future is None and (now >= next_catalog or limit):
                     catalog_future = catalogs.submit(w.catalog_payload, token)
+                limit_workers, limit_heavy = lending.limits()
                 if not stop.is_set():
                     if (prefetch is None or not prefetch.is_alive()) and now >= next_prefetch and pending:
                         prefetch = w._start_package_prefetch([j for _, j in pending], background_stop)
@@ -295,23 +399,23 @@ def run_watch(w, args, stop):
                     while not limit and not stop.is_set():
                         why = []
                         selected = select_ready(w, pending, active, readiness, now, heavy_launches,
-                                                workers, max(0, args.heavy_workers), why)
+                                                limit_workers, limit_heavy, why)
                         if selected is None:
                             break
                         index, mode = selected
                         manifest, job = pending.pop(index)
                         timeout = max(1, args.derived_timeout if job.tier else args.native_timeout)
-                        w._mark_job_started(manifest, job, timeout, slots=workers)
+                        w._mark_job_started(manifest, job, timeout, slots=limit_workers)
                         w._persist_manifest(store, manifest, latest_run=registry.latest)
                         future = jobs.submit(w._run_isolated_job, job, timeout, scheduled=True)
                         active[future] = (manifest, job, mode)
                         logger.info("Procesando RUN %s %s nivel=%d vía=%s activos=%d/%d", job.run,
-                                    job.valid_time, job.tier, mode, len(active), workers)
+                                    job.valid_time, job.tier, mode, len(active), limit_workers)
                         if job.tier >= 2:
                             heavy_launches.append(now)
                         admitted += 1
                         limit = args.max_tasks > 0 and admitted >= args.max_tasks
-                    libres = workers - len(active)
+                    libres = limit_workers - len(active)
                     if libres > 0 and registry.latest:
                         # Sin nada en cola es que Météo-France no ha publicado
                         # más horas (o el catálogo aún no las ha visto); con
@@ -320,6 +424,7 @@ def run_watch(w, args, stop):
                                   else why[0] if why else "otro")
                         pasada = pending[0][0] if pending else registry.items.get(registry.latest)
                         parado = (pasada, motivo, libres, now)
+                lending.publish(len(active), 0 if stop.is_set() else len(pending))
                 if not active and registry.latest and now >= next_maintenance:
                     # Prefetch may still be reading/writing these same packages.
                     if prefetch is None or not prefetch.is_alive():
@@ -337,9 +442,9 @@ def run_watch(w, args, stop):
                         next_maintenance = now + interval
                 if registry.latest and now >= next_heartbeat:
                     w.write_json(store, w.worker_state_key(), {"version": 2, "last_run": registry.latest,
-                        "heartbeat_at": w._utc_now(), "workers": workers})
+                        "heartbeat_at": w._utc_now(), "workers": limit_workers})
                     logger.info("Planificador: %d/%d activos, %d pendientes, catálogo_en_curso=%s",
-                                len(active), workers, len(pending), catalog_future is not None)
+                                len(active), limit_workers, len(pending), catalog_future is not None)
                     next_heartbeat = now + 30
                 # Never busy-spin while all hours are waiting for publication.
                 if stop.is_set():
@@ -348,6 +453,7 @@ def run_watch(w, args, stop):
                     stop.wait(0.25)
     finally:
         background_stop.set()
+        lending.publish(0, 0)
         # Transfers have finite HTTP timeouts; do not delete files under them.
         if prefetch is not None:
             prefetch.join(timeout=0.1)

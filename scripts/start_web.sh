@@ -87,6 +87,7 @@ nice -n "${METEOLABX_FORECAST_WORKER_NICE:-10}" \
   --watch \
   --isolate-tasks \
   --workers "${METEOLABX_FORECAST_WORKERS:-6}" \
+  --max-workers "${METEOLABX_FORECAST_MAX_WORKERS:-0}" \
   --heavy-workers "${METEOLABX_FORECAST_HEAVY_WORKERS:-0}" \
   --diagnostic-max-hours "${METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS:-36}" \
   --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &
@@ -95,7 +96,9 @@ FORECAST_WORKER_PID=$!
 # 2b) Worker de AROME-IFS, solo si se activa. Es el mismo worker con otro
 # modelo: mismo código, pero sus propios manifiestos, paquetes y estado. Va con
 # menos huecos que el principal porque comparte con él memoria y la cuota del
-# WCS, y el que no puede quedarse atrás es AROME.
+# WCS, y el que no puede quedarse atrás es AROME. Pero sus pasadas llegan horas
+# después de las de AROME: mientras el principal está parado, toma prestados
+# tantos huecos como tiene él y los devuelve en cuanto vuelve a tener trabajo.
 AROME_IFS_WORKER_PID=""
 case "$(printf '%s' "${METEOLABX_ENABLE_AROME_IFS:-}" | tr '[:upper:]' '[:lower:]')" in
   1|true|yes)
@@ -105,6 +108,7 @@ case "$(printf '%s' "${METEOLABX_ENABLE_AROME_IFS:-}" | tr '[:upper:]' '[:lower:
       --watch \
       --isolate-tasks \
       --workers "${METEOLABX_AROME_IFS_WORKERS:-2}" \
+      --max-workers "${METEOLABX_AROME_IFS_MAX_WORKERS:-${METEOLABX_FORECAST_WORKERS:-6}}" \
       --heavy-workers "${METEOLABX_AROME_IFS_HEAVY_WORKERS:-1}" \
       --diagnostic-max-hours "${METEOLABX_FORECAST_DIAGNOSTIC_MAX_HOURS:-36}" \
       --interval "${METEOLABX_FORECAST_WORKER_INTERVAL_S:-60}" &

@@ -228,6 +228,7 @@ def test_watch_refresh_never_drains_deduplicates_and_stops_orderly(monkeypatch, 
         prefetches.append(stop)
         return SimpleNamespace(is_alive=lambda: True, join=lambda **kw: None)
     monkeypatch.setattr(w, "_start_package_prefetch", prefetch)
+    monkeypatch.setenv("METEOLABX_FORECAST_SLOTS_DIR", str(tmp_path / "slots"))
     args = SimpleNamespace(diagnostic_max_hours=0, max_hours=0, workers=2, interval=30,
         cycle_budget=1, max_tasks=quota, heavy_workers=2, native_timeout=300,
         derived_timeout=1800, ecmwf_max_frames=-1)
@@ -336,3 +337,51 @@ def test_a_growing_ip1_holds_the_native_beyond_the_budget(ready, monkeypatch):
     assert ready.mode(isobarico, 10) == "downloading"
     tamano[0] += 1
     assert ready.mode(isobarico, 10 + ready.wait + 1) == "downloading"
+
+
+def test_a_worker_borrows_slots_only_while_the_others_are_idle(tmp_path, monkeypatch):
+    """El 29/09 AROME-IFS pasó una hora a 2/2 con los 7 huecos de AROME parados."""
+    reloj = SimpleNamespace(now=1000.0)
+    monkeypatch.setattr(s, "_wall_clock", lambda: reloj.now)
+    arome = s.SlotLending("arome", 7, 0, 0, directory=tmp_path)
+    ifs = s.SlotLending("arome-ifs", 2, 7, 1, directory=tmp_path)
+    ifs.READ_EVERY_S = arome.READ_EVERY_S = 0
+    arome.publish(0, 0)
+    assert ifs.limits() == (7, 6)  # Los perfiles suben con los huecos.
+    assert arome.limits() == (7, 0)  # Sin max_workers no presta ni pide nada.
+    # AROME recibe pasada: el préstamo acaba aunque aún no haya lanzado nada.
+    arome.publish(0, 30)
+    assert ifs.limits() == (2, 1)
+    arome.publish(5, 0)
+    assert ifs.limits() == (2, 1)
+    arome.publish(0, 0)
+    assert ifs.limits() == (7, 6)
+
+
+def test_a_dead_worker_does_not_block_lending_forever(tmp_path, monkeypatch):
+    reloj = SimpleNamespace(now=1000.0)
+    monkeypatch.setattr(s, "_wall_clock", lambda: reloj.now)
+    arome = s.SlotLending("arome", 7, 0, 0, directory=tmp_path)
+    ifs = s.SlotLending("arome-ifs", 2, 7, 0, directory=tmp_path)
+    ifs.READ_EVERY_S = 0
+    arome.publish(4, 10)
+    assert ifs.limits() == (2, 0)
+    reloj.now += s.SlotLending.STALE_S + 1
+    assert ifs.limits() == (7, 0)
+    # Un fichero a medio escribir no cuenta como trabajo.
+    (tmp_path / "otro.json").write_text("{")
+    assert ifs.limits() == (7, 0)
+
+
+def test_the_state_is_rewritten_only_on_change_or_to_renew_it(tmp_path, monkeypatch):
+    reloj = SimpleNamespace(now=1000.0)
+    monkeypatch.setattr(s, "_wall_clock", lambda: reloj.now)
+    arome = s.SlotLending("arome", 7, 0, 0, directory=tmp_path)
+    arome.publish(3, 5)
+    escrito = (tmp_path / "arome.json").stat().st_mtime_ns
+    reloj.now += 1
+    arome.publish(3, 9)  # Mismo estado: sigue ocupado con cola.
+    assert (tmp_path / "arome.json").stat().st_mtime_ns == escrito
+    reloj.now += s.SlotLending.REWRITE_S
+    arome.publish(3, 9)
+    assert '"at": %s' % reloj.now in (tmp_path / "arome.json").read_text()
