@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.2.0",
+  "app_version": "2.2.1",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -530,6 +530,18 @@ export default {
         "Es conserven les quatre passades del dia de cada model en lloc de tres.",
         "Millores generals a la interfície de «Predicció»."
       ],
+      "release_221_fixes": [
+        "S'han corregit les unitats i el nom del model als PNG descarregats.",
+        "S'ha corregit la rosa dels vents, que no apareixia en estacions amb poques lectures.",
+        "S'ha corregit el desplegable de preferits de Predicció, que al mòbil sortia de la pantalla."
+      ],
+      "release_221_improvements": [
+        "Nou mapa de reflectivitat simulada CAPPI a 1,5 km.",
+        "Més localitats i províncies als mapes d'AROME amb el zoom alt.",
+        "Ciutats al mapa de ratxa màxima.",
+        "Terra i mar diferenciats als mapes de precipitació.",
+        "La passada del model apareix als PNG descarregats."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -662,6 +674,18 @@ export default {
         "Aktive tropische Wirbelstürme erscheinen mit ihrem Namen über dem Tief des Modells.",
         "Pro Modell werden jetzt die vier Läufe des Tages statt drei aufbewahrt.",
         "Allgemeine Verbesserungen der Oberfläche von „Vorhersage“."
+      ],
+      "release_221_fixes": [
+        "Einheiten und Modellname in heruntergeladenen PNGs korrigiert.",
+        "Windrose korrigiert, die bei Stationen mit wenigen Messwerten nicht erschien.",
+        "Favoritenmenü der Vorhersage korrigiert, das auf dem Handy über den Bildschirm hinausragte."
+      ],
+      "release_221_improvements": [
+        "Neue Karte der simulierten Reflektivität als CAPPI in 1,5 km.",
+        "Mehr Orte und Provinzen auf den AROME-Karten bei starkem Zoom.",
+        "Städte auf der Karte der maximalen Böen.",
+        "Land und Meer auf den Niederschlagskarten unterscheidbar.",
+        "Heruntergeladene PNGs zeigen den Modelllauf."
       ],
       "sources": "Quellen",
       "unaffiliated": "Nicht verbunden",
@@ -796,6 +820,18 @@ export default {
         "The four runs of the day are now kept for each model instead of three.",
         "General improvements to the “Forecast” interface."
       ],
+      "release_221_fixes": [
+        "Fixed the units and the model name in downloaded PNGs.",
+        "Fixed the wind rose, which did not appear for stations with few readings.",
+        "Fixed the Forecast favorites menu, which overflowed the screen on mobile."
+      ],
+      "release_221_improvements": [
+        "New simulated reflectivity CAPPI map at 1.5 km.",
+        "More towns and provinces on AROME maps when zoomed in.",
+        "Cities on the maximum gust map.",
+        "Land and sea told apart on precipitation maps.",
+        "Downloaded PNGs now show the model run."
+      ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
       "version": "Version {version}",
@@ -928,6 +964,18 @@ export default {
         "Los ciclones tropicales activos aparecen con su nombre sobre la baja del modelo.",
         "Se conservan las cuatro pasadas del día de cada modelo en lugar de tres.",
         "Mejoras generales en la interfaz de «Predicción»."
+      ],
+      "release_221_fixes": [
+        "Se han corregido las unidades y el nombre del modelo en los PNG descargados.",
+        "Se ha corregido la rosa de viento, que no aparecía en estaciones con pocas lecturas.",
+        "Se ha corregido el desplegable de favoritos de Predicción, que en el móvil se salía de la pantalla."
+      ],
+      "release_221_improvements": [
+        "Nuevo mapa de reflectividad simulada CAPPI a 1,5 km.",
+        "Más localidades y provincias en los mapas de AROME con el zoom alto.",
+        "Ciudades en el mapa de racha máxima.",
+        "Tierra y mar diferenciados en los mapas de precipitación.",
+        "La pasada del modelo aparece en los PNG descargados."
       ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
@@ -1062,6 +1110,18 @@ export default {
         "Les quatre réseaux du jour sont désormais conservés pour chaque modèle au lieu de trois.",
         "Améliorations générales de l'interface « Prévision »."
       ],
+      "release_221_fixes": [
+        "Correction des unités et du nom du modèle dans les PNG téléchargés.",
+        "Correction de la rose des vents, qui n'apparaissait pas pour les stations avec peu de relevés.",
+        "Correction du menu des favoris de Prévision, qui débordait de l'écran sur mobile."
+      ],
+      "release_221_improvements": [
+        "Nouvelle carte de réflectivité simulée CAPPI à 1,5 km.",
+        "Plus de localités et de provinces sur les cartes AROME avec un zoom élevé.",
+        "Villes sur la carte de rafale maximale.",
+        "Terre et mer différenciées sur les cartes de précipitations.",
+        "Les PNG téléchargés indiquent le run du modèle."
+      ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
       "version": "Version {version}",
@@ -1195,6 +1255,18 @@ export default {
         "Si conservano le quattro corse del giorno di ogni modello invece di tre.",
         "Miglioramenti generali all'interfaccia di «Previsione»."
       ],
+      "release_221_fixes": [
+        "Corretti le unità e il nome del modello nei PNG scaricati.",
+        "Corretta la rosa dei venti, che non compariva nelle stazioni con poche letture.",
+        "Corretto il menu dei preferiti di Previsione, che su mobile usciva dallo schermo."
+      ],
+      "release_221_improvements": [
+        "Nuova mappa di riflettività simulata CAPPI a 1,5 km.",
+        "Più località e province nelle mappe AROME con zoom elevato.",
+        "Città nella mappa della raffica massima.",
+        "Terra e mare distinti nelle mappe di precipitazione.",
+        "I PNG scaricati indicano la corsa del modello."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -1327,6 +1399,18 @@ export default {
         "Os ciclones tropicais ativos aparecem com o seu nome sobre a baixa do modelo.",
         "Passam a conservar-se as quatro corridas do dia de cada modelo em vez de três.",
         "Melhorias gerais na interface de «Previsão»."
+      ],
+      "release_221_fixes": [
+        "Corrigidas as unidades e o nome do modelo nos PNG descarregados.",
+        "Corrigida a rosa dos ventos, que não aparecia em estações com poucas leituras.",
+        "Corrigido o menu de favoritos da Previsão, que no telemóvel saía do ecrã."
+      ],
+      "release_221_improvements": [
+        "Novo mapa de refletividade simulada CAPPI a 1,5 km.",
+        "Mais localidades e províncias nos mapas AROME com zoom elevado.",
+        "Cidades no mapa de rajada máxima.",
+        "Terra e mar diferenciados nos mapas de precipitação.",
+        "Os PNG descarregados indicam a corrida do modelo."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -2632,6 +2716,7 @@ export default {
     }
   },
   "releases": [
+    "221",
     "220",
     "212",
     "211",

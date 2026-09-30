@@ -323,8 +323,8 @@ def test_a_native_that_ip1_does_not_serve_never_waits(ready, monkeypatch):
     assert ready.mode(mixto, 10) == "ready"
 
 
-def test_the_air_mass_map_counts_even_though_it_still_asks_for_the_mslp(ready, monkeypatch):
-    """Con IP1 pasa de cuatro coberturas a una: la espera se paga sola."""
+def test_the_air_mass_map_waits_for_its_packages(ready, monkeypatch):
+    """IP1, SP1 y SP2 evitan las cuatro coberturas del mapa."""
     monkeypatch.setattr(s.packages, "package_ready", lambda *a: False)
     assert ready.mode(job(0, products=("mslp-theta-e-850",)), 10) == "publication"
 
@@ -403,3 +403,102 @@ def test_ecmwf_does_not_wait_between_cycles_while_it_has_work(monkeypatch):
         def wait(self, seconds): waits.append(seconds)
     s._ecmwf_loop(120, Stop(), 60)
     assert waits == [1, 60, 60]
+
+
+@pytest.mark.parametrize('product', ['temperature-2m', 'cloud-cover', 'wind-gust',
+                                   'precip-1h', 'shortwave-down', 'accumulated-precip'])
+def test_sp1_maps_wait_for_sp1_with_bounded_wcs_fallback(ready, monkeypatch, product):
+    native = job(0, products=(product,))
+    monkeypatch.setattr(s.packages, 'package_ready', lambda p, *a: p == 'IP1')
+    assert ready.mode(native, 10) == 'publication'
+    assert ready.mode(native, ready.sp1_wait + 1) == 'wcs_parallel'
+    monkeypatch.setattr(s.packages, 'package_ready', lambda p, *a: p == 'SP1')
+    assert ready.mode(native, 400) == 'ready'
+
+
+def test_hourly_sp1_waits_for_previous_block_too(ready, monkeypatch):
+    native = job(0, hour='2026-09-21T07:00:00Z', products=('precip-1h',))
+    monkeypatch.setattr(s.packages, 'package_ready', lambda p, run, valid: valid.hour == 7)
+    assert ready.mode(native, 10) == 'publication'
+    assert ready.mode(native, 10 + ready.sp1_wait + 1) == 'wcs_parallel'
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: True)
+    assert ready.mode(native, 400) == 'ready'
+
+
+def test_theta_e_waits_for_all_three_packages(ready, monkeypatch):
+    native = job(0, products=('mslp-theta-e-850',))
+    monkeypatch.setattr(s.packages, 'package_ready', lambda p, *a: p in {'IP1', 'SP2'})
+    assert ready.mode(native, 10) == 'publication'
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: True)
+    assert ready.mode(native, 20) == 'ready'
+
+
+def test_sp1_fallback_fills_free_slots_despite_serialized_wcs(ready, monkeypatch):
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: False)
+    active = {1: ({}, job(2, '2026-09-21T03:00:00Z'), 'wcs')}
+    pending = [({}, job(0, H1, ('temperature-2m',))),
+               ({}, job(0, H2, ('wind-gust',)))]
+    now = ready.sp1_wait + 1
+    assert s.select_ready(w, pending, active, ready, now, [], 3, 2) == (0, 'wcs_parallel')
+    active[2] = (*pending.pop(0), 'wcs_parallel')
+    assert s.select_ready(w, pending, active, ready, now, [], 3, 2) == (0, 'wcs_parallel')
+    active[3] = (*pending[0], 'wcs_parallel')
+    assert s.select_ready(w, pending, active, ready, now, [], 3, 2) is None
+
+
+def test_parallel_sp1_does_not_occupy_the_serialized_slot(ready, monkeypatch):
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: False)
+    active = {1: ({}, job(0, H2, ('temperature-2m',)), 'wcs_parallel')}
+    pending = [({}, job(0, H1, ('temperature-850',)))]
+    assert s.select_ready(w, pending, active, ready, ready.wait + 1, [], 3, 2) == (0, 'wcs')
+    active[2] = ({}, job(0, '2026-09-21T03:00:00Z', ('temperature-500',)), 'wcs')
+    assert s.select_ready(w, pending, active, ready, ready.wait + 1, [], 3, 2) is None
+
+
+def test_sp1_deadline_is_absolute_even_while_download_grows(ready, monkeypatch):
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: False)
+    size = [1]
+    monkeypatch.setattr(s.packages, '_partial_sizes', lambda p: {('part', 1): size[0]})
+    native = job(0, H1, ('shortwave-down',))
+    assert ready.mode(native, 1) == 'downloading'
+    size[0] += 100
+    assert ready.mode(native, ready.sp1_wait) == 'wcs_parallel'
+    ready.observe({'run': RUN, 'expected_times': [H1]}, ready.sp1_wait + 1)
+    assert ready.mode(native, ready.sp1_wait + 2) == 'wcs_parallel'
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: True)
+    assert ready.mode(native, ready.sp1_wait + 3) == 'ready'
+
+
+def test_sp1_wait_is_independent_and_zero_disables_it(monkeypatch):
+    monkeypatch.setenv('METEOLABX_AROME_PACKAGE_WAIT_S', '0')
+    monkeypatch.setenv('METEOLABX_AROME_SP1_WAIT_S', '20')
+    monkeypatch.setattr(s, '_packages_available', lambda: True)
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: False)
+    monkeypatch.setattr(s.packages, '_partial_sizes', lambda p: {})
+    r = s.Readiness(w)
+    r.observe({'run': RUN, 'expected_times': [H1]}, 0)
+    native = job(0, H1, ('cloud-cover',))
+    assert r.mode(native, 19) == 'publication'
+    assert r.mode(native, 20) == 'wcs_parallel'
+    monkeypatch.setenv('METEOLABX_AROME_SP1_WAIT_S', '0')
+    assert s.Readiness(w).mode(native, 0) == 'wcs_parallel'
+    monkeypatch.setattr(s, '_packages_available', lambda: False)
+    assert r.mode(native, 0) == 'wcs_parallel'
+    assert r.mode(job(0, H1, ('temperature-850',)), 0) == 'wcs'
+
+
+def test_mixed_ip1_sp1_job_keeps_serialized_fallback(ready, monkeypatch):
+    monkeypatch.setattr(s.packages, 'package_ready', lambda *a: False)
+    work = job(0, H1, ('temperature-850', 'temperature-2m'))
+    assert ready.mode(work, ready.sp1_wait + 1) == 'publication'
+    assert ready.mode(work, ready.wait + 1) == 'wcs'
+
+
+def test_the_cappi_waits_for_ip1_ip4_and_sp2(ready, monkeypatch):
+    """El CAPPI sale de tres paquetes; por el WCS son once peticiones por hora."""
+    cappi = job(1, products=("reflectivity-cappi-1500",))
+    monkeypatch.setattr(s.packages, "package_ready", lambda p, *a: p in {"IP1", "SP2"})
+    assert ready.mode(cappi, 10) == "publication"
+    assert ready.mode(cappi, 10 + ready.wait + 1) == "wcs"
+    monkeypatch.setattr(s.packages, "package_ready", lambda p, *a: p in {"IP1", "IP4", "SP2"})
+    assert ready.mode(cappi, 400) == "ready"

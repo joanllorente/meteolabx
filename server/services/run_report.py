@@ -226,7 +226,7 @@ IDLE_REASONS = {
     "memoria": "freno de memoria",
     "espaciado": "15 s entre perfiles",
     "tope_pesados": "tope de perfiles",
-    "wcs": "un solo WCS a la vez",
+    "wcs": "cola WCS serializada (IP1/perfiles)",
     "solapado": "hora ya en cálculo",
     "cuota": "cuota de admisiones",
     "otro": "otros",
@@ -428,6 +428,10 @@ def build_report(
         "occupancy": _overall_occupancy(manifest),
         "idle": _idle(manifest),
         "resources": recursos,
+        "wcs": {
+            "http": (manifest.get("resource_usage") or {}).get("wcs"),
+            "jobs": manifest.get("job_routes"),
+        },
         "failures": fallos,
         "cost": coste,
         "errors": errores,
@@ -483,6 +487,39 @@ def render_text(report: dict[str, Any]) -> str:
                     for motivo in parado["by_reason"]
                 )
             lineas.append(linea)
+
+    wcs = report.get("wcs") or {}
+    http, jobs = wcs.get("http"), wcs.get("jobs")
+    if http is not None or jobs is not None:
+        lineas.append("")
+        lineas.append("WCS de los trabajos de esta pasada:")
+        if http is not None:
+            lineas.append(
+                f"  · HTTP: {http['requests']} peticiones reales "
+                f"({http['coverage_requests']} GetCoverage, "
+                f"{http['metadata_requests']} metadatos); "
+                f"{http['retries']} reintentos incluidos."
+            )
+            statuses = http.get("by_status") or {}
+            lineas.append(
+                f"  · Respuestas 429: {statuses.get('429', 0)}; "
+                f"errores de conexión: {statuses.get('connection_error', 0)}; "
+                f"intentos sin respuesta registrada: {http.get('without_response', 0)}."
+            )
+            lineas.append(f"  · Peticiones medidas desde {http.get('observed_since', '?')}.")
+        else:
+            lineas.append("  · Peticiones HTTP: sin medición.")
+        if jobs is not None:
+            for mode, label in (("wcs", "cola WCS serializada"),
+                                ("wcs_parallel", "WCS paralelo SP1")):
+                counts = jobs.get("by_mode", {}).get(mode, {})
+                lineas.append(
+                    f"  · {label}: {counts.get('started', 0)} trabajos admitidos, "
+                    f"{counts.get('completed', 0)} completados, {counts.get('failed', 0)} fallidos."
+                )
+            if jobs.get("partial"):
+                lineas.append(f"  · Medición parcial de trabajos desde {jobs.get('observed_since', '?')}.")
+            lineas.append("  · Las vías cuentan intentos de trabajo; las peticiones cuentan HTTP, no caché.")
 
     recursos = report.get("resources") or {}
     coste = report.get("cost") or {}

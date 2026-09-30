@@ -13,6 +13,11 @@ const MF_AROME = {
   url: 'https://portail-api.meteofrance.fr/web/fr/api/AROME'
 };
 
+const MARSHALL_PALMER = {
+  label: 'Marshall & Palmer (1948) · The distribution of raindrops with size',
+  url: 'https://doi.org/10.1175/1520-0469(1948)005%3C0165:TDORWS%3E2.0.CO;2'
+};
+
 const NOAA_CAPE = {
   label: 'NOAA/NWS · parámetros convectivos e interpretación de CAPE',
   url: 'https://www.weather.gov/lmk/indices'
@@ -393,6 +398,27 @@ export const forecastProductGuides = {
       'Clases de 5 en 5 dBZ hasta 70; por debajo de 5 no se pinta.'
     ],
     sources: [MF_AROME, MF_API]
+  },
+  'reflectivity-cappi-1500': {
+    what: 'Reflectividad simulada a 1.500 m sobre el nivel del mar, en dBZ: un CAPPI, el corte a altitud constante con el que trabajan los radares. Enseña la precipitación en capas bajas, cerca de lo que llega al suelo.',
+    interpretation: [
+      'Frente a la MAX, que se queda con el valor mayor de toda la columna, el CAPPI mira a una sola altitud. Una tormenta con el núcleo en altura sale mucho más intensa en la MAX; en el CAPPI se ve la lluvia que ya está cayendo.',
+      'Es el corte más parecido a los CAPPI de los radares de AEMET o Meteocat, así que sirve para comparar el modelo con lo que se está midiendo.',
+      'Donde el terreno supera los 1.500 m —Pirineo, Alpes, Sistema Central— el corte queda bajo tierra y el mapa va sin color, igual que en un radar.',
+      'Mismos órdenes que en la MAX: por debajo de 20 dBZ, lluvia débil; entre 20 y 35, moderada; por encima de 40, convección. Sin color por debajo de 5 dBZ.'
+    ],
+    method: 'AROME publica la reflectividad en niveles de presión. MeteoLabX busca en cada celda los dos niveles que encierran 1.500 m —su altura sale del geopotencial— e interpola entre ellos en reflectividad lineal, no en dBZ: la escala logarítmica exageraría los ecos débiles al mezclarlos con uno fuerte.',
+    equations: [
+      { label: 'Del paquete a reflectividad (Marshall-Palmer)', latex: String.raw`Z=200\,R^{1.6},\qquad \mathrm{dBZ}=10\log_{10}Z` },
+      { label: 'Interpolación en altura', latex: String.raw`Z(h)=Z_1+\frac{h-h_1}{h_2-h_1}\,(Z_2-Z_1),\qquad h=\frac{\Phi}{g_0}` }
+    ],
+    steps: [
+      'Reflectividad de AROME en 925, 900, 850, 800 y 750 hPa, que siempre encierran 1.500 m. El paquete la da como lluvia equivalente R en mm/h y se pasa a Z con Marshall-Palmer.',
+      'Altura de cada nivel sobre el mar a partir del geopotencial.',
+      'Interpolación lineal en Z entre los dos niveles que encierran 1.500 m, y paso a dBZ.',
+      'Sin valor donde la presión en superficie es menor que la de 1.500 m: ahí el corte está bajo tierra.'
+    ],
+    sources: [MF_AROME, MF_API, MARSHALL_PALMER]
   },
   'mslp-theta-e-850': {
     what: 'Temperatura potencial equivalente en 850 hPa, en °C, con la presión al nivel del mar en isobaras y sus centros marcados. La theta-e resume en un solo número el calor y la humedad que trae el aire, y se conserva tanto si la masa sube seca como si condensa: por eso identifica a la masa misma y no al termómetro de un momento, y permite identificar los frentes que separan unas masas de otras.',

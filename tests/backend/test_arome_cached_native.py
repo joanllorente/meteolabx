@@ -94,7 +94,7 @@ def test_the_air_mass_map_takes_three_of_its_four_coverages_from_disk(monkeypatc
     """Era el producto más caro de la pasada: 1.738 s de los 7.484 del 24/09.
 
     Cuesta cuatro coberturas WCS por hora y tres están en paquetes que ya se
-    bajan para los perfiles. La MSLP no la publica ninguno y sigue por el WCS.
+    bajan para los perfiles. La MSLP de SP1 se resuelve aparte, con fallback independiente al WCS.
     """
     _paquetes_listos(monkeypatch,temperatura=np.full((1,2),273.15+10.),
                      humedad=np.full((1,2),100.),presion=np.full((1,2),101325.))

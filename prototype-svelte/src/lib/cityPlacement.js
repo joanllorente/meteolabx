@@ -19,11 +19,22 @@
  */
 import { frameGeo } from './projection.js';
 
+/**
+ * Zoom desde el que entran los núcleos de 5.000 a 15.000 habitantes.
+ *
+ * Solo el último salto del botón de ampliar (8×): ahí la pantalla cubre unos
+ * pocos miles de km² y, sin ellos, comarcas enteras de interior se quedaban
+ * sin un solo nombre. El componente usa el mismo corte para pedir el fichero,
+ * que pesa casi el doble que el resto del catálogo.
+ */
+export const CITY_DETAIL_ZOOM = 7;
+
 export function cityRank(zoomLevel) {
   if (zoomLevel < 2.8) return 3;
   if (zoomLevel < 3.8) return 4;
   if (zoomLevel < 5) return 5;
-  return 6;
+  if (zoomLevel < CITY_DETAIL_ZOOM) return 6;
+  return 7;
 }
 
 /**
@@ -53,9 +64,16 @@ export function cityRoom(zoomLevel) {
  *
  * El reparto va por orden de importancia, que es el del catálogo: si dos
  * rótulos se pisan sobrevive el de la ciudad mayor.
+ *
+ * `bounds` lleva un margen alrededor de la pantalla para que al arrastrar no
+ * aparezcan huecos; `visible` es la pantalla sola, y el tope `max` cuenta solo
+ * lo que cae dentro. Si contara también el margen, las ciudades mayores de
+ * fuera de la vista se comían el cupo antes de llegar a los pueblos que sí se
+ * ven, y cada desplazamiento cambiaba cuáles: Tauste o Zuera aparecían y
+ * desaparecían según hacia dónde se moviera el mapa.
  */
 export function placeCities({
-  catalogue, frame, bounds, viewZoom, labelScale, format, max = 60
+  catalogue, frame, bounds, visible = bounds, viewZoom, labelScale, format, max = 60
 }) {
   if (!frame?.bounds && !frame?.lcc) return [];
   const geo = frameGeo(frame);
@@ -66,9 +84,10 @@ export function placeCities({
   const altura = 34 * escala;
   const holgura = cityRoom(viewZoom);
   const puestas = [];
+  let enPantalla = 0;
   for (const [name, latitude, longitude, rank] of catalogue) {
     if (rank > limite) continue;
-    if (puestas.length >= max) break;
+    if (enPantalla >= max) break;
     const [x, y] = geo.toGrid(longitude, latitude);
     if (x < bounds.west || x > bounds.east || y < bounds.north || y > bounds.south) continue;
     const column = Math.floor(x);
@@ -87,6 +106,9 @@ export function placeCities({
     });
     if (choca) continue;
     puestas.push({ name, x, y, anchura, secundaria, text: format(value) });
+    if (x >= visible.west && x <= visible.east && y >= visible.north && y <= visible.south) {
+      enPantalla += 1;
+    }
   }
   return puestas;
 }

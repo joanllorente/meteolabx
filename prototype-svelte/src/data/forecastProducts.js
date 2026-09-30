@@ -309,6 +309,7 @@ const allForecastProducts = [
   {
     id: 'wind-gust', category: 'dynamics', label: 'Racha máxima horaria a 10 m', short: 'Racha máx. 10 m', kind: 'native',
     unit: 'm/s', min: 0, max: 45, palette: 'wind', accent: '#62a9f5', vectors: false,
+    cityLabels: true,
     description: 'Racha máxima prevista durante la hora, útil para localizar aceleraciones por relieve, frentes y convección.',
     method: 'Racha máxima de AROME (WIND_SPEED_GUST_MAX) a 10 m durante la hora anterior.', coverage: 'WIND SPEED GUST MAX · 10 m · 1 h'
   },
@@ -479,6 +480,16 @@ const allForecastProducts = [
     coverage: 'AROME · REFLECTIVITY MAX DBZ · superficie'
   },
   {
+    id: 'reflectivity-cappi-1500', category: 'precipitation', label: 'Reflectividad simulada CAPPI 1,5 km', short: 'CAPPI 1,5 km', kind: 'derived',
+    unit: 'dBZ', min: 0, max: 70, palette: 'reflectivity', accent: '#e8606b', vectors: false,
+    // La misma escala que la MAX, para que se puedan comparar de un vistazo.
+    scaleBreaks: [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70],
+    zeroFloor: 5,
+    description: 'Reflectividad simulada a 1.500 m sobre el nivel del mar, en dBZ, como el CAPPI de un radar. A diferencia de la MAX, corta la columna a una altitud fija: enseña la precipitación cerca del suelo y no el núcleo más intenso de la tormenta.',
+    method: 'MeteoLabX interpola la reflectividad de AROME entre los niveles de presión que encierran 1.500 m, con su altura sacada del geopotencial. Sin valor donde el terreno supera esa altitud.',
+    coverage: 'Diagnóstico MeteoLabX · reflectividad y geopotencial en niveles de presión'
+  },
+  {
     id: 'lightning-density', category: 'severe', label: 'Densidad de rayos en 3 h', short: 'Rayos 3 h', kind: 'native',
     unit: 'rayos/km²', min: 0, max: 8, palette: 'lightning', accent: '#ecdb58', vectors: false,
     description: 'Densidad media de descargas eléctricas prevista por AROME durante tres horas.',
@@ -607,6 +618,7 @@ const initialProductIds = [
   'precip-type',
   'snow-level',
   'reflectivity',
+  'reflectivity-cappi-1500',
   'ecmwf-mslp-theta-e-850',
   'ecmwf-temperature-850',
   'ecmwf-temperature-500',

@@ -35,20 +35,30 @@ class Readiness:
         self.seen = {}
         self.progress = {}
         self.wait = max(0, float(os.getenv("METEOLABX_AROME_PACKAGE_WAIT_S", "180")))
+        self.sp1_wait = max(0, float(os.getenv("METEOLABX_AROME_SP1_WAIT_S", "45")))
         self.stall = max(0, float(os.getenv("METEOLABX_AROME_PACKAGE_STALL_S", "60")))
 
-    def _only_ip1_products(self, job):
-        """Si todo lo que calcula el trabajo se ahorra peticiones con IP1.
+    def _native_packages(self, job):
+        """Paquetes aprovechables por todos los productos de este trabajo."""
+        from server.services.arome_forecast import (
+            IP1_BACKED_PRODUCTS, PACKAGE_DERIVED_PRODUCTS, SP1_BACKED_PRODUCTS,
+        )
 
-        Un trabajo mixto no espera: sus otros productos irían al WCS
-        igualmente y la espera no ahorraría nada. El mapa de masas de aire sí
-        cuenta aunque siga pidiendo la MSLP: con IP1 pasa de cuatro
-        coberturas a una.
-        """
-        from server.services.arome_forecast import IP1_BACKED_PRODUCTS
-
-        productos = set(job.products)
-        return bool(productos) and productos <= IP1_BACKED_PRODUCTS
+        products = set(job.products)
+        # Derivados que salen enteros de paquetes, como el CAPPI: se esperan
+        # igual que un nativo de IP1, porque su respaldo por el WCS es caro.
+        if products and products <= set(PACKAGE_DERIVED_PRODUCTS):
+            return set().union(*(PACKAGE_DERIVED_PRODUCTS[p] for p in products))
+        if not products or not products <= IP1_BACKED_PRODUCTS | SP1_BACKED_PRODUCTS:
+            return set()
+        wanted = set()
+        if products & IP1_BACKED_PRODUCTS:
+            wanted.add("IP1")
+        if products & SP1_BACKED_PRODUCTS:
+            wanted.add("SP1")
+        if "mslp-theta-e-850" in products:
+            wanted.update(("SP1", "SP2"))
+        return wanted
 
     def observe(self, manifest, now):
         # First catalog observation, even if earlier tiers still have work.
@@ -66,23 +76,35 @@ class Readiness:
         return bool(sizes) and now - changed < self.stall
 
     def mode(self, job, now):
-        if job.tier < 2 and not self._only_ip1_products(job):
+        native_packages = self._native_packages(job) if job.tier < 2 else set()
+        sp1_only = native_packages == {"SP1"}
+        if job.tier < 2 and not native_packages:
             return "ready"
         if not _packages_available():
-            return "wcs"
+            return "wcs_parallel" if sp1_only else "wcs"
         run, valid = self.w._parse_iso(job.run), self.w._parse_iso(job.valid_time)
         if job.tier < 2:
-            # Nativos que IP1 sirve enteros. Merece la pena esperar a que el
-            # bloque esté: son seis peticiones por hora, y el barrido de
-            # nativos adelanta a la precarga porque recorre las 52 horas en un
-            # cuarto de hora. La espera es la misma que la de los perfiles y
-            # tiene la misma salida: pasado el plazo, WCS.
-            if packages.package_ready("IP1", run, valid):
+            # Espera acotada para aprovechar IP1/SP1 antes de recurrir al WCS.
+            missing = [(p, valid) for p in sorted(native_packages)
+                       if not packages.package_ready(p, run, valid)]
+            # La primera hora de un bloque necesita el acumulado anterior
+            # para restar lluvia/radiación; puede estar en otro fichero.
+            if set(job.products) & {"precip-1h", "shortwave-down"}:
+                from datetime import timedelta
+                previous = valid - timedelta(hours=1)
+                if previous > run and not packages.package_ready("SP1", run, previous):
+                    missing.append(("SP1", previous))
+            if not missing:
                 return "ready"
-            if self.downloading("IP1", run, valid, now):
-                return "downloading"
             first = self.seen.setdefault((job.run, job.valid_time), now)
-            return "publication" if now - first < self.wait else "wcs"
+            # SP1 no retiene los huecos al final de la pasada, ni siquiera
+            # si la descarga sigue avanzando. El lector sigue siendo local
+            # y oportunista: aprovechará el paquete si llega antes de leerlo.
+            if sp1_only and now - first >= self.sp1_wait:
+                return "wcs_parallel"
+            if any(self.downloading(p, run, instant, now) for p, instant in missing):
+                return "downloading"
+            return "publication" if sp1_only or now - first < self.wait else "wcs"
         # IP3 supplies vertical velocity for profiles, dewpoint for DCAPE.
         missing = [p for p in ("IP1", "IP3") if not packages.package_ready(p, run, valid)]
         if not missing:
@@ -98,7 +120,7 @@ class Readiness:
 
 def select_ready(worker, pending, active, readiness, now, heavy_launches, workers, heavy_workers,
                  why=None):
-    """Highest priority admissible work; one shared heavy and WCS allowance.
+    """Highest priority work; serialize expensive WCS fallback, not SP1.
 
     ``heavy_launches`` son los instantes en que salieron los últimos pesados:
     los que aún crecen reservan su memoria aparte.
@@ -132,7 +154,7 @@ def select_ready(worker, pending, active, readiness, now, heavy_launches, worker
                 skip("espaciado")
                 continue
         mode = readiness.mode(job, now)
-        if mode == "ready" or (mode == "wcs" and not wcs):
+        if mode in {"ready", "wcs_parallel"} or (mode == "wcs" and not wcs):
             return index, mode
         skip("wcs" if mode == "wcs" else "paquete")
     return None
@@ -413,7 +435,7 @@ def run_watch(w, args, stop):
                         index, mode = selected
                         manifest, job = pending.pop(index)
                         timeout = max(1, args.derived_timeout if job.tier else args.native_timeout)
-                        w._mark_job_started(manifest, job, timeout, slots=limit_workers)
+                        w._mark_job_started(manifest, job, timeout, slots=limit_workers, mode=mode)
                         w._persist_manifest(store, manifest, latest_run=registry.latest)
                         future = jobs.submit(w._run_isolated_job, job, timeout, scheduled=True)
                         active[future] = (manifest, job, mode)

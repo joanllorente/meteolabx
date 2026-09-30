@@ -406,9 +406,11 @@ def test_domain_boundaries_are_cached_without_changing_the_result(tmp_path, monk
     bounds = sa.AROME_MODEL_GRID_BOUNDS
     monkeypatch.setattr(sa, "_load_forecast_regions_geojson", _unexpected_remote_regions)
 
+    # El visor de AROME lleva también las provincias.
     directo = sa._boundary_payload(
-        sa._model_boundary_geojson({"features": []}, bounds)
+        sa._model_boundary_geojson({"features": []}, bounds, include_admin2=True)
     )
+    assert any(region["level"] == "admin2" for region in directo)
     generado = sa._domain_boundary_payload(bounds, "model")
     assert generado == directo
     assert list(tmp_path.glob("boundaries-*.json")), "no se escribió la caché"
@@ -430,7 +432,7 @@ def test_boundary_cache_falls_back_when_the_directory_is_unusable(tmp_path, monk
     monkeypatch.setattr(sa, "_load_forecast_regions_geojson", _unexpected_remote_regions)
 
     esperado = sa._boundary_payload(
-        sa._model_boundary_geojson({"features": []}, bounds)
+        sa._model_boundary_geojson({"features": []}, bounds, include_admin2=True)
     )
     assert sa._domain_boundary_payload(bounds, "model") == esperado
 

@@ -47,3 +47,9 @@ test('las isentrópicas tienen nombre propio en todos los idiomas', async () => 
     assert.equal(forecastLayerLabel(lang, 'isentropes', 'Isentrópicas'), word);
   }
 });
+
+test('cada idioma nombra las isopletas de LI', () => {
+  for (const idioma of IDIOMAS) {
+    assert.ok(forecastLayerLabel(idioma, 'liContours', ''), `${idioma} no traduce liContours`);
+  }
+});

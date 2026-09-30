@@ -168,6 +168,18 @@
     ],
     "privacy_contact_title": "Contacte",
     "privacy_contact": "Per a qualsevol consulta sobre privacitat o sobre el tractament de la informació, pots escriure a",
+    "release_221_improvements": [
+      "Nou mapa de reflectivitat simulada CAPPI a 1,5 km.",
+      "Més localitats i províncies als mapes d'AROME amb el zoom alt.",
+      "Ciutats al mapa de ratxa màxima.",
+      "Terra i mar diferenciats als mapes de precipitació.",
+      "La passada del model apareix als PNG descarregats."
+    ],
+    "release_221_fixes": [
+      "S'han corregit les unitats i el nom del model als PNG descarregats.",
+      "S'ha corregit la rosa dels vents, que no apareixia en estacions amb poques lectures.",
+      "S'ha corregit el desplegable de preferits de Predicció, que al mòbil sortia de la pantalla."
+    ],
     "release_220_improvements": [
       "Nous models: ECMWF 0,25° i AROME-IFS 0,025°.",
       "AROME ara fa servir la projecció de Lambert en lloc de l'equirectangular.",

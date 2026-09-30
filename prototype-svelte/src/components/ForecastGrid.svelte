@@ -5,7 +5,7 @@
     paletteStop, precipitationPalette, divergingPalette, thetaEPalette, windPalette,
   } from '../lib/palettes.js';
   import { contourLines, stepLevels } from '../lib/contours.js';
-  import { placeCities } from '../lib/cityPlacement.js';
+  import { CITY_DETAIL_ZOOM, placeCities } from '../lib/cityPlacement.js';
   import { troughAxes as detectTroughAxes, troughAxesLonLat as detectTroughAxesLonLat, troughAxesProjected as detectTroughAxesProjected } from '../lib/troughs.js';
   import { frameGeo } from '../lib/projection.js';
   import {
@@ -60,6 +60,7 @@
       : capa.id === 'troughs' ? troughAxes && Boolean(frame.overlay)
       : capa.id === 'cities' ? cityLabels
       : capa.id === 'multipleSolutions' ? multipleSolutions && Boolean(frame.overlay)
+      : capa.id === 'liContours' ? showsIndexContours
       : pressureCentres && Boolean(frame.overlay)
   // La capa superpuesta se llama distinto según el campo: isohipsas en un
   // mapa de geopotencial e isobaras en uno de presión. El nombre alternativo
@@ -76,6 +77,10 @@
   )));
   const showValueContours = $derived(contourStep > 0 && layerPreferences[contourLayerId]);
   const showIsohypses = $derived(overlayStep > 0 && layerPreferences.isohypses);
+  // Isopletas del índice superpuesto sin paso propio: el LI de los mapas de
+  // CAPE. Son lo único que dibuja esa rama, así que su casilla sale solo ahí.
+  const showsIndexContours = $derived(Boolean(frame.overlay) && !multipleSolutions && !(overlayStep > 0));
+  const showLiContours = $derived(showsIndexContours && layerPreferences.liContours);
 
   // Ancho de rejilla con el que se ajustaron los rótulos: el dominio nativo de
   // AROME.
@@ -141,6 +146,16 @@
       cityCatalogue = modulo.CITY_LABELS;
     });
   });
+  // Los núcleos pequeños, aparte y solo con el zoom a fondo. Van detrás del
+  // catálogo principal: el orden decide quién gana cuando dos se pisan.
+  let cityDetail = $state([]);
+  $effect(() => {
+    if (!showCities || viewZoom < CITY_DETAIL_ZOOM || cityDetail.length) return;
+    import('../data/cityLabelsDetail.js').then((modulo) => {
+      cityDetail = modulo.CITY_LABELS_DETAIL;
+    });
+  });
+  const cityRows = $derived(cityDetail.length ? [...cityCatalogue, ...cityDetail] : cityCatalogue);
   const showCentres = $derived(pressureCentres && layerPreferences.centres);
   const showMultipleSolutions = $derived(multipleSolutions && layerPreferences.multipleSolutions);
   const profileHint = $derived(({
@@ -298,7 +313,10 @@
       const colors = new Map();
       for (let index = 0; index < values.length; index += 1) {
         const type = precipitationType(values[index]);
-        if (!type) continue;
+        // Donde no precipita no se pinta: con el gris de «sin precipitación»
+        // encima, el mapa entero quedaba de un color y no se veía dónde acaba
+        // la tierra y empieza el mar. El globo del cursor lo sigue diciendo.
+        if (!type || type.code === 0) continue;
         if (!colors.has(type.code)) {
           const hex = type.color.slice(1);
           colors.set(type.code, packColor(
@@ -433,14 +451,15 @@
         if (trazo) paths.push({ path: trazo, level: region.level || 'country' });
       }
     }
-    // Las divisiones interiores se dibujan primero para que la frontera nacional
-    // conserve exactamente su grosor y color en costas y límites internacionales.
-    return paths.sort((left, right) =>
-      (left.level === 'country' ? 1 : 0) - (right.level === 'country' ? 1 : 0)
-    );
+    // Las divisiones interiores se dibujan primero —de la más fina a la más
+    // gruesa— para que en un límite compartido mande la de más rango: la
+    // frontera nacional conserva su grosor y color en costas y límites
+    // internacionales, y la de comunidad no queda tapada por la de provincia.
+    const orden = { admin2: 0, admin1: 1, country: 2 };
+    return paths.sort((left, right) => (orden[left.level] ?? 1) - (orden[right.level] ?? 1));
   }
 
-  function visibleSourceBounds() {
+  function visibleSourceBounds(margen = .3) {
     const renderedWidth = surface?.clientWidth || frame.width;
     const renderedHeight = surface?.clientHeight || frame.height;
     // Se usa el encuadre asentado, no el del gesto en curso: integrar las
@@ -453,8 +472,8 @@
     const sourceY = (screenY) => centerY + (screenY - userPanY - centerY) / viewZoom;
     // El margen mantiene glifos ya calculados fuera de cuadro, de modo que el
     // arrastre no descubre zonas vacías antes de que el encuadre se asiente.
-    const marginX = frame.width * .3 / viewZoom;
-    const marginY = frame.height * .3 / viewZoom;
+    const marginX = frame.width * margen / viewZoom;
+    const marginY = frame.height * margen / viewZoom;
     return {
       west: Math.max(0, sourceX(0) - marginX),
       east: Math.min(frame.width, sourceX(frame.width) + marginX),
@@ -539,6 +558,91 @@
 
 
   const boundaryPaths = $derived(makeBoundaryPaths());
+
+  /**
+   * Relleno de tierra, debajo del campo.
+   *
+   * En los mapas que solo colorean donde pasa algo —precipitación, nieve,
+   * tipo de precipitación— el resto del ráster es transparente, y tierra y mar
+   * salían del mismo gris: sin costa a la vista no se sabía dónde acababa el
+   * continente. Se rellenan los países con un tono cálido y neutro que no usa
+   * ninguna paleta, así que no se confunde con un valor del campo.
+   *
+   * A diferencia de las fronteras, aquí sí hacen falta los cierres por el
+   * borde del recorte: sin ellos el polígono no encierra nada. En una LCC ese
+   * borde es un paralelo que se curva, así que los tramos largos se parten
+   * para que el cierre siga la curva y no corte el mapa en diagonal.
+   */
+  function makeLandPath() {
+    if (!frame.boundaries?.length) return '';
+    let trazo = '';
+    const punto = (longitude, latitude) => {
+      const [x, y] = geo.toGrid(longitude, latitude);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    };
+    for (const region of frame.boundaries) {
+      if ((region.level || 'country') !== 'country') continue;
+      for (const ring of region.rings) {
+        if (ring.length < 3) continue;
+        trazo += `M${punto(ring[0][0], ring[0][1])}`;
+        for (let i = 1; i <= ring.length; i += 1) {
+          const [lonA, latA] = ring[i - 1];
+          const [lonB, latB] = ring[i % ring.length];
+          const pasos = Math.min(40, Math.ceil(Math.max(Math.abs(lonB - lonA), Math.abs(latB - latA)) / 0.25));
+          for (let paso = 1; paso <= pasos; paso += 1) {
+            const t = paso / pasos;
+            trazo += `L${punto(lonA + (lonB - lonA) * t, latA + (latB - latA) * t)}`;
+          }
+        }
+        trazo += 'Z';
+      }
+    }
+    return trazo;
+  }
+  const landPath = $derived(makeLandPath());
+
+  /**
+   * Celdas con dato, como máscara de la tierra.
+   *
+   * No todos los campos cubren el dominio entero: el tipo de precipitación de
+   * AROME, por ejemplo, deja sin dato una franja al este y otra al oeste. Ahí
+   * el ráster es transparente, y sin recortar asomaba la tierra en beige donde
+   * el modelo no dice nada. Con la máscara, fuera del campo vuelve a verse el
+   * fondo liso. Si todas las celdas tienen dato no hace falta.
+   */
+  function makeDataMask() {
+    const { width, height, values } = frame;
+    if (!values?.length || typeof document === 'undefined') return '';
+    let huecos = false;
+    for (let index = 0; index < values.length; index += 1) {
+      if (!Number.isFinite(values[index])) { huecos = true; break; }
+    }
+    if (!huecos) return '';
+    const lienzo = document.createElement('canvas');
+    lienzo.width = width;
+    lienzo.height = height;
+    const contexto = lienzo.getContext('2d');
+    const pixels = contexto.createImageData(width, height);
+    const blanco32 = new Uint32Array(pixels.data.buffer);
+    for (let index = 0; index < values.length; index += 1) {
+      if (Number.isFinite(values[index])) blanco32[index] = 0xffffffff;
+    }
+    contexto.putImageData(pixels, 0, 0);
+    return lienzo.toDataURL('image/png');
+  }
+  const dataMask = $derived(landPath ? makeDataMask() : '');
+  const uid = $props.id();
+  const maskId = `land-mask-${uid}`;
+  const clipId = `land-clip-${uid}`;
+  // Provincias, départements y demás solo con el zoom alto: con el mapa
+  // entero son una maraña que tapa el campo, y a partir de aquí la pantalla
+  // cubre media comunidad y ya no queda ninguna referencia entre fronteras.
+  // Se filtra al pintar, no al construir los trazos, para no rehacerlos en
+  // cada cambio de zoom.
+  const ADMIN2_ZOOM = 4;
+  const visibleBoundaryPaths = $derived(
+    viewZoom >= ADMIN2_ZOOM ? boundaryPaths : boundaryPaths.filter((item) => item.level !== 'admin2')
+  );
 
   function makeStreamlinePaths() {
     if (!frame.u || !frame.v || !flowLines) {
@@ -844,7 +948,7 @@
     }
     // Isolíneas del índice superpuesto (el LI de los mapas de CAPE). Pesan
     // más cuanto más inestable: el −6 importa más que el +2.
-    if (frame.overlay && !multipleSolutions && !(overlayStep > 0)) {
+    if (showLiContours) {
       groups.push({
         kind: 'index',
         contours: contourPaths,
@@ -870,9 +974,10 @@
   const cities = $derived.by(() => (
     showCities
       ? placeCities({
-          catalogue: cityCatalogue,
+          catalogue: cityRows,
           frame,
           bounds: visibleSourceBounds(),
+          visible: visibleSourceBounds(0),
           viewZoom,
           labelScale: textScale,
           format: (value) => (
@@ -1164,6 +1269,24 @@
     ondblclick={(event) => setZoom(zoom * 1.7, event.clientX, event.clientY)}
     onpointerleave={() => (hover = null)}
   >
+    {#if landPath}
+      <svg class="land-overlay" viewBox={`0 0 ${frame.width} ${frame.height}`} preserveAspectRatio="none" aria-hidden="true">
+        <g transform={vectorTransform()}>
+          <!-- Las fronteras son las del dominio del modelo, pero un campo puede
+               llegar recortado: fuera de su rejilla la tierra no tiene nada
+               que separar y asomaría en beige junto al campo. -->
+          <clipPath id={clipId}>
+            <rect x="0" y="0" width={frame.width} height={frame.height} />
+          </clipPath>
+          {#if dataMask}
+            <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width={frame.width} height={frame.height}>
+              <image href={dataMask} x="0" y="0" width={frame.width} height={frame.height} preserveAspectRatio="none" style="image-rendering:pixelated" />
+            </mask>
+          {/if}
+          <path class="land" d={landPath} clip-path={`url(#${clipId})`} mask={dataMask ? `url(#${maskId})` : undefined} />
+        </g>
+      </svg>
+    {/if}
     <canvas
       class="grid-raster"
       bind:this={raster}
@@ -1224,7 +1347,7 @@
             d={contour.path}
           />
         {/each}
-        {#each (overlayStep > 0 && !showIsohypses) ? [] : contourPaths as contour}
+        {#each (overlayStep > 0 ? !showIsohypses : !showLiContours) ? [] : contourPaths as contour}
           {#if overlayStep > 0}
             <path class="height-contour-halo" style:stroke-width={overlayWidth.fuerte + 1.1} d={contour.path} />
             <path
@@ -1277,10 +1400,11 @@
             >{label.text}</text>
           </g>
         {/each}
-        {#each boundaryPaths as boundary}
+        {#each visibleBoundaryPaths as boundary}
           <path
             class="region-boundary"
             class:admin-boundary={boundary.level === 'admin1'}
+            class:admin2-boundary={boundary.level === 'admin2'}
             d={boundary.path}
           />
         {/each}
@@ -1344,6 +1468,8 @@
   .stream-overlay{transform-origin:center;will-change:transform}
   .map-surface.profile-target:not(.dragging){cursor:pointer}
   .vector-overlay{position:absolute;inset:0;display:block;width:100%;height:100%}
+  .land-overlay{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:visible;pointer-events:none}
+  .land{fill:#e8e4da;stroke:none}
   /* El raster se compone en GPU: el encuadre no vuelve a rasterizar la malla. */
   .grid-raster{position:absolute;inset:0;display:block;width:100%;height:100%;image-rendering:pixelated;transform-origin:center;will-change:transform}
   .multiple-raster{pointer-events:none}
@@ -1415,7 +1541,7 @@
   .city-name{fill:#fff;stroke:rgba(9,16,24,.72);stroke-width:2.6px;paint-order:stroke;font-size:10.5px;font-weight:700;letter-spacing:.01em;pointer-events:none}
   .city-value{fill:#fff;stroke:rgba(9,16,24,.78);stroke-width:3px;paint-order:stroke;font-size:12px;font-weight:800;pointer-events:none}
   .region-boundary{fill:none;stroke:#0b0f12;stroke-width:.7;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-  .region-boundary.admin-boundary{stroke:rgba(11,15,18,.54);stroke-width:.32}
+  .region-boundary.admin-boundary{stroke:rgba(11,15,18,.54);stroke-width:.32}.region-boundary.admin2-boundary{stroke:rgba(11,15,18,.32);stroke-width:.26}
   .grid-tooltip{position:absolute;z-index:12;display:flex;flex-direction:column;gap:2px;min-width:142px;padding:8px 9px;transform:translate(12px,calc(-100% - 10px));border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#eef6fa;background:rgba(5,14,22,.9);box-shadow:0 8px 24px rgba(0,0,0,.3);backdrop-filter:blur(8px);pointer-events:none}
   .grid-tooltip.below{transform:translate(12px,16px)}.grid-tooltip.left{transform:translate(calc(-100% - 12px),calc(-100% - 10px))}.grid-tooltip.below.left{transform:translate(calc(-100% - 12px),16px)}
   .grid-tooltip strong{font-size:.59rem}.grid-tooltip span{color:#8ed1ff;font-size:.72rem;font-weight:720}.grid-tooltip small{color:rgba(235,244,251,.6);font-size:.5rem}

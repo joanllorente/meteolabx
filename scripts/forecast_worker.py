@@ -627,20 +627,23 @@ def _frame_path(store, job: ForecastJob, product: str) -> str:
 
 def _calculate_and_store_job(token: str, store, job: ForecastJob) -> None:
     """Calcula los productos del trabajo reutilizando el perfil convectivo."""
-    if job.products == (ACCUMULATED_PRECIP_PRODUCT,) and job.valid_times:
-        _store_accumulated_precip_series(token, store, job)
-        return
-    for product in job.products:
-        key = _frame_path(store, job, product)
-        if store.exists(key):
-            continue
-        content, _headers = frame_grid(
-            token,
-            product,
-            job.valid_time,
-            run_iso=job.run,
-        )
-        write_grid(store, key, content)
+    from server.services.arome_wcs_metrics import track_job
+
+    with track_job(job.run, job.products):
+        if job.products == (ACCUMULATED_PRECIP_PRODUCT,) and job.valid_times:
+            _store_accumulated_precip_series(token, store, job)
+            return
+        for product in job.products:
+            key = _frame_path(store, job, product)
+            if store.exists(key):
+                continue
+            content, _headers = frame_grid(
+                token,
+                product,
+                job.valid_time,
+                run_iso=job.run,
+            )
+            write_grid(store, key, content)
 
 
 def _store_accumulated_precip_series(token: str, store, job: ForecastJob) -> None:
@@ -825,7 +828,9 @@ def _start_package_prefetch(
             [orden, 0.0, (paquete, run, valid_time)]
             for orden, (paquete, run, valid_time) in enumerate(
                 (paquete, run, valid_time) for run, valid_time in objetivos
-                for paquete in ("IP1", "IP3", "SP1", "SP2")
+                # IP4 al final: solo lo usa el CAPPI, y son 64 MB por bloque
+                # frente al medio giga de IP1.
+                for paquete in ("IP1", "IP3", "SP1", "SP2", "IP4")
             )
         ]
         cerrojo = threading.Lock()
@@ -1038,7 +1043,8 @@ def _run_job(
 
 
 def _mark_job_started(
-    manifest: dict[str, Any], job: ForecastJob, timeout_s: int, *, slots: int = 1
+    manifest: dict[str, Any], job: ForecastJob, timeout_s: int, *, slots: int = 1,
+    mode: str = "unscheduled",
 ) -> None:
     now = _utc_now()
     manifest["worker_heartbeat_at"] = now
@@ -1051,7 +1057,19 @@ def _mark_job_started(
         "product": _group_label(job.products),
         "started_at": now,
         "timeout_seconds": timeout_s,
+        "mode": mode,
     }
+    # Admisiones, no peticiones: incluso un desvío WCS puede encontrar SP1
+    # cuando el hijo empieza. Los reintentos del trabajo cuentan por separado.
+    routes = manifest.setdefault("job_routes", {
+        "observed_since": now,
+        "partial": bool(manifest.get("tier_timing") or any(
+            state.get("available_times") for state in (manifest.get("products") or {}).values()
+        )),
+        "by_mode": {},
+    })
+    counts = routes["by_mode"].setdefault(mode, {"started": 0, "completed": 0, "failed": 0})
+    counts["started"] += 1
     # Marca de paso por nivel, para poder resumir la pasada al terminarla sin
     # tener que reconstruir la cronología de miles de líneas de log.
     tiempos = manifest.setdefault("tier_timing", {})
@@ -1136,8 +1154,15 @@ def _job_id(job: ForecastJob) -> str:
     return f"{job.run}|{job.valid_time}|{job.label}"
 
 
-def _clear_active_job(manifest: dict[str, Any], job: ForecastJob) -> None:
+def _clear_active_job(manifest: dict[str, Any], job: ForecastJob, *, outcome: str) -> None:
     progress = manifest.setdefault("progress", {})
+    entry = next((item for item in progress.get("active_jobs", ())
+                  if item.get("id") == _job_id(job)), None)
+    if entry and entry.get("mode"):
+        routes = (manifest.get("job_routes") or {}).get("by_mode", {})
+        counts = routes.get(entry["mode"])
+        if counts is not None:
+            counts[outcome] += 1
     _add_busy_time(manifest, job, progress.get("active_jobs", ()))
     active = [
         item for item in progress.get("active_jobs", ())
@@ -1232,6 +1257,14 @@ def _record_downloads(manifest: dict[str, Any]) -> None:
         )
     except Exception:
         logger.debug("No se pudieron contar las descargas de la pasada", exc_info=True)
+    try:
+        from server.services.arome_wcs_metrics import request_stats
+
+        stats = request_stats(_parse_iso(str(manifest["run"])))
+        if stats is not None:
+            manifest.setdefault("resource_usage", {})["wcs"] = stats
+    except Exception:
+        logger.debug("No se pudieron contar las peticiones WCS", exc_info=True)
 
 
 def _failure_kind(message: str) -> str:
@@ -1263,7 +1296,7 @@ def _mark_job_finished(manifest: dict[str, Any], job: ForecastJob) -> int:
             if valid_time not in available:
                 mark_available(manifest, product, valid_time)
                 completed += 1
-    _clear_active_job(manifest, job)
+    _clear_active_job(manifest, job, outcome="completed")
     manifest.setdefault("progress", {})["last_completed"] = {
         "run": job.run,
         "valid_time": job.valid_time,
@@ -1305,7 +1338,7 @@ def _mark_job_failed(
     fallos = manifest.setdefault("failure_kinds", {})
     fallos[clase] = int(fallos.get(clase, 0)) + 1
     _sample_resources(manifest)
-    _clear_active_job(manifest, job)
+    _clear_active_job(manifest, job, outcome="failed")
 
 
 def _log_why_incomplete(

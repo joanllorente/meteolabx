@@ -12,6 +12,7 @@ export const LAYERS = [
   { id: 'isotherms', label: 'Isotermas' },
   { id: 'snowContours', label: 'Isolíneas de cota de nieve' },
   { id: 'freezingContours', label: 'Isolíneas de altura de la iso 0 °C' },
+  { id: 'liContours', label: 'Isopletas de LI' },
   { id: 'isohypses', label: 'Isohipsas' },
   { id: 'troughs', label: 'Ejes de vaguada' },
   { id: 'centres', label: 'Centros de presión' },

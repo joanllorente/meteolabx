@@ -45,6 +45,7 @@ from shapely.ops import unary_union
 from zoneinfo import ZoneInfo
 
 from server.services.arome_models import AROME, AROME_SOURCES, current_source
+from server.services.arome_wcs_metrics import request_started, request_finished
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +217,10 @@ PREFIX_CANDIDATES = {
         "REFLECTIVITY_MAX_DBZ__GROUND_OR_WATER_SURFACE",
         "REFL_MAX_DBZ__GROUND",
     ],
+    # Reflectividad en dBZ por niveles de presión: el CAPPI la interpola a
+    # altitud constante. Solo es el respaldo del paquete IP4, que trae lo
+    # mismo sin gastar peticiones.
+    "pressure_reflectivity": ["REFLECTIVITY_DBZ__ISOBARIC_SURFACE"],
     "precipitation_1h": [
         "TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE",
         "PRECIP__GROUND",
@@ -456,18 +461,26 @@ def _api_get_sin_cache(
 ) -> Tuple[bytes, str]:
     response = None
     last_connection_error: Optional[requests.RequestException] = None
+    operation = url.rstrip("/").rsplit("/", 1)[-1]
     for attempt in range(API_MAX_ATTEMPTS):
+        sent = False
         try:
-            if url.rstrip("/").endswith("GetCoverage"):
+            if operation == "GetCoverage":
                 _wait_for_api_request_slot()
+            headers = _credential_headers(_token)
+            request_started(operation, attempt)
+            sent = True
             response = requests.get(
                 url,
                 params=list(params),
-                headers=_credential_headers(_token),
+                headers=headers,
                 timeout=90,
             )
+            request_finished(operation, response.status_code)
             last_connection_error = None
         except requests.RequestException as exc:
+            if sent:
+                request_finished(operation, None)
             last_connection_error = exc
             if attempt == API_MAX_ATTEMPTS - 1:
                 break

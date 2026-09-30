@@ -31,12 +31,15 @@ from server.services.arome_packages import (
     package_ready,
     SURFACE_ELEMENTS,
     read_surface_fields,
+    SP1_FIELDS,
+    read_sp1_field,
     AromePackageError,
     AromePackageNotReady,
     discard_packages_before,
     ensure_package,
     open_isobaric_extras,
     open_isobaric_profile,
+    open_isobaric_reflectivity,
     read_isobaric_profile,
 )
 from server.services.arome_models import (
@@ -182,6 +185,15 @@ PRODUCTS = {
         # y el progreso se quedaba clavado en el 99,9 % con cero errores.
         "starts_at_hour": 1,
         "value_mode": "nonnegative", "vmin": 0.0, "vmax": 70.0, "unit": "dBZ",
+    },
+    "reflectivity-cappi-1500": {
+        # Reflectividad simulada a 1.500 m sobre el nivel del mar, como el
+        # CAPPI de un radar. Sale del paquete IP4 con el geopotencial de IP1 y
+        # la presión en superficie de SP2; ver `_cappi_field`.
+        "kind": "cappi", "altitude_m": 1500.0,
+        # Como la MAX, la reflectividad por niveles empieza en H+01.
+        "starts_at_hour": 1,
+        "vmin": 0.0, "vmax": 70.0, "unit": "dBZ",
     },
     "mslp-theta-e-850": {
         # Theta-e en color y presión al nivel del mar en isobaras: el mapa de
@@ -367,8 +379,10 @@ def _boundary_payload_from_disk(
     include_admin1: bool,
     simplify: float,
 ) -> list[dict[str, Any]]:
+    # `admin2` en la firma: los ficheros de antes de esa capa no la llevan y,
+    # con la firma de entonces, se seguirían leyendo tal cual.
     firma = hashlib.sha1(
-        f"{scope}|{int(include_admin1)}|{simplify:.5f}|"
+        f"admin2|{scope}|{int(include_admin1)}|{simplify:.5f}|"
         f"{'|'.join(f'{value:.4f}' for value in bounds)}".encode()
     ).hexdigest()[:16]
     cache_path = _boundary_cache_dir() / f"boundaries-{firma}.json"
@@ -384,6 +398,9 @@ def _boundary_payload_from_disk(
             {"features": []},
             bounds,
             include_admin1=include_admin1,
+            # Va con las regiones: donde no se dibujan, menos aún las
+            # provincias.
+            include_admin2=include_admin1,
             simplify=simplify,
         )
     )
@@ -435,11 +452,19 @@ def _admin1_boundaries_geojson() -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=1)
+def _admin2_boundaries_geojson() -> dict[str, Any]:
+    """Provincias, départements y demás, de `scripts/build_admin2_boundaries.py`."""
+    path = Path(__file__).resolve().parents[2] / "data" / "ne_10m_admin_2_europe.geojson"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _model_boundary_geojson(
     regions_geojson: dict[str, Any],
     bounds: tuple[float, float, float, float],
     *,
     include_admin1: bool = True,
+    include_admin2: bool = False,
     simplify: float = 0.0012,
 ) -> dict[str, Any]:
     """Fronteras nacionales y divisiones administrativas visibles en el dominio."""
@@ -464,6 +489,20 @@ def _model_boundary_geojson(
             "geometry": mapping(clipped),
         })
     for feature in (_admin1_boundaries_geojson().get("features", ()) if include_admin1 else ()):
+        geometry = shape(feature.get("geometry") or {})
+        if geometry.is_empty or not geometry.intersects(viewport):
+            continue
+        clipped = geometry.intersection(viewport)
+        if clipped.is_empty:
+            continue
+        features.append({
+            "type": "Feature",
+            "properties": feature.get("properties") or {},
+            "geometry": mapping(clipped),
+        })
+    # Solo para el visor, que las enseña con el zoom alto; los PNG recortados a
+    # Cataluña siguen sin ellas. Vienen ya simplificadas del script.
+    for feature in (_admin2_boundaries_geojson().get("features", ()) if include_admin2 else ()):
         geometry = shape(feature.get("geometry") or {})
         if geometry.is_empty or not geometry.intersects(viewport):
             continue
@@ -581,6 +620,13 @@ def _product_context(
             "geopotential": catalog.resolve("geopotential"),
             "precipitation": catalog.resolve("precipitation_1h"),
             "terrain": catalog.resolve("terrain"),
+        }
+    elif config["kind"] == "cappi":
+        # La reflectividad va la primera: de ella salen las horas del mapa.
+        prefixes = {
+            "reflectivity": catalog.resolve("pressure_reflectivity"),
+            "geopotential": catalog.resolve("geopotential"),
+            "surface_pressure": catalog.resolve("surface_pressure"),
         }
     elif config["kind"] == "freezing_level":
         prefixes = {
@@ -1415,7 +1461,11 @@ def _surface_wind_10m(
     cached = _SURFACE_WIND_CACHE.get(key)
     if cached is not None:
         return cached
-    fields = _get_uv_height(client, catalog, prefixes, run, valid_time, 10.0)
+    u = _field_from_cached_sp1("surface_u", run, valid_time)
+    v = _field_from_cached_sp1("surface_v", run, valid_time)
+    fields = (u, v) if u is not None and v is not None else _get_uv_height(
+        client, catalog, prefixes, run, valid_time, 10.0
+    )
     _SURFACE_WIND_CACHE.clear()
     _SURFACE_WIND_CACHE[key] = fields
     return fields
@@ -1487,6 +1537,63 @@ def _packages_available() -> bool:
     }
 
 
+def _field_from_cached_sp1(name, run, valid_time):
+    """SP1 already on disk; unavailable/ambiguous data falls back to WCS.
+
+    Return hourly precipitation in mm and hourly solar energy in J/m²,
+    matching the WCS inputs (the map applies the solar /3600 once).
+    """
+    if name not in SP1_FIELDS or not _packages_available():
+        return None
+    from server.services.arome_packages import _package_path, block_range
+    from rasterio.errors import RasterioError
+
+    def read(instant):
+        if not package_ready("SP1", run, instant):
+            return None
+        result = read_sp1_field(
+            _package_path("SP1", run, block_range(run, instant)), run, instant, name
+        )
+        return RasterField(result[0], *result[1], result[2]) if result is not None else None
+
+    try:
+        field = read(valid_time)
+        if field is None:
+            return None
+        if name in {"precip-1h", "shortwave-down"} and valid_time > run + timedelta(hours=1):
+            previous = read(valid_time - timedelta(hours=1))
+            if previous is None:
+                return None
+            if (field.transform != previous.transform or field.crs != previous.crs
+                    or field.data.shape != previous.data.shape or field.units != previous.units):
+                return None
+            field.data = field.data - previous.data
+        if name in {"precip-1h", "accumulated-precip", "shortwave-down"}:
+            # Separate packing of cumulative fields can introduce tiny negative
+            # increments. Preserve missing cells while clipping those to zero.
+            field.data = np.maximum(field.data, 0.0)
+    except (AromePackageError, OSError, RasterioError, ValueError) as exc:
+        logger.info("SP1 local no utilizable para %s; se usa WCS: %s", name, exc)
+        return None
+    logger.info("Campo %s %s servido desde SP1 local.", name, valid_time.isoformat())
+    return field
+
+
+def _surface_temperature(client, catalog, prefixes, run, valid_time):
+    field = _field_from_cached_sp1("temperature-2m", run, valid_time)
+    if field is not None:
+        return field
+    return client.get_field(
+        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
+    )
+
+
+SP1_BACKED_PRODUCTS = frozenset({
+    "temperature-2m", "cloud-cover", "wind-gust", "precip-1h",
+    "accumulated-precip", "shortwave-down",
+})
+
+
 def _native_field_from_cached_ip1(product_id, run, valid_time, *, overlay=False):
     """Read one native map only when IP1 is already on disk; never download."""
     fields = {
@@ -1535,7 +1642,8 @@ def _theta_e_inputs_from_cached_packages(run, valid_time, level):
     El mapa de masas de aire cuesta cuatro coberturas por hora y es el
     producto más caro de la pasada: 1.738 s de los 7.484 que se fueron en
     descargas el 24/09. Tres de las cuatro están en paquetes que ya se bajan
-    para los perfiles. La MSLP no la publica ninguno y sigue por el WCS.
+    para los perfiles. La cuarta, MSLP, se lee de SP1 por separado cuando
+    está disponible; si falta, solo esa cobertura vuelve al WCS.
 
     Devuelve None si los paquetes no están ya en disco: nunca los descarga,
     porque un nativo esperando media hora a medio giga sale más caro que las
@@ -1865,14 +1973,7 @@ def _convective_frames(
     fases: dict[str, float] = {}
     reloj = time.monotonic()
 
-    reference = client.get_field(
-        catalog,
-        prefixes["height_temperature"],
-        run,
-        valid_time,
-        2.0,
-        "height",
-    )
+    reference = _surface_temperature(client, catalog, prefixes, run, valid_time)
     surface_temperature = _as_kelvin(reference.data, reference.units)
     levels = _pressure_levels(client, catalog, prefixes["pressure_temperature"], run)
     if 500.0 not in levels or 700.0 not in levels:
@@ -2306,9 +2407,7 @@ def _snow_level_field(client, catalog, prefixes, run, valid_time) -> RasterField
     """Cota Tw=0,5 °C de todo el dominio; overlay=cruces múltiples."""
     from server.services.arome_wcs import _align, _height_from_geopotential
 
-    reference = client.get_field(
-        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
-    )
+    reference = _surface_temperature(client, catalog, prefixes, run, valid_time)
     terrain_runs = catalog.by_prefix[prefixes["terrain"]]
     terrain_run = run if run in terrain_runs else max(terrain_runs)
     terrain_field = client.get_field(
@@ -2321,9 +2420,11 @@ def _snow_level_field(client, catalog, prefixes, run, valid_time) -> RasterField
     pressure_field = surface_package["surface_pressure"] if surface_package else client.get_field(
         catalog, prefixes["surface_pressure"], run, valid_time, None, None
     )
-    precip_field = client.get_field(
-        catalog, prefixes["precipitation"], run, valid_time, None, None, period="PT1H"
-    )
+    precip_field = _field_from_cached_sp1("precip-1h", run, valid_time)
+    if precip_field is None:
+        precip_field = client.get_field(
+            catalog, prefixes["precipitation"], run, valid_time, None, None, period="PT1H"
+        )
     terrain = _align(reference, terrain_field)
     surface_t = _as_kelvin(reference.data, reference.units) - 273.15
     surface_td = _as_kelvin(_align(reference, dewpoint_field), dewpoint_field.units) - 273.15
@@ -2388,9 +2489,7 @@ def _freezing_level_field(client, catalog, prefixes, run, valid_time) -> RasterF
     """Altitud de la isoterma de 0 °C, con el cruce más alto del perfil."""
     from server.services.arome_wcs import _align, _height_from_geopotential
 
-    reference = client.get_field(
-        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
-    )
+    reference = _surface_temperature(client, catalog, prefixes, run, valid_time)
     terrain_runs = catalog.by_prefix[prefixes["terrain"]]
     terrain_run = run if run in terrain_runs else max(terrain_runs)
     terrain_field = client.get_field(
@@ -2441,6 +2540,109 @@ def _freezing_level_field(client, catalog, prefixes, run, valid_time) -> RasterF
     return field
 
 
+# Niveles que encierran 1.500 m en cualquier situación: 925 hPa ronda los
+# 750 m y 750 hPa los 2.500 m; ni la borrasca más profunda sube 925 por encima
+# de 1.500 ni baja 750 por debajo. IP4 no publica más abajo de 925.
+CAPPI_LEVELS_HPA = [925.0, 900.0, 850.0, 800.0, 750.0]
+# Paquetes que necesita: reflectividad, geopotencial y presión en superficie.
+CAPPI_PACKAGES = ("IP1", "IP4", "SP2")
+# Derivados que salen enteros de paquetes. El planificador los espera como a
+# los nativos de IP1: el respaldo por el WCS son once peticiones por hora.
+PACKAGE_DERIVED_PRODUCTS = {"reflectivity-cappi-1500": CAPPI_PACKAGES}
+
+
+def _cappi_from_packages(run, valid_time, altitude_m) -> RasterField | None:
+    """El CAPPI entero desde IP4, IP1 y SP2, o None para ir por el WCS.
+
+    Descodifica solo lo que usa —cinco niveles de reflectividad y cinco de
+    geopotencial, ~20 ms cada uno— y lo suelta nivel a nivel.
+    """
+    if not _packages_available():
+        return None
+    from server.services.arome_wcs import GRAVITY
+    from server.services.cappi import CappiAccumulator, reflectivity_from_rain_rate
+
+    reflectividad = geopotencial = None
+    try:
+        rutas = {p: _ensure_profile_package(p, run, valid_time) for p in CAPPI_PACKAGES}
+        superficie, geometria_sp = read_surface_fields(
+            rutas["SP2"], valid_time, {("PRES", "0-SFC"): ("surface_pressure", "Pa")}
+        )
+        if "surface_pressure" not in superficie:
+            return None
+        paquete_ip4 = open_isobaric_reflectivity(rutas["IP4"], valid_time, CAPPI_LEVELS_HPA)
+        # `fields` registra el uso; `clear`, en el finally, cierra el fichero.
+        reflectividad = paquete_ip4.fields("reflectivity")
+        paquete_ip1 = open_isobaric_profile(
+            rutas["IP1"], valid_time, CAPPI_LEVELS_HPA, ("geopotential",)
+        )
+        geopotencial = paquete_ip1.fields("geopotential")
+        faltan = [nivel for nivel in CAPPI_LEVELS_HPA
+                  if nivel not in reflectividad or nivel not in geopotencial]
+        # Las tres son la rejilla completa del modelo; si alguna no lo fuera,
+        # mezclarlas celda a celda daría basura sin avisar.
+        if faltan or paquete_ip4.geometry[0] != paquete_ip1.geometry[0] \
+                or paquete_ip4.geometry[0] != geometria_sp[0]:
+            logger.info("Paquetes del CAPPI incompletos o sin la misma rejilla (%s); "
+                        "se usa el WCS.", faltan or "rejilla")
+            return None
+        presion = superficie["surface_pressure"][0] / 100.0
+        corte = CappiAccumulator(altitude_m, presion)
+        for nivel in CAPPI_LEVELS_HPA:
+            corte.add(
+                nivel,
+                geopotencial[nivel] / GRAVITY,
+                reflectivity_from_rain_rate(reflectividad[nivel]),
+            )
+    except (AromePackageError, MeteoFranceAuthError, OSError) as exc:
+        logger.info("Paquetes del CAPPI no disponibles, se usa el WCS: %s", exc)
+        return None
+    finally:
+        for niveles in (reflectividad, geopotencial):
+            if niveles is not None:
+                niveles.clear()
+    logger.info("CAPPI %s servido desde IP4, IP1 y SP2 locales.", valid_time.isoformat())
+    return RasterField(corte.dbz(), *paquete_ip4.geometry, "dBZ")
+
+
+def _cappi_field(client, catalog, prefixes, run, valid_time, altitude_m) -> RasterField:
+    """Reflectividad simulada a altitud constante: ver `server.services.cappi`."""
+    field = _cappi_from_packages(run, valid_time, altitude_m)
+    if field is not None:
+        return field
+    from server.services.arome_wcs import _align, _height_from_geopotential
+    from server.services.cappi import CappiAccumulator, reflectivity_from_dbz
+
+    # Respaldo: la misma cuenta con la reflectividad en dBZ del WCS. Es el
+    # camino del recorte local, donde no se usan paquetes.
+    reference = client.get_field(
+        catalog, prefixes["reflectivity"], run, valid_time, CAPPI_LEVELS_HPA[0], "pressure"
+    )
+    surface_field = client.get_field(
+        catalog, prefixes["surface_pressure"], run, valid_time, None, None
+    )
+    surface = _align(reference, surface_field)
+    finite_surface = surface[np.isfinite(surface)]
+    if finite_surface.size and float(np.nanmedian(finite_surface)) > 2_000:
+        surface = surface / 100.0
+    corte = CappiAccumulator(altitude_m, surface)
+    for nivel in CAPPI_LEVELS_HPA:
+        dbz_field = reference if nivel == CAPPI_LEVELS_HPA[0] else client.get_field(
+            catalog, prefixes["reflectivity"], run, valid_time, nivel, "pressure"
+        )
+        gp_field = client.get_field(
+            catalog, prefixes["geopotential"], run, valid_time, nivel, "pressure"
+        )
+        corte.add(
+            nivel,
+            _height_from_geopotential(_align(reference, gp_field), gp_field.units),
+            reflectivity_from_dbz(_align(reference, dbz_field)),
+        )
+    return RasterField(
+        corte.dbz(), reference.transform, reference.crs, reference.bounds, "dBZ"
+    )
+
+
 def _thermal_crossings(levels: list[dict[str, float]], threshold_c: float,
                        value_key: str) -> list[dict[str, float]]:
     """Cruces con la misma regla de signos e interpolación del mapa de cotas."""
@@ -2482,9 +2684,7 @@ def thermal_point_profile(
     valid_time = _parse_time(valid_time_iso)
     if valid_time not in times:
         raise AromeError("La hora solicitada no está disponible en ese RUN.")
-    reference = client.get_field(
-        catalog, prefixes["height_temperature"], run, valid_time, 2.0, "height"
-    )
+    reference = _surface_temperature(client, catalog, prefixes, run, valid_time)
     row, col = rowcol(reference.transform, longitude, latitude)
     if not (0 <= row < reference.data.shape[0] and 0 <= col < reference.data.shape[1]):
         raise AromeError("El punto está fuera del dominio del mapa.")
@@ -2646,18 +2846,28 @@ def _computed_frame(
         field = _snow_level_field(client, catalog, prefixes, run, valid_time)
     elif config["kind"] == "freezing_level":
         field = _freezing_level_field(client, catalog, prefixes, run, valid_time)
+    elif config["kind"] == "cappi":
+        field = _cappi_field(
+            client, catalog, prefixes, run, valid_time, float(config["altitude_m"])
+        )
     elif config["kind"] == "level_difference":
         field = _level_difference_field(
             client, catalog, prefixes, config, run, valid_time
         )
     elif config["kind"] == "wind":
         vertical_mode = "height" if vertical_kind == "height" else "pressure"
-        u_field = client.get_field(
-            catalog, prefixes["u"], run, valid_time, level, vertical_mode, component="u"
-        )
-        v_field = client.get_field(
-            catalog, prefixes["v"], run, valid_time, level, vertical_mode, component="v"
-        )
+        u_field = v_field = None
+        if vertical_mode == "height" and level == 10.0:
+            u_field = _field_from_cached_sp1("surface_u", run, valid_time)
+            v_field = _field_from_cached_sp1("surface_v", run, valid_time)
+        if u_field is None:
+            u_field = client.get_field(
+                catalog, prefixes["u"], run, valid_time, level, vertical_mode, component="u"
+            )
+        if v_field is None:
+            v_field = client.get_field(
+                catalog, prefixes["v"], run, valid_time, level, vertical_mode, component="v"
+            )
         from server.services.arome_wcs import _align
 
         vector_v = _align(u_field, v_field)
@@ -2720,9 +2930,11 @@ def _computed_frame(
         # En kelvin por dentro, en grados solo para el mapa.
         field.data = theta_e - 273.15
         field.units = str(config["unit"])
-        mslp_field = client.get_field(
-            catalog, prefixes["overlay"], run, valid_time, None, None
-        )
+        mslp_field = _field_from_cached_sp1("mean_sea_level_pressure", run, valid_time)
+        if mslp_field is None:
+            mslp_field = client.get_field(
+                catalog, prefixes["overlay"], run, valid_time, None, None
+            )
         mslp = _align(field, mslp_field)
         finite_mslp = mslp[np.isfinite(mslp)]
         if finite_mslp.size and float(np.nanmedian(finite_mslp)) > 2_000:
@@ -2733,14 +2945,19 @@ def _computed_frame(
         native_level = config.get("level")
         native_vertical_kind = config.get("vertical_kind")
         field_times = [valid_time]
-        if config.get("accumulate_from_run"):
+        field = _field_from_cached_sp1(product_id, run, valid_time)
+        direct_accumulation = field is not None and config.get("accumulate_from_run")
+        if config.get("accumulate_from_run") and not direct_accumulation:
             # TOTAL_PRECIPITATION PT1H es un incremento horario. Para el
             # acumulado del RUN sumamos H+01..H+n sobre la misma rejilla; H+00
             # no pertenece al periodo de predicción iniciado por esta pasada.
             field_times = _complete_hourly_times(run, valid_time, times)
             if not field_times:
                 field_times = [valid_time]
-        field = _native_field_from_cached_ip1(product_id, run, field_times[0])
+        if field is None:
+            field = _native_field_from_cached_ip1(product_id, run, field_times[0])
+        if field is None and config.get("accumulate_from_run"):
+            field = _field_from_cached_sp1("precip-1h", run, field_times[0])
         if field is None:
             field = client.get_field(
                 catalog,
@@ -2751,7 +2968,7 @@ def _computed_frame(
                 str(native_vertical_kind) if native_vertical_kind else None,
                 period=str(config["period"]) if config.get("period") else None,
             )
-        if config.get("accumulate_from_run"):
+        if config.get("accumulate_from_run") and not direct_accumulation:
             from server.services.arome_wcs import _align
 
             accumulated = np.maximum(np.asarray(field.data, dtype=float), 0.0)
@@ -2759,15 +2976,17 @@ def _computed_frame(
                 accumulated = np.zeros_like(accumulated)
             else:
                 for increment_time in field_times[1:]:
-                    increment = client.get_field(
-                        catalog,
-                        prefixes["field"],
-                        run,
-                        increment_time,
-                        float(native_level) if native_level is not None else None,
-                        str(native_vertical_kind) if native_vertical_kind else None,
-                        period=str(config["period"]),
-                    )
+                    increment = _field_from_cached_sp1("precip-1h", run, increment_time)
+                    if increment is None:
+                        increment = client.get_field(
+                            catalog,
+                            prefixes["field"],
+                            run,
+                            increment_time,
+                            float(native_level) if native_level is not None else None,
+                            str(native_vertical_kind) if native_vertical_kind else None,
+                            period=str(config["period"]),
+                        )
                     accumulated += np.maximum(_align(field, increment), 0.0)
             field.data = accumulated
         values = np.asarray(field.data, dtype=float)
@@ -2932,15 +3151,15 @@ def accumulated_precip_series(
     (1.326 para una pasada de 51 horas en lugar de 51). Aquí se recorren las
     horas en orden llevando la suma acumulada.
 
-    El resultado es el mismo que el del camino por hora: se recortan los
-    negativos incremento a incremento y todos se alinean sobre la rejilla del
-    primer campo, igual que hacía `_computed_frame`.
+    Sin SP1 se recortan los negativos incremento a incremento y se alinean
+    sobre la rejilla de referencia, como en `_computed_frame`. Con SP1 se
+    usa el acumulado publicado, evitando sumar errores de cuantización.
 
     `stored_increment` permite recuperar una hora ya calculada en vez de
     volver a pedirla: el mapa horario de lluvia sale del mismo campo del WCS y
     se publica antes, así que cuando llega el acumulado esas horas ya están en
-    disco. La primera siempre se descarga, porque de ella salen la rejilla y la
-    proyección sobre las que se alinea el resto.
+    disco. SP1 tiene prioridad: su acumulado evita tanto descargas como la
+    suma de incrementos ya cuantizados. Si falta, se conserva la suma horaria.
     """
     product_id = "accumulated-precip"
     config, client, catalog, prefixes, run, times = _product_context(
@@ -2950,42 +3169,40 @@ def accumulated_precip_series(
     increments = [value for value in times if value > run and value in requested]
     if not increments:
         return
-    # La serie necesita cada hora desde la pasada, aunque no todas se publiquen.
-    horizon = max(increments)
-    ordered = _complete_hourly_times(run, horizon, times)
-
+    # Cada acumulado SP1 incluye toda la historia. Solo reconstruimos los
+    # intervalos de las horas solicitadas que no se puedan leer directamente.
     reference: RasterField | None = None
     accumulated: np.ndarray | None = None
+    previous_time = run
     reutilizados = 0
-    for valid_time in ordered:
-        guardado = None
-        if reference is not None and stored_increment is not None:
-            guardado = stored_increment(
-                valid_time.isoformat().replace("+00:00", "Z")
-            )
-            # Sólo sirve si cubre la misma rejilla; si no, se descarga.
-            if guardado is not None and guardado.shape != reference.data.shape:
-                guardado = None
-        if guardado is not None:
-            reutilizados += 1
-            accumulated = accumulated + np.maximum(guardado, 0.0)
+    for valid_time in sorted(increments):
+        direct = _field_from_cached_sp1(product_id, run, valid_time)
+        if direct is not None:
+            reference = direct
+            accumulated = direct.data
         else:
-            increment = client.get_field(
-                catalog,
-                prefixes["field"],
-                run,
-                valid_time,
-                None,
-                None,
-                period=str(config["period"]),
-            )
-            if reference is None:
-                reference = increment
-                accumulated = np.maximum(np.asarray(increment.data, dtype=float), 0.0)
-            else:
-                accumulated = accumulated + np.maximum(_align(reference, increment), 0.0)
-        if valid_time not in requested:
-            continue
+            for increment_time in _complete_hourly_times(previous_time, valid_time, times):
+                guardado = None
+                if reference is not None and stored_increment is not None:
+                    guardado = stored_increment(increment_time.isoformat().replace("+00:00", "Z"))
+                    if guardado is not None and guardado.shape != reference.data.shape:
+                        guardado = None
+                if guardado is not None:
+                    reutilizados += 1
+                    accumulated = accumulated + np.maximum(guardado, 0.0)
+                else:
+                    increment = _field_from_cached_sp1("precip-1h", run, increment_time)
+                    if increment is None:
+                        increment = client.get_field(
+                            catalog, prefixes["field"], run, increment_time,
+                            None, None, period=str(config["period"]),
+                        )
+                    if reference is None:
+                        reference = increment
+                        accumulated = np.maximum(np.asarray(increment.data, dtype=float), 0.0)
+                    else:
+                        accumulated = accumulated + np.maximum(_align(reference, increment), 0.0)
+        previous_time = valid_time
         frame = RasterField(
             accumulated * float(config.get("scale", 1.0)),
             reference.transform,
@@ -3007,9 +3224,9 @@ def accumulated_precip_series(
         )
     if reutilizados:
         logger.info(
-            "Acumulado: %d de %d horas reutilizadas del mapa horario ya "
-            "publicado, sin volver a pedirlas.",
-            reutilizados, len(ordered),
+            "Acumulado: %d incrementos reutilizados del mapa horario ya "
+            "publicado, sin volver a pedirlos.",
+            reutilizados,
         )
 
 

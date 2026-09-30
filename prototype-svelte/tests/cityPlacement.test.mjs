@@ -7,7 +7,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CITY_LABELS } from '../src/data/cityLabels.js';
+import { CITY_LABELS_DETAIL } from '../src/data/cityLabelsDetail.js';
 import { cityRank, cityRoom, placeCities } from '../src/lib/cityPlacement.js';
+import { frameGeo } from '../src/lib/projection.js';
 
 // Rejilla de juguete con el encuadre de AROME: 0,05° por celda.
 const FRAME = {
@@ -28,12 +30,13 @@ const opciones = (extra = {}) => ({
   ...extra
 });
 
-test('el nivel de detalle crece con el zoom y se para en 6', () => {
+test('el nivel de detalle crece con el zoom y se para en 7', () => {
   assert.equal(cityRank(1), 3);
   assert.equal(cityRank(2.5), 3);
   assert.equal(cityRank(3.5), 4);
   assert.equal(cityRank(4.5), 5);
-  assert.equal(cityRank(8), 6);
+  assert.equal(cityRank(6), 6);
+  assert.equal(cityRank(8), 7);
   // Nunca retrocede: un mapa más cerca no puede pedir menos detalle.
   let previo = 0;
   for (let zoom = 1; zoom <= 8; zoom += 0.1) {
@@ -137,5 +140,49 @@ test('el catálogo está bien formado', () => {
   const primeras = CITY_LABELS.filter(([, , , rank]) => rank === 1).map(([name]) => name);
   for (const capital of ['Madrid', 'París', 'Londres', 'Roma', 'Berlín', 'Lisboa']) {
     assert.ok(primeras.includes(capital), `falta ${capital} en el primer nivel`);
+  }
+});
+
+test('con el zoom al máximo entran los núcleos pequeños, y no antes', () => {
+  const catalogue = [...CITY_LABELS, ...CITY_LABELS_DETAIL];
+  assert.ok(CITY_LABELS_DETAIL.every((ciudad) => ciudad[3] === 7));
+  assert.ok(CITY_LABELS.every((ciudad) => ciudad[3] < 7));
+  // Pirineo catalán sobre la rejilla de AROME, 0,025° por celda.
+  const frame = {
+    ...FRAME, width: 1121, height: 717, bounds: [-12.0125, 37.4875, 16.0125, 55.4125],
+    values: new Float32Array(1121 * 717).fill(12)
+  };
+  const geo = frameGeo(frame);
+  const [west, north] = geo.toGrid(1.3, 42.6);
+  const [east, south] = geo.toGrid(2.5, 41.8);
+  const bounds = { west, east, north, south };
+  const nombres = (viewZoom) => placeCities(opciones({ catalogue, frame, bounds, viewZoom }))
+    .map((ciudad) => ciudad.name);
+  assert.ok(nombres(8).includes('Puigcerdà'), 'falta Puigcerdà a 8×');
+  assert.ok(!nombres(5.9).includes('Puigcerdà'), 'Puigcerdà no debe entrar a 5,9×');
+});
+
+test('lo que se ve no depende de las ciudades que quedan fuera de la pantalla', () => {
+  // Valle del Ebro a 8×: el margen de fuera de la vista llega a Pamplona, Logroño
+  // o Lleida, que van antes en el catálogo. Contaban para el tope y dejaban sin
+  // sitio a Tauste, que sí estaba en pantalla, según hacia dónde se moviera.
+  const catalogue = [...CITY_LABELS, ...CITY_LABELS_DETAIL];
+  const frame = {
+    ...FRAME, width: 1121, height: 717, bounds: [-12.0125, 37.4875, 16.0125, 55.4125],
+    values: new Float32Array(1121 * 717).fill(12)
+  };
+  const geo = frameGeo(frame);
+  const encuadre = (oeste, norte, este, sur, margen) => {
+    const [west, north] = geo.toGrid(oeste - margen, norte + margen);
+    const [east, south] = geo.toGrid(este + margen, sur - margen);
+    return { west, east, north, south };
+  };
+  const nombres = (oeste, norte, este, sur) => placeCities(opciones({
+    catalogue, frame, viewZoom: 8,
+    bounds: encuadre(oeste, norte, este, sur, 1.2),
+    visible: encuadre(oeste, norte, este, sur, 0)
+  })).map((ciudad) => ciudad.name);
+  for (const vista of [nombres(-1.9, 42.4, 0.2, 41.2), nombres(-1.6, 42.9, 0.5, 41.7)]) {
+    assert.ok(vista.includes('Tauste'), 'Tauste debe salir en los dos encuadres');
   }
 });

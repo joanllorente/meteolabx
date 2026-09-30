@@ -24,6 +24,11 @@ const MF_AROME = {
   url: 'https://portail-api.meteofrance.fr/web/fr/api/AROME'
 };
 
+const MARSHALL_PALMER = {
+  label: 'Marshall & Palmer (1948) · The distribution of raindrops with size',
+  url: 'https://doi.org/10.1175/1520-0469(1948)005%3C0165:TDORWS%3E2.0.CO;2'
+};
+
 const NOAA_CAPE = {
   label: 'NOAA/NWS · convective parameters and how to read CAPE',
   url: 'https://www.weather.gov/lmk/indices'
@@ -204,6 +209,28 @@ export const forecastProductGuides = {
       'Classes of 5 dBZ up to 70; below 5 nothing is painted.'
     ],
     sources: [MF_AROME, MF_API]
+  },
+
+  'reflectivity-cappi-1500': {
+    what: 'Simulated reflectivity at 1,500 m above sea level, in dBZ: a CAPPI, the constant-altitude cut that radars work with. It shows precipitation in the low levels, close to what reaches the ground.',
+    interpretation: [
+      'Unlike the MAX, which keeps the largest value of the whole column, the CAPPI looks at a single altitude. A storm with its core aloft comes out much stronger on the MAX; on the CAPPI you see the rain that is already falling.',
+      'It is the cut closest to the CAPPIs of national weather-service radars, so it is useful for comparing the model with what is being measured.',
+      'Where the terrain rises above 1,500 m —Pyrenees, Alps— the cut lies underground and the map has no colour, just as on a radar.',
+      'Same orders of magnitude as the MAX: below 20 dBZ, light rain; between 20 and 35, moderate; above 40, convection. No colour below 5 dBZ.'
+    ],
+    method: 'AROME publishes reflectivity on pressure levels. In each cell MeteoLabX finds the two levels that enclose 1,500 m —their height comes from the geopotential— and interpolates between them in linear reflectivity, not in dBZ: the logarithmic scale would exaggerate weak echoes when mixed with a strong one.',
+    equations: [
+      { label: 'From the package to reflectivity (Marshall-Palmer)', latex: String.raw`Z=200\,R^{1.6},\qquad \mathrm{dBZ}=10\log_{10}Z` },
+      { label: 'Interpolation in height', latex: String.raw`Z(h)=Z_1+\frac{h-h_1}{h_2-h_1}\,(Z_2-Z_1),\qquad h=\frac{\Phi}{g_0}` }
+    ],
+    steps: [
+      'AROME reflectivity at 925, 900, 850, 800 and 750 hPa, which always enclose 1,500 m. The package gives it as equivalent rain rate R in mm/h, converted to Z with Marshall-Palmer.',
+      'Height of each level above sea level from the geopotential.',
+      'Linear interpolation in Z between the two levels that enclose 1,500 m, then conversion to dBZ.',
+      'No value where the surface pressure is lower than that at 1,500 m: there the cut is underground.'
+    ],
+    sources: [MF_AROME, MF_API, MARSHALL_PALMER]
   },
 
   'mslp-theta-e-850': {

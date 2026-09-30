@@ -658,3 +658,23 @@ def test_renovar_el_catalogo_no_devuelve_a_publicando_una_pasada_hecha(monkeypat
     )
     assert devuelto["status"] == "complete"
     assert read_json(store, run_manifest_key(run))["status"] == "complete"
+
+
+def test_wcs_counters_do_not_invent_zero_for_old_runs():
+    informe = run_report.build_report(_manifiesto())
+    assert informe['wcs'] == {'http': None, 'jobs': None}
+    assert 'peticiones reales' not in run_report.render_text(informe)
+
+
+def test_wcs_partial_measurement_and_zero_are_explicit():
+    informe = run_report.build_report(_manifiesto(
+        resource_usage={'wcs': {'requests': 0, 'coverage_requests': 0,
+                               'metadata_requests': 0, 'retries': 0,
+                               'by_status': {}, 'observed_since': '2026-09-30T14:00:00Z'}},
+        job_routes={'observed_since': '2026-09-30T14:00:00Z', 'partial': True,
+                    'by_mode': {'ready': {'started': 2, 'completed': 2, 'failed': 0}}},
+    ))
+    text = run_report.render_text(informe)
+    assert '0 peticiones reales' in text
+    assert 'Medición parcial de trabajos desde 2026-09-30T14:00:00Z' in text
+    assert 'WCS paralelo SP1: 0 trabajos admitidos' in text

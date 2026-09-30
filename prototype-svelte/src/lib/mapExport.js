@@ -119,9 +119,18 @@ function pintaTexto(ctx, elemento, origen) {
   ctx.font = `${estilo.fontStyle} ${estilo.fontWeight} ${estilo.fontSize}/${estilo.fontSize} ${estilo.fontFamily}`;
   ctx.fillStyle = estilo.color;
   if ('letterSpacing' in ctx) ctx.letterSpacing = estilo.letterSpacing === 'normal' ? '0px' : estilo.letterSpacing;
-  ctx.textAlign = 'left';
+  // La caja es la del borde: el texto arranca tras el borde y el relleno, o
+  // en una etiqueta con relleno —la del modelo— saldría pegado a la izquierda
+  // y fuera de su óvalo.
+  const izquierda = (parseFloat(estilo.borderLeftWidth) || 0) + (parseFloat(estilo.paddingLeft) || 0);
+  const derecha = (parseFloat(estilo.borderRightWidth) || 0) + (parseFloat(estilo.paddingRight) || 0);
+  const centrado = estilo.textAlign === 'center';
+  ctx.textAlign = centrado ? 'center' : 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(texto, rect.x, rect.y + rect.height / 2);
+  const x = centrado
+    ? rect.x + izquierda + (rect.width - izquierda - derecha) / 2
+    : rect.x + izquierda;
+  ctx.fillText(texto, x, rect.y + rect.height / 2);
   ctx.restore();
 }
 
@@ -300,6 +309,14 @@ export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } =
     }
   }
 
+  // La tierra va debajo del campo, como en pantalla: donde el campo es
+  // transparente es lo único que separa la costa del mar.
+  const tierra = area.querySelector('svg.land-overlay');
+  if (tierra) {
+    const imagen = await capaVectorial(tierra, areaRect, origen);
+    if (imagen) ctx.drawImage(imagen, areaRect.x, areaRect.y, areaRect.width, areaRect.height);
+  }
+
   // El campo. Su caja ya viene transformada por el encuadre del usuario, así
   // que basta con dibujarlo donde el navegador lo está poniendo.
   const rasterRect = caja(raster, origen);
@@ -315,7 +332,14 @@ export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } =
   const marca = area.querySelector('.map-watermark');
   if (marca) pintaRama(ctx, marca, origen);
   const leyenda = area.querySelector('.legend');
-  if (leyenda) pintaRama(ctx, leyenda, origen, ['.unit-picker']);
+  if (leyenda) {
+    pintaRama(ctx, leyenda, origen, ['.unit-picker']);
+    // El selector de unidades es un control y no se pinta, pero la unidad que
+    // enseña sí hace falta: sin ella la escala son números sueltos. Va solo
+    // el texto, donde está en pantalla, sin el botón ni la flecha.
+    const unidad = leyenda.querySelector('.unit-picker .unit-button > span');
+    if (unidad) pintaTexto(ctx, unidad, origen);
+  }
   ctx.restore();
 
   const blob = await new Promise((resolve) => lienzo.toBlob(resolve, 'image/png'));

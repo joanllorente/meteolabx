@@ -120,3 +120,22 @@ test('sin serie de rachas no hay rosa de rachas', () => {
   const r = roseWithGusts([10, 12, 14, 16, 18, 20], [], [sur, sur, sur, oeste, oeste, oeste]);
   assert.equal(r.gust, null);
 });
+
+test('con pocas lecturas la rosa sigue saliendo', () => {
+  const r = rose([12, 14], [sur, oeste]);
+  assert.ok(r);
+  assert.equal(r.stats.samples, '2');
+  assert.equal(r.data[8].pct, 50);
+});
+
+test('un día en calma enseña la rosa vacía, sin rumbo dominante', () => {
+  const r = rose([0.5, 1, 1.5], [sur, sur, oeste]);
+  assert.ok(r);
+  assert.equal(r.stats.calm, '100 %');
+  assert.equal(r.stats.dominant, '—');
+  assert.ok(r.data.every((sector) => sector.pct === 0));
+});
+
+test('sin ninguna lectura con rumbo y velocidad no hay rosa', () => {
+  assert.equal(rose([null, 5], [sur, null]), null);
+});

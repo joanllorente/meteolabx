@@ -22,10 +22,12 @@ Meteo-France pierde las horas previas del día → degradación aceptable.
 
 from __future__ import annotations
 
+from array import array
 import asyncio
 import json
 import logging
 import math
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -129,7 +131,10 @@ MG_BASE = "https://servizos.meteogalicia.gal/mgrss/observacion"
 MG_DAILY_ENDPOINT = f"{MG_BASE}/datosDiariosEstacionsMeteo.action"
 
 
-@dataclass
+# Con slots: el ranking guarda ~80.000 a la vez (cuatro días de cada
+# proveedor) y el diccionario de atributos de cada uno era un tercio de lo que
+# ocupaban.
+@dataclass(slots=True)
 class StationDaily:
     """Agregado diario de una estación para las 4 métricas."""
 
@@ -177,6 +182,154 @@ class StationDaily:
 
     def value(self, metric: str) -> Optional[float]:
         return getattr(self, metric, None)
+
+
+# Campos de texto que se repiten en miles de registros: internados, todos
+# apuntan a la misma cadena en vez de guardar cada uno su copia.
+_SHARED_TEXT_FIELDS = ("provider", "country", "local_date", "locality", "local_time")
+
+
+def _compact_record(record: StationDaily) -> StationDaily:
+    for name in _SHARED_TEXT_FIELDS:
+        value = getattr(record, name)
+        if type(value) is str:
+            setattr(record, name, sys.intern(value))
+    return record
+
+
+# --- Horas acumuladas, por columnas -----------------------------------------
+# Las horas de los acumulables eran un diccionario por estación y hora: más de
+# medio millón en producción, casi todos de IEM con solo lluvia y su instante,
+# a unos 300 bytes cada uno para guardar dos números. El ranking se llevaba así
+# ~280 MB de la API. Aquí cada estación y día guarda sus horas en orden de
+# llegada y, por campo, un array compacto con un valor por hora.
+#
+# El orden de llegada se conserva a propósito: las sumas de lluvia se hacen en
+# ese orden y un cambio de orden cambia el último decimal de un float.
+_HOURLY_FLOAT_FIELDS = frozenset({"rain", "tmax", "tmin", "gust", "tcur", "wind", "wind_dir"})
+_HOURLY_EPOCH_FIELDS = frozenset({"rain_at", "tcur_at", "wind_at"})
+# Hueco de una columna de instantes: un int64 que ningún epoch real alcanza.
+_EPOCH_MISSING = -(2 ** 63)
+
+
+def _hourly_column(field_name: str, length: int):
+    """Columna vacía (todo hueco) para ``length`` horas."""
+    if field_name in _HOURLY_FLOAT_FIELDS:
+        return array("d", [math.nan]) * length
+    if field_name in _HOURLY_EPOCH_FIELDS:
+        return array("q", [_EPOCH_MISSING]) * length
+    return [None] * length
+
+
+def _column_missing(column):
+    if isinstance(column, list):
+        return None
+    return math.nan if column.typecode == "d" else _EPOCH_MISSING
+
+
+def _column_get(column, index: int):
+    value = column[index]
+    if isinstance(column, list):
+        return value
+    if column.typecode == "d":
+        return None if value != value else value
+    return None if value == _EPOCH_MISSING else value
+
+
+def _column_list(column) -> list:
+    """La columna como lista de Python, con ``None`` en los huecos."""
+    if isinstance(column, list):
+        return list(column)
+    if column.typecode == "d":
+        return [None if value != value else value for value in column]
+    return [None if value == _EPOCH_MISSING else value for value in column]
+
+
+def _fits_column(column, value) -> bool:
+    """Si el valor cabe en el array sin cambiar lo que se leerá después.
+
+    Solo entran ``float`` que no sean NaN en las columnas de decimales y
+    ``int`` de 64 bits en las de instantes: un NaN se confundiría con el
+    hueco, y un ``0`` entero volvería como ``0.0``. Lo demás pasa la columna
+    a lista normal, que lo guarda tal cual.
+    """
+    if column.typecode == "d":
+        return type(value) is float and value == value
+    return type(value) is int and _EPOCH_MISSING < value < 2 ** 63
+
+
+class _HourlyStation:
+    """Horas acumuladas de una estación en un día local, por columnas."""
+
+    __slots__ = ("meta", "hours", "columns")
+
+    def __init__(self) -> None:
+        # (nombre, localidad, lat, lon) del último upsert.
+        self.meta: Tuple[Any, Any, Any, Any] = (None, None, None, None)
+        self.hours: List[str] = []
+        self.columns: Dict[str, Any] = {}
+
+    def upsert(self, hour_key: str, values: Dict[str, Any]) -> None:
+        try:
+            index = self.hours.index(hour_key)
+        except ValueError:
+            index = len(self.hours)
+            self.hours.append(sys.intern(hour_key))
+            for column in self.columns.values():
+                column.append(_column_missing(column))
+        for name, value in values.items():
+            column = self.columns.get(name)
+            if column is None:
+                column = self.columns[name] = _hourly_column(name, len(self.hours))
+            self._set(name, column, index, value)
+
+    def _set(self, name: str, column, index: int, value) -> None:
+        if isinstance(column, list):
+            column[index] = value
+        elif value is None:
+            column[index] = _column_missing(column)
+        elif _fits_column(column, value):
+            column[index] = value
+        else:
+            column = self.columns[name] = _column_list(column)
+            column[index] = value
+
+    def values(self, name: str) -> List[Any]:
+        """Valores de ``name`` hora a hora, en orden de llegada; ``None`` si falta."""
+        column = self.columns.get(name)
+        if column is None:
+            return [None] * len(self.hours)
+        return _column_list(column)
+
+    def to_json(self) -> list:
+        return [
+            list(self.meta),
+            list(self.hours),
+            {name: _column_list(column) for name, column in self.columns.items()},
+        ]
+
+    @classmethod
+    def from_json(cls, payload) -> "_HourlyStation":
+        meta, hours, columns = payload
+        station = cls()
+        station.meta = tuple(meta) if len(meta) == 4 else (None, None, None, None)
+        station.hours = [sys.intern(str(hour)) for hour in hours]
+        for name, raw in columns.items():
+            station.columns[name] = _hourly_column(name, len(station.hours))
+            for index, value in enumerate(raw[: len(station.hours)]):
+                if value is not None:
+                    station._set(name, station.columns[name], index, value)
+        return station
+
+    @classmethod
+    def from_legacy(cls, payload: dict) -> "_HourlyStation":
+        """Estación en el formato anterior: ``{"meta": {...}, "hours": {hora: {...}}}``."""
+        station = cls()
+        meta = payload.get("meta") or {}
+        station.meta = (meta.get("name"), meta.get("locality"), meta.get("lat"), meta.get("lon"))
+        for hour_key, values in (payload.get("hours") or {}).items():
+            station.upsert(str(hour_key), values or {})
+        return station
 
 
 def _num(value) -> Optional[float]:
@@ -1752,7 +1905,7 @@ async def fetch_meteoswiss_records(
 
     tz = ZoneInfo(PROVIDER_TZ["METEOSWISS"])
     yesterday = (now_utc.astimezone(tz).date() - timedelta(days=1)).isoformat()
-    known = set(store._hourly.get(("METEOSWISS", yesterday), {}))
+    known = store.hourly_station_ids("METEOSWISS", yesterday)
 
     async def _current() -> Dict[str, Tuple[int, Dict[str, float]]]:
         # Sin él el ranking sigue: solo faltan la temperatura y el viento del
@@ -3165,8 +3318,8 @@ class RankingStore:
     Meteo-France) → ``upsert_hourly`` por hora + ``reduce_accumulable``."""
 
     _daily: Dict[Tuple[str, str], Dict[str, StationDaily]] = field(default_factory=dict)
-    # (proveedor, día) → {station_id: {"meta": {...}, "hours": {hora: {metric: val}}}}
-    _hourly: Dict[Tuple[str, str], Dict[str, dict]] = field(default_factory=dict)
+    # (proveedor, día) → {station_id: horas de ese día, por columnas}
+    _hourly: Dict[Tuple[str, str], Dict[str, _HourlyStation]] = field(default_factory=dict)
     # Marca de tiempo (UTC) del último ciclo de refresco completado.
     updated_at: Optional[datetime] = None
 
@@ -3199,8 +3352,13 @@ class RankingStore:
                 [provider, day, {sid: asdict(rec) for sid, rec in stations.items()}]
                 for (provider, day), stations in self._daily.items()
             ],
-            "hourly": [
-                [provider, day, stations]
+            # Las horas van por columnas en su propia clave. "hourly", el
+            # formato anterior, se deja vacío: si hubiera que volver al código
+            # de antes, arrancaría con los diarios y sin las horas acumuladas,
+            # en vez de descartar el snapshot entero.
+            "hourly": [],
+            "hourly_columns": [
+                [provider, day, {sid: station.to_json() for sid, station in stations.items()}]
                 for (provider, day), stations in self._hourly.items()
             ],
             # Quién ha dejado de reportar. Va aquí porque se alimenta del mismo
@@ -3245,15 +3403,25 @@ class RankingStore:
             # una versión más nueva del código no revienta la carga.
             known = {f.name for f in dc_fields(StationDaily)}
             daily: Dict[Tuple[str, str], Dict[str, StationDaily]] = {}
-            for provider, day, stations in payload.get("daily", []):
-                daily[(str(provider), str(day))] = {
-                    str(sid): StationDaily(**{k: v for k, v in rec.items() if k in known})
+            for provider, day, stations in payload.pop("daily", []):
+                daily[(sys.intern(str(provider)), sys.intern(str(day)))] = {
+                    str(sid): _compact_record(
+                        StationDaily(**{k: v for k, v in rec.items() if k in known})
+                    )
                     for sid, rec in stations.items()
                 }
-            hourly: Dict[Tuple[str, str], Dict[str, dict]] = {
-                (str(provider), str(day)): stations
-                for provider, day, stations in payload.get("hourly", [])
-            }
+            hourly: Dict[Tuple[str, str], Dict[str, _HourlyStation]] = {}
+            # Formato anterior (un diccionario por hora) y el actual, por
+            # columnas. Se sueltan del payload según se convierten para no
+            # tener las dos copias vivas a la vez.
+            for provider, day, stations in payload.pop("hourly", []):
+                bucket = hourly.setdefault((str(provider), str(day)), {})
+                for sid, station in stations.items():
+                    bucket[str(sid)] = _HourlyStation.from_legacy(station)
+            for provider, day, stations in payload.pop("hourly_columns", []):
+                bucket = hourly.setdefault((str(provider), str(day)), {})
+                for sid, station in stations.items():
+                    bucket[str(sid)] = _HourlyStation.from_json(station)
         except Exception:
             logger.warning("ranking: snapshot ilegible en %s; se ignora", path, exc_info=True)
             return False
@@ -3346,6 +3514,7 @@ class RankingStore:
         for r in records:
             day = self._bucket_day(provider, r, fallback_day)
             r.local_date = day
+            _compact_record(r)
             # Juzgar ANTES de sanear. El saneador anula la máxima cuando la
             # pareja no cabe en un día, y así la cuarentena llegaba tarde: ya
             # no quedaba máxima con la que comparar, el criterio de amplitud no
@@ -3384,21 +3553,27 @@ class RankingStore:
         values: Dict[str, Optional[float]],
     ) -> None:
         bucket = self._hourly.setdefault((provider, day), {})
-        st = bucket.setdefault(station_id, {"meta": {}, "hours": {}})
-        st["meta"] = {"name": name, "locality": locality, "lat": lat, "lon": lon}
+        st = bucket.get(station_id)
+        if st is None:
+            st = bucket[station_id] = _HourlyStation()
+        st.meta = (name, locality, lat, lon)
         # Upsert por hora: re-poll de la misma hora la sobrescribe (la suma de
         # lluvia no se duplica al solaparse ventanas).
         # Distintos bulks del mismo proveedor pueden completar una misma hora
         # por separado (p. ej. SMHI: lluvia latest-day + viento latest-hour).
         # Mezclar evita que el segundo borre la lluvia ya almacenada.
-        st["hours"].setdefault(hour_key, {}).update(values)
+        st.upsert(hour_key, values)
+
+    def hourly_station_ids(self, provider: str, day: str) -> set:
+        """Estaciones con alguna hora acumulada para (proveedor, día)."""
+        return set(self._hourly.get((provider, day), {}))
 
     def accumulated_hours(self, provider: str, day: str) -> set:
         """Horas ya almacenadas para (proveedor, día) — para pedir solo las
         que faltan (Meteo-France acumula 1 llamada por hora nueva)."""
         hours: set = set()
         for st in self._hourly.get((provider, day), {}).values():
-            hours.update(st.get("hours", {}).keys())
+            hours.update(st.hours)
         return hours
 
     def rolling_rain_24h_by_station(
@@ -3423,10 +3598,12 @@ class RankingStore:
             if hour_provider != provider:
                 continue
             for sid, station_row in station_rows.items():
-                for values in (station_row.get("hours") or {}).values():
-                    value = _num(values.get("rain"))
+                for raw_value, raw_at in zip(
+                    station_row.values("rain"), station_row.values("rain_at")
+                ):
+                    value = _num(raw_value)
                     try:
-                        observed_at = int(values.get("rain_at"))
+                        observed_at = int(raw_at)
                     except (TypeError, ValueError):
                         continue
                     if value is None or not (
@@ -3465,47 +3642,41 @@ class RankingStore:
         for day in (today, yesterday):
             recs: List[StationDaily] = []
             for sid, st in self._hourly.get((provider, day), {}).items():
-                hours = list(st["hours"].values())
-                txs = [h["tmax"] for h in hours if h.get("tmax") is not None]
-                tns = [h["tmin"] for h in hours if h.get("tmin") is not None]
-                gus = [h["gust"] for h in hours if h.get("gust") is not None]
-                rns = [h["rain"] for h in hours if h.get("rain") is not None]
+                txs = [v for v in st.values("tmax") if v is not None]
+                tns = [v for v in st.values("tmin") if v is not None]
+                gus = [v for v in st.values("gust") if v is not None]
+                rain, rain_at = st.values("rain"), st.values("rain_at")
+                rns = [v for v in rain if v is not None]
                 _flag_implausible_rain(
                     [
-                        (h.get("rain_at"), h["rain"]) for h in hours
-                        if h.get("rain") is not None and h.get("rain_at") is not None
+                        (at, value) for value, at in zip(rain, rain_at)
+                        if value is not None and at is not None
                     ],
                     provider=provider, station_id=sid, day=day,
                 )
                 # Instantánea de la HORA MÁS RECIENTE que la traiga (para el
                 # mapa de temperaturas; no participa en los extremos).
-                tcs = [
-                    (st["hours"][hour_key].get("tcur"), st["hours"][hour_key].get("tcur_at"))
-                    for hour_key in sorted(st["hours"])
-                    if st["hours"][hour_key].get("tcur") is not None
-                ]
+                by_hour = sorted(range(len(st.hours)), key=st.hours.__getitem__)
+                tcur, tcur_at = st.values("tcur"), st.values("tcur_at")
+                tcs = [(tcur[i], tcur_at[i]) for i in by_hour if tcur[i] is not None]
+                wind, wind_dir, wind_at = (
+                    st.values("wind"), st.values("wind_dir"), st.values("wind_at")
+                )
                 winds = [
-                    (
-                        st["hours"][hour_key].get("wind"),
-                        st["hours"][hour_key].get("wind_dir"),
-                        st["hours"][hour_key].get("wind_at"),
-                    )
-                    for hour_key in sorted(st["hours"])
-                    if (
-                        st["hours"][hour_key].get("wind") is not None
-                        and st["hours"][hour_key].get("wind_dir") is not None
-                    )
+                    (wind[i], wind_dir[i], wind_at[i])
+                    for i in by_hour
+                    if wind[i] is not None and wind_dir[i] is not None
                 ]
-                meta = st["meta"]
+                name, locality, lat, lon = st.meta
                 rain_24h = rolling_rain.get(sid)
                 recs.append(
                     StationDaily(
                         provider=provider,
                         station_id=sid,
-                        name=meta.get("name") or sid,
-                        locality=meta.get("locality") or "",
-                        lat=meta.get("lat"),
-                        lon=meta.get("lon"),
+                        name=name or sid,
+                        locality=locality or "",
+                        lat=lat,
+                        lon=lon,
                         tmax=round(max(txs), 1) if txs else None,
                         tmin=round(min(tns), 1) if tns else None,
                         gust=_daily_gust_max_from_series(
@@ -3698,6 +3869,7 @@ class RankingStore:
             for r in records:
                 day = self._bucket_day(provider, r, fallback_day)
                 r.local_date = day
+                _compact_record(r)
                 _flag_suspect_temperature(r)  # antes de sanear: ver arriba
                 _sanitize_record_extremes(r)  # imposibilidad física (todos)
                 _drop_quarantined_variables(r)

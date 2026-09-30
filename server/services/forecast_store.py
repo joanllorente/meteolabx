@@ -22,6 +22,7 @@ DERIVED_FORECAST_PRODUCTS = (
     "vertical-totals",
     "freezing-level",
     "snow-level",
+    "reflectivity-cappi-1500",
     # Los convectivos tienen que estar todos aquí: NATIVE_PRODUCTS se define
     # como «lo que no es derivado», así que faltar en esta lista los encola
     # además en el nivel 0, donde cada uno recalcula el perfil entero con el
@@ -65,6 +66,7 @@ PERSISTED_FORECAST_PRODUCTS = (
     "relative-humidity-700",
     "shortwave-down",
     "reflectivity",
+    "reflectivity-cappi-1500",
     "mu-ecape",
     "ml-ecape",
     "mucape-muli",
@@ -109,7 +111,10 @@ CONVECTIVE_FORECAST_PRODUCTS = (
 # y una nativa segundos, así que se calculan menos plazos de ellos.
 # Productos de IP1 con horizonte diagnóstico. Vertical Totals usa dos niveles;
 # iso 0 y cota de nieve recorren el perfil completo desde superficie.
-LEVEL_INDEX_PRODUCTS = ("vertical-totals", "freezing-level", "snow-level")
+# El CAPPI también: sale de IP4, que la precarga baja hasta ese mismo horizonte.
+LEVEL_INDEX_PRODUCTS = (
+    "vertical-totals", "freezing-level", "snow-level", "reflectivity-cappi-1500",
+)
 
 CAPPED_FORECAST_PRODUCTS = tuple(
     product

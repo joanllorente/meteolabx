@@ -22,10 +22,25 @@ La cola conserva la prioridad por pasada y nivel y escoge el primer trabajo
   esperan fuera de los procesos de cálculo. Pasados 180 s desde la primera
   aparición de la hora en el catálogo, pueden usar WCS.
 - DCAPE espera IP1 e IP3. Con paquetes desactivados se mantiene la vía WCS.
-- Una descarga cuyo `.part` avanza aplaza el desvío WCS. Un parcial sin avance
+- Para IP1 y perfiles, una descarga cuyo `.part` avanza aplaza el desvío WCS. Un parcial sin avance
   deja de aplazarlo después de 60 s, incluso si quedó huérfano.
-- Solo se admite un perfil/DCAPE por WCS a la vez. Las lecturas nativas y de
-  superficie siguen compartiendo el limitador global de peticiones.
+- Los mapas que solo aprovechan SP1 (temperatura 2 m, nube, racha, lluvia,
+  radiación y acumulado) tienen un plazo independiente de 45 s desde la
+  primera aparición de la hora en el catálogo (`METEOLABX_AROME_SP1_WAIT_S`).
+  No se reinicia al renovar el catálogo ni se prolonga por un `.part` que
+  avance. Con 0 no esperan. Si falta SP1 al vencer, salen como `wcs_parallel`.
+- Solo se admite un trabajo `wcs` a la vez: nativos de IP1, theta-e y
+  perfiles/DCAPE que recurran a esa vía. Los `wcs_parallel` de SP1 pueden
+  ocupar los huecos normales aunque haya un `wcs` activo y no consumen su
+  permiso. Siguen vigentes el máximo de workers y el limitador global de
+  peticiones; no se incrementa el ritmo permitido a Météo-France.
+
+El modo de admisión queda en `progress.active_jobs[].mode`; los contadores
+persistentes `job_routes.by_mode` registran `started`, `completed` y `failed`.
+Son intentos de trabajo (incluyen reintentos), no frames ni descargas. Un
+trabajo admitido para WCS puede encontrar luego SP1 y no hacer ninguna
+petición de campo. El informe muestra por separado la cola serializada y
+el WCS paralelo; si la instrumentación comenzó a media pasada, lo indica.
 
 Los trabajos pesados se cuentan juntos entre niveles. Se conserva el límite
 `heavy_workers` y la admisión por memoria anónima libre, con la reserva de

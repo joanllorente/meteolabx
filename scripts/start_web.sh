@@ -165,7 +165,19 @@ echo "⏳ Backend FastAPI arrancando en ${BACKEND_HOST}:${BACKEND_PORT} ..."
 BACKEND_READY_PID=$!
 
 # Si cualquiera cae, salimos → Railway reinicia el servicio.
-# shellcheck disable=SC2086 # sin AROME-IFS la variable va vacía y no cuenta
-wait -n "${UVICORN_PID}" "${FORECAST_WORKER_PID}" ${AROME_IFS_WORKER_PID}
+# `wait -n` es de bash 4.3; el de macOS es el 3.2 y lo rechaza, con lo que el
+# script salía nada más arrancar y se llevaba por delante backend y worker. Ahí
+# se sondea cada dos segundos, que para detectar una caída basta.
+if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 3) )); then
+  # shellcheck disable=SC2086 # sin AROME-IFS la variable va vacía y no cuenta
+  wait -n "${UVICORN_PID}" "${FORECAST_WORKER_PID}" ${AROME_IFS_WORKER_PID}
+else
+  while :; do
+    for pid in "${UVICORN_PID}" "${FORECAST_WORKER_PID}" ${AROME_IFS_WORKER_PID}; do
+      kill -0 "${pid}" 2>/dev/null || break 2
+    done
+    sleep 2
+  done
+fi
 echo "✗ Un proceso (backend o worker AROME) terminó; reiniciando servicio" >&2
 exit 1

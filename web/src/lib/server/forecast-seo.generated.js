@@ -1367,6 +1367,145 @@ export default {
    }
   },
   {
+   "id": "reflectivity-cappi-1500",
+   "model": "arome",
+   "modelLabel": "AROME",
+   "category": "precipitation",
+   "kind": "derived",
+   "coverage": "Diagnóstico MeteoLabX · reflectividad y geopotencial en niveles de presión",
+   "labels": {
+    "es": "Reflectividad simulada CAPPI 1,5 km",
+    "ca": "Reflectivitat simulada CAPPI 1,5 km",
+    "en": "Simulated reflectivity CAPPI 1,5 km",
+    "de": "Simulierte Reflektivität CAPPI 1,5 km",
+    "fr": "Réflectivité simulée CAPPI 1,5 km",
+    "it": "Riflettività simulata CAPPI 1,5 km",
+    "pt": "Refletividade simulada CAPPI 1,5 km"
+   },
+   "guides": {
+    "es": {
+     "what": "Reflectividad simulada a 1.500 m sobre el nivel del mar, en dBZ: un CAPPI, el corte a altitud constante con el que trabajan los radares. Enseña la precipitación en capas bajas, cerca de lo que llega al suelo.",
+     "interpretation": [
+      "Frente a la MAX, que se queda con el valor mayor de toda la columna, el CAPPI mira a una sola altitud. Una tormenta con el núcleo en altura sale mucho más intensa en la MAX; en el CAPPI se ve la lluvia que ya está cayendo.",
+      "Es el corte más parecido a los CAPPI de los radares de AEMET o Meteocat, así que sirve para comparar el modelo con lo que se está midiendo.",
+      "Donde el terreno supera los 1.500 m —Pirineo, Alpes, Sistema Central— el corte queda bajo tierra y el mapa va sin color, igual que en un radar.",
+      "Mismos órdenes que en la MAX: por debajo de 20 dBZ, lluvia débil; entre 20 y 35, moderada; por encima de 40, convección. Sin color por debajo de 5 dBZ."
+     ],
+     "method": "AROME publica la reflectividad en niveles de presión. MeteoLabX busca en cada celda los dos niveles que encierran 1.500 m —su altura sale del geopotencial— e interpola entre ellos en reflectividad lineal, no en dBZ: la escala logarítmica exageraría los ecos débiles al mezclarlos con uno fuerte.",
+     "equations": [
+      {
+       "label": "Del paquete a reflectividad (Marshall-Palmer)",
+       "latex": "Z=200\\,R^{1.6},\\qquad \\mathrm{dBZ}=10\\log_{10}Z"
+      },
+      {
+       "label": "Interpolación en altura",
+       "latex": "Z(h)=Z_1+\\frac{h-h_1}{h_2-h_1}\\,(Z_2-Z_1),\\qquad h=\\frac{\\Phi}{g_0}"
+      }
+     ],
+     "steps": [
+      "Reflectividad de AROME en 925, 900, 850, 800 y 750 hPa, que siempre encierran 1.500 m. El paquete la da como lluvia equivalente R en mm/h y se pasa a Z con Marshall-Palmer.",
+      "Altura de cada nivel sobre el mar a partir del geopotencial.",
+      "Interpolación lineal en Z entre los dos niveles que encierran 1.500 m, y paso a dBZ.",
+      "Sin valor donde la presión en superficie es menor que la de 1.500 m: ahí el corte está bajo tierra."
+     ],
+     "sources": [
+      {
+       "label": "Météo-France · ficha oficial de la API AROME",
+       "url": "https://portail-api.meteofrance.fr/web/fr/api/AROME"
+      },
+      {
+       "label": "Météo-France · API ciblée modèles (WCS/WMS)",
+       "url": "https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/854032416/API+Cibl+e+Mod+les"
+      },
+      {
+       "label": "Marshall & Palmer (1948) · The distribution of raindrops with size",
+       "url": "https://doi.org/10.1175/1520-0469(1948)005%3C0165:TDORWS%3E2.0.CO;2"
+      }
+     ]
+    },
+    "en": {
+     "what": "Simulated reflectivity at 1,500 m above sea level, in dBZ: a CAPPI, the constant-altitude cut that radars work with. It shows precipitation in the low levels, close to what reaches the ground.",
+     "interpretation": [
+      "Unlike the MAX, which keeps the largest value of the whole column, the CAPPI looks at a single altitude. A storm with its core aloft comes out much stronger on the MAX; on the CAPPI you see the rain that is already falling.",
+      "It is the cut closest to the CAPPIs of national weather-service radars, so it is useful for comparing the model with what is being measured.",
+      "Where the terrain rises above 1,500 m —Pyrenees, Alps— the cut lies underground and the map has no colour, just as on a radar.",
+      "Same orders of magnitude as the MAX: below 20 dBZ, light rain; between 20 and 35, moderate; above 40, convection. No colour below 5 dBZ."
+     ],
+     "method": "AROME publishes reflectivity on pressure levels. In each cell MeteoLabX finds the two levels that enclose 1,500 m —their height comes from the geopotential— and interpolates between them in linear reflectivity, not in dBZ: the logarithmic scale would exaggerate weak echoes when mixed with a strong one.",
+     "equations": [
+      {
+       "label": "From the package to reflectivity (Marshall-Palmer)",
+       "latex": "Z=200\\,R^{1.6},\\qquad \\mathrm{dBZ}=10\\log_{10}Z"
+      },
+      {
+       "label": "Interpolation in height",
+       "latex": "Z(h)=Z_1+\\frac{h-h_1}{h_2-h_1}\\,(Z_2-Z_1),\\qquad h=\\frac{\\Phi}{g_0}"
+      }
+     ],
+     "steps": [
+      "AROME reflectivity at 925, 900, 850, 800 and 750 hPa, which always enclose 1,500 m. The package gives it as equivalent rain rate R in mm/h, converted to Z with Marshall-Palmer.",
+      "Height of each level above sea level from the geopotential.",
+      "Linear interpolation in Z between the two levels that enclose 1,500 m, then conversion to dBZ.",
+      "No value where the surface pressure is lower than that at 1,500 m: there the cut is underground."
+     ],
+     "sources": [
+      {
+       "label": "Météo-France · official AROME API reference",
+       "url": "https://portail-api.meteofrance.fr/web/fr/api/AROME"
+      },
+      {
+       "label": "Météo-France · Model-targeted API (WCS/WMS)",
+       "url": "https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/854032416/API+Cibl+e+Mod+les"
+      },
+      {
+       "label": "Marshall & Palmer (1948) · The distribution of raindrops with size",
+       "url": "https://doi.org/10.1175/1520-0469(1948)005%3C0165:TDORWS%3E2.0.CO;2"
+      }
+     ]
+    },
+    "fr": {
+     "what": "Réflectivité simulée à 1 500 m au-dessus du niveau de la mer, en dBZ : un CAPPI, la coupe à altitude constante avec laquelle travaillent les radars. Elle montre les précipitations dans les basses couches, près de ce qui atteint le sol.",
+     "interpretation": [
+      "Contrairement à la MAX, qui retient la valeur la plus élevée de toute la colonne, le CAPPI regarde une seule altitude. Un orage dont le noyau est en altitude ressort bien plus intense sur la MAX ; sur le CAPPI, on voit la pluie qui tombe déjà.",
+      "C’est la coupe la plus proche des CAPPI des radars des services météorologiques, utile pour comparer le modèle à ce qui est mesuré.",
+      "Là où le relief dépasse 1 500 m —Pyrénées, Alpes— la coupe passe sous terre et la carte reste sans couleur, comme sur un radar.",
+      "Mêmes ordres de grandeur que la MAX : en dessous de 20 dBZ, pluie faible ; entre 20 et 35, modérée ; au-dessus de 40, convection. Aucune couleur en dessous de 5 dBZ."
+     ],
+     "method": "AROME publie la réflectivité sur des niveaux de pression. Dans chaque maille, MeteoLabX cherche les deux niveaux qui encadrent 1 500 m —leur altitude vient du géopotentiel— et interpole entre eux en réflectivité linéaire, pas en dBZ : l’échelle logarithmique exagérerait les échos faibles mêlés à un écho fort.",
+     "equations": [
+      {
+       "label": "Du paquet à la réflectivité (Marshall-Palmer)",
+       "latex": "Z=200\\,R^{1.6},\\qquad \\mathrm{dBZ}=10\\log_{10}Z"
+      },
+      {
+       "label": "Interpolation en altitude",
+       "latex": "Z(h)=Z_1+\\frac{h-h_1}{h_2-h_1}\\,(Z_2-Z_1),\\qquad h=\\frac{\\Phi}{g_0}"
+      }
+     ],
+     "steps": [
+      "Réflectivité d’AROME à 925, 900, 850, 800 et 750 hPa, qui encadrent toujours 1 500 m. Le paquet la donne comme taux de pluie équivalent R en mm/h, converti en Z avec Marshall-Palmer.",
+      "Altitude de chaque niveau au-dessus de la mer à partir du géopotentiel.",
+      "Interpolation linéaire en Z entre les deux niveaux qui encadrent 1 500 m, puis passage en dBZ.",
+      "Pas de valeur là où la pression de surface est inférieure à celle de 1 500 m : la coupe y passe sous terre."
+     ],
+     "sources": [
+      {
+       "label": "Météo-France · fiche officielle de l’API AROME",
+       "url": "https://portail-api.meteofrance.fr/web/fr/api/AROME"
+      },
+      {
+       "label": "Météo-France · API ciblée modèles (WCS/WMS)",
+       "url": "https://confluence-meteofrance.atlassian.net/wiki/spaces/OpenDataMeteoFrance/pages/854032416/API+Cibl+e+Mod+les"
+      },
+      {
+       "label": "Marshall & Palmer (1948) · The distribution of raindrops with size",
+       "url": "https://doi.org/10.1175/1520-0469(1948)005%3C0165:TDORWS%3E2.0.CO;2"
+      }
+     ]
+    }
+   }
+  },
+  {
    "id": "mslp-theta-e-850",
    "model": "arome",
    "modelLabel": "AROME",

@@ -15,6 +15,9 @@ const API_BASE = (configuredBase || localBase).replace(/\/$/, '');
 // tenga la hora guardada seguiría enseñando la versión anterior —sin la capa
 // de geopotencial, en este caso— y ni recargando ni reiniciando la cambiaría.
 const FORECAST_DATA_REVISION = 'forecast-fields-v21';
+// Las fronteras van con su propia revisión, para que añadirles una capa no
+// invalide la caché de todos los frames. La 2 trae provincias y départements.
+const BOUNDARIES_REVISION = `${FORECAST_DATA_REVISION}.fronteras-2`;
 // Modelo por defecto: el visor nació con AROME y las llamadas que no lo
 // dicen siguen siendo suyas.
 const DEFAULT_MODEL = 'arome';
@@ -93,7 +96,7 @@ export function fetchDomainBoundaries(model = DEFAULT_MODEL, domain = '') {
     // La revisión va en la URL para que la respuesta pueda declararse
     // inmutable y quedarse en la CDN: la geometría de una revisión dada no
     // cambia, y así el visitante no cruza el Atlántico a por las mismas costas.
-    boundariesRequests.set(clave, getJson(`/v1/forecast/${model}/boundaries?revision=${FORECAST_DATA_REVISION}${consulta}`)
+    boundariesRequests.set(clave, getJson(`/v1/forecast/${model}/boundaries?revision=${BOUNDARIES_REVISION}${consulta}`)
       .then((payload) => payload.boundaries || [])
       .catch((error) => {
         // Sin contornos el mapa sigue siendo legible; se reintenta al siguiente.

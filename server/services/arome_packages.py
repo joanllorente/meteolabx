@@ -69,6 +69,28 @@ IP3_ELEMENTS: dict[str, tuple[str, ...]] = {
 }
 
 
+# IP4 publica la reflectividad con un parámetro local de Météo-France
+# (disciplina 0, categoría 16, número 192) que no está en las tablas de GDAL:
+# la etiqueta como «unknown». Se reconoce por la plantilla del producto. Su
+# valor no son dBZ sino la lluvia equivalente de Marshall-Palmer, en mm/h:
+# pasada a dBZ con Z = 200·R^1,6 coincide con la cobertura en dBZ del WCS
+# (comprobado el 30/09/2026 en 850 y 500 hPa: sesgo mediano de 0,2 dB).
+IP4_REFLECTIVITY = "RFLCTVT"
+_LOCAL_ELEMENTS = {("0", "16", "192"): IP4_REFLECTIVITY}
+
+
+def _band_element(tags: dict[str, str]) -> str:
+    """Nombre del campo de una banda, también para los parámetros locales."""
+    element = tags.get("GRIB_ELEMENT", "")
+    if element and element != "unknown":
+        return element
+    numeros = tags.get("GRIB_PDS_TEMPLATE_NUMBERS", "").split()
+    disciplina = tags.get("GRIB_DISCIPLINE", "").split("(", 1)[0].strip()
+    if len(numeros) >= 2:
+        return _LOCAL_ELEMENTS.get((disciplina, numeros[0], numeros[1]), element)
+    return element
+
+
 class AromePackageError(RuntimeError):
     """El paquete no se pudo descargar o no contiene lo esperado."""
 
@@ -522,7 +544,7 @@ def _index_isobaric_bands(
             dataset = stack.enter_context(rasterio.open(path))
             for index in range(1, dataset.count + 1):
                 tags = dataset.tags(index)
-                element = tags.get("GRIB_ELEMENT", "")
+                element = _band_element(tags)
                 seen.add(element)
                 name = by_element.get(element)
                 if name is None:
@@ -614,6 +636,28 @@ def open_isobaric_extras(
     return package
 
 
+def open_isobaric_reflectivity(
+    path: Path,
+    valid_time: datetime,
+    levels_hpa: list[float],
+) -> IsobaricPackage:
+    """IP4 abierto e indexado: solo la reflectividad, nivel a nivel.
+
+    El paquete trae además la TKE en 24 niveles; indexar es leer etiquetas, así
+    que no cuesta nada dejarla fuera. Cada nivel se descodifica en ~20 ms.
+    """
+    package = _index_isobaric_bands(
+        path, valid_time, levels_hpa, {IP4_REFLECTIVITY: "reflectivity"}
+    )
+    if "reflectivity" not in package.elements:
+        package.close()
+        raise AromePackageError(
+            f"IP4 no trae reflectividad para {valid_time:%Y-%m-%dT%H:%M}Z. "
+            f"Elementos del fichero: {', '.join(sorted(package.seen))}"
+        )
+    return package
+
+
 def read_isobaric_profile(
     path: Path,
     valid_time: datetime,
@@ -661,8 +705,8 @@ def read_isobaric_extras(
 
 
 # Campos de superficie que el diagnóstico convectivo necesita, repartidos entre
-# los dos paquetes de superficie. La temperatura a 2 m no está aquí: se sigue
-# pidiendo al WCS porque es la referencia que fija la geometría del recorte.
+# los dos paquetes de superficie. La temperatura y los mapas SP1 tienen un
+# lector selectivo propio; no son requisitos adicionales de los perfiles.
 # Comprobado contra el WCS sobre la misma pasada y hora: viento y presión
 # coinciden hasta el último bit del float, y el rocío difiere 0,039 °C como
 # máximo, que es la precisión con la que el paquete empaqueta ese campo.
@@ -676,6 +720,76 @@ SURFACE_ELEMENTS: dict[str, dict[tuple[str, str], tuple[str, str]]] = {
         ("PRES", "0-SFC"): ("surface_pressure", "Pa"),
     },
 }
+
+
+# Inventariado en producción el 30/09/2026. GDAL etiqueta TPRATE y DSWRF
+# como tasas, pero PDT 4.8 declara SUMAS desde el RUN: sus valores son mm
+# y J/m². No multiplicar por el plazo ni por 3600. El lector comprueba la
+# estadística y el intervalo antes de aceptar esos campos.
+SP1_FIELDS = {
+    "temperature-2m": ("TMP", "2-HTGL", "C", "instant"),
+    "relative-humidity-2m": ("RH", "2-HTGL", "%", "instant"),
+    "surface_u": ("UGRD", "10-HTGL", "m/s", "instant"),
+    "surface_v": ("VGRD", "10-HTGL", "m/s", "instant"),
+    "mean_sea_level_pressure": ("PRMSL", "0-MSL", "Pa", "instant"),
+    "cloud-cover": ("TCDC", "0-SFC", "%", "instant"),
+    "wind-gust": ("GUST", "10-HTGL", "m/s", "maximum"),
+    "precip-1h": ("TPRATE", "0-SFC", "mm", "accumulation"),
+    "accumulated-precip": ("TPRATE", "0-SFC", "mm", "accumulation"),
+    "shortwave-down": ("DSWRF", "0-SFC", "J/m²", "accumulation"),
+}
+
+
+def _sp1_time_matches(tags, run: datetime, valid_time: datetime, mode: str) -> bool:
+    """Reject a different run, instantaneous rates or an unexpected interval."""
+    try:
+        start, end = int(run.timestamp()), int(valid_time.timestamp())
+        if int(tags["GRIB_REF_TIME"]) != start or int(tags["GRIB_VALID_TIME"]) != end:
+            return False
+        forecast = int(tags["GRIB_FORECAST_SECONDS"])
+        template = int(tags["GRIB_PDS_PDTN"])
+        if mode == "instant":
+            return template == 0 and forecast == end - start
+        pds = [int(v) for v in tags["GRIB_PDS_TEMPLATE_ASSEMBLED_VALUES"].split()]
+        # PDT 4.8: one interval, no missing samples, successive forecast times.
+        if template != 8 or len(pds) != 29 or pds[21:23] != [1, 0] or pds[24:26] != [2, 1]:
+            return False
+        interval_end = datetime(*pds[15:21], tzinfo=timezone.utc)
+        if interval_end != valid_time or pds[26] * 3600 != end - start - forecast:
+            return False
+        if mode == "maximum":
+            return pds[23] == 2 and pds[26] == 1
+        return pds[23] == 1 and forecast == 0 and end > start
+    except (KeyError, ValueError, TypeError, OverflowError):
+        return False
+
+
+def read_sp1_field(path: Path, run: datetime, valid_time: datetime, name: str):
+    """Read only one validated SP1 band, retaining its own grid and mask.
+
+    Accumulations are returned from RUN to valid_time. The caller differences
+    adjacent times for hourly products, including at package boundaries.
+    """
+    element, level, units, mode = SP1_FIELDS[name]
+    expected_units = {
+        "TMP": {"C", "K"}, "RH": {"%"}, "TCDC": {"%"},
+        "UGRD": {"m/s"}, "VGRD": {"m/s"}, "GUST": {"m/s"},
+        "PRMSL": {"Pa"}, "TPRATE": {"kg/(m^2*s)", "kg/m^2"},
+        "DSWRF": {"W/(m^2)", "J/(m^2)"},
+    }
+    with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
+        for index in range(1, dataset.count + 1):
+            tags = dataset.tags(index)
+            if (tags.get("GRIB_ELEMENT"), tags.get("GRIB_SHORT_NAME")) != (element, level):
+                continue
+            source_units = tags.get("GRIB_UNIT", "").strip("[] ")
+            if source_units not in expected_units[element] or not _sp1_time_matches(tags, run, valid_time, mode):
+                continue
+            values = dataset.read(index, masked=True).astype(float).filled(np.nan)
+            if element == "TMP":
+                units = source_units
+            return values, (dataset.transform, dataset.crs, dataset.bounds), units
+    return None
 
 
 def read_surface_fields(
@@ -793,6 +907,7 @@ def discard_packages_before(run: datetime) -> list[Path]:
         candidates = list(_cache_dir().glob("*.grib2"))
         candidates += list(_cache_dir().glob("*.lock"))
         candidates += list(_cache_dir().glob("downloads-*.jsonl"))
+        candidates += list(_cache_dir().glob("wcs-*.jsonl"))
     except OSError:
         return removed
     for path in candidates:

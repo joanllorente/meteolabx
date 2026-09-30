@@ -168,6 +168,18 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à",
+    "release_221_improvements": [
+      "Nouvelle carte de réflectivité simulée CAPPI à 1,5 km.",
+      "Plus de localités et de provinces sur les cartes AROME avec un zoom élevé.",
+      "Villes sur la carte de rafale maximale.",
+      "Terre et mer différenciées sur les cartes de précipitations.",
+      "Les PNG téléchargés indiquent le run du modèle."
+    ],
+    "release_221_fixes": [
+      "Correction des unités et du nom du modèle dans les PNG téléchargés.",
+      "Correction de la rose des vents, qui n'apparaissait pas pour les stations avec peu de relevés.",
+      "Correction du menu des favoris de Prévision, qui débordait de l'écran sur mobile."
+    ],
     "release_220_improvements": [
       "Nouveaux modèles : ECMWF 0,25° et AROME-IFS 0,025°.",
       "AROME utilise désormais une projection de Lambert au lieu de l'équirectangulaire.",

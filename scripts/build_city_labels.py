@@ -22,11 +22,15 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
 DESTINO = RAIZ / "prototype-svelte" / "src" / "data" / "cityLabels.js"
+# Los núcleos de rango 7 van en un fichero aparte: son el doble de filas que
+# todo lo demás junto y solo se usan con el zoom casi al máximo, así que el
+# visor los pide únicamente al llegar ahí.
+DESTINO_DETALLE = RAIZ / "prototype-svelte" / "src" / "data" / "cityLabelsDetail.js"
 
 # Ventana de trabajo: cubre el dominio de AROME con holgura y el recorte
 # europeo de ECMWF que se enseña junto a él.
 OESTE, ESTE, SUR, NORTE = -16.0, 24.0, 33.0, 59.0
-POBLACION_MINIMA = 15_000
+POBLACION_MINIMA = 5_000
 
 # Entidades de población de GeoNames. Se quedan fuera las secciones de ciudad
 # (PPLX), que son barrios con nombre propio y llenarían el área metropolitana
@@ -39,6 +43,10 @@ ENTIDADES = {"PPL", "PPLA", "PPLA2", "PPLA3", "PPLA4", "PPLA5", "PPLC", "PPLG"}
 # más de 70.000 y las capitales se libran: ahí los vecinos son ciudades por
 # derecho propio —Getafe y Leganés no son un duplicado de Madrid—.
 CUADRO_CRIBA = 0.1
+# Los de rango 7 se criban más fino, unos cinco kilómetros, y contra todo lo ya
+# elegido: con el zoom a fondo caben a esa distancia, pero un pueblo pegado a
+# una ciudad mayor solo le quitaría el sitio.
+CUADRO_CRIBA_DETALLE = 0.05
 
 # Rango de rótulo: a qué nivel de detalle entra cada ciudad. El 1 es lo que se
 # ve con el mapa entero y el 6 lo que aparece con el zoom a fondo, cuando la
@@ -54,7 +62,9 @@ def rango(poblacion: float, capital: bool) -> int:
         return 4
     if poblacion >= 35_000:
         return 5
-    return 6
+    if poblacion >= 15_000:
+        return 6
+    return 7
 
 
 # Natural Earth rotula en inglés y con alguna marca de control colada en el
@@ -96,7 +106,19 @@ EN_CASTELLANO = {
     "Lisbon": "Lisboa", "Bruxelles": "Bruselas", "Den Haag": "La Haya",
     "'s-Gravenhage": "La Haya", "Genève": "Ginebra", "Zürich": "Zúrich",
     "Edinburgh": "Edimburgo", "Dublin": "Dublín",
-    "Luxembourg": "Luxemburgo", "Andorra": "Andorra la Vella",
+    "Luxembourg": "Luxemburgo",
+}
+# Las traducciones son para las ciudades que todo el mundo conoce por su nombre
+# castellano. Aplicadas a cualquier núcleo, se equivocaban de sitio con los
+# homónimos pequeños: Andorra (Teruel) salía rotulada «Andorra la Vella» y
+# Cologne, un pueblo de Brescia, «Colonia». Hasta el 5 y no menos: Venecia, con
+# el censo del centro histórico, se queda en 51.000 habitantes.
+RANGO_TRADUCIBLE = 5
+
+# Nombres que se traducen enteros, antes de quitarles el paréntesis: sin él,
+# Frankfurt (Oder) sería otra «Fráncfort».
+NOMBRE_COMPLETO = {
+    "Frankfurt (Oder)": "Fráncfort del Óder",
 }
 
 
@@ -169,7 +191,7 @@ def ciudades(volcado: Path) -> list[list]:
         capital = fila["fcode"] == "PPLC"
         if poblacion < POBLACION_MINIMA and not capital:
             continue
-        nombre = limpia(fila["name"])
+        nombre = NOMBRE_COMPLETO.get(fila["name"]) or limpia(fila["name"])
         if not nombre:
             continue
         # Los distritos de París y Marsella vienen numerados —«Paris 15
@@ -186,16 +208,22 @@ def ciudades(volcado: Path) -> list[list]:
     # reconoce, no la que llegue antes en el volcado.
     candidatas.sort(key=lambda fila: -fila[0])
     ocupados = set()
+    ocupados_detalle = set()
     elegidas = []
     for poblacion, capital, nombre, latitud, longitud in candidatas:
         nivel = rango(poblacion, capital)
-        if nivel > 4:
+        fino = (round(latitud / CUADRO_CRIBA_DETALLE), round(longitud / CUADRO_CRIBA_DETALLE))
+        if nivel == 7:
+            if fino in ocupados_detalle:
+                continue
+        elif nivel > 4:
             cuadro = (round(latitud / CUADRO_CRIBA), round(longitud / CUADRO_CRIBA))
             if cuadro in ocupados:
                 continue
             ocupados.add(cuadro)
+        ocupados_detalle.add(fino)
         elegidas.append([
-            EN_CASTELLANO.get(nombre, nombre),
+            EN_CASTELLANO.get(nombre, nombre) if nivel <= RANGO_TRADUCIBLE else nombre,
             round(latitud, 3),
             round(longitud, 3),
             nivel,
@@ -204,28 +232,47 @@ def ciudades(volcado: Path) -> list[list]:
     return elegidas
 
 
+def _filas(lista: list[list]) -> str:
+    return ",\n  ".join(json.dumps(ciudad, ensure_ascii=False) for ciudad in lista)
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print(__doc__)
         return 2
-    lista = ciudades(Path(sys.argv[1]))
-    filas = ",\n  ".join(json.dumps(ciudad, ensure_ascii=False) for ciudad in lista)
+    todas = ciudades(Path(sys.argv[1]))
+    lista = [ciudad for ciudad in todas if ciudad[3] < 7]
+    detalle = [ciudad for ciudad in todas if ciudad[3] == 7]
+    filas = _filas(lista)
     DESTINO.write_text(
         "/**\n"
         " * Ciudades que el visor puede rotular sobre el mapa.\n"
         " *\n"
         " * Generado por `scripts/build_city_labels.py` a partir de\n"
-        " * `ne_10m_populated_places_simple` de Natural Earth (dominio público).\n"
+        " * `cities5000` de GeoNames (CC BY 4.0).\n"
         " * No se edita a mano: se vuelve a generar.\n"
         " *\n"
         " * Cada fila es `[nombre, latitud, longitud, rango]`. El rango es el nivel\n"
         " * de detalle desde el que la ciudad merece rótulo: 1 son las que se ven\n"
-        " * con el mapa entero y 6 las que solo aparecen con el zoom a fondo.\n"
+        " * con el mapa entero y 6 las del zoom a fondo. El 7 va aparte, en\n"
+        " * `cityLabelsDetail.js`.\n"
         " */\n\n"
         f"export const CITY_LABELS = [\n  {filas}\n];\n",
         encoding="utf-8",
     )
+    DESTINO_DETALLE.write_text(
+        "/**\n"
+        " * Núcleos de 5.000 a 15.000 habitantes: el rango 7 del catálogo de\n"
+        " * `cityLabels.js`, que solo se rotula con el zoom casi al máximo.\n"
+        " *\n"
+        " * Generado por `scripts/build_city_labels.py` a partir de `cities5000`\n"
+        " * de GeoNames (CC BY 4.0). No se edita a mano: se vuelve a generar.\n"
+        " */\n\n"
+        f"export const CITY_LABELS_DETAIL = [\n  {_filas(detalle)}\n];\n",
+        encoding="utf-8",
+    )
     print(f"{len(lista)} ciudades en {DESTINO.relative_to(RAIZ)}")
+    print(f"{len(detalle)} núcleos en {DESTINO_DETALLE.relative_to(RAIZ)}")
     return 0
 
 

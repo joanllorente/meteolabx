@@ -100,12 +100,16 @@ function roseFor(dirs, speeds, language, preferences) {
     sectors[Math.round((((direction % 360) + 360) % 360) / 22.5) % 16][band] += 1;
   }
 
+  // Basta una lectura para enseñar la rosa. Con un mínimo, la tarjeta
+  // desaparecía a primera hora o en días flojos —en WU el medio de cinco
+  // minutos cae en calma a menudo— y parecía que faltaba el anemómetro. El
+  // número de muestras va al lado para que se lea con esa cautela.
+  if (total === 0) return null;
   const active = total - calm;
-  if (active < 6) return null;
 
   const names = cardinals(language);
   const data = sectors.map((counts, index) => {
-    const bandPct = counts.map((count) => (count / active) * 100);
+    const bandPct = counts.map((count) => (active ? (count / active) * 100 : 0));
     return {
       dir: names[index],
       pct: bandPct.reduce((sum, value) => sum + value, 0),
@@ -123,8 +127,9 @@ function roseFor(dirs, speeds, language, preferences) {
     cardinals: [names[0], names[4], names[8], names[12]],
     samples: total,
     stats: {
-      dominant: dominant.dir,
-      frequency: `${num(dominant.pct, { language, decimals: 0 })} %`,
+      // Todo en calma: no hay rumbo que destacar.
+      dominant: active ? dominant.dir : '—',
+      frequency: active ? `${num(dominant.pct, { language, decimals: 0 })} %` : '—',
       samples: num(total, { language, decimals: 0 }),
       calm: `${num((calm / total) * 100, { language, decimals: 0 })} %`
     }
