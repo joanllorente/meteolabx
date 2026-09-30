@@ -601,38 +601,7 @@
   }
   const landPath = $derived(makeLandPath());
 
-  /**
-   * Celdas con dato, como máscara de la tierra.
-   *
-   * No todos los campos cubren el dominio entero: el tipo de precipitación de
-   * AROME, por ejemplo, deja sin dato una franja al este y otra al oeste. Ahí
-   * el ráster es transparente, y sin recortar asomaba la tierra en beige donde
-   * el modelo no dice nada. Con la máscara, fuera del campo vuelve a verse el
-   * fondo liso. Si todas las celdas tienen dato no hace falta.
-   */
-  function makeDataMask() {
-    const { width, height, values } = frame;
-    if (!values?.length || typeof document === 'undefined') return '';
-    let huecos = false;
-    for (let index = 0; index < values.length; index += 1) {
-      if (!Number.isFinite(values[index])) { huecos = true; break; }
-    }
-    if (!huecos) return '';
-    const lienzo = document.createElement('canvas');
-    lienzo.width = width;
-    lienzo.height = height;
-    const contexto = lienzo.getContext('2d');
-    const pixels = contexto.createImageData(width, height);
-    const blanco32 = new Uint32Array(pixels.data.buffer);
-    for (let index = 0; index < values.length; index += 1) {
-      if (Number.isFinite(values[index])) blanco32[index] = 0xffffffff;
-    }
-    contexto.putImageData(pixels, 0, 0);
-    return lienzo.toDataURL('image/png');
-  }
-  const dataMask = $derived(landPath ? makeDataMask() : '');
   const uid = $props.id();
-  const maskId = `land-mask-${uid}`;
   const clipId = `land-clip-${uid}`;
   // Provincias, départements y demás solo con el zoom alto: con el mapa
   // entero son una maraña que tapa el campo, y a partir de aquí la pantalla
@@ -1278,12 +1247,7 @@
           <clipPath id={clipId}>
             <rect x="0" y="0" width={frame.width} height={frame.height} />
           </clipPath>
-          {#if dataMask}
-            <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width={frame.width} height={frame.height}>
-              <image href={dataMask} x="0" y="0" width={frame.width} height={frame.height} preserveAspectRatio="none" style="image-rendering:pixelated" />
-            </mask>
-          {/if}
-          <path class="land" d={landPath} clip-path={`url(#${clipId})`} mask={dataMask ? `url(#${maskId})` : undefined} />
+          <path class="land" d={landPath} clip-path={`url(#${clipId})`} />
         </g>
       </svg>
     {/if}
