@@ -1387,8 +1387,8 @@ export default {
      "what": "Reflectividad simulada a 1.500 m sobre el nivel del mar, en dBZ: un CAPPI, el corte a altitud constante con el que trabajan los radares. Enseña la precipitación en capas bajas, cerca de lo que llega al suelo.",
      "interpretation": [
       "Frente a la MAX, que se queda con el valor mayor de toda la columna, el CAPPI mira a una sola altitud. Una tormenta con el núcleo en altura sale mucho más intensa en la MAX; en el CAPPI se ve la lluvia que ya está cayendo.",
-      "Es el corte más parecido a los CAPPI de los radares de AEMET o Meteocat, así que sirve para comparar el modelo con lo que se está midiendo.",
-      "Donde el terreno supera los 1.500 m —Pirineo, Alpes, Sistema Central— el corte queda bajo tierra y el mapa va sin color, igual que en un radar.",
+      "Es el corte más parecido a los CAPPI que publican los servicios meteorológicos con sus radares, así que sirve para comparar el modelo con lo que se está midiendo.",
+      "Donde el terreno supera los 1.500 m —Alpes, Pirineo— el corte queda bajo tierra y el mapa va sin color, igual que en un radar.",
       "Mismos órdenes que en la MAX: por debajo de 20 dBZ, lluvia débil; entre 20 y 35, moderada; por encima de 40, convección. Sin color por debajo de 5 dBZ."
      ],
      "method": "AROME publica la reflectividad en niveles de presión. MeteoLabX busca en cada celda los dos niveles que encierran 1.500 m —su altura sale del geopotencial— e interpola entre ellos en reflectividad lineal, no en dBZ: la escala logarítmica exageraría los ecos débiles al mezclarlos con uno fuerte.",
