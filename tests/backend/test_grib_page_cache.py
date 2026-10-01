@@ -106,3 +106,36 @@ def test_map_cleanup_respects_scope_and_ignores_temporary_files(monkeypatch, tmp
     assert cache.release_completed_grib_cache()['map_files_advised'] == 1
     assert len(advised) == 1
     assert temp.read_bytes() == b'partial'
+
+
+def test_ecmwf_map_pages_cover_every_domain_of_completed_runs(monkeypatch, tmp_path):
+    """Los mapas de ECMWF no son del modelo activo: hay que pedirlos por modelo.
+
+    Antes nadie los liberaba y se quedaban en la caché de páginas hasta que se
+    borraba su pasada.
+    """
+    advised = setup(monkeypatch, tmp_path)
+    store = forecast_store.LocalObjectStore(tmp_path / 'store')
+    manifests = [
+        {'run': '2026-09-12T12:00:00Z', 'status': 'complete'},
+        {'run': '2026-09-12T18:00:00Z', 'status': 'publishing'},
+    ]
+    pedidos = []
+    def retained(_, model=None):
+        pedidos.append(model)
+        return manifests
+    monkeypatch.setattr(forecast_store, 'retained_manifests', retained)
+    paths = []
+    for m in manifests:
+        for scope in ('model', 'iberia'):
+            key = forecast_store.frame_key(m['run'], 'temperature-2m', m['run'],
+                                           scope=scope, model='ecmwf')
+            store.put(key, b'map', 'application/gzip')
+            paths.append(store._path(key))
+
+    result = cache.release_completed_map_cache(store, model='ecmwf', scopes=['model', 'iberia'])
+
+    assert pedidos == ['ecmwf']
+    assert result == {'map_files_advised': 2, 'map_file_bytes': 6}
+    assert len(advised) == 2
+    assert all(p.read_bytes() == b'map' for p in paths)

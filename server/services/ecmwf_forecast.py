@@ -61,6 +61,7 @@ from server.services.forecast_store import (
     write_grid,
     write_json,
 )
+from server.services.grib_page_cache import release_completed_map_cache
 
 
 logger = logging.getLogger("meteolabx.ecmwf_forecast")
@@ -1271,6 +1272,11 @@ def run_cycle(max_frames: int = 0) -> dict[str, Any]:
     write_json(store, latest_manifest_key(FORECAST_MODEL), manifiesto)
     _retire_replaced_runs(store, run, register_run_slot(store, manifiesto))
     prune_retained_runs(store, model=FORECAST_MODEL)
+    try:
+        release_completed_map_cache(store, model=FORECAST_MODEL,
+                                    scopes=[frame_scope(domain) for domain in DOMAINS])
+    except OSError:
+        logger.warning("ECMWF: no se pudo liberar la caché de páginas de los mapas", exc_info=True)
     return {
         "model": FORECAST_MODEL,
         "run": run_iso,

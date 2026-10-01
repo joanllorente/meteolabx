@@ -65,7 +65,24 @@ def release_completed_grib_cache() -> dict:
     return result
 
 
-def _release_completed_map_cache(store, manifests):
+def release_completed_map_cache(store, *, model: str, scopes=('model',)) -> dict:
+    """Descarta las páginas de los mapas de un modelo que no calcula AROME.
+
+    `release_completed_grib_cache` solo ve los manifiestos del modelo activo.
+    Los mapas de ECMWF se quedaban en la caché de páginas hasta que se borraba
+    su pasada: el 01/10/2026, 1,6 GB de los 3,2 GB que facturaba Railway.
+    """
+    from server.services.forecast_store import retained_manifests
+
+    if not hasattr(os, 'posix_fadvise') or not hasattr(os, 'POSIX_FADV_DONTNEED'):
+        return {'skipped': 'unsupported'}
+    manifests = [m for m in retained_manifests(store, model=model)
+                 if not (m.get("progress") or {}).get("active_jobs")]
+    count, total = _release_completed_map_cache(store, manifests, model=model, scopes=scopes)
+    return {'map_files_advised': count, 'map_file_bytes': total}
+
+
+def _release_completed_map_cache(store, manifests, *, model=None, scopes=None):
     from server.services.forecast_store import LocalObjectStore, frame_key
 
     # Remote object stores do not expose local files to advise.
@@ -77,10 +94,9 @@ def _release_completed_map_cache(store, manifests):
             continue
         run = str(manifest['run'])
         # Derive the run directory with the same scope/revision rules as writers.
-        key = frame_key(run, 'temperature-2m', run,
-                        scope=str(manifest.get('calculation_scope', 'model')))
-        root = store._path(key).parent.parent
-        for path in root.rglob('*.grid.gz'):
+        roots = [store._path(frame_key(run, 'temperature-2m', run, scope=scope, model=model)).parent.parent
+                 for scope in scopes or (str(manifest.get('calculation_scope', 'model')),)]
+        for path in (p for root in roots for p in root.rglob('*.grid.gz')):
             try:
                 with path.open('rb') as stream:
                     os.fsync(stream.fileno())
