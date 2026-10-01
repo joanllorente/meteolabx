@@ -134,6 +134,31 @@ function pintaTexto(ctx, elemento, origen) {
   ctx.restore();
 }
 
+/**
+ * Texto suelto que convive con elementos: `<span><i></i>Lluvia</span>`.
+ *
+ * `pintaTexto` solo entra en hojas, y aquí la hoja es el cuadradito de color:
+ * la leyenda de tipo de precipitación salía con los colores y sin los nombres.
+ * La caja se mide con un `Range`, que da la del texto y no la del padre.
+ */
+function pintaTextoSuelto(ctx, nodo, origen) {
+  const texto = (nodo.textContent || '').trim();
+  if (!texto) return;
+  const rango = document.createRange();
+  rango.selectNodeContents(nodo);
+  const r = rango.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const estilo = getComputedStyle(nodo.parentElement);
+  ctx.save();
+  ctx.font = `${estilo.fontStyle} ${estilo.fontWeight} ${estilo.fontSize}/${estilo.fontSize} ${estilo.fontFamily}`;
+  ctx.fillStyle = estilo.color;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = estilo.letterSpacing === 'normal' ? '0px' : estilo.letterSpacing;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texto, r.left - origen.left, r.top - origen.top + r.height / 2);
+  ctx.restore();
+}
+
 function cargaImagen(url) {
   return new Promise((resolve, reject) => {
     const imagen = new Image();
@@ -260,6 +285,9 @@ function pintaRama(ctx, raiz, origen, excluir = []) {
     ctx.clip();
   }
   for (const hijo of hijos) pintaRama(ctx, hijo, origen, excluir);
+  for (const nodo of raiz.childNodes) {
+    if (nodo.nodeType === Node.TEXT_NODE) pintaTextoSuelto(ctx, nodo, origen);
+  }
   if (recorta) ctx.restore();
 }
 
