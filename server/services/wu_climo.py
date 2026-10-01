@@ -29,7 +29,9 @@ import pandas as pd
 from server.schemas.errors import ProviderError
 from server.services.climo_cache import get_or_fetch_climo_block
 from domain.parsing.wu_climo import (
+    apply_hourly_precip,
     clip_period_tuples_to_today,
+    daily_precip_from_hourly,
     empty_daily_dataframe,
     merge_daily_chunks,
     normalize_wu_daily_payload,
@@ -39,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 PROVIDER = "WU"
 HISTORY_DAILY_URL = "https://api.weather.com/v2/pws/history/daily"
+# El horario, para recalcular la lluvia de cada día: ver
+# ``daily_precip_from_hourly``. Admite 32 días por petición.
+HISTORY_HOURLY_URL = "https://api.weather.com/v2/pws/history/hourly"
 
 # Concurrencia máxima de chunks simultáneos contra api.weather.com.
 _MAX_CONCURRENT_CHUNKS = 4
@@ -55,6 +60,7 @@ async def _fetch_chunk_payload_uncached(
     api_key: str,
     start_txt: str,
     end_txt: str,
+    url: str = HISTORY_DAILY_URL,
 ) -> Dict[str, Any]:
     params = {
         "stationId": str(station_id).strip(),
@@ -67,7 +73,7 @@ async def _fetch_chunk_payload_uncached(
     }
     async with semaphore:
         try:
-            response = await client.get(HISTORY_DAILY_URL, params=params)
+            response = await client.get(url, params=params)
         except httpx.HTTPError as exc:
             logger.warning(
                 "Chunk WU history %s→%s falló para %s: %s",
@@ -123,6 +129,35 @@ async def _fetch_chunk_payload(
         return {"observations": []}
 
 
+async def _fetch_hourly_payload(
+    client: httpx.AsyncClient,
+    semaphore: asyncio.Semaphore,
+    station_id: str,
+    api_key: str,
+    start_txt: str,
+    end_txt: str,
+) -> Dict[str, Any]:
+    """Horario del mes más el día anterior, que da el contador de partida."""
+    start = date.fromisoformat(f"{start_txt[:4]}-{start_txt[4:6]}-{start_txt[6:8]}")
+    previous_txt = (start - timedelta(days=1)).strftime("%Y%m%d")
+    try:
+        return await get_or_fetch_climo_block(
+            provider=PROVIDER,
+            kind=f"hourly:{previous_txt}:{end_txt}",
+            station_id=station_id,
+            credential=api_key,
+            client=client,
+            end_date=date.fromisoformat(f"{end_txt[:4]}-{end_txt[4:6]}-{end_txt[6:8]}"),
+            fetcher=lambda: _fetch_chunk_payload_uncached(
+                client, semaphore, station_id, api_key, previous_txt, end_txt,
+                url=HISTORY_HOURLY_URL,
+            ),
+        )
+    except _TransientChunkFailure:
+        # Sin horario se queda la lluvia del resumen diario.
+        return {"observations": []}
+
+
 async def fetch_climo_daily_for_periods(
     client: httpx.AsyncClient,
     station_id: str,
@@ -164,6 +199,17 @@ async def fetch_climo_daily_for_periods(
         _fetch_chunk_payload(client, semaphore, station_id, api_key, start_txt, end_txt)
         for start_txt, end_txt in chunk_windows
     ))
+    hourly_payloads = await asyncio.gather(*(
+        _fetch_hourly_payload(client, semaphore, station_id, api_key, start_txt, end_txt)
+        for start_txt, end_txt in chunk_windows
+    ))
 
-    chunks = [normalize_wu_daily_payload(payload) for payload in payloads]
+    # La lluvia diaria del resumen cuenta dos veces lo que cae antes de que la
+    # estación ponga a cero su contador; se rehace con el horario.
+    chunks = [
+        apply_hourly_precip(
+            normalize_wu_daily_payload(payload), daily_precip_from_hourly(hourly),
+        )
+        for payload, hourly in zip(payloads, hourly_payloads)
+    ]
     return merge_daily_chunks(chunks)

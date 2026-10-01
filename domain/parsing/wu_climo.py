@@ -235,6 +235,72 @@ def clip_period_tuples_to_today(
     return clipped
 
 
+# Bajada del contador por debajo de la cual no se considera puesta a cero: el
+# empaquetado de WU mueve a veces una centésima arriba o abajo.
+_COUNTER_RESET_DROP_MM = 0.05
+
+
+def daily_precip_from_hourly(payload: Dict[str, Any]) -> Dict[str, float]:
+    """Lluvia de cada día local sumando los incrementos del contador horario.
+
+    El ``precipTotal`` de history/daily es el valor MÁS ALTO del contador de
+    la estación en el día, y el contador lo pone a cero la propia estación con
+    SU reloj. Una estación con la hora mal puesta —ILHOSP26 lo pone a cero a
+    la 01:00 en verano— arrastra la lluvia de un día a la primera hora del
+    siguiente, y el resumen diario la cuenta dos veces: 70,36 mm el 29/09 y
+    otros 70,36 el 30/09, que fue seco.
+
+    Aquí se suman los incrementos hora a hora y se asignan a la fecha local de
+    cada hora; una bajada del contador es una puesta a cero y lo que marca
+    después es lluvia nueva. La primera observación solo sirve de referencia:
+    quien llame debe pedir un día antes del periodo para no perder su primera
+    hora. Devuelve ``{"AAAA-MM-DD": mm}`` con todos los días que tienen alguna
+    hora, también los secos.
+    """
+    observations = payload.get("observations", []) if isinstance(payload, dict) else []
+    rows = []
+    for observation in observations if isinstance(observations, list) else []:
+        if not isinstance(observation, dict):
+            continue
+        local_time = observation.get("obsTimeLocal")
+        metric = observation.get("metric") if isinstance(observation.get("metric"), dict) else {}
+        total = _safe_float(metric.get("precipTotal"))
+        epoch = _safe_float(observation.get("epoch"))
+        if not isinstance(local_time, str) or len(local_time) < 10 or total != total or epoch != epoch:
+            continue
+        rows.append((epoch, local_time[:10], max(0.0, total)))
+    rows.sort()
+
+    totals: Dict[str, float] = {}
+    previous: Optional[float] = None
+    for _epoch, day, total in rows:
+        if previous is None:
+            previous = total
+            continue
+        if total < previous - _COUNTER_RESET_DROP_MM:
+            increment = total
+        else:
+            increment = max(0.0, total - previous)
+        totals[day] = totals.get(day, 0.0) + increment
+        previous = total
+    return {day: quantize_rain_mm_wu(value) for day, value in totals.items()}
+
+
+def apply_hourly_precip(frame: pd.DataFrame, hourly_totals: Dict[str, float]) -> pd.DataFrame:
+    """Sustituye la lluvia del resumen diario por la recalculada, día a día.
+
+    Solo en los días que el horario cubre: si WU no devolvió horas de un día,
+    se queda el valor del resumen, que es mejor que ninguno.
+    """
+    if frame.empty or not hourly_totals:
+        return frame
+    out = frame.copy()
+    days = pd.to_datetime(out["date"]).dt.strftime("%Y-%m-%d")
+    recalculated = days.map(hourly_totals)
+    out["precip_total"] = recalculated.where(recalculated.notna(), out["precip_total"])
+    return out
+
+
 def merge_daily_chunks(chunks: Sequence[pd.DataFrame]) -> pd.DataFrame:
     """Concatena chunks normalizados y deduplica por fecha (último gana)."""
     non_empty = [chunk for chunk in chunks if isinstance(chunk, pd.DataFrame) and not chunk.empty]

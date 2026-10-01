@@ -549,12 +549,14 @@ def _overlay_aemet_current_from_newer_series(current: dict, series: dict) -> dic
             merged[current_key] = value
 
     # En el shape canónico del backend AEMET, ``pressures`` es presión
-    # reducida al nivel del mar. Al actualizarla desde la serie, anulamos
-    # la absoluta para que el glue posterior la recalcule con altitud+Tc.
+    # reducida al nivel del mar y ``pressures_abs`` la de la estación. Se
+    # toman las dos del mismo punto; si la serie no trae la absoluta, se anula
+    # para que el glue posterior la recalcule con altitud+Tc.
     pressure_msl = _series_value_at(series, "pressures", latest_index)
+    pressure_abs = _series_value_at(series, "pressures_abs", latest_index)
     if not _is_nan_value(pressure_msl):
         merged["p_hpa"] = pressure_msl
-        merged["p_abs_hpa"] = float("nan")
+        merged["p_abs_hpa"] = pressure_abs
 
     return merged
 
@@ -586,7 +588,7 @@ def _aemet_current_from_series(station_id: str, series: dict) -> dict:
         "Tc": _latest("temps"),
         "RH": _latest("humidities"),
         "p_hpa": _latest("pressures"),
-        "p_abs_hpa": float("nan"),
+        "p_abs_hpa": _latest("pressures_abs"),
         "Td": _latest("dewpts"),
         "wind": _latest("winds"),
         "gust": _latest("gusts"),

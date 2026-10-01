@@ -605,3 +605,40 @@ async def test_a_failing_yesterday_is_not_cached_and_today_still_serves() -> Non
 
     assert counter["yesterday"] == 2  # el fallo no se quedó cacheado 6 horas
     assert isinstance(first, dict)
+
+
+def _diezminutal(hora, **extra):
+    """Registro diezminutal como los de Alicante 8025: sin ``pres_nmar``."""
+    base = {"fint": f"2026-10-01T{hora}:00", "TA": 30.0, "HR": 30.0, "PRES": 1000.0,
+            "ALT": 81.0, "VV10m": 4.0, "PREC": 0.0}
+    base.update(extra)
+    return base
+
+
+def test_today_series_carries_rain_steps_for_the_daily_chart():
+    """Sin ``precip_step_mm`` la serie del día no traía lluvia y no había gráfica."""
+    from domain.trend_series import derive_trend_series
+    from server.services import aemet
+
+    serie = aemet._normalize_today_series([
+        _diezminutal("10:00", PREC=0.0), _diezminutal("10:10", PREC=0.4),
+        _diezminutal("10:20", PREC=0.2), _diezminutal("10:30", PREC=None),
+    ])
+    assert serie["precip_step_mm"][:3] == [0.0, 0.4, 0.2]
+    assert math.isnan(serie["precip_step_mm"][3])
+    acumulada = derive_trend_series(serie, period="today")["precips"]
+    assert acumulada[:3] == pytest.approx([0.0, 0.4, 0.6])
+
+
+def test_station_pressure_is_reduced_when_aemet_does_not_publish_msl():
+    """La 8025 manda ``PRES`` pero no ``pres_nmar``: el barómetro no desaparece."""
+    from models.thermodynamics import absolute_to_msl
+    from server.services import aemet
+
+    serie = aemet._normalize_today_series([_diezminutal("10:00")])
+    assert serie["pressures_abs"] == [1000.0]
+    assert serie["pressures"][0] == pytest.approx(absolute_to_msl(1000.0, 81.0, 30.0))
+    # Sin temperatura no hay reducción posible, pero la absoluta se conserva.
+    sin_t = aemet._normalize_today_series([_diezminutal("10:00", TA=None)])
+    assert sin_t["pressures_abs"] == [1000.0]
+    assert math.isnan(sin_t["pressures"][0])

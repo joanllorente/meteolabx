@@ -43,12 +43,19 @@ def _history_payload(*days: str) -> dict:
     }
 
 
-def _mock_client(record: Optional[dict] = None, status: int = 200) -> httpx.AsyncClient:
+def _mock_client(
+    record: Optional[dict] = None, status: int = 200, hourly: Optional[dict] = None,
+) -> httpx.AsyncClient:
+    """WU simulado. Las peticiones al horario, que solo sirve para rehacer la
+    lluvia, se apuntan aparte: las cuentas de bloques miran el resumen diario."""
     def handler(request: httpx.Request) -> httpx.Response:
+        es_horario = request.url.path.endswith("/hourly")
         if record is not None:
-            record.setdefault("requests", []).append(request)
+            record.setdefault("hourly" if es_horario else "requests", []).append(request)
         if status != 200:
             return httpx.Response(status, json={})
+        if es_horario:
+            return httpx.Response(200, json=hourly or {"observations": []})
         start = request.url.params.get("startDate", "")
         day = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
         return httpx.Response(200, json=_history_payload(day))
@@ -219,3 +226,57 @@ def test_endpoint_serves_the_dataset_from_the_async_service() -> None:
     assert body["has_data"] is True
     df = pd.read_json(io.StringIO(body["dataset"]), orient="table")
     assert df["temp_mean"].iloc[0] == pytest.approx(15.0)
+
+
+
+def _hora(local: str, total: float, epoch: int) -> dict:
+    return {"obsTimeLocal": local, "epoch": epoch, "metric": {"precipTotal": total}}
+
+
+def test_hourly_counter_rebuilds_rain_that_the_daily_summary_counts_twice() -> None:
+    """ILHOSP26, 29-30/09/2026: la estación pone el contador a cero a la 01:00.
+
+    El resumen diario daba 70,36 mm los dos días; el 30 fue seco. Con lluvia
+    pasada la medianoche, esa hora es del día nuevo y no del anterior.
+    """
+    from domain.parsing.wu_climo import daily_precip_from_hourly
+
+    horas = [
+        _hora("2026-09-28 23:59:54", 0.0, 0),        # referencia: el día antes
+        _hora("2026-09-29 00:59:54", 0.0, 1),
+        _hora("2026-09-29 12:59:54", 70.36, 2),
+        _hora("2026-09-29 23:59:54", 70.36, 3),
+        _hora("2026-09-30 00:59:54", 72.0, 4),       # sigue lloviendo tras medianoche
+        _hora("2026-09-30 01:59:54", 0.5, 5),        # puesta a cero y lluvia nueva
+        _hora("2026-09-30 23:59:54", 0.5, 6),
+    ]
+    totales = daily_precip_from_hourly({"observations": horas})
+    from domain.parsing.wu_climo import quantize_rain_mm_wu
+    assert totales["2026-09-29"] == quantize_rain_mm_wu(70.36)
+    assert totales["2026-09-30"] == quantize_rain_mm_wu(1.64 + 0.5)
+    assert "2026-09-28" not in totales  # la referencia no se cuenta
+
+
+@pytest.mark.asyncio
+async def test_daily_rain_comes_from_the_hourly_counter_when_available() -> None:
+    from server.services.climo_cache import clear_climo_block_cache
+    from server.services.wu_climo import fetch_climo_daily_for_periods
+
+    clear_climo_block_cache()
+    record: dict = {}
+    horario = {"observations": [
+        _hora("2025-05-31 23:59:00", 4.0, 0),
+        _hora("2025-06-01 00:59:00", 4.0, 1),   # arrastre del día anterior: no cuenta
+        _hora("2025-06-01 01:59:00", 0.0, 2),
+        _hora("2025-06-01 23:59:00", 0.0, 3),
+    ]}
+    async with _mock_client(record, hourly=horario) as client:
+        df = await fetch_climo_daily_for_periods(
+            client, "IBARCE12345", "K",
+            [(date(2025, 6, 1), date(2025, 6, 1))],
+            today_date=date(2025, 7, 1),
+        )
+    # El resumen diario simulado decía 1,2 mm; el horario, que no llovió.
+    assert df["precip_total"].tolist() == [0.0]
+    # El horario empieza el día antes, para tener el contador de partida.
+    assert record["hourly"][0].url.params["startDate"] == "20250531"

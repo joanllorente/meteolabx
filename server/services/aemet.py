@@ -586,7 +586,7 @@ def _normalize_today_series(
     (NaN en esa slot). Solo descarta el punto si no hay timestamp
     parseable.
     """
-    rows: list[tuple[int, float, float, float, float, float, float, float, float]] = []
+    rows: list[tuple[int, float, float, float, float, float, float, float, float, float]] = []
     lat_seen: float = float("nan")
     lon_seen: float = float("nan")
 
@@ -611,6 +611,13 @@ def _normalize_today_series(
         # Presión: priorizamos MSL para coherencia con WU (cuyo p_hpa también es MSL).
         # La absoluta queda derivada en el pipeline vía msl_to_absolute.
         p_msl = _parse_num(_field(record, "pres_nmar", "PRES_NMAR", "pnm", "PNM"))
+        # La de la estación viene siempre que haya barómetro; la MSL, solo si
+        # AEMET tenía temperatura para reducirla.
+        p_abs = _parse_num(_field(record, "pres", "PRES"))
+        if _is_nan(p_msl):
+            p_msl = _msl_from_station_pressure(
+                p_abs, _parse_num(_field(record, "alt", "ALT")), temp,
+            )
 
         # Viento: en m/s en AEMET; convertimos a km/h.
         wind = _ms_to_kmh(
@@ -623,11 +630,17 @@ def _normalize_today_series(
             _field(record, "DV10m", "dv10m", "dv", "DV", "dd", "DD", "dir", "DIR"),
         )
 
+        # Lluvia del intervalo: PREC en el diezminutal son los mm de esos diez
+        # minutos (en el horario, los de la hora). Va como incremento y el
+        # normalizador común la acumula en ``precips``; sin ella la serie del
+        # día no traía lluvia y la gráfica no salía aunque la estación mida.
+        precip = _parse_num(_field(record, "prec", "PREC"))
+
         # Punto de rocío: AEMET no lo expone directamente en diezminutal,
         # se calcula en el pipeline a partir de Tc + RH. Dejamos NaN.
         dewpt = float("nan")
 
-        if _is_nan(temp) and _is_nan(rh) and _is_nan(p_msl) and _is_nan(wind):
+        if _is_nan(temp) and _is_nan(rh) and _is_nan(p_msl) and _is_nan(p_abs) and _is_nan(wind):
             # Punto totalmente vacío → descartamos.
             continue
 
@@ -638,8 +651,7 @@ def _normalize_today_series(
         if _is_nan(lon_seen):
             lon_seen = _parse_num(_field(record, "lon", "LON"))
 
-        rows.append((epoch, temp, rh, dewpt, p_msl, wind, gust, wind_dir,
-                     float("nan")))  # último slot reservado para futuras métricas (uv, etc.)
+        rows.append((epoch, temp, rh, dewpt, p_msl, wind, gust, wind_dir, precip, p_abs))
 
     if not rows:
         return _empty_today_series()
@@ -659,9 +671,11 @@ def _normalize_today_series(
     winds: list[float] = []
     gusts: list[float] = []
     wind_dirs: list[float] = []
+    precip_steps: list[float] = []
+    pressures_abs: list[float] = []
 
     for ep in epochs_sorted:
-        _ep, temp, rh, dewpt, p_msl, wind, gust, wind_dir, _reserved = seen[ep]
+        _ep, temp, rh, dewpt, p_msl, wind, gust, wind_dir, precip, p_abs = seen[ep]
         epochs.append(int(_ep))
         temps.append(float(temp))
         humidities.append(float(rh))
@@ -670,6 +684,8 @@ def _normalize_today_series(
         winds.append(float(wind))
         gusts.append(float(gust))
         wind_dirs.append(float(wind_dir))
+        precip_steps.append(float(precip) if _is_nan(precip) else max(0.0, float(precip)))
+        pressures_abs.append(float(p_abs))
 
     return {
         "epochs": epochs,
@@ -677,11 +693,13 @@ def _normalize_today_series(
         "humidities": humidities,
         "dewpts": dewpts,
         "pressures": pressures,
+        "pressures_abs": pressures_abs,
         "uv_indexes": [float("nan")] * len(epochs),       # AEMET conv. no expone UV
         "solar_radiations": [float("nan")] * len(epochs),  # idem
         "winds": winds,
         "gusts": gusts,
         "wind_dirs": wind_dirs,
+        "precip_step_mm": precip_steps,
         "lat": lat_seen,
         "lon": lon_seen,
         "has_data": len(epochs) > 0,
@@ -724,6 +742,22 @@ def _raise_for_http_status(status_code: int) -> None:
 # =====================================================================
 # Normalización: record AEMET → shape canónico
 # =====================================================================
+
+
+def _msl_from_station_pressure(p_station: float, elevation: float, temp_c: float) -> float:
+    """Presión a nivel del mar cuando AEMET solo publica la de la estación.
+
+    AEMET reduce ``pres_nmar`` con la temperatura, así que una estación que no
+    la publica —Alicante 8025 no manda ``ta`` desde el 30/09/2026— se queda
+    también sin MSL aunque su barómetro siga midiendo. Con la temperatura de
+    otra fuente (el diezminutal sí la trae) se reduce con la misma fórmula que
+    el resto del pipeline.
+    """
+    if _is_nan(p_station) or _is_nan(elevation) or _is_nan(temp_c):
+        return float("nan")
+    from models.thermodynamics import absolute_to_msl
+
+    return float(absolute_to_msl(p_station, elevation, temp_c))
 
 
 def _daily_extremes_from_aemet_records(records: List[Dict[str, Any]]) -> Dict[str, float]:
@@ -869,6 +903,10 @@ def _normalize_aemet_record(
     # si no se computará en el endpoint vía ``msl_to_absolute``.
     p_hpa = _parse_num(_field(record, "pres_nmar", "PRES_NMAR", "pnm", "PNM"))
     p_station = _parse_num(_field(record, "pres", "PRES"))
+    if _is_nan(p_hpa):
+        p_hpa = _msl_from_station_pressure(
+            p_station, _parse_num(_field(record, "alt", "ALT")), Tc,
+        )
 
     # Viento: AEMET en m/s
     wind_kmh = _ms_to_kmh(
