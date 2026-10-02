@@ -6,7 +6,20 @@
   // `afterNavigate`, no `onMount`: al saltar de una estación a otra el
   // componente se reutiliza y el montaje no vuelve a ocurrir, así que esas
   // visitas no llegaban a contarse.
-  afterNavigate(() => recordSection('observation'));
+  afterNavigate(({ from }) => {
+    recordSection('observation');
+    // La conexión a la estación, como en la ficha indexable. Sin esto las
+    // redes sin slug —Netatmo, IEM, Windy, WU, WeatherLink— no sumaban
+    // ninguna visita en el panel interno: solo la de la sección. El nombre
+    // de una estación con credencial aún no ha llegado; va su identificador.
+    recordVisit({
+      provider: data.provider,
+      stationId: data.stationId,
+      name: data.station?.name || '',
+      language: data.lang,
+      entry: classifyEntry(document.referrer, location.host, { interna: Boolean(from) })
+    });
+  });
 
   onMount(() => {
     loadCredentials();
@@ -28,7 +41,7 @@
   import { fetchPersonalObservation } from '$lib/personal.js';
   import { startLiveObservation } from '$lib/live.svelte.js';
   import { ui } from '$lib/i18n/ui.js';
-  import { recordSection } from '$lib/stats.js';
+  import { classifyEntry, recordSection, recordVisit } from '$lib/stats.js';
   import { observationModel } from '$lib/observation/model.js';
   import { unitPreferences } from '$lib/units.svelte.js';
   import { unavailableKey } from '$lib/observation/unavailable.js';
