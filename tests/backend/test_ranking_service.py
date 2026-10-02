@@ -662,3 +662,39 @@ def test_fetch_geosphere_daily_uses_block_extremes():
     assert rec.local_time == "14:00"
     assert rec.name == "WIEN/HOHE WARTE"
     assert rec.locality == "Wien"
+
+
+def test_map_hides_quarantined_stations_and_brings_them_back():
+    """Una marca que llega después de guardar la lectura también la saca del mapa.
+
+    El 02/10/2026 el mapa enseñaba 1300 mm de una estación que el panel ya tenía
+    en cuarentena: la marca solo se aplicaba al guardar.
+    """
+    from server.services import suspect_data
+
+    suspect_data.clear()
+    now = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    epoch = int(now.timestamp()) - 600
+    store = RankingStore()
+    store._daily[("METEOCAT", "2026-10-02")] = {
+        "X1": StationDaily(provider="METEOCAT", station_id="X1", name="X1", lat=41.0, lon=2.0,
+                           tcur=18.0, tcur_at=epoch, rain_24h=1300.0, rain_24h_at=epoch,
+                           local_date="2026-10-02"),
+        "X2": StationDaily(provider="METEOCAT", station_id="X2", name="X2", lat=41.5, lon=2.5,
+                           tcur=17.0, tcur_at=epoch, rain_24h=4.0, rain_24h_at=epoch,
+                           local_date="2026-10-02"),
+    }
+    try:
+        # Marcada ayer: la ventana de 24 h todavía arrastra esas horas.
+        suspect_data.flag("METEOCAT", "X1", "2026-10-01", suspect_data.PRECIPITATION)
+        suspect_data.flag("METEOCAT", "X2", "2026-10-02", suspect_data.TEMPERATURE)
+
+        assert store.current_precipitation_points(now=now) == [(41.5, 2.5, 4.0)]
+        assert store.current_temperature_points(now=now) == [(41.0, 2.0, 18.0)]
+
+        suspect_data.clear()  # sale de la cuarentena
+
+        assert len(store.current_precipitation_points(now=now)) == 2
+        assert len(store.current_temperature_points(now=now)) == 2
+    finally:
+        suspect_data.clear()

@@ -2,7 +2,7 @@
   import { Locate, Minus, Plus } from '@lucide/svelte';
   import {
     LUT_SIZE, anchorFraction, bandOfValue, bandPosition, defaultPalette,
-    paletteStop, precipitationPalette, divergingPalette, thetaEPalette, windPalette,
+    paletteStop, precipitationPalette, precipitationExtensionRamp, splitBandRgb, divergingPalette, thetaEPalette, windPalette,
   } from '../lib/palettes.js';
   import { contourLines, stepLevels } from '../lib/contours.js';
   import { CITY_DETAIL_ZOOM, placeCities } from '../lib/cityPlacement.js';
@@ -19,6 +19,7 @@
   import { LAYERS, layerPreferences, toggleLayer } from '../lib/layerPreferences.svelte.js';
   import { forecastLayerLabel, forecastText } from '../lib/forecast-i18n.js';
   import { precipitationType } from '../data/precipitationTypes.js';
+  import { afterPaint } from '../lib/afterPaint.js';
 
   // `formatProbe` trae ya la unidad elegida en la leyenda; sin ella se cae a la
   // que manda el backend en la cabecera del frame. `scaleBreaks` y `zeroFloor`
@@ -28,7 +29,7 @@
   let {
     frame, productLabel, language = 'es', resetKey = 0, formatProbe = null,
     colorPalette = '', vectorMinMagnitude = .5, vectorScaleMagnitude = 0,
-    scaleBreaks = null, scaleAnchors = null, zeroFloor = 0,
+    scaleBreaks = null, scaleAnchors = null, zeroFloor = 0, paletteSplit = 0,
     displayMin = null, displayMax = null, contourStep = 0, contourLayerId = 'isotherms', formatContour = null,
     nationalBoundariesOnly = false, overlayStep = 0, overlayMajorStep = 0,
     cityLabels = false,
@@ -202,6 +203,8 @@
   function settleViewport() {
     window.clearTimeout(settleTimer);
     settleTimer = 0;
+    cancelSettleSoon?.();
+    cancelSettleSoon = null;
     viewZoom = zoom;
     viewPanX = panX;
     viewPanY = panY;
@@ -210,6 +213,23 @@
   function scheduleSettle() {
     window.clearTimeout(settleTimer);
     settleTimer = window.setTimeout(settleViewport, 160);
+  }
+
+  /**
+   * Asienta el encuadre tras pintar el gesto que lo ha cambiado.
+   *
+   * Asentarlo rehace glifos, streamlines e isolíneas. Hecho dentro del
+   * `pointerup` o del clic, el INP de soltar el dedo tras arrastrar llegaba a
+   * 3,5 s en móvil: el mapa ya está en su sitio por la transformación CSS, así
+   * que el recálculo puede esperar un fotograma.
+   */
+  let cancelSettleSoon = null;
+  function settleSoon() {
+    cancelSettleSoon?.();
+    cancelSettleSoon = afterPaint(() => {
+      cancelSettleSoon = null;
+      settleViewport();
+    });
   }
 
   function packColor(red, green, blue, alpha) {
@@ -338,10 +358,21 @@
       ? precipitationPalette
       : defaultPalette;
     const lut = paletteLut(palette, 235);
-    // Precipitación: escala logarítmica para no aplastar las lluvias débiles.
-    const logScale = isPrecipitation ? last / Math.log1p(frame.vmax) : 0;
     const breaks = scaleBreaks?.length ? scaleBreaks : null;
-    const bands = breaks ? bandColors(palette, breaks.length + 1, 235) : null;
+    // Escala ampliada: la de siempre hasta `paletteSplit` y el tramo hacia el
+    // blanco por encima; ver `precipitationExtension`.
+    const extended = colorPalette === 'precipitation-extended' && paletteSplit > 0;
+    const bands = !breaks ? null
+      : extended ? Uint32Array.from(splitBandRgb(breaks, paletteSplit), ([red, green, blue]) => packColor(red, green, blue, 235))
+      : bandColors(palette, breaks.length + 1, 235);
+    // Precipitación: escala logarítmica para no aplastar las lluvias débiles.
+    // Hasta el máximo del producto, no el de la cabecera: es presentación, y
+    // así cambiar la escala se ve sin recalcular los frames guardados.
+    const topLog = Math.log1p(Number.isFinite(displayMax) ? displayMax : frame.vmax);
+    const splitLog = extended ? Math.log1p(paletteSplit) : 0;
+    const logScale = !isPrecipitation ? 0 : last / (extended ? splitLog : topLog);
+    const upperLut = extended ? paletteLut(precipitationExtensionRamp, 235) : null;
+    const upperScale = extended ? last / ((topLog - splitLog) || 1) : 0;
     // El rango de color es de presentación, igual que la paleta o las clases:
     // lo fija el producto y la cabecera del frame solo hace de respaldo. Si
     // mandara la cabecera, cambiar una escala no se vería hasta que la pasada
@@ -364,6 +395,11 @@
         canvas32[index] = bands[bandOfValue(value, breaks)];
       } else if (isPrecipitation) {
         if (value < .05) continue;
+        if (extended && value > paletteSplit) {
+          const upper = (Math.log1p(value) - splitLog) * upperScale;
+          canvas32[index] = upperLut[upper > last ? last : upper | 0];
+          continue;
+        }
         const slot = Math.log1p(value) * logScale;
         canvas32[index] = lut[slot > last ? last : slot < 0 ? 0 : slot | 0];
       } else if (anchors) {
@@ -1015,7 +1051,7 @@
     // eventos por gesto, y rehacerlos en cada uno —las streamlines son 50 ms
     // de cálculo y más de un mega de trazos— bloqueaba el hilo principal: el
     // zoom iba a saltos y Safari, sin respuesta a tiempo, desplazaba la página.
-    if (settle) settleViewport();
+    if (settle) settleSoon();
     else scheduleSettle();
   }
 
@@ -1044,6 +1080,18 @@
       moving: k !== 1 || panX !== viewPanX || panY !== viewPanY,
       transform: `translate(${panX - k * viewPanX}px, ${panY - k * viewPanY}px) scale(${k})`
     };
+  });
+
+  // La rueda se escucha en todo el recuadro del visor y no solo en la hoja del
+  // mapa: la capa que la contiene deja pasar el puntero, así que en los
+  // márgenes —y sobre la leyenda, los botones o la marca— la rueda llegaba a
+  // la página y la desplazaba a mitad de un zoom. Sin `passive: false` el
+  // navegador puede ignorar el preventDefault.
+  $effect(() => {
+    const visor = layer?.parentElement;
+    if (!visor) return;
+    visor.addEventListener('wheel', zoomWithWheel, { passive: false });
+    return () => visor.removeEventListener('wheel', zoomWithWheel);
   });
 
   function zoomWithWheel(event) {
@@ -1119,7 +1167,7 @@
       cancelAnimationFrame(dragFrame);
       dragFrame = 0;
     }
-    settleViewport();
+    settleSoon();
     if (surface?.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
     if (clicked && showMultipleSolutions && onprofileclick) {
       inspect(event);
@@ -1136,7 +1184,7 @@
     }
   }
 
-  function resetView() {
+  function resetView({ soon = false } = {}) {
     zoom = 1;
     panX = 0;
     panY = 0;
@@ -1149,7 +1197,8 @@
       panY = (.5 - (north - 53) / (north - south)) * (surface?.clientHeight || frame.height) * zoom;
     }
     hover = null;
-    settleViewport();
+    if (soon) settleSoon();
+    else settleViewport();
   }
 
   $effect(() => {
@@ -1157,6 +1206,8 @@
     scaleBreaks;
     scaleAnchors;
     zeroFloor;
+    paletteSplit;
+    displayMax;
     renderGrid();
   });
   $effect(() => {
@@ -1217,6 +1268,7 @@
 
   $effect(() => () => {
     window.clearTimeout(settleTimer);
+    cancelSettleSoon?.();
     if (dragFrame) cancelAnimationFrame(dragFrame);
   });
 </script>
@@ -1230,7 +1282,6 @@
     aria-label={forecastText(language, 'interactiveMap', { product: productLabel })}
     class:dragging
     class:profile-target={showMultipleSolutions && hover?.overlay >= 0.5}
-    onwheel={zoomWithWheel}
     onpointerdown={beginDrag}
     onpointermove={movePointer}
     onpointerup={endDrag}
@@ -1408,7 +1459,7 @@
   <div class="zoom-controls" aria-label={forecastText(language, 'zoom')}>
     <button type="button" onclick={() => setZoom(zoom * 1.35)} aria-label={forecastText(language, 'zoomIn')}><Plus size={15} /></button>
     <button type="button" onclick={() => setZoom(zoom / 1.35)} aria-label={forecastText(language, 'zoomOut')} disabled={zoom <= 1}><Minus size={15} /></button>
-    <button type="button" onclick={resetView} aria-label={forecastText(language, 'resetView')}><Locate size={15} /></button>
+    <button type="button" onclick={() => resetView({ soon: true })} aria-label={forecastText(language, 'resetView')}><Locate size={15} /></button>
     <span>{Math.round(zoom * 100)}%</span>
   </div>
 </div>

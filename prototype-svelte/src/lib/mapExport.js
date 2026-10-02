@@ -292,11 +292,12 @@ function pintaRama(ctx, raiz, origen, excluir = []) {
 }
 
 /**
- * Compone el PNG y lo descarga.
+ * Compone la imagen del visor en un canvas, sin descargarla.
  *
- * `tarjeta` es la tarjeta entera del visor: cabecera más mapa.
+ * `tarjeta` es la tarjeta entera del visor: cabecera más mapa. La usan el PNG
+ * y cada fotograma del GIF.
  */
-export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } = {}) {
+export async function componerMapa(tarjeta, { escala = 2 } = {}) {
   const origen = tarjeta.getBoundingClientRect();
   const cabecera = tarjeta.querySelector('.map-head');
   const area = tarjeta.querySelector('.forecast-map');
@@ -369,14 +370,24 @@ export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } =
     if (unidad) pintaTexto(ctx, unidad, origen);
   }
   ctx.restore();
+  return lienzo;
+}
 
-  const blob = await new Promise((resolve) => lienzo.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error('El navegador no ha podido generar el PNG.');
+/** Descarga un blob con ese nombre de fichero. */
+export function descargar(blob, fichero) {
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement('a');
   enlace.href = url;
-  enlace.download = `${nombre}.png`;
+  enlace.download = fichero;
   enlace.click();
   // Se libera al final del ciclo, cuando la descarga ya tiene el blob.
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Compone el PNG y lo descarga. */
+export async function exportarMapaPng(tarjeta, { nombre = 'mapa', escala = 2 } = {}) {
+  const lienzo = await componerMapa(tarjeta, { escala });
+  const blob = await new Promise((resolve) => lienzo.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('El navegador no ha podido generar el PNG.');
+  descargar(blob, `${nombre}.png`);
 }

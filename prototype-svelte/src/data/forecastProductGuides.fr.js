@@ -559,7 +559,7 @@ export const forecastProductGuides = {
   },
 
   'accumulated-precip': {
-    what: 'Somme de la précipitation horaire depuis le début du RUN jusqu’à l’heure valide sélectionnée, maille par maille et en équivalent d’eau.',
+    what: 'Somme de la précipitation horaire entre deux heures choisies avec les curseurs A et B, maille par maille et en équivalent d’eau. Avec A au début du RUN, c’est le cumul de toute la prévision jusqu’à B ; en déplaçant A, on ne garde que ce qui tombe dans la fenêtre.',
     interpretation: [
       'Elle montre l’empreinte totale de l’épisode prévu par un même RUN et aide à localiser les maximums persistants ou orographiques. En avançant sur la ligne temporelle, elle ne devrait jamais diminuer dans une maille.',
       'Elle accumule aussi les erreurs d’intensité et de position de chaque heure. Comparer des cumuls de RUN différents exige d’indiquer clairement l’intervalle, car ils ne partagent pas nécessairement la même fenêtre temporelle.'
@@ -596,21 +596,21 @@ export const forecastProductGuides = {
     sources: [MF_AROME, MF_API]
   },
 
-  'shortwave-down': {
-    what: 'Flux moyen horaire de rayonnement solaire de courte longueur d’onde qui atteint la surface vers le bas, somme de la composante directe et de la composante diffuse.',
+  'precipitable-water': {
+    what: 'Vapeur d’eau contenue dans toute la colonne d’air, du sol au sommet de l’atmosphère, exprimée comme l’épaisseur de la lame d’eau obtenue si elle se condensait entièrement. En kg/m², c’est-à-dire en millimètres d’eau.',
     interpretation: [
-      'Les maximums suivent l’ensoleillement, la hauteur solaire et les ciels dégagés ; des baisses locales signalent généralement de la nébulosité, du brouillard, des aérosols ou une ombre orographique représentée par le modèle. Utile pour l’énergie solaire et le bilan de surface.',
-      'La valeur affichée est une moyenne horaire, pas une irradiance instantanée. Près du lever et du coucher du soleil, la moyenne peut différer beaucoup du maximum dans l’intervalle ; la nuit, elle doit s’approcher de zéro.'
+      'Elle mesure le carburant de la pluie : là où la valeur est élevée pour la zone et la saison, un orage ou un front peut donner des cumuls très importants. Les langues allongées de fortes valeurs signalent les rivières atmosphériques et les advections d’humidité.',
+      'Ce n’est pas la pluie prévue : rien ne tombe sans soulèvement de l’air, et la colonne ne se condense jamais entièrement. Elle n’indique pas non plus à quelle altitude se trouve la vapeur.',
+      'Elle dépend fortement de la température : les valeurs normales varient avec la saison et la latitude. Sur le relief, la colonne est plus courte et la valeur baisse même si l’air est aussi humide : comparer des zones d’altitude semblable.'
     ],
-    method: 'AROME publie le rayonnement de courte longueur d’onde descendant (DOWNWARD_SHORT_WAVE_RADIATION_FLUX) accumulé sur une heure. Bien que les métadonnées puissent annoncer des W/m², la donnée contient l’énergie reçue durant cette heure, en J/m² ; MeteoLabX divise par 3 600 s pour obtenir le flux moyen horaire.',
+    method: 'Champ natif d’AROME (PRECIPITABLE_WATER) : le modèle intègre la vapeur d’eau sur tous ses niveaux. MeteoLabX l’affiche tel quel, à toutes les échéances du run.',
     equations: [
-      { label: 'Conversion de l’énergie accumulée en flux moyen', latex: String.raw`\overline{F}_{SW\downarrow}=\frac{E_{SW\downarrow,\,PT1H}}{3600\ \mathrm s}` },
-      { label: 'Décomposition physique', latex: String.raw`F_{SW\downarrow}=F_{dir}+F_{dif}` }
+      { label: 'Définition', latex: String.raw`PW=\frac{1}{g}\int_{0}^{p_s} q\,dp` }
     ],
     steps: [
-      'Variable d’AROME : DOWNWARD_SHORT_WAVE_RADIATION_FLUX accumulée sur une heure.',
-      'Les valeurs négatives sont ramenées à zéro.',
-      'Seule transformation MLX : multiplication par 1/3600.'
+      'Variable AROME : PRECIPITABLE_WATER en surface.',
+      'Sans interpolation ni mise à l’échelle : 1 kg/m² = 1 mm d’eau.',
+      'Même échelle que l’eau précipitable d’ECMWF, pour pouvoir les comparer.'
     ],
     sources: [MF_AROME, MF_API]
   },

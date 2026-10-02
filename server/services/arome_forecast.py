@@ -263,14 +263,6 @@ PRODUCTS = {
         "level": 700.0, "vertical_kind": "pressure", "value_mode": "percent",
         "vmax": 100.0, "unit": "%",
     },
-    "shortwave-down": {
-        "kind": "native", "prefix_kind": "shortwave_down_1h",
-        "period": "PT1H", "value_mode": "nonnegative",
-        # Aunque DescribeCoverage anuncia W/m², GetCoverage PT1H entrega la
-        # energía integrada de la hora. Convertimos J/m² a flujo medio W/m².
-        "scale": 1.0 / 3600.0,
-        "vmax": 1000.0, "unit": "W/m²",
-    },
     "vertical-totals": {
         # Vertical Totals: T850 - T500. Mide el gradiente termico del entorno
         # sin depender de que parcela se elija, que es lo que lo hace util al
@@ -281,6 +273,15 @@ PRODUCTS = {
         "lower_level": 850.0,
         "upper_level": 500.0,
         "vmin": 18.0, "vmax": 34.0, "unit": "°C",
+    },
+    "precipitable-water": {
+        # Vapor de agua integrado en la columna (TCIWV), nativo de AROME y en
+        # todas las horas, H+00 incluida. Viene también en el paquete SP3, pero
+        # bajar 63 MB por bloque para un solo campo sale mucho más caro que una
+        # cobertura del WCS por hora: ~1,5 s y unos pocos MB. Comparados sobre
+        # la misma pasada y hora, los dos son idénticos celda a celda.
+        "kind": "native", "prefix_kind": "precipitable_water",
+        "value_mode": "nonnegative", "vmax": 70.0, "unit": "kg/m²",
     },
     "cloud-cover": {
         "kind": "native", "prefix_kind": "total_cloud_cover",
@@ -1540,8 +1541,7 @@ def _packages_available() -> bool:
 def _field_from_cached_sp1(name, run, valid_time):
     """SP1 already on disk; unavailable/ambiguous data falls back to WCS.
 
-    Return hourly precipitation in mm and hourly solar energy in J/m²,
-    matching the WCS inputs (the map applies the solar /3600 once).
+    Return hourly precipitation in mm, matching the WCS input.
     """
     if name not in SP1_FIELDS or not _packages_available():
         return None
@@ -1560,7 +1560,7 @@ def _field_from_cached_sp1(name, run, valid_time):
         field = read(valid_time)
         if field is None:
             return None
-        if name in {"precip-1h", "shortwave-down"} and valid_time > run + timedelta(hours=1):
+        if name == "precip-1h" and valid_time > run + timedelta(hours=1):
             previous = read(valid_time - timedelta(hours=1))
             if previous is None:
                 return None
@@ -1568,7 +1568,7 @@ def _field_from_cached_sp1(name, run, valid_time):
                     or field.data.shape != previous.data.shape or field.units != previous.units):
                 return None
             field.data = field.data - previous.data
-        if name in {"precip-1h", "accumulated-precip", "shortwave-down"}:
+        if name in {"precip-1h", "accumulated-precip"}:
             # Separate packing of cumulative fields can introduce tiny negative
             # increments. Preserve missing cells while clipping those to zero.
             field.data = np.maximum(field.data, 0.0)
@@ -1590,7 +1590,7 @@ def _surface_temperature(client, catalog, prefixes, run, valid_time):
 
 SP1_BACKED_PRODUCTS = frozenset({
     "temperature-2m", "cloud-cover", "wind-gust", "precip-1h",
-    "accumulated-precip", "shortwave-down",
+    "accumulated-precip",
 })
 
 

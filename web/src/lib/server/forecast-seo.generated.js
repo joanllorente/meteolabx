@@ -113,7 +113,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Nubes, humedad y radiación"
+    "label": "Nubes y humedad"
    }
   ],
   "ca": [
@@ -147,7 +147,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Núvols, humitat i radiació"
+    "label": "Núvols i humitat"
    }
   ],
   "en": [
@@ -181,7 +181,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Clouds, humidity and radiation"
+    "label": "Clouds and humidity"
    }
   ],
   "de": [
@@ -215,7 +215,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Wolken, Feuchte und Strahlung"
+    "label": "Wolken und Feuchte"
    }
   ],
   "fr": [
@@ -249,7 +249,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Nuages, humidité et rayonnement"
+    "label": "Nuages et humidité"
    }
   ],
   "it": [
@@ -283,7 +283,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Nubi, umidità e radiazione"
+    "label": "Nubi e umidità"
    }
   ],
   "pt": [
@@ -317,7 +317,7 @@ export default {
    },
    {
     "id": "clouds",
-    "label": "Nuvens, humidade e radiação"
+    "label": "Nuvens e humidade"
    }
   ]
  },
@@ -927,7 +927,7 @@ export default {
    },
    "guides": {
     "es": {
-     "what": "Suma de la precipitación horaria desde el inicio del RUN hasta la hora válida seleccionada, celda por celda y en equivalente de agua.",
+     "what": "Suma de la precipitación horaria entre dos horas elegidas con los deslizadores A y B, celda por celda y en equivalente de agua. Con A en el inicio del RUN es el acumulado de toda la pasada hasta B; moviendo A se queda solo lo que cae dentro de la ventana.",
      "interpretation": [
       "Muestra la huella total del episodio prevista por un mismo RUN y ayuda a localizar máximos persistentes u orográficos. Al avanzar la línea temporal nunca debería disminuir en una celda.",
       "Acumula también los errores de intensidad y posición de cada hora. Comparar acumulados de RUN distintos requiere indicar claramente el intervalo, porque no comparten necesariamente la misma ventana temporal."
@@ -957,7 +957,7 @@ export default {
      ]
     },
     "en": {
-     "what": "Sum of the hourly precipitation from the start of the RUN to the selected valid hour, cell by cell and in water equivalent.",
+     "what": "Sum of the hourly precipitation between two hours chosen with sliders A and B, cell by cell and in water equivalent. With A at the start of the RUN it is the accumulation of the whole run up to B; moving A keeps only what falls inside the window.",
      "interpretation": [
       "It shows the total footprint of the episode as forecast by a single RUN and helps locate persistent or orographic maxima. As the timeline advances it should never decrease at a given cell.",
       "It also accumulates the intensity and position errors of each hour. Comparing accumulations from different RUNs requires clearly stating the interval, because they do not necessarily share the same time window."
@@ -987,7 +987,7 @@ export default {
      ]
     },
     "fr": {
-     "what": "Somme de la précipitation horaire depuis le début du RUN jusqu’à l’heure valide sélectionnée, maille par maille et en équivalent d’eau.",
+     "what": "Somme de la précipitation horaire entre deux heures choisies avec les curseurs A et B, maille par maille et en équivalent d’eau. Avec A au début du RUN, c’est le cumul de toute la prévision jusqu’à B ; en déplaçant A, on ne garde que ce qui tombe dans la fenêtre.",
      "interpretation": [
       "Elle montre l’empreinte totale de l’épisode prévu par un même RUN et aide à localiser les maximums persistants ou orographiques. En avançant sur la ligne temporelle, elle ne devrait jamais diminuer dans une maille.",
       "Elle accumule aussi les erreurs d’intensité et de position de chaque heure. Comparer des cumuls de RUN différents exige d’indiquer clairement l’intervalle, car ils ne partagent pas nécessairement la même fenêtre temporelle."
@@ -4654,43 +4654,40 @@ export default {
    }
   },
   {
-   "id": "shortwave-down",
+   "id": "precipitable-water",
    "model": "arome",
    "modelLabel": "AROME",
    "category": "clouds",
    "kind": "native",
-   "coverage": "DOWNWARD SHORT WAVE RADIATION FLUX · 1 h → W/m²",
+   "coverage": "PRECIPITABLE WATER · columna",
    "labels": {
-    "es": "Radiación solar descendente",
-    "ca": "Radiació solar descendent",
-    "en": "Downward solar radiation",
-    "de": "Abwärtsgerichtete Solarstrahlung",
-    "fr": "Rayonnement solaire descendant",
-    "it": "Radiazione solare discendente",
-    "pt": "Radiação solar descendente"
+    "es": "Agua precipitable",
+    "ca": "Aigua precipitable",
+    "en": "Precipitable water",
+    "de": "Niederschlagbares Wasser",
+    "fr": "Eau précipitable",
+    "it": "Acqua precipitabile",
+    "pt": "Água precipitável"
    },
    "guides": {
     "es": {
-     "what": "Flujo medio horario de radiación solar de onda corta que llega hacia abajo a la superficie, suma de componente directa y difusa.",
+     "what": "Vapor de agua contenido en toda la columna de aire, desde el suelo hasta el tope de la atmósfera, expresado como el espesor de la lámina de agua que saldría si se condensara entero. Se da en kg/m², que son milímetros de agua.",
      "interpretation": [
-      "Los máximos siguen insolación, altura solar y cielos despejados; descensos locales suelen señalar nubosidad, niebla, aerosoles o sombra orográfica representada por el modelo. Es útil para energía solar y balance superficial.",
-      "El valor mostrado es medio de una hora, no irradiancia instantánea. Cerca de amanecer y ocaso el promedio puede diferir mucho del máximo dentro del intervalo; por la noche debe aproximarse a cero."
+      "Mide el combustible de la lluvia: donde el valor es alto para la zona y la época, una tormenta o un frente pueden dejar acumulados muy grandes. Las lenguas alargadas de valores altos señalan los ríos atmosféricos y las advecciones de humedad que alimentan los temporales.",
+      "No es lluvia prevista: no llueve si no hay algo que levante el aire, y nunca se condensa toda la columna. Tampoco dice a qué altura está el vapor: el mismo valor puede estar concentrado en los primeros kilómetros o repartido.",
+      "Depende mucho de la temperatura —el aire cálido admite más vapor—, así que los valores normales cambian con la estación y la latitud. Sobre el relieve la columna es más corta y el valor baja aunque el aire esté igual de húmedo: conviene comparar con zonas de altitud parecida."
      ],
-     "method": "AROME publica la radiación de onda corta descendente (DOWNWARD_SHORT_WAVE_RADIATION_FLUX) acumulada en una hora. Aunque los metadatos puedan anunciar W/m², el dato contiene la energía recibida en esa hora, en J/m²; MeteoLabX divide por 3.600 s para obtener el flujo medio horario.",
+     "method": "Campo nativo de AROME (PRECIPITABLE_WATER): el modelo integra el vapor de agua de todos sus niveles. MeteoLabX lo muestra tal cual, en todas las horas de la pasada.",
      "equations": [
       {
-       "label": "Conversión de energía acumulada a flujo medio",
-       "latex": "\\overline{F}_{SW\\downarrow}=\\frac{E_{SW\\downarrow,\\,PT1H}}{3600\\ \\mathrm s}"
-      },
-      {
-       "label": "Descomposición física",
-       "latex": "F_{SW\\downarrow}=F_{dir}+F_{dif}"
+       "label": "Definición",
+       "latex": "PW=\\frac{1}{g}\\int_{0}^{p_s} q\\,dp"
       }
      ],
      "steps": [
-      "Variable de AROME: DOWNWARD_SHORT_WAVE_RADIATION_FLUX acumulada en una hora.",
-      "Valores negativos se limitan a cero.",
-      "Única transformación MLX: multiplicación por 1/3600."
+      "Variable de AROME: PRECIPITABLE_WATER sobre la superficie.",
+      "Sin interpolación ni escalado: 1 kg/m² = 1 mm de agua.",
+      "Misma escala que el agua precipitable de ECMWF, para poder compararlos."
      ],
      "sources": [
       {
@@ -4704,26 +4701,23 @@ export default {
      ]
     },
     "en": {
-     "what": "Hourly mean flux of downward shortwave solar radiation reaching the surface, the sum of the direct and diffuse components.",
+     "what": "Water vapour contained in the whole air column, from the ground to the top of the atmosphere, expressed as the depth of liquid water it would give if all of it condensed. Given in kg/m², which are millimetres of water.",
      "interpretation": [
-      "Maxima follow insolation, solar elevation and clear skies; local drops usually signal cloud cover, fog, aerosols or orographic shading represented by the model. It is useful for solar energy and the surface balance.",
-      "The value shown is an hourly mean, not instantaneous irradiance. Near sunrise and sunset the average can differ greatly from the maximum within the interval; at night it should approach zero."
+      "It measures the fuel for rain: where the value is high for the area and season, a storm or a front can produce very large totals. Elongated tongues of high values mark atmospheric rivers and moisture advection feeding heavy-rain events.",
+      "It is not forecast rain: nothing falls without something lifting the air, and the whole column never condenses. Nor does it say at what height the vapour is.",
+      "It depends strongly on temperature, so normal values change with season and latitude. Over terrain the column is shorter and the value drops even if the air is just as moist: compare areas of similar altitude."
      ],
-     "method": "AROME publishes the downward shortwave radiation (DOWNWARD_SHORT_WAVE_RADIATION_FLUX) accumulated over one hour. Although the metadata may advertise W/m², the data contains the energy received during that hour, in J/m²; MeteoLabX divides by 3,600 s to obtain the hourly mean flux.",
+     "method": "Native AROME field (PRECIPITABLE_WATER): the model integrates water vapour over all its levels. MeteoLabX shows it as published, for every hour of the run.",
      "equations": [
       {
-       "label": "Conversion from accumulated energy to mean flux",
-       "latex": "\\overline{F}_{SW\\downarrow}=\\frac{E_{SW\\downarrow,\\,PT1H}}{3600\\ \\mathrm s}"
-      },
-      {
-       "label": "Physical decomposition",
-       "latex": "F_{SW\\downarrow}=F_{dir}+F_{dif}"
+       "label": "Definition",
+       "latex": "PW=\\frac{1}{g}\\int_{0}^{p_s} q\\,dp"
       }
      ],
      "steps": [
-      "AROME variable: DOWNWARD_SHORT_WAVE_RADIATION_FLUX accumulated over one hour.",
-      "Negative values are clipped to zero.",
-      "The only MLX transformation: multiplication by 1/3600."
+      "AROME variable: PRECIPITABLE_WATER at the surface.",
+      "No interpolation or scaling: 1 kg/m² = 1 mm of water.",
+      "Same scale as ECMWF precipitable water, so both can be compared."
      ],
      "sources": [
       {
@@ -4737,26 +4731,23 @@ export default {
      ]
     },
     "fr": {
-     "what": "Flux moyen horaire de rayonnement solaire de courte longueur d’onde qui atteint la surface vers le bas, somme de la composante directe et de la composante diffuse.",
+     "what": "Vapeur d’eau contenue dans toute la colonne d’air, du sol au sommet de l’atmosphère, exprimée comme l’épaisseur de la lame d’eau obtenue si elle se condensait entièrement. En kg/m², c’est-à-dire en millimètres d’eau.",
      "interpretation": [
-      "Les maximums suivent l’ensoleillement, la hauteur solaire et les ciels dégagés ; des baisses locales signalent généralement de la nébulosité, du brouillard, des aérosols ou une ombre orographique représentée par le modèle. Utile pour l’énergie solaire et le bilan de surface.",
-      "La valeur affichée est une moyenne horaire, pas une irradiance instantanée. Près du lever et du coucher du soleil, la moyenne peut différer beaucoup du maximum dans l’intervalle ; la nuit, elle doit s’approcher de zéro."
+      "Elle mesure le carburant de la pluie : là où la valeur est élevée pour la zone et la saison, un orage ou un front peut donner des cumuls très importants. Les langues allongées de fortes valeurs signalent les rivières atmosphériques et les advections d’humidité.",
+      "Ce n’est pas la pluie prévue : rien ne tombe sans soulèvement de l’air, et la colonne ne se condense jamais entièrement. Elle n’indique pas non plus à quelle altitude se trouve la vapeur.",
+      "Elle dépend fortement de la température : les valeurs normales varient avec la saison et la latitude. Sur le relief, la colonne est plus courte et la valeur baisse même si l’air est aussi humide : comparer des zones d’altitude semblable."
      ],
-     "method": "AROME publie le rayonnement de courte longueur d’onde descendant (DOWNWARD_SHORT_WAVE_RADIATION_FLUX) accumulé sur une heure. Bien que les métadonnées puissent annoncer des W/m², la donnée contient l’énergie reçue durant cette heure, en J/m² ; MeteoLabX divise par 3 600 s pour obtenir le flux moyen horaire.",
+     "method": "Champ natif d’AROME (PRECIPITABLE_WATER) : le modèle intègre la vapeur d’eau sur tous ses niveaux. MeteoLabX l’affiche tel quel, à toutes les échéances du run.",
      "equations": [
       {
-       "label": "Conversion de l’énergie accumulée en flux moyen",
-       "latex": "\\overline{F}_{SW\\downarrow}=\\frac{E_{SW\\downarrow,\\,PT1H}}{3600\\ \\mathrm s}"
-      },
-      {
-       "label": "Décomposition physique",
-       "latex": "F_{SW\\downarrow}=F_{dir}+F_{dif}"
+       "label": "Définition",
+       "latex": "PW=\\frac{1}{g}\\int_{0}^{p_s} q\\,dp"
       }
      ],
      "steps": [
-      "Variable d’AROME : DOWNWARD_SHORT_WAVE_RADIATION_FLUX accumulée sur une heure.",
-      "Les valeurs négatives sont ramenées à zéro.",
-      "Seule transformation MLX : multiplication par 1/3600."
+      "Variable AROME : PRECIPITABLE_WATER en surface.",
+      "Sans interpolation ni mise à l’échelle : 1 kg/m² = 1 mm d’eau.",
+      "Même échelle que l’eau précipitable d’ECMWF, pour pouvoir les comparer."
      ],
      "sources": [
       {
@@ -5081,6 +5072,51 @@ export default {
    }
   },
   {
+   "id": "ecmwf-precip-accumulated",
+   "model": "ecmwf",
+   "modelLabel": "ECMWF",
+   "category": "precipitation",
+   "kind": "derived",
+   "coverage": "ECMWF IFS 0,25° · tp acumulada desde la pasada",
+   "labels": {
+    "es": "Precipitación acumulada",
+    "ca": "Precipitació acumulada",
+    "en": "Accumulated precipitation",
+    "de": "Akkumulierter Niederschlag",
+    "fr": "Précipitations cumulées",
+    "it": "Precipitazione accumulata",
+    "pt": "Precipitação acumulada"
+   },
+   "guides": {
+    "es": {
+     "what": "Precipitación total prevista por ECMWF entre dos horas elegidas con los deslizadores A y B, en milímetros. Con A en el inicio de la pasada es todo lo que caerá hasta B; moviendo A se queda solo lo de la ventana. Es el acumulado a varios días vista.",
+     "interpretation": [
+      "Sirve para ver la huella de un episodio entero —un temporal de varios días, una DANA— y comparar zonas. Con la misma escala que el acumulado de AROME, los dos mapas se pueden poner uno al lado del otro.",
+      "Con celdas de unos 25 km, ECMWF reparte la lluvia de forma más suave que la realidad: subestima los máximos de las tormentas y los del relieve. Para el detalle de las primeras 51 horas, el acumulado de AROME.",
+      "Por debajo de 0,1 mm en la ventana no se pinta nada: el redondeo con que viajan los mapas no permite distinguir menos."
+     ],
+     "method": "ECMWF publica la precipitación acumulada desde el inicio de la pasada. Cada plazo se guarda tal cual, pasado de metros de agua a milímetros, y el visor resta el de A al de B. Los plazos van cada 3 horas hasta la +144.",
+     "equations": [
+      {
+       "label": "Precipitación de la ventana",
+       "latex": "P_{A\\to B}=1000\\,\\left[tp(B)-tp(A)\\right]"
+      }
+     ],
+     "steps": [
+      "Leer la precipitación acumulada de cada plazo y pasarla a milímetros.",
+      "En el visor, restar el plazo A del plazo B, celda a celda.",
+      "Mostrar la precipitación por clases, con la misma escala que el acumulado de AROME."
+     ],
+     "sources": [
+      {
+       "label": "ECMWF · Real-time open data",
+       "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"
+      }
+     ]
+    }
+   }
+  },
+  {
    "id": "ecmwf-eady-850-500",
    "model": "ecmwf",
    "modelLabel": "ECMWF",
@@ -5274,6 +5310,51 @@ export default {
       "Leer ω en 700 hPa, la altura geopotencial de ese nivel y la presión en superficie.",
       "Cambiar el signo, suavizar unos 40 km y ocultar los puntos bajo el relieve.",
       "Mostrar −ω en color, con el rojo como ascenso, y las isohipsas cada 3 dam."
+     ],
+     "sources": [
+      {
+       "label": "ECMWF · Real-time open data",
+       "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "ecmwf-precipitable-water",
+   "model": "ecmwf",
+   "modelLabel": "ECMWF",
+   "category": "clouds",
+   "kind": "native",
+   "coverage": "ECMWF IFS 0,25° · tcwv",
+   "labels": {
+    "es": "Agua precipitable",
+    "ca": "Aigua precipitable",
+    "en": "Precipitable water",
+    "de": "Niederschlagbares Wasser",
+    "fr": "Eau précipitable",
+    "it": "Acqua precipitabile",
+    "pt": "Água precipitável"
+   },
+   "guides": {
+    "es": {
+     "what": "Vapor de agua contenido en toda la columna de aire según ECMWF, expresado como el espesor de la lámina de agua que saldría si se condensara entero, en kg/m² (milímetros de agua). Hasta seis días vista.",
+     "interpretation": [
+      "Sirve para seguir de dónde viene la humedad de un episodio: los ríos atmosféricos y las lenguas de aire cálido y húmedo se ven días antes de que lleguen. Con valores altos para la zona y la época, cualquier mecanismo de ascenso puede dar lluvias muy fuertes.",
+      "No es lluvia prevista ni dice a qué altura está el vapor. Con la misma escala que el de AROME, los dos se pueden comparar en las horas que comparten.",
+      "Con celdas de unos 25 km, el relieve se suaviza: los valles y las cumbres quedan mezclados y el descenso del valor con la altitud se ve menos que en AROME."
+     ],
+     "method": "Campo nativo del IFS (tcwv, vapor de agua total en la columna), tal como lo publica ECMWF. Los plazos van cada 3 horas hasta la +144.",
+     "equations": [
+      {
+       "label": "Definición",
+       "latex": "TCWV=\\frac{1}{g}\\int_{0}^{p_s} q\\,dp"
+      }
+     ],
+     "steps": [
+      "Leer el vapor de agua total en la columna de cada plazo.",
+      "Mostrarlo tal cual: 1 kg/m² = 1 mm de agua.",
+      "Misma escala que el agua precipitable de AROME."
      ],
      "sources": [
       {

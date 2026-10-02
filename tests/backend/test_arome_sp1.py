@@ -125,9 +125,9 @@ def test_missing_previous_hour_falls_back_but_accumulation_does_not_need_it(monk
 @pytest.mark.parametrize('name,value,expected', [
     ('temperature-2m', 18., 18.), ('cloud-cover', 60., 60.),
     ('wind-gust', 12., 12.), ('precip-1h', 9., 9.),
-    ('shortwave-down', 720000., 200.), ('accumulated-precip', 20., 20.),
+    ('accumulated-precip', 20., 20.),
 ])
-def test_native_maps_use_sp1_without_wcs_and_scale_solar_once(monkeypatch, name, value, expected):
+def test_native_maps_use_sp1_without_wcs(monkeypatch, name, value, expected):
     valid = RUN + timedelta(hours=1)
     cached(monkeypatch, {(name, 1): value})
     def no_wcs(*args, **kwargs): pytest.fail('unexpected WCS call')

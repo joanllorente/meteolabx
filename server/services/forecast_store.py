@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import gzip
 import json
@@ -64,7 +64,6 @@ PERSISTED_FORECAST_PRODUCTS = (
     "precip-type",
     "accumulated-precip",
     "relative-humidity-700",
-    "shortwave-down",
     "reflectivity",
     "reflectivity-cappi-1500",
     "mu-ecape",
@@ -84,6 +83,7 @@ PERSISTED_FORECAST_PRODUCTS = (
     "updraft-helicity",
     "mslp-theta-e-850",
     "cloud-cover",
+    "precipitable-water",
     "vertical-totals",
 )
 
@@ -133,7 +133,7 @@ ECMWF_FORECAST_PRODUCTS = (
     "ecmwf-mslp-theta-e-850", "ecmwf-temperature-850", "ecmwf-temperature-500",
     "relative-vorticity-500", "q-vectors-700",
     "ecmwf-precip-6h", "ecmwf-jet-300", "ecmwf-omega-700", "ecmwf-frontogenesis-850",
-    "ecmwf-eady-850-500",
+    "ecmwf-eady-850-500", "ecmwf-precip-accumulated", "ecmwf-precipitable-water",
 )
 
 # Qué publica cada modelo. El almacén deja de asumir que todo lo que hay en el
@@ -685,6 +685,10 @@ def mark_error(
     manifest["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _parse_utc(value: str) -> datetime:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
 def augment_catalog_with_manifest(
     catalog: dict[str, Any], manifest: dict[str, Any] | None, *, precomputed_only: bool
 ) -> dict[str, Any]:
@@ -702,14 +706,22 @@ def augment_catalog_with_manifest(
     manifest_run = manifest.get("run")
     # El visor no debe ofrecer horas que no se van a calcular: de los productos
     # recortados solo existen los primeros plazos.
+    #
+    # El corte va por horas desde la pasada, como el del worker (H+00 a
+    # H+n-1), no por número de plazos de cada mapa. La cota de nieve y el
+    # CAPPI empiezan en H+01: contando n plazos suyos se anunciaba H+n, que el
+    # worker nunca calcula, y el visor se quedaba esperándola en la última hora.
     diagnostic_hours = int((manifest.get("expected_hours") or {}).get("diagnostic") or 0)
-    if diagnostic_hours > 0:
+    if diagnostic_hours > 0 and manifest_run:
+        limite = _parse_utc(manifest_run) + timedelta(hours=diagnostic_hours)
         for product in CAPPED_FORECAST_PRODUCTS:
             product_catalog = catalog.get("products", {}).get(product)
             if not product_catalog or product_catalog.get("run") != manifest_run:
                 continue
-            times = sorted(set(product_catalog.get("valid_times", ())))
-            product_catalog["valid_times"] = times[:diagnostic_hours]
+            product_catalog["valid_times"] = [
+                valid for valid in sorted(set(product_catalog.get("valid_times", ())))
+                if _parse_utc(valid) < limite
+            ]
 
     for product, state in manifest.get("products", {}).items():
         product_catalog = catalog.get("products", {}).get(product)

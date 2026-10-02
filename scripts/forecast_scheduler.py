@@ -88,8 +88,8 @@ class Readiness:
             missing = [(p, valid) for p in sorted(native_packages)
                        if not packages.package_ready(p, run, valid)]
             # La primera hora de un bloque necesita el acumulado anterior
-            # para restar lluvia/radiación; puede estar en otro fichero.
-            if set(job.products) & {"precip-1h", "shortwave-down"}:
+            # para restar la lluvia; puede estar en otro fichero.
+            if "precip-1h" in job.products:
                 from datetime import timedelta
                 previous = valid - timedelta(hours=1)
                 if previous > run and not packages.package_ready("SP1", run, previous):

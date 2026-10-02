@@ -406,7 +406,7 @@ def test_ecmwf_does_not_wait_between_cycles_while_it_has_work(monkeypatch):
 
 
 @pytest.mark.parametrize('product', ['temperature-2m', 'cloud-cover', 'wind-gust',
-                                   'precip-1h', 'shortwave-down', 'accumulated-precip'])
+                                   'precip-1h', 'accumulated-precip'])
 def test_sp1_maps_wait_for_sp1_with_bounded_wcs_fallback(ready, monkeypatch, product):
     native = job(0, products=(product,))
     monkeypatch.setattr(s.packages, 'package_ready', lambda p, *a: p == 'IP1')
@@ -459,7 +459,7 @@ def test_sp1_deadline_is_absolute_even_while_download_grows(ready, monkeypatch):
     monkeypatch.setattr(s.packages, 'package_ready', lambda *a: False)
     size = [1]
     monkeypatch.setattr(s.packages, '_partial_sizes', lambda p: {('part', 1): size[0]})
-    native = job(0, H1, ('shortwave-down',))
+    native = job(0, H1, ('precip-1h',))
     assert ready.mode(native, 1) == 'downloading'
     size[0] += 100
     assert ready.mode(native, ready.sp1_wait) == 'wcs_parallel'

@@ -92,7 +92,7 @@ def test_forecast_map_selector_is_grouped_by_weather_type():
         "Cizalladura y helicidad",
         "Forzamiento y cinemática",
         "Tiempo severo",
-        "Nubes, humedad y radiación",
+        "Nubes y humedad",
     ):
         assert f"label: '{category}'" in products
 
@@ -390,7 +390,7 @@ def test_every_selected_forecast_product_has_a_technical_guide():
         if line.strip().startswith("'")
     ]
     # Los mapas publicados; sube al añadir uno nuevo al selector.
-    assert len(selected_ids) == 46
+    assert len(selected_ids) == 48
     for product_id in selected_ids:
         assert f"'{product_id}': {{" in guides or f"  {product_id}: {{" in guides
 

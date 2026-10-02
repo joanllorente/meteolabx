@@ -449,8 +449,11 @@
         button.addEventListener('pointerenter', () => {
           hovered = { ...tooltipFor(point), x, y };
         });
-        button.addEventListener('pointerleave', () => {
-          hovered = null;
+        // Con el dedo no hay «pasar por encima»: el puntero sale de la caja
+        // en cuanto se levanta, y el tooltip solo duraba lo que durase el
+        // toque. Se queda puesto hasta tocar otra caja o mover el mapa.
+        button.addEventListener('pointerleave', (event) => {
+          if (event.pointerType === 'mouse') hovered = null;
         });
       }
 
@@ -570,6 +573,8 @@
       map.on(event, scheduleRender);
     }
     map.on('movestart', () => (hovered = null));
+    // Tocar el mapa fuera de las cajas quita el tooltip que dejó un toque.
+    map.on('click', () => (hovered = null));
 
     map.on('moveend', () => {
       if (!onMove) return;

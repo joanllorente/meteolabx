@@ -168,6 +168,20 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à",
+    "release_222_improvements": [
+      "Nouvelle carte d’eau précipitable pour AROME, AROME-IFS et ECMWF.",
+      "Nouvelle carte de précipitations cumulées d’ECMWF, jusqu’à six jours d’échéance.",
+      "Les précipitations cumulées d’AROME et d’ECMWF ont désormais une fenêtre glissante.",
+      "Les cartes de prévision peuvent être téléchargées en animation GIF, en choisissant les heures.",
+      "Les échelles de précipitations vont désormais jusqu’à 140 mm en 1 heure et 800 mm en cumul.",
+      "La carte de rayonnement solaire d’AROME a été retirée."
+    ],
+    "release_222_fixes": [
+      "Correction de la limite pluie-neige et de la réflectivité CAPPI, qui restaient en calcul à la dernière heure.",
+      "Correction du zoom à la molette, qui faisait défiler la page.",
+      "Correction du chevauchement des étiquettes dans la légende des précipitations cumulées.",
+      "Correction : sur mobile, il fallait maintenir le doigt sur une station de la carte pour voir ses données."
+    ],
     "release_221_improvements": [
       "Nouvelle carte de réflectivité simulée CAPPI à 1,5 km.",
       "Plus de localités et de provinces sur les cartes AROME avec un zoom élevé.",

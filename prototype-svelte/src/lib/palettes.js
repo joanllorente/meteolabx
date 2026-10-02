@@ -44,6 +44,22 @@ export const precipitationPalette = [
   '#d7dc69', '#f2c55a', '#ed914c', '#df6262', '#b44f88'
 ];
 
+/**
+ * Tramo más allá del lila, hacia el blanco como en la theta-e, para la lluvia
+ * horaria y el acumulado de AROME, que se quedaban cortos en 60 mm/h y 400 mm.
+ *
+ * No se alarga la paleta: se añade DESPUÉS de la escala de siempre. Alargarla
+ * repartía la rampa entera de otra forma y los mismos milímetros cambiaban de
+ * color —10 mm/h pasaban de ocre a rojo y 40 de rojo a lila—. Hasta el antiguo
+ * techo (`paletteSplit` del producto) todo se pinta igual que antes; solo lo
+ * que lo supera usa este tramo.
+ */
+export const precipitationExtension = ['#9a5bb5', '#c597dc', '#e8cdf3', '#fbf5ff'];
+/** Del lila con que acaba la escala de siempre hasta el blanco. */
+export const precipitationExtensionRamp = [precipitationPalette.at(-1), ...precipitationExtension];
+/** Para la leyenda continua: la de siempre seguida del tramo nuevo. */
+export const precipitationExtendedPalette = [...precipitationPalette, ...precipitationExtension];
+
 function channels(hex) {
   return [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
 }
@@ -66,6 +82,25 @@ export function paletteStop(palette, position) {
 /** Posición en la rampa de la clase `index` de `count`. */
 export function bandPosition(index, count) {
   return Math.round(index / Math.max(1, count - 1) * (LUT_SIZE - 1));
+}
+
+/**
+ * Colores por clase de una escala de precipitación ampliada, como [r, g, b].
+ *
+ * Las clases hasta `split` son exactamente las de siempre —las mismas muestras
+ * de la paleta original que daba la escala corta—; las que lo superan se
+ * reparten por el tramo nuevo, sin repetir el lila con que acaba la original.
+ */
+export function splitBandRgb(breaks, split) {
+  const base = breaks.filter((value) => value <= split).length + 1;
+  const extra = breaks.length + 1 - base;
+  return [
+    ...Array.from({ length: base }, (_, index) => paletteStop(precipitationPalette, bandPosition(index, base))),
+    ...Array.from({ length: extra }, (_, index) => paletteStop(
+      precipitationExtensionRamp,
+      Math.round((index + 1) / extra * (LUT_SIZE - 1))
+    ))
+  ];
 }
 
 /** Un color CSS por clase, para la leyenda. */

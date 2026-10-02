@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.2.1",
+  "app_version": "2.2.2",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -542,6 +542,20 @@ export default {
         "Terra i mar diferenciats als mapes de precipitació.",
         "La passada del model apareix als PNG descarregats."
       ],
+      "release_222_fixes": [
+        "S’ha corregit que la cota de neu i la reflectivitat CAPPI es quedessin calculant a l’última hora.",
+        "S’ha corregit que el zoom amb la roda del ratolí desplacés la pàgina.",
+        "S’ha corregit la superposició d’etiquetes a la llegenda de la precipitació acumulada.",
+        "S’ha corregit que, al mòbil, calgués mantenir premuda una estació del mapa per veure’n les dades."
+      ],
+      "release_222_improvements": [
+        "Nou mapa d’aigua precipitable a AROME, AROME-IFS i ECMWF.",
+        "Nou mapa de precipitació acumulada d’ECMWF, fins a sis dies vista.",
+        "La precipitació acumulada d’AROME i ECMWF té finestra mòbil.",
+        "Els mapes de predicció es poden descarregar com a animació GIF, triant les hores.",
+        "Les escales de precipitació s’amplien fins a 140 mm en 1 hora i 800 mm en l’acumulat.",
+        "S’ha retirat el mapa de radiació solar d’AROME."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -686,6 +700,20 @@ export default {
         "Städte auf der Karte der maximalen Böen.",
         "Land und Meer auf den Niederschlagskarten unterscheidbar.",
         "Heruntergeladene PNGs zeigen den Modelllauf."
+      ],
+      "release_222_fixes": [
+        "Behoben: Schneefallgrenze und CAPPI-Reflektivität blieben in der letzten Stunde bei „wird berechnet“ hängen.",
+        "Behoben: Der Zoom mit dem Mausrad scrollte die Seite.",
+        "Behoben: Überlappende Beschriftungen in der Legende des akkumulierten Niederschlags.",
+        "Behoben: Auf dem Handy musste man eine Station auf der Karte gedrückt halten, um ihre Daten zu sehen."
+      ],
+      "release_222_improvements": [
+        "Neue Karte des niederschlagbaren Wassers für AROME, AROME-IFS und ECMWF.",
+        "Neue Karte des akkumulierten Niederschlags von ECMWF, bis zu sechs Tage im Voraus.",
+        "Der akkumulierte Niederschlag von AROME und ECMWF hat jetzt ein gleitendes Zeitfenster.",
+        "Vorhersagekarten lassen sich als GIF-Animation herunterladen, mit frei wählbaren Stunden.",
+        "Die Niederschlagsskalen reichen jetzt bis 140 mm in 1 Stunde und 800 mm akkumuliert.",
+        "Die Karte der Solarstrahlung von AROME wurde entfernt."
       ],
       "sources": "Quellen",
       "unaffiliated": "Nicht verbunden",
@@ -832,6 +860,20 @@ export default {
         "Land and sea told apart on precipitation maps.",
         "Downloaded PNGs now show the model run."
       ],
+      "release_222_fixes": [
+        "Fixed snow level and CAPPI reflectivity getting stuck calculating at the last hour.",
+        "Fixed mouse-wheel zoom scrolling the page.",
+        "Fixed overlapping labels in the accumulated precipitation legend.",
+        "Fixed having to press and hold a station on the map on mobile to see its data."
+      ],
+      "release_222_improvements": [
+        "New precipitable water map for AROME, AROME-IFS and ECMWF.",
+        "New ECMWF accumulated precipitation map, up to six days ahead.",
+        "AROME and ECMWF accumulated precipitation now has a moving window.",
+        "Forecast maps can be downloaded as a GIF animation, choosing the hours.",
+        "Precipitation scales now reach 140 mm in 1 hour and 800 mm accumulated.",
+        "The AROME solar radiation map has been removed."
+      ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
       "version": "Version {version}",
@@ -976,6 +1018,20 @@ export default {
         "Ciudades en el mapa de racha máxima.",
         "Tierra y mar diferenciados en los mapas de precipitación.",
         "La pasada del modelo aparece en los PNG descargados."
+      ],
+      "release_222_fixes": [
+        "Se ha corregido que la cota de nieve y la reflectividad CAPPI se quedaran calculando en la última hora.",
+        "Se ha corregido que el zoom con la rueda del ratón desplazara la página.",
+        "Se ha corregido el solapamiento de etiquetas en la leyenda de la precipitación acumulada.",
+        "Se ha corregido que, en el móvil, hubiera que mantener pulsada una estación del mapa para ver sus datos."
+      ],
+      "release_222_improvements": [
+        "Nuevo mapa de agua precipitable en AROME, AROME-IFS y ECMWF.",
+        "Nuevo mapa de precipitación acumulada de ECMWF, hasta seis días vista.",
+        "La precipitación acumulada de AROME y ECMWF tiene ventana móvil.",
+        "Los mapas de predicción se pueden descargar como animación GIF, eligiendo las horas.",
+        "Las escalas de precipitación se amplían hasta 140 mm en 1 hora y 800 mm en el acumulado.",
+        "Se ha retirado el mapa de radiación solar de AROME."
       ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
@@ -1122,6 +1178,20 @@ export default {
         "Terre et mer différenciées sur les cartes de précipitations.",
         "Les PNG téléchargés indiquent le run du modèle."
       ],
+      "release_222_fixes": [
+        "Correction de la limite pluie-neige et de la réflectivité CAPPI, qui restaient en calcul à la dernière heure.",
+        "Correction du zoom à la molette, qui faisait défiler la page.",
+        "Correction du chevauchement des étiquettes dans la légende des précipitations cumulées.",
+        "Correction : sur mobile, il fallait maintenir le doigt sur une station de la carte pour voir ses données."
+      ],
+      "release_222_improvements": [
+        "Nouvelle carte d’eau précipitable pour AROME, AROME-IFS et ECMWF.",
+        "Nouvelle carte de précipitations cumulées d’ECMWF, jusqu’à six jours d’échéance.",
+        "Les précipitations cumulées d’AROME et d’ECMWF ont désormais une fenêtre glissante.",
+        "Les cartes de prévision peuvent être téléchargées en animation GIF, en choisissant les heures.",
+        "Les échelles de précipitations vont désormais jusqu’à 140 mm en 1 heure et 800 mm en cumul.",
+        "La carte de rayonnement solaire d’AROME a été retirée."
+      ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
       "version": "Version {version}",
@@ -1267,6 +1337,20 @@ export default {
         "Terra e mare distinti nelle mappe di precipitazione.",
         "I PNG scaricati indicano la corsa del modello."
       ],
+      "release_222_fixes": [
+        "Corretto il blocco in calcolo della quota neve e della riflettività CAPPI all’ultima ora.",
+        "Corretto lo zoom con la rotella del mouse, che faceva scorrere la pagina.",
+        "Corretta la sovrapposizione delle etichette nella legenda della precipitazione accumulata.",
+        "Corretto: su mobile bisognava tenere premuta una stazione della mappa per vederne i dati."
+      ],
+      "release_222_improvements": [
+        "Nuova mappa dell’acqua precipitabile per AROME, AROME-IFS ed ECMWF.",
+        "Nuova mappa della precipitazione accumulata di ECMWF, fino a sei giorni.",
+        "La precipitazione accumulata di AROME ed ECMWF ha ora una finestra mobile.",
+        "Le mappe di previsione si possono scaricare come animazione GIF, scegliendo le ore.",
+        "Le scale di precipitazione arrivano ora a 140 mm in 1 ora e 800 mm in accumulo.",
+        "È stata rimossa la mappa della radiazione solare di AROME."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -1411,6 +1495,20 @@ export default {
         "Cidades no mapa de rajada máxima.",
         "Terra e mar diferenciados nos mapas de precipitação.",
         "Os PNG descarregados indicam a corrida do modelo."
+      ],
+      "release_222_fixes": [
+        "Corrigido o bloqueio em cálculo da cota de neve e da refletividade CAPPI na última hora.",
+        "Corrigido o zoom com a roda do rato, que deslocava a página.",
+        "Corrigida a sobreposição de etiquetas na legenda da precipitação acumulada.",
+        "Corrigido: no telemóvel era preciso manter premida uma estação do mapa para ver os seus dados."
+      ],
+      "release_222_improvements": [
+        "Novo mapa de água precipitável no AROME, AROME-IFS e ECMWF.",
+        "Novo mapa de precipitação acumulada do ECMWF, até seis dias.",
+        "A precipitação acumulada do AROME e do ECMWF tem agora janela móvel.",
+        "Os mapas de previsão podem ser descarregados como animação GIF, escolhendo as horas.",
+        "As escalas de precipitação vão agora até 140 mm em 1 hora e 800 mm no acumulado.",
+        "Foi retirado o mapa de radiação solar do AROME."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -2716,6 +2814,7 @@ export default {
     }
   },
   "releases": [
+    "222",
     "221",
     "220",
     "212",

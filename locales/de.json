@@ -168,6 +168,20 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_222_improvements": [
+      "Neue Karte des niederschlagbaren Wassers für AROME, AROME-IFS und ECMWF.",
+      "Neue Karte des akkumulierten Niederschlags von ECMWF, bis zu sechs Tage im Voraus.",
+      "Der akkumulierte Niederschlag von AROME und ECMWF hat jetzt ein gleitendes Zeitfenster.",
+      "Vorhersagekarten lassen sich als GIF-Animation herunterladen, mit frei wählbaren Stunden.",
+      "Die Niederschlagsskalen reichen jetzt bis 140 mm in 1 Stunde und 800 mm akkumuliert.",
+      "Die Karte der Solarstrahlung von AROME wurde entfernt."
+    ],
+    "release_222_fixes": [
+      "Behoben: Schneefallgrenze und CAPPI-Reflektivität blieben in der letzten Stunde bei „wird berechnet“ hängen.",
+      "Behoben: Der Zoom mit dem Mausrad scrollte die Seite.",
+      "Behoben: Überlappende Beschriftungen in der Legende des akkumulierten Niederschlags.",
+      "Behoben: Auf dem Handy musste man eine Station auf der Karte gedrückt halten, um ihre Daten zu sehen."
+    ],
     "release_221_improvements": [
       "Neue Karte der simulierten Reflektivität als CAPPI in 1,5 km.",
       "Mehr Orte und Provinzen auf den AROME-Karten bei starkem Zoom.",

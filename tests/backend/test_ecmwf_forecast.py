@@ -397,6 +397,51 @@ def test_six_hour_precipitation_subtracts_the_previous_accumulation(monkeypatch)
     assert ecmwf_forecast.product_steps('ecmwf-jet-300', [0, 3]) == [0, 3]
 
 
+def test_accumulated_precipitation_is_tp_since_the_run(monkeypatch):
+    """El acumulado es `tp` tal cual: la ventana móvil la resta el visor."""
+    bounds = (-10.125, 39.875, .125, 50.125)
+    monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: bounds)
+    pedidos = []
+
+    def field(run, step, selector, domain):
+        pedidos.append((step, selector['param']))
+        west, south, east, north = domain
+        shape = (round((north-south)*4), round((east-west)*4))
+        return np.full(shape, step * 1e-3), domain
+
+    monkeypatch.setattr(ecmwf_forecast, '_field', field)
+    run = ecmwf_forecast.parse_run(RUN)
+    header, values = _decode_values(ecmwf_forecast.frame_payload('ecmwf-precip-accumulated', run, 12)[0])
+    assert header['unit'] == 'mm' and not header['has_overlay']
+    assert np.nanmedian(values) == pytest.approx(12.0, abs=.05)
+    # Un solo mensaje, el mismo que ya baja el mapa de 6 horas.
+    assert pedidos == [(12, 'tp')]
+    assert REQUIRED_FIELDS('ecmwf-precip-accumulated', 12) == [(12, {'param': 'tp', 'levtype': 'sfc'})]
+    assert ecmwf_forecast.product_steps('ecmwf-precip-accumulated', [0, 3, 6]) == [3, 6]
+
+
+def test_precipitable_water_is_native_tcwv_without_overlay(monkeypatch):
+    """Agua precipitable: `tcwv` tal cual, un solo mensaje y desde la +0."""
+    bounds = (-10.125, 39.875, .125, 50.125)
+    monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: bounds)
+    pedidos = []
+
+    def field(run, step, selector, domain):
+        pedidos.append((step, selector['param']))
+        west, south, east, north = domain
+        shape = (round((north-south)*4), round((east-west)*4))
+        return np.full(shape, 31.4), domain
+
+    monkeypatch.setattr(ecmwf_forecast, '_field', field)
+    run = ecmwf_forecast.parse_run(RUN)
+    header, values = _decode_values(ecmwf_forecast.frame_payload('ecmwf-precipitable-water', run, 0)[0])
+    assert header['unit'] == 'kg/m²' and not header['has_overlay']
+    assert np.nanmedian(values) == pytest.approx(31.4, abs=.05)
+    assert pedidos == [(0, 'tcwv')]
+    assert REQUIRED_FIELDS('ecmwf-precipitable-water', 0) == [(0, {'param': 'tcwv', 'levtype': 'sfc'})]
+    assert ecmwf_forecast.product_steps('ecmwf-precipitable-water', [0, 3, 6]) == [0, 3, 6]
+
+
 def test_omega_is_shown_positive_upwards_and_masked_below_ground(monkeypatch):
     bounds = (-10.125, 39.875, .125, 50.125)
     monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: bounds)
@@ -726,7 +771,7 @@ def _synthetic_field(requested):
             't': 270. + (level-500)*.05 + x*.1, 'gh': (1000-level)*10 + y*y*.1 + x*y*.05,
             'q': .005 + x*1e-6,
             'sp': np.full((height, width), 100000.), 'msl': np.full((height, width), 101300.),
-            'tp': .01 + step*1e-3 + x*0.,
+            'tp': .01 + step*1e-3 + x*0., 'tcwv': 20. + x*.1,
         }
         return base[selector['param']], domain
     return field

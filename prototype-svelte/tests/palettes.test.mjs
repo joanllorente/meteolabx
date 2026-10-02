@@ -100,3 +100,15 @@ test('las streamlines oscuras se leen sobre el viento flojo y moderado', async (
   // Y el viento fuerte acaba en los mismos colores que antes.
   assert.deepEqual(windPalette.slice(-7), defaultPalette.slice(-7));
 });
+
+test('la escala ampliada de precipitación no cambia los colores de siempre', async () => {
+  const { bandHexColors, precipitationPalette, splitBandRgb } = await import('../src/lib/palettes.js');
+  const antes = [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400];
+  const ahora = [...antes, 500, 600, 800];
+  const rgb = splitBandRgb(ahora, 400).map(([r, g, b]) => `rgb(${r} ${g} ${b})`);
+  // Las catorce clases hasta 400 mm, idénticas a la escala corta.
+  assert.deepEqual(rgb.slice(0, 14), bandHexColors(precipitationPalette, 14));
+  // Las tres nuevas, cada vez más claras y ninguna repite el lila final.
+  const luz = (texto) => texto.match(/\d+/g).map(Number).reduce((a, b) => a + b, 0);
+  assert.ok(luz(rgb[14]) > luz(rgb[13]) && luz(rgb[15]) > luz(rgb[14]) && luz(rgb[16]) > luz(rgb[15]));
+});

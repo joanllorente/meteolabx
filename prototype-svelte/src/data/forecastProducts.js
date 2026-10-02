@@ -89,7 +89,7 @@ export const forecastCategories = [
   { id: 'shear', label: 'Cizalladura y helicidad' },
   { id: 'forcing', label: 'Forzamiento y cinemática' },
   { id: 'severe', label: 'Tiempo severo' },
-  { id: 'clouds', label: 'Nubes, humedad y radiación' }
+  { id: 'clouds', label: 'Nubes y humedad' }
 ];
 
 const allForecastProducts = [
@@ -128,6 +128,27 @@ const allForecastProducts = [
     description: 'Precipitación total de las 6 horas que terminan en la hora seleccionada, con la presión al nivel del mar en isobaras y los centros de acción. Desde la +6 hasta seis días vista.',
     method: 'Diferencia entre la precipitación acumulada de ECMWF en la hora válida y 6 horas antes. Incluye lluvia y nieve en equivalente de agua.',
     coverage: 'ECMWF IFS 0,25° · tp · MSLP'
+  },
+  {
+    id: 'ecmwf-precip-accumulated', model: 'ecmwf', category: 'precipitation',
+    label: 'Precipitación acumulada', short: 'Precip. acumulada', kind: 'derived',
+    // La misma escala que el acumulado de AROME, para poder compararlos.
+    unit: 'mm', min: 0, max: 800, palette: 'precipitation-extended', paletteSplit: 400, accent: '#479be5', vectors: false,
+    scaleBreaks: [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400, 500, 600, 800],
+    zeroFloor: 0.05,
+    nationalBoundariesOnly: true,
+    description: 'Precipitación caída entre dos horas elegidas con los deslizadores A y B, hasta seis días vista.',
+    method: 'Diferencia entre la precipitación acumulada de ECMWF en B y en A. Incluye lluvia y nieve en equivalente de agua.',
+    coverage: 'ECMWF IFS 0,25° · tp acumulada desde la pasada'
+  },
+  {
+    id: 'ecmwf-precipitable-water', model: 'ecmwf', category: 'clouds',
+    label: 'Agua precipitable', short: 'PWAT', kind: 'native',
+    unit: 'kg/m²', min: 0, max: 70, palette: 'humidity', accent: '#3db9bc', vectors: false,
+    nationalBoundariesOnly: true,
+    description: 'Vapor de agua contenido en toda la columna atmosférica, expresado como el espesor de agua que daría si se condensara entero.',
+    method: 'Campo nativo tcwv del IFS: vapor de agua integrado en toda la columna. 1 kg/m² equivale a 1 mm de agua.',
+    coverage: 'ECMWF IFS 0,25° · tcwv'
   },
   {
     id: 'ecmwf-eady-850-500', model: 'ecmwf', category: 'dynamics',
@@ -343,7 +364,10 @@ const allForecastProducts = [
   },
   {
     id: 'precip-1h', category: 'precipitation', label: 'Precipitación en 1 hora', short: 'Precip. 1 h', kind: 'native',
-    unit: 'mm', min: 0, max: 60, palette: 'precipitation', accent: '#38a8ad', vectors: false,
+    // Hasta 140 mm/h y con el tramo hacia el blanco: 60 se quedaba corto en los
+    // núcleos convectivos del Mediterráneo. Por debajo de 60, los colores de
+    // siempre (`paletteSplit`).
+    unit: 'mm', min: 0, max: 140, palette: 'precipitation-extended', paletteSplit: 60, accent: '#38a8ad', vectors: false,
     cityLabels: true,
     description: 'Precipitación total prevista durante la hora que termina en la hora válida seleccionada.',
     method: 'Precipitación total de AROME (TOTAL_PRECIPITATION) acumulada en una hora. Incluye precipitación líquida y sólida en equivalente de agua.',
@@ -351,12 +375,13 @@ const allForecastProducts = [
   },
   {
     id: 'accumulated-precip', category: 'precipitation', label: 'Precipitación acumulada', short: 'Precip. acumulada', kind: 'derived',
-    unit: 'mm', min: 0, max: 400, palette: 'precipitation', accent: '#479be5', vectors: false,
+    unit: 'mm', min: 0, max: 800, palette: 'precipitation-extended', paletteSplit: 400, accent: '#479be5', vectors: false,
     // Clases en mm, no una rampa continua: un acumulado reparte casi todas sus
     // celdas por debajo de los 20 mm, y en escala lineal hasta el máximo esas
     // salen todas del mismo azul. `zeroFloor` deja el cero sin pintar para que
     // lo acumulado se lea sobre el fondo en vez de sobre una capa de color.
-    scaleBreaks: [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400],
+    // Hasta 800 mm: un episodio largo en el Mediterráneo pasa de los 400.
+    scaleBreaks: [1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400, 500, 600, 800],
     zeroFloor: 0.05,
     cityLabels: true,
     description: 'Precipitación total acumulada desde el inicio de la pasada hasta la hora válida seleccionada.',
@@ -384,21 +409,16 @@ const allForecastProducts = [
   },
   {
     id: 'precipitable-water', category: 'clouds', label: 'Agua precipitable', short: 'PWAT', kind: 'native',
-    unit: 'kg/m²', min: 0, max: 55, palette: 'humidity', accent: '#3db9bc', vectors: false,
-    description: 'Contenido integrado de vapor de agua en toda la columna atmosférica.',
-    method: 'Campo nativo PRECIPITABLE_WATER sobre la superficie.', coverage: 'PRECIPITABLE WATER · columna'
+    // La misma escala que el de ECMWF, para poder compararlos.
+    unit: 'kg/m²', min: 0, max: 70, palette: 'humidity', accent: '#3db9bc', vectors: false,
+    description: 'Vapor de agua contenido en toda la columna atmosférica, expresado como el espesor de agua que daría si se condensara entero.',
+    method: 'Campo nativo PRECIPITABLE_WATER de AROME: vapor de agua integrado desde la superficie hasta el tope del modelo. 1 kg/m² equivale a 1 mm de agua.', coverage: 'PRECIPITABLE WATER · columna'
   },
   {
     id: 'boundary-layer', category: 'dynamics', label: 'Altura de la capa límite', short: 'Capa límite', kind: 'native',
     unit: 'm', min: 0, max: 3500, palette: 'boundary', accent: '#d2a75d', vectors: false,
     description: 'Altura prevista de la capa límite planetaria, vinculada a la mezcla vertical de la baja atmósfera.',
     method: 'Campo nativo PLANETARY_BOUNDARY_LAYER_HEIGHT de AROME.', coverage: 'PLANETARY BOUNDARY LAYER HEIGHT'
-  },
-  {
-    id: 'shortwave-down', category: 'clouds', label: 'Radiación solar descendente', short: 'Solar ↓', kind: 'native',
-    unit: 'W/m²', min: 0, max: 1000, palette: 'radiation', accent: '#f3be4f', vectors: false,
-    description: 'Flujo de onda corta descendente que alcanza la superficie, incluyendo la componente directa y difusa.',
-    method: 'Radiación de onda corta descendente de AROME (DOWNWARD_SHORT_WAVE_RADIATION_FLUX). AROME entrega la energía acumulada en la hora; MeteoLabX divide entre 3.600 para mostrar el flujo medio en W/m².', coverage: 'DOWNWARD SHORT WAVE RADIATION FLUX · 1 h → W/m²'
   },
   {
     id: 'direct-shortwave', category: 'clouds', label: 'Radiación solar directa', short: 'Solar directa', kind: 'native',
@@ -625,10 +645,12 @@ const initialProductIds = [
   'relative-vorticity-500',
   'q-vectors-700',
   'ecmwf-precip-6h',
+  'ecmwf-precip-accumulated',
   'ecmwf-eady-850-500',
   'ecmwf-jet-300',
   'ecmwf-frontogenesis-850',
   'ecmwf-omega-700',
+  'ecmwf-precipitable-water',
   'mslp-theta-e-850',
   'wind-level',
   'wind-gust',
@@ -654,7 +676,7 @@ const initialProductIds = [
   'updraft-helicity',
   'cloud-cover',
   'relative-humidity-700',
-  'shortwave-down'
+  'precipitable-water'
 ];
 
 export const forecastProducts = initialProductIds.map((id) => {

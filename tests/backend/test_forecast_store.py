@@ -857,7 +857,7 @@ def test_full_run_denominator_is_stable_while_the_model_publishes():
         for product in PERSISTED_FORECAST_PRODUCTS
     )
     # 1.492 más los 35 plazos del CAPPI (36 horas diagnósticas desde la H+01).
-    assert al_principio == al_final == 1527
+    assert al_principio == al_final == 1528
 
 
 def test_capped_products_only_offer_the_hours_that_will_exist():
@@ -866,7 +866,7 @@ def test_capped_products_only_offer_the_hours_that_will_exist():
     Con el horizonte recortado, anunciar las 52 horas dejaba 16 plazos que
     nunca tendrían datos y un porcentaje calculado sobre un total irreal.
     """
-    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(0, 12)]
+    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(12, 24)]
     manifest = new_manifest(RUN, horas)
     manifest["expected_hours"] = {"native": 12, "diagnostic": 5}
     for hora in horas[:4]:
@@ -886,9 +886,31 @@ def test_capped_products_only_offer_the_hours_that_will_exist():
     assert resultado["products"]["temperature-2m"]["valid_times"] == horas
 
 
+def test_cap_counts_hours_from_the_run_not_each_map_s_own_steps():
+    """La cota de nieve empieza en H+01: su última hora es la de los demás.
+
+    El worker calcula los recortados de H+00 a H+n-1. Contar n plazos desde
+    el primero del mapa anunciaba H+n, que nunca llega, y el visor se quedaba
+    esperándola en la última hora.
+    """
+    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(12, 24)]
+    manifest = new_manifest(RUN, horas)
+    manifest["expected_hours"] = {"native": 12, "diagnostic": 5}
+    catalog = {"products": {
+        "snow-level": {"run": RUN, "valid_times": horas[1:]},
+        "reflectivity-cappi-1500": {"run": RUN, "valid_times": horas[1:]},
+        "shear-01": {"run": RUN, "valid_times": list(horas)},
+    }}
+    resultado = augment_catalog_with_manifest(catalog, manifest, precomputed_only=True)
+
+    assert resultado["products"]["snow-level"]["valid_times"] == horas[1:5]
+    assert resultado["products"]["reflectivity-cappi-1500"]["valid_times"] == horas[1:5]
+    assert resultado["products"]["shear-01"]["valid_times"] == horas[:5]
+
+
 def test_available_hours_outside_the_cap_are_not_announced():
     """Si una hora quedó calculada fuera del recorte, no se ofrece."""
-    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(0, 8)]
+    horas = [f"2026-08-24T{h:02d}:00:00Z" for h in range(12, 20)]
     manifest = new_manifest(RUN, horas)
     manifest["expected_hours"] = {"native": 8, "diagnostic": 3}
     for hora in horas:  # se calcularon todas antes de aplicar el recorte

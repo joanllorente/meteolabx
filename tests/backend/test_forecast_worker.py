@@ -566,7 +566,6 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     assert trabajador._expected_hours(manifiesto, "precip-1h") == 51
     assert trabajador._expected_hours(manifiesto, "accumulated-precip") == 51
     assert trabajador._expected_hours(manifiesto, "wind-gust") == 51
-    assert trabajador._expected_hours(manifiesto, "shortwave-down") == 51
     # La nubosidad tampoco existe en H+0, aunque su cobertura no declare
     # periodo: se marca a mano en el catálogo de productos.
     assert trabajador._expected_hours(manifiesto, "cloud-cover") == 51
@@ -580,8 +579,10 @@ def test_accumulative_products_are_not_expected_at_the_run_hour():
     total = sum(
         trabajador._expected_hours(manifiesto, p) for p in PERSISTED_FORECAST_PRODUCTS
     )
-    # El tipo de precipitación se añade desde H+1: 51 plazos más.
-    assert total == 1527, f"el denominador de una pasada completa es 1527, no {total}"
+    # El tipo de precipitación se añade desde H+1: 51 plazos más. El agua
+    # precipitable existe desde H+0: otros 52. La radiación solar, que se quitó,
+    # restaba 51.
+    assert total == 1528, f"el denominador de una pasada completa es 1528, no {total}"
 
 
 def test_prefetch_also_brings_the_dcape_package(monkeypatch):
@@ -987,7 +988,7 @@ def test_partial_catalog_does_not_close_or_send_report(monkeypatch, product, mis
     worker._finish_status(manifest, store=object())
     assert manifest["status"] == "complete"
     assert len(reports) == len(summaries) == 1
-    assert reports[0]["progress"]["frames_available"] == reports[0]["progress"]["frames_total"] == 1527
+    assert reports[0]["progress"]["frames_available"] == reports[0]["progress"]["frames_total"] == 1528
 
 
 def test_no_report_until_last_active_job_finishes(monkeypatch):

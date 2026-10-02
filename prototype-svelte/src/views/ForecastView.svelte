@@ -1,9 +1,9 @@
 <script>
   import {
-    Calendar, ChevronDown, ChevronLeft, ChevronRight, Download,
+    Calendar, ChevronDown, ChevronLeft, ChevronRight, Download, Film,
     Globe, Info, Maximize2, Minimize2, Pause, Play, Search
   } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import ForecastGrid from '../components/ForecastGrid.svelte';
   import ThermalProfile from '../components/ThermalProfile.svelte';
   import MathFormula from '../components/MathFormula.svelte';
@@ -15,14 +15,17 @@
   import { nameStorms, stormsNear } from '../lib/storms.js';
   import { activeUnit, formatBound, formatValue, unitFamilyOf, unitLabel, unitOptions } from '../lib/units.js';
   import { chooseUnit, unitPreferences } from '../lib/unitPreferences.svelte.js';
-  import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette, divergingPalette, thetaEPalette } from '../lib/palettes.js';
+  import { anchorFraction, bandHexColors, defaultPalette, precipitationPalette, precipitationExtension, splitBandRgb, divergingPalette, thetaEPalette } from '../lib/palettes.js';
   import { recordForecastMap, recordForecastModel } from '../lib/stats.js';
   import { forecastPath } from '../lib/forecast-route.js';
   import { fetchActiveStorms, fetchDomainBoundaries, fetchForecastCatalog, fetchForecastFrame, fetchThermalProfile, getCachedForecastFrame, prefetchForecastFrames } from '../services/forecastApi.js';
-  import { exportarMapaPng } from '../lib/mapExport.js';
+  import { componerMapa, descargar, exportarMapaPng } from '../lib/mapExport.js';
+  import { RETARDO_FINAL_GIF, RETARDO_GIF, horasDelGif, nuevoGif } from '../lib/mapGif.js';
+  import { MOVING_WINDOW_PRODUCTS, clampWindowStart, windowBounds, windowedFrame } from '../lib/precipWindow.js';
   import { forecastDomainLabel, forecastLocale, forecastText, localizedForecastCategories, localizedForecastProducts } from '../lib/forecast-i18n.js';
   import { loadForecastGuides, localizedForecastGuide } from '../lib/forecast-guides.svelte.js';
   import { precipitationType, precipitationTypeLabel } from '../data/precipitationTypes.js';
+  import { afterPaint } from '../lib/afterPaint.js';
 
   const liquidTypes = [1, 11, 3, 12].map((code) => precipitationType(code));
   const solidTypes = [5, 6, 7, 8, 9, 10].map((code) => precipitationType(code));
@@ -79,9 +82,10 @@
       : null
   );
   const displayFrame = $derived(
-    frameData?.projection ? projectFrame(frameData)
-      : aromeDisplayProjection ? projectFrame(frameData, aromeDisplayProjection, { nearest: frameData.product === 'precip-type' })
-      : frameData
+    !sourceFrame ? null
+      : sourceFrame.projection ? projectFrame(sourceFrame)
+      : aromeDisplayProjection ? projectFrame(sourceFrame, aromeDisplayProjection, { nearest: sourceFrame.product === 'precip-type' })
+      : sourceFrame
   );
   // Proporción del dominio del último mapa cargado. El recuadro la adopta para
   // que el mapa lo llene sin márgenes; se conserva mientras llega el siguiente
@@ -174,6 +178,96 @@
       exporting = false;
     }
   }
+  // Animación GIF de las horas que elija el usuario. Avanza el visor hora a
+  // hora, espera a que cada una esté pintada y la compone igual que el PNG.
+  let gifMenuOpen = $state(false);
+  let gifFrom = $state(0);
+  let gifTo = $state(0);
+  let gifProgress = $state(null);
+  let gifCancelled = false;
+
+  /**
+   * Horas que se pueden animar: las ya calculadas. En la ventana móvil, solo
+   * las posteriores a A: con B por detrás, A se movería sola.
+   */
+  const gifHours = $derived(activeHours
+    .map((hour, index) => ({ hour, index }))
+    .filter(({ hour, index }) => hourIsReady(hour) && (!movingWindow || index >= windowStartPos)));
+  const gifSelection = $derived(horasDelGif(gifHours.map(({ index }) => index), gifFrom, gifTo));
+
+  function hourOptionLabel(hour) {
+    return `${hour.day} ${hour.time} · H+${String(hour.horizon).padStart(2, '0')}`;
+  }
+
+  function toggleGifMenu(event) {
+    event.stopPropagation();
+    if (gifProgress) {
+      gifCancelled = true;
+      return;
+    }
+    if (!gifMenuOpen) {
+      const indices = gifHours.map(({ index }) => index);
+      gifFrom = indices.includes(hourIndex) ? hourIndex : indices[0] ?? 0;
+      gifTo = indices.at(-1) ?? 0;
+    }
+    gifMenuOpen = !gifMenuOpen;
+  }
+
+  const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+  /** Espera a que la hora `iso` esté en pantalla; false si falla o tarda. */
+  async function waitForHour(iso, limitMs = 45_000) {
+    const start = performance.now();
+    while (performance.now() - start < limitMs) {
+      if (gifCancelled) return false;
+      if (frameError || windowError) return false;
+      if (frameMatchesSelection && frameData?.valid_time === iso && displayFrame && !frameLoading) {
+        await tick();
+        // Dos pintados: el del campo y el de las capas que dependen de él.
+        await nextPaint();
+        await nextPaint();
+        return true;
+      }
+      await nextPaint();
+    }
+    return false;
+  }
+
+  async function downloadGif() {
+    const indices = gifSelection;
+    if (!indices.length || exporting || !mapContainer) return;
+    gifMenuOpen = false;
+    playing = false;
+    exporting = true;
+    exportError = '';
+    gifCancelled = false;
+    const original = hourIndex;
+    const tarjeta = mapContainer.closest('.map-card');
+    const gif = nuevoGif();
+    try {
+      for (const [position, index] of indices.entries()) {
+        if (gifCancelled) break;
+        gifProgress = { done: position, total: indices.length };
+        hourIndex = index;
+        if (!(await waitForHour(activeHours[index]?.iso))) continue;
+        const lienzo = await componerMapa(tarjeta, { escala: 1 });
+        gif.anade(lienzo, position === indices.length - 1 ? RETARDO_FINAL_GIF : RETARDO_GIF);
+      }
+      if (!gifCancelled) {
+        if (!gif.fotogramas) throw new Error(tr('gifEmpty'));
+        const sello = (index) => String(activeHours[index]?.iso || '').replace(/[-:]/g, '');
+        descargar(gif.termina(), `meteolabx-${selectedModel}-${product.id}-${sello(indices[0])}-${sello(indices.at(-1))}.gif`);
+      }
+    } catch (error) {
+      exportError = error.message;
+    } finally {
+      hourIndex = original;
+      gifProgress = null;
+      gifCancelled = false;
+      exporting = false;
+    }
+  }
+
 
   function toggleFullscreen() {
     // Pantalla completa sobre la barra de mapas y la tarjeta, no solo el mapa:
@@ -219,6 +313,38 @@
     };
   }) : hours);
   const valid = $derived(activeHours[Math.min(hourIndex, activeHours.length - 1)] || hours[0]);
+
+  // Precipitación acumulada en ventana móvil: dos deslizadores, A y B, sobre
+  // una misma escala cuya posición 0 es la pasada y la k, la hora k-ésima. B es
+  // la hora de siempre —`hourIndex`—, así que reproducir, las flechas y los
+  // botones la siguen moviendo; A se queda donde se puso, siempre por detrás.
+  const movingWindow = $derived(MOVING_WINDOW_PRODUCTS.has(product.id) && Boolean(connectedProduct));
+  let windowStartPos = $state(0);
+  const windowEndPos = $derived(Math.min(hourIndex, activeHours.length - 1) + 1);
+  const windowEdges = $derived(movingWindow ? windowBounds(connectedProduct.run, activeHours, (iso) => {
+    const date = new Date(iso);
+    return {
+      day: new Intl.DateTimeFormat(locale, { weekday: 'short', day: '2-digit', timeZone: 'UTC' }).format(date),
+      time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' }).format(date)
+    };
+  }) : []);
+  const windowStartHour = $derived(windowEdges[windowStartPos] || null);
+  // Con A en la pasada no hay nada que restar: el frame es el acumulado tal cual.
+  const windowStartIso = $derived(movingWindow && windowStartPos > 0 ? windowStartHour?.iso || '' : '');
+  // Otra pasada u otro mapa empiezan otra vez desde el principio.
+  let windowScope = '';
+  $effect(() => {
+    const scope = `${product.id}|${connectedProduct?.run || ''}`;
+    if (scope !== windowScope) {
+      windowScope = scope;
+      windowStartPos = 0;
+    }
+  });
+  $effect(() => {
+    if (!movingWindow) return;
+    const fixed = clampWindowStart(windowStartPos, windowEndPos);
+    if (fixed !== windowStartPos) windowStartPos = fixed;
+  });
   const selectedFrameReady = $derived(
     !precomputedOnly
       || (connectedProduct?.available_times || []).includes(valid?.iso)
@@ -236,6 +362,55 @@
     activeFrameKey;
     closeThermalProfile();
   });
+  // El frame de A, que se resta al de B. Va aparte del de B para que mover A
+  // no vuelva a pedir B, y sale de la misma caché que la reproducción.
+  let windowBaseFrame = $state.raw(null);
+  let windowBaseKey = $state('');
+  let windowError = $state('');
+  const windowBaseWanted = $derived(windowStartIso ? `${activeFrameKey}|${windowStartIso}` : '');
+  $effect(() => {
+    const wanted = windowBaseWanted;
+    const validTime = windowStartIso;
+    const meta = connectedProduct;
+    windowError = '';
+    if (!wanted || !meta) {
+      windowBaseFrame = null;
+      windowBaseKey = '';
+      return;
+    }
+    const options = {
+      model: selectedModel,
+      product: product.id,
+      validTime,
+      run: selectedRunCatalog?.run,
+      frameRevision: meta.frame_revision || 0,
+      domain: serverDomain || undefined
+    };
+    const cached = getCachedForecastFrame(options);
+    if (cached) {
+      windowBaseFrame = cached;
+      windowBaseKey = wanted;
+      return;
+    }
+    let vigente = true;
+    fetchForecastFrame(options)
+      .then((frame) => {
+        if (!vigente) return;
+        windowBaseFrame = frame;
+        windowBaseKey = wanted;
+      })
+      .catch((error) => {
+        if (vigente && error.name !== 'AbortError') windowError = error.message;
+      });
+    return () => { vigente = false; };
+  });
+  // Lo que se pinta: el acumulado de B o, con A después de la pasada, B − A.
+  // Mientras llega el frame de A no se enseña el de B: parecería la ventana.
+  const sourceFrame = $derived(
+    !windowStartIso ? frameData
+      : frameData && windowBaseKey === windowBaseWanted ? windowedFrame(frameData, windowBaseFrame)
+      : null
+  );
   // Una selección nueva no puede reutilizar visualmente el frame anterior:
   // sus valores se repintarían durante un instante con la paleta y los límites
   // del producto recién pulsado, produciendo un mapa de colores falsos.
@@ -247,6 +422,7 @@
     frameLoading
       || (selectedProduct && connectedProduct && selectedFrameReady
         && !frameMatchesSelection && !framePending && !frameError)
+      || (frameMatchesSelection && !sourceFrame && !frameError && !windowError)
   ));
   const selectedCategory = $derived(categories.find((item) => item.id === product.category));
   // Qué enseña el mapa. Por defecto su categoría, que para la mayoría es
@@ -255,7 +431,11 @@
   const windLevels = $derived(connectedProduct?.levels?.[windLevelKind] || []);
   const displayedWindLevels = $derived(windLevelKind === 'height' ? [...windLevels].reverse() : windLevels);
   const windLevelUnit = $derived(windLevelKind === 'height' ? 'm AGL' : 'hPa');
-  const mapProductLabel = $derived(product.id === 'wind-level' ? `${product.label} · ${windLevel} ${windLevelUnit}` : product.label);
+  const mapProductLabel = $derived(
+    product.id === 'wind-level' ? `${product.label} · ${windLevel} ${windLevelUnit}`
+      : movingWindow ? `${product.label} (${tr('movingWindow')})`
+      : product.label
+  );
   // Unidad de presentación: no toca el frame ni la escala de color, solo los
   // números que se escriben en la leyenda y en el globo del cursor.
   const displayUnit = $derived(activeUnit(product, unitPreferences));
@@ -266,13 +446,24 @@
   // Leyenda por clases: los mismos colores y los mismos cortes que pinta el
   // ráster, para que la barra no describa una escala que el mapa no usa.
   const legendBands = $derived(
-    product.scaleBreaks?.length
-      ? bandHexColors(
+    !product.scaleBreaks?.length ? []
+      : product.palette === 'precipitation-extended' && product.paletteSplit
+        ? splitBandRgb(product.scaleBreaks, product.paletteSplit).map(([red, green, blue]) => `rgb(${red} ${green} ${blue})`)
+      : bandHexColors(
           product.palette === 'precipitation' ? precipitationPalette : defaultPalette,
           product.scaleBreaks.length + 1
         )
-      : []
   );
+  // Degradado continuo de la escala ampliada: la paleta de siempre ocupa hasta
+  // donde cae el antiguo techo en la escala logarítmica, y el tramo nuevo, el
+  // resto. Repartidos a partes iguales, la barra contaría otra escala.
+  const extendedRamp = $derived.by(() => {
+    if (product.palette !== 'precipitation-extended' || !product.paletteSplit || product.scaleBreaks?.length) return '';
+    const corte = Math.log1p(product.paletteSplit) / Math.log1p(product.max) * 100;
+    const base = precipitationPalette.map((color, index) => `${color} ${(index / (precipitationPalette.length - 1) * corte).toFixed(1)}%`);
+    const tramo = precipitationExtension.map((color, index) => `${color} ${(corte + (index + 1) / precipitationExtension.length * (100 - corte)).toFixed(1)}%`);
+    return `linear-gradient(90deg,${[...base, ...tramo].join(',')})`;
+  });
   // Escala con nodos: la barra sigue siendo el degradado entero, y lo que deja
   // de ser uniforme es el reparto de grados. Las marcas van donde cae cada
   // valor en la rampa, no donde caería en una regla lineal, que es justo lo
@@ -345,6 +536,33 @@
       }))
       .filter((category) => category.products.length);
   });
+
+  // Lo que se acaba de tocar, pintado ya, mientras el cambio de verdad espera
+  // al fotograma siguiente: cambiar de mapa desmonta el visor entero, y hecho
+  // dentro del clic el INP llegaba a 0,9 s sin que el botón se marcara siquiera.
+  let pendingProduct = $state(null);
+  let pendingModel = $state(null);
+  const shownProduct = $derived(pendingProduct ?? selectedProduct);
+  const shownModel = $derived(pendingModel ?? selectedModel);
+
+  function selectProductSoon(item) {
+    pendingProduct = item.id;
+    afterPaint(() => {
+      if (pendingProduct !== item.id) return;
+      pendingProduct = null;
+      selectProduct(item);
+    });
+  }
+
+  function selectModelSoon(modelId) {
+    if (modelId === (pendingModel ?? selectedModel)) return;
+    pendingModel = modelId;
+    afterPaint(() => {
+      if (pendingModel !== modelId) return;
+      pendingModel = null;
+      selectModel(modelId);
+    });
+  }
 
   function selectProduct(item) {
     playing = false;
@@ -742,7 +960,7 @@
 <svelte:document onfullscreenchange={() => (fullscreen = Boolean(forecastLayout) && document.fullscreenElement === forecastLayout)} />
 
 <svelte:window
-  onclick={() => (unitMenuOpen = false)}
+  onclick={() => { unitMenuOpen = false; gifMenuOpen = false; }}
   onkeydown={keyboardHours}
 />
 
@@ -764,9 +982,9 @@
     {#each forecastModels as item}
       <button
         type="button"
-        class:active={item.id === selectedModel}
-        aria-pressed={item.id === selectedModel}
-        onclick={() => selectModel(item.id)}
+        class:active={item.id === shownModel}
+        aria-pressed={item.id === shownModel}
+        onclick={() => selectModelSoon(item.id)}
       >
         <strong>{item.label}</strong>
         <small>{item.origin} · {item.horizon}</small>
@@ -797,7 +1015,7 @@
 <div class="forecast-layout" bind:this={forecastLayout}>
   <aside class="product-selector" aria-label={tr('mapSelector')}>
     <header>
-      <div><span>{tr('maps')}</span><small>{modelSummary.total} {tr('selected')}</small></div>
+      <div><span>{tr('maps')}</span><small>{modelSummary.total} {tr('availableMaps')}</small></div>
       <p>{modelSummary.selectedNative} {tr('fields')} {model.short}{modelSummary.selectedDerived ? ` · ${modelSummary.selectedDerived} ${tr('diagnostics')}` : ''}</p>
       <label class="search-box"><Search size={14} /><input bind:value={search} type="search" placeholder={tr('search')} aria-label={tr('searchMap')} /></label>
     </header>
@@ -823,12 +1041,12 @@
                      pestaña. El clic normal cambia de mapa sin recargar. -->
                 <a
                   href={forecastPath(language, item.id)}
-                  class:active={selectedProduct === item.id}
-                  aria-current={selectedProduct === item.id ? 'page' : undefined}
+                  class:active={shownProduct === item.id}
+                  aria-current={shownProduct === item.id ? 'page' : undefined}
                   onclick={(event) => {
                     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
-                    selectProduct(item);
+                    selectProductSoon(item);
                   }}
                 >
                   <i style:--accent={item.accent}></i>
@@ -873,14 +1091,20 @@
           <span class="product-mark" style:--product-accent={product.accent}></span>
           <div>
             <span class="product-title">
-              <strong>{product.label}</strong>
+              <strong>{mapProductLabel}</strong>
               {#if product.kind === 'derived'}<img src={`${assetBase}mlx-logo.png`} alt={tr('calculatedBy')} />{/if}
               <!-- Con varios modelos, el mismo mapa existe en más de uno: sin
                    esto, una captura no dice de cuál es. La pasada va con él
                    por lo mismo: el PNG no lleva el selector de RUN. -->
               <span class="model-tag" title={model.label}>{model.short}{#if connectedProduct?.run} · {shortRunLabel(connectedProduct.run)}{/if}</span>
             </span>
-            <small>{productContents}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · {tr('valid')} {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
+            {#if movingWindow && windowStartHour}
+              <!-- El intervalo elegido: es lo que hace distinto a cada mapa de
+                   la ventana, y una captura tiene que poder decirlo sola. -->
+              <small>{productContents} · {tr('windowAccumulated')} {windowStartHour.day} {windowStartHour.time} → {valid.day} {valid.time} UTC · H+{String(windowStartHour.horizon).padStart(2, '0')}–H+{String(valid.horizon).padStart(2, '0')}</small>
+            {:else}
+              <small>{productContents}{product.id === 'wind-level' ? ` · ${windLevel} ${windLevelUnit}` : ''} · {tr('valid')} {valid.day} · {valid.time} UTC · H+{String(valid.horizon).padStart(2, '0')}</small>
+            {/if}
           </div>
         </div>
         <div class="map-actions">
@@ -892,6 +1116,36 @@
             disabled={!frameMatchesSelection || exporting}
             onclick={downloadPng}
           ><Download size={16} /></button>
+          <div class="gif-picker">
+            <button
+              type="button"
+              class:active={gifMenuOpen || gifProgress}
+              title={gifProgress ? tr('gifCancel') : tr('downloadGif')}
+              aria-label={gifProgress ? tr('gifCancel') : tr('downloadMapGif')}
+              aria-haspopup="dialog"
+              aria-expanded={gifMenuOpen}
+              disabled={!frameMatchesSelection || (exporting && !gifProgress) || !gifHours.length}
+              onclick={toggleGifMenu}
+            >{#if gifProgress}<small class="gif-count">{gifProgress.done + 1}/{gifProgress.total}</small>{:else}<Film size={16} />{/if}</button>
+            {#if gifMenuOpen}
+              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+              <div class="gif-menu" role="dialog" aria-label={tr('downloadMapGif')} onclick={(event) => event.stopPropagation()}>
+                <strong>{tr('downloadMapGif')}</strong>
+                <label>{tr('gifFrom')}
+                  <select bind:value={gifFrom}>
+                    {#each gifHours as { hour, index } (index)}<option value={index}>{hourOptionLabel(hour)}</option>{/each}
+                  </select>
+                </label>
+                <label>{tr('gifTo')}
+                  <select bind:value={gifTo}>
+                    {#each gifHours as { hour, index } (index)}<option value={index}>{hourOptionLabel(hour)}</option>{/each}
+                  </select>
+                </label>
+                <small>{tr('gifFrames', { count: gifSelection.length })}</small>
+                <button type="button" class="gif-create" disabled={!gifSelection.length} onclick={downloadGif}>{tr('gifCreate')}</button>
+              </div>
+            {/if}
+          </div>
           <button type="button" title={tr(fullscreen ? 'exitFullscreen' : 'fullscreen')} aria-label={tr(fullscreen ? 'exitFullscreen' : 'fullscreen')} onclick={toggleFullscreen}>
             {#if fullscreen}<Minimize2 size={16} />{:else}<Maximize2 size={16} />{/if}
           </button>
@@ -899,7 +1153,7 @@
       </header>
 
       <div class="forecast-map palette-{product.palette}" class:fitted={Boolean(mapRatio)} bind:this={mapContainer} style:--map-ink={mapInk || null} style:aspect-ratio={mapRatio || null}>
-        {#if frameMatchesSelection}<ForecastGrid colorPalette={product.palette} vectorMinMagnitude={product.vectorMinMagnitude ?? .5} vectorScaleMagnitude={product.vectorScaleMagnitude || 0} frame={displayFrame} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} contourLayerId={product.contourLayerId || 'isotherms'} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} {stormLabels} flowLines={Boolean(product.flowLines)} flowMinMagnitude={product.flowMinMagnitude || 0} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} multipleSolutions={Boolean(product.multipleSolutions)} onprofileclick={openThermalProfile} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedDomain}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
+        {#if frameMatchesSelection && displayFrame}<ForecastGrid colorPalette={product.palette} vectorMinMagnitude={product.vectorMinMagnitude ?? .5} vectorScaleMagnitude={product.vectorScaleMagnitude || 0} frame={displayFrame} productLabel={mapProductLabel} {language} formatProbe={formatProbe} scaleBreaks={product.scaleBreaks || null} scaleAnchors={product.scaleAnchors || null} zeroFloor={product.zeroFloor || 0} paletteSplit={product.paletteSplit || 0} cityLabels={Boolean(product.cityLabels)} displayMin={product.min} displayMax={product.max} contourStep={product.contourStep || 0} contourLayerId={product.contourLayerId || 'isotherms'} formatContour={formatContour} nationalBoundariesOnly={Boolean(product.nationalBoundariesOnly)} overlayStep={product.overlayStep || 0} overlayMajorStep={product.overlayMajorStep || 0} troughAxes={Boolean(product.troughAxes)} {stormLabels} flowLines={Boolean(product.flowLines)} flowMinMagnitude={product.flowMinMagnitude || 0} overlayLabel={product.overlay || ''} pressureCentres={Boolean(product.pressureCentres)} multipleSolutions={Boolean(product.multipleSolutions)} onprofileclick={openThermalProfile} overlaySmoothing={product.overlaySmoothing ?? 4} overlayLayerLabel={product.overlayLayerLabel || ''} onink={(tinta) => (mapInk = tinta)} savedView={mapView} onviewchange={(view) => (mapView = view)} resetKey={`${mapResetKey}:${selectedDomain}:${selectedRun}:${product.id}:${windLevelKind}:${windLevel}`} />{/if}
         {#if product.id === 'wind-level' && windLevels.length}
           <aside class="level-rail" aria-label={tr('windLevel')}>
             <header><strong>{tr('level')}</strong><small>{windLevelKind === 'height' ? tr('aboveGround') : tr('isobaric')}</small></header>
@@ -917,7 +1171,7 @@
 
         {#if showFrameLoading}<div class="frame-state"><span class="spinner"></span><strong>{tr('loading', { product: product.short })}</strong><small>{tr('downloading')}</small></div>{/if}
         {#if framePending}<div class="frame-state"><span class="spinner"></span><strong>{tr('calculating', { product: product.short })}</strong><small>{tr('workerPending')}</small></div>{/if}
-        {#if frameError}<div class="frame-state error"><strong>{tr('loadError')}</strong><small>{frameError}</small><button type="button" onclick={() => (hourIndex = Math.max(0, hourIndex - 1))}>{tr('previousHourTry')}</button></div>{/if}
+        {#if frameError || windowError}<div class="frame-state error"><strong>{tr('loadError')}</strong><small>{frameError || windowError}</small><button type="button" onclick={() => (hourIndex = Math.max(0, hourIndex - 1))}>{tr('previousHourTry')}</button></div>{/if}
         {#if frameMatchesSelection}
           <div class="map-watermark" aria-hidden="true">
             <img src={`${assetBase}mlx-logo.png`} alt="" />
@@ -954,7 +1208,7 @@
                 </div>
               </div>
             {:else}
-              <span>{legendMin}</span><i></i><span>{legendMax}</span>
+              <span>{legendMin}</span><i style:--extended-ramp={extendedRamp || null}></i><span>{legendMax}</span>
             {/if}
             {#if product.id !== 'precip-type' && displayUnitOptions.length > 1}
               <div class="unit-picker">
@@ -997,9 +1251,29 @@
           {#if playing}<Pause size={16} />{:else}<Play size={16} />{/if}
         </button>
         <div class="time-range">
-          <div class="time-labels"><span>{activeHours[0].day} · {activeHours[0].time} UTC</span><strong>{valid.day} · {valid.time} UTC</strong><span>{activeHours.at(-1).day} · {activeHours.at(-1).time} UTC</span></div>
-          <input type="range" min="0" max={activeHours.length - 1} bind:value={hourIndex} aria-label={tr('forecastHour')} />
-          <div class="ticks">{#each activeHours as hour, index}<i class:major={index % 6 === 0} class:ready={hourIsReady(hour)} class:pending={!hourIsReady(hour)} title={tr(hourIsReady(hour) ? 'hourAvailable' : 'hourPending', { time: hour.time })}></i>{/each}</div>
+          {#if movingWindow && windowStartHour}
+            <div class="time-labels"><span>{windowEdges[0].day} · {windowEdges[0].time} UTC</span><strong>A {windowStartHour.day} {windowStartHour.time} → B {valid.day} {valid.time} UTC</strong><span>{activeHours.at(-1).day} · {activeHours.at(-1).time} UTC</span></div>
+            <!-- Un carril con dos tiradores: son dos deslizadores superpuestos
+                 que solo atienden en su tirador, así que cada uno se arrastra
+                 por separado. La posición 0 es la pasada. El valor se reescribe
+                 en el propio control porque, si A se pasa de B, el estado no
+                 cambia y el tirador se quedaría donde lo soltaron. -->
+            <div
+              class="window-range"
+              style:--a={windowStartPos / activeHours.length}
+              style:--b={windowEndPos / activeHours.length}
+            >
+              <span class="window-fill"></span>
+              <span class="window-mark" style:left="calc(7px + (100% - 14px) * var(--a))">A</span>
+              <span class="window-mark" style:left="calc(7px + (100% - 14px) * var(--b))">B</span>
+              <input type="range" min="0" max={activeHours.length} value={windowStartPos} oninput={(event) => { windowStartPos = clampWindowStart(Number(event.currentTarget.value), windowEndPos); event.currentTarget.value = String(windowStartPos); }} aria-label={tr('windowStart')} />
+              <input type="range" min="0" max={activeHours.length} value={windowEndPos} oninput={(event) => { hourIndex = Math.max(1, Number(event.currentTarget.value)) - 1; event.currentTarget.value = String(hourIndex + 1); }} aria-label={tr('windowEnd')} />
+            </div>
+          {:else}
+            <div class="time-labels"><span>{activeHours[0].day} · {activeHours[0].time} UTC</span><strong>{valid.day} · {valid.time} UTC</strong><span>{activeHours.at(-1).day} · {activeHours.at(-1).time} UTC</span></div>
+            <input type="range" min="0" max={activeHours.length - 1} bind:value={hourIndex} aria-label={tr('forecastHour')} />
+          {/if}
+          <div class="ticks" class:window-ticks={movingWindow}>{#if movingWindow}<i class="major ready"></i>{/if}{#each activeHours as hour, index}<i class:major={index % 6 === 0} class:ready={hourIsReady(hour)} class:pending={!hourIsReady(hour)} title={tr(hourIsReady(hour) ? 'hourAvailable' : 'hourPending', { time: hour.time })}></i>{/each}</div>
         </div>
         <button type="button" onclick={() => step(1)} disabled={hourIndex === activeHours.length - 1} aria-label={tr('nextHour')}><ChevronRight size={17} /></button>
       </div>
@@ -1086,6 +1360,13 @@
   .control-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}.control-bar label{display:flex;align-items:center;gap:7px;height:40px;padding:0 11px;border:1px solid var(--border);border-radius:9px;color:var(--ink-2);background:var(--panel-2);font-size:.76rem;transition:border-color .15s ease,background .15s ease}.control-bar label:hover,.control-bar label:focus-within{border-color:var(--border-2);background:var(--card)}.control-bar select{height:100%;max-width:220px;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-weight:650;cursor:pointer}.run-summary{display:flex;align-items:center;gap:10px;height:40px;margin-left:auto;padding:0 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-2)}.run-summary-copy{display:flex;min-width:0;flex-direction:column;gap:1px}.run-summary small{color:var(--ink-2);font-size:.62rem;line-height:1}.run-summary strong{max-width:330px;overflow:hidden;color:var(--ink);font-size:.71rem;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
   .forecast-layout{display:grid;grid-template-columns:260px minmax(0,1fr);align-items:start;gap:14px}.product-selector,.map-card,.product-explainer{border:1px solid var(--border);border-radius:15px;background:var(--panel);overflow:hidden}.product-selector{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}.product-selector>header{padding:15px;border-bottom:1px solid var(--border)}.product-selector>header>div{display:flex;align-items:baseline;justify-content:space-between}.product-selector>header span{font-size:.82rem;font-weight:720}.product-selector>header small,.product-selector>header p{color:var(--muted);font-size:.57rem}.product-selector>header p{margin:5px 0 11px}.search-box{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel-2)}.search-box input{min-width:0;width:100%;border:0;outline:0;color:var(--ink);background:transparent;font:inherit;font-size:.66rem}.category-list{overflow-y:auto;padding:7px}.category{border-bottom:1px solid var(--border)}.category:last-child{border:0}.category-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 8px;border:0;color:var(--ink-2);background:transparent;font-size:.68rem;font-weight:680;text-align:left}.category-toggle span{display:flex;align-items:center;gap:6px}.category-toggle small{display:grid;place-items:center;min-width:18px;height:18px;border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:.52rem}.category-toggle :global(svg){transition:transform .18s}.category-toggle :global(svg.open){transform:rotate(180deg)}.product-list{display:flex;flex-direction:column;gap:2px;padding:0 2px 8px}.product-list a{display:grid;text-decoration:none;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:35px;padding:6px 7px;border:1px solid transparent;border-radius:8px;color:var(--muted);background:transparent;font-size:.63rem;text-align:left}.product-list a:hover{color:var(--ink);background:var(--panel-2)}.product-list a.active{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--ink);background:var(--card)}.product-list>a>i{width:3px;height:20px;border-radius:4px;background:var(--accent)}.product-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px}.product-list img{width:20px;height:20px;border-radius:6px}.product-status{display:grid;place-items:center;min-width:22px;height:18px;padding:0 4px;border-radius:6px;font-size:.48rem;font-weight:780;font-variant-numeric:tabular-nums}.product-status.complete{color:#143c2b;background:rgba(67,201,138,.78)}.product-status.partial{color:#5a3a09;background:rgba(240,178,78,.82)}.product-status.pending{color:var(--muted);background:var(--panel-2);font-size:.82rem}.product-selector>footer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);color:var(--muted);background:var(--panel-2);font-size:.55rem;line-height:1.35}.product-selector>footer img{width:22px;height:22px;border-radius:6px}
   .viewer-column{min-width:0}.empty-map-card{display:grid;place-items:center;min-height:clamp(620px,64vh,780px);background:var(--panel)}.empty-forecast{display:flex;align-items:center;flex-direction:column;color:var(--ink);text-align:center}.empty-forecast img{width:62px;height:62px;margin-bottom:18px;border-radius:16px;opacity:.88}.empty-forecast strong{font-size:1.72rem;letter-spacing:.14em}.empty-forecast span{margin-top:7px;color:var(--muted);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase}.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid var(--border)}.map-product{display:flex;align-items:center;gap:10px}.product-mark{width:4px;height:35px;border-radius:5px;background:var(--product-accent);box-shadow:0 0 16px color-mix(in srgb,var(--product-accent) 45%,transparent)}.product-title{display:flex;align-items:center;gap:7px}.product-title strong{font-size:.82rem}.product-title img{width:21px;height:21px;border-radius:6px}.map-head small{display:block;margin-top:3px;color:var(--muted);font-size:.61rem;font-variant-numeric:tabular-nums}.map-actions{display:flex;align-items:center;gap:5px}.map-actions button{width:31px;height:31px;border-radius:8px}.map-actions button:disabled{opacity:.45}.export-error{max-width:210px;color:#e8846b;font-size:.52rem;line-height:1.25}
+  .gif-picker{position:relative}.gif-picker>button.active{color:var(--ink);border-color:var(--border-2)}.gif-count{font-size:.5rem;font-weight:750;font-variant-numeric:tabular-nums}
+  .gif-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:8px;width:230px;padding:11px;border:1px solid var(--border);border-radius:10px;color:var(--ink);background:var(--panel);box-shadow:0 12px 30px rgba(0,0,0,.35)}
+  .gif-menu strong{font-size:.66rem}.gif-menu label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:.58rem}
+  .gif-menu select{width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:7px;color:var(--ink);background:var(--panel-2);font:inherit;font-size:.62rem}
+  .gif-menu small{color:var(--muted);font-size:.55rem}
+  .map-actions .gif-menu .gif-create{width:100%;height:auto;padding:7px;border-radius:8px;color:#06131c;background:#68bdf1;border:0;font-size:.62rem;font-weight:750}
+  .map-actions .gif-menu .gif-create:disabled{opacity:.45}
   /* El lienzo del mapa lleva un fondo claro fijo, no el del tema: las
      fronteras se trazan casi en negro (`.region-boundary`) y sobre un fondo
      oscuro no se ven. Los paneles que se posan encima —leyenda, zoom, tooltip,
@@ -1093,6 +1374,7 @@
      para este fondo. */
   .forecast-map{position:relative;min-height:clamp(620px,64vh,780px);overflow:hidden;background:#d5e1e6}.real-frame{position:absolute;inset:5% 7%;z-index:3;width:86%;height:90%;object-fit:contain;filter:drop-shadow(0 12px 24px rgba(0,0,0,.25))}.frame-state{position:absolute;left:50%;top:50%;z-index:9;display:flex;align-items:center;flex-direction:column;gap:6px;width:min(280px,70%);padding:16px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#eaf3f8;background:rgba(6,16,25,.82);backdrop-filter:blur(10px);text-align:center}.frame-state strong{font-size:.72rem}.frame-state small{color:rgba(235,244,251,.65);font-size:.58rem;line-height:1.4}.frame-state.error{border-color:rgba(239,111,118,.32)}.frame-state button{margin-top:4px;padding:6px 9px;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#dceaf2;background:rgba(255,255,255,.06);font-size:.57rem}.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.18);border-top-color:#70b9ef;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.legend{position:absolute;right:12px;bottom:12px;z-index:18;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.13);border-radius:9px;color:rgba(235,244,251,.8);background:rgba(6,16,25,.62);font-size:.6rem}.legend i{width:130px;height:8px;border-radius:99px;background:linear-gradient(90deg,#3b4cc0,#3288bd,#66c2a5,#e6f598,#fdae61,#d73027,#762a83)}
   .palette-precipitation .legend i{background:linear-gradient(90deg,#28465f,#2f6f8e,#369aa1,#58bd91,#9bd275,#d7dc69,#f2c55a,#ed914c,#df6262,#b44f88)}
+  .palette-precipitation-extended .legend i{background:var(--extended-ramp)}
   .palette-wind .legend i{background:linear-gradient(90deg,#dfe8f1,#a9c8e4,#6fa8d6,#66c2a5,#abdda4,#e6f598,#fee08b,#fdae61,#f46d43,#d73027,#762a83)}
   .legend-classes{align-items:flex-end;padding-bottom:6px}
   .band-scale{position:relative;padding-bottom:11px}
@@ -1102,7 +1384,10 @@
   .band-marks{position:absolute;left:0;right:0;bottom:0;height:10px}
   .band-marks span{position:absolute;color:rgba(235,244,251,.72);font-size:.44rem;line-height:1;transform:translateX(-50%);white-space:nowrap}
   .band-marks span:first-child{transform:none}
-  .band-marks span:last-child{transform:translateX(-100%)}
+  /* Sin alinear la última a la derecha: las etiquetas marcan dónde empieza
+     cada clase, así que la última no cae en el borde de la barra sino una
+     clase antes —al 93 % con catorce—, y empujarla a la izquierda la montaba
+     sobre la anterior: el «400» del acumulado tapaba al «300». */
   .unit-picker{position:relative}
   .legend .unit-static{margin-left:-4px}
   .ptype-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 12px;width:min(390px,calc(100vw - 50px))}
@@ -1127,7 +1412,7 @@
      mínimo ni fijo, que volverían a dejar franjas grises. */
   .forecast-map.fitted{min-height:0;height:auto}
   .level-rail{position:absolute;right:12px;top:58px;bottom:54px;z-index:14;display:flex;width:92px;flex-direction:column;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8f2f7;background:rgba(5,14,22,.78);backdrop-filter:blur(10px);overflow:hidden}.level-rail header{padding:9px 9px 7px;border-bottom:1px solid rgba(255,255,255,.1)}.level-rail header strong,.level-rail header small{display:block}.level-rail header strong{font-size:.62rem}.level-rail header small{margin-top:2px;color:rgba(235,244,251,.55);font-size:.47rem}.level-kind{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px}.level-kind button,.level-list button{border:0;color:rgba(235,244,251,.62);background:transparent;font-size:.5rem}.level-kind button{padding:5px 2px;border-radius:5px}.level-kind button.active{color:#06131c;background:#68bdf1;font-weight:750}.level-list{display:flex;min-height:0;flex:1;flex-direction:column;overflow-y:auto;padding:2px 5px 6px}.level-list button{flex:0 0 25px;border-left:2px solid transparent;text-align:right}.level-list button:hover{color:#fff;background:rgba(255,255,255,.06)}.level-list button.active{border-left-color:#68bdf1;border-radius:4px;color:#8ed3ff;background:rgba(76,163,219,.12);font-weight:750}
-  .timeline{display:grid;grid-template-columns:34px 34px 1fr 34px;align-items:center;gap:7px;padding:12px 14px 14px;border-top:1px solid var(--border)}.timeline>button{width:34px;height:34px;border-radius:9px}.timeline>button:disabled{opacity:.35;cursor:default}.timeline .play{color:#76bfff}.timeline .play.active{color:#08141f;background:#76bfff}.time-range{min-width:0;padding:0 5px}.time-labels{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.57rem}.time-labels strong{color:var(--ink);font-size:.63rem}.time-range input{width:100%;margin:9px 0 2px;accent-color:#5faeea}.ticks{display:flex;justify-content:space-between;padding:0 3px}.ticks i{width:2px;height:4px;border-radius:2px;background:var(--border-2)}.ticks i.major{height:7px}.ticks i.ready{background:#43c98a}.ticks i.pending{background:var(--border-2);opacity:.62}
+  .timeline{display:grid;grid-template-columns:34px 34px 1fr 34px;align-items:center;gap:7px;padding:12px 14px 14px;border-top:1px solid var(--border)}.timeline>button{width:34px;height:34px;border-radius:9px}.timeline>button:disabled{opacity:.35;cursor:default}.timeline .play{color:#76bfff}.timeline .play.active{color:#08141f;background:#76bfff}.time-range{min-width:0;padding:0 5px}.time-labels{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.57rem}.time-labels strong{color:var(--ink);font-size:.63rem}.time-range input{width:100%;margin:9px 0 2px;accent-color:#5faeea}.ticks.window-ticks{padding:0 6px}.window-range{position:relative;height:34px;margin-top:2px}.window-range::before{content:'';position:absolute;left:7px;right:7px;top:21px;height:4px;border-radius:2px;background:var(--border-2)}.window-fill{position:absolute;top:21px;left:calc(7px + (100% - 14px) * var(--a));width:calc((100% - 14px) * (var(--b) - var(--a)));height:4px;border-radius:2px;background:#5faeea}.window-mark{position:absolute;top:0;transform:translateX(-50%);color:var(--ink-2);font-size:.6rem;font-weight:750;line-height:1;pointer-events:none}.time-range .window-range input{position:absolute;inset:16px 0 auto;width:100%;height:14px;margin:0;background:none;-webkit-appearance:none;appearance:none;pointer-events:none}.window-range input::-webkit-slider-runnable-track{height:14px;background:none}.window-range input::-moz-range-track{background:none}.window-range input::-webkit-slider-thumb{width:14px;height:14px;border:2px solid var(--panel);border-radius:50%;background:#5faeea;-webkit-appearance:none;appearance:none;pointer-events:auto;cursor:grab}.window-range input::-moz-range-thumb{width:10px;height:10px;border:2px solid var(--panel);border-radius:50%;background:#5faeea;pointer-events:auto;cursor:grab}.ticks{display:flex;justify-content:space-between;padding:0 3px}.ticks i{width:2px;height:4px;border-radius:2px;background:var(--border-2)}.ticks i.major{height:7px}.ticks i.ready{background:#43c98a}.ticks i.pending{background:var(--border-2);opacity:.62}
   .product-explainer{margin-top:14px;padding:17px}.product-explainer>header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.explainer-identity{display:flex;align-items:center;gap:11px}.explainer-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;color:#6ab7ef;background:rgba(62,142,208,.11)}.explainer-identity small{display:block;margin-bottom:3px;color:var(--muted);font-size:.56rem}.explainer-identity h3{font-size:.88rem}.source-tag{padding:5px 8px;border-radius:6px;color:#78baf0;background:rgba(62,142,208,.11);font-size:.55rem;font-weight:740;text-transform:uppercase}.source-tag.derived{color:#f08b9d;background:rgba(240,112,134,.1)}.product-explainer h4{margin-bottom:7px;color:var(--ink-2);font-size:.61rem;text-transform:uppercase;letter-spacing:.065em}.explanation-overview{display:grid;grid-template-columns:1fr;gap:19px;padding-top:17px}.explanation-overview p,.interpretation li,.calculation-detail p,.calculation-detail li{color:var(--muted);font-size:.65rem;line-height:1.62}.interpretation ul{display:grid;gap:8px;margin:0;padding-left:17px}.interpretation li::marker,.calculation-copy li::marker{color:#67b7ef}.calculation-detail{margin-top:19px;padding-top:17px;border-top:1px solid var(--border)}.calculation-copy{min-width:0}.calculation-copy ol{display:grid;gap:5px;margin:11px 0 0;padding-left:18px}.calculation-copy code{display:block;margin-top:12px;padding:7px 9px;border-radius:7px;color:#70b9ef;background:var(--panel-2);font-size:.52rem;overflow-wrap:anywhere}.technical-sources{display:grid;grid-template-columns:1fr;gap:12px;margin-top:17px;padding-top:14px;border-top:1px solid var(--border)}.technical-sources>strong{color:var(--ink-2);font-size:.58rem;text-transform:uppercase;letter-spacing:.055em}.technical-sources>div{display:flex;flex-wrap:wrap;gap:6px}.technical-sources a{padding:5px 7px;border:1px solid var(--border);border-radius:6px;color:#6db5e9;background:var(--panel-2);font-size:.53rem;line-height:1.35;text-decoration:none}.technical-sources a:hover{border-color:rgba(109,181,233,.42);color:#8bcbf8}
   /* Igualamos la escala tipográfica con el resto de MeteoLabX. El mapa
      conserva todo su espacio: solo crecen los rótulos y controles que antes

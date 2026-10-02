@@ -248,10 +248,7 @@ PREFIX_CANDIDATES = {
         "RELATIVE_HUMIDITY__ISOBARIC_SURFACE",
         "HU__ISOBARIC",
     ],
-    "shortwave_down_1h": [
-        "DOWNWARD_SHORT_WAVE_RADIATION_FLUX__GROUND_OR_WATER_SURFACE",
-        "FLSOLAIRE__GROUND",
-    ],
+    "precipitable_water": ["PRECIPITABLE_WATER__GROUND_OR_WATER_SURFACE"],
     "total_cloud_cover": [
         "TOTAL_CLOUD_COVER__GROUND_OR_WATER_SURFACE",
         "NEBUL__GROUND",

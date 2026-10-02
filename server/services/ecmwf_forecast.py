@@ -142,6 +142,22 @@ PRODUCTS: dict[str, dict[str, Any]] = {
         "kind": "precip_accum", "hours": 6, "min_step": 6,
         "overlay": {"param": "msl", "levtype": "sfc", "scale": 0.01},
     },
+    # Precipitación acumulada desde el inicio de la pasada: `tp` tal cual, en
+    # milímetros. El visor la usa en ventana móvil —lo caído entre A y B es la
+    # resta de dos plazos—, así que no lleva isobaras: la presión de B no
+    # describe un intervalo. Sale de los mismos mensajes que el de 6 horas, así
+    # que no añade descargas. En la +0 es cero por definición.
+    "ecmwf-precip-accumulated": {
+        "label": "Precipitación acumulada", "unit": "mm", "vmin": 0.0, "vmax": 800.0,
+        "kind": "precip_total", "min_step": STEP_HOURS,
+    },
+    # Agua precipitable: el vapor integrado en la columna (`tcwv`), tal cual
+    # lo publica el IFS, en kg/m² —lo mismo que mm de agua—. Un mensaje de
+    # ~700 kB por plazo, desde la +0. Sin isolíneas, como el de AROME.
+    "ecmwf-precipitable-water": {
+        "label": "Agua precipitable", "unit": "kg/m²", "vmin": 0.0, "vmax": 70.0,
+        "value": {"param": "tcwv", "levtype": "sfc"},
+    },
     # Jet stream: velocidad del viento en 300 hPa y sus componentes para las
     # flechas. Sin isohipsas: con el viento flojo sin pintar, la forma del jet
     # ya dibuja la onda.
@@ -752,6 +768,8 @@ def required_fields(product_id: str, step: int) -> list[tuple[int, dict[str, Any
             return []
         tp = {"param": "tp", "levtype": "sfc"}
         return [(step, tp), (step - horas, tp), (step, config["overlay"])]
+    if kind == "precip_total":
+        return [(step, {"param": "tp", "levtype": "sfc"})] if step >= int(config["min_step"]) else []
     if kind == "wind":
         return [(step, pl(param, config["pressure"])) for param in ("u", "v")]
     if kind == "frontogenesis":
@@ -767,7 +785,9 @@ def required_fields(product_id: str, step: int) -> list[tuple[int, dict[str, Any
     if "level" in config:
         nivel = config["level"]
         return [(step, pl("vo" if nivel == 500 else "t", nivel)), (step, pl("gh", nivel)), (step, presion)]
-    campos = [(step, config["value"]), (step, config["overlay"])]
+    campos = [(step, config["value"])]
+    if config.get("overlay"):
+        campos.append((step, config["overlay"]))
     if config.get("mask_below_hpa"):
         campos.append((step, presion))
     return campos
@@ -793,6 +813,12 @@ def frame_payload(
         # diferencias negativas de centésimas.
         valores = np.maximum((final - inicio) * 1000.0, 0.0)
         overlay, _ = _field(run, step, config["overlay"], bounds)
+    elif config.get("kind") == "precip_total":
+        if step < int(config["min_step"]):
+            raise EcmwfError("La precipitación acumulada empieza en el primer plazo.")
+        total, reales = _field(run, step, {"param": "tp", "levtype": "sfc"}, bounds)
+        # De metros de agua a milímetros.
+        valores = np.maximum(total * 1000.0, 0.0)
     elif config.get("kind") == "wind":
         nivel = str(config["pressure"])
         vector_u, reales = _field(run, step, {"param": "u", "levtype": "pl", "levelist": nivel}, bounds)
@@ -813,12 +839,14 @@ def frame_payload(
         valores, vector_u, vector_v, reales, overlay = _diagnostic_fields(product_id, run, step, bounds)
     else:
         valores, reales = _field(run, step, config["value"], bounds)
-        overlay, _ = _field(run, step, config["overlay"], bounds)
+        if config.get("overlay"):
+            overlay, _ = _field(run, step, config["overlay"], bounds)
         if config.get("mask_below_hpa"):
             presion, _ = _field(run, step, {"param": "sp", "levtype": "sfc"}, bounds)
             bajo_tierra = ~(np.isfinite(presion) & (presion >= config["mask_below_hpa"] * 100))
             valores = np.where(bajo_tierra, np.nan, valores)
-            overlay = np.where(bajo_tierra, np.nan, overlay)
+            if overlay is not None:
+                overlay = np.where(bajo_tierra, np.nan, overlay)
     valid_time = run.astimezone(timezone.utc) + timedelta(hours=step)
     run_iso = run.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     valid_iso = valid_time.isoformat().replace("+00:00", "Z")

@@ -722,9 +722,9 @@ SURFACE_ELEMENTS: dict[str, dict[tuple[str, str], tuple[str, str]]] = {
 }
 
 
-# Inventariado en producción el 30/09/2026. GDAL etiqueta TPRATE y DSWRF
-# como tasas, pero PDT 4.8 declara SUMAS desde el RUN: sus valores son mm
-# y J/m². No multiplicar por el plazo ni por 3600. El lector comprueba la
+# Inventariado en producción el 30/09/2026. GDAL etiqueta TPRATE como tasa,
+# pero PDT 4.8 declara SUMAS desde el RUN: sus valores son mm. No
+# multiplicar por el plazo. El lector comprueba la
 # estadística y el intervalo antes de aceptar esos campos.
 SP1_FIELDS = {
     "temperature-2m": ("TMP", "2-HTGL", "C", "instant"),
@@ -736,7 +736,6 @@ SP1_FIELDS = {
     "wind-gust": ("GUST", "10-HTGL", "m/s", "maximum"),
     "precip-1h": ("TPRATE", "0-SFC", "mm", "accumulation"),
     "accumulated-precip": ("TPRATE", "0-SFC", "mm", "accumulation"),
-    "shortwave-down": ("DSWRF", "0-SFC", "J/m²", "accumulation"),
 }
 
 
@@ -775,7 +774,6 @@ def read_sp1_field(path: Path, run: datetime, valid_time: datetime, name: str):
         "TMP": {"C", "K"}, "RH": {"%"}, "TCDC": {"%"},
         "UGRD": {"m/s"}, "VGRD": {"m/s"}, "GUST": {"m/s"},
         "PRMSL": {"Pa"}, "TPRATE": {"kg/(m^2*s)", "kg/m^2"},
-        "DSWRF": {"W/(m^2)", "J/(m^2)"},
     }
     with rasterio.Env(GDAL_CACHEMAX=GDAL_CACHE_MB), rasterio.open(path) as dataset:
         for index in range(1, dataset.count + 1):

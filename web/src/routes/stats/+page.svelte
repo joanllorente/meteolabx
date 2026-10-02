@@ -172,6 +172,19 @@
     { clave: 'visita', etiqueta: 'Última visita', valor: (f) => f.last_epoch || 0 }
   ];
 
+  // Las demás tablas solo se ordenan por su columna «Último»: un clic las pone
+  // de la más reciente a la más antigua y otro vuelve al orden del servidor.
+  let recientes = $state({});
+
+  function alternarReciente(tabla) {
+    recientes[tabla] = !recientes[tabla];
+  }
+
+  function porReciente(tabla, filas, campo = 'last_epoch') {
+    if (!recientes[tabla] || !filas) return filas;
+    return [...filas].sort((a, b) => (Number(b[campo]) || 0) - (Number(a[campo]) || 0));
+  }
+
   // Sin columna elegida se respeta el orden que manda el servidor.
   let orden = $state(null);
 
@@ -383,7 +396,10 @@
   const COLORES = ['#1b3a5c', '#245782', '#2c74a8', '#3e8ed0', '#6fb2e8'];
   const colorPais = (codigo) => {
     const visitas = visitasPorPais[codigo] || 0;
-    if (!visitas) return 'var(--panel-2)';
+    // Va como `style`, no como atributo `fill`: la regla `.mapa .pais` del
+    // CSS manda sobre un atributo de presentación SVG y dejaba todos los
+    // países del mismo color, con visitas o sin ellas.
+    if (!visitas) return 'var(--panel)';
     return COLORES[Math.min(COLORES.length - 1, Math.floor(intensidad(visitas) * COLORES.length))];
   };
 
@@ -396,6 +412,16 @@
     }))
   );
 </script>
+
+{#snippet ultimo(tabla, etiqueta = 'Último')}
+  <th aria-sort={recientes[tabla] ? 'descending' : 'none'}>
+    <button type="button" onclick={() => alternarReciente(tabla)}
+      title={recientes[tabla] ? 'Volver al orden original' : 'Ordenar de más reciente a más antiguo'}>
+      {etiqueta}
+      <span class="flecha" aria-hidden="true">{recientes[tabla] ? '▼' : ''}</span>
+    </button>
+  </th>
+{/snippet}
 
 <svelte:head>
   <title>Uso interno · MeteoLabX</title>
@@ -483,7 +509,7 @@
             {#each Object.entries(paises) as [codigo, pais] (codigo)}
               <path
                 d={trazo(pais.rings)}
-                fill={colorPais(codigo)}
+                style:fill={colorPais(codigo)}
                 class="pais"
                 class:visitado={visitasPorPais[codigo] > 0}
                 onmousemove={(e) => mostrarPais(e, codigo, pais.name)}
@@ -524,9 +550,9 @@
 
     <h2>Secciones</h2>
     <table>
-      <thead><tr><th>Sección</th><th>Hoy</th><th>7 d</th><th>30 d</th><th>Total</th><th>Última</th></tr></thead>
+      <thead><tr><th>Sección</th><th>Hoy</th><th>7 d</th><th>30 d</th><th>Total</th>{@render ultimo('secciones', 'Última')}</tr></thead>
       <tbody>
-        {#each secciones as fila (fila.section)}
+        {#each porReciente('secciones', secciones) as fila (fila.section)}
           <tr>
             <td title={fila.section}>{nombreSeccion(fila.section)}</td>
             <td class="n">{numero(fila.d1)}</td>
@@ -567,11 +593,11 @@
             <tr>
               <th>Modelo</th>
               <th class="num">Entradas hoy</th><th class="num">7 d</th><th class="num">30 d</th><th class="num">Total</th>
-              <th class="num">Mapas 30 d</th><th class="num">Mapas total</th><th class="num">Mapas distintos</th><th>Último</th>
+              <th class="num">Mapas 30 d</th><th class="num">Mapas total</th><th class="num">Mapas distintos</th>{@render ultimo('modelos')}
             </tr>
           </thead>
           <tbody>
-            {#each prediccion.models as fila (fila.model)}
+            {#each porReciente('modelos', prediccion.models) as fila (fila.model)}
               <tr>
                 <td>{MODELOS_PREDICCION[fila.model] || fila.model}</td>
                 <td class="n">{numero(fila.visits_d1)}</td>
@@ -604,11 +630,11 @@
             <tr>
               <th>Mapa</th><th>Modelo</th><th>Categoría</th>
               <th class="num">Hoy</th><th class="num">7 d</th><th class="num">30 d</th>
-              <th class="num">Total</th><th>Último</th>
+              <th class="num">Total</th>{@render ultimo('mapas')}
             </tr>
           </thead>
           <tbody>
-            {#each mapasPrediccion as fila (`${fila.model}|${fila.product}`)}
+            {#each porReciente('mapas', mapasPrediccion) as fila (`${fila.model}|${fila.product}`)}
               <tr>
                 <td title={fila.product}>
                   {fila.label || fila.product}
@@ -785,10 +811,10 @@
         <h3 class="sub">Han pasado por cuarentena ({cuarentena.history.length})</h3>
         <table>
           <thead>
-            <tr><th>Estación</th><th>Red</th><th>Variable</th><th>Días</th><th>Última vez</th></tr>
+            <tr><th>Estación</th><th>Red</th><th>Variable</th><th>Días</th>{@render ultimo('cuarentena', 'Última vez')}</tr>
           </thead>
           <tbody>
-            {#each cuarentena.history as fila (fila.provider + fila.station_id + fila.variable)}
+            {#each porReciente('cuarentena', cuarentena.history, 'last_seen') as fila (fila.provider + fila.station_id + fila.variable)}
               <tr>
                 <td>
                   <a href={fichaDe(fila)} target="_blank" rel="noopener">
@@ -919,9 +945,9 @@
                         {#if d.referrers?.length}
                           <h3>Quién enlaza</h3>
                           <table>
-                            <thead><tr><th>Dominio</th><th>30 d</th><th>Total</th><th>Último</th></tr></thead>
+                            <thead><tr><th>Dominio</th><th>30 d</th><th>Total</th>{@render ultimo('enlaces')}</tr></thead>
                             <tbody>
-                              {#each d.referrers as fila (fila.domain)}
+                              {#each porReciente('enlaces', d.referrers) as fila (fila.domain)}
                                 <tr>
                                   <td>{fila.domain}</td>
                                   <td class="n">{numero(fila.d30)}</td>
@@ -986,9 +1012,9 @@
                         <h3>Errores por tipo</h3>
                         {#if d.error_kinds?.length}
                           <table>
-                            <thead><tr><th>Tipo</th><th>Hoy</th><th>30 d</th><th>Total</th><th>Último</th></tr></thead>
+                            <thead><tr><th>Tipo</th><th>Hoy</th><th>30 d</th><th>Total</th>{@render ultimo('errores')}</tr></thead>
                             <tbody>
-                              {#each d.error_kinds as tipo (tipo.kind)}
+                              {#each porReciente('errores', d.error_kinds) as tipo (tipo.kind)}
                                 <tr>
                                   <td>{tipo.kind}</td>
                                   <td class="n" class:mal={tipo.d1 > 0}>{numero(tipo.d1)}</td>

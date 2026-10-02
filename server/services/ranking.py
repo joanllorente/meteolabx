@@ -2946,6 +2946,31 @@ def _drop_quarantined_variables(rec: StationDaily) -> None:
         rec.gust = None
 
 
+def _in_quarantine(rec: StationDaily, variable: str, *, with_previous_day: bool = False) -> bool:
+    """Si la variable de esa estación está en cuarentena ahora mismo, para los mapas.
+
+    ``_drop_quarantined_variables`` solo actúa al guardar la lectura: una marca
+    que llega después —al abrir alguien la ficha, o de otro ciclo— no la
+    retiraba, y el mapa siguió enseñando 1300 mm de una estación que el panel ya
+    tenía en cuarentena. Por eso los mapas lo vuelven a mirar al servir.
+
+    La lluvia de 24 h es una ventana móvil: a primera hora de hoy todavía arrastra
+    las horas de ayer, así que una marca de ayer también la deja fuera. Cuando la
+    marca deja de aplicarse, la estación vuelve sola al mapa.
+    """
+    if not rec.local_date:
+        return False
+    days = [rec.local_date]
+    if with_previous_day:
+        try:
+            days.append((date.fromisoformat(rec.local_date) - timedelta(days=1)).isoformat())
+        except ValueError:
+            pass
+    return any(
+        suspect_data.is_flagged(rec.provider, rec.station_id, day, variable) for day in days
+    )
+
+
 def _parse_iem_network(
     network: str,
     rows: List[dict],
@@ -3745,6 +3770,8 @@ class RankingStore:
                     continue
                 if rec.tcur_at is None or int(rec.tcur_at) < cutoff:
                     continue
+                if _in_quarantine(rec, suspect_data.TEMPERATURE):
+                    continue
                 key = (provider, sid)
                 held = freshest.get(key)
                 if held is None or int(rec.tcur_at) > int(held.tcur_at or 0):
@@ -3846,6 +3873,8 @@ class RankingStore:
                 if not math.isfinite(amount) or not (0.0 <= amount <= _WORLD_RAIN_RECORD_MM):
                     continue
                 if observed_at < cutoff:
+                    continue
+                if _in_quarantine(rec, suspect_data.PRECIPITATION, with_previous_day=True):
                     continue
                 rec.rain_24h = round(amount, 1)
                 key = (provider, sid)

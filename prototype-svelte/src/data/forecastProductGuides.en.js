@@ -549,7 +549,7 @@ export const forecastProductGuides = {
   },
 
   'accumulated-precip': {
-    what: 'Sum of the hourly precipitation from the start of the RUN to the selected valid hour, cell by cell and in water equivalent.',
+    what: 'Sum of the hourly precipitation between two hours chosen with sliders A and B, cell by cell and in water equivalent. With A at the start of the RUN it is the accumulation of the whole run up to B; moving A keeps only what falls inside the window.',
     interpretation: [
       'It shows the total footprint of the episode as forecast by a single RUN and helps locate persistent or orographic maxima. As the timeline advances it should never decrease at a given cell.',
       'It also accumulates the intensity and position errors of each hour. Comparing accumulations from different RUNs requires clearly stating the interval, because they do not necessarily share the same time window.'
@@ -586,21 +586,21 @@ export const forecastProductGuides = {
     sources: [MF_AROME, MF_API]
   },
 
-  'shortwave-down': {
-    what: 'Hourly mean flux of downward shortwave solar radiation reaching the surface, the sum of the direct and diffuse components.',
+  'precipitable-water': {
+    what: 'Water vapour contained in the whole air column, from the ground to the top of the atmosphere, expressed as the depth of liquid water it would give if all of it condensed. Given in kg/m², which are millimetres of water.',
     interpretation: [
-      'Maxima follow insolation, solar elevation and clear skies; local drops usually signal cloud cover, fog, aerosols or orographic shading represented by the model. It is useful for solar energy and the surface balance.',
-      'The value shown is an hourly mean, not instantaneous irradiance. Near sunrise and sunset the average can differ greatly from the maximum within the interval; at night it should approach zero.'
+      'It measures the fuel for rain: where the value is high for the area and season, a storm or a front can produce very large totals. Elongated tongues of high values mark atmospheric rivers and moisture advection feeding heavy-rain events.',
+      'It is not forecast rain: nothing falls without something lifting the air, and the whole column never condenses. Nor does it say at what height the vapour is.',
+      'It depends strongly on temperature, so normal values change with season and latitude. Over terrain the column is shorter and the value drops even if the air is just as moist: compare areas of similar altitude.'
     ],
-    method: 'AROME publishes the downward shortwave radiation (DOWNWARD_SHORT_WAVE_RADIATION_FLUX) accumulated over one hour. Although the metadata may advertise W/m², the data contains the energy received during that hour, in J/m²; MeteoLabX divides by 3,600 s to obtain the hourly mean flux.',
+    method: 'Native AROME field (PRECIPITABLE_WATER): the model integrates water vapour over all its levels. MeteoLabX shows it as published, for every hour of the run.',
     equations: [
-      { label: 'Conversion from accumulated energy to mean flux', latex: String.raw`\overline{F}_{SW\downarrow}=\frac{E_{SW\downarrow,\,PT1H}}{3600\ \mathrm s}` },
-      { label: 'Physical decomposition', latex: String.raw`F_{SW\downarrow}=F_{dir}+F_{dif}` }
+      { label: 'Definition', latex: String.raw`PW=\frac{1}{g}\int_{0}^{p_s} q\,dp` }
     ],
     steps: [
-      'AROME variable: DOWNWARD_SHORT_WAVE_RADIATION_FLUX accumulated over one hour.',
-      'Negative values are clipped to zero.',
-      'The only MLX transformation: multiplication by 1/3600.'
+      'AROME variable: PRECIPITABLE_WATER at the surface.',
+      'No interpolation or scaling: 1 kg/m² = 1 mm of water.',
+      'Same scale as ECMWF precipitable water, so both can be compared.'
     ],
     sources: [MF_AROME, MF_API]
   },

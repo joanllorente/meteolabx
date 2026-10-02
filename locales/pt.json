@@ -168,6 +168,20 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para qualquer questão sobre privacidade ou sobre o tratamento da informação, pode escrever para",
+    "release_222_improvements": [
+      "Novo mapa de água precipitável no AROME, AROME-IFS e ECMWF.",
+      "Novo mapa de precipitação acumulada do ECMWF, até seis dias.",
+      "A precipitação acumulada do AROME e do ECMWF tem agora janela móvel.",
+      "Os mapas de previsão podem ser descarregados como animação GIF, escolhendo as horas.",
+      "As escalas de precipitação vão agora até 140 mm em 1 hora e 800 mm no acumulado.",
+      "Foi retirado o mapa de radiação solar do AROME."
+    ],
+    "release_222_fixes": [
+      "Corrigido o bloqueio em cálculo da cota de neve e da refletividade CAPPI na última hora.",
+      "Corrigido o zoom com a roda do rato, que deslocava a página.",
+      "Corrigida a sobreposição de etiquetas na legenda da precipitação acumulada.",
+      "Corrigido: no telemóvel era preciso manter premida uma estação do mapa para ver os seus dados."
+    ],
     "release_221_improvements": [
       "Novo mapa de refletividade simulada CAPPI a 1,5 km.",
       "Mais localidades e províncias nos mapas AROME com zoom elevado.",

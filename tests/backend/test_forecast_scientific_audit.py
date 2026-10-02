@@ -82,6 +82,26 @@ def test_small_explicit_percentages_are_not_fractions(monkeypatch, product):
     np.testing.assert_allclose(result.data, 1.)
 
 
+def test_precipitable_water_is_the_native_wcs_field(monkeypatch):
+    """Una sola cobertura por hora, sin paquetes ni escala: kg/m² tal cual."""
+    pedidos = []
+
+    def get_field(catalog, prefix, run, valid, level, vertical, period=None):
+        pedidos.append((prefix, level, vertical, period))
+        return field(27.5, "kg/m^2")
+
+    client = SimpleNamespace(get_field=get_field)
+    monkeypatch.setattr(af, "_product_context", lambda *a, **k: (
+        af.PRODUCTS["precipitable-water"], client, None, {"field": "PW"}, RUN, [RUN]
+    ))
+    result, _, _ = af._computed_frame.__wrapped__("audit", "precipitable-water", RUN.isoformat())
+    np.testing.assert_allclose(result.data, 27.5)
+    assert result.units == "kg/m²"
+    assert pedidos == [("PW", None, None, None)]
+    from server.services.arome_wcs import PREFIX_CANDIDATES
+    assert PREFIX_CANDIDATES["precipitable_water"] == ["PRECIPITABLE_WATER__GROUND_OR_WATER_SURFACE"]
+
+
 def test_accumulation_does_not_publish_when_an_intermediate_hour_is_absent(monkeypatch):
     hours = [RUN + timedelta(hours=h) for h in (1, 3)]
     client = SimpleNamespace(get_field=lambda *a, **k: field(1., "mm"))
