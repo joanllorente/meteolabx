@@ -71,6 +71,26 @@
     formMode = mode;
   });
 
+  // Lo marcado en los desplegables, antes de consultar. El rótulo de cada
+  // desplegable sale de aquí y no de `selection`, que es lo que trae la URL:
+  // con ella, marcar meses dejaba el botón diciendo «Septiembre» hasta
+  // pulsar Consultar, y parecía que las casillas no hacían nada.
+  // Arrancan con la selección para que el HTML del servidor salga ya marcado:
+  // el formulario tiene que funcionar también sin JavaScript.
+  // svelte-ignore state_referenced_locally
+  let chosenMonths = $state([...selection.months]);
+  // svelte-ignore state_referenced_locally
+  let chosenYears = $state([...selection.years]);
+  $effect(() => {
+    chosenMonths = [...selection.months];
+    chosenYears = [...selection.years];
+  });
+
+  function pickerLabel(values, options, fallback) {
+    if (values.length === 1) return options.find((item) => item.value === values[0])?.label ?? String(values[0]);
+    return `${values.length} · ${fallback}`;
+  }
+
   function parsedNumber(value) {
     const number = Number(String(value ?? '').replace(',', '.'));
     return Number.isFinite(number) ? number : null;
@@ -312,17 +332,13 @@
       <div class="field">
         <span class="field-label">{texts.inputs?.months}</span>
         <details class="picker" use:closeOnOutside>
-          <summary>
-            {selection.months.length === 1
-              ? selection.monthOptions.find((item) => item.value === selection.months[0])?.label
-              : `${selection.months.length} · ${texts.inputs?.months}`}
-          </summary>
+          <summary>{pickerLabel(chosenMonths, selection.monthOptions, texts.inputs?.months)}</summary>
           <div class="options months">
             {#each selection.monthOptions as month (month.value)}
               <label>
                 <input
                   type="checkbox" name="meses" value={month.value}
-                  checked={selection.months.includes(month.value)} />
+                  bind:group={chosenMonths} />
                 <span>{month.label}</span>
               </label>
             {/each}
@@ -334,17 +350,13 @@
     <div class="field">
       <span class="field-label">{texts.inputs?.years}</span>
       <details class="picker" use:closeOnOutside>
-        <summary>
-          {selection.years.length === 1
-            ? selection.years[0]
-            : `${selection.years.length} · ${texts.inputs?.years}`}
-        </summary>
+        <summary>{pickerLabel(chosenYears, [], texts.inputs?.years)}</summary>
         <div class="options years">
           {#each selection.yearOptions as year (year)}
             <label>
               <input
                 type="checkbox" name="anios" value={year}
-                checked={selection.years.includes(year)} />
+                bind:group={chosenYears} />
               <span>{year}</span>
             </label>
           {/each}
