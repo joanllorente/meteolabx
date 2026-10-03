@@ -397,10 +397,14 @@ def _filter_rows(rows, *, start_epoch: Optional[int] = None):
 
 
 def _precip_cumulative(rows: list[Dict[str, Any]]) -> list[float]:
+    buckets = [_safe_float(row.get("precip_bucket_mm")) for row in rows]
+    # Sin ningún bucket válido (estación sin pluviómetro, o getmeasure de la
+    # lluvia caído) no hay acumulado: NaN, no 0,0 mm.
+    if not any(math.isfinite(bucket) for bucket in buckets):
+        return [float("nan")] * len(rows)
     cumulative = 0.0
     values = []
-    for row in rows:
-        bucket = _safe_float(row.get("precip_bucket_mm"))
+    for bucket in buckets:
         if math.isfinite(bucket):
             cumulative += max(0.0, bucket)
         values.append(cumulative)

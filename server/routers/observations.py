@@ -56,7 +56,9 @@ from server.schemas.observation import (
     _ProviderStationRequest,
 )
 from server.services import (
+    aca,
     aemet,
+    portbcn,
     climantartide,
     eccc,
     euskalmet,
@@ -864,6 +866,24 @@ def _resolve_provider_fetchers(
             "public",
             lambda: meteoswiss.fetch_current(body.station_id, client=http),
             lambda: meteoswiss.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "ACA":
+        # API Sentilo pública: la serie de 5 min del pluviómetro, compartida
+        # entre la observación y la serie del día.
+        return (
+            "public",
+            lambda: aca.fetch_current(body.station_id, client=http),
+            lambda: aca.fetch_today_series(body.station_id, client=http),
+        )
+
+    if body.provider == "PORTBCN":
+        # Almacén CKAN del puerto: los últimos tres días de 10 min, compartidos
+        # entre la observación y la serie del día.
+        return (
+            "public",
+            lambda: portbcn.fetch_current(body.station_id, client=http),
+            lambda: portbcn.fetch_today_series(body.station_id, client=http),
         )
 
     if body.provider == "DMI":
@@ -1964,6 +1984,20 @@ def _resolve_recent_fetcher(
         return (
             "public",
             lambda: meteoswiss.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "ACA":
+        # Solo pluviómetros: sin tendencia de temperatura, humedad ni presión.
+        return (
+            "public",
+            lambda: aca.fetch_recent_series(body.station_id, days_back=days, client=http),
+        )
+
+    if body.provider == "PORTBCN":
+        # El fichero del año (cerrado a diario) más los últimos tres días.
+        return (
+            "public",
+            lambda: portbcn.fetch_recent_series(body.station_id, days_back=days, client=http),
         )
 
     if body.provider == "DMI":

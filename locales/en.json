@@ -168,6 +168,12 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "For any question about privacy or about how this information is handled, you can write to",
+    "release_223_improvements": [
+      "New stations: the 60 rain gauges of the Catalan Water Agency (ACA), with rainfall every 5 minutes on the station page, the ranking and the precipitation map.",
+      "New Port of Barcelona station, on the Moll de Bosch i Alsina.",
+      "New tropical cyclogenesis section in ECMWF: genesis potential index (GPI), maximum potential intensity (MPI), absolute vorticity at 850 hPa and 850-200 hPa shear.",
+      "New extratropical cyclogenesis section in ECMWF: Eady growth rate 850-500 hPa and frontogenesis at 850 hPa."
+    ],
     "release_222_improvements": [
       "New precipitable water map for AROME, AROME-IFS and ECMWF.",
       "New ECMWF accumulated precipitation map, up to six days ahead.",

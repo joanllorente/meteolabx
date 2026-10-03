@@ -58,6 +58,8 @@ PROVIDER_FILES = {
     "IMGW": DATA / "data_estaciones_imgw.json",
     "DMI": DATA / "data_estaciones_dmi.json",
     "METEOSWISS": DATA / "data_estaciones_meteoswiss.json",
+    "ACA": DATA / "data_estaciones_aca.json",
+    "PORTBCN": DATA / "data_estaciones_portbcn.json",
 }
 
 LIST_KEYS = ("estaciones", "stations", "listaEstacionsMeteo")
@@ -235,7 +237,8 @@ DEFAULT_TIMEZONES = {
     "POEM": "Europe/Madrid", "IPMA": "Europe/Lisbon",
     "GEOSPHERE": "Europe/Vienna", "SMHI": "Europe/Stockholm",
     "LHMT": "Europe/Vilnius", "IMGW": "Europe/Warsaw",
-    "METEOSWISS": "Europe/Zurich",
+    "METEOSWISS": "Europe/Zurich", "ACA": "Europe/Madrid",
+    "PORTBCN": "Europe/Madrid",
 }
 SENSOR_KEYS = (
     "thermometer", "hygrometer", "barometer", "anemometer",
@@ -351,6 +354,83 @@ def _normalized_station(provider: str, row: dict[str, Any]) -> tuple[Any, ...] |
     )
 
 
+def _import_provider(connection: sqlite3.Connection, provider: str, source_path: Path) -> int:
+    """Importa el inventario de un proveedor: registros crudos, estaciones
+    normalizadas y sensores. Devuelve el número de registros."""
+    payload = json.loads(source_path.read_text(encoding="utf-8"))
+    rows, list_key, metadata = _split_payload(payload)
+    connection.execute(
+        """
+        INSERT INTO inventory_sources(
+            provider, source_file, payload_type, list_key,
+            record_count, source_metadata_json
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            provider,
+            source_path.name,
+            "array" if isinstance(payload, list) else "object",
+            list_key,
+            len(rows),
+            _compact_json(metadata),
+        ),
+    )
+    connection.executemany(
+        """
+        INSERT INTO station_inventory_records(
+            provider, source_ordinal, source_station_id, raw_json
+        ) VALUES (?, ?, ?, ?)
+        """,
+        (
+            (provider, ordinal, _source_station_id(row), _compact_json(row))
+            for ordinal, row in enumerate(rows)
+        ),
+    )
+
+    record_pks = {
+        ordinal: record_pk
+        for record_pk, ordinal in connection.execute(
+            """
+            SELECT record_pk, source_ordinal
+            FROM station_inventory_records
+            WHERE provider = ?
+            ORDER BY source_ordinal
+            """,
+            (provider,),
+        )
+    }
+    for ordinal, row in enumerate(rows):
+        normalized = _normalized_station(provider, row)
+        if normalized is None:
+            continue
+        cursor = connection.execute(
+            """
+            INSERT INTO stations(
+                source_record_pk, provider, network_code, station_id,
+                name, latitude, longitude, elevation_m, timezone,
+                country, region, locality, online, has_historical, manual
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (record_pks[ordinal], *normalized),
+        )
+        station_pk = int(cursor.lastrowid)
+        sensors = row.get("sensors") if isinstance(row.get("sensors"), dict) else None
+        if sensors is not None:
+            connection.execute(
+                """
+                INSERT INTO station_sensors(
+                    station_pk, thermometer, hygrometer, barometer,
+                    anemometer, wind_vane, rain_gauge, pyranometer, uv
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    station_pk,
+                    *(int(bool(sensors.get(key))) if key in sensors else None for key in SENSOR_KEYS),
+                ),
+            )
+    return len(rows)
+
+
 def apply_manual_visibility_overrides(connection: sqlite3.Connection) -> int:
     """Oculta duplicados confirmados y enlaza su estación canónica."""
     changed = 0
@@ -422,78 +502,7 @@ def build_database(
             )
 
             for provider, source_path in sources.items():
-                payload = json.loads(source_path.read_text(encoding="utf-8"))
-                rows, list_key, metadata = _split_payload(payload)
-                provider_counts[provider] = len(rows)
-                connection.execute(
-                    """
-                    INSERT INTO inventory_sources(
-                        provider, source_file, payload_type, list_key,
-                        record_count, source_metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        provider,
-                        source_path.name,
-                        "array" if isinstance(payload, list) else "object",
-                        list_key,
-                        len(rows),
-                        _compact_json(metadata),
-                    ),
-                )
-                connection.executemany(
-                    """
-                    INSERT INTO station_inventory_records(
-                        provider, source_ordinal, source_station_id, raw_json
-                    ) VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        (provider, ordinal, _source_station_id(row), _compact_json(row))
-                        for ordinal, row in enumerate(rows)
-                    ),
-                )
-
-                record_pks = {
-                    ordinal: record_pk
-                    for record_pk, ordinal in connection.execute(
-                        """
-                        SELECT record_pk, source_ordinal
-                        FROM station_inventory_records
-                        WHERE provider = ?
-                        ORDER BY source_ordinal
-                        """,
-                        (provider,),
-                    )
-                }
-                for ordinal, row in enumerate(rows):
-                    normalized = _normalized_station(provider, row)
-                    if normalized is None:
-                        continue
-                    cursor = connection.execute(
-                        """
-                        INSERT INTO stations(
-                            source_record_pk, provider, network_code, station_id,
-                            name, latitude, longitude, elevation_m, timezone,
-                            country, region, locality, online, has_historical, manual
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (record_pks[ordinal], *normalized),
-                    )
-                    station_pk = int(cursor.lastrowid)
-                    sensors = row.get("sensors") if isinstance(row.get("sensors"), dict) else None
-                    if sensors is not None:
-                        connection.execute(
-                            """
-                            INSERT INTO station_sensors(
-                                station_pk, thermometer, hygrometer, barometer,
-                                anemometer, wind_vane, rain_gauge, pyranometer, uv
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                station_pk,
-                                *(int(bool(sensors.get(key))) if key in sensors else None for key in SENSOR_KEYS),
-                            ),
-                        )
+                provider_counts[provider] = _import_provider(connection, provider, source_path)
 
             apply_manual_visibility_overrides(connection)
             connection.commit()
@@ -537,10 +546,92 @@ def build_database(
         raise
 
 
+def update_providers(
+    database_path: Path,
+    providers: list[str],
+    *,
+    provider_files: dict[str, Path] | None = None,
+) -> dict[str, int]:
+    """Reimporta solo esos proveedores en un catálogo ya construido.
+
+    Reconstruirlo entero desde los inventarios perdería lo que otros scripts
+    han ido añadiendo (los alias revisados de IEM y sus comprobaciones). Aquí
+    se borran las filas de esos proveedores y se vuelven a insertar; el resto
+    del catálogo no se toca.
+    """
+    sources = provider_files or PROVIDER_FILES
+    unknown = [provider for provider in providers if provider not in sources]
+    if unknown:
+        raise ValueError(f"Proveedores sin inventario: {', '.join(unknown)}")
+    counts: dict[str, int] = {}
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        for provider in providers:
+            station_pks = "SELECT station_pk FROM stations WHERE provider = ?"
+            for statement in (
+                f"DELETE FROM station_alias_observation_checks WHERE alias_pk IN ("
+                f"SELECT alias_pk FROM station_aliases WHERE station_pk IN ({station_pks}) "
+                f"OR canonical_station_pk IN ({station_pks}))",
+                f"DELETE FROM station_visibility_overrides WHERE station_pk IN ({station_pks}) "
+                f"OR preferred_station_pk IN ({station_pks})",
+                f"DELETE FROM station_aliases WHERE station_pk IN ({station_pks}) "
+                f"OR canonical_station_pk IN ({station_pks})",
+                f"DELETE FROM station_rtree WHERE station_pk IN ({station_pks})",
+                f"DELETE FROM station_sensors WHERE station_pk IN ({station_pks})",
+            ):
+                connection.execute(statement, (provider,) * statement.count("?"))
+            if connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'station_url_slugs'"
+            ).fetchone():
+                connection.execute(
+                    f"DELETE FROM station_url_slugs WHERE station_pk IN ({station_pks})", (provider,),
+                )
+            connection.execute("DELETE FROM stations WHERE provider = ?", (provider,))
+            connection.execute("DELETE FROM station_inventory_records WHERE provider = ?", (provider,))
+            connection.execute("DELETE FROM inventory_sources WHERE provider = ?", (provider,))
+            counts[provider] = _import_provider(connection, provider, sources[provider])
+            connection.execute(
+                """
+                INSERT INTO station_rtree(
+                    station_pk, min_latitude, max_latitude, min_longitude, max_longitude
+                )
+                SELECT station_pk, latitude, latitude, longitude, longitude
+                FROM stations
+                WHERE provider = ? AND latitude IS NOT NULL AND longitude IS NOT NULL
+                """,
+                (provider,),
+            )
+        apply_manual_visibility_overrides(connection)
+        connection.commit()
+        connection.execute("ANALYZE")
+        connection.commit()
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+        foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
+    finally:
+        connection.close()
+    if integrity != "ok" or foreign_key_errors:
+        raise RuntimeError(
+            f"SQLite validation failed: integrity={integrity!r}, foreign_keys={foreign_key_errors!r}"
+        )
+    return counts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--update-providers",
+        nargs="+",
+        metavar="PROVIDER",
+        help="Reimporta solo estos proveedores en el catálogo existente (--output).",
+    )
     args = parser.parse_args()
+    if args.update_providers:
+        counts = update_providers(args.output, [p.upper() for p in args.update_providers])
+        for provider, count in counts.items():
+            print(f"Reimportados {count} registros de {provider} en {args.output}")
+        return
     result = build_database(args.output)
     print(
         f"Saved {result['records']} raw and {result['normalized']} normalized station records "

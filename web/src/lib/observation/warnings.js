@@ -24,3 +24,14 @@ export function hasUnreliableData(warnings) {
   if (!Array.isArray(warnings)) return false;
   return warnings.some((code) => CODIGOS_DATOS_DUDOSOS.has(String(code)));
 }
+
+/**
+ * Redes de particulares: Netatmo y Windy PWS, las mismas que el filtro
+ * «ocultar particulares» (`AMATEUR_PROVIDERS` en el backend). Su ficha avisa
+ * de que el sensor puede no cumplir los estándares de medición.
+ */
+const REDES_PARTICULARES = new Set(['NETATMO', 'WINDY']);
+
+export function isPersonalWeatherStation(provider) {
+  return REDES_PARTICULARES.has(String(provider || '').toUpperCase());
+}

@@ -93,6 +93,8 @@ PROVIDER_LABELS = {
     "IMGW": "IMGW",
     "DMI": "DMI",
     "METEOSWISS": "MeteoSwiss",
+    "ACA": "ACA",
+    "PORTBCN": "Port de Barcelona",
 }
 PROVIDER_COUNTRIES = {
     "AEMET": "ES", "METEOCAT": "ES", "EUSKALMET": "ES",
@@ -100,7 +102,7 @@ PROVIDER_COUNTRIES = {
     "FROST": "NO", "NWS": "US", "METOFFICE": "GB",
     "METEOHUB_IT": "IT", "IPMA": "PT", "GEOSPHERE": "AT",
     "SMHI": "SE", "ECCC": "CA", "CLIMANTARTIDE": "AQ",
-    "LHMT": "LT", "IMGW": "PL",
+    "LHMT": "LT", "IMGW": "PL", "ACA": "ES", "PORTBCN": "ES",
 }
 LANGUAGES_BY_COUNTRY = {
     "ES": ("es", "ca", "en", "de", "fr", "it", "pt"),

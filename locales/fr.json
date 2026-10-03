@@ -168,6 +168,12 @@
     ],
     "privacy_contact_title": "Contact",
     "privacy_contact": "Pour toute question concernant la confidentialité ou le traitement de ces informations, vous pouvez écrire à",
+    "release_223_improvements": [
+      "Nouvelles stations : les 60 pluviomètres de l'Agence catalane de l'eau (ACA), avec la pluie toutes les 5 minutes sur la fiche, le classement et la carte des précipitations.",
+      "Nouvelle station du port de Barcelone, sur le Moll de Bosch i Alsina.",
+      "Nouvelle section de cyclogenèse tropicale pour ECMWF : indice de potentiel de genèse (GPI), intensité potentielle maximale (MPI), tourbillon absolu à 850 hPa et cisaillement 850-200 hPa.",
+      "Nouvelle section de cyclogenèse extratropicale pour ECMWF : taux de croissance d'Eady 850-500 hPa et frontogenèse à 850 hPa."
+    ],
     "release_222_improvements": [
       "Nouvelle carte d’eau précipitable pour AROME, AROME-IFS et ECMWF.",
       "Nouvelle carte de précipitations cumulées d’ECMWF, jusqu’à six jours d’échéance.",

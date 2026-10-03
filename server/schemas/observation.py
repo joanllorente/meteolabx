@@ -67,7 +67,7 @@ class _ProviderStationRequest(BaseModel):
         "WU", "AEMET", "METEOCAT", "EUSKALMET", "METEOGALICIA", "NWS",
         "METEOFRANCE", "METOFFICE", "FROST", "POEM", "METEOHUB_IT",
         "IPMA", "GEOSPHERE", "SMHI", "ECCC", "IEM", "CLIMANTARTIDE", "LHMT", "IMGW", "DMI", "METEOSWISS",
-        "WEATHERLINK", "WINDY", "NETATMO",
+        "ACA", "PORTBCN", "WEATHERLINK", "WINDY", "NETATMO",
     ] = Field(
         default="WU",
         description=(

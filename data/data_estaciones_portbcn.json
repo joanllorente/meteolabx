@@ -1,0 +1,50 @@
+{
+ "generated_at": "2026-10-03T21:32:23+00:00",
+ "provider": "PORTBCN",
+ "source": "https://opendata.portdebarcelona.cat/api/3/action",
+ "license": "CC BY-SA 4.0 (Port de Barcelona)",
+ "stations": [
+  {
+   "id": "01",
+   "source_id": "estacio-meteorolgica-dispensari-bosch-i-alsina",
+   "name": "Port de Barcelona - Dispensari",
+   "site": "Moll de Bosch i Alsina",
+   "lat": 41.381774,
+   "lon": 2.183219,
+   "coords_source": "portbcn_adreces.csv: APB SERVEIS MEDICS (UTM 31N 431705, 4581461)",
+   "elev": 3.0,
+   "altitude": 3.0,
+   "elevation_source": "cota del muelle (aproximada)",
+   "tz": "Europe/Madrid",
+   "country": "España",
+   "country_code": "ES",
+   "region": "Barcelona",
+   "municipality": "Barcelona",
+   "network": "PORTBCN",
+   "manual": false,
+   "realtime": true,
+   "active_now": false,
+   "status": "inactive",
+   "has_historical": false,
+   "last_observation_utc": "2026-10-03T07:00:00+00:00",
+   "resource_recent": "5ee51163-c18d-4888-9bf8-20a9ffdc4af0",
+   "resource_years": {
+    "2025": "bad65a6a-5e3a-476d-92fc-39d4c1cfc0db",
+    "2026": "d42e9c00-98d5-4f64-835d-ce8e2e6397b7"
+   },
+   "extra_sensors": [],
+   "provider": "PORTBCN",
+   "source": "https://opendata.portdebarcelona.cat/dataset/estacio-meteorolgica-dispensari-bosch-i-alsina",
+   "sensors": {
+    "thermometer": true,
+    "hygrometer": true,
+    "barometer": true,
+    "anemometer": true,
+    "wind_vane": true,
+    "rain_gauge": true,
+    "pyranometer": false,
+    "uv": false
+   }
+  }
+ ]
+}

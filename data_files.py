@@ -31,6 +31,8 @@ LHMT_STATIONS_PATH = DATA_DIR / "data_estaciones_lhmt.json"
 IMGW_STATIONS_PATH = DATA_DIR / "data_estaciones_imgw.json"
 DMI_STATIONS_PATH = DATA_DIR / "data_estaciones_dmi.json"
 METEOSWISS_STATIONS_PATH = DATA_DIR / "data_estaciones_meteoswiss.json"
+ACA_STATIONS_PATH = DATA_DIR / "data_estaciones_aca.json"
+PORTBCN_STATIONS_PATH = DATA_DIR / "data_estaciones_portbcn.json"
 # Coordenadas de las estaciones del archivo de IMGW sacadas de sus mapas PDF
 # (scripts/extract_imgw_pdf_coords.py).
 IMGW_PDF_COORDS_PATH = DATA_DIR / "imgw_pdf_coords.json"
@@ -68,10 +70,12 @@ STATION_CATALOG_PATHS = [
     IMGW_STATIONS_PATH,
     DMI_STATIONS_PATH,
     METEOSWISS_STATIONS_PATH,
+    ACA_STATIONS_PATH,
+    PORTBCN_STATIONS_PATH,
 ]
 
 # Valor de respaldo del conteo visible del SQLite unificado (conectables +
 # IEM de inventario, sin duplicados ocultos). Solo se usa si stations.sqlite
 # no está disponible; el contador de la cabecera lo calcula en vivo desde los
 # SQLite (catálogo unificado + Windy online + Netatmo).
-STATION_CATALOG_TOTAL = 230824
+STATION_CATALOG_TOTAL = 230885

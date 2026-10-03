@@ -115,7 +115,7 @@
   const asList = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
   const SOURCES =
-    'WU · WeatherLink · Windy PWS · AEMET · Meteocat · Euskalmet · Frost · ' +
+    'WU · WeatherLink · Windy PWS · AEMET · Meteocat · ACA · Port de Barcelona · Euskalmet · Frost · ' +
     'Meteo-France · MeteoGalicia · NWS · POEM · Met Office · MeteoHub Italia · ' +
     'IPMA · GeoSphere · SMHI · ECCC · LHMT · IMGW · DMI · MeteoSwiss · IEM';
 

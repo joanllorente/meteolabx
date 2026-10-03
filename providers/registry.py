@@ -31,6 +31,8 @@ PROVIDER_NAMES = {
     "IMGW": "IMGW",
     "DMI": "DMI",
     "METEOSWISS": "MeteoSwiss",
+    "ACA": "ACA",
+    "PORTBCN": "Port de Barcelona",
     "WINDY": "Windy PWS",
     "NETATMO": "Netatmo",
 }

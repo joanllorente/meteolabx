@@ -100,7 +100,8 @@ UI.de = {
   trend_fall_moderate: 'Mäßig fallend', trend_fall_strong: 'Stark fallend', rain_none: 'Kein Niederschlag',
   rain_trace: 'Spuren', rain_very_light: 'Sehr schwach', rain_light: 'Schwach', rain_slight: 'Leicht',
   rain_moderate: 'Mäßig', rain_heavy: 'Stark', rain_very_heavy: 'Sehr stark', rain_torrential: 'Extrem stark',
-  uv_low: 'Niedrig', uv_moderate: 'Mäßig', uv_high: 'Hoch', uv_very_high: 'Sehr hoch', uv_extreme: 'Extrem'
+  uv_low: 'Niedrig', uv_moderate: 'Mäßig', uv_high: 'Hoch', uv_very_high: 'Sehr hoch', uv_extreme: 'Extrem',
+  pws_notice: 'ℹ️ Private Wetterstationen entsprechen möglicherweise nicht den meteorologischen Messstandards.'
 };
 
 Object.assign(UI, {
@@ -373,6 +374,7 @@ Object.assign(UI, {
     provider_timeout: "El proveedor ha tardado demasiado en responder. Vuelve a intentarlo en unos minutos.",
     provider_ratelimit: "El proveedor limita el número de consultas y ha rechazado esta. La estación sí está publicando; vuelve a intentarlo en unos minutos.",
     unreliable_data: "Esta estación podría estar devolviendo datos incorrectos.",
+    pws_notice: "ℹ️ Las estaciones particulares pueden no ajustarse a los estándares de medición meteorológica.",
     provider_unreachable: "No se ha podido contactar con el proveedor de esta red.",
     open_app: 'Abrir en la aplicación', measured_at: 'Medido a las {time}',
     trend_steady: 'Estable', trend_rise_weak: 'Subida débil', trend_rise_moderate: 'Subida moderada',
@@ -652,6 +654,7 @@ Object.assign(UI, {
     provider_timeout: "El proveïdor ha trigat massa a respondre. Torna-ho a provar d’aquí a uns minuts.",
     provider_ratelimit: "El proveïdor limita el nombre de consultes i ha rebutjat aquesta. L’estació sí que està publicant; torna-ho a provar d’aquí a uns minuts.",
     unreliable_data: "Aquesta estació podria estar retornant dades incorrectes.",
+    pws_notice: "ℹ️ Les estacions particulars poden no ajustar-se als estàndards de mesurament meteorològic.",
     provider_unreachable: "No s’ha pogut contactar amb el proveïdor d’aquesta xarxa.",
     open_app: "Obrir a l'aplicació", measured_at: 'Mesurat a les {time}',
     trend_steady: 'Estable', trend_rise_weak: 'Pujada feble', trend_rise_moderate: 'Pujada moderada',
@@ -931,6 +934,7 @@ Object.assign(UI, {
     provider_timeout: "The provider took too long to respond. Try again in a few minutes.",
     provider_ratelimit: "The provider limits how many requests it accepts and turned this one away. The station is publishing fine; try again in a few minutes.",
     unreliable_data: "This station may be returning incorrect data.",
+    pws_notice: "ℹ️ Personal weather stations may not comply with meteorological measurement standards.",
     provider_unreachable: "The provider for this network could not be reached.",
     open_app: 'Open in the app', measured_at: 'Measured at {time}',
     trend_steady: 'Steady', trend_rise_weak: 'Rising slowly', trend_rise_moderate: 'Rising',
@@ -1210,6 +1214,7 @@ Object.assign(UI, {
     provider_timeout: "Le fournisseur a mis trop de temps à répondre. Réessayez dans quelques minutes.",
     provider_ratelimit: "Le fournisseur limite le nombre de requêtes et a rejeté celle-ci. La station publie normalement ; réessayez dans quelques minutes.",
     unreliable_data: "Cette station pourrait renvoyer des données incorrectes.",
+    pws_notice: "ℹ️ Les stations météorologiques personnelles peuvent ne pas respecter les normes de mesure météorologique.",
     provider_unreachable: "Impossible de contacter le fournisseur de ce réseau.",
     open_app: "Ouvrir dans l'application", measured_at: 'Mesuré à {time}',
     trend_steady: 'Stable', trend_rise_weak: 'Légère hausse', trend_rise_moderate: 'Hausse modérée',
@@ -1489,6 +1494,7 @@ Object.assign(UI, {
     provider_timeout: "Il fornitore ha impiegato troppo tempo a rispondere. Riprova tra qualche minuto.",
     provider_ratelimit: "Il fornitore limita il numero di richieste e ha rifiutato questa. La stazione sta pubblicando regolarmente; riprova tra qualche minuto.",
     unreliable_data: "Questa stazione potrebbe restituire dati errati.",
+    pws_notice: "ℹ️ Le stazioni meteorologiche personali potrebbero non essere conformi agli standard di misurazione meteorologica.",
     provider_unreachable: "Non è stato possibile contattare il fornitore di questa rete.",
     open_app: "Apri nell'applicazione", measured_at: 'Misurato alle {time}',
     trend_steady: 'Stabile', trend_rise_weak: 'Lieve aumento', trend_rise_moderate: 'Aumento moderato',
@@ -1768,6 +1774,7 @@ Object.assign(UI, {
     provider_timeout: "O fornecedor demorou demasiado a responder. Tenta novamente dentro de alguns minutos.",
     provider_ratelimit: "O fornecedor limita o número de pedidos e rejeitou este. A estação está a publicar normalmente; tenta novamente dentro de alguns minutos.",
     unreliable_data: "Esta estação pode estar a devolver dados incorretos.",
+    pws_notice: "ℹ️ As estações meteorológicas particulares podem não cumprir as normas de medição meteorológica.",
     provider_unreachable: "Não foi possível contactar o fornecedor desta rede.",
     open_app: 'Abrir na aplicação', measured_at: 'Medido às {time}',
     trend_steady: 'Estável', trend_rise_weak: 'Subida ligeira', trend_rise_moderate: 'Subida moderada',

@@ -198,6 +198,26 @@ def test_today_series_respects_local_midnight():
     assert series["has_data"] is False
 
 
+def test_station_without_rain_gauge_has_no_precip_total():
+    payload = _payload()
+    payload["public"] = {
+        **PUBLIC_ROW,
+        "measures": {
+            key: value for key, value in PUBLIC_ROW["measures"].items()
+            if key != "05:00:00:aa:bb:cc"
+        },
+    }
+    for row in payload["rows"]:
+        row["precip_bucket_mm"] = float("nan")
+
+    current = netatmo.current_from_payload(payload, now=NOW, tz_name="UTC")
+    series = netatmo.today_series_from_payload(payload, now=NOW, tz_name="UTC")
+
+    assert current["precip_total"] != current["precip_total"]
+    assert current["precip_rate"] != current["precip_rate"]
+    assert all(value != value for value in series["precips"])
+
+
 def test_fetch_observations_merges_modules(_catalog_station):
     client = _client()
     payload = _run(netatmo.fetch_observations(

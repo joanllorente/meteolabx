@@ -1,7 +1,7 @@
 // GENERADO por scripts/export_app_i18n.py — no editar a mano.
 // Los textos viven en locales/*.json, que es lo que lee la app actual.
 export default {
-  "app_version": "2.2.2",
+  "app_version": "2.2.3",
   "calibration": {
     "ca": {
       "close": "Tanca el calibratge",
@@ -556,6 +556,12 @@ export default {
         "Les escales de precipitació s’amplien fins a 140 mm en 1 hora i 800 mm en l’acumulat.",
         "S’ha retirat el mapa de radiació solar d’AROME."
       ],
+      "release_223_improvements": [
+        "Noves estacions: els 60 pluviòmetres de l'Agència Catalana de l'Aigua (ACA), amb pluja cada 5 minuts a la fitxa, el rànquing i el mapa de precipitació.",
+        "Nova estació del Port de Barcelona, al Moll de Bosch i Alsina.",
+        "Nou apartat de ciclogènesi tropical a ECMWF: índex de potencial de gènesi (GPI), intensitat potencial màxima (MPI), vorticitat absoluta a 850 hPa i cisallament 850-200 hPa.",
+        "Nou apartat de ciclogènesi extratropical a ECMWF: taxa de creixement d'Eady 850-500 hPa i frontogènesi a 850 hPa."
+      ],
       "sources": "Fonts",
       "unaffiliated": "No afiliat",
       "version": "Versió {version}",
@@ -714,6 +720,12 @@ export default {
         "Vorhersagekarten lassen sich als GIF-Animation herunterladen, mit frei wählbaren Stunden.",
         "Die Niederschlagsskalen reichen jetzt bis 140 mm in 1 Stunde und 800 mm akkumuliert.",
         "Die Karte der Solarstrahlung von AROME wurde entfernt."
+      ],
+      "release_223_improvements": [
+        "Neue Stationen: die 60 Regenmesser der Katalanischen Wasseragentur (ACA), mit Niederschlag alle 5 Minuten auf der Stationsseite, im Ranking und auf der Niederschlagskarte.",
+        "Neue Station des Hafens von Barcelona, am Moll de Bosch i Alsina.",
+        "Neuer Bereich tropische Zyklogenese bei ECMWF: Genesis-Potential-Index (GPI), maximale potenzielle Intensität (MPI), absolute Vorticity in 850 hPa und Windscherung 850-200 hPa.",
+        "Neuer Bereich außertropische Zyklogenese bei ECMWF: Eady-Wachstumsrate 850-500 hPa und Frontogenese in 850 hPa."
       ],
       "sources": "Quellen",
       "unaffiliated": "Nicht verbunden",
@@ -874,6 +886,12 @@ export default {
         "Precipitation scales now reach 140 mm in 1 hour and 800 mm accumulated.",
         "The AROME solar radiation map has been removed."
       ],
+      "release_223_improvements": [
+        "New stations: the 60 rain gauges of the Catalan Water Agency (ACA), with rainfall every 5 minutes on the station page, the ranking and the precipitation map.",
+        "New Port of Barcelona station, on the Moll de Bosch i Alsina.",
+        "New tropical cyclogenesis section in ECMWF: genesis potential index (GPI), maximum potential intensity (MPI), absolute vorticity at 850 hPa and 850-200 hPa shear.",
+        "New extratropical cyclogenesis section in ECMWF: Eady growth rate 850-500 hPa and frontogenesis at 850 hPa."
+      ],
       "sources": "Sources",
       "unaffiliated": "Not affiliated",
       "version": "Version {version}",
@@ -1032,6 +1050,12 @@ export default {
         "Los mapas de predicción se pueden descargar como animación GIF, eligiendo las horas.",
         "Las escalas de precipitación se amplían hasta 140 mm en 1 hora y 800 mm en el acumulado.",
         "Se ha retirado el mapa de radiación solar de AROME."
+      ],
+      "release_223_improvements": [
+        "Nuevas estaciones: los 60 pluviómetros de la Agència Catalana de l'Aigua (ACA), con lluvia cada 5 minutos en la ficha, el ranking y el mapa de precipitación.",
+        "Nueva estación del Port de Barcelona, en el Moll de Bosch i Alsina.",
+        "Nuevo apartado de ciclogénesis tropical en ECMWF: índice de potencial de génesis (GPI), intensidad potencial máxima (MPI), vorticidad absoluta a 850 hPa y cizalladura 850-200 hPa.",
+        "Nuevo apartado de ciclogénesis extratropical en ECMWF: tasa de crecimiento de Eady 850-500 hPa y frontogénesis a 850 hPa."
       ],
       "sources": "Fuentes",
       "unaffiliated": "No afiliado",
@@ -1192,6 +1216,12 @@ export default {
         "Les échelles de précipitations vont désormais jusqu’à 140 mm en 1 heure et 800 mm en cumul.",
         "La carte de rayonnement solaire d’AROME a été retirée."
       ],
+      "release_223_improvements": [
+        "Nouvelles stations : les 60 pluviomètres de l'Agence catalane de l'eau (ACA), avec la pluie toutes les 5 minutes sur la fiche, le classement et la carte des précipitations.",
+        "Nouvelle station du port de Barcelone, sur le Moll de Bosch i Alsina.",
+        "Nouvelle section de cyclogenèse tropicale pour ECMWF : indice de potentiel de genèse (GPI), intensité potentielle maximale (MPI), tourbillon absolu à 850 hPa et cisaillement 850-200 hPa.",
+        "Nouvelle section de cyclogenèse extratropicale pour ECMWF : taux de croissance d'Eady 850-500 hPa et frontogenèse à 850 hPa."
+      ],
       "sources": "Sources",
       "unaffiliated": "Non affilié",
       "version": "Version {version}",
@@ -1351,6 +1381,12 @@ export default {
         "Le scale di precipitazione arrivano ora a 140 mm in 1 ora e 800 mm in accumulo.",
         "È stata rimossa la mappa della radiazione solare di AROME."
       ],
+      "release_223_improvements": [
+        "Nuove stazioni: i 60 pluviometri dell'Agenzia catalana dell'acqua (ACA), con la pioggia ogni 5 minuti nella scheda, nella classifica e nella mappa delle precipitazioni.",
+        "Nuova stazione del porto di Barcellona, sul Moll de Bosch i Alsina.",
+        "Nuova sezione di ciclogenesi tropicale per ECMWF: indice di potenziale di genesi (GPI), intensità potenziale massima (MPI), vorticità assoluta a 850 hPa e wind shear 850-200 hPa.",
+        "Nuova sezione di ciclogenesi extratropicale per ECMWF: tasso di crescita di Eady 850-500 hPa e frontogenesi a 850 hPa."
+      ],
       "sources": "Fonti",
       "unaffiliated": "Non affiliato",
       "version": "Versione {version}",
@@ -1509,6 +1545,12 @@ export default {
         "Os mapas de previsão podem ser descarregados como animação GIF, escolhendo as horas.",
         "As escalas de precipitação vão agora até 140 mm em 1 hora e 800 mm no acumulado.",
         "Foi retirado o mapa de radiação solar do AROME."
+      ],
+      "release_223_improvements": [
+        "Novas estações: os 60 udómetros da Agência Catalã da Água (ACA), com a chuva a cada 5 minutos na ficha, no ranking e no mapa de precipitação.",
+        "Nova estação do Porto de Barcelona, no Moll de Bosch i Alsina.",
+        "Nova secção de ciclogénese tropical no ECMWF: índice de potencial de génese (GPI), intensidade potencial máxima (MPI), vorticidade absoluta a 850 hPa e cisalhamento 850-200 hPa.",
+        "Nova secção de ciclogénese extratropical no ECMWF: taxa de crescimento de Eady 850-500 hPa e frontogénese a 850 hPa."
       ],
       "sources": "Fontes",
       "unaffiliated": "Não afiliado",
@@ -2814,6 +2856,7 @@ export default {
     }
   },
   "releases": [
+    "223",
     "222",
     "221",
     "220",

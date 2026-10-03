@@ -1,7 +1,7 @@
 import json
 import sqlite3
 
-from scripts.build_stations_sqlite import build_database
+from scripts.build_stations_sqlite import build_database, update_providers
 from scripts.build_station_url_slugs import build_url_slugs
 from server.services import stations
 
@@ -240,3 +240,49 @@ def test_build_catalog_hides_confirmed_crozet_iem_duplicate(tmp_path, monkeypatc
         assert not stations.is_station_hidden("METEOFRANCE", "98404004")
     finally:
         stations.hidden_station_identities.cache_clear()
+
+
+def test_update_providers_reimports_one_provider_and_keeps_the_rest(tmp_path):
+    aemet = tmp_path / "aemet.json"
+    aca = tmp_path / "aca.json"
+    target = tmp_path / "stations.sqlite"
+    aemet.write_text(json.dumps([
+        {"idema": "24", "nombre": "AEMET", "lat": 41.0, "lon": 2.0},
+    ]), encoding="utf-8")
+    aca.write_text(json.dumps({"stations": [
+        {"id": "080018-005", "name": "Abrera (Llobregat)", "lat": 41.5, "lon": 1.9,
+         "sensors": {"rain_gauge": True, "thermometer": False}},
+    ]}), encoding="utf-8")
+    build_database(target, provider_files={"AEMET": aemet})
+    with sqlite3.connect(target) as connection:
+        # Lo que otros scripts añaden después del build: tiene que sobrevivir.
+        connection.execute(
+            "INSERT INTO catalog_metadata(key, value) VALUES ('reviewed', 'yes')"
+        )
+
+    files = {"AEMET": aemet, "ACA": aca}
+    assert update_providers(target, ["ACA"], provider_files=files) == {"ACA": 1}
+    # Repetirlo no duplica nada.
+    aca.write_text(json.dumps({"stations": [
+        {"id": "080018-005", "name": "Abrera", "lat": 41.5, "lon": 1.9,
+         "sensors": {"rain_gauge": True}},
+        {"id": "080462-001", "name": "La Roca del Vallès", "lat": 41.6, "lon": 2.3},
+    ]}), encoding="utf-8")
+    assert update_providers(target, ["ACA"], provider_files=files) == {"ACA": 2}
+
+    with sqlite3.connect(target) as connection:
+        assert connection.execute(
+            "SELECT provider, station_id, name FROM stations ORDER BY provider, station_id"
+        ).fetchall() == [
+            ("ACA", "080018-005", "Abrera"),
+            ("ACA", "080462-001", "La Roca del Vallès"),
+            ("AEMET", "24", "AEMET"),
+        ]
+        assert connection.execute("SELECT COUNT(*) FROM station_rtree").fetchone()[0] == 3
+        assert connection.execute("SELECT COUNT(*) FROM station_sensors").fetchone()[0] == 1
+        assert connection.execute(
+            "SELECT record_count FROM inventory_sources WHERE provider = 'ACA'"
+        ).fetchone()[0] == 2
+        assert connection.execute(
+            "SELECT value FROM catalog_metadata WHERE key = 'reviewed'"
+        ).fetchone()[0] == "yes"

@@ -888,6 +888,7 @@ export default {
     ]
   },
   "provider_countries": {
+    "ACA": "ES",
     "AEMET": "ES",
     "CLIMANTARTIDE": "AQ",
     "ECCC": "CA",
@@ -904,9 +905,11 @@ export default {
     "METOFFICE": "GB",
     "NWS": "US",
     "POEM": "ES",
+    "PORTBCN": "ES",
     "SMHI": "SE"
   },
   "provider_labels": {
+    "ACA": "ACA",
     "AEMET": "AEMET",
     "CLIMANTARTIDE": "ClimAntartide",
     "DMI": "DMI",
@@ -925,6 +928,7 @@ export default {
     "METOFFICE": "Met Office",
     "NWS": "National Weather Service",
     "POEM": "Puertos del Estado",
+    "PORTBCN": "Port de Barcelona",
     "SMHI": "SMHI"
   },
   "site_url": "https://www.meteolabx.com",

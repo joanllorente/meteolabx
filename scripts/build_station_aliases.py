@@ -48,7 +48,7 @@ PROVIDER_ISO_NUMERIC = {
     "POEM": 724, "METEOFRANCE": 250, "METEOHUB_IT": 380, "METOFFICE": 826,
     "FROST": 578, "ECCC": 124, "IPMA": 620, "GEOSPHERE": 40,
     "SMHI": 752, "LHMT": 440, "IMGW": 616,
-    "METEOSWISS": 756,
+    "METEOSWISS": 756, "ACA": 724, "PORTBCN": 724,
 }
 
 # IEM labels WMO/BUFR records as UN even when their coordinates are inside the
@@ -76,6 +76,8 @@ ALLOWED_IEM_COUNTRIES = {
     "IMGW": {"PL", "UN"},
     "CLIMANTARTIDE": {"AQ", "UN"},
     "METEOSWISS": {"CH", "LI", "UN"},
+    "ACA": {"ES", "UN"},
+    "PORTBCN": {"ES", "UN"},
     "NWS": None,
 }
 

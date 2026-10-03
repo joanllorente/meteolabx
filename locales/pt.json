@@ -168,6 +168,12 @@
     ],
     "privacy_contact_title": "Contacto",
     "privacy_contact": "Para qualquer questão sobre privacidade ou sobre o tratamento da informação, pode escrever para",
+    "release_223_improvements": [
+      "Novas estações: os 60 udómetros da Agência Catalã da Água (ACA), com a chuva a cada 5 minutos na ficha, no ranking e no mapa de precipitação.",
+      "Nova estação do Porto de Barcelona, no Moll de Bosch i Alsina.",
+      "Nova secção de ciclogénese tropical no ECMWF: índice de potencial de génese (GPI), intensidade potencial máxima (MPI), vorticidade absoluta a 850 hPa e cisalhamento 850-200 hPa.",
+      "Nova secção de ciclogénese extratropical no ECMWF: taxa de crescimento de Eady 850-500 hPa e frontogénese a 850 hPa."
+    ],
     "release_222_improvements": [
       "Novo mapa de água precipitável no AROME, AROME-IFS e ECMWF.",
       "Novo mapa de precipitação acumulada do ECMWF, até seis dias.",

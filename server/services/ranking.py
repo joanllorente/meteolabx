@@ -70,6 +70,8 @@ PROVIDER_TZ = {
     # cada estación guarda sus horas en su día local (como ECCC).
     "DMI": "Europe/Copenhagen",
     "METEOSWISS": "Europe/Zurich",
+    "ACA": "Europe/Madrid",
+    "PORTBCN": "Europe/Madrid",
     "FROST": "Europe/Oslo",
     # Canadá cruza 6 husos: UTC como clave de bucket; cada estación aporta
     # su día local (como IEM).
@@ -96,6 +98,8 @@ PROVIDER_FIXED_COUNTRY = {
     "METEOCAT": "ES",
     "METEOGALICIA": "ES",
     "EUSKALMET": "ES",
+    "ACA": "ES",
+    "PORTBCN": "ES",
     "POEM": "ES",
     "METEOFRANCE": "FR",
     "METEOHUB_IT": "IT",
@@ -1991,6 +1995,164 @@ async def fetch_meteoswiss_records(
     records = store.reduce_accumulable_records("METEOSWISS", now=now)
     for rec in records:
         rec.country = str((catalog.get(rec.station_id) or {}).get("country_code") or "CH")
+    return records
+
+
+# ----------------------------------------------------------------------
+# Adaptador: ACA (pluviómetros de Catalunya; DIRECTO, solo lluvia)
+# ----------------------------------------------------------------------
+# La consulta de toda la red trae 4 h por llamada: cada ciclo pide las últimas
+# 24 h en seis tramos (y, de madrugada, también el día de ayer entero, para
+# cerrarlo) y recalcula los totales desde cero. Un ciclo perdido no deja
+# huecos. La lluvia sale de sumar intensidades de 5 minutos, así que un día con
+# demasiados pasos perdidos no se publica: el hueco sería lluvia sin contar.
+ACA_MIN_DAY_COVERAGE = 0.8
+ACA_MIN_24H_COVERAGE = 0.9
+
+
+async def fetch_aca_daily(
+    *,
+    client: httpx.AsyncClient,
+    timeout_s: float = 60.0,
+    now: Optional[datetime] = None,
+) -> List[StationDaily]:
+    from server.services import aca
+
+    now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+    tz = ZoneInfo(PROVIDER_TZ["ACA"])
+    since, day_start, now_epoch = aca.network_window(now_utc, tz_name=PROVIDER_TZ["ACA"])
+    network = await aca.fetch_network(
+        client, since_epoch=since, until_epoch=now_epoch, timeout_s=timeout_s,
+    )
+    catalog = aca.stations_by_sensor()
+    today = datetime.fromtimestamp(day_start, tz=timezone.utc).astimezone(tz)
+    yesterday_start = int((today - timedelta(days=1)).timestamp())
+    close_yesterday = since <= yesterday_start
+
+    records: List[StationDaily] = []
+    for sensor, series in network.items():
+        meta = catalog.get(sensor)
+        if not meta or not series:
+            continue
+
+        def _record(local_date: str, totals: Tuple[float, int, int]) -> StationDaily:
+            return StationDaily(
+                provider="ACA",
+                station_id=str(meta["id"]),
+                name=str(meta.get("name") or meta["id"]).strip(),
+                locality=str(meta.get("municipality") or ""),
+                lat=_num(meta.get("lat")),
+                lon=_num(meta.get("lon")),
+                rain=round(totals[0], 1),
+                country="ES",
+                local_date=local_date,
+                local_time=datetime.fromtimestamp(totals[2], tz=timezone.utc).astimezone(tz).strftime("%H:%M"),
+            )
+
+        current = aca.daily_totals(
+            series, day_start=day_start, day_end=now_epoch, min_coverage=ACA_MIN_DAY_COVERAGE,
+        )
+        if current is not None:
+            record = _record(today.date().isoformat(), current)
+            rolling = aca.daily_totals(
+                series, day_start=now_epoch - 24 * 3600, day_end=now_epoch,
+                min_coverage=ACA_MIN_24H_COVERAGE,
+            )
+            if rolling is not None:
+                record.rain_24h, record.rain_24h_at = round(rolling[0], 1), rolling[2]
+            records.append(record)
+        if close_yesterday:
+            closed = aca.daily_totals(
+                series, day_start=yesterday_start, day_end=day_start, min_coverage=ACA_MIN_DAY_COVERAGE,
+            )
+            if closed is not None:
+                records.append(_record((today - timedelta(days=1)).date().isoformat(), closed))
+    return records
+
+
+# ----------------------------------------------------------------------
+# Adaptador: Port de Barcelona (DIRECTO; un recurso de CKAN por estación)
+# ----------------------------------------------------------------------
+# Cada estación publica sus últimos tres días: una consulta por estación trae
+# hoy, las últimas 24 h y ayer entero, que se recalculan desde cero en cada
+# ciclo. La máxima y la mínima salen de las medias de 10 minutos (quedan algo
+# recortadas). Un día con demasiados registros perdidos no se publica.
+PORTBCN_MIN_DAY_COVERAGE = 0.8
+PORTBCN_MIN_24H_COVERAGE = 0.9
+
+
+async def fetch_portbcn_daily(
+    *,
+    client: httpx.AsyncClient,
+    timeout_s: float = 60.0,
+    now: Optional[datetime] = None,
+) -> List[StationDaily]:
+    from server.services import portbcn
+
+    now_utc = (now or datetime.now(tz=timezone.utc)).astimezone(timezone.utc)
+    tz = ZoneInfo(PROVIDER_TZ["PORTBCN"])
+    now_local = now_utc.astimezone(tz)
+    now_epoch = int(now_utc.timestamp())
+    today = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start = int(today.timestamp())
+    yesterday_start = int((today - timedelta(days=1)).timestamp())
+
+    catalog = portbcn.stations()
+    results = await asyncio.gather(*(
+        portbcn.fetch_resource(client, str(meta["resource_recent"]), limit=432, timeout_s=timeout_s)
+        for meta in catalog
+    ), return_exceptions=True)
+    failures = [result for result in results if isinstance(result, Exception)]
+    if catalog and len(failures) == len(results):
+        raise failures[0]
+
+    records: List[StationDaily] = []
+    for meta, rows in zip(catalog, results):
+        if isinstance(rows, Exception) or not rows:
+            continue
+
+        def _record(local_date: str, aggregates: Dict[str, Any]) -> StationDaily:
+            return StationDaily(
+                provider="PORTBCN",
+                station_id=str(meta["id"]),
+                name=str(meta.get("name") or meta["id"]).strip(),
+                locality=str(meta.get("municipality") or ""),
+                lat=_num(meta.get("lat")),
+                lon=_num(meta.get("lon")),
+                tmax=aggregates["tmax"],
+                tmin=aggregates["tmin"],
+                gust=aggregates["gust"],
+                rain=aggregates["rain"],
+                country="ES",
+                local_date=local_date,
+                local_time=datetime.fromtimestamp(aggregates["last"], tz=timezone.utc).astimezone(tz).strftime("%H:%M"),
+            )
+
+        current = portbcn.day_aggregates(
+            rows, day_start=day_start, day_end=now_epoch, min_coverage=PORTBCN_MIN_DAY_COVERAGE,
+        )
+        if current is not None:
+            record = _record(today.date().isoformat(), current)
+            rolling = portbcn.day_aggregates(
+                rows, day_start=now_epoch - 24 * 3600, day_end=now_epoch,
+                min_coverage=PORTBCN_MIN_24H_COVERAGE,
+            )
+            if rolling is not None and rolling["rain"] is not None:
+                record.rain_24h, record.rain_24h_at = rolling["rain"], rolling["last"]
+            last = max(epoch for epoch in rows if epoch <= now_epoch)
+            values = rows[last]
+            if "TEM_Avg" in values:
+                record.tcur, record.tcur_at = round(values["TEM_Avg"], 1), last
+            if "VV_S_WVT" in values and "DV_D1_WVT" in values:
+                record.wind = round(portbcn.kmh(values["VV_S_WVT"]), 1)
+                record.wind_dir = float(values["DV_D1_WVT"]) % 360.0
+                record.wind_at = last
+            records.append(record)
+        closed = portbcn.day_aggregates(
+            rows, day_start=yesterday_start, day_end=day_start, min_coverage=PORTBCN_MIN_DAY_COVERAGE,
+        )
+        if closed is not None:
+            records.append(_record((today - timedelta(days=1)).date().isoformat(), closed))
     return records
 
 
@@ -4107,6 +4269,10 @@ async def refresh_once(
         tasks["DMI"] = fetch_dmi_records(store, client=client)
     if _want("METEOSWISS"):
         tasks["METEOSWISS"] = fetch_meteoswiss_records(store, client=client)
+    if _want("ACA"):
+        tasks["ACA"] = fetch_aca_daily(client=client)
+    if _want("PORTBCN"):
+        tasks["PORTBCN"] = fetch_portbcn_daily(client=client)
     if frost_id and _want("FROST"):
         tasks["FROST"] = fetch_frost_daily(frost_id, frost_secret, client=client)
     if mf_key and _want("METEOFRANCE"):

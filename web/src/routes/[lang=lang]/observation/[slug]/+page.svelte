@@ -10,7 +10,7 @@
   import { ui } from '$lib/i18n/ui.js';
   import { observationModel } from '$lib/observation/model.js';
   import { isSnapshotMissing, unavailableKey } from '$lib/observation/unavailable.js';
-  import { hasUnreliableData } from '$lib/observation/warnings.js';
+  import { hasUnreliableData, isPersonalWeatherStation } from '$lib/observation/warnings.js';
   import { displayName } from '$lib/seo/i18n.js';
   import {
     classifyEntry,
@@ -167,6 +167,12 @@
     <p class="offline">⚠️ {ui(lang, 'unreliable_data')}</p>
   {/if}
 
+  <!-- Netatmo y Windy PWS: sensores de particulares, sin garantía de que estén
+       instalados según las normas de medición. -->
+  {#if isPersonalWeatherStation(station.provider)}
+    <p class="pws">{ui(lang, 'pws_notice')}</p>
+  {/if}
+
   {#if !isManualDaily(station)}
     <ObservationPanel {model} language={lang} stationName={meta.name} />
   {/if}
@@ -194,4 +200,10 @@
     text-underline-offset: 2px;
   }
 
+  .pws {
+    margin: 0 0 20px; padding: 12px 15px;
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--panel); color: var(--ink-2);
+    font-size: 0.84rem;
+  }
 </style>
