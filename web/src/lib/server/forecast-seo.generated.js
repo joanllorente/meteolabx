@@ -114,6 +114,14 @@ export default {
    {
     "id": "clouds",
     "label": "Nubes y humedad"
+   },
+   {
+    "id": "extratropical",
+    "label": "Ciclogénesis extratropical"
+   },
+   {
+    "id": "tropical",
+    "label": "Ciclogénesis tropical"
    }
   ],
   "ca": [
@@ -148,6 +156,14 @@ export default {
    {
     "id": "clouds",
     "label": "Núvols i humitat"
+   },
+   {
+    "id": "extratropical",
+    "label": "Ciclogènesi extratropical"
+   },
+   {
+    "id": "tropical",
+    "label": "Ciclogènesi tropical"
    }
   ],
   "en": [
@@ -182,6 +198,14 @@ export default {
    {
     "id": "clouds",
     "label": "Clouds and humidity"
+   },
+   {
+    "id": "extratropical",
+    "label": "Extratropical cyclogenesis"
+   },
+   {
+    "id": "tropical",
+    "label": "Tropical cyclogenesis"
    }
   ],
   "de": [
@@ -216,6 +240,14 @@ export default {
    {
     "id": "clouds",
     "label": "Wolken und Feuchte"
+   },
+   {
+    "id": "extratropical",
+    "label": "Außertropische Zyklogenese"
+   },
+   {
+    "id": "tropical",
+    "label": "Tropische Zyklogenese"
    }
   ],
   "fr": [
@@ -250,6 +282,14 @@ export default {
    {
     "id": "clouds",
     "label": "Nuages et humidité"
+   },
+   {
+    "id": "extratropical",
+    "label": "Cyclogenèse extratropicale"
+   },
+   {
+    "id": "tropical",
+    "label": "Cyclogenèse tropicale"
    }
   ],
   "it": [
@@ -284,6 +324,14 @@ export default {
    {
     "id": "clouds",
     "label": "Nubi e umidità"
+   },
+   {
+    "id": "extratropical",
+    "label": "Ciclogenesi extratropicale"
+   },
+   {
+    "id": "tropical",
+    "label": "Ciclogenesi tropicale"
    }
   ],
   "pt": [
@@ -318,6 +366,14 @@ export default {
    {
     "id": "clouds",
     "label": "Nuvens e humidade"
+   },
+   {
+    "id": "extratropical",
+    "label": "Ciclogénese extratropical"
+   },
+   {
+    "id": "tropical",
+    "label": "Ciclogénese tropical"
    }
   ]
  },
@@ -5120,7 +5176,7 @@ export default {
    "id": "ecmwf-eady-850-500",
    "model": "ecmwf",
    "modelLabel": "ECMWF",
-   "category": "dynamics",
+   "category": "extratropical",
    "kind": "derived",
    "coverage": "ECMWF IFS 0,25° · u, v, t y gh 850 y 500 hPa · presión en superficie",
    "labels": {
@@ -5222,7 +5278,7 @@ export default {
    "id": "ecmwf-frontogenesis-850",
    "model": "ecmwf",
    "modelLabel": "ECMWF",
-   "category": "forcing",
+   "category": "extratropical",
    "kind": "derived",
    "coverage": "ECMWF IFS 0,25° · t, u y v 850 hPa · presión en superficie",
    "labels": {
@@ -5357,6 +5413,244 @@ export default {
       "Misma escala que el agua precipitable de AROME."
      ],
      "sources": [
+      {
+       "label": "ECMWF · Real-time open data",
+       "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "ecmwf-gpi",
+   "model": "ecmwf",
+   "modelLabel": "ECMWF",
+   "category": "tropical",
+   "kind": "derived",
+   "coverage": "ECMWF IFS 0,25° · t y q de 1000 a 50 hPa · vo 850 · u, v 850 y 200 hPa · skt, lsm, msl, sp",
+   "labels": {
+    "es": "Índice de potencial de génesis (GPI)",
+    "ca": "Índex de potencial de gènesi (GPI)",
+    "en": "Genesis potential index (GPI)",
+    "de": "Genesepotenzialindex (GPI)",
+    "fr": "Indice de potentiel de cyclogenèse (GPI)",
+    "it": "Indice di potenziale di genesi (GPI)",
+    "pt": "Índice de potencial de génese (GPI)"
+   },
+   "guides": {
+    "es": {
+     "what": "Índice de potencial de génesis (GPI) de Emanuel y Nolan (2004): lo propicio que es el entorno para que nazca un ciclón tropical, o un sistema de núcleo cálido que se alimente del calor del mar. Reúne en un número los cuatro ingredientes clásicos: rotación en niveles bajos, humedad en niveles medios, la intensidad máxima que el mar y la atmósfera permitirían alcanzar y poca cizalladura. Con las isobaras y los centros de presión. Solo existe sobre el mar.",
+     "interpretation": [
+      "Cada factor puede anular a los demás: un mar muy cálido no sirve de nada con 20 m/s de cizalladura, y un entorno perfecto sin un remolino previo tampoco da génesis. Los valores altos aparecen solo donde coinciden todos, y por eso el índice es multiplicativo.",
+      "El índice se calibró con medias mensuales de reanálisis de 2,5°, donde vale de décimas a unas decenas. Aquí se calcula con campos instantáneos de 0,25°, mucho más extremos: un ciclón tropical organizado pasa de 200 y un entorno favorable sin sistema anda por 20-100. Los números no son comparables con los de la climatología; lo que cuenta es dónde destaca y cómo evoluciona de un plazo a otro.",
+      "Un núcleo de GPI alto que se mantiene varios plazos, sobre una baja cerrada en las isobaras, es la señal más clara de que el modelo ve un entorno capaz de convertirla en un sistema de núcleo cálido. Un máximo aislado de un solo plazo suele ser una celda convectiva que dispara la vorticidad.",
+      "La intensidad potencial es una cota, no una previsión: dice hasta qué viento podría llegar un ciclón maduro en ese entorno, con el mar y el perfil de temperatura dados, no que vaya a alcanzarlo. Depende sobre todo de la diferencia entre el calor del mar y el frío de la troposfera alta, así que un embolsamiento frío en altura sobre un mar templado puede dar valores sorprendentemente altos lejos del trópico.",
+      "El índice nació para el trópico. En latitudes medias la génesis de ciclones de núcleo cálido depende también de forzamientos que el GPI no ve, como un embolsamiento frío que se aísla o el aporte baroclino, y el valor se lee como «entorno compatible», no como probabilidad.",
+      "La temperatura del mar que entra en el cálculo es la de piel, no la SST de masa. De día, con sol y viento flojo, la capa cálida diurna puede calentar la piel por encima del agua de debajo y subir la intensidad potencial; de noche la capa fría la deja algo por debajo. Un ciclo diario en el índice sobre mar en calma puede venir de ahí y no del entorno atmosférico.",
+      "Queda vacío sobre tierra y en las celdas de costa con más de un 10 % de tierra, porque su temperatura de piel mezcla la del mar con la del suelo; donde el mar está a 5 °C o menos y donde la columna tiene huecos."
+     ],
+     "method": "MeteoLabX calcula la intensidad potencial de Bister y Emanuel (2002) columna a columna, con el algoritmo de tcpyPI traducido a C++ y los mismos parámetros: ascenso reversible, calentamiento disipativo, Ck/Cd = 0,9 y reducción del viento de gradiente a 10 m de 0,8. El perfil son la temperatura y la humedad de ECMWF en los 13 niveles de 1000 a 50 hPa, sin los que quedan bajo el suelo. El open data publica niveles hasta 10 hPa, pero el perfil se corta en 50 hPa, el techo por defecto de tcpyPI. Como temperatura del mar se usa la de piel del IFS (skt), porque el open data no publica la SST. No son el mismo campo: la de piel es la temperatura radiativa de la interfaz aire-mar, y el IFS le aplica la capa fría de piel, que la deja algo por debajo de la del agua, y la capa cálida diurna, que de día con sol y viento flojo la sube. Es una aproximación a la SST de masa que pide la teoría, no ese campo. La humedad relativa de 600 hPa se calcula respecto al agua a partir de la humedad específica, y la vorticidad absoluta de 850 hPa se suaviza unos 55 km antes de entrar en el índice.",
+     "equations": [
+      {
+       "label": "Índice de potencial de génesis",
+       "latex": "\\mathrm{GPI}=\\left|10^{5}\\eta\\right|^{3/2}\\left(\\frac{H}{50}\\right)^{3}\\left(\\frac{V_{pot}}{70}\\right)^{3}\\left(1+0{,}1\\,V_{shear}\\right)^{-2}"
+      },
+      {
+       "label": "Intensidad potencial",
+       "latex": "V_{pot}^{2}=\\frac{C_k}{C_D}\\,\\frac{T_s}{T_o}\\left(\\mathrm{CAPE}^{*}-\\mathrm{CAPE}\\right)\\Big|_{r_m}"
+      },
+      {
+       "label": "Ingredientes",
+       "latex": "\\eta=\\zeta_{850}+f,\\quad H=\\mathrm{HR}_{600},\\quad V_{shear}=\\left|\\vec V_{200}-\\vec V_{850}\\right|"
+      }
+     ],
+     "steps": [
+      "Leer temperatura y humedad específica de 1000 a 50 hPa, la vorticidad y el viento de 850 hPa, el viento de 200 hPa, la temperatura de piel, la máscara tierra-mar y las presiones en superficie y al nivel del mar.",
+      "Calcular la intensidad potencial en cada celda de mar, iterando la presión en el radio de vientos máximos hasta que converge, como en tcpyPI.",
+      "Calcular la humedad relativa de 600 hPa respecto al agua, la vorticidad absoluta suavizada de 850 hPa y la cizalladura 850-200 hPa.",
+      "Combinar los cuatro factores y mostrarlos en una escala casi logarítmica a partir de 1, con las isobaras cada 4 hPa."
+     ],
+     "sources": [
+      {
+       "label": "Emanuel & Nolan (2004) · Tropical cyclone activity and the global climate system",
+       "url": "https://ams.confex.com/ams/26HURR/techprogram/paper_75463.htm"
+      },
+      {
+       "label": "Bister & Emanuel (2002) · Low frequency variability of tropical cyclone potential intensity",
+       "url": "https://doi.org/10.1029/2001JD000776"
+      },
+      {
+       "label": "Gilford (2021) · pyPI v1.3: tropical cyclone potential intensity calculations in Python",
+       "url": "https://doi.org/10.5194/gmd-14-2351-2021"
+      },
+      {
+       "label": "ECMWF · Real-time open data",
+       "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "ecmwf-mpi",
+   "model": "ecmwf",
+   "modelLabel": "ECMWF",
+   "category": "tropical",
+   "kind": "derived",
+   "coverage": "ECMWF IFS 0,25° · t y q de 1000 a 50 hPa · skt, lsm, msl, sp",
+   "labels": {
+    "es": "Intensidad potencial máxima (MPI)",
+    "ca": "Intensitat potencial màxima (MPI)",
+    "en": "Maximum potential intensity (MPI)",
+    "de": "Maximale potenzielle Intensität (MPI)",
+    "fr": "Intensité potentielle maximale (MPI)",
+    "it": "Intensità potenziale massima (MPI)",
+    "pt": "Intensidade potencial máxima (MPI)"
+   },
+   "guides": {
+    "es": {
+     "what": "Intensidad potencial máxima (MPI) de Bister y Emanuel (2002): el viento sostenido a 10 m más fuerte que podría alcanzar un ciclón tropical maduro en ese punto, dados la temperatura del mar y el perfil de temperatura y humedad de la atmósfera. Se trata el ciclón como una máquina térmica de Carnot que toma calor del mar y lo cede en la salida fría de la troposfera alta. Con las isobaras y los centros de presión. Solo existe sobre el mar.",
+     "interpretation": [
+      "Es una cota, no una previsión: dice hasta dónde podría llegar un sistema si todo lo demás acompaña, no que haya un ciclón ni que vaya a intensificarse. La mayoría de los ciclones reales se quedan bastante por debajo, frenados por la cizalladura, el aire seco o el enfriamiento del mar que ellos mismos remueven.",
+      "Depende de la diferencia entre el calor del mar y el frío de la salida, y del déficit de humedad del aire de niveles bajos respecto al de saturación sobre el mar. Por eso no basta con un mar cálido: con una troposfera alta templada el valor baja, y bajo una masa fría en altura, con un mar solo templado, puede salir alto lejos del trópico.",
+      "El viento es a 10 m, ya reducido un 20 % respecto al de gradiente, como en tcpyPI. Como orientación, 33 m/s es el umbral de huracán, y por encima de 70 m/s solo se llega con mares muy cálidos y una salida muy fría.",
+      "La temperatura del mar que entra en el cálculo es la de piel, no la SST de masa. De día, con sol y viento flojo, la capa cálida diurna puede calentar la piel por encima del agua de debajo y subir la intensidad potencial; de noche la capa fría la deja algo por debajo.",
+      "En mares cerrados y someros rodeados de desierto pueden salir valores por encima de 90 m/s, al tope de la escala. La teoría los da ahí por un mar muy cálido bajo aire muy seco, y la capa cálida diurna de la piel puede exagerarlos.",
+      "Queda vacío sobre tierra y en las celdas de costa con más de un 10 % de tierra, porque su temperatura de piel mezcla la del mar con la del suelo; donde el mar está a 5 °C o menos, donde la columna tiene huecos y donde la iteración no converge."
+     ],
+     "method": "MeteoLabX calcula la intensidad potencial columna a columna con el algoritmo de tcpyPI traducido a C++ y sus parámetros por defecto: ascenso reversible, calentamiento disipativo, Ck/Cd = 0,9 y reducción del viento de gradiente a 10 m de 0,8. Se itera la presión en el radio de vientos máximos hasta que converge, comparando la CAPE de una parcela saturada a la temperatura del mar con la del aire de niveles bajos. El perfil son la temperatura y la humedad de ECMWF en los 13 niveles de 1000 a 50 hPa, sin los que quedan bajo el suelo; el open data llega a 10 hPa, pero 50 hPa es el techo por defecto de tcpyPI. Como temperatura del mar se usa la de piel del IFS (skt), porque el open data no publica la SST: es una aproximación a la SST de masa, no ese campo. Es la misma V_pot que entra en el GPI.",
+     "equations": [
+      {
+       "label": "Intensidad potencial",
+       "latex": "V_{pot}^{2}=\\frac{C_k}{C_D}\\,\\frac{T_s}{T_o}\\left(\\mathrm{CAPE}^{*}-\\mathrm{CAPE}\\right)\\Big|_{r_m}"
+      },
+      {
+       "label": "Viento a 10 m",
+       "latex": "V_{10}=0{,}8\\,V_{pot}"
+      }
+     ],
+     "steps": [
+      "Leer temperatura y humedad específica de 1000 a 50 hPa, la temperatura de piel, la máscara tierra-mar y las presiones en superficie y al nivel del mar.",
+      "Quitar los niveles bajo el suelo y las celdas con más de un 10 % de tierra.",
+      "Iterar en cada celda la presión en el radio de vientos máximos y calcular la CAPE saturada, la del entorno y la temperatura de salida, como en tcpyPI.",
+      "Mostrar el viento máximo a 10 m con las isobaras cada 4 hPa."
+     ],
+     "sources": [
+      {
+       "label": "Bister & Emanuel (2002) · Low frequency variability of tropical cyclone potential intensity",
+       "url": "https://doi.org/10.1029/2001JD000776"
+      },
+      {
+       "label": "Gilford (2021) · pyPI v1.3: tropical cyclone potential intensity calculations in Python",
+       "url": "https://doi.org/10.5194/gmd-14-2351-2021"
+      },
+      {
+       "label": "ECMWF · Real-time open data",
+       "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "ecmwf-absolute-vorticity-850",
+   "model": "ecmwf",
+   "modelLabel": "ECMWF",
+   "category": "tropical",
+   "kind": "derived",
+   "coverage": "ECMWF IFS 0,25° · vo 850 hPa · msl, sp",
+   "labels": {
+    "es": "Vorticidad absoluta a 850 hPa",
+    "ca": "Vorticitat absoluta a 850 hPa",
+    "en": "Absolute vorticity at 850 hPa",
+    "de": "Absolute Vorticity in 850 hPa",
+    "fr": "Tourbillon absolu à 850 hPa",
+    "it": "Vorticità assoluta a 850 hPa",
+    "pt": "Vorticidade absoluta a 850 hPa"
+   },
+   "guides": {
+    "es": {
+     "what": "Vorticidad absoluta a 850 hPa según ECMWF: la rotación total del aire en niveles bajos, suma de la del viento (vorticidad relativa) y la que le da el giro de la Tierra (el parámetro de Coriolis, f). Es el ingrediente de rotación del GPI, con el mismo suavizado. Se muestra multiplicada por el signo de f, para que lo ciclónico sea positivo en los dos hemisferios. Con las isobaras y los centros de presión.",
+     "interpretation": [
+      "Un ciclón no nace de la nada: necesita un remolino previo en niveles bajos que la convección pueda concentrar. Los núcleos que destacan sobre el fondo son esas semillas: ondas, bajas, vaguadas o restos de sistemas anteriores.",
+      "El fondo es la propia f, que crece con la latitud: unos 2,5·10⁻⁵ s⁻¹ a 10°, 10 a 45° y 14 a 75°. Por eso el color va subiendo hacia los polos sin que haya ningún remolino; lo que importa es lo que sobresale de su latitud. La escala dedica dos tercios de la rampa al tramo de 0 a 15, que es donde se distinguen los remolinos de latitudes bajas. Cerca del ecuador f se anula, y sin un remolino fuerte la rotación no basta, que es por lo que casi ningún ciclón tropical nace a menos de 5° del ecuador.",
+      "En el GPI entra elevada a 3/2: doblar la vorticidad multiplica el índice por casi 3. Un núcleo de vorticidad sobre mar cálido, con humedad y poca cizalladura es lo que hace subir el GPI de verdad.",
+      "Los valores negativos indican rotación anticiclónica más fuerte que la de la Tierra, algo poco frecuente que aparece en anticiclones intensos de latitudes bajas o junto a jets muy curvados.",
+      "Está suavizada unos 55 km: los núcleos de una sola celda de convección se reparten y los remolinos de escala sinóptica quedan. Sin ese filtro, a 0,25° cada tormenta aparecería como un remolino.",
+      "Queda vacío donde 850 hPa queda bajo el suelo."
+     ],
+     "method": "Vorticidad relativa nativa del IFS a 850 hPa (vo), calculada por el modelo en el espacio espectral, suavizada con un filtro gaussiano de igual anchura en kilómetros en las dos direcciones (σ de unos 55 km). Se le suma el parámetro de Coriolis y se multiplica por su signo. Es el mismo campo, en valor absoluto, que usa el GPI.",
+     "equations": [
+      {
+       "label": "Vorticidad absoluta",
+       "latex": "\\eta=\\zeta+f,\\qquad f=2\\Omega\\sin\\varphi"
+      },
+      {
+       "label": "Valor representado",
+       "latex": "\\eta\\,\\mathrm{sgn}(f)"
+      }
+     ],
+     "steps": [
+      "Leer la vorticidad relativa de 850 hPa, la presión en superficie y la del nivel del mar.",
+      "Quitar lo que queda bajo el suelo y suavizar la vorticidad unos 55 km.",
+      "Sumar f, multiplicar por su signo y mostrarla en 10⁻⁵ s⁻¹ con las isobaras cada 4 hPa."
+     ],
+     "sources": [
+      {
+       "label": "Emanuel & Nolan (2004) · Tropical cyclone activity and the global climate system",
+       "url": "https://ams.confex.com/ams/26HURR/techprogram/paper_75463.htm"
+      },
+      {
+       "label": "ECMWF · Real-time open data",
+       "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "ecmwf-shear-850-200",
+   "model": "ecmwf",
+   "modelLabel": "ECMWF",
+   "category": "tropical",
+   "kind": "derived",
+   "coverage": "ECMWF IFS 0,25° · u y v 850 y 200 hPa · presión en superficie",
+   "labels": {
+    "es": "Cizalladura 850-200 hPa",
+    "ca": "Cisallament 850-200 hPa",
+    "en": "Wind shear 850-200 hPa",
+    "de": "Windscherung 850-200 hPa",
+    "fr": "Cisaillement 850-200 hPa",
+    "it": "Wind shear 850-200 hPa",
+    "pt": "Cisalhamento 850-200 hPa"
+   },
+   "guides": {
+    "es": {
+     "what": "Cizalladura vertical profunda entre 850 y 200 hPa según ECMWF: el módulo de la diferencia entre el viento de la troposfera alta y el de niveles bajos, en m/s, con flechas que indican hacia dónde apunta esa diferencia. Es el freno principal de la ciclogénesis tropical y el mismo término que entra en el GPI.",
+     "interpretation": [
+      "Un sistema de núcleo cálido necesita que la columna se mantenga vertical: el calor que libera la convección tiene que quedarse encima del centro en superficie. Con mucha cizalladura, el viento de arriba arrastra la convección y el aire seco de los lados, y el núcleo cálido se desmonta.",
+      "Como orientación, por debajo de 10 m/s el entorno es favorable, entre 10 y 20 la organización cuesta y suele quedarse en sistemas asimétricos, y por encima de 20 m/s es raro que un ciclón tropical nazca o se mantenga. En el GPI el factor vale 1/4 con 10 m/s y 1/9 con 20.",
+      "Las flechas dan la dirección de la cizalladura: la convección tiende a desplazarse hacia ese lado del centro, y el aire seco entra por el contrario. Sirve para ver si un núcleo de convección queda encima de la baja o se separa de ella.",
+      "Es un valor de 0,25° y de un instante: un embolsamiento frío aislado suele tener poca cizalladura justo en su centro aunque alrededor sea grande, y esa ventana es la que puede aprovechar un sistema en desarrollo. En latitudes medias la cizalladura alta también significa baroclinidad, que alimenta otro tipo de borrascas.",
+      "Queda vacío donde 850 hPa queda bajo el suelo."
+     ],
+     "method": "Diferencia vectorial entre el viento de 200 hPa y el de 850 hPa de ECMWF, sin suavizar. El color es el módulo y las flechas, el vector.",
+     "equations": [
+      {
+       "label": "Cizalladura profunda",
+       "latex": "V_{shear}=\\left|\\vec V_{200}-\\vec V_{850}\\right|=\\sqrt{(u_{200}-u_{850})^{2}+(v_{200}-v_{850})^{2}}"
+      }
+     ],
+     "steps": [
+      "Leer las componentes del viento en 850 y 200 hPa y la presión en superficie.",
+      "Restar el viento de 850 hPa al de 200 hPa, componente a componente.",
+      "Mostrar el módulo con las flechas del vector y ocultar donde la presión en superficie baja de 850 hPa."
+     ],
+     "sources": [
+      {
+       "label": "Emanuel & Nolan (2004) · Tropical cyclone activity and the global climate system",
+       "url": "https://ams.confex.com/ams/26HURR/techprogram/paper_75463.htm"
+      },
       {
        "label": "ECMWF · Real-time open data",
        "url": "https://www.ecmwf.int/en/forecasts/datasets/open-data"

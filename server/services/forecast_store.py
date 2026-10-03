@@ -134,6 +134,8 @@ ECMWF_FORECAST_PRODUCTS = (
     "relative-vorticity-500", "q-vectors-700",
     "ecmwf-precip-6h", "ecmwf-jet-300", "ecmwf-omega-700", "ecmwf-frontogenesis-850",
     "ecmwf-eady-850-500", "ecmwf-precip-accumulated", "ecmwf-precipitable-water",
+    "ecmwf-gpi", "ecmwf-mpi", "ecmwf-shear-850-200",
+    "ecmwf-absolute-vorticity-850",
 )
 
 # Qué publica cada modelo. El almacén deja de asumir que todo lo que hay en el

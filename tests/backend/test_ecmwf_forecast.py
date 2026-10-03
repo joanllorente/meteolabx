@@ -442,6 +442,138 @@ def test_precipitable_water_is_native_tcwv_without_overlay(monkeypatch):
     assert ecmwf_forecast.product_steps('ecmwf-precipitable-water', [0, 3, 6]) == [0, 3, 6]
 
 
+def test_gpi_follows_emanuel_nolan_with_the_native_potential_intensity(monkeypatch):
+    """GPI = |10⁵η|^{3/2} (H/50)³ (V_pot/70)³ (1 + 0,1 V_shear)⁻², solo sobre el mar."""
+    from server.services import _dcape_native
+    from server.services.synoptic_diagnostics import coordinates
+    bounds = (-10.125, 39.875, .125, 50.125)
+    monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: bounds)
+    llamadas = []
+
+    def field(run, step, selector, domain):
+        west, south, east, north = domain
+        shape = (round((north-south)*4), round((east-west)*4))
+        _, x = np.indices(shape)
+        level = float(selector.get('levelist') or 0)
+        temperatura = 288.15 - 6.5e-3 * 8000 * np.log(1000 / max(level, 1))
+        # q a 600 hPa con la humedad relativa respecto al agua justo al 50 %.
+        tc = temperatura - 273.15
+        vapor = .5 * 6.112 * np.exp(17.67 * tc / (243.5 + tc))
+        q600 = .622 * vapor / (600 - .378 * vapor)
+        valores = {
+            # Tierra en el primer grado del dominio, que llega con halo.
+            'skt': 300., 'lsm': np.where(west + (x + .5) / 4 < -9.125, 1., 0.),
+            'msl': 101000., 'sp': 101500.,
+            't': temperatura, 'q': q600 if level == 600 else 1e-3, 'vo': 0.,
+            'u': 10. if level == 200 else 0., 'v': 0.,
+        }
+        return np.full(shape, valores[selector['param']], dtype=float), domain
+
+    def pi(sst, msl, surface, pressure, temperature, mixing):
+        llamadas.append((sst.copy(), pressure.copy()))
+        return np.where(np.isfinite(sst), 70., np.nan), np.full(sst.shape, np.nan)
+
+    monkeypatch.setattr(ecmwf_forecast, '_field', field)
+    monkeypatch.setattr(_dcape_native, 'potential_intensity', pi)
+    run = ecmwf_forecast.parse_run(RUN)
+    header, values = _decode_values(ecmwf_forecast.frame_payload('ecmwf-gpi', run, 0)[0])
+    assert header['has_overlay']
+    (sst, pressure), = llamadas
+    assert list(pressure) == list(ecmwf_forecast.GPI_LEVELS)
+    assert np.nanmax(sst) == pytest.approx(26.85)
+    # Sin vorticidad relativa queda f; cizalladura de 10 m/s, factor 1/4.
+    _, lat = coordinates(values.shape, bounds)
+    f = 2 * ecmwf_forecast.OMEGA_EARTH * np.sin(lat)[:, None]
+    esperado = np.broadcast_to((1e5 * f) ** 1.5 / 4, values.shape)
+    mar = np.isfinite(values)
+    assert not mar[:, :4].any() and mar[:, 4:].all()
+    assert values[mar] == pytest.approx(esperado[mar], rel=2e-3)
+
+
+def test_gpi_and_mpi_share_one_potential_intensity_per_step(monkeypatch):
+    """La V_pot se itera una vez por plazo y dominio, aunque la pidan los dos mapas."""
+    from server.services import _dcape_native
+    monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: (-10.125, 39.875, .125, 50.125))
+    monkeypatch.setattr(ecmwf_forecast, '_field', _synthetic_field([]))
+    llamadas = []
+
+    def pi(sst, *resto):
+        llamadas.append(1)
+        return np.where(np.isfinite(sst), 55., np.nan), np.full(sst.shape, np.nan)
+
+    monkeypatch.setattr(_dcape_native, 'potential_intensity', pi)
+    run = ecmwf_forecast.parse_run(RUN)
+    with ecmwf_forecast.shared_downloads():
+        header, values = _decode_values(ecmwf_forecast.frame_payload('ecmwf-mpi', run, 12)[0])
+        ecmwf_forecast.frame_payload('ecmwf-gpi', run, 12)
+    assert len(llamadas) == 1
+    assert header['unit'] == 'm/s' and header['has_overlay']
+    assert np.nanmax(values) == pytest.approx(55.0)
+    # Las dos primeras columnas sintéticas son tierra, pero caen en el halo.
+    assert np.isfinite(values).all()
+
+
+def test_absolute_vorticity_adds_f_and_is_cyclonic_positive_in_both_hemispheres(monkeypatch):
+    from server.services.synoptic_diagnostics import coordinates
+    for bounds, signo in (((-10.125, 39.875, .125, 50.125), 1), ((140.125, -50.125, 150.125, -39.875), -1)):
+        monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_, b=bounds: b)
+
+        def field(run, step, selector, domain, signo=signo):
+            west, south, east, north = domain
+            shape = (round((north-south)*4), round((east-west)*4))
+            _, x = np.indices(shape)
+            # Remolino ciclónico uniforme de 5·10⁻⁵ s⁻¹ y relieve en el
+            # primer grado del dominio, que llega con halo.
+            valores = {'vo': np.full(shape, signo * 5e-5),
+                       'sp': np.where(west + (x + .5) / 4 < domain[0] + 7, 80000., 100000.),
+                       'msl': np.full(shape, 101000.)}[selector['param']]
+            return valores, domain
+
+        monkeypatch.setattr(ecmwf_forecast, '_field', field)
+        header, values = _decode_values(ecmwf_forecast.frame_payload(
+            'ecmwf-absolute-vorticity-850', ecmwf_forecast.parse_run(RUN), 12)[0])
+        _, lat = coordinates(values.shape, bounds)
+        f = 2 * ecmwf_forecast.OMEGA_EARTH * np.abs(np.sin(lat))[:, None] * 1e5
+        esperado = np.broadcast_to(5 + f, values.shape)
+        assert header['unit'] == '10⁻⁵ s⁻¹' and header['has_overlay']
+        assert np.isnan(values[:, :4]).all()
+        assert values[:, 4:] == pytest.approx(esperado[:, 4:], abs=.02)
+
+
+def test_shear_850_200_is_the_vector_difference_hidden_below_850(monkeypatch):
+    bounds = (-10.125, 39.875, .125, 50.125)
+    monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: bounds)
+
+    def field(run, step, selector, domain):
+        west, south, east, north = domain
+        shape = (round((north-south)*4), round((east-west)*4))
+        _, x = np.indices(shape)
+        level = selector.get('levelist')
+        valores = {
+            ('u', '850'): 5., ('v', '850'): -2., ('u', '200'): 35., ('v', '200'): 38.,
+            ('sp', None): np.where(x < 4, 80000., 100000.),
+        }[(selector['param'], level)]
+        return np.broadcast_to(np.asarray(valores, dtype=float), shape).copy(), domain
+
+    monkeypatch.setattr(ecmwf_forecast, '_field', field)
+    payload = ecmwf_forecast.frame_payload('ecmwf-shear-850-200', ecmwf_forecast.parse_run(RUN), 12)[0]
+    header_len = struct.unpack('<I', payload[:4])[0]
+    header = json.loads(payload[4:4+header_len])
+    # El módulo no viaja: el visor lo rehace con las dos componentes.
+    assert header['unit'] == 'm/s' and header['value_source'] == 'hypot'
+    size = header['width'] * header['height']
+    body = payload[4+header_len:]
+    componentes = []
+    for i, array in enumerate(header['arrays']):
+        encoded = np.frombuffer(body[i*size*2:(i+1)*size*2], dtype=np.uint8)
+        codes = encoded[:size].astype(np.uint16)*256 + encoded[size:]
+        values = array['offset'] + (codes.astype(float)-1)*array['step']
+        componentes.append(np.where(codes == 0, np.nan, values).reshape(header['height'], header['width']))
+    u, v = componentes
+    assert np.isnan(u[:, :4]).all() and np.isnan(v[:, :4]).all()
+    assert u[:, 4:] == pytest.approx(30.0, abs=.01) and v[:, 4:] == pytest.approx(40.0, abs=.01)
+
+
 def test_omega_is_shown_positive_upwards_and_masked_below_ground(monkeypatch):
     bounds = (-10.125, 39.875, .125, 50.125)
     monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: bounds)
@@ -772,6 +904,7 @@ def _synthetic_field(requested):
             'q': .005 + x*1e-6,
             'sp': np.full((height, width), 100000.), 'msl': np.full((height, width), 101300.),
             'tp': .01 + step*1e-3 + x*0., 'tcwv': 20. + x*.1,
+            'skt': 298. + x*.01, 'lsm': np.where(x < 2, 1., 0.),
         }
         return base[selector['param']], domain
     return field
@@ -780,6 +913,8 @@ def _synthetic_field(requested):
 @pytest.mark.parametrize('product', sorted(ecmwf_forecast.PRODUCTS))
 def test_the_prefetch_list_matches_what_each_map_reads(monkeypatch, product):
     """Si la lista se queda corta el mapa sale igual, pero baja en serie lo que falte."""
+    if ecmwf_forecast.PRODUCTS[product].get('kind') == 'gpi':
+        pytest.importorskip('server.services._dcape_native')
     requested = []
     monkeypatch.setattr(ecmwf_forecast, 'domain_bounds', lambda *_: (-10.125, 39.875, .125, 50.125))
     monkeypatch.setattr(ecmwf_forecast, '_field', _synthetic_field(requested))

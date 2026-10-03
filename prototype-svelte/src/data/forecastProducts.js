@@ -89,7 +89,9 @@ export const forecastCategories = [
   { id: 'shear', label: 'Cizalladura y helicidad' },
   { id: 'forcing', label: 'Forzamiento y cinemática' },
   { id: 'severe', label: 'Tiempo severo' },
-  { id: 'clouds', label: 'Nubes y humedad' }
+  { id: 'clouds', label: 'Nubes y humedad' },
+  { id: 'extratropical', label: 'Ciclogénesis extratropical' },
+  { id: 'tropical', label: 'Ciclogénesis tropical' }
 ];
 
 const allForecastProducts = [
@@ -151,7 +153,7 @@ const allForecastProducts = [
     coverage: 'ECMWF IFS 0,25° · tcwv'
   },
   {
-    id: 'ecmwf-eady-850-500', model: 'ecmwf', category: 'dynamics',
+    id: 'ecmwf-eady-850-500', model: 'ecmwf', category: 'extratropical',
     label: 'Tasa de crecimiento de Eady 850-500 hPa', short: 'Eady 850-500', kind: 'derived',
     unit: 'día⁻¹', min: 0.3, max: 2.5, palette: 'shear', accent: '#c46bd1', vectors: false,
     // Por debajo de 0,3 día⁻¹ no se pinta: queda la zona baroclina, donde las
@@ -162,6 +164,59 @@ const allForecastProducts = [
     description: 'Lo rápido que podría crecer una borrasca en la capa 850-500 hPa, según la cizalladura del viento y la estabilidad, con las isohipsas de 500 hPa. Marca las zonas propicias para la ciclogénesis.',
     method: 'Tasa de Eady con la cizalladura entre 850 y 500 hPa y la estabilidad de esa capa, de ECMWF, suavizadas unos 40 km. Se oculta donde 850 hPa queda a menos de unos 500 m del suelo.',
     coverage: 'ECMWF IFS 0,25° · u, v, t y gh 850 y 500 hPa · presión en superficie'
+  },
+  {
+    id: 'ecmwf-gpi', model: 'ecmwf', category: 'tropical',
+    label: 'Índice de potencial de génesis (GPI)', short: 'GPI', kind: 'derived',
+    unit: '', min: 1, max: 200, palette: 'convection', accent: '#e0703c', vectors: false,
+    // A 0,25° y hora a hora el índice va de décimas a varios cientos: la rampa
+    // es casi logarítmica para que se distingan a la vez un entorno apenas
+    // propicio y el de un ciclón organizado. Por debajo de 1 no se pinta.
+    scaleAnchors: [[1, 0], [5, .25], [20, .5], [50, .7], [100, .85], [200, 1]],
+    scaleTicks: [1, 5, 20, 50, 100, 200], zeroFloor: 1,
+    overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 2, overlay: '',
+    overlayLayerLabel: 'Isobaras', pressureCentres: true,
+    nationalBoundariesOnly: true, contents: 'Potencial de génesis · Presión',
+    description: 'Lo propicio que es el entorno para que nazca un ciclón tropical, según el índice de Emanuel y Nolan (2004): vorticidad, humedad en niveles medios, intensidad potencial y cizalladura. Con las isobaras. Solo sobre el mar.',
+    method: 'GPI de Emanuel y Nolan con la intensidad potencial de Bister y Emanuel (2002), calculada por MeteoLabX columna a columna con los 13 niveles de ECMWF hasta 50 hPa y la temperatura de piel como aproximación a la del mar.',
+    coverage: 'ECMWF IFS 0,25° · t y q de 1000 a 50 hPa · vo 850 · u, v 850 y 200 hPa · skt, lsm, msl, sp'
+  },
+  {
+    id: 'ecmwf-mpi', model: 'ecmwf', category: 'tropical',
+    label: 'Intensidad potencial máxima (MPI)', short: 'MPI', kind: 'derived',
+    unit: 'm/s', min: 0, max: 90, palette: 'wind', accent: '#e8a23c', vectors: false,
+    overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 2, overlay: '',
+    overlayLayerLabel: 'Isobaras', pressureCentres: true,
+    nationalBoundariesOnly: true, contents: 'Intensidad potencial · Presión',
+    description: 'Viento máximo a 10 m que podría alcanzar un ciclón tropical maduro con ese mar y ese perfil de temperatura y humedad, según Bister y Emanuel (2002). Una cota teórica, no una previsión. Con las isobaras. Solo sobre el mar.',
+    method: 'Intensidad potencial de Bister y Emanuel calculada por MeteoLabX columna a columna con el algoritmo de tcpyPI, los 13 niveles de ECMWF hasta 50 hPa y la temperatura de piel como aproximación a la del mar. Es la misma V_pot que entra en el GPI.',
+    coverage: 'ECMWF IFS 0,25° · t y q de 1000 a 50 hPa · skt, lsm, msl, sp'
+  },
+  {
+    id: 'ecmwf-absolute-vorticity-850', model: 'ecmwf', category: 'tropical',
+    label: 'Vorticidad absoluta a 850 hPa', short: 'η 850', kind: 'derived',
+    unit: '10⁻⁵ s⁻¹', min: -5, max: 40, palette: 'convection', accent: '#d9485f', vectors: false,
+    // Lo que interesa en el trópico está entre 0 y 15: f vale de 0 a unos 5
+    // hasta 20° y los remolinos que siembran un ciclón suben de ahí. Ese tramo
+    // se lleva dos tercios de la rampa, con la paleta multicolor, que distingue
+    // más escalones que la divergente de un solo tono. Lo negativo, raro,
+    // queda en el primer azul, y de 15 a 40 se comprime al final.
+    scaleAnchors: [[-5, 0], [0, .08], [15, .75], [25, .88], [40, 1]], scaleTicks: [-5, 0, 5, 10, 15, 25, 40],
+    overlayStep: 4, overlayMajorStep: 20, overlaySmoothing: 2, overlay: '',
+    overlayLayerLabel: 'Isobaras', pressureCentres: true,
+    nationalBoundariesOnly: true, contents: 'Vorticidad absoluta · Presión',
+    description: 'Rotación total del aire a 850 hPa, la del viento más la de la Tierra: el remolino previo que necesita un ciclón para nacer. Es el ingrediente de vorticidad del GPI. Positiva ciclónica en los dos hemisferios, con las isobaras.',
+    method: 'Vorticidad relativa nativa de ECMWF a 850 hPa suavizada unos 55 km, más el parámetro de Coriolis, multiplicada por el signo de f. Se oculta donde 850 hPa queda bajo el suelo.',
+    coverage: 'ECMWF IFS 0,25° · vo 850 hPa · msl, sp'
+  },
+  {
+    id: 'ecmwf-shear-850-200', model: 'ecmwf', category: 'tropical',
+    label: 'Cizalladura 850-200 hPa', short: 'CIZ 850-200', kind: 'derived',
+    unit: 'm/s', min: 0, max: 40, palette: 'shear', accent: '#9a7cf0', vectors: true,
+    nationalBoundariesOnly: true, contents: 'Cizalladura',
+    description: 'Diferencia vectorial del viento entre 850 y 200 hPa, la cizalladura profunda que decide si un sistema tropical puede organizarse. Es el mismo término que entra en el GPI.',
+    method: 'Módulo de la diferencia entre el viento de 200 hPa y el de 850 hPa de ECMWF, con las flechas del vector. Se oculta donde 850 hPa queda bajo el suelo.',
+    coverage: 'ECMWF IFS 0,25° · u y v 850 y 200 hPa · presión en superficie'
   },
   {
     id: 'ecmwf-jet-300', model: 'ecmwf', category: 'dynamics',
@@ -176,7 +231,7 @@ const allForecastProducts = [
     coverage: 'ECMWF IFS 0,25° · u y v 300 hPa'
   },
   {
-    id: 'ecmwf-frontogenesis-850', model: 'ecmwf', category: 'forcing',
+    id: 'ecmwf-frontogenesis-850', model: 'ecmwf', category: 'extratropical',
     label: 'Frontogénesis a 850 hPa', short: 'Frontogénesis 850', kind: 'derived',
     unit: 'K/100 km/3 h', min: -4, max: 4, palette: 'diverging', accent: '#e8826b', vectors: false,
     // Casi todo el campo está por debajo de 1: esa franja se lleva el 60 % de
@@ -651,6 +706,10 @@ const initialProductIds = [
   'ecmwf-frontogenesis-850',
   'ecmwf-omega-700',
   'ecmwf-precipitable-water',
+  'ecmwf-gpi',
+  'ecmwf-mpi',
+  'ecmwf-absolute-vorticity-850',
+  'ecmwf-shear-850-200',
   'mslp-theta-e-850',
   'wind-level',
   'wind-gust',

@@ -109,6 +109,23 @@ for _dominio in DOMAINS.values():
     _dominio["bounds"] = covering_bounds(_dominio["projection"])
 DEFAULT_DOMAIN = DOMAINS[DEFAULT_DOMAIN_ID]["bounds"]
 
+# Niveles del perfil de la intensidad potencial: todos los del open data
+# hasta 50 hPa, que es donde tcpyPI deja de mirar el sondeo.
+GPI_LEVELS = (1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100, 50)
+# σ del suavizado de la vorticidad absoluta de 850 hPa, en celdas de 0,25°
+# (≈ 55 km). El índice se ajustó con reanálisis de 2,5°: a 0,25° la vorticidad
+# cruda trae núcleos convectivos de una celda que, elevados a 3/2, salpicaban
+# el mapa de máximos sin sentido sinóptico.
+GPI_VORTICITY_SIGMA = 2.0
+# A 0,25° y con campos instantáneos los ingredientes son mucho más extremos
+# que las medias mensuales de 2,5° con que se calibró el índice: un sistema
+# tropical organizado pasa de 300 y un ambiente propicio en latitudes medias
+# ronda 20-100. El visor pinta la escala en tramos casi logarítmicos.
+GPI_VMAX = 200.0
+# Fracción de tierra por encima de la cual la celda no tiene mar que medir.
+SEA_MAX_LAND_FRACTION = 0.1
+OMEGA_EARTH = 7.292e-5
+
 # Hasta +144 h las cuatro pasadas publican cada 3 h. Las 00 y 12Z siguen hasta
 # +360 h cada 6 h; ese tramo se deja fuera por defecto para que el primer mapa
 # no dispare ni el tiempo ni el volumen.
@@ -157,6 +174,41 @@ PRODUCTS: dict[str, dict[str, Any]] = {
     "ecmwf-precipitable-water": {
         "label": "Agua precipitable", "unit": "kg/m²", "vmin": 0.0, "vmax": 70.0,
         "value": {"param": "tcwv", "levtype": "sfc"},
+    },
+    # Índice de potencial de génesis de Emanuel y Nolan (2004), con la
+    # intensidad potencial de Bister y Emanuel (2002) y las isobaras. Solo
+    # sobre el mar: la intensidad potencial necesita la temperatura del agua.
+    "ecmwf-gpi": {
+        "label": "Índice de potencial de génesis (GPI)", "unit": "", "vmin": 0.0, "vmax": GPI_VMAX,
+        "overlay_unit": "hPa", "kind": "gpi",
+        "overlay": {"param": "msl", "levtype": "sfc", "scale": 0.01},
+        # Las isobaras siguen sobre tierra, donde el índice no existe.
+        "overlay_own_mask": True,
+    },
+    # Vorticidad absoluta de 850 hPa, la misma que entra en el GPI: `vo`
+    # nativa más f, suavizada igual. Multiplicada por el signo de f para que
+    # lo ciclónico sea positivo en los dos hemisferios. Con las isobaras.
+    "ecmwf-absolute-vorticity-850": {
+        "label": "Vorticidad absoluta a 850 hPa", "unit": "10⁻⁵ s⁻¹", "vmin": -5.0, "vmax": 40.0,
+        "overlay_unit": "hPa", "kind": "absolute_vorticity", "pressure": 850,
+        "overlay": {"param": "msl", "levtype": "sfc", "scale": 0.01},
+        "overlay_own_mask": True,
+    },
+    # Cizalladura profunda 850-200 hPa: el módulo de la diferencia de viento,
+    # el mismo V_shear que entra en el GPI, con el vector para las flechas.
+    # Se oculta donde 850 hPa queda bajo el suelo.
+    "ecmwf-shear-850-200": {
+        "label": "Cizalladura 850-200 hPa", "unit": "m/s", "vmin": 0.0, "vmax": 40.0,
+        "kind": "shear_layer", "levels": (850, 200),
+    },
+    # Intensidad potencial máxima (MPI) de Bister y Emanuel (2002): el viento
+    # a 10 m que podría alcanzar un ciclón tropical maduro con ese mar y ese
+    # perfil. Es la V_pot del GPI, calculada una sola vez para los dos.
+    "ecmwf-mpi": {
+        "label": "Intensidad potencial máxima (MPI)", "unit": "m/s", "vmin": 0.0, "vmax": 90.0,
+        "overlay_unit": "hPa", "kind": "mpi",
+        "overlay": {"param": "msl", "levtype": "sfc", "scale": 0.01},
+        "overlay_own_mask": True,
     },
     # Jet stream: velocidad del viento en 300 hPa y sus componentes para las
     # flechas. Sin isohipsas: con el viento flojo sin pintar, la forma del jet
@@ -429,6 +481,7 @@ class shared_downloads:
 
     def __enter__(self):
         self.fields = {}
+        self.derived = {}
         self.locks = {}
         self.guard = threading.Lock()
         self.token = _shared_fields.set(self)
@@ -437,7 +490,21 @@ class shared_downloads:
     def __exit__(self, *exc):
         _shared_fields.reset(self.token)
         self.fields.clear()
+        self.derived.clear()
         return False
+
+    def derive(self, key, calcular):
+        """Resultado derivado de los campos del plazo, calculado una sola vez.
+
+        La intensidad potencial la piden el GPI y la MPI de cada dominio; sin
+        esto se iteraba dos veces la misma columna.
+        """
+        with self.guard:
+            lock = self.locks.setdefault(("derived", key), threading.Lock())
+        with lock:
+            if key not in self.derived:
+                self.derived[key] = calcular()
+            return self.derived[key]
 
     def load(self, key, run, step, selector):
         """Campo global de la caché; lo baja si nadie lo ha hecho todavía."""
@@ -685,6 +752,141 @@ def _theta_e_field(run, step, bounds, level):
     return theta_e - 273.15, reales
 
 
+def _gpi_halo(bounds):
+    """Halo para el suavizado de la vorticidad del GPI: 4σ son 2° en latitud
+    y, en longitud, se ensancha hacia el norte con 1/cos φ. La MPI usa el
+    mismo para compartir el cálculo."""
+    return (max(-180, bounds[0] - 6), max(-90, bounds[1] - 3),
+            min(180, bounds[2] + 6), min(90, bounds[3] + 3))
+
+
+def _crop(reales, bounds, *arrays):
+    h, w = arrays[0].shape
+    rw, rs, re, rn = reales
+    dx, dy = (re - rw) / w, (rn - rs) / h
+    x0, x1 = max(0, round((bounds[0] - rw) / dx)), min(w, round((bounds[2] - rw) / dx))
+    y0, y1 = max(0, round((rn - bounds[3]) / dy)), min(h, round((rn - bounds[1]) / dy))
+    recorte = np.s_[y0:y1, x0:x1]
+    return [a[recorte] for a in arrays] + [(rw + x0 * dx, rn - y1 * dy, rw + x1 * dx, rn - y0 * dy)]
+
+
+def _read_on_grid(run, step, halo, que):
+    """Lee campos sobre el halo y comprueba que comparten rejilla."""
+    reales = None
+    def read(selector):
+        nonlocal reales
+        valores, rejilla = _field(run, step, selector, halo)
+        if reales is None:
+            reales = rejilla
+        elif not np.allclose(reales, rejilla):
+            raise EcmwfError(f"Los campos de {que} no comparten rejilla.")
+        return valores
+    return read, lambda: reales
+
+
+def _pl(param, level):
+    return {"param": param, "levtype": "pl", "levelist": str(level)}
+
+
+def _sfc(param):
+    return {"param": param, "levtype": "sfc"}
+
+
+def _potential_intensity(run, step, halo):
+    """V_pot (m/s) de Bister y Emanuel (2002) y presión al nivel del mar (hPa).
+
+    Sale del núcleo en C++ (traducción de tcpyPI). Como temperatura del mar
+    se usa la de piel (`skt`), porque el open data publica esa y no `sst`. No
+    son el mismo campo: la de piel es la de la interfaz radiativa aire-mar, y
+    el IFS le aplica la capa fría de piel y la capa cálida diurna, así que
+    puede apartarse de la SST de masa, sobre todo de día con viento flojo. Es
+    una aproximación, no la SST que pide la teoría.
+
+    El open data llega a 10 hPa, pero el perfil se corta en 50 hPa: es el
+    techo por defecto de tcpyPI y por encima no cambia el resultado.
+    """
+    def calcular():
+        from server.services._dcape_native import potential_intensity
+
+        read, reales = _read_on_grid(run, step, halo, "la intensidad potencial")
+        piel, tierra = read(_sfc("skt")), read(_sfc("lsm"))
+        msl, presion = read(_sfc("msl")) * .01, read(_sfc("sp")) * .01
+        temperatura = np.stack([read(_pl("t", nivel)) for nivel in GPI_LEVELS]) - 273.15
+        humedad = np.stack([read(_pl("q", nivel)) for nivel in GPI_LEVELS])
+        # La `skt` de una celda de costa mezcla la del mar con la de la tierra:
+        # con media celda de tierra, a mediodía junto a un desierto, salían
+        # mares a 43 °C y vientos de 138 m/s. Por debajo de un 10 % de tierra
+        # la mezcla ya no se nota.
+        sst = np.where(np.isfinite(tierra) & (tierra < SEA_MAX_LAND_FRACTION), piel - 273.15, np.nan)
+        mezcla = humedad / np.maximum(1.0 - humedad, 1e-6) * 1000.0
+        vpot, _ = potential_intensity(sst, msl, presion, np.asarray(GPI_LEVELS, dtype=float),
+                                      temperatura, mezcla)
+        return vpot, msl, reales()
+
+    session = _shared_fields.get()
+    if session is None:
+        return calcular()
+    return session.derive(
+        ("potential_intensity", run.astimezone(timezone.utc).isoformat(), int(step), tuple(halo)), calcular)
+
+
+def _mpi_fields(run, step, bounds):
+    """MPI en m/s, con la presión al nivel del mar para las isobaras."""
+    vpot, msl, reales = _potential_intensity(run, step, _gpi_halo(bounds))
+    return _crop(reales, bounds, vpot, msl)
+
+
+def _absolute_vorticity(vorticidad, reales):
+    """η = ζ + f en s⁻¹, con ζ suavizada como en el GPI."""
+    _, latitudes = coordinates(vorticidad.shape, reales)
+    coriolis = 2 * OMEGA_EARTH * np.sin(latitudes)[:, None]
+    return smooth(vorticidad, GPI_VORTICITY_SIGMA, reales) + coriolis, np.sign(latitudes)[:, None]
+
+
+def _absolute_vorticity_fields(run, step, bounds, level):
+    """η·signo(f) en 10⁻⁵ s⁻¹ y la presión al nivel del mar, sin lo que queda bajo el suelo."""
+    halo = _gpi_halo(bounds)
+    read, reales = _read_on_grid(run, step, halo, "la vorticidad absoluta")
+    vorticidad = read(_pl("vo", level))
+    presion = read(_sfc("sp"))
+    msl = read(_sfc("msl")) * .01
+    sobre_suelo = np.isfinite(presion) & (presion >= level * 100)
+    eta, signo = _absolute_vorticity(np.where(sobre_suelo, vorticidad, np.nan), reales())
+    return _crop(reales(), bounds, np.where(sobre_suelo, eta * signo * 1e5, np.nan), msl)
+
+
+def _gpi_fields(run, step, bounds):
+    """GPI de Emanuel y Nolan (2004) y sus cuatro ingredientes.
+
+    GPI = |10⁵ η|^{3/2} · (H/50)³ · (V_pot/70)³ · (1 + 0,1 V_shear)⁻²
+
+    η es la vorticidad absoluta de 850 hPa, H la humedad relativa de 600 hPa
+    en %, V_pot la intensidad potencial en m/s (ver `_potential_intensity`)
+    y V_shear el módulo de la cizalladura 850-200 hPa en m/s.
+    """
+    halo = _gpi_halo(bounds)
+    vpot, msl, reales_pi = _potential_intensity(run, step, halo)
+    read, reales = _read_on_grid(run, step, halo, "el GPI")
+    t600, q600 = read(_pl("t", 600)) - 273.15, read(_pl("q", 600))
+    vorticidad = read(_pl("vo", 850))
+    u850, v850 = read(_pl("u", 850)), read(_pl("v", 850))
+    u200, v200 = read(_pl("u", 200)), read(_pl("v", 200))
+    if not np.allclose(reales(), reales_pi):
+        raise EcmwfError("Los campos del GPI no comparten rejilla.")
+
+    # Humedad relativa respecto al agua, desde q: la `r` del IFS se mide
+    # respecto al hielo por debajo de 0 °C, y a 600 hPa casi siempre lo está.
+    vapor = q600 * 600.0 / (0.622 + 0.378 * q600)
+    saturacion = 6.112 * np.exp(17.67 * t600 / (243.5 + t600))
+    hr600 = np.clip(100.0 * vapor / saturacion, 0.0, 100.0)
+
+    eta = np.abs(_absolute_vorticity(vorticidad, reales())[0])
+    cizalladura = np.hypot(u200 - u850, v200 - v850)
+    gpi = (np.abs(1e5 * eta) ** 1.5 * (hr600 / 50.0) ** 3 * (vpot / 70.0) ** 3
+           * (1.0 + 0.1 * cizalladura) ** -2)
+    return _crop(reales(), bounds, gpi, msl)
+
+
 def _diagnostic_fields(product_id, run, step, bounds):
     # Halo fuera del encuadre para que las derivadas no nazcan en el borde.
     # La vorticidad solo se suaviza una celda: 3° bastan. El filtro de Q
@@ -779,6 +981,18 @@ def required_fields(product_id: str, step: int) -> list[tuple[int, dict[str, Any
             (step, presion)]
     if kind == "omega":
         return [(step, pl("w", config["pressure"])), (step, presion), (step, config["overlay"])]
+    if kind == "absolute_vorticity":
+        return [(step, pl("vo", config["pressure"])), (step, presion), (step, config["overlay"])]
+    if kind == "shear_layer":
+        return [(step, pl(param, nivel)) for nivel in config["levels"] for param in ("u", "v")] + [
+            (step, presion)]
+    if kind in ("gpi", "mpi"):
+        campos = ([(step, {"param": param, "levtype": "sfc"}) for param in ("skt", "lsm", "msl", "sp")]
+                  + [(step, pl(param, nivel)) for param in ("t", "q") for nivel in GPI_LEVELS])
+        if kind == "gpi":
+            campos += [(step, pl("vo", 850))] + [
+                (step, pl(param, nivel)) for nivel in (850, 200) for param in ("u", "v")]
+        return campos
     if kind == "theta_e":
         return [(step, pl(param, config["level"])) for param in ("t", "q")] + [
             (step, presion), (step, config["overlay"])]
@@ -832,6 +1046,23 @@ def frame_payload(
         valores, reales = _omega_field(run, step, bounds, int(config["pressure"]))
         overlay, _ = _field(run, step, config["overlay"], bounds)
         overlay = np.where(np.isfinite(valores), overlay, np.nan)
+    elif config.get("kind") == "shear_layer":
+        bajo, alto = (str(nivel) for nivel in config["levels"])
+        u_bajo, reales = _field(run, step, {"param": "u", "levtype": "pl", "levelist": bajo}, bounds)
+        v_bajo, _ = _field(run, step, {"param": "v", "levtype": "pl", "levelist": bajo}, bounds)
+        u_alto, _ = _field(run, step, {"param": "u", "levtype": "pl", "levelist": alto}, bounds)
+        v_alto, _ = _field(run, step, {"param": "v", "levtype": "pl", "levelist": alto}, bounds)
+        presion, _ = _field(run, step, {"param": "sp", "levtype": "sfc"}, bounds)
+        sobre_suelo = np.isfinite(presion) & (presion >= float(bajo) * 100)
+        vector_u = np.where(sobre_suelo, u_alto - u_bajo, np.nan)
+        vector_v = np.where(sobre_suelo, v_alto - v_bajo, np.nan)
+        valores = np.hypot(vector_u, vector_v)
+    elif config.get("kind") == "gpi":
+        valores, overlay, reales = _gpi_fields(run, step, bounds)
+    elif config.get("kind") == "absolute_vorticity":
+        valores, overlay, reales = _absolute_vorticity_fields(run, step, bounds, int(config["pressure"]))
+    elif config.get("kind") == "mpi":
+        valores, overlay, reales = _mpi_fields(run, step, bounds)
     elif config.get("kind") == "theta_e":
         valores, reales = _theta_e_field(run, step, bounds, config["level"])
         overlay, _ = _field(run, step, config["overlay"], bounds)
@@ -859,6 +1090,7 @@ def frame_payload(
         vmax=float(config["vmax"]),
         overlay=overlay,
         overlay_unit=config.get("overlay_unit"),
+        overlay_own_mask=bool(config.get("overlay_own_mask")),
         vector_u=vector_u, vector_v=vector_v,
         metadata={
             "run": run_iso,

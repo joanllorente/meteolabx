@@ -213,6 +213,7 @@ double ship_scalar(double cape,double ratio,double lapse,double temp,double shea
     return std::isnan(value)?NaN:std::max(value,0.);
 }
 #include "parcel.hpp"
+#include "potential_intensity.hpp"
 PYBIND11_MODULE(_dcape_native,m) {
     m.def("parcel", &parcel_diagnostics_native);
     m.def("saturated_temperature", py::vectorize(saturated_temperature));
@@ -220,6 +221,7 @@ PYBIND11_MODULE(_dcape_native,m) {
     m.def("wetlift", py::vectorize(wetlift_scalar));
     m.def("wetbulb", py::vectorize(wetbulb_scalar));
     m.def("satlift", py::vectorize(satlift_scalar));
+    m.def("potential_intensity", &potential_intensity);
     m.def("source",&source,py::arg("pressure").noconvert(),py::arg("temperature").noconvert(),
           py::arg("dewpoint").noconvert(),py::arg("height").noconvert());
 }
